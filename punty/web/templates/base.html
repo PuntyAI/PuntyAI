@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PuntyAI{% endblock %}</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        punty: {
+                            coral: '#e07050',
+                            blue: '#3b5998',
+                            gold: '#d4a847',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .htmx-indicator {
+            display: none;
+        }
+        .htmx-request .htmx-indicator {
+            display: inline-block;
+        }
+        .htmx-request.htmx-indicator {
+            display: inline-block;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-punty-coral shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-2">
+                        <span class="text-2xl">&#x1F40E;</span>
+                        <span class="text-white font-bold text-xl">PuntyAI</span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-4">
+                        <a href="/" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">Dashboard</a>
+                        <a href="/meets" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">Meets</a>
+                        <a href="/content" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">Content</a>
+                        <a href="/review" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">
+                            Review
+                            <span id="review-badge" class="ml-1 bg-punty-gold text-xs px-2 py-0.5 rounded-full"
+                                  hx-get="/api/content/review-queue"
+                                  hx-trigger="every 30s"
+                                  hx-swap="innerHTML">
+                                {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
+                            </span>
+                        </a>
+                        <a href="/settings" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">Settings</a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-white/80 text-sm">Punty's Command Centre</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Toast notifications -->
+    <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+    <script>
+        // Toast notification helper
+        function showToast(message, type = 'info') {
+            const colors = {
+                'info': 'bg-blue-500',
+                'success': 'bg-green-500',
+                'error': 'bg-red-500',
+                'warning': 'bg-yellow-500'
+            };
+            const toast = document.createElement('div');
+            toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300`;
+            toast.textContent = message;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // HTMX event handlers
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.xhr.status >= 200 && evt.detail.xhr.status < 300) {
+                // Success
+            }
+        });
+
+        document.body.addEventListener('htmx:responseError', function(evt) {
+            showToast('An error occurred', 'error');
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

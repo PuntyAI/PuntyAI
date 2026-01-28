@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}{{ meeting.venue }} - {{ meeting.date }} - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <nav class="text-sm text-gray-500 mb-2">
+                <a href="/meets" class="hover:text-punty-coral">Meets</a> /
+                <span>{{ meeting.venue }}</span>
+            </nav>
+            <h1 class="text-3xl font-bold text-gray-900">{{ meeting.venue }}</h1>
+            <p class="text-gray-500">{{ meeting.date.strftime('%A, %d %B %Y') if meeting.date else '' }}</p>
+        </div>
+        <div class="flex items-center space-x-4">
+            {% if meeting.track_condition %}
+            <span class="px-3 py-1 rounded-full bg-green-100 text-green-800">
+                {{ meeting.track_condition }}
+            </span>
+            {% endif %}
+            {% if meeting.weather %}
+            <span class="text-gray-500">{{ meeting.weather }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-punty-coral/10 rounded-lg p-4 flex flex-wrap gap-3">
+        <button hx-post="/api/content/generate"
+                hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "early_mail"}'
+                class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
+            &#x1F4E7; Generate Early Mail
+        </button>
+        <button hx-post="/api/meets/scrape?venue={{ meeting.venue }}&date={{ meeting.date }}"
+                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
+            &#x1F504; Refresh Data
+        </button>
+        <button hx-post="/api/scheduler/run/scrape_speed_maps?meeting_id={{ meeting.id }}"
+                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
+            &#x1F3C3; Fetch Speed Maps
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Races -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        Races ({{ meeting.races|length }})
+                    </h2>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    {% for race in meeting.races|sort(attribute='race_number') %}
+                    <div class="p-6" x-data="{ open: false }">
+                        <div class="flex justify-between items-start cursor-pointer" @click="open = !open">
+                            <div>
+                                <div class="flex items-center space-x-3">
+                                    <span class="bg-punty-coral text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">
+                                        {{ race.race_number }}
+                                    </span>
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900">{{ race.name }}</h3>
+                                        <p class="text-sm text-gray-500">
+                                            {{ race.distance }}m | {{ race.class_ or 'Open' }}
+                                            {% if race.prize_money %} | ${{ "{:,}".format(race.prize_money) }}{% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                {% if race.start_time %}
+                                <span class="text-sm text-gray-500">{{ race.start_time.strftime('%H:%M') }}</span>
+                                {% endif %}
+                                <button hx-post="/api/content/generate"
+                                        hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "race_preview", "race_id": "{{ race.id }}"}'
+                                        class="text-punty-coral hover:underline text-sm"
+                                        @click.stop>
+                                    Generate Preview
+                                </button>
+                                <span class="text-gray-400" x-text="open ? '&#x25B2;' : '&#x25BC;'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Runners -->
+                        <div x-show="open" x-collapse class="mt-4">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Horse</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Barrier</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Jockey</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Weight</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Form</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Speed Map</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Odds</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {% for runner in race.runners|sort(attribute='barrier') %}
+                                    <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}">
+                                        <td class="px-3 py-2">{{ runner.barrier }}</td>
+                                        <td class="px-3 py-2 font-medium">
+                                            {{ runner.horse_name }}
+                                            {% if runner.scratched %}
+                                            <span class="text-red-500 text-xs">(SCR)</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-3 py-2">{{ runner.barrier or '-' }}</td>
+                                        <td class="px-3 py-2">{{ runner.jockey or '-' }}</td>
+                                        <td class="px-3 py-2">{{ runner.weight or '-' }}kg</td>
+                                        <td class="px-3 py-2 font-mono">{{ runner.form or '-' }}</td>
+                                        <td class="px-3 py-2">
+                                            {% if runner.speed_map_position %}
+                                            {% set pos_colors = {
+                                                'leader': 'bg-red-100 text-red-700',
+                                                'on_pace': 'bg-orange-100 text-orange-700',
+                                                'midfield': 'bg-yellow-100 text-yellow-700',
+                                                'backmarker': 'bg-blue-100 text-blue-700'
+                                            } %}
+                                            <span class="px-2 py-0.5 text-xs rounded {{ pos_colors.get(runner.speed_map_position, 'bg-gray-100') }}">
+                                                {{ runner.speed_map_position|replace('_', ' ')|title }}
+                                            </span>
+                                            {% else %}
+                                            <span class="text-gray-400">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            {% if runner.current_odds %}
+                                            ${{ "%.2f"|format(runner.current_odds) }}
+                                            {% if runner.opening_odds and runner.current_odds != runner.opening_odds %}
+                                            <span class="text-xs {{ 'text-green-600' if runner.current_odds < runner.opening_odds else 'text-red-600' }}">
+                                                ({{ "%.2f"|format(runner.opening_odds) }})
+                                            </span>
+                                            {% endif %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="8" class="px-3 py-4 text-center text-gray-500">
+                                            No runners loaded yet
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="p-6 text-center text-gray-500">
+                        No races loaded yet. Click "Refresh Data" to fetch.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-4">
+            <!-- Generated Content -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Generated Content</h2>
+                </div>
+                <div class="p-4">
+                    {% if content_items %}
+                    <ul class="divide-y divide-gray-200">
+                        {% for item in content_items[:10] %}
+                        <li class="py-3">
+                            <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-1 rounded">
+                                <div>
+                                    <p class="font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</p>
+                                    <p class="text-xs text-gray-500">{{ item.created_at.strftime('%H:%M') if item.created_at else '' }}</p>
+                                </div>
+                                {% set status_colors = {
+                                    'draft': 'bg-gray-100 text-gray-600',
+                                    'pending_review': 'bg-yellow-100 text-yellow-600',
+                                    'approved': 'bg-green-100 text-green-600',
+                                    'sent': 'bg-purple-100 text-purple-600'
+                                } %}
+                                <span class="px-2 py-0.5 text-xs rounded {{ status_colors.get(item.status, 'bg-gray-100') }}">
+                                    {{ item.status|replace('_', ' ')|title }}
+                                </span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-center text-gray-500 py-4">No content generated yet</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Meeting Info -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Meeting Info</h3>
+                <dl class="space-y-3 text-sm">
+                    <div>
+                        <dt class="text-gray-500">Track Condition</dt>
+                        <dd class="font-medium">{{ meeting.track_condition or 'TBC' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Weather</dt>
+                        <dd class="font-medium">{{ meeting.weather or 'TBC' }}</dd>
+                    </div>
+                    {% if meeting.rail_position %}
+                    <div>
+                        <dt class="text-gray-500">Rail Position</dt>
+                        <dd class="font-medium">{{ meeting.rail_position }}</dd>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <dt class="text-gray-500">Last Updated</dt>
+                        <dd class="font-medium">{{ meeting.updated_at.strftime('%d %b %H:%M') if meeting.updated_at else '-' }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alpine.js for collapsible sections -->
+<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+{% endblock %}

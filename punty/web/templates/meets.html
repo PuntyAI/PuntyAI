@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Race Meetings - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Race Meetings</h1>
+            <p class="text-gray-500">Manage and scrape race meeting data</p>
+        </div>
+    </div>
+
+    <!-- Add Meeting Form -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Scrape New Meeting</h2>
+        <form hx-post="/api/meets/scrape" hx-swap="none" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Venue</label>
+                <select name="venue" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-punty-coral focus:border-punty-coral">
+                    <option value="flemington">Flemington</option>
+                    <option value="randwick">Randwick</option>
+                    <option value="moonee-valley">Moonee Valley</option>
+                    <option value="caulfield">Caulfield</option>
+                    <option value="rosehill">Rosehill</option>
+                    <option value="doomben">Doomben</option>
+                    <option value="eagle-farm">Eagle Farm</option>
+                    <option value="morphettville">Morphettville</option>
+                    <option value="ascot">Ascot (WA)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input type="date" name="date" value="{{ now().strftime('%Y-%m-%d') if now is defined else '' }}"
+                       class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-punty-coral focus:border-punty-coral">
+            </div>
+            <button type="submit"
+                    class="bg-punty-coral text-white px-6 py-2 rounded-lg hover:bg-punty-coral/90 flex items-center space-x-2">
+                <span class="htmx-indicator">
+                    <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                </span>
+                <span>Scrape Meeting</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Meetings List -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">All Meetings</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Track</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Weather</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Races</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for meeting in meetings %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline font-medium">
+                                {{ meeting.venue }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ meeting.date.strftime('%a %d %b %Y') if meeting.date else '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if meeting.track_condition %}
+                            <span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800">
+                                {{ meeting.track_condition }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">TBC</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ meeting.weather or '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ meeting.races|length if meeting.races else 0 }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                            <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline">View</a>
+                            <button hx-post="/api/meets/scrape?venue={{ meeting.venue }}&date={{ meeting.date }}"
+                                    class="text-blue-600 hover:underline">Refresh</button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                            <p class="text-4xl mb-2">&#x1F3C7;</p>
+                            <p>No meetings yet</p>
+                            <p class="text-sm">Scrape a meeting to get started</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

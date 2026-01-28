@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900">Settings</h1>
+        <p class="text-gray-500">Configure Punty's behaviour and integrations</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Analysis Framework Weights -->
+        <div class="bg-white rounded-lg shadow lg:col-span-2">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Analysis Framework Weights</h2>
+                    <p class="text-sm text-gray-500">Configure how Punty weighs different factors when analysing horses</p>
+                </div>
+                <button hx-post="/api/settings/weights/reset"
+                        hx-target="#weights-form"
+                        hx-swap="outerHTML"
+                        class="text-sm text-gray-500 hover:text-punty-coral">
+                    Reset to Defaults
+                </button>
+            </div>
+            <form id="weights-form" class="p-6" hx-put="/api/settings/weights" hx-trigger="change" hx-swap="none">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {% for key, label in weight_labels.items() %}
+                    <div class="space-y-1">
+                        <label class="block text-sm font-medium text-gray-700">{{ label }}</label>
+                        <select name="weights[{{ key }}]"
+                                class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-punty-coral focus:border-punty-coral">
+                            {% for option in weight_options %}
+                            <option value="{{ option }}" {% if weights.get(key) == option %}selected{% endif %}>
+                                {{ option|title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-4 pt-4 border-t text-sm text-gray-500">
+                    <p><strong>Tip:</strong> Higher weights give more importance to that factor in Punty's analysis. "High" factors are critical to selections, "Low" factors are considered but not heavily weighted.</p>
+                </div>
+            </form>
+        </div>
+
+        <!-- Favorites Detection Settings -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Value vs Favorites</h2>
+                <p class="text-sm text-gray-500">Configure how Punty handles market favorites</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Favorites Odds Threshold</label>
+                    <input type="number" step="0.10" min="1.00" max="5.00"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2"
+                           value="{{ settings.get('favorites_threshold', {}).get('value', '2.50') }}"
+                           hx-put="/api/settings/favorites_threshold"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           name="value">
+                    <p class="text-xs text-gray-500 mt-1">Horses at or below this price are considered "favorites"</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Favorites Per Card</label>
+                    <input type="number" min="1" max="10"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2"
+                           value="{{ settings.get('max_favorites_per_card', {}).get('value', '3') }}"
+                           hx-put="/api/settings/max_favorites_per_card"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           name="value">
+                    <p class="text-xs text-gray-500 mt-1">Trigger widen request if more favorites selected</p>
+                </div>
+
+                <label class="flex items-center space-x-3 mt-4">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('auto_widen_favorites', {}).get('value', 'false') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/auto_widen_favorites"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('auto_widen_favorites', {}).get('value', 'false') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Auto-widen selections</span>
+                        <p class="text-xs text-gray-500">Automatically ask AI to reconsider when too many favorites</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- WhatsApp Settings -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">WhatsApp Settings</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Group Invite Link</label>
+                    <input type="url"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2"
+                           placeholder="https://chat.whatsapp.com/..."
+                           value="{{ settings.get('whatsapp_invite_link', {}).get('value', '') }}"
+                           hx-put="/api/settings/whatsapp_invite_link"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           name="value">
+                    <p class="text-xs text-gray-500 mt-1">The only link allowed in Early Mail</p>
+                </div>
+
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('use_emojis', {}).get('value', 'false') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/use_emojis"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('use_emojis', {}).get('value', 'false') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Use Emojis</span>
+                        <p class="text-xs text-gray-500">PUNTY_MASTER v3.13 says no emojis!</p>
+                    </div>
+                </label>
+
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('persona_swearing', {}).get('value', 'true') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/persona_swearing"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('persona_swearing', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Colorful Language</span>
+                        <p class="text-xs text-gray-500">Allow Punty to swear for colour</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- API Keys -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
+                    <div class="flex space-x-2">
+                        <input type="password"
+                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                               placeholder="sk-..."
+                               value="***configured***"
+                               disabled>
+                        <button class="text-punty-coral hover:underline text-sm">Edit</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Set in .env file as OPENAI_API_KEY</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Twitter/X API</label>
+                    <div class="flex space-x-2">
+                        <input type="password"
+                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                               placeholder="Not configured"
+                               disabled>
+                        <button class="text-punty-coral hover:underline text-sm">Configure</button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Business API</label>
+                    <div class="flex space-x-2">
+                        <input type="password"
+                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                               placeholder="Not configured"
+                               disabled>
+                        <button class="text-punty-coral hover:underline text-sm">Configure</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approval Settings -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Approval Settings</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-500 mb-4">Configure which content types require manual review</p>
+
+                <div class="space-y-3">
+                    <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Early Mail</span>
+                        <input type="checkbox" checked class="rounded text-punty-coral focus:ring-punty-coral">
+                    </label>
+                    <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Race Previews</span>
+                        <input type="checkbox" class="rounded text-punty-coral focus:ring-punty-coral">
+                    </label>
+                    <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Results</span>
+                        <input type="checkbox" class="rounded text-punty-coral focus:ring-punty-coral">
+                    </label>
+                    <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Update Alerts</span>
+                        <input type="checkbox" checked class="rounded text-punty-coral focus:ring-punty-coral">
+                    </label>
+                    <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Group 1 Races</span>
+                        <input type="checkbox" checked class="rounded text-punty-coral focus:ring-punty-coral">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduled Jobs -->
+        <div class="bg-white rounded-lg shadow lg:col-span-2">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900">Scheduled Jobs</h2>
+                <button class="text-punty-coral hover:underline text-sm">+ Add Job</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Schedule</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Run</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for job in jobs %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ job.job_type|replace('_', ' ')|title }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ job.meeting_id or 'All' }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                                {{ job.cron_expression or 'Manual' }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ job.last_run.strftime('%d %b %H:%M') if job.last_run else 'Never' }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if job.enabled %}
+                                <span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Active</span>
+                                {% else %}
+                                <span class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Disabled</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                                <button hx-put="/api/scheduler/jobs/{{ job.id }}/toggle"
+                                        class="text-punty-coral hover:underline">
+                                    {{ 'Disable' if job.enabled else 'Enable' }}
+                                </button>
+                                <button hx-post="/api/scheduler/run/{{ job.job_type }}?meeting_id={{ job.meeting_id }}"
+                                        class="text-blue-600 hover:underline">
+                                    Run Now
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                                No scheduled jobs configured
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Punty Personality -->
+        <div class="bg-white rounded-lg shadow lg:col-span-2">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Punty's Personality (PUNTY_MASTER v3.13)</h2>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-500 mb-4">
+                    Edit the personality prompt that defines how Punty writes content.
+                    This is loaded from <code class="bg-gray-100 px-1 rounded">prompts/personality.md</code>
+                </p>
+                <textarea class="w-full h-64 border border-gray-300 rounded-lg p-4 font-mono text-sm"
+                          placeholder="Loading personality prompt...">{{ personality_prompt }}</textarea>
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button class="text-gray-500 hover:text-gray-700 px-4 py-2">
+                        Reset to Default
+                    </button>
+                    <button class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
+                        Save Personality
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

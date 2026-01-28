@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">G'day, Legend!</h1>
+            <p class="text-gray-500">Here's what Punty's got brewing today</p>
+        </div>
+        <div class="flex items-center space-x-2 text-sm text-gray-500">
+            <span>&#x1F4C5;</span>
+            <span>{{ now().strftime('%A, %d %B %Y') if now is defined else 'Today' }}</span>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-punty-coral/10 rounded-lg">
+                    <span class="text-2xl">&#x1F3C7;</span>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm text-gray-500">Today's Meets</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ todays_meetings|length }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-yellow-100 rounded-lg">
+                    <span class="text-2xl">&#x1F4DD;</span>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm text-gray-500">Pending Review</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ pending_reviews }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-green-100 rounded-lg">
+                    <span class="text-2xl">&#x2705;</span>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm text-gray-500">Content Sent</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ recent_content|selectattr('status', 'equalto', 'sent')|list|length }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-blue-100 rounded-lg">
+                    <span class="text-2xl">&#x23F0;</span>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm text-gray-500">Active Jobs</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ active_jobs|length }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Today's Meetings -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900">Today's Race Meets</h2>
+                <a href="/meets" class="text-punty-coral hover:underline text-sm">View all</a>
+            </div>
+            <div class="p-6">
+                {% if todays_meetings %}
+                <ul class="divide-y divide-gray-200">
+                    {% for meeting in todays_meetings %}
+                    <li class="py-3">
+                        <a href="/meets/{{ meeting.id }}" class="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-1 rounded">
+                            <div>
+                                <p class="font-medium text-gray-900">{{ meeting.venue }}</p>
+                                <p class="text-sm text-gray-500">
+                                    {{ meeting.track_condition or 'TBC' }} |
+                                    {{ meeting.races|length if meeting.races else '?' }} races
+                                </p>
+                            </div>
+                            <span class="text-punty-coral">&#x2192;</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-center py-8 text-gray-500">
+                    <p class="text-4xl mb-2">&#x1F3C7;</p>
+                    <p>No meetings today</p>
+                    <a href="/meets" class="text-punty-coral hover:underline text-sm">Add a meeting</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Pending Reviews -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900">Needs Your Approval</h2>
+                <a href="/review" class="text-punty-coral hover:underline text-sm">Review all</a>
+            </div>
+            <div class="p-6">
+                {% set review_items = recent_content|selectattr('status', 'equalto', 'pending_review')|list %}
+                {% if review_items %}
+                <ul class="divide-y divide-gray-200">
+                    {% for item in review_items[:5] %}
+                    <li class="py-3">
+                        <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-1 rounded">
+                            <div>
+                                <p class="font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</p>
+                                <p class="text-sm text-gray-500">{{ item.meeting_id }}</p>
+                            </div>
+                            <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Review</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-center py-8 text-gray-500">
+                    <p class="text-4xl mb-2">&#x2705;</p>
+                    <p>All caught up!</p>
+                    <p class="text-sm">No content waiting for review</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Content -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900">Recent Content</h2>
+            <a href="/content" class="text-punty-coral hover:underline text-sm">View all</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for item in recent_content[:10] %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ item.meeting_id }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% set status_colors = {
+                                'draft': 'bg-gray-100 text-gray-800',
+                                'pending_review': 'bg-yellow-100 text-yellow-800',
+                                'approved': 'bg-green-100 text-green-800',
+                                'rejected': 'bg-red-100 text-red-800',
+                                'scheduled': 'bg-blue-100 text-blue-800',
+                                'sent': 'bg-purple-100 text-purple-800'
+                            } %}
+                            <span class="px-2 py-1 text-xs rounded {{ status_colors.get(item.status, 'bg-gray-100') }}">
+                                {{ item.status|replace('_', ' ')|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ item.created_at.strftime('%H:%M') if item.created_at else '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <a href="/review/{{ item.id }}" class="text-punty-coral hover:underline">View</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                            No content generated yet. Add a meeting to get started!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-punty-blue/10 rounded-lg p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div class="flex flex-wrap gap-3">
+            <button class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 flex items-center space-x-2"
+                    hx-post="/api/meets/scrape"
+                    hx-include="[name='venue'],[name='date']">
+                <span>&#x1F50D;</span>
+                <span>Scrape New Meeting</span>
+            </button>
+            <button class="bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90 flex items-center space-x-2">
+                <span>&#x1F4DD;</span>
+                <span>Generate Early Mail</span>
+            </button>
+            <button class="bg-punty-gold text-white px-4 py-2 rounded-lg hover:bg-punty-gold/90 flex items-center space-x-2">
+                <span>&#x1F4E4;</span>
+                <span>Send to WhatsApp</span>
+            </button>
+            <button class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2">
+                <span>&#x1F426;</span>
+                <span>Post to Twitter</span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Error - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center py-20">
+    <p class="text-6xl mb-4">&#x1F40E;&#x1F4A8;</p>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Whoops!</h1>
+    <p class="text-gray-500 mb-6">{{ error or 'Something went wrong' }}</p>
+    <a href="/" class="bg-punty-coral text-white px-6 py-2 rounded-lg hover:bg-punty-coral/90">
+        Back to Dashboard
+    </a>
+</div>
+{% endblock %}

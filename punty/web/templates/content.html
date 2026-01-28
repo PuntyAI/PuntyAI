@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Content - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Content</h1>
+            <p class="text-gray-500">All generated content from Punty</p>
+        </div>
+    </div>
+
+    <!-- Status Filters -->
+    <div class="flex flex-wrap gap-2">
+        <a href="/content" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300">
+            All ({{ status_counts.values()|sum }})
+        </a>
+        {% for status, count in status_counts.items() %}
+        {% set colors = {
+            'draft': 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+            'pending_review': 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
+            'approved': 'bg-green-100 text-green-700 hover:bg-green-200',
+            'rejected': 'bg-red-100 text-red-700 hover:bg-red-200',
+            'scheduled': 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+            'sent': 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+        } %}
+        <a href="/content?status={{ status }}" class="px-4 py-2 rounded-lg {{ colors.get(status, 'bg-gray-100') }}">
+            {{ status|replace('_', ' ')|title }} ({{ count }})
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- Content Table -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Platforms</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for item in content_items %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm font-medium text-gray-900">
+                                {{ item.content_type|replace('_', ' ')|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <a href="/meets/{{ item.meeting_id }}" class="text-punty-coral hover:underline">
+                                {{ item.meeting_id }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-sm text-gray-600 truncate max-w-xs">
+                                {{ (item.raw_content or '')[:100] }}{{ '...' if item.raw_content and item.raw_content|length > 100 else '' }}
+                            </p>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% set status_colors = {
+                                'draft': 'bg-gray-100 text-gray-800',
+                                'pending_review': 'bg-yellow-100 text-yellow-800',
+                                'approved': 'bg-green-100 text-green-800',
+                                'rejected': 'bg-red-100 text-red-800',
+                                'regenerating': 'bg-orange-100 text-orange-800',
+                                'scheduled': 'bg-blue-100 text-blue-800',
+                                'sent': 'bg-purple-100 text-purple-800'
+                            } %}
+                            <span class="px-2 py-1 text-xs rounded {{ status_colors.get(item.status, 'bg-gray-100') }}">
+                                {{ item.status|replace('_', ' ')|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <div class="flex space-x-1">
+                                {% if item.sent_to_whatsapp %}
+                                <span class="text-green-600" title="Sent to WhatsApp">&#x2705; WA</span>
+                                {% endif %}
+                                {% if item.sent_to_twitter %}
+                                <span class="text-green-600" title="Sent to Twitter">&#x2705; X</span>
+                                {% endif %}
+                                {% if not item.sent_to_whatsapp and not item.sent_to_twitter %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ item.created_at.strftime('%d %b %H:%M') if item.created_at else '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                            <a href="/review/{{ item.id }}" class="text-punty-coral hover:underline">View</a>
+                            {% if item.status == 'approved' %}
+                            <button hx-post="/api/delivery/send"
+                                    hx-vals='{"content_id": "{{ item.id }}", "platform": "twitter"}'
+                                    class="text-blue-600 hover:underline">Send</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                            <p class="text-4xl mb-2">&#x1F4DD;</p>
+                            <p>No content generated yet</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

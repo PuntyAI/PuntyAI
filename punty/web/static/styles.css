@@ -1,0 +1,93 @@
+/* PuntyAI - Custom Styles */
+/* Most styling is handled by Tailwind CSS */
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #e07050;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #c05040;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* WhatsApp message bubble */
+.whatsapp-bubble {
+    background-color: #DCF8C6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    max-width: 80%;
+    margin-left: auto;
+    position: relative;
+}
+
+.whatsapp-bubble::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 0;
+    border-width: 8px;
+    border-style: solid;
+    border-color: #DCF8C6 transparent transparent transparent;
+}
+
+/* Twitter card style */
+.twitter-card {
+    border: 1px solid #e1e8ed;
+    border-radius: 16px;
+    padding: 12px;
+    max-width: 500px;
+}
+
+/* Punty coral gradient */
+.punty-gradient {
+    background: linear-gradient(135deg, #e07050 0%, #d4a847 100%);
+}
+
+/* Table hover effect */
+.table-hover tbody tr:hover {
+    background-color: rgba(224, 112, 80, 0.05);
+}
+
+/* Form focus states */
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: #e07050;
+    box-shadow: 0 0 0 3px rgba(224, 112, 80, 0.1);
+}
+
+/* Button loading state */
+button.htmx-request {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .mobile-hidden {
+        display: none;
+    }
+}

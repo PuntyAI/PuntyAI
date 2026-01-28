@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Review: {{ content.content_type|replace('_', ' ')|title }} - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <nav class="text-sm text-gray-500 mb-2">
+                <a href="/review" class="hover:text-punty-coral">Review Queue</a> /
+                <span>{{ content.content_type|replace('_', ' ')|title }}</span>
+            </nav>
+            <h1 class="text-3xl font-bold text-gray-900">
+                {{ content.content_type|replace('_', ' ')|title }}
+            </h1>
+            <p class="text-gray-500">{{ content.meeting_id }}</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            {% set status_colors = {
+                'draft': 'bg-gray-100 text-gray-800',
+                'pending_review': 'bg-yellow-100 text-yellow-800',
+                'approved': 'bg-green-100 text-green-800',
+                'rejected': 'bg-red-100 text-red-800',
+                'regenerating': 'bg-orange-100 text-orange-800',
+                'scheduled': 'bg-blue-100 text-blue-800',
+                'sent': 'bg-purple-100 text-purple-800'
+            } %}
+            <span class="px-3 py-1 rounded-full {{ status_colors.get(content.status, 'bg-gray-100') }}">
+                {{ content.status|replace('_', ' ')|title }}
+            </span>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content Editor -->
+        <div class="lg:col-span-2 space-y-4">
+            <!-- Raw Content -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Content</h2>
+                </div>
+                <div class="p-6">
+                    <textarea id="raw-content"
+                              class="w-full h-64 border border-gray-300 rounded-lg p-4 font-mono text-sm focus:ring-punty-coral focus:border-punty-coral"
+                              hx-put="/api/content/{{ content.id }}"
+                              hx-trigger="blur changed delay:500ms"
+                              hx-vals="js:{raw_content: document.getElementById('raw-content').value}"
+                              name="raw_content">{{ content.raw_content or '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Platform Previews -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Platform Previews</h2>
+                </div>
+                <div class="p-6">
+                    <div class="flex border-b border-gray-200 mb-4">
+                        <button class="px-4 py-2 border-b-2 border-punty-coral text-punty-coral font-medium"
+                                onclick="showPreview('whatsapp')">
+                            WhatsApp
+                        </button>
+                        <button class="px-4 py-2 text-gray-500 hover:text-gray-700"
+                                onclick="showPreview('twitter')">
+                            Twitter/X
+                        </button>
+                    </div>
+
+                    <!-- WhatsApp Preview -->
+                    <div id="preview-whatsapp" class="preview-panel">
+                        <div class="bg-[#DCF8C6] rounded-lg p-4 max-w-sm ml-auto">
+                            <pre class="whitespace-pre-wrap text-sm">{{ content.whatsapp_formatted or content.raw_content or 'No content' }}</pre>
+                            <div class="text-right text-xs text-gray-500 mt-1">
+                                {{ content.created_at.strftime('%H:%M') if content.created_at else '' }} &#x2713;&#x2713;
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Twitter Preview -->
+                    <div id="preview-twitter" class="preview-panel hidden">
+                        <div class="border border-gray-200 rounded-xl p-4 max-w-md">
+                            <div class="flex items-start space-x-3">
+                                <div class="w-12 h-12 bg-punty-coral rounded-full flex items-center justify-center text-white text-xl">
+                                    &#x1F40E;
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-1">
+                                        <span class="font-bold">Punty</span>
+                                        <span class="text-blue-500">&#x2713;</span>
+                                        <span class="text-gray-500">@PuntyAI</span>
+                                    </div>
+                                    <pre class="whitespace-pre-wrap text-sm mt-2">{{ content.twitter_formatted or content.raw_content or 'No content' }}</pre>
+                                    <div class="flex justify-between text-gray-500 mt-3 text-sm">
+                                        <span>&#x1F4AC; 0</span>
+                                        <span>&#x1F501; 0</span>
+                                        <span>&#x2764; 0</span>
+                                        <span>&#x1F4CA; 0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2">
+                            Character count: <span id="char-count">{{ (content.twitter_formatted or content.raw_content or '')|length }}</span>/280
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-4">
+            <!-- Actions -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
+                <div class="space-y-3">
+                    {% if content.status == 'pending_review' %}
+                    <button hx-post="/api/content/{{ content.id }}/review"
+                            hx-vals='{"action": "approve"}'
+                            hx-swap="none"
+                            class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                        &#x2705; Approve
+                    </button>
+                    <button hx-post="/api/content/{{ content.id }}/review"
+                            hx-vals='{"action": "reject"}'
+                            hx-swap="none"
+                            class="w-full border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50">
+                        &#x274C; Reject
+                    </button>
+                    {% endif %}
+
+                    <button hx-post="/api/content/{{ content.id }}/review"
+                            hx-vals='{"action": "regenerate"}'
+                            hx-swap="none"
+                            class="w-full border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50">
+                        &#x1F504; Regenerate
+                    </button>
+
+                    {% if content.status == 'approved' %}
+                    <hr class="my-4">
+                    <button hx-post="/api/delivery/send"
+                            hx-vals='{"content_id": "{{ content.id }}", "platform": "whatsapp"}'
+                            class="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
+                        Send to WhatsApp
+                    </button>
+                    <button hx-post="/api/delivery/send"
+                            hx-vals='{"content_id": "{{ content.id }}", "platform": "twitter"}'
+                            class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900">
+                        Post to Twitter
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- AI Fix -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Fix</h3>
+                <p class="text-sm text-gray-500 mb-3">Ask Punty to fix specific issues</p>
+                <select id="issue-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3">
+                    <option value="tone_wrong">Tone is off</option>
+                    <option value="too_long">Too long</option>
+                    <option value="too_short">Too short</option>
+                    <option value="factually_incorrect">Factually incorrect</option>
+                    <option value="missing_info">Missing information</option>
+                    <option value="not_funny">Not funny enough</option>
+                </select>
+                <textarea id="fix-notes"
+                          class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 h-20"
+                          placeholder="Additional notes..."></textarea>
+                <button hx-post="/api/content/{{ content.id }}/review"
+                        hx-vals="js:{action: 'ai_fix', issue_type: document.getElementById('issue-type').value, notes: document.getElementById('fix-notes').value}"
+                        class="w-full bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90">
+                    &#x1F916; Request AI Fix
+                </button>
+            </div>
+
+            <!-- Context Info -->
+            {% if content.context_snapshot %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Context Used</h3>
+                <dl class="text-sm space-y-2">
+                    <div>
+                        <dt class="text-gray-500">Version</dt>
+                        <dd class="font-medium">{{ content.context_snapshot.version }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Created</dt>
+                        <dd class="font-medium">{{ content.context_snapshot.created_at.strftime('%d %b %H:%M') if content.context_snapshot.created_at else '-' }}</dd>
+                    </div>
+                    {% if content.context_snapshot.significant_changes %}
+                    <div>
+                        <dt class="text-gray-500">Changes</dt>
+                        <dd class="text-orange-600">{{ content.context_snapshot.significant_changes }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+            {% endif %}
+
+            <!-- Review Notes -->
+            {% if content.review_notes %}
+            <div class="bg-yellow-50 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Review Notes</h3>
+                <p class="text-sm text-gray-700">{{ content.review_notes }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function showPreview(platform) {
+    document.querySelectorAll('.preview-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('preview-' + platform).classList.remove('hidden');
+}
+</script>
+{% endblock %}

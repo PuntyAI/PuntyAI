@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Review Queue - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Review Queue</h1>
+            <p class="text-gray-500">Content awaiting your approval</p>
+        </div>
+        <div class="text-sm text-gray-500">
+            {{ review_items|length }} item(s) pending
+        </div>
+    </div>
+
+    {% if review_items %}
+    <!-- Review List -->
+    <div class="space-y-4">
+        {% for item in review_items %}
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        {{ item.content_type|replace('_', ' ')|title }}
+                    </h3>
+                    <p class="text-sm text-gray-500">
+                        {{ item.meeting_id }} | Created {{ item.created_at.strftime('%d %b at %H:%M') if item.created_at else '' }}
+                    </p>
+                </div>
+                <a href="/review/{{ item.id }}"
+                   class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
+                    Review
+                </a>
+            </div>
+            <div class="px-6 py-4">
+                <div class="prose prose-sm max-w-none">
+                    <pre class="whitespace-pre-wrap bg-gray-50 p-4 rounded text-sm">{{ item.raw_content or 'No content yet' }}</pre>
+                </div>
+            </div>
+            <div class="px-6 py-3 bg-gray-50 flex justify-end space-x-3">
+                <button hx-post="/api/content/{{ item.id }}/review"
+                        hx-vals='{"action": "reject", "notes": "Quick reject from queue"}'
+                        hx-swap="outerHTML"
+                        hx-target="closest div.bg-white"
+                        class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">
+                    Reject
+                </button>
+                <button hx-post="/api/content/{{ item.id }}/review"
+                        hx-vals='{"action": "approve"}'
+                        hx-swap="outerHTML"
+                        hx-target="closest div.bg-white"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    Approve
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="bg-white rounded-lg shadow p-12 text-center">
+        <p class="text-6xl mb-4">&#x1F389;</p>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">All caught up!</h2>
+        <p class="text-gray-500 mb-6">No content is waiting for your review</p>
+        <div class="flex justify-center space-x-4">
+            <a href="/meets" class="text-punty-coral hover:underline">View meetings</a>
+            <span class="text-gray-300">|</span>
+            <a href="/content" class="text-punty-coral hover:underline">View all content</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
