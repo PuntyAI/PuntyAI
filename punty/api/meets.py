@@ -1,9 +1,14 @@
 """API endpoints for race meetings."""
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from punty.models.database import get_db
+from punty.models.meeting import Meeting
 
 router = APIRouter()
 
@@ -11,10 +16,29 @@ router = APIRouter()
 @router.get("/")
 async def list_meetings(db: AsyncSession = Depends(get_db)):
     """List all race meetings."""
-    from punty.models.meeting import Meeting
-    from sqlalchemy import select
-
     result = await db.execute(select(Meeting).order_by(Meeting.date.desc()))
+    meetings = result.scalars().all()
+    return [m.to_dict() for m in meetings]
+
+
+@router.get("/today")
+async def list_today(db: AsyncSession = Depends(get_db)):
+    """List today's meetings."""
+    today = date.today()
+    result = await db.execute(
+        select(Meeting).where(Meeting.date == today).order_by(Meeting.venue)
+    )
+    meetings = result.scalars().all()
+    return [m.to_dict() for m in meetings]
+
+
+@router.get("/selected")
+async def list_selected(db: AsyncSession = Depends(get_db)):
+    """List only selected meetings for today."""
+    today = date.today()
+    result = await db.execute(
+        select(Meeting).where(Meeting.date == today, Meeting.selected == True).order_by(Meeting.venue)
+    )
     meetings = result.scalars().all()
     return [m.to_dict() for m in meetings]
 
@@ -22,10 +46,6 @@ async def list_meetings(db: AsyncSession = Depends(get_db)):
 @router.get("/{meeting_id}")
 async def get_meeting(meeting_id: str, db: AsyncSession = Depends(get_db)):
     """Get a specific meeting with races and runners."""
-    from punty.models.meeting import Meeting
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
     result = await db.execute(
         select(Meeting)
         .where(Meeting.id == meeting_id)
@@ -37,8 +57,52 @@ async def get_meeting(meeting_id: str, db: AsyncSession = Depends(get_db)):
     return meeting.to_dict(include_races=True)
 
 
+@router.post("/scrape-calendar")
+async def scrape_calendar_endpoint(db: AsyncSession = Depends(get_db)):
+    """Trigger calendar scrape for today's meetings."""
+    from punty.scrapers.orchestrator import scrape_calendar
+
+    meetings = await scrape_calendar(db)
+    return {"status": "ok", "count": len(meetings), "meetings": meetings}
+
+
+@router.put("/{meeting_id}/select")
+async def toggle_select(meeting_id: str, db: AsyncSession = Depends(get_db)):
+    """Toggle meeting selection on/off."""
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    meeting.selected = not meeting.selected
+    await db.commit()
+    return {"id": meeting_id, "selected": meeting.selected}
+
+
+@router.post("/{meeting_id}/scrape-full")
+async def scrape_full_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
+    """Run all scrapers for a meeting."""
+    from punty.scrapers.orchestrator import scrape_meeting_full
+
+    try:
+        result = await scrape_meeting_full(meeting_id, db)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{meeting_id}/refresh-odds")
+async def refresh_odds_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
+    """Quick odds/scratchings refresh for a meeting."""
+    from punty.scrapers.orchestrator import refresh_odds
+
+    try:
+        result = await refresh_odds(meeting_id, db)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/scrape")
 async def scrape_meeting(venue: str, date: str, db: AsyncSession = Depends(get_db)):
-    """Trigger scraping for a race meeting."""
-    # Will be implemented with scrapers
+    """Trigger scraping for a race meeting (legacy endpoint)."""
     return {"status": "queued", "venue": venue, "date": date}

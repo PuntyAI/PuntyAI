@@ -3,7 +3,7 @@
 from datetime import datetime, date
 from typing import Optional, List
 
-from sqlalchemy import String, Integer, Float, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Boolean, String, Integer, Float, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from punty.models.database import Base
@@ -20,6 +20,8 @@ class Meeting(Base):
     track_condition: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     weather: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     rail_position: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    selected: Mapped[bool] = mapped_column(Boolean, default=False)
+    source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -39,6 +41,8 @@ class Meeting(Base):
             "track_condition": self.track_condition,
             "weather": self.weather,
             "rail_position": self.rail_position,
+            "selected": self.selected,
+            "source": self.source,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

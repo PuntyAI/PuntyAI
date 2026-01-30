@@ -43,6 +43,13 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down PuntyAI...")
     # await scheduler_manager.stop()
 
+    # Close Playwright browser if it was started
+    try:
+        from punty.scrapers.playwright_base import close_browser
+        await close_browser()
+    except Exception:
+        pass
+
 
 # Create FastAPI app
 app = FastAPI(

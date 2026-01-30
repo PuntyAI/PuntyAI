@@ -60,9 +60,23 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/meets", response_class=HTMLResponse)
 async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Race meetings management page."""
-    result = await db.execute(select(Meeting).order_by(Meeting.date.desc()).limit(50))
-    meetings = result.scalars().all()
+    """Race meetings management page — shows today's meetings first."""
+    from datetime import date as date_type
+
+    today = date_type.today()
+
+    # Today's meetings first
+    result = await db.execute(
+        select(Meeting).where(Meeting.date == today).order_by(Meeting.venue)
+    )
+    todays = result.scalars().all()
+
+    # If no today meetings, fall back to all recent
+    if todays:
+        meetings = todays
+    else:
+        result = await db.execute(select(Meeting).order_by(Meeting.date.desc()).limit(50))
+        meetings = result.scalars().all()
 
     return templates.TemplateResponse(
         "meets.html",
