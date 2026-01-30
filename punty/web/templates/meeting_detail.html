@@ -20,8 +20,13 @@
                 {{ meeting.track_condition }}
             </span>
             {% endif %}
-            {% if meeting.weather %}
+            {% if meeting.weather_condition %}
+            <span class="text-gray-500">{{ meeting.weather_condition }}</span>
+            {% elif meeting.weather %}
             <span class="text-gray-500">{{ meeting.weather }}</span>
+            {% endif %}
+            {% if meeting.weather_temp %}
+            <span class="text-gray-500">{{ meeting.weather_temp }}&deg;C</span>
             {% endif %}
         </div>
     </div>
@@ -30,17 +35,43 @@
     <div class="bg-punty-coral/10 rounded-lg p-4 flex flex-wrap gap-3">
         <button hx-post="/api/content/generate"
                 hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "early_mail"}'
+                hx-swap="none"
+                hx-on::after-request="if(event.detail.successful) showToast('Early mail generation queued', 'success'); else showToast('Failed to queue early mail', 'error');"
                 class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
             &#x1F4E7; Generate Early Mail
         </button>
-        <button hx-post="/api/meets/scrape?venue={{ meeting.venue }}&date={{ meeting.date }}"
+        <button onclick="startScrape()" id="scrape-btn"
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x1F504; Refresh Data
+            &#x1F504; Scrape All Data
         </button>
-        <button hx-post="/api/scheduler/run/scrape_speed_maps?meeting_id={{ meeting.id }}"
+        <button onclick="startSpeedMaps()" id="speedmap-btn"
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
             &#x1F3C3; Fetch Speed Maps
         </button>
+    </div>
+
+    <!-- Scrape Progress -->
+    <div id="scrape-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-gray-900">Scraping Data</h3>
+            <span id="progress-pct" class="text-sm text-gray-500">0%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+            <div id="progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <div id="progress-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
+    </div>
+
+    <!-- Speed Map Progress -->
+    <div id="speedmap-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-gray-900">Fetching Speed Maps</h3>
+            <span id="speedmap-pct" class="text-sm text-gray-500">0%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+            <div id="speedmap-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <div id="speedmap-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -54,7 +85,7 @@
                 </div>
                 <div class="divide-y divide-gray-200">
                     {% for race in meeting.races|sort(attribute='race_number') %}
-                    <div class="p-6" x-data="{ open: false }">
+                    <div class="p-6" x-data="{ open: false, detail: null }">
                         <div class="flex justify-between items-start cursor-pointer" @click="open = !open">
                             <div>
                                 <div class="flex items-center space-x-3">
@@ -66,7 +97,12 @@
                                         <p class="text-sm text-gray-500">
                                             {{ race.distance }}m | {{ race.class_ or 'Open' }}
                                             {% if race.prize_money %} | ${{ "{:,}".format(race.prize_money) }}{% endif %}
+                                            {% if race.weight_type %} | {{ race.weight_type }}{% endif %}
+                                            {% if race.age_restriction %} | {{ race.age_restriction }}{% endif %}
                                         </p>
+                                        {% if race.track_condition %}
+                                        <p class="text-xs text-gray-400">Track: {{ race.track_condition }}{% if race.field_size %} | Field: {{ race.field_size }}{% endif %}</p>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -91,28 +127,31 @@
                                     <tr>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Horse</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Barrier</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Jockey</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Weight</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Wt</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Form</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Speed Map</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Speed</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Odds</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
                                     {% for runner in race.runners|sort(attribute='barrier') %}
-                                    <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}">
+                                    <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}"
+                                        x-data="{ expanded: false }">
                                         <td class="px-3 py-2">{{ runner.barrier }}</td>
                                         <td class="px-3 py-2 font-medium">
                                             {{ runner.horse_name }}
                                             {% if runner.scratched %}
                                             <span class="text-red-500 text-xs">(SCR)</span>
                                             {% endif %}
+                                            {% if runner.horse_age and runner.horse_sex and not runner.scratched %}
+                                            <span class="text-xs text-gray-400">{{ runner.horse_age }}yo {{ runner.horse_sex[0] if runner.horse_sex else '' }}</span>
+                                            {% endif %}
                                         </td>
-                                        <td class="px-3 py-2">{{ runner.barrier or '-' }}</td>
-                                        <td class="px-3 py-2">{{ runner.jockey or '-' }}</td>
-                                        <td class="px-3 py-2">{{ runner.weight or '-' }}kg</td>
-                                        <td class="px-3 py-2 font-mono">{{ runner.form or '-' }}</td>
+                                        <td class="px-3 py-2 text-xs">{{ runner.jockey or '-' }}</td>
+                                        <td class="px-3 py-2">{{ runner.weight or '-' }}</td>
+                                        <td class="px-3 py-2 font-mono text-xs">{{ runner.last_five or runner.form or '-' }}</td>
                                         <td class="px-3 py-2">
                                             {% if runner.speed_map_position %}
                                             {% set pos_colors = {
@@ -140,7 +179,135 @@
                                             -
                                             {% endif %}
                                         </td>
+                                        <td class="px-3 py-2">
+                                            {% if not runner.scratched %}
+                                            <button @click.stop="expanded = !expanded" class="text-xs text-punty-coral hover:underline">
+                                                <span x-text="expanded ? 'Less' : 'More'"></span>
+                                            </button>
+                                            {% endif %}
+                                        </td>
                                     </tr>
+                                    <!-- Expandable detail row -->
+                                    {% if not runner.scratched %}
+                                    <tr x-show="expanded" x-collapse class="bg-gray-50">
+                                        <td colspan="8" class="px-3 py-3">
+                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                                <!-- Pedigree -->
+                                                {% if runner.sire %}
+                                                <div>
+                                                    <span class="text-gray-500">Sire:</span>
+                                                    <span class="font-medium">{{ runner.sire }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.dam %}
+                                                <div>
+                                                    <span class="text-gray-500">Dam:</span>
+                                                    <span class="font-medium">{{ runner.dam }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <!-- Trainer -->
+                                                {% if runner.trainer %}
+                                                <div>
+                                                    <span class="text-gray-500">Trainer:</span>
+                                                    <span class="font-medium">{{ runner.trainer }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <!-- Handicap Rating -->
+                                                {% if runner.handicap_rating %}
+                                                <div>
+                                                    <span class="text-gray-500">HC Rating:</span>
+                                                    <span class="font-medium">{{ runner.handicap_rating }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <!-- Career -->
+                                                {% if runner.career_record %}
+                                                <div>
+                                                    <span class="text-gray-500">Career:</span>
+                                                    <span class="font-medium">{{ runner.career_record }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.career_prize_money %}
+                                                <div>
+                                                    <span class="text-gray-500">Prize $:</span>
+                                                    <span class="font-medium">${{ "{:,}".format(runner.career_prize_money) }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.days_since_last_run is not none %}
+                                                <div>
+                                                    <span class="text-gray-500">Days since run:</span>
+                                                    <span class="font-medium">{{ runner.days_since_last_run }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <!-- Stats -->
+                                                {% if runner.track_dist_stats %}
+                                                <div>
+                                                    <span class="text-gray-500">Trk/Dist:</span>
+                                                    <span class="font-medium">{{ runner.track_dist_stats }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.track_stats %}
+                                                <div>
+                                                    <span class="text-gray-500">Track:</span>
+                                                    <span class="font-medium">{{ runner.track_stats }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.distance_stats %}
+                                                <div>
+                                                    <span class="text-gray-500">Distance:</span>
+                                                    <span class="font-medium">{{ runner.distance_stats }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.first_up_stats %}
+                                                <div>
+                                                    <span class="text-gray-500">1st Up:</span>
+                                                    <span class="font-medium">{{ runner.first_up_stats }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.second_up_stats %}
+                                                <div>
+                                                    <span class="text-gray-500">2nd Up:</span>
+                                                    <span class="font-medium">{{ runner.second_up_stats }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <!-- Gear -->
+                                                {% if runner.gear %}
+                                                <div class="col-span-2">
+                                                    <span class="text-gray-500">Gear:</span>
+                                                    <span class="font-medium">{{ runner.gear }}</span>
+                                                </div>
+                                                {% endif %}
+                                                {% if runner.gear_changes %}
+                                                <div class="col-span-2">
+                                                    <span class="text-gray-500">Gear Changes:</span>
+                                                    <span class="font-medium text-amber-700">{{ runner.gear_changes }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <!-- Multi-provider odds -->
+                                                {% if runner.odds_tab or runner.odds_sportsbet or runner.odds_bet365 or runner.odds_ladbrokes %}
+                                                <div class="col-span-2 md:col-span-4">
+                                                    <span class="text-gray-500">Odds:</span>
+                                                    {% if runner.odds_tab %}<span class="ml-1 px-1.5 py-0.5 bg-blue-50 rounded">TAB ${{ "%.2f"|format(runner.odds_tab) }}</span>{% endif %}
+                                                    {% if runner.odds_sportsbet %}<span class="ml-1 px-1.5 py-0.5 bg-green-50 rounded">SB ${{ "%.2f"|format(runner.odds_sportsbet) }}</span>{% endif %}
+                                                    {% if runner.odds_bet365 %}<span class="ml-1 px-1.5 py-0.5 bg-yellow-50 rounded">B365 ${{ "%.2f"|format(runner.odds_bet365) }}</span>{% endif %}
+                                                    {% if runner.odds_ladbrokes %}<span class="ml-1 px-1.5 py-0.5 bg-red-50 rounded">LAD ${{ "%.2f"|format(runner.odds_ladbrokes) }}</span>{% endif %}
+                                                    {% if runner.odds_betfair %}<span class="ml-1 px-1.5 py-0.5 bg-purple-50 rounded">BF ${{ "%.2f"|format(runner.odds_betfair) }}</span>{% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            <!-- Comments -->
+                                            {% if runner.comment_long %}
+                                            <div class="mt-2 text-xs text-gray-600 italic border-t border-gray-200 pt-2">
+                                                {{ runner.comment_long }}
+                                            </div>
+                                            {% endif %}
+                                            {% if runner.stewards_comment %}
+                                            <div class="mt-1 text-xs text-red-600">
+                                                <span class="font-medium">Stewards:</span> {{ runner.stewards_comment }}
+                                            </div>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endif %}
                                     {% else %}
                                     <tr>
                                         <td colspan="8" class="px-3 py-4 text-center text-gray-500">
@@ -154,7 +321,7 @@
                     </div>
                     {% else %}
                     <div class="p-6 text-center text-gray-500">
-                        No races loaded yet. Click "Refresh Data" to fetch.
+                        No races loaded yet. Click "Scrape All Data" to fetch.
                     </div>
                     {% endfor %}
                 </div>
@@ -207,12 +374,33 @@
                     </div>
                     <div>
                         <dt class="text-gray-500">Weather</dt>
-                        <dd class="font-medium">{{ meeting.weather or 'TBC' }}</dd>
+                        <dd class="font-medium">
+                            {{ meeting.weather_condition or meeting.weather or 'TBC' }}
+                            {% if meeting.weather_temp %} &mdash; {{ meeting.weather_temp }}&deg;C{% endif %}
+                        </dd>
                     </div>
+                    {% if meeting.weather_wind_speed %}
+                    <div>
+                        <dt class="text-gray-500">Wind</dt>
+                        <dd class="font-medium">{{ meeting.weather_wind_speed }} km/h {{ meeting.weather_wind_dir or '' }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if meeting.penetrometer %}
+                    <div>
+                        <dt class="text-gray-500">Penetrometer</dt>
+                        <dd class="font-medium">{{ meeting.penetrometer }}</dd>
+                    </div>
+                    {% endif %}
                     {% if meeting.rail_position %}
                     <div>
                         <dt class="text-gray-500">Rail Position</dt>
                         <dd class="font-medium">{{ meeting.rail_position }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if meeting.rail_bias_comment %}
+                    <div>
+                        <dt class="text-gray-500">Rail/Track Bias</dt>
+                        <dd class="font-medium text-xs">{{ meeting.rail_bias_comment }}</dd>
                     </div>
                     {% endif %}
                     <div>
@@ -227,4 +415,140 @@
 
 <!-- Alpine.js for collapsible sections -->
 <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+<script>
+function startScrape() {
+    const btn = document.getElementById('scrape-btn');
+    const panel = document.getElementById('scrape-progress');
+    const bar = document.getElementById('progress-bar');
+    const pct = document.getElementById('progress-pct');
+    const log = document.getElementById('progress-log');
+
+    btn.disabled = true;
+    btn.textContent = 'Scraping...';
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    panel.classList.remove('hidden');
+    log.innerHTML = '';
+    bar.style.width = '0%';
+    pct.textContent = '0%';
+
+    const evtSource = new EventSource('/api/meets/{{ meeting.id }}/scrape-stream');
+
+    evtSource.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        const percent = Math.round((data.step / data.total) * 100);
+
+        // Update bar
+        bar.style.width = percent + '%';
+        pct.textContent = percent + '%';
+
+        // Add log line
+        const line = document.createElement('div');
+        line.className = 'flex items-center gap-2 py-0.5';
+
+        let icon = '';
+        let textClass = 'text-gray-700';
+        if (data.status === 'running') {
+            icon = '<span class="inline-block w-4 h-4 border-2 border-punty-coral border-t-transparent rounded-full animate-spin"></span>';
+            textClass = 'text-gray-600';
+        } else if (data.status === 'done') {
+            icon = '<span class="text-green-600 font-bold">&#10003;</span>';
+            textClass = 'text-green-700';
+        } else if (data.status === 'error') {
+            icon = '<span class="text-red-600 font-bold">&#10007;</span>';
+            textClass = 'text-red-600';
+        } else if (data.status === 'complete') {
+            icon = '<span class="text-punty-coral font-bold">&#9679;</span>';
+            textClass = 'font-semibold text-gray-900';
+            bar.classList.remove('bg-punty-coral');
+            bar.classList.add(data.errors && data.errors.length ? 'bg-yellow-500' : 'bg-green-500');
+            evtSource.close();
+            btn.disabled = false;
+            btn.textContent = '\u{1F504} Scrape All Data';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            // Reload page after a short delay to show updated data
+            setTimeout(() => window.location.reload(), 1500);
+        }
+
+        line.innerHTML = icon + '<span class="' + textClass + '">' + data.label + '</span>';
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    };
+
+    evtSource.onerror = function() {
+        evtSource.close();
+        btn.disabled = false;
+        btn.textContent = '\u{1F504} Scrape All Data';
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        bar.classList.remove('bg-punty-coral');
+        bar.classList.add('bg-red-500');
+        pct.textContent = 'Error';
+    };
+}
+
+function startSpeedMaps() {
+    var btn = document.getElementById('speedmap-btn');
+    var panel = document.getElementById('speedmap-progress');
+    var bar = document.getElementById('speedmap-bar');
+    var pct = document.getElementById('speedmap-pct');
+    var log = document.getElementById('speedmap-log');
+
+    btn.disabled = true;
+    btn.textContent = 'Fetching...';
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    panel.classList.remove('hidden');
+    log.innerHTML = '';
+    bar.style.width = '0%';
+    pct.textContent = '0%';
+    bar.className = 'bg-punty-coral h-3 rounded-full transition-all duration-500';
+
+    var evtSource = new EventSource('/api/meets/{{ meeting.id }}/speed-maps-stream');
+
+    evtSource.onmessage = function(e) {
+        var data = JSON.parse(e.data);
+        var percent = Math.round((data.step / data.total) * 100);
+
+        bar.style.width = percent + '%';
+        pct.textContent = percent + '%';
+
+        var line = document.createElement('div');
+        line.className = 'flex items-center gap-2 py-0.5';
+
+        var icon = '';
+        var textClass = 'text-gray-700';
+        if (data.status === 'running') {
+            icon = '<span class="inline-block w-4 h-4 border-2 border-punty-coral border-t-transparent rounded-full animate-spin"></span>';
+            textClass = 'text-gray-600';
+        } else if (data.status === 'done') {
+            icon = '<span class="text-green-600 font-bold">&#10003;</span>';
+            textClass = 'text-green-700';
+        } else if (data.status === 'error') {
+            icon = '<span class="text-red-600 font-bold">&#10007;</span>';
+            textClass = 'text-red-600';
+        } else if (data.status === 'complete') {
+            icon = '<span class="text-punty-coral font-bold">&#9679;</span>';
+            textClass = 'font-semibold text-gray-900';
+            bar.className = 'bg-green-500 h-3 rounded-full transition-all duration-500';
+            evtSource.close();
+            btn.disabled = false;
+            btn.textContent = '\u{1F3C3} Fetch Speed Maps';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            setTimeout(function() { window.location.reload(); }, 1500);
+        }
+
+        line.innerHTML = icon + '<span class="' + textClass + '">' + data.label + '</span>';
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    };
+
+    evtSource.onerror = function() {
+        evtSource.close();
+        btn.disabled = false;
+        btn.textContent = '\u{1F3C3} Fetch Speed Maps';
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        bar.className = 'bg-red-500 h-3 rounded-full transition-all duration-500';
+        pct.textContent = 'Error';
+    };
+}
+</script>
 {% endblock %}

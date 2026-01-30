@@ -1,247 +1,416 @@
-"""Racing.com scraper for race cards, form, and results."""
+"""Racing.com scraper — intercepts GraphQL API responses for structured data.
 
+Uses Playwright to load racing.com pages and captures all GraphQL responses
+from graphql.rmdprod.racing.com, extracting 70+ fields per runner.
+
+URL pattern: racing.com/form/{date}/{venue-slug}/race/{n}
+"""
+
+import json as _json
 import logging
 import re
-from datetime import date, datetime
-from typing import Any, Optional
+from datetime import date, datetime, timedelta
+from typing import Any, AsyncGenerator, Optional
 
 from punty.scrapers.base import BaseScraper, ScraperError
+from punty.scrapers.playwright_base import new_page
 
 logger = logging.getLogger(__name__)
 
+# Map racing.com odds provider codes to our field names
+PROVIDER_MAP = {
+    "Q": "odds_tab",       # TAB/SuperTAB
+    "SB2": "odds_sportsbet",
+    "B3": "odds_bet365",
+    "LD": "odds_ladbrokes",
+    "BF": "odds_betfair",
+}
+
 
 class RacingComScraper(BaseScraper):
-    """Scraper for racing.com - primary source for Australian racing data."""
+    """Scraper for racing.com — primary source for Australian racing data."""
 
     BASE_URL = "https://www.racing.com"
 
-    # Venue name mapping to URL slugs
-    VENUE_SLUGS = {
-        "flemington": "flemington",
-        "caulfield": "caulfield",
-        "moonee valley": "moonee-valley",
-        "moonee-valley": "moonee-valley",
-        "sandown": "sandown",
-        "randwick": "randwick",
-        "rosehill": "rosehill",
-        "warwick farm": "warwick-farm",
-        "doomben": "doomben",
-        "eagle farm": "eagle-farm",
-        "morphettville": "morphettville",
-        "ascot": "ascot",
-    }
+    def _venue_slug(self, venue: str) -> str:
+        """Convert venue name to URL slug."""
+        return venue.lower().replace(" ", "-")
 
-    def get_venue_slug(self, venue: str) -> str:
-        """Get URL slug for venue name."""
-        slug = self.VENUE_SLUGS.get(venue.lower())
-        if not slug:
-            # Try to create slug from venue name
-            slug = venue.lower().replace(" ", "-")
-        return slug
+    def _build_meeting_url(self, venue: str, race_date: date) -> str:
+        slug = self._venue_slug(venue)
+        return f"{self.BASE_URL}/form/{race_date.isoformat()}/{slug}"
 
-    def build_meeting_url(self, venue: str, race_date: date) -> str:
-        """Build URL for meeting page."""
-        venue_slug = self.get_venue_slug(venue)
-        date_str = race_date.strftime("%Y-%m-%d")
-        return f"{self.BASE_URL}/races/{venue_slug}/{date_str}"
+    def _build_race_url(self, venue: str, race_date: date, race_num: int) -> str:
+        slug = self._venue_slug(venue)
+        return f"{self.BASE_URL}/form/{race_date.isoformat()}/{slug}/race/{race_num}"
 
     async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
-        """Scrape meeting data from racing.com."""
-        url = self.build_meeting_url(venue, race_date)
-        logger.info(f"Scraping meeting from: {url}")
+        """Scrape full meeting data by intercepting GraphQL API responses.
 
-        try:
-            html = await self.fetch(url)
-            soup = self.parse_html(html)
+        Opens one Playwright session, navigates to each race page, and captures
+        getMeeting_CD, getRaceEntriesForField_CD, GetBettingData_CD, and
+        getRaceNumberList_CD GraphQL responses.
+        """
+        meeting_url = self._build_meeting_url(venue, race_date)
+        logger.info(f"Scraping racing.com meeting (GraphQL): {meeting_url}")
 
-            meeting_id = self.generate_meeting_id(venue, race_date)
+        meeting_id = self.generate_meeting_id(venue, race_date)
 
-            # Parse meeting info
-            meeting = {
-                "id": meeting_id,
-                "venue": venue.title(),
-                "date": race_date,
-                "track_condition": self._parse_track_condition(soup),
-                "weather": self._parse_weather(soup),
-                "rail_position": self._parse_rail_position(soup),
+        # Accumulators for captured GraphQL data
+        meeting_gql: dict = {}
+        race_list_gql: list = []
+        race_entries_by_num: dict[int, list] = {}
+        betting_by_num: dict[int, list] = {}
+
+        async with new_page() as page:
+            # --- GraphQL response interceptor ---
+            async def capture_graphql(response):
+                if "graphql.rmdprod.racing.com" not in response.url:
+                    return
+                try:
+                    body = await response.text()
+                    data = _json.loads(body)
+                except Exception:
+                    return
+
+                url = response.url
+
+                if "getMeeting_CD" in url:
+                    gm = data.get("data", {}).get("getMeeting")
+                    if gm:
+                        meeting_gql.update(gm)
+
+                elif "getRaceNumberList_CD" in url:
+                    races = data.get("data", {}).get("getNoCacheRacesForMeet", [])
+                    if races:
+                        race_list_gql.clear()
+                        race_list_gql.extend(races)
+
+                elif "getRaceEntriesForField_CD" in url:
+                    form = data.get("data", {}).get("getRaceForm", {})
+                    entries = form.get("formRaceEntries", [])
+                    rn = form.get("id")  # race code, but we also get raceNumber from entries
+                    # Determine race number from the entries or form
+                    race_num = None
+                    if entries:
+                        race_num = entries[0].get("raceNumber")
+                    if race_num and entries:
+                        race_entries_by_num[race_num] = entries
+
+                elif "GetBettingData_CD" in url:
+                    bd = data.get("data", {}).get("GetBettingData", {})
+                    entries = bd.get("formRaceEntries", [])
+                    # We need to figure out race number — stored in captured context
+                    if entries:
+                        # Store temporarily keyed by first entry id; will merge later
+                        betting_by_num.setdefault("_pending", []).append(entries)
+
+            page.on("response", capture_graphql)
+
+            # 1. Load meeting page to get meeting info and race list
+            resp = await page.goto(meeting_url, wait_until="load")
+            if resp and resp.status == 404:
+                raise ScraperError(f"HTTP 404: {meeting_url}")
+            await page.wait_for_timeout(5000)
+
+            # Dismiss cookie banner
+            try:
+                btn = page.locator("button:has-text('Decline')").first
+                if await btn.is_visible(timeout=2000):
+                    await btn.click()
+            except Exception:
+                pass
+
+            # Determine race count from GraphQL race list or DOM
+            race_count = len(race_list_gql)
+            if race_count == 0:
+                # Fallback: count from DOM links
+                race_count = await page.evaluate("""() => {
+                    var links = document.querySelectorAll('a[href*="/race/"]');
+                    var maxNum = 0;
+                    for (var i = 0; i < links.length; i++) {
+                        var m = links[i].href.match(/\\/race\\/(\\d+)$/);
+                        if (m) { var n = parseInt(m[1]); if (n > maxNum) maxNum = n; }
+                    }
+                    return maxNum;
+                }""")
+
+            if race_count == 0:
+                logger.warning(f"No races found on {meeting_url}")
+                return {"meeting": self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql),
+                        "races": [], "runners": []}
+
+            logger.info(f"Found {race_count} races for {venue}")
+
+            # 2. Navigate to each race page to trigger GraphQL queries
+            for race_num in range(1, race_count + 1):
+                race_url = self._build_race_url(venue, race_date, race_num)
+                logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
+
+                await page.goto(race_url, wait_until="load")
+                await page.wait_for_timeout(4000)
+
+                # Try clicking "Full Form" tab to trigger getRaceEntriesForField_CD
+                try:
+                    ff_btn = page.locator("button:has-text('Full Form'), a:has-text('Full Form')").first
+                    if await ff_btn.is_visible(timeout=2000):
+                        await ff_btn.click()
+                        await page.wait_for_timeout(3000)
+                except Exception:
+                    pass
+
+            # Remove listener
+            page.remove_listener("response", capture_graphql)
+
+        # --- Build output from captured GraphQL data ---
+        meeting_dict = self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql)
+
+        # Build race-level lookup from getRaceNumberList
+        race_info_by_num: dict[int, dict] = {}
+        for r in race_list_gql:
+            rn = r.get("raceNumber")
+            if rn:
+                race_info_by_num[rn] = r
+
+        # Build betting lookup by horse name for merging
+        betting_by_horse: dict[str, list] = {}
+        for entries_list in betting_by_num.get("_pending", []):
+            for entry in entries_list:
+                name = entry.get("horseName", "")
+                if name:
+                    betting_by_horse[name] = entry.get("oddsByProvider", [])
+
+        races = []
+        runners = []
+
+        for race_num in range(1, race_count + 1):
+            race_id = self.generate_race_id(meeting_id, race_num)
+            rl = race_info_by_num.get(race_num, {})
+
+            # Parse distance
+            dist_str = rl.get("distance", "")
+            distance = self.parse_distance(dist_str) or 1200
+
+            # Parse prize money
+            prize_money = None
+            total_pm = rl.get("totalPrizeMoney")
+            if total_pm:
+                try:
+                    prize_money = int(float(total_pm))
+                except (ValueError, TypeError):
+                    pass
+
+            # Parse start time
+            start_time = self._parse_iso_time(rl.get("time"))
+
+            # Parse condition string for weight type / age restriction
+            condition_str = rl.get("condition", "")
+            weight_type = self._extract_weight_type(condition_str)
+            age_restriction = self._extract_age_restriction(condition_str)
+
+            race_data = {
+                "id": race_id,
+                "meeting_id": meeting_id,
+                "race_number": race_num,
+                "name": rl.get("name", f"Race {race_num}"),
+                "distance": distance,
+                "class_": rl.get("rdcClass") or rl.get("nameForm"),
+                "prize_money": prize_money,
+                "start_time": start_time,
+                "status": "scheduled",
+                "track_condition": rl.get("trackCondition"),
+                "race_type": "Thoroughbred",
+                "age_restriction": age_restriction,
+                "weight_type": weight_type,
+                "field_size": None,  # set after counting runners
             }
 
-            # Parse races
-            races = []
-            runners = []
+            # Process entries from getRaceEntriesForField_CD
+            entries = race_entries_by_num.get(race_num, [])
+            race_runners = []
+            for entry in entries:
+                runner = self._parse_graphql_entry(entry, race_id, betting_by_horse)
+                if runner:
+                    race_runners.append(runner)
 
-            race_elements = soup.select(".race-card, .race-item, [data-race-number]")
-            if not race_elements:
-                # Try alternative selectors
-                race_elements = soup.select("section.race, div.race-panel")
+            # Set field size (non-scratched)
+            race_data["field_size"] = sum(1 for r in race_runners if not r.get("scratched"))
 
-            for race_num, race_elem in enumerate(race_elements, start=1):
-                race_data, race_runners = self._parse_race(
-                    race_elem, meeting_id, race_num
-                )
-                if race_data:
-                    races.append(race_data)
-                    runners.extend(race_runners)
+            races.append(race_data)
+            runners.extend(race_runners)
 
-            # If no races found, create placeholder structure
-            if not races:
-                logger.warning(f"No races found for {venue} on {race_date}")
-                # Create sample races for development
-                races = self._create_sample_races(meeting_id)
-                runners = self._create_sample_runners(races)
+        return {"meeting": meeting_dict, "races": races, "runners": runners}
 
-            return {
-                "meeting": meeting,
-                "races": races,
-                "runners": runners,
-            }
+    def _build_meeting_dict(self, meeting_id: str, venue: str, race_date: date, gql: dict) -> dict:
+        """Build meeting dict from getMeeting_CD GraphQL data."""
+        # Parse penetrometer
+        penetrometer = None
+        pen_str = gql.get("penetrometer")
+        if pen_str:
+            try:
+                penetrometer = float(pen_str)
+            except (ValueError, TypeError):
+                pass
 
-        except ScraperError:
-            raise
-        except Exception as e:
-            logger.error(f"Error scraping meeting: {e}")
-            raise ScraperError(f"Failed to scrape meeting: {e}")
+        # Parse weather temp
+        weather_temp = None
+        temp_str = gql.get("weatherAirTemp")
+        if temp_str:
+            try:
+                weather_temp = int(float(temp_str))
+            except (ValueError, TypeError):
+                pass
 
-    def _parse_track_condition(self, soup) -> Optional[str]:
-        """Parse track condition from page."""
-        # Try various selectors
-        selectors = [
-            ".track-condition",
-            ".track-rating",
-            '[data-track-condition]',
-            ".meeting-conditions .condition",
-        ]
-        for selector in selectors:
-            elem = soup.select_one(selector)
-            if elem:
-                text = self.clean_text(elem.get_text())
-                if text:
-                    return text
+        # Parse wind speed
+        weather_wind_speed = None
+        wind_str = gql.get("weatherWindSpeed")
+        if wind_str:
+            try:
+                weather_wind_speed = int(float(wind_str))
+            except (ValueError, TypeError):
+                pass
 
-        # Try to find in text
-        text = soup.get_text()
-        conditions = ["Good", "Soft", "Heavy", "Firm", "Synthetic"]
-        for condition in conditions:
-            pattern = rf"Track[:\s]+({condition}\s*\d*)"
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
+        # Rail bias comment from previous rail positions
+        rail_bias_comment = None
+        prev_positions = gql.get("previousRailPositions", [])
+        if prev_positions:
+            first = prev_positions[0]
+            comments = first.get("comments")
+            if comments:
+                rail_bias_comment = comments
+            # Also check tips for short/long comments
+            meet_data = first.get("meet", {})
+            tips = meet_data.get("meetTips", [])
+            if tips:
+                short = tips[0].get("shortComment")
+                long_c = tips[0].get("longComment")
+                if short or long_c:
+                    rail_bias_comment = long_c or short
 
-        return None
+        # Track condition with rating
+        tc = gql.get("trackCondition", "")
+        tr = gql.get("trackRating", "")
+        track_condition = f"{tc} {tr}".strip() if tc else None
 
-    def _parse_weather(self, soup) -> Optional[str]:
-        """Parse weather from page."""
-        selectors = [".weather", ".meeting-weather", '[data-weather]']
-        for selector in selectors:
-            elem = soup.select_one(selector)
-            if elem:
-                return self.clean_text(elem.get_text())
-        return None
-
-    def _parse_rail_position(self, soup) -> Optional[str]:
-        """Parse rail position from page."""
-        selectors = [".rail-position", ".rail", '[data-rail]']
-        for selector in selectors:
-            elem = soup.select_one(selector)
-            if elem:
-                return self.clean_text(elem.get_text())
-        return None
-
-    def _parse_race(
-        self, race_elem, meeting_id: str, race_num: int
-    ) -> tuple[Optional[dict], list[dict]]:
-        """Parse individual race and its runners."""
-        race_id = self.generate_race_id(meeting_id, race_num)
-
-        # Try to get race name
-        name_elem = race_elem.select_one(".race-name, .race-title, h2, h3")
-        race_name = self.clean_text(name_elem.get_text()) if name_elem else f"Race {race_num}"
-
-        # Get distance
-        distance_elem = race_elem.select_one(".distance, .race-distance")
-        distance = None
-        if distance_elem:
-            distance = self.parse_distance(distance_elem.get_text())
-
-        # Get class
-        class_elem = race_elem.select_one(".race-class, .class")
-        race_class = self.clean_text(class_elem.get_text()) if class_elem else None
-
-        # Get prize money
-        prize_elem = race_elem.select_one(".prize-money, .prizemoney")
-        prize_money = None
-        if prize_elem:
-            prize_money = self.parse_prize_money(prize_elem.get_text())
-
-        # Get start time
-        time_elem = race_elem.select_one(".race-time, .start-time, time")
-        start_time = None
-        if time_elem:
-            time_text = time_elem.get_text().strip()
-            start_time = self._parse_time(time_text)
-
-        race_data = {
-            "id": race_id,
-            "meeting_id": meeting_id,
-            "race_number": race_num,
-            "name": race_name,
-            "distance": distance or 1200,  # Default
-            "class_": race_class,
-            "prize_money": prize_money,
-            "start_time": start_time,
-            "status": "scheduled",
+        return {
+            "id": meeting_id,
+            "venue": venue.title(),
+            "date": race_date,
+            "track_condition": track_condition,
+            "weather": gql.get("weather") or gql.get("weatherText"),
+            "rail_position": gql.get("railPosition"),
+            "penetrometer": penetrometer,
+            "weather_condition": gql.get("weather"),
+            "weather_temp": weather_temp,
+            "weather_wind_speed": weather_wind_speed,
+            "weather_wind_dir": gql.get("weatherWindDirection"),
+            "rail_bias_comment": rail_bias_comment,
         }
 
-        # Parse runners
-        runners = []
-        runner_elements = race_elem.select(".runner, .horse-row, tr.runner-row")
-        for runner_elem in runner_elements:
-            runner = self._parse_runner(runner_elem, race_id)
-            if runner:
-                runners.append(runner)
-
-        return race_data, runners
-
-    def _parse_runner(self, runner_elem, race_id: str) -> Optional[dict]:
-        """Parse individual runner data."""
-        # Get horse name
-        name_elem = runner_elem.select_one(".horse-name, .runner-name, .horse")
-        if not name_elem:
-            return None
-        horse_name = self.clean_text(name_elem.get_text())
+    def _parse_graphql_entry(self, entry: dict, race_id: str, betting_by_horse: dict) -> Optional[dict]:
+        """Parse a single formRaceEntry from getRaceEntriesForField_CD."""
+        horse_name = entry.get("horseName", "").strip()
         if not horse_name:
             return None
 
-        # Get barrier
-        barrier_elem = runner_elem.select_one(".barrier, .gate, .number")
-        barrier = None
-        if barrier_elem:
+        barrier = entry.get("barrierNumber")
+        tab_number = entry.get("raceEntryNumber")
+        runner_id = self.generate_runner_id(race_id, barrier or tab_number or 0, horse_name)
+
+        # Weight
+        weight = self.parse_weight(entry.get("weight"))
+
+        # Speed value and map position
+        sv = None
+        sv_str = entry.get("speedValue")
+        if sv_str:
             try:
-                barrier = int(re.search(r"\d+", barrier_elem.get_text()).group())
-            except (AttributeError, ValueError):
-                barrier = 1
+                sv = int(sv_str)
+            except (ValueError, TypeError):
+                pass
 
-        runner_id = self.generate_runner_id(race_id, barrier or 1, horse_name)
+        # Horse details from nested horse object
+        horse = entry.get("horse", {}) or {}
+        age_str = horse.get("age", "")  # e.g. "4YO"
+        horse_age = None
+        if age_str:
+            m = re.match(r"(\d+)", age_str)
+            if m:
+                horse_age = int(m.group(1))
 
-        # Get weight
-        weight_elem = runner_elem.select_one(".weight")
-        weight = self.parse_weight(weight_elem.get_text()) if weight_elem else None
+        # Last five — comes as JSON string like '["4","3","1"]'
+        last_five_raw = horse.get("lastFive", "")
+        last_five = None
+        if last_five_raw:
+            try:
+                arr = _json.loads(last_five_raw)
+                last_five = "".join(str(x) for x in arr)
+            except (ValueError, TypeError):
+                last_five = str(last_five_raw)
 
-        # Get jockey
-        jockey_elem = runner_elem.select_one(".jockey, .jockey-name")
-        jockey = self.clean_text(jockey_elem.get_text()) if jockey_elem else None
+        # Days since last run
+        days_since = None
+        last_race_str = entry.get("lastRaceDate") or horse.get("lastRaceDate")
+        if last_race_str:
+            try:
+                last_dt = datetime.fromisoformat(last_race_str.replace("Z", ""))
+                days_since = (datetime.utcnow() - last_dt).days
+            except Exception:
+                pass
 
-        # Get trainer
-        trainer_elem = runner_elem.select_one(".trainer, .trainer-name")
-        trainer = self.clean_text(trainer_elem.get_text()) if trainer_elem else None
+        # Career prize money
+        career_pm = None
+        pm_str = horse.get("careerPrizeMoney", "")
+        if pm_str:
+            career_pm = self.parse_prize_money(pm_str)
 
-        # Get form
-        form_elem = runner_elem.select_one(".form, .recent-form")
-        form = self.clean_text(form_elem.get_text()) if form_elem else None
+        # Handicap rating
+        hr = entry.get("handicapRating")
+        handicap_rating = None
+        if hr is not None:
+            try:
+                handicap_rating = float(hr)
+            except (ValueError, TypeError):
+                pass
 
-        # Get odds
-        odds_elem = runner_elem.select_one(".odds, .price, .win-odds")
-        current_odds = self.parse_odds(odds_elem.get_text()) if odds_elem else None
+        # Career record from horse stats
+        career_record = None
+        last_ten = horse.get("lastTenStats")
+        if last_ten:
+            career_record = last_ten
+
+        # Form from last five
+        form = last_five
+
+        # Odds — from entry.odds array
+        odds_dict = self._parse_odds_array(entry.get("odds", []))
+
+        # Merge betting data if available
+        betting_odds = betting_by_horse.get(horse_name, [])
+        if betting_odds:
+            for bp in betting_odds:
+                code = bp.get("providerCode", "")
+                field = PROVIDER_MAP.get(code)
+                if field and field not in odds_dict:
+                    odds_dict[field] = self.parse_odds(bp.get("oddsWin"))
+                # Capture flucs from first provider that has them
+                if bp.get("flucsWin") and "odds_flucs" not in odds_dict:
+                    flucs = [{"time": f.get("updateTime"), "odds": f.get("amount")}
+                             for f in bp["flucsWin"][:20]]
+                    odds_dict["odds_flucs"] = _json.dumps(flucs)
+
+        # Primary odds (use TAB as current_odds)
+        current_odds = odds_dict.get("odds_tab")
+        if not current_odds:
+            # Fallback to first available
+            for k in ["odds_sportsbet", "odds_bet365", "odds_ladbrokes"]:
+                if odds_dict.get(k):
+                    current_odds = odds_dict[k]
+                    break
+
+        # Sire/dam — from nested horse.sireHorseName etc.
+        sire = horse.get("sireHorseName")
+        dam = horse.get("damHorseName")
 
         return {
             "id": runner_id,
@@ -249,81 +418,218 @@ class RacingComScraper(BaseScraper):
             "horse_name": horse_name,
             "barrier": barrier,
             "weight": weight,
-            "jockey": jockey,
-            "trainer": trainer,
+            "jockey": entry.get("jockeyName"),
+            "trainer": entry.get("trainerName"),
             "form": form,
+            "career_record": career_record,
+            "speed_map_position": self._speed_value_to_position(sv),
             "current_odds": current_odds,
-            "opening_odds": current_odds,  # Same as current initially
-            "scratched": False,
+            "opening_odds": current_odds,  # Will be updated by TAB scraper
+            "scratched": bool(entry.get("scratched")),
+            "comments": entry.get("comment"),
+            # New fields
+            "horse_age": horse_age,
+            "horse_sex": horse.get("sex"),
+            "horse_colour": horse.get("colour"),
+            "sire": sire,
+            "dam": dam,
+            "dam_sire": None,  # Not directly available in this query
+            "career_prize_money": career_pm,
+            "last_five": last_five,
+            "days_since_last_run": days_since,
+            "handicap_rating": handicap_rating,
+            "speed_value": sv,
+            "track_dist_stats": entry.get("trackDistanceStats"),
+            "track_stats": entry.get("trackStats"),
+            "distance_stats": entry.get("distanceStats"),
+            "first_up_stats": horse.get("firstUpStats"),
+            "second_up_stats": horse.get("secondUpStats"),
+            "good_track_stats": horse.get("goodStats"),
+            "soft_track_stats": horse.get("softStats"),
+            "heavy_track_stats": horse.get("heavyStats"),
+            "jockey_stats": entry.get("jockeyStats"),
+            "class_stats": entry.get("atThisClassStats"),
+            "gear": entry.get("lastGear"),
+            "gear_changes": entry.get("gearChanges"),
+            "stewards_comment": entry.get("commentStewards"),
+            "comment_long": entry.get("comment"),
+            "comment_short": entry.get("commentShort"),
+            "odds_tab": odds_dict.get("odds_tab"),
+            "odds_sportsbet": odds_dict.get("odds_sportsbet"),
+            "odds_bet365": odds_dict.get("odds_bet365"),
+            "odds_ladbrokes": odds_dict.get("odds_ladbrokes"),
+            "odds_betfair": odds_dict.get("odds_betfair"),
+            "odds_flucs": odds_dict.get("odds_flucs"),
+            "trainer_location": None,  # Not in this query
         }
 
-    def _parse_time(self, time_str: str) -> Optional[datetime]:
-        """Parse time string to datetime."""
+    def _parse_odds_array(self, odds_list: list) -> dict:
+        """Parse the odds array from a GraphQL entry into our field names."""
+        result = {}
+        for o in odds_list:
+            code = o.get("providerCode", "")
+            field = PROVIDER_MAP.get(code)
+            if field:
+                val = self.parse_odds(o.get("oddsWin"))
+                if val:
+                    result[field] = val
+            # Capture flucs from any provider that has them
+            flucs = o.get("flucsWin")
+            if flucs and "odds_flucs" not in result:
+                flucs_data = [{"time": f.get("updateTime"), "odds": f.get("amount")}
+                              for f in flucs[:20]]
+                result["odds_flucs"] = _json.dumps(flucs_data)
+        return result
+
+    @staticmethod
+    def _extract_weight_type(condition: str) -> Optional[str]:
+        """Extract weight type from race condition string."""
+        if not condition:
+            return None
+        low = condition.lower()
+        if "set weights" in low:
+            return "Set Weights"
+        if "handicap" in low:
+            return "Handicap"
+        if "weight for age" in low:
+            return "Weight For Age"
+        if "quality" in low:
+            return "Quality"
+        return None
+
+    @staticmethod
+    def _extract_age_restriction(condition: str) -> Optional[str]:
+        """Extract age restriction from race condition string."""
+        if not condition:
+            return None
+        m = re.search(r"(Two|Three|Four|Five|Six)[\s-]Year[s]?[\s-]Old[s]?", condition, re.IGNORECASE)
+        if m:
+            age_words = {"two": "2yo", "three": "3yo", "four": "4yo", "five": "5yo", "six": "6yo"}
+            word = m.group(1).lower()
+            return age_words.get(word, m.group(0))
+        m = re.search(r"(\d)yo\+?", condition, re.IGNORECASE)
+        if m:
+            return m.group(0)
+        return None
+
+    def _parse_iso_time(self, time_str: Optional[str]) -> Optional[datetime]:
+        """Parse ISO 8601 time string from GraphQL."""
+        if not time_str:
+            return None
         try:
-            # Try common formats
-            for fmt in ["%H:%M", "%I:%M %p", "%I:%M%p"]:
+            # Handle "2026-01-30T07:15:00.000Z" or "2026-01-30T07:15:00.0000000Z"
+            cleaned = time_str.replace("Z", "+00:00")
+            return datetime.fromisoformat(cleaned)
+        except Exception:
+            return None
+
+    def _parse_time(self, time_str: str) -> Optional[datetime]:
+        """Parse time string like '6:15pm' to datetime."""
+        try:
+            for fmt in ["%I:%M%p", "%I:%M %p", "%H:%M"]:
                 try:
-                    parsed = datetime.strptime(time_str.strip().upper(), fmt)
-                    return parsed.replace(year=datetime.now().year)
+                    parsed = datetime.strptime(time_str.strip().upper(), fmt.upper())
+                    return parsed.replace(year=datetime.now().year,
+                                         month=datetime.now().month,
+                                         day=datetime.now().day)
                 except ValueError:
                     continue
         except Exception:
             pass
         return None
 
-    def _create_sample_races(self, meeting_id: str) -> list[dict]:
-        """Create sample races for development/testing."""
-        races = []
-        for i in range(1, 9):
-            races.append({
-                "id": self.generate_race_id(meeting_id, i),
-                "meeting_id": meeting_id,
-                "race_number": i,
-                "name": f"Race {i} - Sample Race",
-                "distance": 1200 + (i * 100),
-                "class_": "Open Handicap",
-                "prize_money": 50000 + (i * 10000),
-                "start_time": None,
-                "status": "scheduled",
-            })
-        return races
+    @staticmethod
+    def _speed_value_to_position(speed_value) -> str | None:
+        """Convert racing.com speedValue (1-12) to position label."""
+        if speed_value is None:
+            return None
+        try:
+            sv = int(speed_value)
+        except (ValueError, TypeError):
+            return None
+        if sv >= 10:
+            return "leader"
+        if sv >= 7:
+            return "on_pace"
+        if sv >= 4:
+            return "midfield"
+        return "backmarker"
 
-    def _create_sample_runners(self, races: list[dict]) -> list[dict]:
-        """Create sample runners for development/testing."""
-        sample_horses = [
-            ("Lightning Bolt", "Nash Rawiller", "Chris Waller"),
-            ("Thunder Strike", "James McDonald", "Gai Waterhouse"),
-            ("Ocean Runner", "Damien Oliver", "Ciaron Maher"),
-            ("Desert Wind", "Hugh Bowman", "Peter Moody"),
-            ("Star Gazer", "Craig Williams", "Lindsay Park"),
-            ("Moon Shadow", "Kerrin McEvoy", "Godolphin"),
-            ("Fire Storm", "Tommy Berry", "Team Hawkes"),
-            ("Silent Runner", "Glen Boss", "John Size"),
-            ("Golden Dream", "Zac Purton", "David Hayes"),
-            ("Silver Streak", "Mark Zahra", "Mick Price"),
-        ]
+    async def scrape_speed_maps(self, venue: str, race_date: date, race_count: int) -> AsyncGenerator[dict, None]:
+        """Scrape speed maps for all races by intercepting the GraphQL API.
 
-        runners = []
-        for race in races:
-            for i, (horse, jockey, trainer) in enumerate(sample_horses, start=1):
-                runner_id = self.generate_runner_id(race["id"], i, horse)
-                runners.append({
-                    "id": runner_id,
-                    "race_id": race["id"],
-                    "horse_name": horse,
-                    "barrier": i,
-                    "weight": 56.5 - (i * 0.5),
-                    "jockey": jockey,
-                    "trainer": trainer,
-                    "form": "1x32",
-                    "current_odds": 3.0 + (i * 1.5),
-                    "opening_odds": 3.5 + (i * 1.5),
-                    "scratched": False,
-                })
-        return runners
+        Racing.com loads speed map data via graphql.rmdprod.racing.com with a
+        `speedValue` field per entrant (1=backmarker, 12=leader). We load each
+        race page and intercept the GraphQL response containing formRaceEntries.
+        """
+        total = race_count + 1  # +1 for completion event
+
+        async with new_page() as page:
+            for race_num in range(1, race_count + 1):
+                yield {"step": race_num - 1, "total": total,
+                       "label": f"Fetching speed map for Race {race_num}...", "status": "running"}
+
+                race_url = self._build_race_url(venue, race_date, race_num)
+                positions = []
+
+                try:
+                    captured_entries = []
+
+                    async def capture_graphql(response):
+                        if "graphql.rmdprod.racing.com" not in response.url:
+                            return
+                        if "getRaceEntriesForField" not in response.url:
+                            return
+                        try:
+                            body = await response.text()
+                            data = _json.loads(body)
+                            entries = data.get("data", {}).get("getRaceForm", {}).get("formRaceEntries", [])
+                            if entries:
+                                captured_entries.extend(entries)
+                        except Exception:
+                            pass
+
+                    page.on("response", capture_graphql)
+
+                    await page.goto(race_url, wait_until="load")
+                    await page.wait_for_timeout(5000)
+
+                    page.remove_listener("response", capture_graphql)
+
+                    for entry in captured_entries:
+                        if entry.get("scratched"):
+                            continue
+                        sv = entry.get("speedValue")
+                        pos = self._speed_value_to_position(sv)
+                        if pos:
+                            positions.append({
+                                "tab_number": entry.get("raceEntryNumber"),
+                                "horse_name": entry.get("horseName", ""),
+                                "position": pos,
+                            })
+
+                    count = len(positions)
+                    if count > 0:
+                        yield {"step": race_num, "total": total,
+                               "label": f"Race {race_num}: {count} positions found", "status": "done",
+                               "race_number": race_num, "positions": positions}
+                    else:
+                        yield {"step": race_num, "total": total,
+                               "label": f"Race {race_num}: no speed map data found", "status": "done",
+                               "race_number": race_num, "positions": []}
+
+                except Exception as e:
+                    logger.error(f"Error scraping speed map for race {race_num}: {e}")
+                    try:
+                        page.remove_listener("response", capture_graphql)
+                    except Exception:
+                        pass
+                    yield {"step": race_num, "total": total,
+                           "label": f"Race {race_num}: error - {e}", "status": "error",
+                           "race_number": race_num, "positions": []}
+
+        yield {"step": total, "total": total, "label": "Speed maps complete", "status": "complete"}
 
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
-        """Scrape race results."""
-        # TODO: Implement results scraping
-        logger.info(f"Results scraping not yet implemented for {venue} on {race_date}")
+        """Scrape race results — not yet implemented."""
         return []

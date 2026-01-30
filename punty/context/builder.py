@@ -25,13 +25,9 @@ class ContextBuilder:
         include_speed_maps: bool = True,
         include_form: bool = True,
     ) -> dict[str, Any]:
-        """Build full context for a race meeting.
-
-        Returns a dict with all relevant information for content generation.
-        """
+        """Build full context for a race meeting."""
         from punty.models.meeting import Meeting, Race, Runner
 
-        # Load meeting with races and runners
         result = await self.db.execute(
             select(Meeting)
             .where(Meeting.id == meeting_id)
@@ -52,6 +48,12 @@ class ContextBuilder:
                 "track_condition": meeting.track_condition,
                 "weather": meeting.weather,
                 "rail_position": meeting.rail_position,
+                "penetrometer": meeting.penetrometer,
+                "weather_condition": meeting.weather_condition,
+                "weather_temp": meeting.weather_temp,
+                "weather_wind_speed": meeting.weather_wind_speed,
+                "weather_wind_dir": meeting.weather_wind_dir,
+                "rail_bias_comment": meeting.rail_bias_comment,
             },
             "races": [],
             "summary": {
@@ -72,13 +74,11 @@ class ContextBuilder:
             )
             context["races"].append(race_context)
 
-            # Update summary
             context["summary"]["total_runners"] += len(race.runners)
             context["summary"]["scratchings"] += sum(
                 1 for r in race.runners if r.scratched
             )
 
-            # Track favorites and roughies
             active_runners = [r for r in race.runners if not r.scratched and r.current_odds]
             if active_runners:
                 sorted_by_odds = sorted(active_runners, key=lambda r: r.current_odds)
@@ -89,10 +89,8 @@ class ContextBuilder:
                         "horse": fav.horse_name,
                         "odds": fav.current_odds,
                     })
-                # Roughies at good odds with decent form
                 for runner in sorted_by_odds:
                     if runner.current_odds >= 10.0 and runner.form:
-                        # Check for recent placings in form
                         if any(c in runner.form[:4] for c in "123"):
                             context["summary"]["roughies"].append({
                                 "race": race.race_number,
@@ -120,11 +118,15 @@ class ContextBuilder:
             "prize_money": race.prize_money,
             "start_time": race.start_time.isoformat() if race.start_time else None,
             "status": race.status,
+            "track_condition": race.track_condition,
+            "race_type": race.race_type,
+            "age_restriction": race.age_restriction,
+            "weight_type": race.weight_type,
+            "field_size": race.field_size,
             "runners": [],
             "analysis": {},
         }
 
-        # Process runners
         active_runners = []
         for runner in sorted(race.runners, key=lambda r: r.barrier or 99):
             runner_data = {
@@ -136,28 +138,72 @@ class ContextBuilder:
                 "scratched": runner.scratched,
             }
 
-            if include_odds and not runner.scratched:
-                runner_data["current_odds"] = runner.current_odds
-                runner_data["opening_odds"] = runner.opening_odds
-                if runner.current_odds and runner.opening_odds:
-                    runner_data["odds_movement"] = self._calculate_odds_movement(
-                        runner.opening_odds, runner.current_odds
-                    )
+            if not runner.scratched:
+                # Pedigree
+                if runner.sire or runner.dam:
+                    runner_data["pedigree"] = {
+                        "sire": runner.sire,
+                        "dam": runner.dam,
+                        "dam_sire": runner.dam_sire,
+                    }
 
-            if include_form and not runner.scratched:
-                runner_data["form"] = runner.form
-                runner_data["career_record"] = runner.career_record
-                runner_data["comments"] = runner.comments
+                # Horse details
+                if runner.horse_age or runner.horse_sex:
+                    runner_data["horse_age"] = runner.horse_age
+                    runner_data["horse_sex"] = runner.horse_sex
+                    runner_data["horse_colour"] = runner.horse_colour
 
-            if include_speed_maps and not runner.scratched:
-                runner_data["speed_map_position"] = runner.speed_map_position
+                # Performance
+                runner_data["handicap_rating"] = runner.handicap_rating
+                runner_data["days_since_last_run"] = runner.days_since_last_run
+                runner_data["career_prize_money"] = runner.career_prize_money
+
+                if include_odds:
+                    runner_data["current_odds"] = runner.current_odds
+                    runner_data["opening_odds"] = runner.opening_odds
+                    if runner.current_odds and runner.opening_odds:
+                        runner_data["odds_movement"] = self._calculate_odds_movement(
+                            runner.opening_odds, runner.current_odds
+                        )
+                    # Multi-provider odds
+                    runner_data["odds_tab"] = runner.odds_tab
+                    runner_data["odds_sportsbet"] = runner.odds_sportsbet
+                    runner_data["odds_bet365"] = runner.odds_bet365
+                    runner_data["odds_ladbrokes"] = runner.odds_ladbrokes
+                    runner_data["odds_betfair"] = runner.odds_betfair
+
+                if include_form:
+                    runner_data["form"] = runner.form
+                    runner_data["last_five"] = runner.last_five
+                    runner_data["career_record"] = runner.career_record
+                    runner_data["comments"] = runner.comments
+                    runner_data["comment_long"] = runner.comment_long
+                    runner_data["comment_short"] = runner.comment_short
+                    runner_data["stewards_comment"] = runner.stewards_comment
+
+                    # Stats
+                    runner_data["track_dist_stats"] = runner.track_dist_stats
+                    runner_data["track_stats"] = runner.track_stats
+                    runner_data["distance_stats"] = runner.distance_stats
+                    runner_data["first_up_stats"] = runner.first_up_stats
+                    runner_data["second_up_stats"] = runner.second_up_stats
+                    runner_data["good_track_stats"] = runner.good_track_stats
+                    runner_data["soft_track_stats"] = runner.soft_track_stats
+                    runner_data["heavy_track_stats"] = runner.heavy_track_stats
+
+                    # Gear
+                    runner_data["gear"] = runner.gear
+                    runner_data["gear_changes"] = runner.gear_changes
+
+                if include_speed_maps:
+                    runner_data["speed_map_position"] = runner.speed_map_position
+                    runner_data["speed_value"] = runner.speed_value
 
             race_context["runners"].append(runner_data)
 
             if not runner.scratched:
                 active_runners.append(runner)
 
-        # Add race analysis
         race_context["analysis"] = self._analyze_race(active_runners)
 
         return race_context
@@ -189,7 +235,6 @@ class ContextBuilder:
             "market_movers": [],
         }
 
-        # Analyze pace
         leaders = [r for r in runners if r.speed_map_position == "leader"]
         on_pace = [r for r in runners if r.speed_map_position == "on_pace"]
         backmarkers = [r for r in runners if r.speed_map_position == "backmarker"]
@@ -206,7 +251,6 @@ class ContextBuilder:
         analysis["likely_leaders"] = [r.horse_name for r in leaders]
         analysis["backmarkers"] = [r.horse_name for r in backmarkers]
 
-        # Find market movers
         for runner in runners:
             if runner.current_odds and runner.opening_odds:
                 movement = self._calculate_odds_movement(
@@ -247,15 +291,17 @@ class ContextBuilder:
         if not race:
             return {}
 
-        # Get meeting context
         meeting_context = {
             "venue": race.meeting.venue,
             "date": race.meeting.date.isoformat(),
             "track_condition": race.meeting.track_condition,
             "weather": race.meeting.weather,
+            "penetrometer": race.meeting.penetrometer,
+            "weather_condition": race.meeting.weather_condition,
+            "weather_temp": race.meeting.weather_temp,
+            "rail_bias_comment": race.meeting.rail_bias_comment,
         }
 
-        # Get race context
         race_context = self._build_race_context(race)
 
         return {

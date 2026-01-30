@@ -22,6 +22,15 @@ class Meeting(Base):
     rail_position: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     selected: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # New GraphQL fields
+    penetrometer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    weather_condition: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    weather_temp: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    weather_wind_speed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    weather_wind_dir: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    rail_bias_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -43,6 +52,12 @@ class Meeting(Base):
             "rail_position": self.rail_position,
             "selected": self.selected,
             "source": self.source,
+            "penetrometer": self.penetrometer,
+            "weather_condition": self.weather_condition,
+            "weather_temp": self.weather_temp,
+            "weather_wind_speed": self.weather_wind_speed,
+            "weather_wind_dir": self.weather_wind_dir,
+            "rail_bias_comment": self.rail_bias_comment,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -64,7 +79,15 @@ class Race(Base):
     class_: Mapped[Optional[str]] = mapped_column("class", String(100), nullable=True)
     prize_money: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="scheduled")  # scheduled, running, finished
+    status: Mapped[str] = mapped_column(String(20), default="scheduled")
+
+    # New GraphQL fields
+    track_condition: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    race_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    age_restriction: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    weight_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    field_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -91,6 +114,11 @@ class Race(Base):
             "prize_money": self.prize_money,
             "start_time": self.start_time.isoformat() if self.start_time else None,
             "status": self.status,
+            "track_condition": self.track_condition,
+            "race_type": self.race_type,
+            "age_restriction": self.age_restriction,
+            "weight_type": self.weight_type,
+            "field_size": self.field_size,
         }
         if include_runners:
             data["runners"] = [r.to_dict() for r in self.runners]
@@ -106,19 +134,65 @@ class Runner(Base):
     race_id: Mapped[str] = mapped_column(String(64), ForeignKey("races.id"))
     horse_name: Mapped[str] = mapped_column(String(100))
     barrier: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # kg
+    weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     jockey: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     trainer: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    form: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., "1x23"
-    career_record: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., "5-2-1-1"
-    speed_map_position: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # leader, on_pace, midfield, backmarker
+    form: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    career_record: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    speed_map_position: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     current_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     opening_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scratched: Mapped[bool] = mapped_column(default=False)
     scratching_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Form comments
+    comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Horse details
+    horse_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    horse_sex: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    horse_colour: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    sire: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    dam: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    dam_sire: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Performance
+    career_prize_money: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_five: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    days_since_last_run: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    handicap_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    speed_value: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # Stats (JSON text columns)
+    track_dist_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    track_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    distance_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    first_up_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    second_up_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    good_track_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    soft_track_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    heavy_track_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    jockey_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    class_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Gear & stewards
+    gear: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    gear_changes: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    stewards_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Form comments
+    comment_long: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    comment_short: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Odds (multi-provider)
+    odds_tab: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    odds_sportsbet: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    odds_bet365: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    odds_ladbrokes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    odds_betfair: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    odds_flucs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Trainer details
+    trainer_location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -145,6 +219,39 @@ class Runner(Base):
             "scratched": self.scratched,
             "scratching_reason": self.scratching_reason,
             "comments": self.comments,
+            "horse_age": self.horse_age,
+            "horse_sex": self.horse_sex,
+            "horse_colour": self.horse_colour,
+            "sire": self.sire,
+            "dam": self.dam,
+            "dam_sire": self.dam_sire,
+            "career_prize_money": self.career_prize_money,
+            "last_five": self.last_five,
+            "days_since_last_run": self.days_since_last_run,
+            "handicap_rating": self.handicap_rating,
+            "speed_value": self.speed_value,
+            "track_dist_stats": self.track_dist_stats,
+            "track_stats": self.track_stats,
+            "distance_stats": self.distance_stats,
+            "first_up_stats": self.first_up_stats,
+            "second_up_stats": self.second_up_stats,
+            "good_track_stats": self.good_track_stats,
+            "soft_track_stats": self.soft_track_stats,
+            "heavy_track_stats": self.heavy_track_stats,
+            "jockey_stats": self.jockey_stats,
+            "class_stats": self.class_stats,
+            "gear": self.gear,
+            "gear_changes": self.gear_changes,
+            "stewards_comment": self.stewards_comment,
+            "comment_long": self.comment_long,
+            "comment_short": self.comment_short,
+            "odds_tab": self.odds_tab,
+            "odds_sportsbet": self.odds_sportsbet,
+            "odds_bet365": self.odds_bet365,
+            "odds_ladbrokes": self.odds_ladbrokes,
+            "odds_betfair": self.odds_betfair,
+            "odds_flucs": self.odds_flucs,
+            "trainer_location": self.trainer_location,
         }
 
 
