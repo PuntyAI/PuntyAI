@@ -68,19 +68,6 @@ async def get_review_queue(db: AsyncSession = Depends(get_db)):
     return [c.to_dict() for c in items]
 
 
-@router.get("/{content_id}")
-async def get_content(content_id: str, db: AsyncSession = Depends(get_db)):
-    """Get specific content item."""
-    from punty.models.content import Content
-    from sqlalchemy import select
-
-    result = await db.execute(select(Content).where(Content.id == content_id))
-    content = result.scalar_one_or_none()
-    if not content:
-        raise HTTPException(status_code=404, detail="Content not found")
-    return content.to_dict()
-
-
 @router.get("/generate-stream")
 async def generate_content_stream(
     meeting_id: str,
@@ -100,6 +87,19 @@ async def generate_content_stream(
             yield f"data: {json.dumps({'step': 1, 'total': 1, 'label': 'Unsupported content type for streaming', 'status': 'error'})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/{content_id}")
+async def get_content(content_id: str, db: AsyncSession = Depends(get_db)):
+    """Get specific content item."""
+    from punty.models.content import Content
+    from sqlalchemy import select
+
+    result = await db.execute(select(Content).where(Content.id == content_id))
+    content = result.scalar_one_or_none()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    return content.to_dict()
 
 
 @router.post("/generate")
