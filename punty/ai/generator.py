@@ -530,6 +530,19 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
 
         return result
 
+    @staticmethod
+    def _get_sequence_lanes(total_races: int) -> dict:
+        """Get quaddie, early quaddie and big 6 race ranges based on meeting size."""
+        rules = {
+            7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
+            8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
+            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
+        }
+        return rules.get(total_races, rules.get(min(rules.keys(), key=lambda k: abs(k - total_races)), {}))
+
     def _format_context_for_prompt(self, context: dict) -> str:
         """Format context dict into readable prompt text."""
         meeting = context.get("meeting", {})
@@ -584,6 +597,23 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             parts.append("\n## Value/Roughies")
             for rough in summary["roughies"]:
                 parts.append(f"- Race {rough['race']}: {rough['horse']} @ ${rough['odds']} (form: {rough['form']})")
+
+        # Sequence lanes (quaddie, early quaddie, big 6)
+        total_races = summary.get("total_races", len(races))
+        sequences = self._get_sequence_lanes(total_races)
+        if sequences:
+            parts.append("\n## SEQUENCE LANES (use these exact race ranges)")
+            eq = sequences.get("early_quad")
+            q = sequences.get("quaddie")
+            b6 = sequences.get("big6")
+            if eq:
+                parts.append(f"- EARLY QUADDIE: Races {eq[0]}-{eq[1]}")
+            if q:
+                parts.append(f"- QUADDIE (main): Races {q[0]}-{q[1]}")
+            if b6:
+                parts.append(f"- BIG 6: Races {b6[0]}-{b6[1]}")
+            elif total_races <= 7:
+                parts.append("- BIG 6: Not applicable (7 race meeting)")
 
         return "\n".join(parts)
 

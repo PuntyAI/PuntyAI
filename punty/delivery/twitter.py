@@ -179,9 +179,8 @@ class TwitterDelivery:
             "status": "posted",
             "content_id": content_id,
             "tweet_count": len(tweet_ids),
-            "total_tweets": len(tweets),
             "tweet_ids": tweet_ids,
-            "thread_url": f"https://twitter.com/i/status/{tweet_ids[0]}"
+            "tweet_url": f"https://twitter.com/i/status/{tweet_ids[0]}"
             if tweet_ids
             else None,
         }
