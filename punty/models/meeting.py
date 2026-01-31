@@ -88,6 +88,11 @@ class Race(Base):
     weight_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     field_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # Result fields
+    winning_time: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    results_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    exotic_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -119,6 +124,9 @@ class Race(Base):
             "age_restriction": self.age_restriction,
             "weight_type": self.weight_type,
             "field_size": self.field_size,
+            "winning_time": self.winning_time,
+            "results_status": self.results_status,
+            "exotic_results": self.exotic_results,
         }
         if include_runners:
             data["runners"] = [r.to_dict() for r in self.runners]
@@ -191,6 +199,15 @@ class Runner(Base):
     odds_betfair: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odds_flucs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Result fields
+    finish_position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    result_margin: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    starting_price: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    win_dividend: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    place_dividend: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    sectional_400: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    sectional_800: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     # Trainer details
     trainer_location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
@@ -254,6 +271,13 @@ class Runner(Base):
             "odds_betfair": self.odds_betfair,
             "odds_flucs": self.odds_flucs,
             "trainer_location": self.trainer_location,
+            "finish_position": self.finish_position,
+            "result_margin": self.result_margin,
+            "starting_price": self.starting_price,
+            "win_dividend": self.win_dividend,
+            "place_dividend": self.place_dividend,
+            "sectional_400": self.sectional_400,
+            "sectional_800": self.sectional_800,
         }
 
 

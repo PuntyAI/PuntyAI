@@ -47,6 +47,23 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ScheduledJob).where(ScheduledJob.enabled == True))
     active_jobs = result.scalars().all()
 
+    # Get results monitor status
+    monitor = getattr(request.app.state, "results_monitor", None)
+    monitor_status = monitor.status() if monitor else {"running": False}
+
+    # Get performance summary for today
+    performance = None
+    performance_history = []
+    try:
+        from punty.results.picks import get_performance_summary, get_performance_history
+        from datetime import timedelta
+        performance = await get_performance_summary(db, today)
+        performance_history = await get_performance_history(
+            db, today - timedelta(days=6), today
+        )
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -55,6 +72,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "pending_reviews": pending_reviews,
             "recent_content": recent_content,
             "active_jobs": active_jobs,
+            "monitor_status": monitor_status,
+            "performance": performance,
+            "performance_history": performance_history,
         },
     )
 

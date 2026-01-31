@@ -86,18 +86,24 @@ class RacingComScraper(BaseScraper):
                         race_list_gql.clear()
                         race_list_gql.extend(races)
 
-                elif "getRaceEntriesForField_CD" in url:
+                elif "getRaceEntriesForField_CD" in url or "getRaceEntries" in url:
                     form = data.get("data", {}).get("getRaceForm", {})
+                    if not form:
+                        # Try alternative data paths
+                        form = data.get("data", {}).get("getRaceEntries", {})
                     entries = form.get("formRaceEntries", [])
-                    rn = form.get("id")  # race code, but we also get raceNumber from entries
                     # Determine race number from the entries or form
                     race_num = None
                     if entries:
                         race_num = entries[0].get("raceNumber")
                     if race_num and entries:
                         race_entries_by_num[race_num] = entries
+                        logger.debug(f"Captured {len(entries)} entries for race {race_num}")
 
-                elif "GetBettingData_CD" in url:
+                # Always scan for formRaceEntries as fallback
+                self._try_extract_entries(data, race_entries_by_num)
+
+                if "GetBettingData_CD" in url:
                     bd = data.get("data", {}).get("GetBettingData", {})
                     entries = bd.get("formRaceEntries", [])
                     # We need to figure out race number — stored in captured context
@@ -106,6 +112,27 @@ class RacingComScraper(BaseScraper):
                         betting_by_num.setdefault("_pending", []).append(entries)
 
             page.on("response", capture_graphql)
+
+            # Track which queries we capture for debugging
+            captured_queries = set()
+
+            original_capture = capture_graphql
+            async def capture_graphql_debug(response):
+                if "graphql.rmdprod.racing.com" in response.url:
+                    # Log which query types we see
+                    for qname in ["getMeeting_CD", "getRaceNumberList_CD",
+                                  "getRaceEntriesForField_CD", "GetBettingData_CD",
+                                  "getRaceEntries", "getRaceForm"]:
+                        if qname in response.url:
+                            captured_queries.add(qname)
+                            break
+                    else:
+                        # Log unknown queries
+                        captured_queries.add(response.url.split("/")[-1][:60])
+                await original_capture(response)
+
+            page.remove_listener("response", capture_graphql)
+            page.on("response", capture_graphql_debug)
 
             # 1. Load meeting page to get meeting info and race list
             resp = await page.goto(meeting_url, wait_until="load")
@@ -156,11 +183,31 @@ class RacingComScraper(BaseScraper):
                     if await ff_btn.is_visible(timeout=2000):
                         await ff_btn.click()
                         await page.wait_for_timeout(3000)
+                    else:
+                        logger.info(f"Race {race_num}: 'Full Form' button not found, trying 'Form' tab")
+                        # Try alternative tab names
+                        for tab_text in ["Form", "Field", "Runners"]:
+                            try:
+                                alt_btn = page.locator(f"button:has-text('{tab_text}'), a:has-text('{tab_text}')").first
+                                if await alt_btn.is_visible(timeout=1000):
+                                    await alt_btn.click()
+                                    await page.wait_for_timeout(3000)
+                                    break
+                            except Exception:
+                                continue
                 except Exception:
                     pass
 
+                # Check if we got entries for this race
+                if race_num not in race_entries_by_num:
+                    logger.warning(f"Race {race_num}: no entries captured after page load")
+
             # Remove listener
-            page.remove_listener("response", capture_graphql)
+            page.remove_listener("response", capture_graphql_debug)
+
+        logger.info(f"Captured GraphQL queries: {captured_queries}")
+        logger.info(f"Entries captured for races: {list(race_entries_by_num.keys())}")
+        logger.info(f"Total entries per race: { {k: len(v) for k, v in race_entries_by_num.items()} }")
 
         # --- Build output from captured GraphQL data ---
         meeting_dict = self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql)
@@ -240,6 +287,30 @@ class RacingComScraper(BaseScraper):
             runners.extend(race_runners)
 
         return {"meeting": meeting_dict, "races": races, "runners": runners}
+
+    def _try_extract_entries(self, data: dict, race_entries_by_num: dict) -> None:
+        """Scan a GraphQL response for formRaceEntries, regardless of query name."""
+        def _find_entries(obj, depth=0):
+            if depth > 5:
+                return
+            if isinstance(obj, dict):
+                # Look for formRaceEntries or raceEntries
+                for key in ["formRaceEntries", "raceEntries", "entries"]:
+                    entries = obj.get(key)
+                    if isinstance(entries, list) and len(entries) > 0:
+                        # Check if entries have horseName (to confirm they're runner data)
+                        if entries[0].get("horseName") or entries[0].get("raceEntryNumber"):
+                            race_num = entries[0].get("raceNumber")
+                            if race_num and race_num not in race_entries_by_num:
+                                race_entries_by_num[race_num] = entries
+                                logger.info(f"Captured {len(entries)} entries for race {race_num} via '{key}'")
+                            return
+                for v in obj.values():
+                    _find_entries(v, depth + 1)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _find_entries(item, depth + 1)
+        _find_entries(data)
 
     def _build_meeting_dict(self, meeting_id: str, venue: str, race_date: date, gql: dict) -> dict:
         """Build meeting dict from getMeeting_CD GraphQL data."""
@@ -631,6 +702,202 @@ class RacingComScraper(BaseScraper):
 
         yield {"step": total, "total": total, "label": "Speed maps complete", "status": "complete"}
 
+    async def check_race_statuses(self, venue: str, race_date: date) -> dict[int, str]:
+        """Lightweight poll — single page load to get race statuses.
+
+        Returns {1: "Open", 2: "Paying", ...}
+        Status values: "Open", "Closed", "Interim", "Paying", "Abandoned"
+        """
+        meeting_url = self._build_meeting_url(venue, race_date)
+        logger.info(f"Checking race statuses: {meeting_url}")
+
+        statuses: dict[int, str] = {}
+
+        async with new_page() as page:
+            captured_races = []
+
+            async def capture_graphql(response):
+                if "graphql.rmdprod.racing.com" not in response.url:
+                    return
+                if "getRaceNumberList_CD" not in response.url:
+                    return
+                try:
+                    body = await response.text()
+                    data = _json.loads(body)
+                    races = data.get("data", {}).get("getNoCacheRacesForMeet", [])
+                    if races:
+                        captured_races.extend(races)
+                except Exception:
+                    pass
+
+            page.on("response", capture_graphql)
+            await page.goto(meeting_url, wait_until="load")
+            await page.wait_for_timeout(4000)
+            page.remove_listener("response", capture_graphql)
+
+        for race in captured_races:
+            race_num = race.get("raceNumber")
+            status = race.get("raceStatus") or race.get("status") or "Open"
+            if race_num:
+                statuses[race_num] = status
+
+        logger.info(f"Race statuses for {venue}: {statuses}")
+        return statuses
+
+    async def scrape_race_result(self, venue: str, race_date: date, race_number: int) -> dict:
+        """Scrape results for a single completed race.
+
+        Returns: {race_number, winning_time, results: [{horse_name, saddlecloth,
+        position, margin, starting_price, sectional_400, sectional_800}],
+        exotics: {exacta, trifecta, quinella, first4}}
+        """
+        race_url = self._build_race_url(venue, race_date, race_number)
+        logger.info(f"Scraping race result: {race_url}")
+
+        entries_data: list = []
+        betting_data: dict = {}
+
+        async with new_page() as page:
+            async def capture_graphql(response):
+                if "graphql.rmdprod.racing.com" not in response.url:
+                    return
+                try:
+                    body = await response.text()
+                    data = _json.loads(body)
+                except Exception:
+                    return
+
+                url = response.url
+
+                if "getRaceEntriesForField" in url or "getRaceEntries" in url:
+                    form = data.get("data", {}).get("getRaceForm", {})
+                    if not form:
+                        form = data.get("data", {}).get("getRaceEntries", {})
+                    entries = form.get("formRaceEntries", [])
+                    if entries:
+                        entries_data.clear()
+                        entries_data.extend(entries)
+
+                if "GetBettingData" in url:
+                    bd = data.get("data", {}).get("GetBettingData", {})
+                    if bd:
+                        betting_data.update(bd)
+
+                # Fallback scan
+                self._try_extract_result_entries(data, entries_data)
+
+            page.on("response", capture_graphql)
+            await page.goto(race_url, wait_until="load")
+            await page.wait_for_timeout(5000)
+
+            # Try clicking Results tab
+            try:
+                for tab_text in ["Results", "Full Form", "Form"]:
+                    btn = page.locator(f"button:has-text('{tab_text}'), a:has-text('{tab_text}')").first
+                    if await btn.is_visible(timeout=1500):
+                        await btn.click()
+                        await page.wait_for_timeout(3000)
+                        break
+            except Exception:
+                pass
+
+            page.remove_listener("response", capture_graphql)
+
+        # Parse results from entries
+        results = []
+        winning_time = None
+        for entry in entries_data:
+            horse_name = entry.get("horseName", "").strip()
+            if not horse_name:
+                continue
+
+            position = entry.get("position")
+            if position is not None:
+                try:
+                    position = int(position)
+                except (ValueError, TypeError):
+                    position = None
+
+            margin = entry.get("margin")
+            if margin is not None:
+                margin = str(margin)
+
+            if not winning_time:
+                wt = entry.get("winningTime")
+                if wt:
+                    winning_time = str(wt)
+
+            sp = entry.get("startingPrice")
+            if sp is not None:
+                sp = str(sp)
+
+            results.append({
+                "horse_name": horse_name,
+                "saddlecloth": entry.get("raceEntryNumber"),
+                "position": position,
+                "margin": margin,
+                "starting_price": sp,
+                "sectional_400": str(entry.get("positionAt400", "")) or None,
+                "sectional_800": str(entry.get("positionAt800", "")) or None,
+                "win_dividend": self._parse_float(entry.get("dividendWin")),
+                "place_dividend": self._parse_float(entry.get("dividendPlace")),
+            })
+
+        # Parse exotics from betting data
+        exotics = {}
+        for exotic in betting_data.get("exotics", []):
+            exotic_type = (exotic.get("poolType") or exotic.get("type") or "").lower()
+            dividend = exotic.get("dividend") or exotic.get("amount")
+            if exotic_type and dividend:
+                exotics[exotic_type] = str(dividend)
+
+        # Sort by position
+        results.sort(key=lambda r: r.get("position") or 999)
+
+        return {
+            "race_number": race_number,
+            "winning_time": winning_time,
+            "results": results,
+            "exotics": exotics,
+        }
+
+    def _try_extract_result_entries(self, data: dict, entries_data: list) -> None:
+        """Scan GraphQL response for result entries with position data."""
+        def _find(obj, depth=0):
+            if depth > 5:
+                return
+            if isinstance(obj, dict):
+                for key in ["formRaceEntries", "raceEntries"]:
+                    entries = obj.get(key)
+                    if isinstance(entries, list) and len(entries) > 0:
+                        if entries[0].get("position") is not None:
+                            if not entries_data or entries_data[0].get("position") is None:
+                                entries_data.clear()
+                                entries_data.extend(entries)
+                            return
+                for v in obj.values():
+                    _find(v, depth + 1)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _find(item, depth + 1)
+        _find(data)
+
+    @staticmethod
+    def _parse_float(val) -> Optional[float]:
+        """Parse a value to float, returning None on failure."""
+        if val is None:
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
-        """Scrape race results — not yet implemented."""
-        return []
+        """Scrape all race results for a venue."""
+        statuses = await self.check_race_statuses(venue, race_date)
+        results = []
+        for race_num, status in sorted(statuses.items()):
+            if status in ("Paying", "Closed", "Interim"):
+                result = await self.scrape_race_result(venue, race_date, race_num)
+                results.append(result)
+        return results

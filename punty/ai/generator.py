@@ -453,37 +453,126 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
         save: bool = True,
     ) -> dict[str, Any]:
         """Generate results commentary for a race."""
-        logger.info(f"Generating results for R{race_number} at {meeting_id}")
+        result = {}
+        async for event in self.generate_results_stream(meeting_id, race_number, save):
+            if event.get("status") == "complete":
+                result = event.get("result", {})
+            elif event.get("status") == "error":
+                raise ValueError(event.get("label", "Generation failed"))
+        return result
 
-        # Build context including results
-        context = await self.context_builder.build_race_context(meeting_id, race_number)
+    async def generate_results_stream(
+        self,
+        meeting_id: str,
+        race_number: int,
+        save: bool = True,
+    ):
+        """Generate results commentary with SSE progress events."""
+        total_steps = 5
+        step = 0
+
+        def evt(label, status="running", **extra):
+            nonlocal step
+            if status == "running":
+                step += 1
+            return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
+
+        try:
+            yield evt("Building results context...")
+            context = await self.context_builder.build_results_context(meeting_id, race_number)
+            if not context:
+                raise ValueError(f"Race not found: R{race_number} at {meeting_id}")
+            yield evt(f"Context built — Race {race_number}", "done")
+
+            yield evt("Loading prompts...")
+            personality = load_prompt("personality")
+            results_prompt = load_prompt("results")
+            analysis_weights = await self.get_analysis_weights()
+            yield evt("Prompts loaded", "done")
+
+            yield evt("Generating results commentary with AI...")
+            context_str = json.dumps(context, indent=2, default=str)
+            system_prompt = f"""{personality}
+
+## Analysis Framework Weights
+{analysis_weights}
+"""
+            raw_content = await self.ai_client.generate_with_context(
+                system_prompt=system_prompt,
+                context=context_str,
+                instruction=results_prompt + f"\n\nGenerate results commentary for Race {race_number}",
+                temperature=0.8,
+            )
+            yield evt("AI content generated", "done")
+
+            result = {
+                "raw_content": raw_content,
+                "meeting_id": meeting_id,
+                "race_number": race_number,
+                "content_type": ContentType.RESULTS.value,
+            }
+
+            if save:
+                yield evt("Saving content...")
+                content = await self._save_content(result, requires_review=True)
+                result["content_id"] = content.id
+                result["status"] = content.status
+                yield evt("Content saved", "done")
+            else:
+                step += 1
+                yield evt("Save skipped", "done")
+
+            yield {"step": total_steps, "total": total_steps, "label": f"Results generated for Race {race_number}", "status": "complete", "result": result}
+
+        except Exception as e:
+            logger.error(f"Results generation failed: {e}")
+            yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
+
+    async def generate_meeting_wrapup(
+        self,
+        meeting_id: str,
+        save: bool = True,
+    ) -> dict[str, Any]:
+        """Generate meeting wrap-up content."""
+        logger.info(f"Generating meeting wrap-up for {meeting_id}")
+
+        context = await self.context_builder.build_wrapup_context(meeting_id)
         if not context:
-            raise ValueError(f"Race not found: R{race_number} at {meeting_id}")
+            raise ValueError(f"Meeting not found: {meeting_id}")
 
-        # Load prompts
         personality = load_prompt("personality")
-        results_prompt = load_prompt("results")
+        wrapup_prompt = load_prompt("wrap_up")
+        analysis_weights = await self.get_analysis_weights()
+        whatsapp_link = await self.get_setting(
+            "whatsapp_invite_link",
+            "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
+        )
 
-        # Format context
         context_str = json.dumps(context, indent=2, default=str)
+        system_prompt = f"""{personality}
 
-        # Generate
+## Analysis Framework Weights
+{analysis_weights}
+
+## WhatsApp Invite Link
+{whatsapp_link}
+"""
+
         raw_content = await self.ai_client.generate_with_context(
-            system_prompt=personality,
+            system_prompt=system_prompt,
             context=context_str,
-            instruction=results_prompt + f"\n\nGenerate results commentary for Race {race_number}",
+            instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {context['meeting']['venue']} on {context['meeting']['date']}",
             temperature=0.8,
         )
 
         result = {
             "raw_content": raw_content,
             "meeting_id": meeting_id,
-            "race_number": race_number,
-            "content_type": ContentType.RESULTS.value,
+            "content_type": ContentType.MEETING_WRAPUP.value,
         }
 
         if save:
-            content = await self._save_content(result, requires_review=False)
+            content = await self._save_content(result, requires_review=True)
             result["content_id"] = content.id
             result["status"] = content.status
 

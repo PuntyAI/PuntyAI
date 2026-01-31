@@ -1,5 +1,6 @@
 """Scraping orchestrator — coordinates scrapers and stores results."""
 
+import json as _json
 import logging
 from datetime import date
 from typing import AsyncGenerator
@@ -377,6 +378,56 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
             if odds.get("scratched"):
                 runner.scratched = True
                 runner.scratching_reason = odds.get("scratching_reason") or runner.scratching_reason
+
+
+async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: int, results_data: dict) -> None:
+    """Update Runner result fields and Race status from scraped results."""
+    race_id = f"{meeting_id}-r{race_number}"
+    race = await db.get(Race, race_id)
+    if not race:
+        logger.warning(f"Race not found for results: {race_id}")
+        return
+
+    # Update race-level fields
+    race.results_status = "Paying"
+    if results_data.get("winning_time"):
+        race.winning_time = results_data["winning_time"]
+    if results_data.get("exotics"):
+        race.exotic_results = _json.dumps(results_data["exotics"])
+
+    # Update runner result fields
+    for result in results_data.get("results", []):
+        horse_name = result.get("horse_name", "")
+        if not horse_name:
+            continue
+
+        runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.horse_name == horse_name,
+            )
+        )
+        runner = runner_result.scalar_one_or_none()
+        if not runner:
+            continue
+
+        if result.get("position") is not None:
+            runner.finish_position = result["position"]
+        if result.get("margin") is not None:
+            runner.result_margin = result["margin"]
+        if result.get("starting_price") is not None:
+            runner.starting_price = result["starting_price"]
+        if result.get("win_dividend") is not None:
+            runner.win_dividend = result["win_dividend"]
+        if result.get("place_dividend") is not None:
+            runner.place_dividend = result["place_dividend"]
+        if result.get("sectional_400"):
+            runner.sectional_400 = result["sectional_400"]
+        if result.get("sectional_800"):
+            runner.sectional_800 = result["sectional_800"]
+
+    await db.flush()
+    logger.info(f"Upserted results for {race_id}: {len(results_data.get('results', []))} runners")
 
 
 def _guess_state(venue: str) -> str:

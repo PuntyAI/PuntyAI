@@ -179,6 +179,15 @@ async def review_content(
     if action.action == "approve":
         content.status = ContentStatus.APPROVED
         content.review_notes = action.notes
+
+        # Store picks from early mail on approval
+        if content.content_type == "early_mail" and content.raw_content:
+            try:
+                from punty.results.picks import store_picks_from_content
+                await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to store picks: {e}")
     elif action.action == "reject":
         content.status = ContentStatus.REJECTED
         content.review_notes = action.notes

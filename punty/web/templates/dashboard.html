@@ -67,6 +67,131 @@
         </div>
     </div>
 
+    <!-- Results Monitor Status -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <div class="p-3 {{ 'bg-green-100' if monitor_status.running else 'bg-gray-100' }} rounded-lg">
+                    <span class="text-2xl">{{ '&#x1F7E2;' if monitor_status.running else '&#x26AA;' }}</span>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm text-gray-500">Results Monitor</p>
+                    <p class="text-lg font-bold {{ 'text-green-700' if monitor_status.running else 'text-gray-500' }}">
+                        {{ 'Running' if monitor_status.running else 'Stopped' }}
+                    </p>
+                    {% if monitor_status.last_check %}
+                    <p class="text-xs text-gray-400">Last check: {{ monitor_status.last_check }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="text-right text-sm text-gray-500">
+                {% set total_processed = 0 %}
+                {% for mid, races in (monitor_status.processed_races or {}).items() %}
+                {% set total_processed = total_processed + races|length %}
+                {% endfor %}
+                <p>{{ total_processed }} races processed</p>
+                <p>{{ (monitor_status.wrapups_generated or [])|length }} wrap-ups</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Dashboard -->
+    {% if performance and performance.total_bets > 0 %}
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center">
+                <div class="p-3 bg-punty-coral/10 rounded-lg">
+                    <span class="text-2xl">&#x1F4CA;</span>
+                </div>
+                <div class="ml-4">
+                    <p class="text-lg font-semibold text-gray-900">Today's Performance</p>
+                    <p class="text-xs text-gray-400">{{ performance.date }}</p>
+                </div>
+            </div>
+            <div class="text-2xl font-bold {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
+                {{ '%+.1f'|format(performance.total_pnl) }}U
+            </div>
+        </div>
+
+        <!-- Summary row -->
+        <div class="grid grid-cols-5 gap-4 mb-4 text-center">
+            <div>
+                <p class="text-xs text-gray-500 uppercase">Bets</p>
+                <p class="text-lg font-bold text-gray-900">{{ performance.total_bets }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 uppercase">Winners</p>
+                <p class="text-lg font-bold text-gray-900">{{ performance.total_winners }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 uppercase">Staked</p>
+                <p class="text-lg font-bold text-gray-900">{{ '%.1f'|format(performance.total_staked) }}U</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 uppercase">Returned</p>
+                <p class="text-lg font-bold text-gray-900">{{ '%.1f'|format(performance.total_returned) }}U</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 uppercase">Net P&L</p>
+                <p class="text-lg font-bold {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
+                    {{ '%+.1f'|format(performance.total_pnl) }}U
+                </p>
+            </div>
+        </div>
+
+        <!-- Product breakdown -->
+        {% set product_labels = {'selection': 'Selections', 'big3': 'Big 3', 'big3_multi': 'Big 3 Multi', 'exotic': 'Exotics', 'sequence': 'Sequences'} %}
+        <div class="space-y-2">
+            {% for ptype, data in performance.by_product.items() %}
+            {% if ptype != 'big3' %}
+            <div class="flex items-center justify-between text-sm">
+                <div class="w-28 font-medium text-gray-700">{{ product_labels.get(ptype, ptype|title) }}</div>
+                <div class="flex-1 mx-3">
+                    <div class="w-full bg-gray-100 rounded-full h-2">
+                        <div class="h-2 rounded-full {{ 'bg-green-500' if data.pnl >= 0 else 'bg-red-400' }}"
+                             style="width: {{ [data.strike_rate, 100]|min }}%"></div>
+                    </div>
+                </div>
+                <div class="w-20 text-right text-gray-500">{{ data.winners }}/{{ data.bets }}</div>
+                <div class="w-20 text-right font-medium {{ 'text-green-600' if data.pnl >= 0 else 'text-red-600' }}">
+                    {{ '%+.1f'|format(data.pnl) }}U
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 7-Day P&L Trend -->
+    {% if performance_history and performance_history|length > 0 %}
+    <div class="bg-white rounded-lg shadow p-6">
+        <p class="text-sm font-semibold text-gray-700 mb-3">7-Day P&L Trend</p>
+        {% set max_abs = namespace(val=1) %}
+        {% for day in performance_history %}
+            {% if day.pnl|abs > max_abs.val %}
+                {% set max_abs.val = day.pnl|abs %}
+            {% endif %}
+        {% endfor %}
+        <div class="flex items-end justify-between gap-1" style="height:80px">
+            {% for day in performance_history %}
+            {% set pct = (day.pnl|abs / max_abs.val * 100)|int %}
+            {% set bar_h = [pct, 5]|max %}
+            <div class="flex-1 flex flex-col items-center justify-end h-full">
+                <div class="w-full rounded-t {{ 'bg-green-500' if day.pnl >= 0 else 'bg-red-400' }}"
+                     style="height:{{ bar_h }}%"
+                     title="{{ day.date }}: {{ '%+.1f'|format(day.pnl) }}U ({{ day.winners }}/{{ day.bets }})"></div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex justify-between mt-1">
+            {% for day in performance_history %}
+            <div class="flex-1 text-center text-xs text-gray-400">{{ day.date[-5:] }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Today's Meetings -->
         <div class="bg-white rounded-lg shadow">

@@ -30,6 +30,7 @@ class ContentType(str, Enum):
     RESULTS = "results"
     UPDATE_ALERT = "update_alert"
     ENGAGEMENT = "engagement"
+    MEETING_WRAPUP = "meeting_wrapup"
 
 
 class ContextSnapshot(Base):

@@ -1,0 +1,444 @@
+"""Pick storage, settlement, and performance summary queries."""
+
+import json
+import logging
+from datetime import date, datetime, timedelta
+from itertools import permutations
+from typing import Optional
+
+from sqlalchemy import select, delete, func, case
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from punty.models.pick import Pick
+from punty.models.meeting import Meeting, Race, Runner
+from punty.models.content import Content
+from punty.results.parser import parse_early_mail
+
+logger = logging.getLogger(__name__)
+
+
+async def store_picks_from_content(
+    db: AsyncSession, content_id: str, meeting_id: str, raw_content: str
+) -> int:
+    """Parse early mail and store Pick rows. Idempotent — deletes existing picks first."""
+    # Delete existing picks for this content
+    await db.execute(delete(Pick).where(Pick.content_id == content_id))
+
+    pick_dicts = parse_early_mail(raw_content, content_id, meeting_id)
+    if not pick_dicts:
+        logger.warning(f"No picks parsed from content {content_id}")
+        return 0
+
+    for pd in pick_dicts:
+        pick = Pick(**pd)
+        db.add(pick)
+
+    await db.flush()
+    logger.info(f"Stored {len(pick_dicts)} picks for content {content_id}")
+    return len(pick_dicts)
+
+
+async def settle_picks_for_race(
+    db: AsyncSession, meeting_id: str, race_number: int
+) -> int:
+    """Settle unsettled picks that involve this race. Returns count settled."""
+    now = datetime.utcnow()
+    settled_count = 0
+
+    # Load race + runners for this race
+    race_id = f"{meeting_id}-r{race_number}"
+    result = await db.execute(select(Runner).where(Runner.race_id == race_id))
+    runners = result.scalars().all()
+    if not runners:
+        return 0
+
+    runners_by_saddlecloth = {r.saddlecloth: r for r in runners if r.saddlecloth}
+    runners_by_name = {r.horse_name.upper(): r for r in runners}
+
+    # Load race for exotic results
+    race_result = await db.execute(select(Race).where(Race.id == race_id))
+    race = race_result.scalar_one_or_none()
+
+    # --- Selections ---
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.race_number == race_number,
+            Pick.pick_type == "selection",
+            Pick.settled == False,
+        )
+    )
+    for pick in result.scalars().all():
+        runner = None
+        if pick.saddlecloth and pick.saddlecloth in runners_by_saddlecloth:
+            runner = runners_by_saddlecloth[pick.saddlecloth]
+        elif pick.horse_name:
+            runner = runners_by_name.get(pick.horse_name.upper())
+
+        if runner and runner.finish_position is not None:
+            won = runner.finish_position == 1
+            pick.hit = won
+            if won and runner.win_dividend:
+                pick.pnl = round(runner.win_dividend - 1.0, 2)
+            else:
+                pick.pnl = -1.0
+            pick.settled = True
+            pick.settled_at = now
+            settled_count += 1
+
+    # --- Big3 individual horses ---
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.race_number == race_number,
+            Pick.pick_type == "big3",
+            Pick.settled == False,
+        )
+    )
+    for pick in result.scalars().all():
+        runner = None
+        if pick.saddlecloth and pick.saddlecloth in runners_by_saddlecloth:
+            runner = runners_by_saddlecloth[pick.saddlecloth]
+        elif pick.horse_name:
+            runner = runners_by_name.get(pick.horse_name.upper())
+
+        if runner and runner.finish_position is not None:
+            pick.hit = runner.finish_position == 1
+            pick.pnl = 0.0  # P&L tracked on the multi row
+            pick.settled = True
+            pick.settled_at = now
+            settled_count += 1
+
+    # --- Big3 multi — only settle when all 3 individual big3 picks are settled ---
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.pick_type == "big3_multi",
+            Pick.settled == False,
+        )
+    )
+    for multi_pick in result.scalars().all():
+        # Find all big3 individual picks for same content
+        b3_result = await db.execute(
+            select(Pick).where(
+                Pick.content_id == multi_pick.content_id,
+                Pick.pick_type == "big3",
+            )
+        )
+        big3_picks = b3_result.scalars().all()
+        if not big3_picks:
+            continue
+
+        all_settled = all(p.settled for p in big3_picks)
+        if not all_settled:
+            continue
+
+        all_won = all(p.hit for p in big3_picks)
+        stake = multi_pick.exotic_stake or 10.0
+        if all_won and multi_pick.multi_odds:
+            multi_pick.pnl = round(multi_pick.multi_odds * stake - stake, 2)
+        else:
+            multi_pick.pnl = round(-stake, 2)
+        multi_pick.hit = all_won
+        multi_pick.settled = True
+        multi_pick.settled_at = now
+        settled_count += 1
+
+    # --- Exotics ---
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.race_number == race_number,
+            Pick.pick_type == "exotic",
+            Pick.settled == False,
+        )
+    )
+    for pick in result.scalars().all():
+        exotic_runners = json.loads(pick.exotic_runners) if pick.exotic_runners else []
+        stake = pick.exotic_stake or 1.0
+        exotic_type = (pick.exotic_type or "").lower()
+
+        # Get finish order
+        finish_order = sorted(
+            [r for r in runners if r.finish_position and r.finish_position <= 4],
+            key=lambda r: r.finish_position,
+        )
+        top_saddlecloths = [r.saddlecloth for r in finish_order]
+
+        hit = False
+        dividend = 0.0
+
+        # Parse exotic dividends from race
+        exotic_divs = {}
+        if race and race.exotic_results:
+            try:
+                exotic_divs = json.loads(race.exotic_results)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if "trifecta" in exotic_type or "boxed" in exotic_type:
+            # Boxed trifecta: any permutation of our runners in top 3
+            if len(top_saddlecloths) >= 3 and len(exotic_runners) >= 3:
+                top3 = set(top_saddlecloths[:3])
+                hit = top3.issubset(set(exotic_runners))
+            if hit:
+                dividend = _find_dividend(exotic_divs, "trifecta")
+        elif "exacta" in exotic_type:
+            if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
+                hit = (top_saddlecloths[0] == exotic_runners[0] and
+                       top_saddlecloths[1] == exotic_runners[1])
+            if hit:
+                dividend = _find_dividend(exotic_divs, "exacta")
+        elif "quinella" in exotic_type:
+            if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
+                hit = set(top_saddlecloths[:2]) == set(exotic_runners[:2])
+            if hit:
+                dividend = _find_dividend(exotic_divs, "quinella")
+        elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
+            if len(top_saddlecloths) >= 4 and len(exotic_runners) >= 4:
+                hit = list(top_saddlecloths[:4]) == list(exotic_runners[:4])
+            if hit:
+                dividend = _find_dividend(exotic_divs, "first4")
+
+        if hit and dividend > 0:
+            pick.pnl = round(dividend * stake - stake, 2)
+        else:
+            pick.pnl = round(-stake, 2)
+        pick.hit = hit
+        pick.settled = True
+        pick.settled_at = now
+        settled_count += 1
+
+    # --- Sequences ---
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.pick_type == "sequence",
+            Pick.settled == False,
+        )
+    )
+    for pick in result.scalars().all():
+        if not pick.sequence_legs or not pick.sequence_start_race:
+            continue
+
+        legs = json.loads(pick.sequence_legs)
+        start = pick.sequence_start_race
+        num_legs = len(legs)
+
+        # Check if this race is part of this sequence
+        if race_number < start or race_number >= start + num_legs:
+            continue
+
+        # Check if ALL legs have results
+        all_resolved = True
+        all_hit = True
+        for leg_idx, leg_saddlecloths in enumerate(legs):
+            leg_race_num = start + leg_idx
+            leg_race_id = f"{meeting_id}-r{leg_race_num}"
+            leg_race_result = await db.execute(
+                select(Race).where(Race.id == leg_race_id)
+            )
+            leg_race = leg_race_result.scalar_one_or_none()
+            if not leg_race or leg_race.results_status not in ("Paying", "Closed"):
+                all_resolved = False
+                break
+
+            # Find winner of this leg
+            winner_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == leg_race_id,
+                    Runner.finish_position == 1,
+                )
+            )
+            winner = winner_result.scalar_one_or_none()
+            if not winner or winner.saddlecloth not in leg_saddlecloths:
+                all_hit = False
+
+        if not all_resolved:
+            continue
+
+        pick.hit = all_hit
+
+        # Look up sequence dividend from last leg's exotic_results
+        seq_pnl = 0.0
+        if all_hit:
+            last_leg_race_id = f"{meeting_id}-r{start + num_legs - 1}"
+            last_leg_result = await db.execute(
+                select(Race).where(Race.id == last_leg_race_id)
+            )
+            last_leg_race = last_leg_result.scalar_one_or_none()
+            if last_leg_race and last_leg_race.exotic_results:
+                try:
+                    exotic_divs = json.loads(last_leg_race.exotic_results)
+                except (json.JSONDecodeError, TypeError):
+                    exotic_divs = {}
+                seq_type = (pick.sequence_type or "").lower()
+                dividend = 0.0
+                for key in ("quaddie", "quadrella", "big6", "big 6"):
+                    if key in seq_type or seq_type == "":
+                        dividend = _find_dividend(exotic_divs, key)
+                        if dividend > 0:
+                            break
+                if dividend > 0:
+                    # Estimate cost from combinations
+                    legs = json.loads(pick.sequence_legs) if pick.sequence_legs else []
+                    num_combos = 1
+                    for leg in legs:
+                        num_combos *= len(leg)
+                    base_unit = pick.exotic_stake or 1.0
+                    cost = num_combos * base_unit
+                    seq_pnl = round(dividend - cost, 2)
+                else:
+                    # Hit but no dividend found — cost only
+                    legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []
+                    num_combos = 1
+                    for leg in legs_data:
+                        num_combos *= len(leg)
+                    base_unit = pick.exotic_stake or 1.0
+                    seq_pnl = 0.0  # No dividend data available
+        else:
+            # Lost — cost is combinations × base unit
+            legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []
+            num_combos = 1
+            for leg in legs_data:
+                num_combos *= len(leg)
+            base_unit = pick.exotic_stake or 1.0
+            cost = num_combos * base_unit
+            seq_pnl = round(-cost, 2)
+
+        pick.pnl = seq_pnl
+        pick.settled = True
+        pick.settled_at = now
+        settled_count += 1
+
+    await db.flush()
+    logger.info(f"Settled {settled_count} picks for {meeting_id} R{race_number}")
+    return settled_count
+
+
+def _find_dividend(exotic_divs: dict, exotic_key: str) -> float:
+    """Search exotic results dict for a dividend matching the key."""
+    for key, val in exotic_divs.items():
+        if exotic_key in key.lower():
+            if isinstance(val, (int, float)):
+                return float(val)
+            if isinstance(val, dict) and "dividend" in val:
+                return float(val["dividend"])
+            if isinstance(val, str):
+                try:
+                    return float(val.replace("$", "").replace(",", ""))
+                except ValueError:
+                    pass
+    return 0.0
+
+
+async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
+    """Get P&L summary for a given date, grouped by pick_type."""
+    result = await db.execute(
+        select(
+            Pick.pick_type,
+            func.count(Pick.id).label("count"),
+            func.sum(Pick.pnl).label("total_pnl"),
+            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
+            func.sum(
+                case((Pick.pick_type == "selection", Pick.exotic_stake), else_=Pick.exotic_stake)
+            ).label("total_staked_exotic"),
+        )
+        .join(Content, Pick.content_id == Content.id)
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Meeting.date == target_date,
+            Pick.settled == True,
+        )
+        .group_by(Pick.pick_type)
+    )
+    rows = result.all()
+
+    by_product = {}
+    total_bets = 0
+    total_winners = 0
+    total_pnl = 0.0
+    total_staked = 0.0
+
+    for row in rows:
+        pick_type = row.pick_type
+        count = row.count or 0
+        pnl = float(row.total_pnl or 0)
+        winners = int(row.winners or 0)
+
+        # Estimate stake: selections = 1U each, exotics/big3_multi use exotic_stake
+        if pick_type == "selection":
+            staked = float(count)  # 1U per selection
+        elif pick_type == "big3":
+            staked = 0.0  # P&L tracked on multi row
+        elif pick_type == "big3_multi":
+            staked = float(row.total_staked_exotic or 10.0)
+        else:
+            staked = float(row.total_staked_exotic or count)
+
+        strike_rate = (winners / count * 100) if count > 0 else 0.0
+
+        by_product[pick_type] = {
+            "bets": count,
+            "winners": winners,
+            "strike_rate": round(strike_rate, 1),
+            "staked": round(staked, 2),
+            "pnl": round(pnl, 2),
+        }
+        total_bets += count
+        total_winners += winners
+        total_pnl += pnl
+        total_staked += staked
+
+    overall_strike = (total_winners / total_bets * 100) if total_bets > 0 else 0.0
+
+    return {
+        "date": target_date.isoformat(),
+        "total_bets": total_bets,
+        "total_winners": total_winners,
+        "total_strike_rate": round(overall_strike, 1),
+        "total_staked": round(total_staked, 2),
+        "total_returned": round(total_staked + total_pnl, 2),
+        "total_pnl": round(total_pnl, 2),
+        "by_product": by_product,
+    }
+
+
+async def get_performance_history(
+    db: AsyncSession, start_date: date, end_date: date
+) -> list[dict]:
+    """Get daily P&L summaries for a date range."""
+    result = await db.execute(
+        select(
+            Meeting.date,
+            func.count(Pick.id).label("count"),
+            func.sum(Pick.pnl).label("total_pnl"),
+            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
+        )
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Meeting.date >= start_date,
+            Meeting.date <= end_date,
+            Pick.settled == True,
+            Pick.pick_type != "big3",  # P&L tracked on multi row
+        )
+        .group_by(Meeting.date)
+        .order_by(Meeting.date)
+    )
+    rows = result.all()
+
+    days = []
+    for row in rows:
+        bets = row.count or 0
+        pnl = float(row.total_pnl or 0)
+        winners = int(row.winners or 0)
+        strike = (winners / bets * 100) if bets > 0 else 0.0
+        days.append({
+            "date": row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+            "bets": bets,
+            "winners": winners,
+            "strike_rate": round(strike, 1),
+            "pnl": round(pnl, 2),
+        })
+
+    return days

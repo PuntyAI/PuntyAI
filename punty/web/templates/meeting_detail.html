@@ -45,6 +45,14 @@
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
             &#x1F3C3; Fetch Speed Maps
         </button>
+        <button onclick="checkResults()" id="results-btn"
+                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
+            &#x1F3C6; Check Results
+        </button>
+        <button onclick="toggleMonitor()" id="monitor-btn"
+                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
+            &#x1F50D; Start Monitor
+        </button>
     </div>
 
     <!-- Scrape Progress -->
@@ -112,6 +120,21 @@
                                         {% if race.track_condition %}
                                         <p class="text-xs text-gray-400">Track: {{ race.track_condition }}{% if race.field_size %} | Field: {{ race.field_size }}{% endif %}</p>
                                         {% endif %}
+                                        {% if race.results_status %}
+                                        {% set rs_colors = {
+                                            'Open': 'bg-blue-100 text-blue-700',
+                                            'Closed': 'bg-gray-100 text-gray-700',
+                                            'Interim': 'bg-yellow-100 text-yellow-700',
+                                            'Paying': 'bg-green-100 text-green-700',
+                                            'Abandoned': 'bg-red-100 text-red-700'
+                                        } %}
+                                        <span class="inline-block mt-1 px-2 py-0.5 text-xs rounded {{ rs_colors.get(race.results_status, 'bg-gray-100') }}">
+                                            {{ race.results_status }}
+                                        </span>
+                                        {% if race.winning_time %}
+                                        <span class="text-xs text-gray-400 ml-2">Time: {{ race.winning_time }}</span>
+                                        {% endif %}
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -144,13 +167,17 @@
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Form</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Speed</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Odds</th>
+                                        {% if race.results_status and race.results_status in ('Paying', 'Closed', 'Interim') %}
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Pos</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Margin</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">SP</th>
+                                        {% endif %}
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-gray-100">
                                     {% for runner in race.runners|sort(attribute='saddlecloth') %}
-                                    <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}"
-                                        x-data="{ expanded: false }">
+                                <tbody class="divide-y divide-gray-100" x-data="{ expanded: false }">
+                                    <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}">
                                         <td class="px-3 py-2">{{ runner.saddlecloth or runner.barrier }}</td>
                                         <td class="px-3 py-2 font-medium">
                                             {{ runner.horse_name }}
@@ -191,6 +218,23 @@
                                             -
                                             {% endif %}
                                         </td>
+                                        {% if race.results_status and race.results_status in ('Paying', 'Closed', 'Interim') %}
+                                        <td class="px-3 py-2 font-bold">
+                                            {% if runner.finish_position %}
+                                            {% if runner.finish_position == 1 %}
+                                            <span class="text-green-700">1st</span>
+                                            {% elif runner.finish_position == 2 %}
+                                            <span class="text-blue-700">2nd</span>
+                                            {% elif runner.finish_position == 3 %}
+                                            <span class="text-amber-700">3rd</span>
+                                            {% else %}
+                                            {{ runner.finish_position }}
+                                            {% endif %}
+                                            {% else %}-{% endif %}
+                                        </td>
+                                        <td class="px-3 py-2 text-xs">{{ runner.result_margin or '-' }}</td>
+                                        <td class="px-3 py-2 text-xs">{{ runner.starting_price or '-' }}</td>
+                                        {% endif %}
                                         <td class="px-3 py-2">
                                             {% if not runner.scratched %}
                                             <button @click.stop="expanded = !expanded" class="text-xs text-punty-coral hover:underline">
@@ -202,7 +246,7 @@
                                     <!-- Expandable detail row -->
                                     {% if not runner.scratched %}
                                     <tr x-show="expanded" x-collapse class="bg-gray-50">
-                                        <td colspan="8" class="px-3 py-3">
+                                        <td colspan="11" class="px-3 py-3">
                                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                                                 <!-- Pedigree -->
                                                 {% if runner.sire %}
@@ -320,14 +364,16 @@
                                         </td>
                                     </tr>
                                     {% endif %}
+                                </tbody>
                                     {% else %}
+                                <tbody>
                                     <tr>
-                                        <td colspan="8" class="px-3 py-4 text-center text-gray-500">
+                                        <td colspan="11" class="px-3 py-4 text-center text-gray-500">
                                             No runners loaded yet
                                         </td>
                                     </tr>
-                                    {% endfor %}
                                 </tbody>
+                                    {% endfor %}
                             </table>
                         </div>
                     </div>
@@ -633,5 +679,61 @@ function startGenerate() {
         pct.textContent = 'Error';
     };
 }
+
+function checkResults() {
+    var btn = document.getElementById('results-btn');
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+    fetch('/api/results/{{ meeting.id }}/check', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            btn.textContent = '\u{1F3C6} Check Results';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (data.status === 'checked') {
+                showToast('Results checked', 'success');
+                setTimeout(function() { window.location.reload(); }, 1500);
+            } else {
+                showToast(data.error || 'Check failed', 'error');
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.textContent = '\u{1F3C6} Check Results';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            showToast('Request failed', 'error');
+        });
+}
+
+var monitorRunning = false;
+function toggleMonitor() {
+    var btn = document.getElementById('monitor-btn');
+    var action = monitorRunning ? 'stop' : 'start';
+    fetch('/api/results/monitor/' + action, { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            monitorRunning = !monitorRunning;
+            btn.textContent = monitorRunning ? '\u{1F6D1} Stop Monitor' : '\u{1F50D} Start Monitor';
+            btn.className = monitorRunning
+                ? 'bg-red-100 text-red-700 px-4 py-2 rounded-lg border border-red-300 hover:bg-red-200'
+                : 'bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50';
+            showToast('Monitor ' + data.status, 'success');
+        });
+}
+
+// Check initial monitor status
+fetch('/api/results/monitor-status')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.running) {
+            monitorRunning = true;
+            var btn = document.getElementById('monitor-btn');
+            btn.textContent = '\u{1F6D1} Stop Monitor';
+            btn.className = 'bg-red-100 text-red-700 px-4 py-2 rounded-lg border border-red-300 hover:bg-red-200';
+        }
+    })
+    .catch(function() {});
 </script>
 {% endblock %}

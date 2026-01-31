@@ -10,7 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from punty.config import settings
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
-from punty.api import meets, content, scheduler, delivery, settings as settings_api
+from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api
+from punty.results.monitor import ResultsMonitor
 
 
 # Configure logging
@@ -37,10 +38,15 @@ async def lifespan(app: FastAPI):
     # Start scheduler (will be implemented later)
     # await scheduler_manager.start()
 
+    # Initialize results monitor
+    monitor = ResultsMonitor(app)
+    app.state.results_monitor = monitor
+
     yield
 
     # Shutdown
     logger.info("Shutting down PuntyAI...")
+    monitor.stop()
     # await scheduler_manager.stop()
 
     # Close Playwright browser if it was started
@@ -71,6 +77,7 @@ app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(scheduler.router, prefix="/api/scheduler", tags=["scheduler"])
 app.include_router(delivery.router, prefix="/api/delivery", tags=["delivery"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["settings"])
+app.include_router(results_api.router, prefix="/api/results", tags=["results"])
 
 
 @app.get("/health")

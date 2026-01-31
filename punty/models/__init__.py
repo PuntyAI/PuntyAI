@@ -3,6 +3,7 @@
 from punty.models.database import Base, get_db, init_db
 from punty.models.meeting import Meeting, Race, Runner, Result
 from punty.models.content import Content, ContentStatus, ContextSnapshot, ScheduledJob
+from punty.models.pick import Pick
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "ContentStatus",
     "ContextSnapshot",
     "ScheduledJob",
+    "Pick",
 ]

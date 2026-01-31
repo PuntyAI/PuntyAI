@@ -42,12 +42,6 @@ class Settings(BaseSettings):
         """SQLite database URL for SQLAlchemy."""
         return f"sqlite+aiosqlite:///{self.db_path}"
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
 
 # Override specific fields to not use PUNTY_ prefix
 class FullSettings(Settings):

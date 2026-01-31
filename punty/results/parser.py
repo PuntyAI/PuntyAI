@@ -1,0 +1,289 @@
+"""Enhanced early mail parser — extracts all pick types from generated content."""
+
+import json
+import re
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+# --- Big 3 section ---
+_BIG3_SECTION = re.compile(
+    r"\*(?:PUNTY'?S?\s+)?BIG\s*3.*?\*\s*\n(.*?)(?=\n###|\n\*RACE-BY-RACE|\n\*Race\s+\d|\Z)",
+    re.DOTALL | re.IGNORECASE,
+)
+_BIG3_HORSE = re.compile(
+    r"(\d)\)\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(Race\s*(\d+),\s*No\.(\d+)\)\s*.*?\$(\d+\.?\d*)",
+    re.IGNORECASE,
+)
+_BIG3_MULTI = re.compile(
+    r"Multi.*?(\d+)U\s*[×x]\s*~?\$?(\d+\.?\d*)\s*=\s*~?(\d+\.?\d*)U",
+    re.IGNORECASE,
+)
+
+# --- Race selections ---
+_RACE_HEADER = re.compile(
+    r"\*Race\s+(\d+)\s*[–\-—]", re.IGNORECASE,
+)
+_SELECTION = re.compile(
+    r"(\d)\.\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)",
+    re.IGNORECASE,
+)
+_ROUGHIE = re.compile(
+    r"Roughie:\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)",
+    re.IGNORECASE,
+)
+
+# --- Exotics ---
+_EXOTIC = re.compile(
+    r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*(Trifecta|Exacta|Quinella|First\s*Four|First\s*4|Boxed\s+Trifecta|Standout\s+Exacta):\s*([0-9,\s]+)\s*[–\-—]\s*(\d+\.?\d*)U",
+    re.IGNORECASE,
+)
+
+# --- Sequences ---
+_SEQ_HEADER = re.compile(
+    r"(EARLY\s+QUADDIE|MAIN\s+QUADDIE|QUADDIE|BIG\s*6)\s*\(R(\d+)[–\-—]R(\d+)\)",
+    re.IGNORECASE,
+)
+_SEQ_VARIANT = re.compile(
+    r"(Skinny|Balanced|Wide):\s*(.+)",
+    re.IGNORECASE,
+)
+
+
+def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list[dict]:
+    """Parse early mail content into a list of pick dicts ready for DB insertion."""
+    if not raw_content:
+        return []
+
+    picks: list[dict] = []
+    _id_counter = 0
+
+    def _next_id() -> str:
+        nonlocal _id_counter
+        _id_counter += 1
+        return f"pk-{content_id[:8]}-{_id_counter:03d}"
+
+    # --- Big 3 ---
+    picks.extend(_parse_big3(raw_content, content_id, meeting_id, _next_id))
+
+    # --- Race-by-race selections + exotics ---
+    picks.extend(_parse_race_sections(raw_content, content_id, meeting_id, _next_id))
+
+    # --- Sequences ---
+    picks.extend(_parse_sequences(raw_content, content_id, meeting_id, _next_id))
+
+    return picks
+
+
+def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> list[dict]:
+    picks = []
+    section_m = _BIG3_SECTION.search(raw_content)
+    if not section_m:
+        return picks
+
+    section = section_m.group(1)
+
+    for m in _BIG3_HORSE.finditer(section):
+        picks.append({
+            "id": next_id(),
+            "content_id": content_id,
+            "meeting_id": meeting_id,
+            "race_number": int(m.group(3)),
+            "horse_name": m.group(2).strip(),
+            "saddlecloth": int(m.group(4)),
+            "tip_rank": int(m.group(1)),
+            "odds_at_tip": float(m.group(5)),
+            "pick_type": "big3",
+            "exotic_type": None,
+            "exotic_runners": None,
+            "exotic_stake": None,
+            "sequence_type": None,
+            "sequence_variant": None,
+            "sequence_legs": None,
+            "sequence_start_race": None,
+            "multi_odds": None,
+        })
+
+    multi_m = _BIG3_MULTI.search(section)
+    if multi_m:
+        picks.append({
+            "id": next_id(),
+            "content_id": content_id,
+            "meeting_id": meeting_id,
+            "race_number": None,
+            "horse_name": None,
+            "saddlecloth": None,
+            "tip_rank": None,
+            "odds_at_tip": None,
+            "pick_type": "big3_multi",
+            "exotic_type": None,
+            "exotic_runners": None,
+            "exotic_stake": float(multi_m.group(1)),
+            "sequence_type": None,
+            "sequence_variant": None,
+            "sequence_legs": None,
+            "sequence_start_race": None,
+            "multi_odds": float(multi_m.group(2)),
+        })
+
+    return picks
+
+
+def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, next_id) -> list[dict]:
+    picks = []
+
+    # Split content into race sections
+    race_splits = _RACE_HEADER.split(raw_content)
+    # race_splits alternates: [before_first_race, race_num_1, section_1, race_num_2, section_2, ...]
+    if len(race_splits) < 3:
+        return picks
+
+    for i in range(1, len(race_splits), 2):
+        race_num = int(race_splits[i])
+        section = race_splits[i + 1] if i + 1 < len(race_splits) else ""
+
+        # Selections (rank 1-3)
+        for m in _SELECTION.finditer(section):
+            picks.append({
+                "id": next_id(),
+                "content_id": content_id,
+                "meeting_id": meeting_id,
+                "race_number": race_num,
+                "horse_name": m.group(2).strip(),
+                "saddlecloth": int(m.group(3)),
+                "tip_rank": int(m.group(1)),
+                "odds_at_tip": float(m.group(4)),
+                "pick_type": "selection",
+                "exotic_type": None,
+                "exotic_runners": None,
+                "exotic_stake": None,
+                "sequence_type": None,
+                "sequence_variant": None,
+                "sequence_legs": None,
+                "sequence_start_race": None,
+                "multi_odds": None,
+            })
+
+        # Roughie (rank 4)
+        roughie_m = _ROUGHIE.search(section)
+        if roughie_m:
+            picks.append({
+                "id": next_id(),
+                "content_id": content_id,
+                "meeting_id": meeting_id,
+                "race_number": race_num,
+                "horse_name": roughie_m.group(1).strip(),
+                "saddlecloth": int(roughie_m.group(2)),
+                "tip_rank": 4,
+                "odds_at_tip": float(roughie_m.group(3)),
+                "pick_type": "selection",
+                "exotic_type": None,
+                "exotic_runners": None,
+                "exotic_stake": None,
+                "sequence_type": None,
+                "sequence_variant": None,
+                "sequence_legs": None,
+                "sequence_start_race": None,
+                "multi_odds": None,
+            })
+
+        # Exotic
+        exotic_m = _EXOTIC.search(section)
+        if exotic_m:
+            exotic_type = exotic_m.group(1).strip()
+            runners_str = exotic_m.group(2).strip()
+            runners = [int(x.strip()) for x in runners_str.split(",") if x.strip().isdigit()]
+            picks.append({
+                "id": next_id(),
+                "content_id": content_id,
+                "meeting_id": meeting_id,
+                "race_number": race_num,
+                "horse_name": None,
+                "saddlecloth": None,
+                "tip_rank": None,
+                "odds_at_tip": None,
+                "pick_type": "exotic",
+                "exotic_type": exotic_type,
+                "exotic_runners": json.dumps(runners),
+                "exotic_stake": float(exotic_m.group(3)),
+                "sequence_type": None,
+                "sequence_variant": None,
+                "sequence_legs": None,
+                "sequence_start_race": None,
+                "multi_odds": None,
+            })
+
+    return picks
+
+
+def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id) -> list[dict]:
+    picks = []
+
+    # Find the sequence lanes section
+    seq_section_m = re.search(
+        r"\*SEQUENCE\s+LANES\*\s*\n(.*?)(?=\n###|\n\*NUGGETS|\Z)",
+        raw_content, re.DOTALL | re.IGNORECASE,
+    )
+    if not seq_section_m:
+        # Try without the heading wrapper
+        seq_section_m = re.search(
+            r"((?:EARLY\s+QUADDIE|MAIN\s+QUADDIE|QUADDIE|BIG\s*6)\s*\(R\d+.*?)(?=\n###|\n\*NUGGETS|\Z)",
+            raw_content, re.DOTALL | re.IGNORECASE,
+        )
+    if not seq_section_m:
+        return picks
+
+    seq_text = seq_section_m.group(1) if seq_section_m else ""
+
+    # Find each sequence block
+    headers = list(_SEQ_HEADER.finditer(seq_text))
+    for idx, hdr in enumerate(headers):
+        seq_name = hdr.group(1).strip().upper()
+        start_race = int(hdr.group(2))
+        end_race = int(hdr.group(3))
+
+        # Normalize type
+        if "EARLY" in seq_name:
+            seq_type = "early_quaddie"
+        elif "QUADDIE" in seq_name:
+            seq_type = "quaddie"
+        elif "BIG" in seq_name or "6" in seq_name:
+            seq_type = "big6"
+        else:
+            seq_type = seq_name.lower().replace(" ", "_")
+
+        # Get text between this header and the next
+        block_start = hdr.end()
+        block_end = headers[idx + 1].start() if idx + 1 < len(headers) else len(seq_text)
+        block = seq_text[block_start:block_end]
+
+        for vm in _SEQ_VARIANT.finditer(block):
+            variant = vm.group(1).strip().lower()
+            legs_raw = vm.group(2).strip()
+            legs = []
+            for leg in legs_raw.split("/"):
+                saddlecloths = [int(x.strip()) for x in leg.split(",") if x.strip().isdigit()]
+                legs.append(saddlecloths)
+
+            picks.append({
+                "id": next_id(),
+                "content_id": content_id,
+                "meeting_id": meeting_id,
+                "race_number": None,
+                "horse_name": None,
+                "saddlecloth": None,
+                "tip_rank": None,
+                "odds_at_tip": None,
+                "pick_type": "sequence",
+                "exotic_type": None,
+                "exotic_runners": None,
+                "exotic_stake": None,
+                "sequence_type": seq_type,
+                "sequence_variant": variant,
+                "sequence_legs": json.dumps(legs),
+                "sequence_start_race": start_race,
+                "multi_odds": None,
+            })
+
+    return picks
