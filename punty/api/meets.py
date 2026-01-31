@@ -1,14 +1,16 @@
 """API endpoints for race meetings."""
 
+import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from punty.models.database import get_db
-from punty.models.meeting import Meeting
+from punty.models.meeting import Meeting, Race
 
 router = APIRouter()
 
@@ -49,7 +51,7 @@ async def get_meeting(meeting_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Meeting)
         .where(Meeting.id == meeting_id)
-        .options(selectinload(Meeting.races))
+        .options(selectinload(Meeting.races).selectinload(Race.runners))
     )
     meeting = result.scalar_one_or_none()
     if not meeting:
@@ -90,6 +92,18 @@ async def scrape_full_endpoint(meeting_id: str, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/{meeting_id}/scrape-stream")
+async def scrape_stream_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
+    """SSE stream of scrape progress for a meeting."""
+    from punty.scrapers.orchestrator import scrape_meeting_full_stream
+
+    async def event_generator():
+        async for event in scrape_meeting_full_stream(meeting_id, db):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @router.post("/{meeting_id}/refresh-odds")
 async def refresh_odds_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
     """Quick odds/scratchings refresh for a meeting."""
@@ -100,6 +114,18 @@ async def refresh_odds_endpoint(meeting_id: str, db: AsyncSession = Depends(get_
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{meeting_id}/speed-maps-stream")
+async def speed_maps_stream_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
+    """SSE stream of speed map scrape progress for a meeting."""
+    from punty.scrapers.orchestrator import scrape_speed_maps_stream
+
+    async def event_generator():
+        async for event in scrape_speed_maps_stream(meeting_id, db):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/scrape")

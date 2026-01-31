@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from punty.models.database import get_db
 from punty.models.meeting import Meeting, Race
@@ -26,7 +27,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
     today = date.today()
     result = await db.execute(
-        select(Meeting).where(Meeting.date == today).order_by(Meeting.venue)
+        select(Meeting).where(Meeting.date == today).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
     todays_meetings = result.scalars().all()
 
@@ -67,7 +68,7 @@ async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
 
     # Today's meetings first
     result = await db.execute(
-        select(Meeting).where(Meeting.date == today).order_by(Meeting.venue)
+        select(Meeting).where(Meeting.date == today).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
     todays = result.scalars().all()
 
@@ -75,7 +76,7 @@ async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
     if todays:
         meetings = todays
     else:
-        result = await db.execute(select(Meeting).order_by(Meeting.date.desc()).limit(50))
+        result = await db.execute(select(Meeting).options(selectinload(Meeting.races)).order_by(Meeting.date.desc()).limit(50))
         meetings = result.scalars().all()
 
     return templates.TemplateResponse(
@@ -92,7 +93,6 @@ async def meeting_detail(
     meeting_id: str, request: Request, db: AsyncSession = Depends(get_db)
 ):
     """Meeting detail page with races."""
-    from sqlalchemy.orm import selectinload
 
     result = await db.execute(
         select(Meeting)
@@ -172,7 +172,6 @@ async def review_detail(
     content_id: str, request: Request, db: AsyncSession = Depends(get_db)
 ):
     """Single content review page."""
-    from sqlalchemy.orm import selectinload
 
     result = await db.execute(
         select(Content)

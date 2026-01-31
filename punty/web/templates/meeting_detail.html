@@ -33,11 +33,7 @@
 
     <!-- Quick Actions -->
     <div class="bg-punty-coral/10 rounded-lg p-4 flex flex-wrap gap-3">
-        <button hx-post="/api/content/generate"
-                hx-ext="json-enc"
-                hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "early_mail"}'
-                hx-swap="none"
-                hx-on::after-request="if(event.detail.successful) showToast('Early mail generation queued', 'success'); else showToast('Failed to queue early mail', 'error');"
+        <button onclick="startGenerate()" id="generate-btn"
                 class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
             &#x1F4E7; Generate Early Mail
         </button>
@@ -61,6 +57,18 @@
             <div id="progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         <div id="progress-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
+    </div>
+
+    <!-- Generate Progress -->
+    <div id="generate-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-gray-900">Generating Early Mail</h3>
+            <span id="generate-pct" class="text-sm text-gray-500">0%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+            <div id="generate-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <div id="generate-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
     </div>
 
     <!-- Speed Map Progress -->
@@ -547,6 +555,77 @@ function startSpeedMaps() {
         evtSource.close();
         btn.disabled = false;
         btn.textContent = '\u{1F3C3} Fetch Speed Maps';
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        bar.className = 'bg-red-500 h-3 rounded-full transition-all duration-500';
+        pct.textContent = 'Error';
+    };
+}
+
+function startGenerate() {
+    var btn = document.getElementById('generate-btn');
+    var panel = document.getElementById('generate-progress');
+    var bar = document.getElementById('generate-bar');
+    var pct = document.getElementById('generate-pct');
+    var log = document.getElementById('generate-log');
+
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    panel.classList.remove('hidden');
+    log.innerHTML = '';
+    bar.style.width = '0%';
+    pct.textContent = '0%';
+    bar.className = 'bg-punty-coral h-3 rounded-full transition-all duration-500';
+
+    var evtSource = new EventSource('/api/content/generate-stream?meeting_id={{ meeting.id }}&content_type=early_mail');
+
+    evtSource.onmessage = function(e) {
+        var data = JSON.parse(e.data);
+        var percent = Math.round((data.step / data.total) * 100);
+
+        bar.style.width = percent + '%';
+        pct.textContent = percent + '%';
+
+        var line = document.createElement('div');
+        line.className = 'flex items-center gap-2 py-0.5';
+
+        var icon = '';
+        var textClass = 'text-gray-700';
+        if (data.status === 'running') {
+            icon = '<span class="inline-block w-4 h-4 border-2 border-punty-coral border-t-transparent rounded-full animate-spin"></span>';
+            textClass = 'text-gray-600';
+        } else if (data.status === 'done') {
+            icon = '<span class="text-green-600 font-bold">&#10003;</span>';
+            textClass = 'text-green-700';
+        } else if (data.status === 'error') {
+            icon = '<span class="text-red-600 font-bold">&#10007;</span>';
+            textClass = 'text-red-600';
+            evtSource.close();
+            btn.disabled = false;
+            btn.textContent = '\u{1F4E7} Generate Early Mail';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            bar.className = 'bg-red-500 h-3 rounded-full transition-all duration-500';
+        } else if (data.status === 'complete') {
+            icon = '<span class="text-punty-coral font-bold">&#9679;</span>';
+            textClass = 'font-semibold text-gray-900';
+            bar.className = 'bg-green-500 h-3 rounded-full transition-all duration-500';
+            evtSource.close();
+            btn.disabled = false;
+            btn.textContent = '\u{1F4E7} Generate Early Mail';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            showToast('Early Mail generated!', 'success');
+            setTimeout(function() { window.location.reload(); }, 1500);
+        }
+
+        line.innerHTML = icon + '<span class="' + textClass + '">' + data.label + '</span>';
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    };
+
+    evtSource.onerror = function() {
+        evtSource.close();
+        btn.disabled = false;
+        btn.textContent = '\u{1F4E7} Generate Early Mail';
         btn.classList.remove('opacity-50', 'cursor-not-allowed');
         bar.className = 'bg-red-500 h-3 rounded-full transition-all duration-500';
         pct.textContent = 'Error';

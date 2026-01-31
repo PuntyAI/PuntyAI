@@ -1,7 +1,9 @@
 """API endpoints for content management."""
 
+import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,6 +79,27 @@ async def get_content(content_id: str, db: AsyncSession = Depends(get_db)):
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
     return content.to_dict()
+
+
+@router.get("/generate-stream")
+async def generate_content_stream(
+    meeting_id: str,
+    content_type: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE stream of content generation progress."""
+    from punty.ai.generator import ContentGenerator
+
+    generator = ContentGenerator(db)
+
+    async def event_generator():
+        if content_type == "early_mail":
+            async for event in generator.generate_early_mail_stream(meeting_id):
+                yield f"data: {json.dumps(event)}\n\n"
+        else:
+            yield f"data: {json.dumps({'step': 1, 'total': 1, 'label': 'Unsupported content type for streaming', 'status': 'error'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/generate")

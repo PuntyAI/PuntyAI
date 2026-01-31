@@ -78,34 +78,57 @@ class ContentGenerator:
         widen_if_favorites: bool = True,
     ) -> dict[str, Any]:
         """Generate Early Mail content for a meeting."""
-        logger.info(f"Generating Early Mail for {meeting_id}")
+        result = {}
+        async for event in self.generate_early_mail_stream(meeting_id, save, widen_if_favorites):
+            if event.get("status") == "complete":
+                result = event.get("result", {})
+            elif event.get("status") == "error":
+                raise ValueError(event.get("label", "Generation failed"))
+        return result
 
-        # Build context
-        context = await self.context_builder.build_meeting_context(meeting_id)
-        if not context:
-            raise ValueError(f"Meeting not found: {meeting_id}")
+    async def generate_early_mail_stream(
+        self,
+        meeting_id: str,
+        save: bool = True,
+        widen_if_favorites: bool = True,
+    ):
+        """Generate Early Mail with SSE progress events."""
+        total_steps = 7
+        step = 0
 
-        # Create context snapshot
-        snapshot = await create_context_snapshot(self.db, meeting_id)
+        def evt(label, status="running", **extra):
+            nonlocal step
+            if status in ("running",):
+                step += 1
+            return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
 
-        # Load prompts
-        personality = load_prompt("personality")
-        early_mail_prompt = load_prompt("early_mail")
+        try:
+            yield evt("Building meeting context...")
 
-        # Get analysis weights and inject into prompt
-        analysis_weights = await self.get_analysis_weights()
+            context = await self.context_builder.build_meeting_context(meeting_id)
+            if not context:
+                raise ValueError(f"Meeting not found: {meeting_id}")
+            venue = context['meeting']['venue']
+            race_count = len(context.get('races', []))
+            yield evt(f"Context built — {venue}, {race_count} races", "done")
 
-        # Get WhatsApp link
-        whatsapp_link = await self.get_setting(
-            "whatsapp_invite_link",
-            "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
-        )
+            yield evt("Creating context snapshot...")
+            snapshot = await create_context_snapshot(self.db, meeting_id)
+            yield evt("Context snapshot saved", "done")
 
-        # Format context for prompt
-        context_str = self._format_context_for_prompt(context)
+            yield evt("Loading prompts & analysis weights...")
+            personality = load_prompt("personality")
+            early_mail_prompt = load_prompt("early_mail")
+            analysis_weights = await self.get_analysis_weights()
+            whatsapp_link = await self.get_setting(
+                "whatsapp_invite_link",
+                "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
+            )
+            yield evt("Prompts & weights loaded", "done")
 
-        # Build full system prompt with weights
-        system_prompt = f"""{personality}
+            yield evt("Generating Early Mail with AI (this may take a moment)...")
+            context_str = self._format_context_for_prompt(context)
+            system_prompt = f"""{personality}
 
 ## Analysis Framework Weights
 {analysis_weights}
@@ -113,43 +136,61 @@ class ContentGenerator:
 ## WhatsApp Invite Link
 {whatsapp_link}
 """
+            raw_content = await self.ai_client.generate_with_context(
+                system_prompt=system_prompt,
+                context=context_str,
+                instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
+                temperature=0.8,
+            )
+            yield evt("AI content generated", "done")
 
-        # Generate content
-        raw_content = await self.ai_client.generate_with_context(
-            system_prompt=system_prompt,
-            context=context_str,
-            instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {context['meeting']['venue']} on {context['meeting']['date']}",
-            temperature=0.8,
-        )
+            favorites_detected = []
+            yield evt("Checking for market favorites...")
+            if widen_if_favorites:
+                auto_widen = await self.get_setting("auto_widen_favorites", "false")
+                if auto_widen.lower() == "true":
+                    favorites_detected = await self._detect_favorites(raw_content, context)
+                    max_favorites = int(await self.get_setting("max_favorites_per_card", "3"))
 
-        # Check for favorites if enabled
-        favorites_detected = []
-        if widen_if_favorites:
-            auto_widen = await self.get_setting("auto_widen_favorites", "false")
-            if auto_widen.lower() == "true":
-                favorites_detected = await self._detect_favorites(raw_content, context)
-                max_favorites = int(await self.get_setting("max_favorites_per_card", "3"))
+                    if len(favorites_detected) > max_favorites:
+                        yield evt(f"Detected {len(favorites_detected)} favorites — widening selections...", "done")
+                        step += 1
+                        total_steps += 1
+                        yield evt("Requesting wider selections from AI...")
+                        raw_content = await self._request_wider_selections(
+                            raw_content, favorites_detected, context, system_prompt
+                        )
+                        yield evt("Selections widened", "done")
+                    else:
+                        yield evt(f"Favorites check passed ({len(favorites_detected)} found)", "done")
+                else:
+                    yield evt("Auto-widen disabled, skipping", "done")
+            else:
+                yield evt("Favorites check skipped", "done")
 
-                if len(favorites_detected) > max_favorites:
-                    logger.info(f"Detected {len(favorites_detected)} favorites, requesting wider selections")
-                    raw_content = await self._request_wider_selections(
-                        raw_content, favorites_detected, context, system_prompt
-                    )
+            result = {
+                "raw_content": raw_content,
+                "meeting_id": meeting_id,
+                "content_type": ContentType.EARLY_MAIL.value,
+                "context_snapshot_id": snapshot["id"] if snapshot else None,
+                "favorites_detected": favorites_detected,
+            }
 
-        result = {
-            "raw_content": raw_content,
-            "meeting_id": meeting_id,
-            "content_type": ContentType.EARLY_MAIL.value,
-            "context_snapshot_id": snapshot["id"] if snapshot else None,
-            "favorites_detected": favorites_detected,
-        }
+            if save:
+                yield evt("Saving & formatting content...")
+                content = await self._save_content(result, requires_review=True)
+                result["content_id"] = content.id
+                result["status"] = content.status
+                yield evt("Content saved", "done")
+            else:
+                step += 1
+                yield evt("Save skipped", "done")
 
-        if save:
-            content = await self._save_content(result, requires_review=True)
-            result["content_id"] = content.id
-            result["status"] = content.status
+            yield {"step": total_steps, "total": total_steps, "label": f"Early Mail generated for {venue}", "status": "complete", "result": result}
 
-        return result
+        except Exception as e:
+            logger.error(f"Early mail generation failed: {e}")
+            yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
     async def generate_initialise(
         self,
