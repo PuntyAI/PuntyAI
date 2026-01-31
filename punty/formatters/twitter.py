@@ -48,10 +48,10 @@ class TwitterFormatter:
         content_type: str = "early_mail",
         venue: Optional[str] = None,
     ) -> str:
-        """Format raw content for Twitter.
+        """Format raw content for Twitter/X as a single long-form post.
 
-        For short content, returns single tweet.
-        For long content, returns thread format with numbered tweets.
+        X supports long-form posts, so content is returned as one post
+        with hashtags appended at the end.
 
         Args:
             raw_content: The raw content to format
@@ -59,19 +59,11 @@ class TwitterFormatter:
             venue: Venue name for hashtags
 
         Returns:
-            Twitter-formatted content (may be single tweet or thread)
+            Twitter-formatted content as a single post
         """
-        # Clean markdown
         content = cls._clean_markdown(raw_content)
-
-        # Get appropriate hashtags
         hashtags = cls._get_hashtags(venue)
-
-        # Check if single tweet or thread needed
-        if len(content) + len(hashtags) + 5 <= cls.MAX_TWEET_LENGTH:
-            return cls._format_single_tweet(content, hashtags, content_type)
-        else:
-            return cls._format_thread(content, hashtags, content_type, venue)
+        return f"{content}\n\n{hashtags}"
 
     @classmethod
     def format_as_thread(

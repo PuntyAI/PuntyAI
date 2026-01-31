@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # All Runner fields that come from the scraper
 RUNNER_FIELDS = [
-    "weight", "jockey", "trainer", "form", "current_odds", "opening_odds",
+    "saddlecloth", "weight", "jockey", "trainer", "form", "current_odds", "opening_odds",
     "scratched", "comments", "horse_age", "horse_sex", "horse_colour",
     "sire", "dam", "dam_sire", "career_prize_money", "last_five",
     "days_since_last_run", "handicap_rating", "speed_value",

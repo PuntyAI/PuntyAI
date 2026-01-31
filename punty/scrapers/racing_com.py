@@ -416,6 +416,7 @@ class RacingComScraper(BaseScraper):
             "id": runner_id,
             "race_id": race_id,
             "horse_name": horse_name,
+            "saddlecloth": tab_number,
             "barrier": barrier,
             "weight": weight,
             "jockey": entry.get("jockeyName"),

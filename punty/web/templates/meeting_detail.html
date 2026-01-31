@@ -146,10 +146,10 @@
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
-                                    {% for runner in race.runners|sort(attribute='barrier') %}
+                                    {% for runner in race.runners|sort(attribute='saddlecloth') %}
                                     <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}"
                                         x-data="{ expanded: false }">
-                                        <td class="px-3 py-2">{{ runner.barrier }}</td>
+                                        <td class="px-3 py-2">{{ runner.saddlecloth or runner.barrier }}</td>
                                         <td class="px-3 py-2 font-medium">
                                             {{ runner.horse_name }}
                                             {% if runner.scratched %}

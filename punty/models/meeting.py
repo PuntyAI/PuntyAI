@@ -133,6 +133,7 @@ class Runner(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     race_id: Mapped[str] = mapped_column(String(64), ForeignKey("races.id"))
     horse_name: Mapped[str] = mapped_column(String(100))
+    saddlecloth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     barrier: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     jockey: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -207,6 +208,7 @@ class Runner(Base):
             "id": self.id,
             "race_id": self.race_id,
             "horse_name": self.horse_name,
+            "saddlecloth": self.saddlecloth,
             "barrier": self.barrier,
             "weight": self.weight,
             "jockey": self.jockey,
