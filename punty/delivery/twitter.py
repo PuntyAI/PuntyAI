@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.config import settings
-from punty.formatters.twitter import format_twitter, format_twitter_thread
+from punty.formatters.twitter import format_twitter
 
 logger = logging.getLogger(__name__)
 
@@ -156,32 +156,18 @@ class TwitterDelivery:
         meeting = meeting_result.scalar_one_or_none()
         venue = meeting.venue if meeting else None
 
-        # Format as thread
-        tweets = format_twitter_thread(content.raw_content, content.content_type, venue)
+        # Format as single long-form post (X Premium supports long posts)
+        tweet_text = format_twitter(content.raw_content, content.content_type, venue)
 
-        # Post thread
+        # Post single tweet
         tweet_ids = []
-        reply_to = None
-
-        for i, tweet_text in enumerate(tweets):
-            try:
-                if reply_to:
-                    response = self.client.create_tweet(
-                        text=tweet_text, in_reply_to_tweet_id=reply_to
-                    )
-                else:
-                    response = self.client.create_tweet(text=tweet_text)
-
-                tweet_id = response.data["id"]
-                tweet_ids.append(tweet_id)
-                reply_to = tweet_id  # Next tweet replies to this one
-
-                logger.info(f"Posted thread tweet {i+1}/{len(tweets)}: {tweet_id}")
-
-            except Exception as e:
-                logger.error(f"Twitter API error on tweet {i+1}: {e}")
-                # Continue with partial thread if possible
-                break
+        try:
+            response = self.client.create_tweet(text=tweet_text)
+            tweet_id = response.data["id"]
+            tweet_ids.append(tweet_id)
+            logger.info(f"Posted tweet: {tweet_id}")
+        except Exception as e:
+            logger.error(f"Twitter API error: {e}")
 
         # Update content status
         if tweet_ids:
@@ -371,13 +357,13 @@ class TwitterDelivery:
         meeting = meeting_result.scalar_one_or_none()
         venue = meeting.venue if meeting else None
 
-        # Format as thread
-        tweets = format_twitter_thread(content.raw_content, content.content_type, venue)
+        # Format as single long-form post
+        tweet_text = format_twitter(content.raw_content, content.content_type, venue)
 
         return {
             "content_id": content_id,
-            "tweet_count": len(tweets),
+            "tweet_count": 1,
             "tweets": [
-                {"index": i + 1, "text": t, "length": len(t)} for i, t in enumerate(tweets)
+                {"index": 1, "text": tweet_text, "length": len(tweet_text)},
             ],
         }

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.formatters.whatsapp import format_whatsapp
-from punty.formatters.twitter import format_twitter, format_twitter_thread
+from punty.formatters.twitter import format_twitter
 
 logger = logging.getLogger(__name__)
 
@@ -94,15 +94,15 @@ class ConsoleDelivery:
         meeting = meeting_result.scalar_one_or_none()
         venue = meeting.venue if meeting else None
 
-        # Format as thread
-        tweets = format_twitter_thread(content.raw_content, content.content_type, venue)
+        # Format as single long-form post
+        tweet_text = format_twitter(content.raw_content, content.content_type, venue)
 
         return {
             "content_id": content_id,
             "platform": "twitter",
-            "tweet_count": len(tweets),
-            "tweets": tweets,
-            "total_characters": sum(len(t) for t in tweets),
+            "tweet_count": 1,
+            "tweets": [tweet_text],
+            "total_characters": len(tweet_text),
         }
 
     def print_preview(
