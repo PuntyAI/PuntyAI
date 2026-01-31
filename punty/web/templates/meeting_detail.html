@@ -34,6 +34,7 @@
     <!-- Quick Actions -->
     <div class="bg-punty-coral/10 rounded-lg p-4 flex flex-wrap gap-3">
         <button hx-post="/api/content/generate"
+                hx-ext="json-enc"
                 hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "early_mail"}'
                 hx-swap="none"
                 hx-on::after-request="if(event.detail.successful) showToast('Early mail generation queued', 'success'); else showToast('Failed to queue early mail', 'error');"
@@ -111,6 +112,7 @@
                                 <span class="text-sm text-gray-500">{{ race.start_time.strftime('%H:%M') }}</span>
                                 {% endif %}
                                 <button hx-post="/api/content/generate"
+                                        hx-ext="json-enc"
                                         hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "race_preview", "race_id": "{{ race.id }}"}'
                                         class="text-punty-coral hover:underline text-sm"
                                         @click.stop>
