@@ -68,6 +68,21 @@ async def get_review_queue(db: AsyncSession = Depends(get_db)):
     return [c.to_dict() for c in items]
 
 
+@router.get("/review-count")
+async def get_review_count(db: AsyncSession = Depends(get_db)):
+    """Get count of pending reviews as plain text for badge."""
+    from punty.models.content import Content, ContentStatus
+    from sqlalchemy import select, func
+    from fastapi.responses import PlainTextResponse
+
+    result = await db.execute(
+        select(func.count(Content.id))
+        .where(Content.status == ContentStatus.PENDING_REVIEW)
+    )
+    count = result.scalar() or 0
+    return PlainTextResponse(str(count) if count > 0 else "")
+
+
 @router.get("/generate-stream")
 async def generate_content_stream(
     meeting_id: str,

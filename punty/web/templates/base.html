@@ -54,7 +54,7 @@
                         <a href="/review" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">
                             Review
                             <span id="review-badge" class="ml-1 bg-punty-gold text-xs px-2 py-0.5 rounded-full"
-                                  hx-get="/api/content/review-queue"
+                                  hx-get="/api/content/review-count"
                                   hx-trigger="every 30s"
                                   hx-swap="innerHTML">
                                 {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
