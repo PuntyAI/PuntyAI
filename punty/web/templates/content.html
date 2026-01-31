@@ -99,7 +99,10 @@
                             <a href="/review/{{ item.id }}" class="text-punty-coral hover:underline">View</a>
                             {% if item.status == 'approved' %}
                             <button hx-post="/api/delivery/send"
+                                    hx-ext="json-enc"
                                     hx-vals='{"content_id": "{{ item.id }}", "platform": "twitter"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) showToast('Sent!', 'success'); else showToast('Failed', 'error');"
                                     class="text-blue-600 hover:underline">Send</button>
                             {% endif %}
                         </td>

@@ -122,6 +122,8 @@
                                 <button hx-post="/api/content/generate"
                                         hx-ext="json-enc"
                                         hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "race_preview", "race_id": "{{ race.id }}"}'
+                                        hx-swap="none"
+                                        hx-on::after-request="if(event.detail.successful) showToast('Preview generated', 'success'); else showToast('Failed', 'error');"
                                         class="text-punty-coral hover:underline text-sm"
                                         @click.stop>
                                     Generate Preview

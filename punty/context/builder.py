@@ -128,8 +128,9 @@ class ContextBuilder:
         }
 
         active_runners = []
-        for runner in sorted(race.runners, key=lambda r: r.barrier or 99):
+        for runner in sorted(race.runners, key=lambda r: r.saddlecloth or r.barrier or 99):
             runner_data = {
+                "saddlecloth": runner.saddlecloth,
                 "barrier": runner.barrier,
                 "horse_name": runner.horse_name,
                 "jockey": runner.jockey,

@@ -44,8 +44,10 @@
                     <textarea id="raw-content"
                               class="w-full h-64 border border-gray-300 rounded-lg p-4 font-mono text-sm focus:ring-punty-coral focus:border-punty-coral"
                               hx-put="/api/content/{{ content.id }}"
+                              hx-ext="json-enc"
                               hx-trigger="blur changed delay:500ms"
                               hx-vals="js:{raw_content: document.getElementById('raw-content').value}"
+                              hx-swap="none"
                               name="raw_content">{{ content.raw_content or '' }}</textarea>
                 </div>
             </div>
@@ -116,22 +118,28 @@
                 <div class="space-y-3">
                     {% if content.status == 'pending_review' %}
                     <button hx-post="/api/content/{{ content.id }}/review"
+                            hx-ext="json-enc"
                             hx-vals='{"action": "approve"}'
                             hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) { showToast('Content approved!', 'success'); setTimeout(() => window.location.reload(), 1000); } else showToast('Failed to approve', 'error');"
                             class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                         &#x2705; Approve
                     </button>
                     <button hx-post="/api/content/{{ content.id }}/review"
+                            hx-ext="json-enc"
                             hx-vals='{"action": "reject"}'
                             hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) { showToast('Content rejected', 'info'); setTimeout(() => window.location.reload(), 1000); } else showToast('Failed to reject', 'error');"
                             class="w-full border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50">
                         &#x274C; Reject
                     </button>
                     {% endif %}
 
                     <button hx-post="/api/content/{{ content.id }}/review"
+                            hx-ext="json-enc"
                             hx-vals='{"action": "regenerate"}'
                             hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) { showToast('Regeneration queued', 'success'); setTimeout(() => window.location.reload(), 1000); } else showToast('Failed to regenerate', 'error');"
                             class="w-full border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50">
                         &#x1F504; Regenerate
                     </button>
@@ -139,12 +147,18 @@
                     {% if content.status == 'approved' %}
                     <hr class="my-4">
                     <button hx-post="/api/delivery/send"
+                            hx-ext="json-enc"
                             hx-vals='{"content_id": "{{ content.id }}", "platform": "whatsapp"}'
+                            hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) showToast('Sent to WhatsApp!', 'success'); else showToast('Failed to send', 'error');"
                             class="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
                         Send to WhatsApp
                     </button>
                     <button hx-post="/api/delivery/send"
+                            hx-ext="json-enc"
                             hx-vals='{"content_id": "{{ content.id }}", "platform": "twitter"}'
+                            hx-swap="none"
+                            hx-on::after-request="if(event.detail.successful) showToast('Posted to Twitter!', 'success'); else showToast('Failed to post', 'error');"
                             class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900">
                         Post to Twitter
                     </button>
@@ -168,7 +182,10 @@
                           class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 h-20"
                           placeholder="Additional notes..."></textarea>
                 <button hx-post="/api/content/{{ content.id }}/review"
+                        hx-ext="json-enc"
                         hx-vals="js:{action: 'ai_fix', issue_type: document.getElementById('issue-type').value, notes: document.getElementById('fix-notes').value}"
+                        hx-swap="none"
+                        hx-on::after-request="if(event.detail.successful) { showToast('AI Fix requested', 'success'); setTimeout(() => window.location.reload(), 1000); } else showToast('Failed to request fix', 'error');"
                         class="w-full bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90">
                     &#x1F916; Request AI Fix
                 </button>

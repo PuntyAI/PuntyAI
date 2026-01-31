@@ -41,16 +41,18 @@
             </div>
             <div class="px-6 py-3 bg-gray-50 flex justify-end space-x-3">
                 <button hx-post="/api/content/{{ item.id }}/review"
+                        hx-ext="json-enc"
                         hx-vals='{"action": "reject", "notes": "Quick reject from queue"}'
-                        hx-swap="outerHTML"
-                        hx-target="closest div.bg-white"
+                        hx-swap="none"
+                        hx-on::after-request="if(event.detail.successful) { this.closest('div.bg-white').remove(); showToast('Rejected', 'info'); } else showToast('Failed', 'error');"
                         class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">
                     Reject
                 </button>
                 <button hx-post="/api/content/{{ item.id }}/review"
+                        hx-ext="json-enc"
                         hx-vals='{"action": "approve"}'
-                        hx-swap="outerHTML"
-                        hx-target="closest div.bg-white"
+                        hx-swap="none"
+                        hx-on::after-request="if(event.detail.successful) { this.closest('div.bg-white').remove(); showToast('Approved!', 'success'); } else showToast('Failed', 'error');"
                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
                     Approve
                 </button>
