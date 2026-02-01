@@ -4,10 +4,12 @@ import json
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, DateTime, String, Text
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, DateTime, String, Text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.models.database import Base
+
+
 
 
 class AnalysisWeights(Base):
@@ -149,6 +151,34 @@ class AppSettings(Base):
             "value": "3",
             "description": "Maximum favorites allowed before triggering widen request",
         },
+        "openai_api_key": {
+            "value": "",
+            "description": "OpenAI API key",
+        },
+        "twitter_api_key": {
+            "value": "",
+            "description": "Twitter/X API key (Consumer Key)",
+        },
+        "twitter_api_secret": {
+            "value": "",
+            "description": "Twitter/X API secret (Consumer Secret)",
+        },
+        "twitter_access_token": {
+            "value": "",
+            "description": "Twitter/X access token",
+        },
+        "twitter_access_secret": {
+            "value": "",
+            "description": "Twitter/X access secret",
+        },
+        "whatsapp_api_token": {
+            "value": "",
+            "description": "WhatsApp Business API token",
+        },
+        "whatsapp_phone_number_id": {
+            "value": "",
+            "description": "WhatsApp phone number ID",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:
@@ -159,3 +189,12 @@ class AppSettings(Base):
             "description": self.description,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+async def get_api_key(db: AsyncSession, key: str, fallback: str = "") -> str:
+    """Read an API key from AppSettings DB, falling back to a default value."""
+    result = await db.execute(select(AppSettings).where(AppSettings.key == key))
+    setting = result.scalar_one_or_none()
+    if setting and setting.value:
+        return setting.value
+    return fallback

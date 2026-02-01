@@ -98,6 +98,9 @@ async def generate_content_stream(
         if content_type == "early_mail":
             async for event in generator.generate_early_mail_stream(meeting_id):
                 yield f"data: {json.dumps(event)}\n\n"
+        elif content_type == "meeting_wrapup":
+            async for event in generator.generate_meeting_wrapup_stream(meeting_id):
+                yield f"data: {json.dumps(event)}\n\n"
         else:
             yield f"data: {json.dumps({'step': 1, 'total': 1, 'label': 'Unsupported content type for streaming', 'status': 'error'})}\n\n"
 

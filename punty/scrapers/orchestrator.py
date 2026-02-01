@@ -388,29 +388,37 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
         logger.warning(f"Race not found for results: {race_id}")
         return
 
-    # Update race-level fields
-    race.results_status = "Paying"
-    if results_data.get("winning_time"):
-        race.winning_time = results_data["winning_time"]
-    if results_data.get("exotics"):
-        race.exotic_results = _json.dumps(results_data["exotics"])
-
     # Update runner result fields
+    matched = 0
     for result in results_data.get("results", []):
         horse_name = result.get("horse_name", "")
-        if not horse_name:
-            continue
+        saddlecloth = result.get("saddlecloth")
 
-        runner_result = await db.execute(
-            select(Runner).where(
-                Runner.race_id == race_id,
-                Runner.horse_name == horse_name,
+        runner = None
+        # Try horse name first
+        if horse_name:
+            runner_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.horse_name == horse_name,
+                )
             )
-        )
-        runner = runner_result.scalar_one_or_none()
+            runner = runner_result.scalar_one_or_none()
+
+        # Fallback to saddlecloth
+        if not runner and saddlecloth is not None:
+            runner_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.saddlecloth == int(saddlecloth),
+                )
+            )
+            runner = runner_result.scalar_one_or_none()
+
         if not runner:
             continue
 
+        matched += 1
         if result.get("position") is not None:
             runner.finish_position = result["position"]
         if result.get("margin") is not None:
@@ -419,6 +427,14 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
             runner.starting_price = result["starting_price"]
         if result.get("win_dividend") is not None:
             runner.win_dividend = result["win_dividend"]
+        elif result.get("starting_price") and result.get("position") in (1, 2, 3):
+            # Use starting price as fallback when dividends aren't available
+            try:
+                sp_val = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
+                if result["position"] == 1 and not runner.win_dividend:
+                    runner.win_dividend = sp_val
+            except (ValueError, TypeError):
+                pass
         if result.get("place_dividend") is not None:
             runner.place_dividend = result["place_dividend"]
         if result.get("sectional_400"):
@@ -426,8 +442,19 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
         if result.get("sectional_800"):
             runner.sectional_800 = result["sectional_800"]
 
+    scraped_count = len(results_data.get("results", []))
+    if scraped_count > 0 and matched == 0:
+        logger.warning(f"Results for {race_id}: 0/{scraped_count} runners matched — wrong race data? Skipping status update.")
+    else:
+        # Only update race-level fields if runners actually matched
+        race.results_status = "Paying"
+        if results_data.get("winning_time"):
+            race.winning_time = results_data["winning_time"]
+        if results_data.get("exotics"):
+            race.exotic_results = _json.dumps(results_data["exotics"])
+
     await db.flush()
-    logger.info(f"Upserted results for {race_id}: {len(results_data.get('results', []))} runners")
+    logger.info(f"Upserted results for {race_id}: {matched}/{scraped_count} runners matched")
 
 
 def _guess_state(venue: str) -> str:

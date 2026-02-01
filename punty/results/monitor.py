@@ -2,13 +2,30 @@
 
 import asyncio
 import logging
-from datetime import date, datetime
+import random
+from datetime import date, datetime, time
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+AEST = ZoneInfo("Australia/Melbourne")
+
+# Racing typically runs between 11:00 and 18:30 AEST
+RACING_START = time(10, 30)
+RACING_END = time(19, 0)
+
+# Poll interval range (seconds) — randomised each cycle
+POLL_MIN = 90
+POLL_MAX = 180
+# Backoff interval when erroring
+ERROR_POLL_MIN = 240
+ERROR_POLL_MAX = 360
+# Idle interval when outside racing hours
+IDLE_POLL = 600
 
 
 class ResultsMonitor:
@@ -21,7 +38,7 @@ class ResultsMonitor:
         self.wrapups_generated: set[str] = set()
         self.task: Optional[asyncio.Task] = None
         self.last_check: Optional[datetime] = None
-        self.poll_interval = 120  # seconds
+        self.poll_interval = POLL_MIN  # display value
         self.consecutive_errors = 0
 
     def start(self):
@@ -48,23 +65,52 @@ class ResultsMonitor:
             "consecutive_errors": self.consecutive_errors,
         }
 
+    def _is_racing_hours(self) -> bool:
+        """Check if current AEST time is within typical racing hours."""
+        now_aest = datetime.now(AEST).time()
+        return RACING_START <= now_aest <= RACING_END
+
+    def _next_interval(self) -> float:
+        """Calculate next poll interval with jitter."""
+        if self.consecutive_errors >= 5:
+            interval = random.uniform(ERROR_POLL_MIN, ERROR_POLL_MAX)
+        elif not self._is_racing_hours():
+            interval = IDLE_POLL + random.uniform(0, 60)
+        else:
+            interval = random.uniform(POLL_MIN, POLL_MAX)
+        self.poll_interval = round(interval)
+        return interval
+
     async def _poll_loop(self):
         self.consecutive_errors = 0
         while self.running:
             try:
-                await self._check_all_meetings()
-                self.last_check = datetime.utcnow()
-                self.consecutive_errors = 0
+                if self._is_racing_hours() or self._has_unfinished_meetings():
+                    await self._check_all_meetings()
+                    self.last_check = datetime.utcnow()
+                    self.consecutive_errors = 0
+                else:
+                    logger.debug("Outside racing hours — skipping check")
+                    self.last_check = datetime.utcnow()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 self.consecutive_errors += 1
                 logger.error(f"Results monitor error ({self.consecutive_errors} consecutive): {e}", exc_info=True)
                 if self.consecutive_errors >= 5:
-                    logger.critical("Results monitor hit 5 consecutive errors — backing off to 5min interval")
-            # Back off if consistently failing
-            interval = self.poll_interval if self.consecutive_errors < 5 else 300
+                    logger.critical("Results monitor hit 5 consecutive errors — backing off")
+
+            interval = self._next_interval()
+            logger.debug(f"Next poll in {interval:.0f}s")
             await asyncio.sleep(interval)
+
+    def _has_unfinished_meetings(self) -> bool:
+        """Check if any tracked meetings still have unprocessed races."""
+        for meeting_id, processed in self.processed_races.items():
+            # If we've started tracking but haven't generated a wrapup, there's work to do
+            if meeting_id not in self.wrapups_generated:
+                return True
+        return False
 
     async def _check_all_meetings(self):
         from punty.models.database import async_session
@@ -78,6 +124,10 @@ class ResultsMonitor:
             meetings = result.scalars().all()
 
             for meeting in meetings:
+                # Skip meetings where wrapup is already done
+                if meeting.id in self.wrapups_generated:
+                    continue
+
                 # Only check meetings that have races (have been scraped)
                 race_result = await db.execute(
                     select(Race).where(Race.meeting_id == meeting.id)
@@ -86,7 +136,16 @@ class ResultsMonitor:
                 if not races:
                     continue
 
+                # Skip if all races already processed
+                processed = self.processed_races.get(meeting.id, set())
+                if len(processed) >= len(races) and meeting.id in self.wrapups_generated:
+                    continue
+
                 await self._check_meeting(db, meeting, races)
+
+                # Small random delay between meetings to avoid burst traffic
+                if len(meetings) > 1:
+                    await asyncio.sleep(random.uniform(3, 8))
 
             await db.commit()
 
@@ -112,6 +171,9 @@ class ResultsMonitor:
             if status in ("Paying", "Closed") and race_num not in self.processed_races[meeting_id]:
                 logger.info(f"New result: {meeting.venue} R{race_num} ({status})")
                 try:
+                    # Random delay before scraping detailed results
+                    await asyncio.sleep(random.uniform(2, 6))
+
                     scraper2 = RacingComScraper()
                     try:
                         results_data = await scraper2.scrape_race_result(
@@ -121,6 +183,20 @@ class ResultsMonitor:
                         await scraper2.close()
 
                     await upsert_race_results(db, meeting_id, race_num, results_data)
+
+                    # Verify runners were actually updated before proceeding
+                    from sqlalchemy import select as sa_select
+                    from punty.models.meeting import Runner as RunnerModel
+                    race_id = f"{meeting_id}-r{race_num}"
+                    check = await db.execute(
+                        sa_select(RunnerModel).where(
+                            RunnerModel.race_id == race_id,
+                            RunnerModel.finish_position.isnot(None),
+                        ).limit(1)
+                    )
+                    if not check.scalar_one_or_none():
+                        logger.warning(f"No runner positions set for {meeting.venue} R{race_num} — skipping settlement & generation")
+                        continue
 
                     # Settle picks for this race
                     try:

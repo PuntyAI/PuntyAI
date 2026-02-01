@@ -31,7 +31,7 @@ async def twitter_status(db: AsyncSession = Depends(get_db)):
 
     twitter = TwitterDelivery(db)
 
-    if not twitter.is_configured():
+    if not await twitter.is_configured():
         return {
             "configured": False,
             "message": "Twitter API not configured. Set TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET in .env",

@@ -5,10 +5,10 @@
 {% block content %}
 <div class="space-y-6">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">G'day, Legend!</h1>
-            <p class="text-gray-500">Here's what Punty's got brewing today</p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">G'day, Legend!</h1>
+            <p class="text-gray-500 text-sm sm:text-base">Here's what Punty's got brewing today</p>
         </div>
         <div class="flex items-center space-x-2 text-sm text-gray-500">
             <span>&#x1F4C5;</span>
@@ -17,7 +17,7 @@
     </div>
 
     <!-- Quick Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-lg shadow p-6">
             <div class="flex items-center">
                 <div class="p-3 bg-punty-coral/10 rounded-lg">
@@ -68,29 +68,35 @@
     </div>
 
     <!-- Results Monitor Status -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
             <div class="flex items-center">
-                <div class="p-3 {{ 'bg-green-100' if monitor_status.running else 'bg-gray-100' }} rounded-lg">
-                    <span class="text-2xl">{{ '&#x1F7E2;' if monitor_status.running else '&#x26AA;' }}</span>
+                <div class="p-2 sm:p-3 {{ 'bg-green-100' if monitor_status.running else 'bg-gray-100' }} rounded-lg">
+                    <span id="monitor-status-dot" class="text-xl sm:text-2xl">{{ '🟢' if monitor_status.running else '⚪' }}</span>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm text-gray-500">Results Monitor</p>
-                    <p class="text-lg font-bold {{ 'text-green-700' if monitor_status.running else 'text-gray-500' }}">
+                <div class="ml-3 sm:ml-4">
+                    <p class="text-xs sm:text-sm text-gray-500">Results Monitor</p>
+                    <p id="monitor-status-text" class="text-base sm:text-lg font-bold {{ 'text-green-700' if monitor_status.running else 'text-gray-500' }}">
                         {{ 'Running' if monitor_status.running else 'Stopped' }}
                     </p>
                     {% if monitor_status.last_check %}
-                    <p class="text-xs text-gray-400">Last check: {{ monitor_status.last_check }}</p>
+                    <p class="text-xs text-gray-400 truncate max-w-[200px]">Last: {{ monitor_status.last_check }}</p>
                     {% endif %}
                 </div>
             </div>
-            <div class="text-right text-sm text-gray-500">
-                {% set total_processed = 0 %}
-                {% for mid, races in (monitor_status.processed_races or {}).items() %}
-                {% set total_processed = total_processed + races|length %}
-                {% endfor %}
-                <p>{{ total_processed }} races processed</p>
-                <p>{{ (monitor_status.wrapups_generated or [])|length }} wrap-ups</p>
+            <div class="flex items-center gap-3">
+                <div class="text-right text-xs sm:text-sm text-gray-500">
+                    {% set total_processed = 0 %}
+                    {% for mid, races in (monitor_status.processed_races or {}).items() %}
+                    {% set total_processed = total_processed + races|length %}
+                    {% endfor %}
+                    <p>{{ total_processed }} processed</p>
+                    <p>{{ (monitor_status.wrapups_generated or [])|length }} wrap-ups</p>
+                </div>
+                <button id="monitor-toggle-btn" onclick="toggleMonitor()"
+                    class="{{ 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' if monitor_status.running else 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200' }} px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg border font-medium text-sm">
+                    {{ 'Stop' if monitor_status.running else 'Start' }}
+                </button>
             </div>
         </div>
     </div>
@@ -114,7 +120,7 @@
         </div>
 
         <!-- Summary row -->
-        <div class="grid grid-cols-5 gap-4 mb-4 text-center">
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4 text-center">
             <div>
                 <p class="text-xs text-gray-500 uppercase">Bets</p>
                 <p class="text-lg font-bold text-gray-900">{{ performance.total_bets }}</p>
@@ -144,16 +150,16 @@
         <div class="space-y-2">
             {% for ptype, data in performance.by_product.items() %}
             {% if ptype != 'big3' %}
-            <div class="flex items-center justify-between text-sm">
-                <div class="w-28 font-medium text-gray-700">{{ product_labels.get(ptype, ptype|title) }}</div>
-                <div class="flex-1 mx-3">
+            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between text-sm gap-1">
+                <div class="w-24 sm:w-28 font-medium text-gray-700 shrink-0">{{ product_labels.get(ptype, ptype|title) }}</div>
+                <div class="flex-1 mx-1 sm:mx-3 min-w-[3rem]">
                     <div class="w-full bg-gray-100 rounded-full h-2">
                         <div class="h-2 rounded-full {{ 'bg-green-500' if data.pnl >= 0 else 'bg-red-400' }}"
                              style="width: {{ [data.strike_rate, 100]|min }}%"></div>
                     </div>
                 </div>
-                <div class="w-20 text-right text-gray-500">{{ data.winners }}/{{ data.bets }}</div>
-                <div class="w-20 text-right font-medium {{ 'text-green-600' if data.pnl >= 0 else 'text-red-600' }}">
+                <div class="w-14 sm:w-20 text-right text-gray-500 shrink-0">{{ data.winners }}/{{ data.bets }}</div>
+                <div class="w-16 sm:w-20 text-right font-medium shrink-0 {{ 'text-green-600' if data.pnl >= 0 else 'text-red-600' }}">
                     {{ '%+.1f'|format(data.pnl) }}U
                 </div>
             </div>
@@ -343,4 +349,50 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var monitorRunning = {{ 'true' if monitor_status.running else 'false' }};
+
+function toggleMonitor() {
+    var btn = document.getElementById('monitor-toggle-btn');
+    var action = monitorRunning ? 'stop' : 'start';
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+    btn.textContent = action === 'start' ? 'Starting...' : 'Stopping...';
+
+    fetch('/api/results/monitor/' + action, { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+            monitorRunning = !monitorRunning;
+            updateMonitorUI();
+            btn.disabled = false;
+            btn.classList.remove('opacity-50');
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50');
+            updateMonitorUI();
+        });
+}
+
+function updateMonitorUI() {
+    var btn = document.getElementById('monitor-toggle-btn');
+    var statusDot = document.getElementById('monitor-status-dot');
+    var statusText = document.getElementById('monitor-status-text');
+
+    btn.textContent = monitorRunning ? 'Stop' : 'Start';
+    btn.className = (monitorRunning
+        ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
+        : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200')
+        + ' px-4 py-2 rounded-lg border font-medium text-sm';
+
+    if (statusDot) statusDot.textContent = monitorRunning ? '\u{1F7E2}' : '\u26AA';
+    if (statusText) {
+        statusText.textContent = monitorRunning ? 'Running' : 'Stopped';
+        statusText.className = 'text-lg font-bold ' + (monitorRunning ? 'text-green-700' : 'text-gray-500');
+    }
+}
+</script>
 {% endblock %}

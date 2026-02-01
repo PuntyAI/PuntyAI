@@ -92,8 +92,8 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                             <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline">View</a>
-                            <button onclick="scrapeFull('{{ meeting.id }}')" class="text-blue-600 hover:underline">Scrape</button>
-                            <button onclick="refreshOdds('{{ meeting.id }}')" class="text-green-600 hover:underline">Odds</button>
+                            <button onclick="withLoading(this, () => scrapeFull('{{ meeting.id }}'))" class="text-blue-600 hover:underline">Scrape</button>
+                            <button onclick="withLoading(this, () => refreshOdds('{{ meeting.id }}'))" class="text-green-600 hover:underline">Odds</button>
                         </td>
                     </tr>
                     {% else %}

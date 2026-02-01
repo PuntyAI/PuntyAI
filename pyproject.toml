@@ -37,6 +37,10 @@ dependencies = [
 
     # Twitter/X API
     "tweepy>=4.14.0",
+
+    # Auth
+    "authlib>=1.3.0",
+    "itsdangerous>=2.1.0",
 ]
 
 [project.optional-dependencies]

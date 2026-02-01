@@ -148,41 +148,91 @@
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
             </div>
-            <div class="p-6 space-y-4">
-                <div>
+            <div class="p-6 space-y-6">
+
+                <!-- OpenAI -->
+                <div id="openai-section">
                     <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
-                    <div class="flex space-x-2">
-                        <input type="password"
-                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
-                               placeholder="sk-..."
-                               value="***configured***"
-                               disabled>
-                        <button class="text-punty-coral hover:underline text-sm">Edit</button>
+                    <div id="openai-display" class="flex items-center space-x-2">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-600">
+                            {{ api_key_status.openai if api_key_status.openai else 'Not configured' }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.openai else 'bg-red-100 text-red-700' }}">
+                            {{ 'Active' if api_key_status.openai else 'Missing' }}
+                        </span>
+                        <button onclick="document.getElementById('openai-edit').classList.remove('hidden'); this.parentElement.classList.add('hidden')"
+                                class="text-punty-coral hover:underline text-sm">Edit</button>
                     </div>
-                    <p class="text-xs text-gray-500 mt-1">Set in .env file as OPENAI_API_KEY</p>
+                    <div id="openai-edit" class="hidden space-y-2 mt-2">
+                        <input type="text" id="oai_key" placeholder="sk-proj-..."
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <div class="flex space-x-2">
+                            <button onclick="saveApiKeys('openai', {openai_api_key: document.getElementById('oai_key').value})"
+                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
+                            <button onclick="document.getElementById('openai-edit').classList.add('hidden'); document.getElementById('openai-display').classList.remove('hidden')"
+                                    class="text-gray-500 hover:underline text-sm">Cancel</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div>
+                <!-- Twitter/X -->
+                <div id="twitter-section">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Twitter/X API</label>
-                    <div class="flex space-x-2">
-                        <input type="password"
-                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
-                               placeholder="Not configured"
-                               disabled>
-                        <button class="text-punty-coral hover:underline text-sm">Configure</button>
+                    <div id="twitter-display" class="flex items-center space-x-2">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-600">
+                            {{ api_key_status.twitter if api_key_status.twitter else 'Not configured' }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.twitter else 'bg-red-100 text-red-700' }}">
+                            {{ 'Active' if api_key_status.twitter else 'Missing' }}
+                        </span>
+                        <button onclick="document.getElementById('twitter-edit').classList.remove('hidden'); this.parentElement.classList.add('hidden')"
+                                class="text-punty-coral hover:underline text-sm">Configure</button>
+                    </div>
+                    <div id="twitter-edit" class="hidden space-y-2 mt-2">
+                        <input type="text" id="tw_api_key" placeholder="API Key (Consumer Key)"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="tw_api_secret" placeholder="API Secret (Consumer Secret)"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="tw_access_token" placeholder="Access Token"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="tw_access_secret" placeholder="Access Secret"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <div class="flex space-x-2">
+                            <button onclick="saveApiKeys('twitter', {twitter_api_key: document.getElementById('tw_api_key').value, twitter_api_secret: document.getElementById('tw_api_secret').value, twitter_access_token: document.getElementById('tw_access_token').value, twitter_access_secret: document.getElementById('tw_access_secret').value})"
+                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
+                            <button onclick="document.getElementById('twitter-edit').classList.add('hidden'); document.getElementById('twitter-display').classList.remove('hidden')"
+                                    class="text-gray-500 hover:underline text-sm">Cancel</button>
+                        </div>
                     </div>
                 </div>
 
-                <div>
+                <!-- WhatsApp -->
+                <div id="whatsapp-section">
                     <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Business API</label>
-                    <div class="flex space-x-2">
-                        <input type="password"
-                               class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
-                               placeholder="Not configured"
-                               disabled>
-                        <button class="text-punty-coral hover:underline text-sm">Configure</button>
+                    <div id="whatsapp-display" class="flex items-center space-x-2">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-600">
+                            {{ api_key_status.whatsapp if api_key_status.whatsapp else 'Not configured' }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.whatsapp else 'bg-red-100 text-red-700' }}">
+                            {{ 'Active' if api_key_status.whatsapp else 'Missing' }}
+                        </span>
+                        <button onclick="document.getElementById('whatsapp-edit').classList.remove('hidden'); this.parentElement.classList.add('hidden')"
+                                class="text-punty-coral hover:underline text-sm">Configure</button>
+                    </div>
+                    <div id="whatsapp-edit" class="hidden space-y-2 mt-2">
+                        <input type="text" id="wa_api_token" placeholder="API Token"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="wa_phone_id" placeholder="Phone Number ID"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <div class="flex space-x-2">
+                            <button onclick="saveApiKeys('whatsapp', {whatsapp_api_token: document.getElementById('wa_api_token').value, whatsapp_phone_number_id: document.getElementById('wa_phone_id').value})"
+                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
+                            <button onclick="document.getElementById('whatsapp-edit').classList.add('hidden'); document.getElementById('whatsapp-display').classList.remove('hidden')"
+                                    class="text-gray-500 hover:underline text-sm">Cancel</button>
+                        </div>
                     </div>
                 </div>
+
             </div>
         </div>
 
@@ -306,4 +356,24 @@
         </div>
     </div>
 </div>
+
+<script>
+async function saveApiKeys(provider, keys) {
+    try {
+        const resp = await fetch(`/api/settings/api-keys/${provider}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keys: keys})
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            alert('Save failed: ' + err);
+            return;
+        }
+        window.location.reload();
+    } catch (e) {
+        alert('Save failed: ' + e.message);
+    }
+}
+</script>
 {% endblock %}

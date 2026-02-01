@@ -1,6 +1,10 @@
 """Web routes for the dashboard."""
 
+import json
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -10,22 +14,28 @@ from sqlalchemy.orm import selectinload
 
 from punty.models.database import get_db
 from punty.models.meeting import Meeting, Race
+from punty.models.pick import Pick
 from punty.models.content import Content, ContentStatus, ScheduledJob
+
+MELB_TZ = ZoneInfo("Australia/Melbourne")
+
+
+def melb_now() -> datetime:
+    """Current time in Melbourne (AEDT/AEST automatically)."""
+    return datetime.now(MELB_TZ)
 
 router = APIRouter()
 
 # Templates directory
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=templates_dir)
+templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else {}
 
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     """Main dashboard page."""
-    # Get today's meetings
-    from datetime import date
-
-    today = date.today()
+    today = melb_now().date()
     result = await db.execute(
         select(Meeting).where(Meeting.date == today).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
@@ -68,6 +78,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "dashboard.html",
         {
             "request": request,
+            "now": melb_now,
             "todays_meetings": todays_meetings,
             "pending_reviews": pending_reviews,
             "recent_content": recent_content,
@@ -82,9 +93,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/meets", response_class=HTMLResponse)
 async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Race meetings management page — shows today's meetings first."""
-    from datetime import date as date_type
-
-    today = date_type.today()
+    today = melb_now().date()
 
     # Today's meetings first
     result = await db.execute(
@@ -134,12 +143,42 @@ async def meeting_detail(
     )
     content_items = result.scalars().all()
 
+    # Load picks for this meeting, grouped by race number
+    pick_result = await db.execute(
+        select(Pick).where(Pick.meeting_id == meeting_id).order_by(Pick.tip_rank)
+    )
+    all_picks = pick_result.scalars().all()
+    picks_by_race = {}
+    meeting_picks = []  # big3_multi, sequences
+    sequences_by_race = {}  # {race_num: [{pick, leg_index, saddlecloths}]}
+    for p in all_picks:
+        if p.pick_type in ("big3", "big3_multi"):
+            meeting_picks.append(p)
+        elif p.pick_type == "sequence":
+            meeting_picks.append(p)
+            # Map each leg to its race number
+            if p.sequence_start_race and p.sequence_legs:
+                legs = json.loads(p.sequence_legs)
+                for i, leg in enumerate(legs):
+                    race_num = p.sequence_start_race + i
+                    sequences_by_race.setdefault(race_num, []).append({
+                        "pick": p,
+                        "leg_index": i,
+                        "saddlecloths": leg,
+                        "label": f"{p.sequence_type or 'Seq'} ({p.sequence_variant or ''})" if p.sequence_variant else (p.sequence_type or "Sequence"),
+                    })
+        elif p.race_number is not None:
+            picks_by_race.setdefault(p.race_number, []).append(p)
+
     return templates.TemplateResponse(
         "meeting_detail.html",
         {
             "request": request,
             "meeting": meeting,
             "content_items": content_items,
+            "picks_by_race": picks_by_race,
+            "meeting_picks": meeting_picks,
+            "sequences_by_race": sequences_by_race,
         },
     )
 
@@ -249,6 +288,19 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
                 "description": default["description"],
             }
 
+    # Build API key status for template
+    from punty.models.settings import get_api_key
+    from punty.config import settings as app_settings
+    openai_key = await get_api_key(db, "openai_api_key", app_settings.openai_api_key)
+    twitter_key = await get_api_key(db, "twitter_api_key", app_settings.twitter_api_key)
+    whatsapp_token = await get_api_key(db, "whatsapp_api_token", app_settings.whatsapp_api_token)
+    # Only pass masked values to template — never expose full keys in HTML
+    api_key_status = {
+        "openai": ("..." + openai_key[-4:]) if openai_key else "",
+        "twitter": ("..." + twitter_key[-4:]) if twitter_key else "",
+        "whatsapp": ("..." + whatsapp_token[-4:]) if whatsapp_token else "",
+    }
+
     # Load personality prompt
     personality_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
     personality_prompt = ""
@@ -265,5 +317,6 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
             "weight_options": AnalysisWeights.WEIGHT_OPTIONS,
             "settings": settings,
             "personality_prompt": personality_prompt,
+            "api_key_status": api_key_status,
         },
     )

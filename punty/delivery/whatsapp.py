@@ -26,16 +26,26 @@ class WhatsAppDelivery:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.token = settings.whatsapp_api_token
-        self.phone_number_id = settings.whatsapp_phone_number_id
+        self._token = None
+        self._phone_number_id = None
         self._client: Optional[httpx.AsyncClient] = None
+        self._keys_loaded = False
 
-    @property
-    def client(self) -> httpx.AsyncClient:
+    async def _load_keys(self):
+        """Load API keys from DB, falling back to config."""
+        if self._keys_loaded:
+            return
+        from punty.models.settings import get_api_key
+        self._token = await get_api_key(self.db, "whatsapp_api_token", settings.whatsapp_api_token)
+        self._phone_number_id = await get_api_key(self.db, "whatsapp_phone_number_id", settings.whatsapp_phone_number_id)
+        self._keys_loaded = True
+
+    async def _get_client(self) -> httpx.AsyncClient:
         """Get HTTP client."""
+        await self._load_keys()
         if self._client is None:
             self._client = httpx.AsyncClient(
-                headers={"Authorization": f"Bearer {self.token}"},
+                headers={"Authorization": f"Bearer {self._token}"},
                 timeout=30.0,
             )
         return self._client
@@ -46,9 +56,10 @@ class WhatsAppDelivery:
             await self._client.aclose()
             self._client = None
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if WhatsApp delivery is configured."""
-        return bool(self.token and self.phone_number_id)
+        await self._load_keys()
+        return bool(self._token and self._phone_number_id)
 
     async def send(
         self,
@@ -66,7 +77,7 @@ class WhatsAppDelivery:
         """
         from punty.models.content import Content, ContentStatus
 
-        if not self.is_configured():
+        if not await self.is_configured():
             raise ValueError("WhatsApp API not configured")
 
         # Get content
@@ -88,7 +99,7 @@ class WhatsAppDelivery:
             content.whatsapp_formatted = formatted
 
         # Send via API
-        url = f"{self.API_BASE}/{self.phone_number_id}/messages"
+        url = f"{self.API_BASE}/{self._phone_number_id}/messages"
         payload = {
             "messaging_product": "whatsapp",
             "to": recipient_phone,
@@ -97,7 +108,7 @@ class WhatsAppDelivery:
         }
 
         try:
-            response = await self.client.post(url, json=payload)
+            response = await (await self._get_client()).post(url, json=payload)
             response.raise_for_status()
             result_data = response.json()
 
@@ -135,13 +146,13 @@ class WhatsAppDelivery:
 
     async def get_template_status(self) -> dict:
         """Check status of message templates (for template messages)."""
-        if not self.is_configured():
+        if not await self.is_configured():
             return {"status": "not_configured"}
 
-        url = f"{self.API_BASE}/{self.phone_number_id}/message_templates"
+        url = f"{self.API_BASE}/{self._phone_number_id}/message_templates"
 
         try:
-            response = await self.client.get(url)
+            response = await (await self._get_client()).get(url)
             response.raise_for_status()
             return response.json()
         except Exception as e:

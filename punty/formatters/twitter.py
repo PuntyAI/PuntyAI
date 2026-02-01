@@ -82,9 +82,16 @@ class TwitterFormatter:
 
         return cls._split_into_thread(content, hashtags, content_type, venue)
 
+    # Words that trigger X's hateful-conduct filter, mapped to safe replacements
+    PROFANITY_SUBS = [
+        (re.compile(r'\bCUNT FACTORY\b', re.IGNORECASE), 'CHAOS FACTORY'),
+        (re.compile(r'\bcunts?\b', re.IGNORECASE), 'legends'),
+        (re.compile(r'\bfuck(ing|ed|s)?\b', re.IGNORECASE), 'bloody'),
+    ]
+
     @classmethod
     def _clean_markdown(cls, content: str) -> str:
-        """Remove markdown formatting."""
+        """Remove markdown formatting and sanitise for X."""
         # Remove headers
         content = re.sub(r'^#{1,3}\s+', '', content, flags=re.MULTILINE)
         # Remove bold
@@ -95,6 +102,9 @@ class TwitterFormatter:
         content = re.sub(r'_(.+?)_', r'\1', content)
         # Clean up multiple newlines
         content = re.sub(r'\n{3,}', '\n\n', content)
+        # Sanitise profanity for X content policy
+        for pattern, replacement in cls.PROFANITY_SUBS:
+            content = pattern.sub(replacement, content)
         return content.strip()
 
     @classmethod

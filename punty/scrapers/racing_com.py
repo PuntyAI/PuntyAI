@@ -769,22 +769,32 @@ class RacingComScraper(BaseScraper):
 
                 url = response.url
 
-                if "getRaceEntriesForField" in url or "getRaceEntries" in url:
+                if "getRaceEntriesForField" in url or "getRaceEntries" in url or "getRaceResults" in url:
                     form = data.get("data", {}).get("getRaceForm", {})
                     if not form:
                         form = data.get("data", {}).get("getRaceEntries", {})
-                    entries = form.get("formRaceEntries", [])
+
+                    # getRaceResults returns entries as a list directly under getRaceForm
+                    if isinstance(form, list):
+                        entries = form
+                    else:
+                        entries = form.get("formRaceEntries", []) if isinstance(form, dict) else []
+
                     if entries:
-                        entries_data.clear()
-                        entries_data.extend(entries)
+                        # Prefer entries that have position data (results)
+                        has_positions = any(e.get("position") is not None for e in entries)
+                        existing_has_positions = any(e.get("position") is not None for e in entries_data)
+                        if not entries_data or (has_positions and not existing_has_positions):
+                            entries_data.clear()
+                            entries_data.extend(entries)
 
-                if "GetBettingData" in url:
-                    bd = data.get("data", {}).get("GetBettingData", {})
-                    if bd:
-                        betting_data.update(bd)
+                # GetBettingData can be in its own response or bundled with getRaceResults
+                bd = data.get("data", {}).get("GetBettingData", {})
+                if bd:
+                    betting_data.update(bd)
 
-                # Fallback scan
-                self._try_extract_result_entries(data, entries_data)
+                # NOTE: removed greedy _try_extract_result_entries fallback
+                # — it could grab entries from a different race's GraphQL response
 
             page.on("response", capture_graphql)
             await page.goto(race_url, wait_until="load")
@@ -839,17 +849,19 @@ class RacingComScraper(BaseScraper):
                 "starting_price": sp,
                 "sectional_400": str(entry.get("positionAt400", "")) or None,
                 "sectional_800": str(entry.get("positionAt800", "")) or None,
-                "win_dividend": self._parse_float(entry.get("dividendWin")),
-                "place_dividend": self._parse_float(entry.get("dividendPlace")),
+                "win_dividend": self._parse_float(entry.get("dividendWin")) or self._parse_float(entry.get("winDividend")),
+                "place_dividend": self._parse_float(entry.get("dividendPlace")) or self._parse_float(entry.get("placeDividend")),
             })
 
         # Parse exotics from betting data
         exotics = {}
         for exotic in betting_data.get("exotics", []):
-            exotic_type = (exotic.get("poolType") or exotic.get("type") or "").lower()
+            exotic_type = (exotic.get("poolType") or exotic.get("poolStatusCode") or exotic.get("type") or "").lower()
             dividend = exotic.get("dividend") or exotic.get("amount")
             if exotic_type and dividend:
-                exotics[exotic_type] = str(dividend)
+                # Clean "$" from amount strings
+                div_str = str(dividend).replace("$", "").replace(",", "").strip()
+                exotics[exotic_type] = div_str
 
         # Sort by position
         results.sort(key=lambda r: r.get("position") or 999)

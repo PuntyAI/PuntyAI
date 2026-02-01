@@ -2,6 +2,9 @@
 
 Generate results commentary after a race for Punty.
 
+## Title Format
+Start with: `**{Venue} Race {N} Wrap-Up: {Race Name}**`
+
 ## Structure
 1. **Quick summary** - Winner, margin, was it expected?
 2. **How it unfolded** - Pace, key moves, where was the winner?

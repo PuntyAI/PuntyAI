@@ -25,36 +25,48 @@ class TwitterDelivery:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.api_key = settings.twitter_api_key
-        self.api_secret = settings.twitter_api_secret
-        self.access_token = settings.twitter_access_token
-        self.access_secret = settings.twitter_access_secret
+        self._api_key = None
+        self._api_secret = None
+        self._access_token = None
+        self._access_secret = None
         self._client = None
+        self._keys_loaded = False
 
-    @property
-    def client(self):
+    async def _load_keys(self):
+        """Load API keys from DB, falling back to config."""
+        if self._keys_loaded:
+            return
+        from punty.models.settings import get_api_key
+        self._api_key = await get_api_key(self.db, "twitter_api_key", settings.twitter_api_key)
+        self._api_secret = await get_api_key(self.db, "twitter_api_secret", settings.twitter_api_secret)
+        self._access_token = await get_api_key(self.db, "twitter_access_token", settings.twitter_access_token)
+        self._access_secret = await get_api_key(self.db, "twitter_access_secret", settings.twitter_access_secret)
+        self._keys_loaded = True
+
+    def _get_client(self):
         """Get authenticated Tweepy client."""
         if self._client is None:
             try:
                 import tweepy
 
                 self._client = tweepy.Client(
-                    consumer_key=self.api_key,
-                    consumer_secret=self.api_secret,
-                    access_token=self.access_token,
-                    access_token_secret=self.access_secret,
+                    consumer_key=self._api_key,
+                    consumer_secret=self._api_secret,
+                    access_token=self._access_token,
+                    access_token_secret=self._access_secret,
                 )
             except ImportError:
                 raise ValueError("tweepy not installed. Run: pip install tweepy")
         return self._client
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if Twitter delivery is configured."""
+        await self._load_keys()
         return bool(
-            self.api_key
-            and self.api_secret
-            and self.access_token
-            and self.access_secret
+            self._api_key
+            and self._api_secret
+            and self._access_token
+            and self._access_secret
         )
 
     async def send(self, content_id: str) -> dict:
@@ -69,8 +81,8 @@ class TwitterDelivery:
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 
-        if not self.is_configured():
-            raise ValueError("Twitter API not configured. Set TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET in .env")
+        if not await self.is_configured():
+            raise ValueError("Twitter API not configured. Set keys via Settings page or .env file")
 
         # Get content
         result = await self.db.execute(select(Content).where(Content.id == content_id))
@@ -103,7 +115,7 @@ class TwitterDelivery:
 
         # Post tweet
         try:
-            response = self.client.create_tweet(text=formatted)
+            response = self._get_client().create_tweet(text=formatted)
             tweet_id = response.data["id"]
 
             # Update content status
@@ -136,7 +148,7 @@ class TwitterDelivery:
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 
-        if not self.is_configured():
+        if not await self.is_configured():
             raise ValueError("Twitter API not configured")
 
         # Get content
@@ -160,29 +172,25 @@ class TwitterDelivery:
         tweet_text = format_twitter(content.raw_content, content.content_type, venue)
 
         # Post single tweet
-        tweet_ids = []
         try:
-            response = self.client.create_tweet(text=tweet_text)
+            response = self._get_client().create_tweet(text=tweet_text)
             tweet_id = response.data["id"]
-            tweet_ids.append(tweet_id)
             logger.info(f"Posted tweet: {tweet_id}")
         except Exception as e:
             logger.error(f"Twitter API error: {e}")
+            raise ValueError(f"Twitter API error: {e}")
 
         # Update content status
-        if tweet_ids:
-            content.sent_at = datetime.utcnow()
-            content.status = ContentStatus.SENT.value
-            await self.db.commit()
+        content.sent_at = datetime.utcnow()
+        content.status = ContentStatus.SENT.value
+        await self.db.commit()
 
         return {
             "status": "posted",
             "content_id": content_id,
-            "tweet_count": len(tweet_ids),
-            "tweet_ids": tweet_ids,
-            "tweet_url": f"https://twitter.com/i/status/{tweet_ids[0]}"
-            if tweet_ids
-            else None,
+            "tweet_count": 1,
+            "tweet_ids": [tweet_id],
+            "tweet_url": f"https://twitter.com/i/status/{tweet_id}",
         }
 
     async def post_tweet(self, text: str, long_form: bool = False) -> dict:
@@ -195,7 +203,7 @@ class TwitterDelivery:
         Returns:
             Dict with tweet ID and URL
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             raise ValueError("Twitter API not configured")
 
         max_length = 25000 if long_form else 280
@@ -203,7 +211,7 @@ class TwitterDelivery:
             raise ValueError(f"Tweet too long: {len(text)} chars (max {max_length})")
 
         try:
-            response = self.client.create_tweet(text=text)
+            response = self._get_client().create_tweet(text=text)
             tweet_id = response.data["id"]
 
             logger.info(f"Posted {'long-form' if long_form else 'standard'} tweet: {tweet_id}")
@@ -230,7 +238,7 @@ class TwitterDelivery:
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 
-        if not self.is_configured():
+        if not await self.is_configured():
             raise ValueError("Twitter API not configured")
 
         # Get content
@@ -255,7 +263,7 @@ class TwitterDelivery:
 
         # Post as long-form
         try:
-            response = self.client.create_tweet(text=post_text)
+            response = self._get_client().create_tweet(text=post_text)
             tweet_id = response.data["id"]
 
             # Update content status
@@ -302,11 +310,11 @@ class TwitterDelivery:
 
     async def delete_tweet(self, tweet_id: str) -> dict:
         """Delete a tweet."""
-        if not self.is_configured():
+        if not await self.is_configured():
             raise ValueError("Twitter API not configured")
 
         try:
-            self.client.delete_tweet(tweet_id)
+            self._get_client().delete_tweet(tweet_id)
             logger.info(f"Deleted tweet: {tweet_id}")
             return {"status": "deleted", "tweet_id": tweet_id}
         except Exception as e:
@@ -315,11 +323,11 @@ class TwitterDelivery:
 
     async def get_me(self) -> dict:
         """Get authenticated user info."""
-        if not self.is_configured():
+        if not await self.is_configured():
             return {"status": "not_configured"}
 
         try:
-            user = self.client.get_me()
+            user = self._get_client().get_me()
             return {
                 "status": "ok",
                 "id": user.data.id,

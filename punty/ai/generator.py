@@ -37,6 +37,19 @@ class ContentGenerator:
         self.db = db
         self.ai_client = AIClient(model=model)
         self.context_builder = ContextBuilder(db)
+        self._openai_key_loaded = False
+
+    async def _ensure_openai_key(self):
+        """Load OpenAI key from DB if not already set."""
+        if self._openai_key_loaded:
+            return
+        from punty.models.settings import get_api_key
+        from punty.config import settings
+        db_key = await get_api_key(self.db, "openai_api_key", "")
+        if db_key:
+            self.ai_client._api_key = db_key
+            self.ai_client._client = None  # Reset to pick up new key
+        self._openai_key_loaded = True
 
     async def get_analysis_weights(self) -> str:
         """Load analysis weights from settings and format for prompt."""
@@ -103,6 +116,7 @@ class ContentGenerator:
             return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
 
         try:
+            await self._ensure_openai_key()
             yield evt("Building meeting context...")
 
             context = await self.context_builder.build_meeting_context(meeting_id)
@@ -198,6 +212,7 @@ class ContentGenerator:
         save: bool = True,
     ) -> dict[str, Any]:
         """Generate meeting initialisation content."""
+        await self._ensure_openai_key()
         logger.info(f"Generating Initialise for {meeting_id}")
 
         # Build context
@@ -403,6 +418,7 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
         save: bool = True,
     ) -> dict[str, Any]:
         """Generate preview for a specific race."""
+        await self._ensure_openai_key()
         logger.info(f"Generating race preview for R{race_number} at {meeting_id}")
 
         # Build race-specific context
@@ -478,10 +494,13 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
 
         try:
+            await self._ensure_openai_key()
             yield evt("Building results context...")
             context = await self.context_builder.build_results_context(meeting_id, race_number)
             if not context:
                 raise ValueError(f"Race not found: R{race_number} at {meeting_id}")
+            if not context.get("race", {}).get("results"):
+                raise ValueError(f"No results data for R{race_number} yet — run Check Results first")
             yield evt(f"Context built — Race {race_number}", "done")
 
             yield evt("Loading prompts...")
@@ -528,12 +547,89 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             logger.error(f"Results generation failed: {e}")
             yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
+    async def generate_meeting_wrapup_stream(
+        self,
+        meeting_id: str,
+        save: bool = True,
+    ):
+        """Generate meeting punt review with SSE progress events."""
+        total_steps = 5
+        step = 0
+
+        def evt(label, status="running", **extra):
+            nonlocal step
+            if status == "running":
+                step += 1
+            return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
+
+        try:
+            await self._ensure_openai_key()
+            yield evt("Building meeting wrap-up context...")
+            context = await self.context_builder.build_wrapup_context(meeting_id)
+            if not context:
+                raise ValueError(f"Meeting not found: {meeting_id}")
+            if not context.get("race_summaries"):
+                raise ValueError("No completed races yet — check results first")
+            venue = context["meeting"]["venue"]
+            yield evt(f"Context built — {venue} ({len(context['race_summaries'])} races)", "done")
+
+            yield evt("Loading prompts & weights...")
+            personality = load_prompt("personality")
+            wrapup_prompt = load_prompt("wrap_up")
+            analysis_weights = await self.get_analysis_weights()
+            whatsapp_link = await self.get_setting(
+                "whatsapp_invite_link",
+                "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
+            )
+            yield evt("Prompts loaded", "done")
+
+            yield evt("Generating punt review with AI...")
+            context_str = json.dumps(context, indent=2, default=str)
+            system_prompt = f"""{personality}
+
+## Analysis Framework Weights
+{analysis_weights}
+
+## WhatsApp Invite Link
+{whatsapp_link}
+"""
+            raw_content = await self.ai_client.generate_with_context(
+                system_prompt=system_prompt,
+                context=context_str,
+                instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {venue} on {context['meeting']['date']}",
+                temperature=0.8,
+            )
+            yield evt("AI content generated", "done")
+
+            result = {
+                "raw_content": raw_content,
+                "meeting_id": meeting_id,
+                "content_type": ContentType.MEETING_WRAPUP.value,
+            }
+
+            if save:
+                yield evt("Saving content...")
+                content = await self._save_content(result, requires_review=True)
+                result["content_id"] = content.id
+                result["status"] = content.status
+                yield evt("Content saved", "done")
+            else:
+                step += 1
+                yield evt("Save skipped", "done")
+
+            yield {"step": total_steps, "total": total_steps, "label": f"Punt Review generated for {venue}", "status": "complete", "result": result}
+
+        except Exception as e:
+            logger.error(f"Meeting wrapup generation failed: {e}")
+            yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
+
     async def generate_meeting_wrapup(
         self,
         meeting_id: str,
         save: bool = True,
     ) -> dict[str, Any]:
         """Generate meeting wrap-up content."""
+        await self._ensure_openai_key()
         logger.info(f"Generating meeting wrap-up for {meeting_id}")
 
         context = await self.context_builder.build_wrapup_context(meeting_id)
@@ -585,6 +681,7 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
         save: bool = True,
     ) -> dict[str, Any]:
         """Generate alert when significant context changes detected."""
+        await self._ensure_openai_key()
         logger.info(f"Generating update alert for {meeting_id}")
 
         # Build full context

@@ -44,7 +44,12 @@ If data is missing, infer conservatively and never invent returns.
   - 1U on each Roughie
   - 1U on each Degenerate Exotic
   - 1U per sequence ticket (Skinny / Balanced / Wide)
-- For exotics, use declared dividend x 1U
+- For exotics: cost = number of combinations x $1 (context includes `combos` and `cost` fields)
+  - e.g. Trifecta Box 4 horses = 24 combos x $1 = $24 cost
+  - Return = dividend - cost
+- For sequences: cost = number of combinations x $1 (context includes `combos` and `cost` fields)
+  - e.g. Quaddie 3x3x3x3 = 81 combos x $1 = $81 cost
+  - Return = dividend - cost
 - For wins, return = dividend - 1U stake
 - Do not show formulas or maths — only outcomes
 - Use the pre-calculated pick_ledger from context where available
@@ -96,14 +101,14 @@ Format:
 List only exotics that returned.
 
 Format examples:
-- R<#> Trifecta Box <numbers> — 1U | div $<div> → *<return>U*
-- R<#> Exacta <A / B> — 1U | div $<div> → *<return>U*
+- R<#> Trifecta Box <numbers> — <combos> combos @ $1 = $<cost> | div $<div> → *+$<net>*
+- R<#> Exacta <A / B> — <combos> combos @ $1 = $<cost> | div $<div> → *+$<net>*
 
 *Sequences That Hit*
 List only sequences (quaddie / big 6) that returned.
 
 Format:
-- <Type> (<variant>) — <combos>x1U | div $<div> → *<return>U*
+- <Type> (<variant>) — <combos> combos @ $1 = $<cost> | div $<div> → *+$<net>*
 
 If none hit, omit this section entirely.
 

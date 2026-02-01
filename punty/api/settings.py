@@ -23,6 +23,12 @@ class SettingUpdate(BaseModel):
     value: str
 
 
+class ApiKeysUpdate(BaseModel):
+    """Update multiple API keys for a provider."""
+
+    keys: dict[str, str]
+
+
 @router.get("/weights")
 async def get_analysis_weights(db: AsyncSession = Depends(get_db)):
     """Get current analysis framework weights."""
@@ -153,6 +159,40 @@ async def update_setting(key: str, update: SettingUpdate, db: AsyncSession = Dep
 
     await db.commit()
     return setting.to_dict()
+
+
+PROVIDER_KEYS = {
+    "openai": ["openai_api_key"],
+    "twitter": ["twitter_api_key", "twitter_api_secret", "twitter_access_token", "twitter_access_secret"],
+    "whatsapp": ["whatsapp_api_token", "whatsapp_phone_number_id"],
+}
+
+
+@router.put("/api-keys/{provider}")
+async def update_api_keys(provider: str, update: ApiKeysUpdate, db: AsyncSession = Depends(get_db)):
+    """Update API keys for a provider (openai, twitter, whatsapp)."""
+    from punty.models.settings import AppSettings
+
+    allowed = PROVIDER_KEYS.get(provider)
+    if not allowed:
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'")
+
+    saved = {}
+    for key, value in update.keys.items():
+        if key not in allowed:
+            continue
+        result = await db.execute(select(AppSettings).where(AppSettings.key == key))
+        setting = result.scalar_one_or_none()
+        if setting:
+            setting.value = value
+        else:
+            desc = AppSettings.DEFAULTS.get(key, {}).get("description", "")
+            setting = AppSettings(key=key, value=value, description=desc)
+            db.add(setting)
+        saved[key] = True
+
+    await db.commit()
+    return {"provider": provider, "saved": list(saved.keys())}
 
 
 @router.post("/initialize")

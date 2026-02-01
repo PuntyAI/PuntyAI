@@ -13,17 +13,19 @@ logger = logging.getLogger(__name__)
 class AIClient:
     """Wrapper for OpenAI API client."""
 
-    def __init__(self, model: str = "gpt-4o"):
+    def __init__(self, model: str = "gpt-4o", api_key: Optional[str] = None):
         self.model = model
+        self._api_key = api_key
         self._client: Optional[AsyncOpenAI] = None
 
     @property
     def client(self) -> AsyncOpenAI:
         """Get or create OpenAI client."""
         if self._client is None:
-            if not settings.openai_api_key:
+            key = self._api_key or settings.openai_api_key
+            if not key:
                 raise ValueError("OPENAI_API_KEY not configured")
-            self._client = AsyncOpenAI(api_key=settings.openai_api_key)
+            self._client = AsyncOpenAI(api_key=key)
         return self._client
 
     async def generate(
@@ -31,7 +33,7 @@ class AIClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.8,
-        max_tokens: int = 8000,
+        max_tokens: int = 16000,
     ) -> str:
         """Generate content using OpenAI API.
 
@@ -69,7 +71,7 @@ class AIClient:
         context: str,
         instruction: str,
         temperature: float = 0.8,
-        max_tokens: int = 8000,
+        max_tokens: int = 16000,
     ) -> str:
         """Generate content with separate context and instruction.
 

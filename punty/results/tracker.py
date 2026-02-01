@@ -237,11 +237,26 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
             bucket["picks"].append(pick_info)
 
         elif p.pick_type == "exotic":
-            stake = p.exotic_stake or 1.0
-            buckets["exotics"]["staked"] += stake
-            buckets["exotics"]["returned"] += max(0.0, (p.pnl or 0.0) + stake) if p.hit else 0.0
+            runners = json.loads(p.exotic_runners) if p.exotic_runners else []
+            n = len(runners)
+            etype = (p.exotic_type or "").lower()
+            if "trifecta" in etype:
+                combos = n * max(n - 1, 0) * max(n - 2, 0)
+            elif "exacta" in etype:
+                combos = n * max(n - 1, 0)
+            elif "quinella" in etype:
+                combos = n * max(n - 1, 0) // 2
+            elif "first4" in etype or "first_4" in etype:
+                combos = n * max(n - 1, 0) * max(n - 2, 0) * max(n - 3, 0)
+            else:
+                combos = max(n, 1)
+            cost = combos * (p.exotic_stake or 1.0)
+            buckets["exotics"]["staked"] += cost
+            buckets["exotics"]["returned"] += max(0.0, (p.pnl or 0.0) + cost) if p.hit else 0.0
             pick_info["exotic_type"] = p.exotic_type
             pick_info["exotic_runners"] = p.exotic_runners
+            pick_info["combos"] = combos
+            pick_info["cost"] = cost
             buckets["exotics"]["picks"].append(pick_info)
 
         elif p.pick_type == "sequence":
@@ -256,6 +271,7 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
             pick_info["sequence_type"] = p.sequence_type
             pick_info["sequence_variant"] = p.sequence_variant
             pick_info["combos"] = num_combos
+            pick_info["cost"] = cost
             buckets["sequences"]["picks"].append(pick_info)
 
         elif p.pick_type == "big3_multi":

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     whatsapp_api_token: str = ""
     whatsapp_phone_number_id: str = ""
 
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    allowed_emails: str = "gerardr@gmail.com,punty@punty.ai"
+
     @property
     def database_url(self) -> str:
         """SQLite database URL for SQLAlchemy."""
@@ -57,11 +62,15 @@ class FullSettings(Settings):
     openai_api_key: str = ""
 
     def model_post_init(self, __context) -> None:
-        """Load OpenAI key from standard env var if not set."""
+        """Load OpenAI key from standard env var or .env file if not set."""
         import os
+        from dotenv import dotenv_values
 
         if not self.openai_api_key:
             self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        if not self.openai_api_key:
+            env_vals = dotenv_values(".env")
+            self.openai_api_key = env_vals.get("OPENAI_API_KEY", "")
 
 
 @lru_cache

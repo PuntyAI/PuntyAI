@@ -34,6 +34,17 @@
         .htmx-request.htmx-indicator {
             display: inline-block;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+        }
+        button:disabled { pointer-events: none; }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -63,8 +74,17 @@
                         <a href="/settings" class="text-white hover:bg-punty-coral/80 px-3 py-2 rounded-md">Settings</a>
                     </div>
                 </div>
-                <div class="flex items-center">
-                    <span class="text-white/80 text-sm">Punty's Command Centre</span>
+                <div class="flex items-center space-x-3">
+                    {% if request.session and request.session.get("user") %}
+                        {% set user = request.session.get("user") %}
+                        {% if user.picture %}
+                        <img src="{{ user.picture }}" class="w-7 h-7 rounded-full" referrerpolicy="no-referrer">
+                        {% endif %}
+                        <span class="text-white/80 text-sm hidden sm:inline">{{ user.name or user.email }}</span>
+                        <a href="/logout" class="text-white/60 hover:text-white text-xs">[Logout]</a>
+                    {% else %}
+                        <span class="text-white/80 text-sm">Punty's Command Centre</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -79,6 +99,30 @@
     <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
     <script>
+        // CSRF token — fetched once, attached to all mutating requests
+        var csrfToken = '';
+        fetch('/api/csrf-token').then(r => r.json()).then(d => {
+            csrfToken = d.csrf_token;
+            // Set htmx to send CSRF token on every request
+            document.body.setAttribute('hx-headers', JSON.stringify({'X-CSRF-Token': csrfToken}));
+        });
+
+        // Patch global fetch to auto-include CSRF token on non-GET requests
+        var _origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            opts = opts || {};
+            var method = (opts.method || 'GET').toUpperCase();
+            if (method !== 'GET' && method !== 'HEAD' && csrfToken) {
+                opts.headers = opts.headers || {};
+                if (opts.headers instanceof Headers) {
+                    if (!opts.headers.has('X-CSRF-Token')) opts.headers.set('X-CSRF-Token', csrfToken);
+                } else {
+                    if (!opts.headers['X-CSRF-Token']) opts.headers['X-CSRF-Token'] = csrfToken;
+                }
+            }
+            return _origFetch.call(this, url, opts);
+        };
+
         // Toast notification helper
         function showToast(message, type = 'info') {
             const colors = {
@@ -107,6 +151,40 @@
         document.body.addEventListener('htmx:responseError', function(evt) {
             showToast('An error occurred', 'error');
         });
+
+        // Global: disable htmx buttons during requests and show spinner
+        document.body.addEventListener('htmx:beforeRequest', function(evt) {
+            var btn = evt.detail.elt;
+            if (btn.tagName === 'BUTTON') {
+                btn._origHTML = btn.innerHTML;
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = '<span class="spinner"></span> ' + (btn.textContent.trim().split(' ').slice(0,2).join(' ') || 'Working') + '...';
+            }
+        });
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            var btn = evt.detail.elt;
+            if (btn.tagName === 'BUTTON' && btn._origHTML) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = btn._origHTML;
+                delete btn._origHTML;
+            }
+        });
+
+        // Reusable loading wrapper for fetch-based buttons
+        async function withLoading(btn, fn) {
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            btn.innerHTML = '<span class="spinner"></span> Working...';
+            try { return await fn(); }
+            finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = orig;
+            }
+        }
     </script>
     {% block scripts %}{% endblock %}
 </body>

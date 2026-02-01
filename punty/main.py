@@ -6,8 +6,10 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from punty.config import settings
+from punty.auth import AuthMiddleware, CSRFMiddleware, router as auth_router
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
 from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api
@@ -64,6 +66,20 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Middleware stack (order matters — added in reverse, outermost first):
+# SessionMiddleware → AuthMiddleware → CSRFMiddleware
+app.add_middleware(CSRFMiddleware)
+app.add_middleware(AuthMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    same_site="lax",
+    https_only=not settings.debug,
+)
+
+# Auth routes (login, callback, logout)
+app.include_router(auth_router)
 
 # Mount static files
 static_path = Path(__file__).parent / "web" / "static"
