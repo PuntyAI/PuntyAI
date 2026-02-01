@@ -1,7 +1,21 @@
 """Application configuration using Pydantic settings."""
 
+from datetime import date, datetime
 from pathlib import Path
 from functools import lru_cache
+from zoneinfo import ZoneInfo
+
+MELB_TZ = ZoneInfo("Australia/Melbourne")
+
+
+def melb_now() -> datetime:
+    """Current time in Melbourne (AEDT/AEST automatically)."""
+    return datetime.now(MELB_TZ)
+
+
+def melb_today() -> date:
+    """Today's date in Melbourne timezone."""
+    return melb_now().date()
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

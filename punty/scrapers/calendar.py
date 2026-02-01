@@ -2,6 +2,8 @@
 
 import logging
 from datetime import date
+
+from punty.config import melb_today
 from typing import Any
 
 from punty.scrapers.playwright_base import new_page
@@ -21,7 +23,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
 
     Returns a list of dicts with: venue, state, num_races, race_type, status, date.
     """
-    race_date = race_date or date.today()
+    race_date = race_date or melb_today()
     logger.info(f"Scraping calendar for {race_date}: {CALENDAR_URL}")
 
     meetings: list[dict[str, Any]] = []

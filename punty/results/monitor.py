@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import random
-from datetime import date, datetime, time
+from datetime import datetime, time
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -117,7 +117,8 @@ class ResultsMonitor:
         from punty.models.meeting import Meeting, Race
 
         async with async_session() as db:
-            today = date.today()
+            from punty.config import melb_today
+            today = melb_today()
             result = await db.execute(
                 select(Meeting).where(Meeting.date == today)
             )

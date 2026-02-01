@@ -70,7 +70,8 @@ async def performance_summary(
         except ValueError:
             return {"error": "Invalid date format, use YYYY-MM-DD"}
     else:
-        target = date_type.today()
+        from punty.config import melb_today
+        target = melb_today()
 
     try:
         return await get_performance_summary(db, target)
@@ -89,7 +90,8 @@ async def performance_history(
     from datetime import date as date_type, timedelta
     from punty.results.picks import get_performance_history
 
-    today = date_type.today()
+    from punty.config import melb_today
+    today = melb_today()
     if end:
         try:
             end_date = date_type.fromisoformat(end)

@@ -2,12 +2,12 @@
 
 import json as _json
 import logging
-from datetime import date
 from typing import AsyncGenerator
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from punty.config import melb_today
 from punty.models.meeting import Meeting, Race, Runner
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
     """Scrape today's calendar and populate meetings in DB."""
     from punty.scrapers.calendar import scrape_calendar as _scrape
 
-    today = date.today()
+    today = melb_today()
     raw_meetings = await _scrape(today)
     results = []
 

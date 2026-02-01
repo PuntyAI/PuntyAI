@@ -132,7 +132,8 @@ class SchedulerManager:
         race_day = race_date.date()
 
         # Only schedule if race day is today or in the future
-        if race_day < datetime.now().date():
+        from punty.config import melb_today
+        if race_day < melb_today():
             logger.info(f"Skipping job setup for past date: {race_day}")
             return
 

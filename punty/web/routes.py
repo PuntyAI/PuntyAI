@@ -3,7 +3,6 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
@@ -12,17 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from punty.config import melb_now
 from punty.models.database import get_db
 from punty.models.meeting import Meeting, Race
 from punty.models.pick import Pick
 from punty.models.content import Content, ContentStatus, ScheduledJob
 
-MELB_TZ = ZoneInfo("Australia/Melbourne")
-
-
-def melb_now() -> datetime:
-    """Current time in Melbourne (AEDT/AEST automatically)."""
-    return datetime.now(MELB_TZ)
 
 router = APIRouter()
 

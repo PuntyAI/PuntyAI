@@ -1,7 +1,6 @@
 """API endpoints for race meetings."""
 
 import json
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -9,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from punty.config import melb_today
 from punty.models.database import get_db
 from punty.models.meeting import Meeting, Race
 
@@ -26,7 +26,7 @@ async def list_meetings(db: AsyncSession = Depends(get_db)):
 @router.get("/today")
 async def list_today(db: AsyncSession = Depends(get_db)):
     """List today's meetings."""
-    today = date.today()
+    today = melb_today()
     result = await db.execute(
         select(Meeting).where(Meeting.date == today).order_by(Meeting.venue)
     )
@@ -37,7 +37,7 @@ async def list_today(db: AsyncSession = Depends(get_db)):
 @router.get("/selected")
 async def list_selected(db: AsyncSession = Depends(get_db)):
     """List only selected meetings for today."""
-    today = date.today()
+    today = melb_today()
     result = await db.execute(
         select(Meeting).where(Meeting.date == today, Meeting.selected == True).order_by(Meeting.venue)
     )
