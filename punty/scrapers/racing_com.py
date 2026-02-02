@@ -849,6 +849,21 @@ class RacingComScraper(BaseScraper):
             if sp is not None:
                 sp = str(sp)
 
+            # Extract win/place dividends from odds array (tote providers)
+            win_div = self._parse_float(entry.get("dividendWin")) or self._parse_float(entry.get("winDividend"))
+            place_div = self._parse_float(entry.get("dividendPlace")) or self._parse_float(entry.get("placeDividend"))
+            if not win_div or not place_div:
+                for odds_item in (entry.get("odds") or []):
+                    provider = (odds_item.get("providerCode") or "").upper()
+                    # Prefer tote providers: N (NSW), V (VIC), Q (QLD), BTOTE
+                    if provider in ("N", "V", "Q", "BTOTE"):
+                        if not win_div:
+                            win_div = self._parse_dollar(odds_item.get("oddsWin"))
+                        if not place_div:
+                            place_div = self._parse_dollar(odds_item.get("oddsPlace"))
+                        if win_div and place_div:
+                            break
+
             results.append({
                 "horse_name": horse_name,
                 "saddlecloth": entry.get("raceEntryNumber"),
@@ -857,8 +872,8 @@ class RacingComScraper(BaseScraper):
                 "starting_price": sp,
                 "sectional_400": str(entry.get("positionAt400", "")) or None,
                 "sectional_800": str(entry.get("positionAt800", "")) or None,
-                "win_dividend": self._parse_float(entry.get("dividendWin")) or self._parse_float(entry.get("winDividend")),
-                "place_dividend": self._parse_float(entry.get("dividendPlace")) or self._parse_float(entry.get("placeDividend")),
+                "win_dividend": win_div,
+                "place_dividend": place_div,
             })
 
         # Parse exotics from betting data
@@ -909,6 +924,16 @@ class RacingComScraper(BaseScraper):
             return None
         try:
             return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _parse_dollar(val) -> Optional[float]:
+        """Parse a dollar string like '$3.60' to float."""
+        if not val:
+            return None
+        try:
+            return float(str(val).replace("$", "").replace(",", "").strip())
         except (ValueError, TypeError):
             return None
 
