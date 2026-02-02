@@ -7,32 +7,30 @@
     <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-            <nav class="text-sm text-gray-500 mb-2">
-                <a href="/meets" class="hover:text-punty-coral">Meets</a> /
+            <nav class="text-sm mb-2" style="color: var(--text-muted);">
+                <a href="/meets" class="hover:text-punty-coral" style="color: var(--text-secondary);">Meets</a> /
                 <span>{{ meeting.venue }}</span>
             </nav>
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">{{ meeting.venue }}</h1>
-            <p class="text-gray-500 text-sm sm:text-base">{{ meeting.date.strftime('%A, %d %B %Y') if meeting.date else '' }}</p>
-        </div>
-        <div class="flex items-center space-x-2 sm:space-x-4">
-            {% if meeting.track_condition %}
-            <span class="px-3 py-1 rounded-full bg-green-100 text-green-800">
-                {{ meeting.track_condition }}
-            </span>
-            {% endif %}
-            {% if meeting.weather_condition %}
-            <span class="text-gray-500">{{ meeting.weather_condition }}</span>
-            {% elif meeting.weather %}
-            <span class="text-gray-500">{{ meeting.weather }}</span>
-            {% endif %}
-            {% if meeting.weather_temp %}
-            <span class="text-gray-500">{{ meeting.weather_temp }}&deg;C</span>
-            {% endif %}
+            <h1 style="font-family: Orbitron, sans-serif; font-size: 1.8rem; font-weight: 700; letter-spacing: 1px;">{{ meeting.venue }}</h1>
+            <div class="flex flex-wrap gap-4 mt-1" style="font-family: Rajdhani, sans-serif; font-size: 0.9rem; color: var(--text-secondary);">
+                <span>{{ meeting.date.strftime('%A, %d %B %Y') if meeting.date else '' }}</span>
+                {% if meeting.track_condition %}
+                <span style="color: var(--cyan); font-weight: 600;">{{ meeting.track_condition }}</span>
+                {% endif %}
+                {% if meeting.weather_condition %}
+                <span style="color: var(--yellow);">{{ meeting.weather_condition }}</span>
+                {% elif meeting.weather %}
+                <span style="color: var(--yellow);">{{ meeting.weather }}</span>
+                {% endif %}
+                {% if meeting.weather_temp %}
+                <span>{{ meeting.weather_temp }}&deg;C</span>
+                {% endif %}
+            </div>
         </div>
     </div>
 
     <!-- Quick Actions -->
-    <div class="bg-white border border-punty-rule rounded-lg p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
+    <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px;" class="p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
         <button onclick="startGenerate()" id="generate-btn"
                 class="bg-punty-coral text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
             &#x1F4E7; Generate Early Mail
@@ -152,17 +150,17 @@
                         <div class="flex justify-between items-start cursor-pointer" @click="open = !open">
                             <div>
                                 <div class="flex items-center space-x-3">
-                                    <span class="bg-punty-coral text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">
+                                    <span class="race-num-pill">
                                         {{ race.race_number }}
                                     </span>
                                     <div>
-                                        <h3 class="font-semibold text-gray-900">{{ race.name }}</h3>
-                                        <p class="text-sm text-gray-500">
-                                            {{ race.distance }}m | {{ race.class_ or 'Open' }}
-                                            {% if race.prize_money %} | ${{ "{:,}".format(race.prize_money) }}{% endif %}
-                                            {% if race.weight_type %} | {{ race.weight_type }}{% endif %}
-                                            {% if race.age_restriction %} | {{ race.age_restriction }}{% endif %}
-                                        </p>
+                                        <h3 style="font-family: Rajdhani, sans-serif; font-size: 1.05rem; font-weight: 700;">{{ race.name }}</h3>
+                                        <div class="flex flex-wrap gap-1.5 mt-1">
+                                            <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">{{ race.distance }}m</span>
+                                            <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">{{ race.class_ or 'Open' }}</span>
+                                            {% if race.prize_money %}<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">${{ "{:,}".format(race.prize_money) }}</span>{% endif %}
+                                            {% if race.weight_type %}<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">{{ race.weight_type }}</span>{% endif %}
+                                        </div>
                                         {% if race.track_condition %}
                                         <p class="text-xs text-gray-400">Track: {{ race.track_condition }}{% if race.field_size %} | Field: {{ race.field_size }}{% endif %}</p>
                                         {% endif %}
@@ -186,7 +184,7 @@
                             </div>
                             <div class="flex items-center space-x-4">
                                 {% if race.start_time %}
-                                <span class="text-sm text-gray-500">{{ race.start_time.strftime('%H:%M') }}</span>
+                                <span style="font-family: Orbitron, sans-serif; font-size: 1.1rem; font-weight: 600; color: var(--cyan);">{{ race.start_time.strftime('%H:%M') }}</span>
                                 {% endif %}
                                 <button hx-post="/api/content/generate"
                                         hx-ext="json-enc"
@@ -207,40 +205,39 @@
                         {% set exotics = race_picks|selectattr('pick_type', 'equalto', 'exotic')|list %}
                         {% set race_sequences = sequences_by_race.get(race.race_number, []) %}
                         {% if selections or exotics or race_sequences %}
-                        <div class="mt-3 mx-1 border-l-4 border-punty-coral bg-orange-50 rounded-r-lg px-4 py-2">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-xs font-semibold text-gray-500 uppercase mr-1">Picks</span>
+                        <div style="background: var(--bg-card-alt); border-top: 1px solid var(--border-subtle);" class="mt-0 px-4 py-2.5">
+                            <div class="flex flex-wrap items-center gap-2" style="font-family: Rajdhani, sans-serif;">
                                 {% for pick in selections|sort(attribute='tip_rank') %}
-                                {% set rank_labels = {1: 'Top Pick', 2: '2nd', 3: '3rd', 4: 'Roughie'} %}
-                                {% set rank_colors = {1: 'bg-punty-coral text-white', 2: 'bg-orange-200 text-orange-800', 3: 'bg-yellow-200 text-yellow-800', 4: 'bg-purple-200 text-purple-800'} %}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium {{ rank_colors.get(pick.tip_rank, 'bg-gray-200 text-gray-700') }}">
-                                    {{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
+                                {% set rank_labels = {1: 'TOP', 2: '2nd', 3: '3rd', 4: 'Roughie'} %}
+                                {% set rank_styles = {1: 'pick-top', 2: 'pick-2nd', 3: 'pick-3rd', 4: 'pick-roughie'} %}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}">
+                                    {% if pick.tip_rank == 1 %}&#9733; {% endif %}{{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
-                                    {% if pick.odds_at_tip %}(${{ "%.2f"|format(pick.odds_at_tip) }}){% endif %}
-                                    {% if pick.bet_stake %}<span class="font-semibold">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
+                                    {% if pick.odds_at_tip %}${{ "%.2f"|format(pick.odds_at_tip) }}{% endif %}
+                                    {% if pick.bet_stake %}<span style="opacity:0.8;">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                     {% if pick.settled %}
-                                        {% if pick.hit %}<span class="text-green-600 font-bold">&#10003;</span>{% else %}<span class="text-red-500 font-bold">&#10007;</span>{% endif %}
+                                        {% if pick.hit %}<span style="color:#4ade80;">&#10003;</span>{% else %}<span style="color:#f87171;">&#10007;</span>{% endif %}
                                     {% endif %}
                                 </span>
                                 {% endfor %}
                                 {% for pick in exotics %}
                                 {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold pick-exotic">
                                     {{ pick.exotic_type or 'Exotic' }}: {{ runners|join(', ') }}
-                                    {% if pick.exotic_stake %}<span class="font-semibold">${{ "%.0f"|format(pick.exotic_stake) }}</span>{% endif %}
-                                    {% if pick.estimated_return_pct %}<span class="text-blue-500">({{ "%.0f"|format(pick.estimated_return_pct) }}%)</span>{% endif %}
+                                    {% if pick.exotic_stake %}&bull; ${{ "%.0f"|format(pick.exotic_stake) }}{% endif %}
+                                    {% if pick.estimated_return_pct %}({{ "%.0f"|format(pick.estimated_return_pct) }}%){% endif %}
                                     {% if pick.settled %}
-                                        {% if pick.hit %}<span class="text-green-600 font-bold">&#10003;</span>{% else %}<span class="text-red-500 font-bold">&#10007;</span>{% endif %}
+                                        {% if pick.hit %}<span style="color:#4ade80;">&#10003;</span>{% else %}<span style="color:#f87171;">&#10007;</span>{% endif %}
                                     {% endif %}
                                 </span>
                                 {% endfor %}
                                 {% for seq in race_sequences %}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold pick-sequence">
                                     {{ seq.label }} Leg {{ seq.leg_index + 1 }}: {{ seq.saddlecloths|join(', ') }}
-                                    {% if seq.pick.exotic_stake %}<span class="font-semibold">${{ "%.2f"|format(seq.pick.exotic_stake) }}/combo</span>{% endif %}
-                                    {% if seq.pick.estimated_return_pct %}<span class="text-teal-500">({{ "%.0f"|format(seq.pick.estimated_return_pct) }}%)</span>{% endif %}
+                                    {% if seq.pick.exotic_stake %}&bull; ${{ "%.2f"|format(seq.pick.exotic_stake) }}/combo{% endif %}
+                                    {% if seq.pick.estimated_return_pct %}({{ "%.0f"|format(seq.pick.estimated_return_pct) }}%){% endif %}
                                     {% if seq.pick.settled %}
-                                        {% if seq.pick.hit %}<span class="text-green-600 font-bold">&#10003;</span>{% else %}<span class="text-red-500 font-bold">&#10007;</span>{% endif %}
+                                        {% if seq.pick.hit %}<span style="color:#4ade80;">&#10003;</span>{% else %}<span style="color:#f87171;">&#10007;</span>{% endif %}
                                     {% endif %}
                                 </span>
                                 {% endfor %}

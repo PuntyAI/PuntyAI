@@ -7,43 +7,72 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Libre+Franklin:wght@300;400;500;600&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            background: #f5f0e8;
-            font-family: 'Libre Franklin', system-ui, sans-serif;
-            color: #1a1a1a;
+        :root {
+            --gradient-sunset: linear-gradient(180deg, #ff2d9e 0%, #ff6b35 50%, #ffc107 100%);
+            --gradient-header: linear-gradient(90deg, #e91e8c 0%, #9d4edd 50%, #00d4ff 100%);
         }
-        .rule-double {
-            border-top: 3px double #1a1a1a;
-            border-bottom: 1px solid #1a1a1a;
-            padding: 2px 0;
+        body {
+            font-family: 'Source Sans Pro', sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
+            margin: 0;
+        }
+        .scanlines {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 2px);
+            z-index: 1000;
+        }
+        .logo-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            background: var(--gradient-sunset);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px;
+        }
+        .glow-orb {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px; height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(233,30,140,0.2) 0%, rgba(157,78,221,0.1) 40%, transparent 70%);
+            pointer-events: none;
         }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-sm text-center px-4">
-        <!-- Masthead -->
+    <div class="scanlines"></div>
+    <div class="glow-orb"></div>
+
+    <div class="relative w-full max-w-sm text-center px-4">
         <div class="mb-8">
-            <div class="rule-double mb-4"></div>
-            <div class="text-4xl mb-2">&#x1F40E;</div>
-            <h1 style="font-family: 'UnifrakturMaguntia', serif; font-size: 2.8rem; color: #1a1a1a;">PuntyAI</h1>
-            <p style="font-family: 'Libre Franklin', sans-serif; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: #6b5e4f; margin-top: 0.25rem;">
-                Command Centre &mdash; Est. 2025
+            <div class="text-5xl mb-3">&#x1F40E;</div>
+            <div class="logo-text">PUNTYAI</div>
+            <p style="font-family: Rajdhani, sans-serif; font-size: 0.75rem; color: #606070; letter-spacing: 3px; text-transform: uppercase; margin-top: 0.25rem;">
+                Command Centre
             </p>
-            <div class="rule-double mt-4"></div>
         </div>
 
         {% if error %}
-        <div class="bg-red-50 border border-red-300 text-red-800 text-sm rounded px-4 py-3 mb-6">
+        <div style="background: rgba(233,30,140,0.15); border: 1px solid rgba(233,30,140,0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.875rem; color: #f87171;">
             {{ error }}
         </div>
         {% endif %}
 
-        <div class="bg-white border border-[#c8b89a] rounded p-6" style="background: #faf6ee; box-shadow: 1px 1px 4px rgba(0,0,0,0.08);">
-            <p style="font-family: 'Playfair Display', serif; font-size: 1.1rem; margin-bottom: 1rem; color: #1a1a1a;">Sign In</p>
+        <div style="background: #12121a; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 2rem; box-shadow: 0 8px 32px rgba(233,30,140,0.1);">
+            <p style="font-family: Rajdhani, sans-serif; font-size: 1.2rem; font-weight: 600; margin-bottom: 1.25rem; color: #a0a0b0;">Sign In</p>
             <a href="/login/google"
-               class="inline-flex items-center justify-center w-full border border-[#c8b89a] rounded px-4 py-3 text-sm font-medium text-[#1a1a1a] hover:bg-[#f5f0e8] transition-all duration-200">
+               style="display: inline-flex; align-items: center; justify-content: center; width: 100%;
+                      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+                      border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.9rem; font-weight: 600;
+                      color: #ffffff; text-decoration: none; transition: all 0.2s ease; font-family: Rajdhani, sans-serif; letter-spacing: 0.5px;"
+               onmouseover="this.style.background='rgba(233,30,140,0.15)';this.style.borderColor='rgba(233,30,140,0.4)'"
+               onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.borderColor='rgba(255,255,255,0.08)'">
                 <svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -55,8 +84,8 @@
         </div>
 
         <div class="mt-6">
-            <p class="text-xs" style="color: #8a7e6e;">Authorised access only</p>
-            <a href="/privacy" class="text-xs hover:underline" style="color: #6b5e4f;">Privacy Policy</a>
+            <p style="font-size: 0.75rem; color: #606070;">Authorised access only</p>
+            <a href="/privacy" style="font-size: 0.75rem; color: #606070; text-decoration: none;" onmouseover="this.style.color='#00d4ff'" onmouseout="this.style.color='#606070'">Privacy Policy</a>
         </div>
     </div>
 </body>
