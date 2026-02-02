@@ -26,7 +26,7 @@
                         {{ item.content_type|replace('_', ' ')|title }}
                     </h3>
                     <p class="text-sm text-gray-500">
-                        {{ item.meeting_id }} | Created {{ item.created_at.strftime('%d %b at %H:%M') if item.created_at else '' }}
+                        {{ item.meeting_id }} | Created {{ item.created_at|melb('%d %b at %H:%M') }}
                     </p>
                 </div>
                 <a href="/review/{{ item.id }}"

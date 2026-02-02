@@ -76,7 +76,7 @@
                         <div style="background: #efeae2; border-radius: 12px; padding: 0.75rem; max-width: 520px; margin-left: auto; background-image: url('data:image/svg+xml,&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;200&quot; height=&quot;200&quot;&gt;&lt;rect fill=&quot;%23efeae2&quot; width=&quot;200&quot; height=&quot;200&quot;/&gt;&lt;circle fill=&quot;%23e4dfd7&quot; cx=&quot;50&quot; cy=&quot;50&quot; r=&quot;1.5&quot;/&gt;&lt;circle fill=&quot;%23e4dfd7&quot; cx=&quot;150&quot; cy=&quot;150&quot; r=&quot;1.5&quot;/&gt;&lt;/svg&gt;');">
                             <div id="wa-bubble" style="background: #d9fdd3; border-radius: 8px; padding: 0.75rem 1rem; color: #111b21; font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 0.85rem; line-height: 1.45; box-shadow: 0 1px 0.5px rgba(11,20,26,0.13);"></div>
                             <div style="text-align: right; font-size: 0.65rem; color: #667781; margin-top: 0.25rem; padding-right: 0.5rem;">
-                                {{ content.created_at.strftime('%H:%M') if content.created_at else '' }} <span style="color:#53bdeb;">&#x2713;&#x2713;</span>
+                                {{ content.created_at|melb('%H:%M') }} <span style="color:#53bdeb;">&#x2713;&#x2713;</span>
                             </div>
                         </div>
                     </div>
@@ -213,7 +213,7 @@
                     </div>
                     <div>
                         <dt class="text-gray-500">Created</dt>
-                        <dd class="font-medium">{{ content.context_snapshot.created_at.strftime('%d %b %H:%M') if content.context_snapshot.created_at else '-' }}</dd>
+                        <dd class="font-medium">{{ content.context_snapshot.created_at|melb('%d %b %H:%M') or '-' }}</dd>
                     </div>
                     {% if content.context_snapshot.significant_changes %}
                     <div>

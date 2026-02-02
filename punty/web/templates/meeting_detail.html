@@ -616,7 +616,7 @@
                             <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-1 rounded">
                                 <div>
                                     <p class="font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</p>
-                                    <p class="text-xs text-gray-500">{{ item.created_at.strftime('%H:%M') if item.created_at else '' }}</p>
+                                    <p class="text-xs text-gray-500">{{ item.created_at|melb('%H:%M') }}</p>
                                 </div>
                                 {% set status_colors = {
                                     'draft': 'bg-gray-100 text-gray-600',

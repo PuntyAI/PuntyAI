@@ -25,6 +25,18 @@ templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else {}
 
+from punty.config import MELB_TZ
+from datetime import timezone
+
+def _melb(dt, fmt='%H:%M'):
+    if dt is None:
+        return ''
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(MELB_TZ).strftime(fmt)
+
+templates.env.filters["melb"] = _melb
+
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
