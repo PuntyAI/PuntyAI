@@ -58,16 +58,13 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     monitor = getattr(request.app.state, "results_monitor", None)
     monitor_status = monitor.status() if monitor else {"running": False}
 
-    # Get performance summary for today
+    # Get performance summary for today + all-time cumulative P&L
     performance = None
-    performance_history = []
+    cumulative_pnl = []
     try:
-        from punty.results.picks import get_performance_summary, get_performance_history
-        from datetime import timedelta
+        from punty.results.picks import get_performance_summary, get_cumulative_pnl
         performance = await get_performance_summary(db, today)
-        performance_history = await get_performance_history(
-            db, today - timedelta(days=6), today
-        )
+        cumulative_pnl = await get_cumulative_pnl(db)
     except Exception:
         pass
 
@@ -82,7 +79,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "active_jobs": active_jobs,
             "monitor_status": monitor_status,
             "performance": performance,
-            "performance_history": performance_history,
+            "cumulative_pnl": cumulative_pnl,
         },
     )
 

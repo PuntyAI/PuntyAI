@@ -496,3 +496,52 @@ async def get_performance_history(
         })
 
     return days
+
+
+async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
+    """Get all-time daily P&L with running cumulative total for the chart."""
+    result = await db.execute(
+        select(
+            Meeting.date,
+            func.count(Pick.id).label("count"),
+            func.sum(Pick.pnl).label("total_pnl"),
+            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
+            func.sum(Pick.bet_stake).label("total_bet_stake"),
+            func.sum(Pick.exotic_stake).label("total_exotic_stake"),
+        )
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Pick.settled == True,
+            Pick.pick_type != "big3",
+        )
+        .group_by(Meeting.date)
+        .order_by(Meeting.date)
+    )
+    rows = result.all()
+
+    cumulative = 0.0
+    cumulative_staked = 0.0
+    cumulative_returned = 0.0
+    days = []
+    for row in rows:
+        bets = row.count or 0
+        pnl = float(row.total_pnl or 0)
+        winners = int(row.winners or 0)
+        staked = float(row.total_bet_stake or 0) + float(row.total_exotic_stake or 0)
+        returned = staked + pnl
+        cumulative += pnl
+        cumulative_staked += staked
+        cumulative_returned += returned
+        days.append({
+            "date": row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+            "bets": bets,
+            "winners": winners,
+            "pnl": round(pnl, 2),
+            "staked": round(staked, 2),
+            "returned": round(returned, 2),
+            "cumulative_pnl": round(cumulative, 2),
+            "cumulative_staked": round(cumulative_staked, 2),
+            "cumulative_returned": round(cumulative_returned, 2),
+        })
+
+    return days
