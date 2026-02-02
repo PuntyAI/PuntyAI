@@ -216,6 +216,9 @@ class Runner(Base):
     sectional_400: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     sectional_800: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
+    # Full form history (JSON: list of past starts)
+    form_history: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Trainer details
     trainer_location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
@@ -286,6 +289,7 @@ class Runner(Base):
             "place_dividend": self.place_dividend,
             "sectional_400": self.sectional_400,
             "sectional_800": self.sectional_800,
+            "form_history": self.form_history,
         }
 
 

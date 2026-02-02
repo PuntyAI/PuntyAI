@@ -42,6 +42,7 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN bet_type VARCHAR(20)",
             "ALTER TABLE picks ADD COLUMN bet_stake FLOAT",
             "ALTER TABLE meetings ADD COLUMN meeting_type VARCHAR(20)",
+            "ALTER TABLE runners ADD COLUMN form_history TEXT",
         ]:
             try:
                 await conn.execute(_text(col))

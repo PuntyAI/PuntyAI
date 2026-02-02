@@ -23,7 +23,7 @@ RUNNER_FIELDS = [
     "soft_track_stats", "heavy_track_stats", "jockey_stats", "class_stats",
     "gear", "gear_changes", "stewards_comment", "comment_long", "comment_short",
     "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes",
-    "odds_betfair", "odds_flucs", "trainer_location",
+    "odds_betfair", "odds_flucs", "trainer_location", "form_history",
 ]
 
 # Race fields from scraper

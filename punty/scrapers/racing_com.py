@@ -61,6 +61,7 @@ class RacingComScraper(BaseScraper):
         race_list_gql: list = []
         race_entries_by_num: dict[int, list] = {}
         betting_by_num: dict[int, list] = {}
+        form_history_by_horse: dict[str, list] = {}  # horseCode -> list of past starts
 
         async with new_page() as page:
             # --- GraphQL response interceptor ---
@@ -100,6 +101,45 @@ class RacingComScraper(BaseScraper):
                         race_entries_by_num[race_num] = entries
                         logger.debug(f"Captured {len(entries)} entries for race {race_num}")
 
+                if "getRaceEntryItemByHorsePaged_CD" in url:
+                    items = data.get("data", {}).get("getRaceEntryItemByHorsePaged", [])
+                    if isinstance(items, list) and items:
+                        # Identify horse by horseName from first item
+                        horse_name = items[0].get("horseName", "")
+                        if horse_name:
+                            existing = form_history_by_horse.get(horse_name, [])
+                            for item in items:
+                                race_info = item.get("race", {}) or {}
+                                start = {
+                                    "date": race_info.get("date"),
+                                    "venue": race_info.get("venueAbbr") or race_info.get("location"),
+                                    "distance": race_info.get("distance"),
+                                    "class": race_info.get("rdcClass"),
+                                    "track": ((race_info.get("trackCondition") or "") + " " + (race_info.get("trackRating") or "")).strip(),
+                                    "field": race_info.get("runnersCount"),
+                                    "pos": item.get("finish") or item.get("finishAbv"),
+                                    "margin": item.get("margin"),
+                                    "weight": item.get("weightCarried"),
+                                    "jockey": item.get("jockeyName"),
+                                    "barrier": item.get("barrierNumber"),
+                                    "sp": item.get("startingPrice"),
+                                    "time": race_info.get("raceTime"),
+                                    "settled": item.get("positionAtSettledAbv"),
+                                    "at800": item.get("positionAt800Abv"),
+                                    "at400": item.get("positionAt400Abv"),
+                                    "comment": item.get("comment"),
+                                }
+                                # Top 4 finishers
+                                top4_raw = item.get("raceEntriesByMaxFinish", [])
+                                if top4_raw:
+                                    start["top4"] = [
+                                        {"name": t.get("horseName"), "pos": t.get("finish")}
+                                        for t in top4_raw[:4]
+                                    ]
+                                existing.append(start)
+                            form_history_by_horse[horse_name] = existing
+                            logger.debug(f"Captured {len(items)} form items for {horse_name}")
+
                 # Always scan for formRaceEntries as fallback
                 self._try_extract_entries(data, race_entries_by_num)
 
@@ -122,7 +162,8 @@ class RacingComScraper(BaseScraper):
                     # Log which query types we see
                     for qname in ["getMeeting_CD", "getRaceNumberList_CD",
                                   "getRaceEntriesForField_CD", "GetBettingData_CD",
-                                  "getRaceEntries", "getRaceForm"]:
+                                  "getRaceEntries", "getRaceForm",
+                                  "getRaceEntryItemByHorsePaged_CD"]:
                         if qname in response.url:
                             captured_queries.add(qname)
                             break
@@ -198,6 +239,12 @@ class RacingComScraper(BaseScraper):
                 except Exception:
                     pass
 
+                # Scroll down to trigger lazy loading of getRaceEntryItemByHorsePaged_CD
+                # Each horse's form history loads as it scrolls into view
+                for _ in range(15):
+                    await page.evaluate("window.scrollBy(0, 600)")
+                    await page.wait_for_timeout(800)
+
                 # Check if we got entries for this race
                 if race_num not in race_entries_by_num:
                     logger.warning(f"Race {race_num}: no entries captured after page load")
@@ -208,6 +255,7 @@ class RacingComScraper(BaseScraper):
         logger.info(f"Captured GraphQL queries: {captured_queries}")
         logger.info(f"Entries captured for races: {list(race_entries_by_num.keys())}")
         logger.info(f"Total entries per race: { {k: len(v) for k, v in race_entries_by_num.items()} }")
+        logger.info(f"Form history captured for {len(form_history_by_horse)} horses")
 
         # --- Build output from captured GraphQL data ---
         meeting_dict = self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql)
@@ -278,6 +326,11 @@ class RacingComScraper(BaseScraper):
             for entry in entries:
                 runner = self._parse_graphql_entry(entry, race_id, betting_by_horse)
                 if runner:
+                    # Attach form history if captured
+                    horse_name = runner["horse_name"]
+                    fh = form_history_by_horse.get(horse_name)
+                    if fh:
+                        runner["form_history"] = _json.dumps(fh)
                     race_runners.append(runner)
 
             # Set field size (non-scratched)
