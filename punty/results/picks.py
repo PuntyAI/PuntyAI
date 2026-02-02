@@ -242,23 +242,11 @@ async def settle_picks_for_race(
             if hit:
                 dividend = _find_dividend(exotic_divs, "first4")
 
-        # For boxed exotics, cost = permutations × unit stake
-        if is_boxed and len(exotic_runners_int) > 1:
-            from math import perm
-            if "trifecta" in exotic_type:
-                num_perms = perm(len(exotic_runners_int), 3) if len(exotic_runners_int) >= 3 else 1
-            elif "exacta" in exotic_type:
-                num_perms = perm(len(exotic_runners_int), 2) if len(exotic_runners_int) >= 2 else 1
-            elif "first" in exotic_type:
-                num_perms = perm(len(exotic_runners_int), 4) if len(exotic_runners_int) >= 4 else 1
-            else:
-                num_perms = 1
-            cost = num_perms * stake
-        else:
-            cost = stake
+        # Stake is the total outlay for this exotic bet
+        cost = stake
 
         if hit and dividend > 0:
-            pick.pnl = round(dividend - cost, 2)
+            pick.pnl = round(dividend * stake - stake, 2)
         else:
             pick.pnl = round(-cost, 2)
         pick.hit = hit
