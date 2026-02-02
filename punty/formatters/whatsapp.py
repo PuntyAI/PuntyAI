@@ -77,8 +77,12 @@ class WhatsAppFormatter:
     @classmethod
     def _convert_headers(cls, content: str) -> str:
         """Convert markdown headers to WhatsApp bold."""
-        # ## Header -> *HEADER*
-        content = re.sub(r'^#{1,3}\s+(.+)$', r'*\1*', content, flags=re.MULTILINE)
+        def _header_to_bold(m):
+            text = m.group(1).strip()
+            # Strip existing * wrapping to avoid double-bold
+            text = text.strip('*').strip()
+            return f'*{text}*'
+        content = re.sub(r'^#{1,3}\s+(.+)$', _header_to_bold, content, flags=re.MULTILINE)
         return content
 
     @classmethod
@@ -89,6 +93,8 @@ class WhatsAppFormatter:
         # __bold__ -> *bold*
         content = re.sub(r'__(.+?)__', r'*\1*', content)
         # _italic_ stays the same
+        # Clean up any accidental double asterisks from mixed formatting
+        content = re.sub(r'\*{2,}', '*', content)
         return content
 
     @classmethod
@@ -129,9 +135,11 @@ class WhatsAppFormatter:
     def _format_race_numbers(cls, content: str) -> str:
         """Format race numbers consistently."""
         # R1, Race 1, Race 1: all become *Race 1*
-        # Use word boundary to avoid matching "Barrier"
-        content = re.sub(r'\bRace\s*(\d+)(?:[:.])?', r'*Race \1*', content, flags=re.IGNORECASE)
-        content = re.sub(r'\bR(\d+)\b', r'*Race \1*', content, flags=re.IGNORECASE)
+        # But skip if already inside bold markers
+        content = re.sub(r'(?<!\*)\bRace\s*(\d+)(?:[:.])?(?!\*)', r'*Race \1*', content, flags=re.IGNORECASE)
+        content = re.sub(r'(?<!\*)\bR(\d+)\b(?!\*)', r'*Race \1*', content, flags=re.IGNORECASE)
+        # Clean up any double bold from overlapping replacements
+        content = re.sub(r'\*{2,}', '*', content)
         return content
 
     @classmethod
