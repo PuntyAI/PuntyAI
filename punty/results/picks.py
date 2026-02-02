@@ -75,8 +75,18 @@ async def settle_picks_for_race(
             runner = runners_by_name.get(pick.horse_name.upper())
 
         if runner and runner.finish_position is not None:
-            stake = pick.bet_stake or 1.0
             bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
+
+            # "Exotics only" picks have no straight bet — settle with $0 P&L
+            if bet_type == "exotics_only":
+                pick.hit = runner.finish_position == 1
+                pick.pnl = 0.0
+                pick.settled = True
+                pick.settled_at = now
+                settled_count += 1
+                continue
+
+            stake = pick.bet_stake or 1.0
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= 3
 

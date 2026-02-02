@@ -36,9 +36,11 @@ _ROUGHIE = re.compile(
 
 # --- Bet line (for selections) ---
 _BET_LINE = re.compile(
-    r"Bet:\s*\$(\d+\.?\d*)\s*(Win|Saver\s*Win|Place|Each\s*Way|E/W)",
+    r"Bet:\s*\$(\d+\.?\d*)\s*(Win\s*\(Saver\)|Win|Saver\s*Win|Place|Each\s*Way|E/W)",
     re.IGNORECASE,
 )
+# "Bet: Exotics only" — no stake
+_BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
 
 # --- Exotics ---
 _EXOTIC = re.compile(
@@ -76,6 +78,8 @@ def _normalize_bet_type(raw: str) -> str:
     t = raw.strip().lower()
     if t in ("e/w", "each way"):
         return "each_way"
+    if t in ("win (saver)", "saver win"):
+        return "saver_win"
     return t.replace(" ", "_")
 
 
@@ -182,8 +186,15 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             # Look for bet line in the text after this match
             after_text = section[m.end():m.end() + 200]
             bet_m = _BET_LINE.search(after_text)
-            bet_stake = float(bet_m.group(1)) if bet_m else None
-            bet_type = _normalize_bet_type(bet_m.group(2)) if bet_m else None
+            if bet_m:
+                bet_stake = float(bet_m.group(1))
+                bet_type = _normalize_bet_type(bet_m.group(2))
+            elif _BET_EXOTICS_ONLY.search(after_text):
+                bet_stake = 0.0
+                bet_type = "exotics_only"
+            else:
+                bet_stake = None
+                bet_type = None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -212,8 +223,15 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
         if roughie_m:
             after_text = section[roughie_m.end():roughie_m.end() + 200]
             bet_m = _BET_LINE.search(after_text)
-            bet_stake = float(bet_m.group(1)) if bet_m else None
-            bet_type = _normalize_bet_type(bet_m.group(2)) if bet_m else None
+            if bet_m:
+                bet_stake = float(bet_m.group(1))
+                bet_type = _normalize_bet_type(bet_m.group(2))
+            elif _BET_EXOTICS_ONLY.search(after_text):
+                bet_stake = 0.0
+                bet_type = "exotics_only"
+            else:
+                bet_stake = None
+                bet_type = None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
