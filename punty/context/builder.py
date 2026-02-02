@@ -421,7 +421,7 @@ class ContextBuilder:
                 Content.content_type == ContentType.EARLY_MAIL.value,
             ).order_by(Content.created_at.desc())
         )
-        early_mail = em_result.scalar_one_or_none()
+        early_mail = em_result.scalars().first()
         if early_mail:
             early_mail_content = early_mail.raw_content
 
