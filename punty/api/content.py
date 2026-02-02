@@ -23,7 +23,7 @@ class GenerateRequest(BaseModel):
 class ReviewAction(BaseModel):
     """Action to take on content review."""
 
-    action: str  # approve, reject, regenerate, ai_fix
+    action: str  # approve, reject, regenerate, ai_fix, unapprove
     notes: Optional[str] = None
     issue_type: Optional[str] = None  # For ai_fix: tone_wrong, factually_incorrect, etc.
 
@@ -185,12 +185,33 @@ async def review_content(
 
         # Store picks from early mail on approval
         if content.content_type == "early_mail" and content.raw_content:
+            # Supersede any previously approved early_mail for this meeting
+            from sqlalchemy import delete as sa_delete
+            from punty.models.pick import Pick
+            old_result = await db.execute(
+                select(Content).where(
+                    Content.meeting_id == content.meeting_id,
+                    Content.content_type == "early_mail",
+                    Content.status.in_(["approved", "sent"]),
+                    Content.id != content.id,
+                )
+            )
+            for old in old_result.scalars().all():
+                old.status = ContentStatus.SUPERSEDED.value
+                await db.execute(sa_delete(Pick).where(Pick.content_id == old.id))
+
             try:
                 from punty.results.picks import store_picks_from_content
                 await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(f"Failed to store picks: {e}")
+    elif action.action == "unapprove":
+        content.status = ContentStatus.PENDING_REVIEW.value
+        content.review_notes = action.notes or "Unapproved by user"
+        from sqlalchemy import delete as sa_delete
+        from punty.models.pick import Pick
+        await db.execute(sa_delete(Pick).where(Pick.content_id == content.id))
     elif action.action == "reject":
         content.status = ContentStatus.REJECTED
         content.review_notes = action.notes

@@ -20,6 +20,7 @@ class ContentStatus(str, Enum):
     REGENERATING = "regenerating"
     SCHEDULED = "scheduled"
     SENT = "sent"
+    SUPERSEDED = "superseded"
 
 
 class ContentType(str, Enum):

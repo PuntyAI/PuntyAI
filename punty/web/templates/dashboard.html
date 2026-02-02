@@ -337,7 +337,8 @@
                                 'approved': 'bg-green-100 text-green-800',
                                 'rejected': 'bg-red-100 text-red-800',
                                 'scheduled': 'bg-blue-100 text-blue-800',
-                                'sent': 'bg-purple-100 text-purple-800'
+                                'sent': 'bg-purple-100 text-purple-800',
+                                'superseded': 'bg-gray-100 text-gray-600'
                             } %}
                             <span class="px-2 py-1 text-xs rounded {{ status_colors.get(item.status, 'bg-gray-100') }}">
                                 {{ item.status|replace('_', ' ')|title }}
