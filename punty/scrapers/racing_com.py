@@ -585,13 +585,21 @@ class RacingComScraper(BaseScraper):
         return None
 
     def _parse_iso_time(self, time_str: Optional[str]) -> Optional[datetime]:
-        """Parse ISO 8601 time string from GraphQL."""
+        """Parse ISO 8601 time string from GraphQL and convert to Melbourne local time.
+
+        Racing.com returns UTC times for all venues (including interstate).
+        We store as Melbourne local time (AEDT/AEST) since that's the display timezone.
+        """
         if not time_str:
             return None
         try:
+            from punty.config import MELB_TZ
             # Handle "2026-01-30T07:15:00.000Z" or "2026-01-30T07:15:00.0000000Z"
             cleaned = time_str.replace("Z", "+00:00")
-            return datetime.fromisoformat(cleaned)
+            utc_dt = datetime.fromisoformat(cleaned)
+            # Convert to Melbourne time and strip tzinfo for naive storage
+            melb_dt = utc_dt.astimezone(MELB_TZ).replace(tzinfo=None)
+            return melb_dt
         except Exception:
             return None
 
