@@ -36,7 +36,11 @@ _ROUGHIE = re.compile(
 
 # --- Exotics ---
 _EXOTIC = re.compile(
-    r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*(Trifecta|Exacta|Quinella|First\s*Four|First\s*4|Boxed\s+Trifecta|Standout\s+Exacta):\s*([0-9,\s]+)\s*[–\-—]\s*(\d+\.?\d*)U",
+    r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*(Trifecta|Exacta|Quinella|First\s*Four|First\s*4|Boxed\s+Trifecta|Standout\s+Exacta):\s*([0-9,\s]+)\s*[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)",
+    re.IGNORECASE,
+)
+_EXOTIC_RETURN = re.compile(
+    r"Est\.\s*return:\s*(\d+\.?\d*)%",
     re.IGNORECASE,
 )
 
@@ -46,7 +50,11 @@ _SEQ_HEADER = re.compile(
     re.IGNORECASE,
 )
 _SEQ_VARIANT = re.compile(
-    r"(Skinny|Balanced|Wide):\s*(.+)",
+    r"(Skinny|Balanced|Wide)\s*(?:\(\$[\d.]+\))?:\s*(.+)",
+    re.IGNORECASE,
+)
+_SEQ_COSTING = re.compile(
+    r"\((\d+)\s*combos?\s*[×x]\s*\$(\d+\.?\d*)\s*=\s*\$(\d+\.?\d*)\)\s*(?:[–\-—]\s*est\.\s*return:\s*(\d+\.?\d*)%)?",
     re.IGNORECASE,
 )
 
@@ -103,6 +111,7 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "sequence_legs": None,
             "sequence_start_race": None,
             "multi_odds": None,
+            "estimated_return_pct": None,
         })
 
     multi_m = _BIG3_MULTI.search(section)
@@ -125,6 +134,7 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "sequence_legs": None,
             "sequence_start_race": None,
             "multi_odds": float(multi_m.group(2)),
+            "estimated_return_pct": None,
         })
 
     return picks
@@ -163,6 +173,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "sequence_legs": None,
                 "sequence_start_race": None,
                 "multi_odds": None,
+                "estimated_return_pct": None,
             })
 
         # Roughie (rank 4)
@@ -186,6 +197,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "sequence_legs": None,
                 "sequence_start_race": None,
                 "multi_odds": None,
+                "estimated_return_pct": None,
             })
 
         # Exotic
@@ -194,6 +206,11 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             exotic_type = exotic_m.group(1).strip()
             runners_str = exotic_m.group(2).strip()
             runners = [int(x.strip()) for x in runners_str.split(",") if x.strip().isdigit()]
+            # $20 format (group 3) or old U format (group 4)
+            stake = float(exotic_m.group(3)) if exotic_m.group(3) else float(exotic_m.group(4))
+            # Est. return %
+            est_return_m = _EXOTIC_RETURN.search(section)
+            est_return_pct = float(est_return_m.group(1)) if est_return_m else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -206,7 +223,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "pick_type": "exotic",
                 "exotic_type": exotic_type,
                 "exotic_runners": json.dumps(runners),
-                "exotic_stake": float(exotic_m.group(3)),
+                "exotic_stake": stake,
+                "estimated_return_pct": est_return_pct,
                 "sequence_type": None,
                 "sequence_variant": None,
                 "sequence_legs": None,
@@ -261,10 +279,23 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
         for vm in _SEQ_VARIANT.finditer(block):
             variant = vm.group(1).strip().lower()
             legs_raw = vm.group(2).strip()
+
+            # Parse costing info if present
+            costing_m = _SEQ_COSTING.search(legs_raw)
+            combo_count = int(costing_m.group(1)) if costing_m else None
+            unit_price = float(costing_m.group(2)) if costing_m else None
+            total_outlay = float(costing_m.group(3)) if costing_m else None
+            est_return_pct = float(costing_m.group(4)) if costing_m and costing_m.group(4) else None
+
+            # Strip costing suffix from legs before parsing
+            if costing_m:
+                legs_raw = legs_raw[:costing_m.start()].strip()
+
             legs = []
             for leg in legs_raw.split("/"):
                 saddlecloths = [int(x.strip()) for x in leg.split(",") if x.strip().isdigit()]
-                legs.append(saddlecloths)
+                if saddlecloths:
+                    legs.append(saddlecloths)
 
             picks.append({
                 "id": next_id(),
@@ -278,7 +309,8 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
                 "pick_type": "sequence",
                 "exotic_type": None,
                 "exotic_runners": None,
-                "exotic_stake": None,
+                "exotic_stake": unit_price,
+                "estimated_return_pct": est_return_pct,
                 "sequence_type": seq_type,
                 "sequence_variant": variant,
                 "sequence_legs": json.dumps(legs),

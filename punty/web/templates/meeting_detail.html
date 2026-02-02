@@ -32,7 +32,7 @@
     </div>
 
     <!-- Quick Actions -->
-    <div class="bg-punty-coral/10 rounded-lg p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
+    <div class="bg-punty-pink/5 border border-punty-border rounded-lg p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
         <button onclick="startGenerate()" id="generate-btn"
                 class="bg-punty-coral text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
             &#x1F4E7; Generate Early Mail
@@ -196,6 +196,8 @@
                                 {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                                     {{ pick.exotic_type or 'Exotic' }}: {{ runners|join(', ') }}
+                                    {% if pick.exotic_stake %}<span class="font-semibold">${{ "%.0f"|format(pick.exotic_stake) }}</span>{% endif %}
+                                    {% if pick.estimated_return_pct %}<span class="text-blue-500">({{ "%.0f"|format(pick.estimated_return_pct) }}%)</span>{% endif %}
                                     {% if pick.settled %}
                                         {% if pick.hit %}<span class="text-green-600 font-bold">&#10003;</span>{% else %}<span class="text-red-500 font-bold">&#10007;</span>{% endif %}
                                     {% endif %}
@@ -204,6 +206,8 @@
                                 {% for seq in race_sequences %}
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
                                     {{ seq.label }} Leg {{ seq.leg_index + 1 }}: {{ seq.saddlecloths|join(', ') }}
+                                    {% if seq.pick.exotic_stake %}<span class="font-semibold">${{ "%.2f"|format(seq.pick.exotic_stake) }}/combo</span>{% endif %}
+                                    {% if seq.pick.estimated_return_pct %}<span class="text-teal-500">({{ "%.0f"|format(seq.pick.estimated_return_pct) }}%)</span>{% endif %}
                                     {% if seq.pick.settled %}
                                         {% if seq.pick.hit %}<span class="text-green-600 font-bold">&#10003;</span>{% else %}<span class="text-red-500 font-bold">&#10007;</span>{% endif %}
                                     {% endif %}

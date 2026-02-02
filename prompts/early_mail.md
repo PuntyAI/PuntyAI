@@ -59,26 +59,27 @@ Roughie: *{R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_ODDS}
 Why: {ONE_LINE_RISK_EXPLAINER}
 
 *Degenerate Exotic of the Race*
-{R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — {R_EXOTIC_STAKE_U}U
+{R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $20
+Est. return: {X}% on $20
 Why: {R_EXOTIC_REASON}
 
 ### 5) *SEQUENCE LANES*
 Print lanes in exact format. Use only saddlecloth numbers, separated by commas within legs, and use " / " to separate legs.
 
 EARLY QUADDIE (R{EQ_START}–R{EQ_END})
-Skinny: {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY}
-Balanced: {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL}
-Wide: {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE}
+Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
+Balanced ($50): {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
+Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
 
 MAIN QUADDIE (R{MQ_START}–R{MQ_END})
-Skinny: {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY}
-Balanced: {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL}
-Wide: {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE}
+Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
+Balanced ($50): {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
+Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
 
 BIG 6 (R{B6_START}–R{B6_END})
-Skinny: {L1_SKINNY} / {L2_SKINNY} / {L3_SKINNY} / {L4_SKINNY} / {L5_SKINNY} / {L6_SKINNY}
-Balanced: {L1_BAL} / {L2_BAL} / {L3_BAL} / {L4_BAL} / {L5_BAL} / {L6_BAL}
-Wide: {L1_WIDE} / {L2_WIDE} / {L3_WIDE} / {L4_WIDE} / {L5_WIDE} / {L6_WIDE}
+Skinny ($1): {L1_SKINNY} / {L2_SKINNY} / {L3_SKINNY} / {L4_SKINNY} / {L5_SKINNY} / {L6_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
+Balanced ($50): {L1_BAL} / {L2_BAL} / {L3_BAL} / {L4_BAL} / {L5_BAL} / {L6_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
+Wide ($100): {L1_WIDE} / {L2_WIDE} / {L3_WIDE} / {L4_WIDE} / {L5_WIDE} / {L6_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
 
 ### 6) *NUGGETS FROM THE TRACK*
 1) *{NUGGET_1_TITLE}*
@@ -95,11 +96,11 @@ Tell your degenerate mates to jump in the WhatsApp chaos here: {WHATSAPP_GROUP_L
 Fresh 1–3 sentence closer in Punty's voice that does not repeat prior runs. Must end with the exact words: "Gamble Responsibly."
 
 ## GENERAL RULES
-1) Stakes in U; 1U is baseline; do not convert to dollars.
+1) Degenerate exotics: $20 fixed. Sequences: Skinny $1, Balanced $50, Wide $100 total outlay.
 2) Odds: print consistently as $X.XX.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
 4) Exactly ONE "Degenerate Exotic of the Race" per race.
-5) Prefer Boxed Trifecta in messy maps; Standout Exacta when one clearly noses others.
+5) Prefer straight Exacta/Quinella. Only box Trifecta in messy pace maps. Never box First 4.
 6) Headings and key labels use single *bold*.
 7) Output is plain text (email/WhatsApp safe). No code fences in the OUTPUT.
 8) Do not ever mention external sources, tipsters, "mail from X", or "consensus" — write as Punty's take.
