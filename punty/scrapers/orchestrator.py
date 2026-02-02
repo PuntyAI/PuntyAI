@@ -60,12 +60,14 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
             results.append(existing.to_dict())
             continue
 
+        meeting_type = _classify_meeting_type(venue)
         meeting = Meeting(
             id=meeting_id,
             venue=venue,
             date=today,
             selected=False,
             source="racing.com/calendar",
+            meeting_type=meeting_type,
         )
         db.add(meeting)
         results.append({
@@ -121,6 +123,19 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
     except Exception as e:
         logger.error(f"track conditions scrape failed: {e}")
         errors.append(f"track_conditions: {e}")
+
+    # If no races were found and not already classified, mark as trial/jumpout
+    if not meeting.meeting_type or meeting.meeting_type == "race":
+        race_count = await db.execute(
+            select(Race).where(Race.meeting_id == meeting_id).limit(1)
+        )
+        if not race_count.scalar_one_or_none():
+            meeting.meeting_type = _classify_meeting_type(venue)
+            if meeting.meeting_type == "race":
+                # No races found but venue name didn't match trial patterns —
+                # still likely a trial/jumpout if racing.com has no form data
+                meeting.meeting_type = "trial"
+                logger.info(f"No races found for {venue} — classified as trial")
 
     await db.commit()
     return {"meeting_id": meeting_id, "errors": errors}
@@ -455,6 +470,28 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
 
     await db.flush()
     logger.info(f"Upserted results for {race_id}: {matched}/{scraped_count} runners matched")
+
+
+def _classify_meeting_type(venue: str) -> str:
+    """Classify whether a meeting is a race, trial, or jump out based on venue name."""
+    v = venue.lower()
+    # Jump out venues typically have a prefix like "Southside", "Inside", "Course Proper"
+    # or explicitly say "jump" / "jumpout" / "barrier trial"
+    jumpout_keywords = ("jump out", "jumpout", "jump-out")
+    trial_keywords = ("trial", "barrier trial")
+    # Common jump out venue prefixes used by Racing Victoria, NSW, etc.
+    jumpout_prefixes = ("southside", "inside", "course proper", "lakeside")
+
+    for kw in jumpout_keywords:
+        if kw in v:
+            return "jumpout"
+    for kw in trial_keywords:
+        if kw in v:
+            return "trial"
+    for prefix in jumpout_prefixes:
+        if v.startswith(prefix):
+            return "jumpout"
+    return "race"
 
 
 def _guess_state(venue: str) -> str:

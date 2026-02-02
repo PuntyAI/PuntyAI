@@ -23,6 +23,7 @@ class Meeting(Base):
     rail_position: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     selected: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    meeting_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # race, trial, jumpout
 
     # New GraphQL fields
     penetrometer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -53,6 +54,7 @@ class Meeting(Base):
             "rail_position": self.rail_position,
             "selected": self.selected,
             "source": self.source,
+            "meeting_type": self.meeting_type,
             "penetrometer": self.penetrometer,
             "weather_condition": self.weather_condition,
             "weather_temp": self.weather_temp,

@@ -31,7 +31,10 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     """Main dashboard page."""
     today = melb_now().date()
     result = await db.execute(
-        select(Meeting).where(Meeting.date == today).options(selectinload(Meeting.races)).order_by(Meeting.venue)
+        select(Meeting).where(
+            Meeting.date == today,
+            Meeting.meeting_type.in_(["race", None]),
+        ).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
     todays_meetings = result.scalars().all()
 
@@ -89,9 +92,12 @@ async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Race meetings management page — shows today's meetings first."""
     today = melb_now().date()
 
-    # Today's meetings first
+    # Today's meetings first (exclude trials/jumpouts)
     result = await db.execute(
-        select(Meeting).where(Meeting.date == today).options(selectinload(Meeting.races)).order_by(Meeting.venue)
+        select(Meeting).where(
+            Meeting.date == today,
+            Meeting.meeting_type.in_(["race", None]),
+        ).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
     todays = result.scalars().all()
 
