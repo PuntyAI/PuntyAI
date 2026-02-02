@@ -299,8 +299,28 @@
                     <span class="text-sm hidden sm:inline" style="color: var(--text-secondary);">{{ user.name or user.email }}</span>
                     <a href="/logout" class="text-xs transition-colors" style="color: var(--text-muted);" onmouseover="this.style.color='var(--magenta)'" onmouseout="this.style.color='var(--text-muted)'">[Logout]</a>
                 {% endif %}
+                <!-- Mobile hamburger -->
+                <button id="mobile-menu-btn" class="md:hidden ml-2 p-1.5 rounded" style="color: var(--text-secondary);" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
             </div>
         </div>
+        <!-- Mobile nav dropdown -->
+        <nav id="mobile-menu" class="hidden md:hidden border-t px-4 pb-3 pt-2" style="border-color: var(--border); background: var(--bg-card);">
+            <a href="/" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Dashboard</a>
+            <a href="/meets" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Meets</a>
+            <a href="/content" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Content</a>
+            <a href="/review" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">
+                Review
+                <span class="ml-1 bg-punty-magenta/20 text-punty-mbright text-xs px-2 py-0.5 rounded-full"
+                      hx-get="/api/content/review-count" hx-trigger="every 30s" hx-swap="innerHTML">
+                    {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
+                </span>
+            </a>
+            <a href="/settings" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Settings</a>
+        </nav>
     </header>
 
     <!-- Main Content -->
