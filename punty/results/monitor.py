@@ -215,6 +215,9 @@ class ResultsMonitor:
                     import traceback
                     logger.error(f"Failed to process result {meeting.venue} R{race_num}: {e}\n{traceback.format_exc()}")
 
+        # Backfill exotic dividends from TabTouch for races missing them
+        await self._backfill_tabtouch_exotics(db, meeting, statuses)
+
         # Check if all races done for wrap-up
         total_races = len(races)
         paying_count = sum(1 for s in statuses.values() if s in ("Paying", "Closed"))
@@ -227,6 +230,62 @@ class ResultsMonitor:
                 logger.info(f"Wrap-up generated for {meeting.venue}")
             except Exception as e:
                 logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
+
+    async def _backfill_tabtouch_exotics(self, db, meeting, statuses):
+        """Fetch exotic dividends from TabTouch for races that are missing them."""
+        import json as _json
+        from punty.models.meeting import Race
+
+        # Only bother if we have paying races
+        paying_races = [rn for rn, s in statuses.items() if s in ("Paying", "Closed")]
+        if not paying_races:
+            return
+
+        # Check which paying races are missing exotic_results
+        missing = []
+        for rn in paying_races:
+            race_id = f"{meeting.id}-r{rn}"
+            race = await db.get(Race, race_id)
+            if race and not race.exotic_results:
+                missing.append(rn)
+
+        if not missing:
+            return
+
+        try:
+            from punty.scrapers.tabtouch import find_venue_code, scrape_meeting_exotics
+
+            venue_code = await find_venue_code(meeting.venue, meeting.date)
+            if not venue_code:
+                logger.debug(f"No TabTouch venue code found for {meeting.venue}")
+                return
+
+            exotics_by_race = await scrape_meeting_exotics(venue_code, meeting.date)
+            if not exotics_by_race:
+                return
+
+            updated = 0
+            for rn, exotics in exotics_by_race.items():
+                race_id = f"{meeting.id}-r{rn}"
+                race = await db.get(Race, race_id)
+                if race and not race.exotic_results and exotics:
+                    race.exotic_results = _json.dumps(exotics)
+                    updated += 1
+
+            if updated:
+                await db.flush()
+                logger.info(f"TabTouch backfilled exotics for {updated} races at {meeting.venue}")
+
+                # Re-settle sequence picks that may now have dividend data
+                from punty.results.picks import settle_picks_for_race
+                for rn in exotics_by_race:
+                    try:
+                        await settle_picks_for_race(db, meeting.id, rn)
+                    except Exception as e:
+                        logger.error(f"Failed to re-settle picks after TabTouch backfill R{rn}: {e}")
+
+        except Exception as e:
+            logger.debug(f"TabTouch exotic backfill failed for {meeting.venue}: {e}")
 
     async def check_single_meeting(self, meeting_id: str):
         """Manual one-shot check for a specific meeting."""
