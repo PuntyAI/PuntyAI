@@ -277,6 +277,20 @@ class ResultsMonitor:
                 logger.info(f"TabTouch backfilled exotics for {updated} races at {meeting.venue}")
 
                 # Re-settle sequence picks that may now have dividend data
+                # First, unsettled any sequence picks that were hit but got $0 pnl (no dividend at time)
+                from punty.models.pick import Pick
+                from sqlalchemy import update
+                await db.execute(
+                    update(Pick).where(
+                        Pick.meeting_id == meeting.id,
+                        Pick.pick_type == "sequence",
+                        Pick.settled == True,
+                        Pick.hit == True,
+                        Pick.pnl == 0.0,
+                    ).values(settled=False, settled_at=None)
+                )
+                await db.flush()
+
                 from punty.results.picks import settle_picks_for_race
                 for rn in exotics_by_race:
                     try:
