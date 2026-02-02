@@ -68,6 +68,24 @@ async def get_review_queue(db: AsyncSession = Depends(get_db)):
     return [c.to_dict() for c in items]
 
 
+@router.post("/reject-all-pending")
+async def reject_all_pending(db: AsyncSession = Depends(get_db)):
+    """Reject all content in pending_review status."""
+    from punty.models.content import Content, ContentStatus
+    from sqlalchemy import select, update
+
+    result = await db.execute(
+        select(Content).where(Content.status == ContentStatus.PENDING_REVIEW)
+    )
+    items = result.scalars().all()
+    count = len(items)
+    for item in items:
+        item.status = ContentStatus.REJECTED.value
+        item.review_notes = "Bulk rejected from review queue"
+    await db.commit()
+    return {"rejected": count}
+
+
 @router.get("/review-count")
 async def get_review_count(db: AsyncSession = Depends(get_db)):
     """Get count of pending reviews as plain text for badge."""

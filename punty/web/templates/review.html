@@ -10,8 +10,17 @@
             <h1 class="text-3xl font-bold text-gray-900">Review Queue</h1>
             <p class="text-gray-500">Content awaiting your approval</p>
         </div>
-        <div class="text-sm text-gray-500">
-            {{ review_items|length }} item(s) pending
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500">{{ review_items|length }} item(s) pending</span>
+            {% if review_items %}
+            <button hx-post="/api/content/reject-all-pending"
+                    hx-confirm="Reject all {{ review_items|length }} pending item(s)?"
+                    hx-swap="none"
+                    hx-on::after-request="if(event.detail.successful) { location.reload(); } else showToast('Failed', 'error');"
+                    class="px-3 py-1.5 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50">
+                Reject All
+            </button>
+            {% endif %}
         </div>
     </div>
 
