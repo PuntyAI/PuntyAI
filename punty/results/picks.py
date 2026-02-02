@@ -344,13 +344,14 @@ async def settle_picks_for_race(
                     cost = num_combos * base_unit
                     seq_pnl = round(dividend - cost, 2)
                 else:
-                    # Hit but no dividend found — cost only
+                    # Hit but no dividend found — treat as loss of stake
                     legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []
                     num_combos = 1
                     for leg in legs_data:
                         num_combos *= len(leg)
                     base_unit = pick.exotic_stake or 1.0
-                    seq_pnl = 0.0  # No dividend data available
+                    cost = num_combos * base_unit
+                    seq_pnl = round(-cost, 2)
         else:
             # Lost — cost is combinations × base unit
             legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []

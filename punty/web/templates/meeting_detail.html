@@ -569,20 +569,24 @@
                                             {{ pick.exotic_type or 'Exotic' }}: {{ runners|join(', ') }}
                                             {% endif %}
                                         </span>
-                                        {% if pick.hit %}
-                                        <span class="font-semibold text-green-600">WON +${{ "%.2f"|format(pick.pnl or 0) }}</span>
+                                        {% if (pick.pnl or 0) > 0 %}
+                                        <span class="font-semibold text-green-600">WON +${{ "%.2f"|format(pick.pnl) }}</span>
+                                        {% elif (pick.pnl or 0) < 0 %}
+                                        <span class="font-medium text-red-500">-${{ "%.2f"|format((pick.pnl)|abs) }}</span>
                                         {% else %}
-                                        <span class="font-medium text-red-500">-${{ "%.2f"|format((pick.pnl or 0)|abs) }}</span>
+                                        <span class="font-medium text-gray-500">$0.00</span>
                                         {% endif %}
                                     </div>
                                     {% endfor %}
                                     {% for seq in settled_sequences %}
                                     <div class="px-4 py-1 flex justify-between items-center text-sm">
                                         <span class="text-gray-600">{{ seq.label }}</span>
-                                        {% if seq.pick.hit %}
-                                        <span class="font-semibold text-green-600">WON +${{ "%.2f"|format(seq.pick.pnl or 0) }}</span>
+                                        {% if (seq.pick.pnl or 0) > 0 %}
+                                        <span class="font-semibold text-green-600">WON +${{ "%.2f"|format(seq.pick.pnl) }}</span>
+                                        {% elif (seq.pick.pnl or 0) < 0 %}
+                                        <span class="font-medium text-red-500">-${{ "%.2f"|format((seq.pick.pnl)|abs) }}</span>
                                         {% else %}
-                                        <span class="font-medium text-red-500">-${{ "%.2f"|format((seq.pick.pnl or 0)|abs) }}</span>
+                                        <span class="font-medium text-gray-500">$0.00</span>
                                         {% endif %}
                                     </div>
                                     {% endfor %}
