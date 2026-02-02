@@ -416,7 +416,7 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
                 select(Runner).where(
                     Runner.race_id == race_id,
                     Runner.horse_name == horse_name,
-                )
+                ).limit(1)
             )
             runner = runner_result.scalar_one_or_none()
 
@@ -426,7 +426,7 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
                 select(Runner).where(
                     Runner.race_id == race_id,
                     Runner.saddlecloth == int(saddlecloth),
-                )
+                ).limit(1)
             )
             runner = runner_result.scalar_one_or_none()
 
