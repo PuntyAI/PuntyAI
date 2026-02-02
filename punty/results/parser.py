@@ -36,7 +36,13 @@ _ROUGHIE = re.compile(
 
 # --- Exotics ---
 _EXOTIC = re.compile(
-    r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*(Trifecta|Exacta|Quinella|First\s*Four|First\s*4|Boxed\s+Trifecta|Standout\s+Exacta):\s*([0-9,\s]+)\s*[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)",
+    r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
+    r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s+(?:Standout|Box(?:ed)?))?|"
+    r"(?:Boxed?\s+)?(?:Trifecta|Exacta|Quinella)|"
+    r"Standout\s+(?:Exacta|Quinella|Trifecta))"
+    r":\s*([0-9,/\s]+?)\s*"
+    r"(?:[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)|"    # — $20 or — 2U
+    r"\(\$(\d+\.?\d*)\))",                               # ($20)
     re.IGNORECASE,
 )
 _EXOTIC_RETURN = re.compile(
@@ -205,9 +211,11 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
         if exotic_m:
             exotic_type = exotic_m.group(1).strip()
             runners_str = exotic_m.group(2).strip()
-            runners = [int(x.strip()) for x in runners_str.split(",") if x.strip().isdigit()]
-            # $20 format (group 3) or old U format (group 4)
-            stake = float(exotic_m.group(3)) if exotic_m.group(3) else float(exotic_m.group(4))
+            # Parse runners — may use "/" for positional separators or "," for boxed
+            runners = [int(x.strip()) for x in re.split(r'[,/]', runners_str) if x.strip().isdigit()]
+            # $20 format: group 3 (— $X), group 4 (— XU), group 5 (($X))
+            stake_str = exotic_m.group(3) or exotic_m.group(4) or exotic_m.group(5)
+            stake = float(stake_str) if stake_str else 20.0
             # Est. return %
             est_return_m = _EXOTIC_RETURN.search(section)
             est_return_pct = float(est_return_m.group(1)) if est_return_m else None

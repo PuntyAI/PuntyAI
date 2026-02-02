@@ -176,22 +176,31 @@ async def settle_picks_for_race(
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        if "trifecta" in exotic_type or "boxed" in exotic_type:
+        is_boxed = "box" in exotic_type
+        if "trifecta" in exotic_type:
             # Boxed trifecta: any permutation of our runners in top 3
+            # Standout/straight trifecta: also check as boxed since flat runner list loses order
             if len(top_saddlecloths) >= 3 and len(exotic_runners) >= 3:
                 top3 = set(top_saddlecloths[:3])
                 hit = top3.issubset(set(exotic_runners))
             if hit:
                 dividend = _find_dividend(exotic_divs, "trifecta")
         elif "exacta" in exotic_type:
-            if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
-                hit = (top_saddlecloths[0] == exotic_runners[0] and
-                       top_saddlecloths[1] == exotic_runners[1])
+            if is_boxed:
+                # Boxed exacta: any order of our runners in top 2
+                if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
+                    hit = set(top_saddlecloths[:2]).issubset(set(exotic_runners))
+            else:
+                # Straight exacta: first runner 1st, second runner 2nd
+                if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
+                    hit = (top_saddlecloths[0] == exotic_runners[0] and
+                           top_saddlecloths[1] == exotic_runners[1])
             if hit:
                 dividend = _find_dividend(exotic_divs, "exacta")
         elif "quinella" in exotic_type:
+            # Quinella is inherently unordered — any of our runners in top 2
             if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
-                hit = set(top_saddlecloths[:2]) == set(exotic_runners[:2])
+                hit = set(top_saddlecloths[:2]).issubset(set(exotic_runners))
             if hit:
                 dividend = _find_dividend(exotic_divs, "quinella")
         elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
