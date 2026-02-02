@@ -36,14 +36,16 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Add columns that may be missing on existing databases
-        try:
-            await conn.execute(
-                __import__("sqlalchemy").text(
-                    "ALTER TABLE picks ADD COLUMN estimated_return_pct FLOAT"
-                )
-            )
-        except Exception:
-            pass  # Column already exists
+        _text = __import__("sqlalchemy").text
+        for col in [
+            "ALTER TABLE picks ADD COLUMN estimated_return_pct FLOAT",
+            "ALTER TABLE picks ADD COLUMN bet_type VARCHAR(20)",
+            "ALTER TABLE picks ADD COLUMN bet_stake FLOAT",
+        ]:
+            try:
+                await conn.execute(_text(col))
+            except Exception:
+                pass  # Column already exists
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

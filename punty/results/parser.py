@@ -34,6 +34,12 @@ _ROUGHIE = re.compile(
     re.IGNORECASE,
 )
 
+# --- Bet line (for selections) ---
+_BET_LINE = re.compile(
+    r"Bet:\s*\$(\d+\.?\d*)\s*(Win|Saver\s*Win|Place|Each\s*Way|E/W)",
+    re.IGNORECASE,
+)
+
 # --- Exotics ---
 _EXOTIC = re.compile(
     r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
@@ -63,6 +69,14 @@ _SEQ_COSTING = re.compile(
     r"\((\d+)\s*combos?\s*[×x]\s*\$(\d+\.?\d*)\s*=\s*\$(\d+\.?\d*)\)\s*(?:[–\-—]\s*est\.\s*return:\s*(\d+\.?\d*)%)?",
     re.IGNORECASE,
 )
+
+
+def _normalize_bet_type(raw: str) -> str:
+    """Normalize bet type string to snake_case."""
+    t = raw.strip().lower()
+    if t in ("e/w", "each way"):
+        return "each_way"
+    return t.replace(" ", "_")
 
 
 def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list[dict]:
@@ -109,6 +123,8 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "tip_rank": int(m.group(1)),
             "odds_at_tip": float(m.group(5)),
             "pick_type": "big3",
+            "bet_type": None,
+            "bet_stake": None,
             "exotic_type": None,
             "exotic_runners": None,
             "exotic_stake": None,
@@ -132,6 +148,8 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "tip_rank": None,
             "odds_at_tip": None,
             "pick_type": "big3_multi",
+            "bet_type": None,
+            "bet_stake": None,
             "exotic_type": None,
             "exotic_runners": None,
             "exotic_stake": float(multi_m.group(1)),
@@ -161,6 +179,11 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
 
         # Selections (rank 1-3)
         for m in _SELECTION.finditer(section):
+            # Look for bet line in the text after this match
+            after_text = section[m.end():m.end() + 200]
+            bet_m = _BET_LINE.search(after_text)
+            bet_stake = float(bet_m.group(1)) if bet_m else None
+            bet_type = _normalize_bet_type(bet_m.group(2)) if bet_m else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -171,6 +194,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "tip_rank": int(m.group(1)),
                 "odds_at_tip": float(m.group(4)),
                 "pick_type": "selection",
+                "bet_type": bet_type,
+                "bet_stake": bet_stake,
                 "exotic_type": None,
                 "exotic_runners": None,
                 "exotic_stake": None,
@@ -185,6 +210,10 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
         # Roughie (rank 4)
         roughie_m = _ROUGHIE.search(section)
         if roughie_m:
+            after_text = section[roughie_m.end():roughie_m.end() + 200]
+            bet_m = _BET_LINE.search(after_text)
+            bet_stake = float(bet_m.group(1)) if bet_m else None
+            bet_type = _normalize_bet_type(bet_m.group(2)) if bet_m else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -195,6 +224,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "tip_rank": 4,
                 "odds_at_tip": float(roughie_m.group(3)),
                 "pick_type": "selection",
+                "bet_type": bet_type,
+                "bet_stake": bet_stake,
                 "exotic_type": None,
                 "exotic_runners": None,
                 "exotic_stake": None,
@@ -229,6 +260,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "tip_rank": None,
                 "odds_at_tip": None,
                 "pick_type": "exotic",
+                "bet_type": None,
+                "bet_stake": None,
                 "exotic_type": exotic_type,
                 "exotic_runners": json.dumps(runners),
                 "exotic_stake": stake,
@@ -315,6 +348,8 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
                 "tip_rank": None,
                 "odds_at_tip": None,
                 "pick_type": "sequence",
+                "bet_type": None,
+                "bet_stake": None,
                 "exotic_type": None,
                 "exotic_runners": None,
                 "exotic_stake": unit_price,

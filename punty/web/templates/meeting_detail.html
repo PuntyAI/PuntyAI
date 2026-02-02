@@ -217,6 +217,7 @@
                                     {{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
                                     {% if pick.odds_at_tip %}(${{ "%.2f"|format(pick.odds_at_tip) }}){% endif %}
+                                    {% if pick.bet_stake %}<span class="font-semibold">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                     {% if pick.settled %}
                                         {% if pick.hit %}<span class="text-green-600 font-bold">&#10003;</span>{% else %}<span class="text-red-500 font-bold">&#10007;</span>{% endif %}
                                     {% endif %}
@@ -565,6 +566,7 @@
                                         <span class="text-gray-600">
                                             {% if pick.pick_type == 'selection' %}
                                             {{ rank_labels.get(pick.tip_rank, 'Pick') }}: #{{ pick.saddlecloth }} {{ pick.horse_name }}
+                                            {% if pick.bet_stake %}<span class="text-gray-400">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                             {% elif pick.pick_type == 'exotic' %}
                                             {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
                                             {{ pick.exotic_type or 'Exotic' }}: {{ runners|join(', ') }}

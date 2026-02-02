@@ -76,12 +76,42 @@ async def settle_picks_for_race(
             runner = runners_by_name.get(pick.horse_name.upper())
 
         if runner and runner.finish_position is not None:
+            stake = pick.bet_stake or 1.0
+            bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
             won = runner.finish_position == 1
-            pick.hit = won
-            if won and runner.win_dividend:
-                pick.pnl = round(runner.win_dividend - 1.0, 2)
+            placed = runner.finish_position is not None and runner.finish_position <= 3
+
+            if bet_type in ("win", "saver_win"):
+                pick.hit = won
+                if won and runner.win_dividend:
+                    pick.pnl = round(runner.win_dividend * stake - stake, 2)
+                else:
+                    pick.pnl = round(-stake, 2)
+            elif bet_type == "place":
+                pick.hit = placed
+                if placed and runner.place_dividend:
+                    pick.pnl = round(runner.place_dividend * stake - stake, 2)
+                else:
+                    pick.pnl = round(-stake, 2)
+            elif bet_type == "each_way":
+                half = stake / 2
+                if won and runner.win_dividend and runner.place_dividend:
+                    pick.pnl = round(runner.win_dividend * half + runner.place_dividend * half - stake, 2)
+                    pick.hit = True
+                elif placed and runner.place_dividend:
+                    pick.pnl = round(runner.place_dividend * half - stake, 2)
+                    pick.hit = True
+                else:
+                    pick.pnl = round(-stake, 2)
+                    pick.hit = False
             else:
-                pick.pnl = -1.0
+                # Fallback: treat as win
+                pick.hit = won
+                if won and runner.win_dividend:
+                    pick.pnl = round(runner.win_dividend * stake - stake, 2)
+                else:
+                    pick.pnl = round(-stake, 2)
+
             pick.settled = True
             pick.settled_at = now
             settled_count += 1
@@ -349,9 +379,8 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             func.count(Pick.id).label("count"),
             func.sum(Pick.pnl).label("total_pnl"),
             func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
-            func.sum(
-                case((Pick.pick_type == "selection", Pick.exotic_stake), else_=Pick.exotic_stake)
-            ).label("total_staked_exotic"),
+            func.sum(Pick.exotic_stake).label("total_staked_exotic"),
+            func.sum(Pick.bet_stake).label("total_staked_bet"),
         )
         .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
@@ -375,9 +404,9 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         pnl = float(row.total_pnl or 0)
         winners = int(row.winners or 0)
 
-        # Estimate stake: selections = 1U each, exotics/big3_multi use exotic_stake
+        # Estimate stake: selections use bet_stake sum, exotics/big3_multi use exotic_stake
         if pick_type == "selection":
-            staked = float(count)  # 1U per selection
+            staked = float(row.total_staked_bet or count)  # sum of bet_stake, fallback to count
         elif pick_type == "big3":
             staked = 0.0  # P&L tracked on multi row
         elif pick_type == "big3_multi":

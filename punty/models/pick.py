@@ -40,6 +40,10 @@ class Pick(Base):
     # Big3 multi
     multi_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Selection bet type and stake
+    bet_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # win, saver_win, place, each_way
+    bet_stake: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # dollar amount
+
     # Estimated return percentage from AI
     estimated_return_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
@@ -74,6 +78,8 @@ class Pick(Base):
             "sequence_legs": self.sequence_legs,
             "sequence_start_race": self.sequence_start_race,
             "multi_odds": self.multi_odds,
+            "bet_type": self.bet_type,
+            "bet_stake": self.bet_stake,
             "estimated_return_pct": self.estimated_return_pct,
             "hit": self.hit,
             "pnl": self.pnl,

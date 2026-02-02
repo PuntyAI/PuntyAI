@@ -45,17 +45,21 @@ Race type: {R_CLASS}, {R_DISTANCE}m
 Map & tempo: {R_TEMPO_LINE}
 Punty read: {R_PUNTY_READ}
 
-*Top 3 + Roughie*
+*Top 3 + Roughie ($20 pool)*
 1. *{R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_ODDS}
+   Bet: ${STAKE} {BET_TYPE}
    Confidence: {R_TAG_1}
    Why: {ONE_OR_TWO_LINES_REASON_1}
 2. *{R_TOP2}* (No.{R_TOP2_NO}) — ${R_TOP2_ODDS}
+   Bet: ${STAKE} {BET_TYPE}
    Confidence: {R_TAG_2}
    Why: {ONE_OR_TWO_LINES_REASON_2}
 3. *{R_TOP3}* (No.{R_TOP3_NO}) — ${R_TOP3_ODDS}
+   Bet: ${STAKE} {BET_TYPE}
    Confidence: {R_TAG_3}
    Why: {ONE_OR_TWO_LINES_REASON_3}
 Roughie: *{R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_ODDS}
+Bet: ${STAKE} {BET_TYPE}
 Why: {ONE_LINE_RISK_EXPLAINER}
 
 *Degenerate Exotic of the Race*
@@ -96,7 +100,7 @@ Tell your degenerate mates to jump in the WhatsApp chaos here: {WHATSAPP_GROUP_L
 Fresh 1–3 sentence closer in Punty's voice that does not repeat prior runs. Must end with the exact words: "Gamble Responsibly."
 
 ## GENERAL RULES
-1) Degenerate exotics: $20 fixed. Sequences: Skinny $1, Balanced $50, Wide $100 total outlay.
+1) Top 3 + Roughie: $20 total pool per race. AI picks bet type (Win/Saver Win/Place/Each Way) and dollar stake for each pick. The four stakes MUST sum to exactly $20. Allocate more to higher-confidence picks. Saver Win is just a smaller win-only bet. Each Way splits the stake 50/50 between win and place. Degenerate exotics: $20 fixed. Sequences: Skinny $1, Balanced $50, Wide $100 total outlay.
 2) Odds: print consistently as $X.XX.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
 4) Exactly ONE "Degenerate Exotic of the Race" per race.
