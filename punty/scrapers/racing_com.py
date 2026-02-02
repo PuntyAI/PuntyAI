@@ -863,7 +863,7 @@ class RacingComScraper(BaseScraper):
 
         # Parse exotics from betting data
         exotics = {}
-        for exotic in betting_data.get("exotics", []):
+        for exotic in (betting_data.get("exotics") or []):
             exotic_type = (exotic.get("poolType") or exotic.get("poolStatusCode") or exotic.get("type") or "").lower()
             dividend = exotic.get("dividend") or exotic.get("amount")
             if exotic_type and dividend:

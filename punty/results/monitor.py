@@ -212,7 +212,8 @@ class ResultsMonitor:
                     self.processed_races[meeting_id].add(race_num)
                     logger.info(f"Processed result: {meeting.venue} R{race_num}")
                 except Exception as e:
-                    logger.error(f"Failed to process result {meeting.venue} R{race_num}: {e}")
+                    import traceback
+                    logger.error(f"Failed to process result {meeting.venue} R{race_num}: {e}\n{traceback.format_exc()}")
 
         # Check if all races done for wrap-up
         total_races = len(races)
