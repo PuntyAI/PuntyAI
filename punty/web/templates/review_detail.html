@@ -42,7 +42,8 @@
                 </div>
                 <div class="p-6">
                     <textarea id="raw-content"
-                              class="w-full h-64 border border-gray-300 rounded-lg p-4 font-mono text-sm focus:ring-punty-coral focus:border-punty-coral"
+                              style="background: var(--bg-card-alt); color: var(--text-primary); border-color: var(--border-subtle);"
+                              class="w-full h-64 border rounded-lg p-4 font-mono text-sm focus:ring-punty-coral focus:border-punty-coral"
                               hx-put="/api/content/{{ content.id }}"
                               hx-ext="json-enc"
                               hx-trigger="blur changed delay:500ms"
@@ -71,9 +72,9 @@
 
                     <!-- WhatsApp Preview -->
                     <div id="preview-whatsapp" class="preview-panel">
-                        <div class="bg-[#DCF8C6] rounded-lg p-4 max-w-sm ml-auto">
-                            <pre class="whitespace-pre-wrap text-sm">{{ content.whatsapp_formatted or content.raw_content or 'No content' }}</pre>
-                            <div class="text-right text-xs text-gray-500 mt-1">
+                        <div style="background: #e2d6ba; border-radius: 12px; padding: 0.75rem; max-width: 480px; margin-left: auto;">
+                            <div style="background: #dcf8c6; border-radius: 8px; padding: 1rem; color: #111b21; font-family: 'Source Sans Pro', -apple-system, sans-serif; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;">{{ content.whatsapp_formatted or content.raw_content or 'No content' }}</div>
+                            <div style="text-align: right; font-size: 0.7rem; color: #667781; margin-top: 0.25rem; padding-right: 0.5rem;">
                                 {{ content.created_at.strftime('%H:%M') if content.created_at else '' }} &#x2713;&#x2713;
                             </div>
                         </div>
@@ -92,7 +93,7 @@
                                         <span class="text-blue-500">&#x2713;</span>
                                         <span class="text-gray-500">@PuntyAI</span>
                                     </div>
-                                    <pre class="whitespace-pre-wrap text-sm mt-2">{{ content.twitter_formatted or content.raw_content or 'No content' }}</pre>
+                                    <div style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.875rem; margin-top: 0.5rem; color: var(--text-primary);">{{ content.twitter_formatted or content.raw_content or 'No content' }}</div>
                                     <div class="flex justify-between text-gray-500 mt-3 text-sm">
                                         <span>&#x1F4AC; 0</span>
                                         <span>&#x1F501; 0</span>
@@ -170,7 +171,7 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Fix</h3>
                 <p class="text-sm text-gray-500 mb-3">Ask Punty to fix specific issues</p>
-                <select id="issue-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3">
+                <select id="issue-type" style="background: var(--bg-card-alt); color: var(--text-primary); border-color: var(--border-subtle);" class="w-full border rounded-lg px-3 py-2 mb-3">
                     <option value="tone_wrong">Tone is off</option>
                     <option value="too_long">Too long</option>
                     <option value="too_short">Too short</option>
@@ -179,7 +180,8 @@
                     <option value="not_funny">Not funny enough</option>
                 </select>
                 <textarea id="fix-notes"
-                          class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 h-20"
+                          style="background: var(--bg-card-alt); color: var(--text-primary); border-color: var(--border-subtle);"
+                          class="w-full border rounded-lg px-3 py-2 mb-3 h-20"
                           placeholder="Additional notes..."></textarea>
                 <button hx-post="/api/content/{{ content.id }}/review"
                         hx-ext="json-enc"
