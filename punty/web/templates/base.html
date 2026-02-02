@@ -206,9 +206,11 @@
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-dark); }
-        ::-webkit-scrollbar-thumb { background: #1e1e30; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #2e2e45; }
+        ::-webkit-scrollbar-track { background: var(--bg-card); }
+        ::-webkit-scrollbar-thumb { background: var(--magenta); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ff2d9e; }
+        /* Firefox */
+        * { scrollbar-color: var(--magenta) var(--bg-card); scrollbar-width: thin; }
 
         /* Race number pill — gradient sunset */
         .race-num-pill {
