@@ -32,7 +32,7 @@
     </div>
 
     <!-- Quick Actions -->
-    <div class="bg-punty-pink/5 border border-punty-border rounded-lg p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
+    <div class="bg-white border border-punty-rule rounded-lg p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
         <button onclick="startGenerate()" id="generate-btn"
                 class="bg-punty-coral text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
             &#x1F4E7; Generate Early Mail
@@ -54,7 +54,7 @@
             &#x1F50D; Start Monitor
         </button>
         <button onclick="startPuntReview()" id="puntreview-btn"
-                class="bg-punty-gold text-white px-4 py-2 rounded-lg hover:bg-punty-gold/90">
+                class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
             &#x1F4CA; Generate Punt Review
         </button>
     </div>
@@ -140,7 +140,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Races -->
         <div class="lg:col-span-2">
-            <div class="bg-white rounded-lg shadow light-table">
+            <div class="bg-white rounded-lg shadow">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <h2 class="text-lg font-semibold text-gray-900">
                         Races ({{ meeting.races|length }})
