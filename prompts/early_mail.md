@@ -69,7 +69,9 @@ Why: {R_EXOTIC_REASON}
 
 ### 5) *SEQUENCE LANES*
 Print lanes in exact format. Use only saddlecloth numbers, separated by commas within legs, and use " / " to separate legs.
-CRITICAL MATHS: combos = product of selections per leg (e.g. 1×2×1×2 = 4). UNIT = TOTAL_OUTLAY / combos. So Skinny with 4 combos: 4 combos × $0.25 = $1. NEVER write combos × $1 = $1 when combos > 1.
+CRITICAL MATHS:
+- combos = product of selections per leg (e.g. 1×2×1×2 = 4). UNIT = TOTAL_OUTLAY / combos. So Skinny with 4 combos: 4 combos × $0.25 = $1. NEVER write combos × $1 = $1 when combos > 1.
+- est. return % = the flexi percentage = (UNIT / $1) × 100. Examples: UNIT $1.00 → 100%. UNIT $3.13 → 313%. UNIT $1.23 → 123%. UNIT $0.25 → 25%. This is just the unit price expressed as a percentage. Do NOT multiply odds or make up numbers.
 
 EARLY QUADDIE (R{EQ_START}–R{EQ_END})
 Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
