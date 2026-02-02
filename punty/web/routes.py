@@ -183,13 +183,14 @@ async def content_page(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Content).order_by(Content.created_at.desc()).limit(100))
     content_items = result.scalars().all()
 
-    # Group by status
-    status_counts = {}
-    for status in ContentStatus:
-        result = await db.execute(
-            select(func.count(Content.id)).where(Content.status == status.value)
-        )
-        status_counts[status.value] = result.scalar() or 0
+    # Group by status — single query instead of N queries
+    result = await db.execute(
+        select(Content.status, func.count(Content.id))
+        .group_by(Content.status)
+    )
+    status_counts = {status.value: 0 for status in ContentStatus}
+    for row in result.all():
+        status_counts[row[0]] = row[1]
 
     return templates.TemplateResponse(
         "content.html",

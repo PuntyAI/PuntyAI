@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Index, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from punty.models.database import Base
@@ -13,6 +13,11 @@ class Pick(Base):
     """A single pick extracted from approved early mail content."""
 
     __tablename__ = "picks"
+    __table_args__ = (
+        Index("ix_picks_meeting_race", "meeting_id", "race_number"),
+        Index("ix_picks_content_id", "content_id"),
+        Index("ix_picks_settled", "settled"),
+    )
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True)
     content_id: Mapped[str] = mapped_column(String(64), ForeignKey("content.id"))

@@ -2,8 +2,7 @@
 
 import json
 import logging
-from datetime import date, datetime, timedelta
-from itertools import permutations
+from datetime import UTC, date, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import select, delete, func, case
@@ -42,7 +41,7 @@ async def settle_picks_for_race(
     db: AsyncSession, meeting_id: str, race_number: int
 ) -> int:
     """Settle unsettled picks that involve this race. Returns count settled."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     settled_count = 0
 
     # Load race + runners for this race
@@ -206,43 +205,62 @@ async def settle_picks_for_race(
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        is_boxed = "box" in exotic_type
+        # Normalise saddlecloths to ints for consistent comparison
+        exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
+        top_sc_int = [int(x) for x in top_saddlecloths if x is not None]
+
+        is_boxed = "box" in exotic_type or "standout" in exotic_type
         if "trifecta" in exotic_type:
-            # Boxed trifecta: any permutation of our runners in top 3
-            # Standout/straight trifecta: also check as boxed since flat runner list loses order
-            if len(top_saddlecloths) >= 3 and len(exotic_runners) >= 3:
-                top3 = set(top_saddlecloths[:3])
-                hit = top3.issubset(set(exotic_runners))
+            if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:
+                if is_boxed:
+                    # Boxed/standout: our runners in top 3 in any order
+                    hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
+                else:
+                    # Straight trifecta: exact order match
+                    hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
             if hit:
                 dividend = _find_dividend(exotic_divs, "trifecta")
         elif "exacta" in exotic_type:
-            if is_boxed:
-                # Boxed exacta: any order of our runners in top 2
-                if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
-                    hit = set(top_saddlecloths[:2]).issubset(set(exotic_runners))
-            else:
-                # Straight exacta: first runner 1st, second runner 2nd
-                if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
-                    hit = (top_saddlecloths[0] == exotic_runners[0] and
-                           top_saddlecloths[1] == exotic_runners[1])
+            if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
+                if is_boxed:
+                    hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
+                else:
+                    hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
             if hit:
                 dividend = _find_dividend(exotic_divs, "exacta")
         elif "quinella" in exotic_type:
-            # Quinella is inherently unordered — any of our runners in top 2
-            if len(top_saddlecloths) >= 2 and len(exotic_runners) >= 2:
-                hit = set(top_saddlecloths[:2]).issubset(set(exotic_runners))
+            if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
+                hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
             if hit:
                 dividend = _find_dividend(exotic_divs, "quinella")
         elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
-            if len(top_saddlecloths) >= 4 and len(exotic_runners) >= 4:
-                hit = list(top_saddlecloths[:4]) == list(exotic_runners[:4])
+            if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
+                if is_boxed:
+                    hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
+                else:
+                    hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
             if hit:
                 dividend = _find_dividend(exotic_divs, "first4")
 
-        if hit and dividend > 0:
-            pick.pnl = round(dividend * stake - stake, 2)
+        # For boxed exotics, cost = permutations × unit stake
+        if is_boxed and len(exotic_runners_int) > 1:
+            from math import perm
+            if "trifecta" in exotic_type:
+                num_perms = perm(len(exotic_runners_int), 3) if len(exotic_runners_int) >= 3 else 1
+            elif "exacta" in exotic_type:
+                num_perms = perm(len(exotic_runners_int), 2) if len(exotic_runners_int) >= 2 else 1
+            elif "first" in exotic_type:
+                num_perms = perm(len(exotic_runners_int), 4) if len(exotic_runners_int) >= 4 else 1
+            else:
+                num_perms = 1
+            cost = num_perms * stake
         else:
-            pick.pnl = round(-stake, 2)
+            cost = stake
+
+        if hit and dividend > 0:
+            pick.pnl = round(dividend - cost, 2)
+        else:
+            pick.pnl = round(-cost, 2)
         pick.hit = hit
         pick.settled = True
         pick.settled_at = now

@@ -114,7 +114,7 @@ class WhatsAppDelivery:
 
             # Update content status
             content.sent_to_whatsapp = True
-            content.sent_at = datetime.utcnow()
+            content.sent_at = datetime.now()
             content.status = ContentStatus.SENT.value
             await self.db.commit()
 

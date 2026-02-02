@@ -87,11 +87,11 @@ class ResultsMonitor:
             try:
                 if self._is_racing_hours() or self._has_unfinished_meetings():
                     await self._check_all_meetings()
-                    self.last_check = datetime.utcnow()
+                    self.last_check = datetime.now(AEST)
                     self.consecutive_errors = 0
                 else:
                     logger.debug("Outside racing hours — skipping check")
-                    self.last_check = datetime.utcnow()
+                    self.last_check = datetime.now(AEST)
             except asyncio.CancelledError:
                 break
             except Exception as e:

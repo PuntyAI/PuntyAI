@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Index, String, Integer, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from punty.models.database import Base
@@ -71,6 +71,10 @@ class Content(Base):
     """Generated content item."""
 
     __tablename__ = "content"
+    __table_args__ = (
+        Index("ix_content_meeting_id", "meeting_id"),
+        Index("ix_content_status", "status"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     meeting_id: Mapped[str] = mapped_column(String(64), ForeignKey("meetings.id"))

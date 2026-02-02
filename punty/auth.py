@@ -63,6 +63,15 @@ CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 CSRF_EXEMPT_PREFIXES = ("/api/webhook/",)
 
 
+def _get_session_csrf_secret(request) -> str:
+    """Get or create a per-session CSRF secret."""
+    csrf_secret = request.session.get("_csrf_secret")
+    if not csrf_secret:
+        csrf_secret = secrets.token_hex(32)
+        request.session["_csrf_secret"] = csrf_secret
+    return csrf_secret
+
+
 def _generate_csrf_token(session_secret: str) -> str:
     """Generate a CSRF token tied to the session."""
     nonce = secrets.token_hex(16)
@@ -107,7 +116,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             or request.query_params.get("_csrf")
         )
 
-        if not _verify_csrf_token(settings.secret_key, token or ""):
+        csrf_secret = request.session.get("_csrf_secret", "")
+        if not csrf_secret or not _verify_csrf_token(csrf_secret, token or ""):
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "CSRF validation failed"}, status_code=403)
             return RedirectResponse(url="/login?error=Session+expired.+Please+try+again.")
@@ -172,7 +182,8 @@ async def auth_callback(request: Request):
 @router.get("/api/csrf-token")
 async def csrf_token(request: Request):
     """Return a fresh CSRF token for JS to use."""
-    token = _generate_csrf_token(settings.secret_key)
+    csrf_secret = _get_session_csrf_secret(request)
+    token = _generate_csrf_token(csrf_secret)
     return {"csrf_token": token}
 
 

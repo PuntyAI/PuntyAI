@@ -3,7 +3,7 @@
 from datetime import datetime, date
 from typing import Optional, List
 
-from sqlalchemy import Boolean, String, Integer, Float, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Boolean, Index, String, Integer, Float, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from punty.models.database import Base
@@ -13,6 +13,7 @@ class Meeting(Base):
     """A race meeting at a venue on a specific date."""
 
     __tablename__ = "meetings"
+    __table_args__ = (Index("ix_meetings_date", "date"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     venue: Mapped[str] = mapped_column(String(100))
@@ -70,6 +71,7 @@ class Race(Base):
     """A single race within a meeting."""
 
     __tablename__ = "races"
+    __table_args__ = (Index("ix_races_meeting_id", "meeting_id"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     meeting_id: Mapped[str] = mapped_column(String(64), ForeignKey("meetings.id"))
@@ -137,6 +139,10 @@ class Runner(Base):
     """A horse running in a race."""
 
     __tablename__ = "runners"
+    __table_args__ = (
+        Index("ix_runners_race_id", "race_id"),
+        Index("ix_runners_finish_position", "race_id", "finish_position"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     race_id: Mapped[str] = mapped_column(String(64), ForeignKey("races.id"))

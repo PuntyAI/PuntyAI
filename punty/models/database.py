@@ -47,6 +47,23 @@ async def init_db() -> None:
             except Exception:
                 pass  # Column already exists
 
+        # Create indexes on existing tables (IF NOT EXISTS handled by SQLite)
+        for idx in [
+            "CREATE INDEX IF NOT EXISTS ix_meetings_date ON meetings(date)",
+            "CREATE INDEX IF NOT EXISTS ix_races_meeting_id ON races(meeting_id)",
+            "CREATE INDEX IF NOT EXISTS ix_runners_race_id ON runners(race_id)",
+            "CREATE INDEX IF NOT EXISTS ix_runners_finish_position ON runners(race_id, finish_position)",
+            "CREATE INDEX IF NOT EXISTS ix_picks_meeting_race ON picks(meeting_id, race_number)",
+            "CREATE INDEX IF NOT EXISTS ix_picks_content_id ON picks(content_id)",
+            "CREATE INDEX IF NOT EXISTS ix_picks_settled ON picks(settled)",
+            "CREATE INDEX IF NOT EXISTS ix_content_meeting_id ON content(meeting_id)",
+            "CREATE INDEX IF NOT EXISTS ix_content_status ON content(status)",
+        ]:
+            try:
+                await conn.execute(_text(idx))
+            except Exception:
+                pass
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get database session."""

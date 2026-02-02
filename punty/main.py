@@ -30,6 +30,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting PuntyAI...")
 
+    # Validate secret key in production
+    if not settings.debug and settings.secret_key == "change-me-in-production":
+        raise RuntimeError(
+            "PUNTY_SECRET_KEY must be set in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
     # Ensure data directory exists
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
 

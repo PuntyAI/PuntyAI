@@ -1,5 +1,6 @@
 """Twitter/X delivery via Tweepy (Twitter API v2 with OAuth 1.0a)."""
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -113,13 +114,14 @@ class TwitterDelivery:
                 f"Tweet too long: {len(formatted)} chars. Use send_thread() instead."
             )
 
-        # Post tweet
+        # Post tweet (blocking Tweepy call → run in thread)
         try:
-            response = self._get_client().create_tweet(text=formatted)
+            client = self._get_client()
+            response = await asyncio.to_thread(client.create_tweet, text=formatted)
             tweet_id = response.data["id"]
 
             # Update content status
-            content.sent_at = datetime.utcnow()
+            content.sent_at = datetime.now()
             content.status = ContentStatus.SENT.value
             await self.db.commit()
 
@@ -171,9 +173,10 @@ class TwitterDelivery:
         # Format as single long-form post (X Premium supports long posts)
         tweet_text = format_twitter(content.raw_content, content.content_type, venue)
 
-        # Post single tweet
+        # Post single tweet (blocking → thread)
         try:
-            response = self._get_client().create_tweet(text=tweet_text)
+            client = self._get_client()
+            response = await asyncio.to_thread(client.create_tweet, text=tweet_text)
             tweet_id = response.data["id"]
             logger.info(f"Posted tweet: {tweet_id}")
         except Exception as e:
@@ -181,7 +184,7 @@ class TwitterDelivery:
             raise ValueError(f"Twitter API error: {e}")
 
         # Update content status
-        content.sent_at = datetime.utcnow()
+        content.sent_at = datetime.now()
         content.status = ContentStatus.SENT.value
         await self.db.commit()
 
@@ -211,7 +214,8 @@ class TwitterDelivery:
             raise ValueError(f"Tweet too long: {len(text)} chars (max {max_length})")
 
         try:
-            response = self._get_client().create_tweet(text=text)
+            client = self._get_client()
+            response = await asyncio.to_thread(client.create_tweet, text=text)
             tweet_id = response.data["id"]
 
             logger.info(f"Posted {'long-form' if long_form else 'standard'} tweet: {tweet_id}")
@@ -261,13 +265,14 @@ class TwitterDelivery:
         # Format for long-form post
         post_text = self._format_long_post(content.raw_content, content.content_type, venue)
 
-        # Post as long-form
+        # Post as long-form (blocking → thread)
         try:
-            response = self._get_client().create_tweet(text=post_text)
+            client = self._get_client()
+            response = await asyncio.to_thread(client.create_tweet, text=post_text)
             tweet_id = response.data["id"]
 
             # Update content status
-            content.sent_at = datetime.utcnow()
+            content.sent_at = datetime.now()
             content.status = ContentStatus.SENT.value
             await self.db.commit()
 
@@ -314,7 +319,8 @@ class TwitterDelivery:
             raise ValueError("Twitter API not configured")
 
         try:
-            self._get_client().delete_tweet(tweet_id)
+            client = self._get_client()
+            await asyncio.to_thread(client.delete_tweet, tweet_id)
             logger.info(f"Deleted tweet: {tweet_id}")
             return {"status": "deleted", "tweet_id": tweet_id}
         except Exception as e:
@@ -327,7 +333,8 @@ class TwitterDelivery:
             return {"status": "not_configured"}
 
         try:
-            user = self._get_client().get_me()
+            client = self._get_client()
+            user = await asyncio.to_thread(client.get_me)
             return {
                 "status": "ok",
                 "id": user.data.id,

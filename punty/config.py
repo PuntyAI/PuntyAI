@@ -62,13 +62,13 @@ class Settings(BaseSettings):
         return f"sqlite+aiosqlite:///{self.db_path}"
 
 
-# Override specific fields to not use PUNTY_ prefix
 class FullSettings(Settings):
-    """Full settings with OpenAI key from standard env var."""
+    """Settings with OpenAI key loaded from standard env var (no PUNTY_ prefix)."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_prefix="PUNTY_",
         extra="ignore",
     )
 
