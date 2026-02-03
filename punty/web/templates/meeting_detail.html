@@ -31,10 +31,6 @@
 
     <!-- Quick Actions -->
     <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px;" class="p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
-        <button onclick="startGenerate()" id="generate-btn"
-                class="bg-punty-coral text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
-            &#x1F4E7; Generate Early Mail
-        </button>
         <button onclick="startScrape()" id="scrape-btn"
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
             &#x1F504; Scrape All Data
@@ -43,17 +39,21 @@
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
             &#x1F3C3; Fetch Speed Maps
         </button>
+        <button onclick="startGenerate()" id="generate-btn"
+                class="bg-punty-coral text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
+            &#x1F4E7; Generate Early Mail
+        </button>
         <button onclick="checkResults()" id="results-btn"
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
             &#x1F3C6; Check Results
         </button>
-        <button onclick="toggleMonitor()" id="monitor-btn"
-                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x1F50D; Start Monitor
-        </button>
         <button onclick="startPuntReview()" id="puntreview-btn"
                 class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
             &#x1F4CA; Generate Punt Review
+        </button>
+        <button onclick="toggleMonitor()" id="monitor-btn"
+                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
+            &#x1F50D; Start Monitor
         </button>
     </div>
 

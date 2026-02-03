@@ -32,7 +32,7 @@ if settings.google_client_id:
 # --- Auth middleware ----------------------------------------------------------
 
 # Paths that never require login
-PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health", "/privacy"}
+PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health", "/privacy", "/group1glory"}
 PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/group1glory/")
 
 
