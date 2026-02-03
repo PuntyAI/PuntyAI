@@ -209,15 +209,17 @@
 </head>
 <body class="min-h-screen font-body text-gray-800">
     <!-- Header -->
-    <header class="header-gradient sticky top-0 z-50 overflow-visible">
+    <header class="header-gradient relative z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-20">
-                <!-- Logo - HUGE and hanging over the header -->
-                <a href="/group1glory/" class="flex items-center group relative -ml-2" style="margin-top: -20px; margin-bottom: -40px;">
+            <div class="flex items-center justify-between h-16 md:h-20">
+                <!-- Logo - Oversized and hanging below header -->
+                <a href="/group1glory/" class="flex items-center group absolute top-2 left-4 sm:left-6 lg:left-8 z-[60]">
                     <img src="/static/glory/logo.png" alt="Mat's Group 1 Glory"
-                         class="h-32 md:h-40 lg:h-48 w-auto drop-shadow-2xl group-hover:scale-105 transition-transform relative z-[60]"
-                         style="filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));">
+                         class="h-24 sm:h-28 md:h-36 lg:h-44 w-auto drop-shadow-2xl group-hover:scale-105 transition-transform"
+                         style="filter: drop-shadow(0 8px 16px rgba(0,0,0,0.4));">
                 </a>
+                <!-- Spacer for logo -->
+                <div class="w-24 sm:w-28 md:w-36 lg:w-44 flex-shrink-0"></div>
 
                 <!-- Desktop Nav -->
                 {% if user %}
@@ -283,7 +285,7 @@
     </header>
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         {% block content %}{% endblock %}
     </main>
 

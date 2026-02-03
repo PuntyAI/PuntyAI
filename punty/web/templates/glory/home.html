@@ -142,9 +142,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="space-y-6">
     <!-- HERO SECTION - MAXIMUM ENERGY -->
-    <div class="relative overflow-hidden rounded-3xl shadow-2xl min-h-[600px]">
+    <div class="relative overflow-hidden rounded-3xl shadow-2xl">
         <!-- Animated gradient background -->
         <div class="absolute inset-0 bg-gradient-to-br from-g1-green via-g1-green-dark to-g1-navy"></div>
 
@@ -156,17 +156,17 @@
         <!-- Running horse -->
         <div class="absolute bottom-4 left-0 text-6xl running-horse opacity-20">🏇</div>
 
-        <div class="relative px-6 py-16 md:py-24 text-center">
+        <div class="relative px-6 py-10 md:py-14 text-center">
             <!-- Logo with mega glow -->
-            <div class="relative inline-block mb-8 pulse-grow">
-                <div class="absolute inset-0 bg-g1-gold/40 blur-[60px] rounded-full scale-150"></div>
+            <div class="relative inline-block mb-6 pulse-grow">
+                <div class="absolute inset-0 bg-g1-gold/40 blur-[50px] rounded-full scale-150"></div>
                 <img src="/static/glory/logo.png" alt="Mat's Group 1 Glory"
-                     class="relative h-56 md:h-72 lg:h-80 mx-auto drop-shadow-2xl"
+                     class="relative h-44 md:h-56 lg:h-64 mx-auto drop-shadow-2xl"
                      style="filter: drop-shadow(0 10px 30px rgba(212, 165, 55, 0.5));">
             </div>
 
             <!-- DANGEROUS Warning Badge -->
-            <div class="mb-6">
+            <div class="mb-4">
                 <span class="inline-flex items-center gap-2 bg-red-600 text-white text-sm font-black px-5 py-2 rounded-full uppercase tracking-wider danger-pulse">
                     <span class="text-lg">⚠️</span>
                     WARNING: HIGHLY ADDICTIVE
@@ -175,65 +175,64 @@
             </div>
 
             <!-- Main headline -->
-            <h1 class="font-display text-4xl md:text-6xl lg:text-7xl font-black text-white mb-3 tracking-tight">
+            <h1 class="font-display text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 tracking-tight">
                 Australia's Most
             </h1>
-            <h2 class="font-display text-6xl md:text-8xl lg:text-9xl font-black mb-6">
+            <h2 class="font-display text-5xl md:text-7xl lg:text-8xl font-black mb-4">
                 <span class="mega-shine neon-gold">DANGEROUS</span>
             </h2>
-            <h3 class="font-display text-3xl md:text-5xl font-bold text-white/90 mb-8">
+            <h3 class="font-display text-2xl md:text-4xl font-bold text-white/90 mb-5">
                 Tipping Competition
             </h3>
 
-            <p class="text-xl md:text-2xl text-white/80 max-w-3xl mx-auto mb-10 font-medium leading-relaxed">
+            <p class="text-lg md:text-xl text-white/80 max-w-2xl mx-auto mb-6 font-medium leading-relaxed">
                 Pick winners. Crush your mates. Claim <span class="text-g1-gold font-bold">ETERNAL GLORY</span> on the Honour Board.
-                <br class="hidden md:block">
                 <span class="text-white font-bold">Zero money. Maximum bragging rights.</span>
             </p>
 
             <!-- CTA Buttons - Make them POP -->
             {% if not user %}
-            <div class="flex flex-col sm:flex-row justify-center gap-5 mb-10">
-                <a href="/group1glory/register" class="group relative inline-flex items-center justify-center gap-3 bg-gradient-to-r from-g1-gold via-g1-gold-light to-g1-gold text-g1-green-dark font-black text-xl md:text-2xl px-12 py-6 rounded-2xl shadow-2xl hover:shadow-glow-gold transform hover:scale-110 transition-all duration-300 hover-shake">
-                    <span class="text-2xl">🏇</span>
-                    <span>JOIN THE COMP NOW</span>
-                    <svg class="w-7 h-7 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex flex-col sm:flex-row justify-center gap-4 mb-6">
+                <a href="/group1glory/register" class="group relative inline-flex items-center justify-center gap-2 bg-gradient-to-r from-g1-gold via-g1-gold-light to-g1-gold text-g1-green-dark font-black text-lg md:text-xl px-8 py-4 rounded-xl shadow-2xl hover:shadow-glow-gold transform hover:scale-105 transition-all duration-300 hover-shake">
+                    <span class="text-xl">🏇</span>
+                    <span>JOIN THE COMP</span>
+                    <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                     </svg>
                 </a>
-                <a href="/group1glory/login" class="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur text-white font-bold text-lg px-10 py-6 rounded-2xl border-2 border-white/40 hover:bg-white/20 hover:border-white/60 transition-all">
+                <a href="/group1glory/login" class="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur text-white font-bold px-8 py-4 rounded-xl border-2 border-white/40 hover:bg-white/20 hover:border-white/60 transition-all">
                     Already playing? Login →
                 </a>
             </div>
             {% else %}
-            <a href="/group1glory/picks" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-g1-gold via-g1-gold-light to-g1-gold text-g1-green-dark font-black text-xl md:text-2xl px-12 py-6 rounded-2xl shadow-2xl hover:shadow-glow-gold transform hover:scale-110 transition-all duration-300 hover-shake mb-10">
-                <span class="text-2xl">🎯</span>
+            <a href="/group1glory/picks" class="group inline-flex items-center justify-center gap-2 bg-gradient-to-r from-g1-gold via-g1-gold-light to-g1-gold text-g1-green-dark font-black text-lg md:text-xl px-8 py-4 rounded-xl shadow-2xl hover:shadow-glow-gold transform hover:scale-105 transition-all duration-300 hover-shake mb-6">
+                <span class="text-xl">🎯</span>
                 <span>PICK YOUR WINNERS</span>
-                <svg class="w-7 h-7 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                 </svg>
             </a>
             {% endif %}
 
             <!-- Free banner - make it unmissable -->
-            <div class="inline-flex items-center gap-4 bg-white/95 backdrop-blur px-8 py-4 rounded-full shadow-2xl">
-                <span class="text-4xl">🎁</span>
-                <span class="font-black text-g1-green text-xl md:text-2xl">100% FREE for Autumn 2026!</span>
-                <span class="text-4xl">🎁</span>
+            <div class="inline-flex items-center gap-3 bg-white/95 backdrop-blur px-6 py-3 rounded-full shadow-xl">
+                <span class="text-2xl">🎁</span>
+                <span class="font-black text-g1-green text-lg md:text-xl">100% FREE for Autumn 2026!</span>
+                <span class="text-2xl">🎁</span>
             </div>
         </div>
     </div>
 
     <!-- TAB RECEIPT + POINTS SYSTEM -->
-    <div class="grid md:grid-cols-2 gap-8">
+    <div class="grid md:grid-cols-2 gap-6">
         <!-- TAB Receipt Card -->
-        <div class="tab-receipt rounded-2xl p-8 shadow-xl">
-            <div class="text-center mb-6">
+        <div class="tab-receipt rounded-2xl p-6 shadow-xl">
+            <div class="text-center mb-4">
                 <div class="text-xs text-gray-500 uppercase tracking-[0.3em]">Mat's Group One Glory</div>
-                <div class="text-3xl font-black text-g1-navy mt-2">🎟️ ENTRY TICKET 🎟️</div>
-                <div class="text-gray-400 text-xs mt-2">════════════════════════════════</div>
+                <div class="text-2xl font-black text-g1-navy mt-1">🎟️ ENTRY TICKET 🎟️</div>
+                <div class="text-gray-400 text-xs mt-1">════════════════════════════════</div>
             </div>
-            <div class="space-y-3 text-base">
+            <div class="space-y-2 text-sm">
                 <div class="flex justify-between border-b border-dashed border-gray-300 pb-2">
                     <span class="text-gray-600">COMPETITION:</span>
                     <span class="font-black text-g1-navy">AUTUMN 2026</span>
@@ -258,46 +257,46 @@
                     </span>
                 </div>
             </div>
-            <div class="text-gray-400 text-xs text-center mt-6">════════════════════════════════</div>
-            <div class="text-center mt-4">
+            <div class="text-gray-400 text-xs text-center mt-4">════════════════════════════════</div>
+            <div class="text-center mt-3">
                 <div class="text-xs text-gray-500 tracking-wider">BARCODE: G1-GLORY-2026-MAT</div>
-                <div class="flex justify-center gap-[2px] mt-3">
-                    {% for i in range(35) %}
-                    <div class="w-[3px] bg-gray-800" style="height: {{ [18,28,22,35,18,28,22,18,35,22,28,18][i % 12] }}px;"></div>
+                <div class="flex justify-center gap-[2px] mt-2">
+                    {% for i in range(30) %}
+                    <div class="w-[2px] bg-gray-800" style="height: {{ [14,22,18,28,14,22,18,14,28,18,22,14][i % 12] }}px;"></div>
                     {% endfor %}
                 </div>
             </div>
         </div>
 
         <!-- Points System Card -->
-        <div class="bg-white rounded-2xl shadow-xl p-8 border-2 border-g1-green/20">
-            <h3 class="font-display text-2xl font-black text-g1-navy mb-6 flex items-center gap-3">
-                <span class="text-4xl">📊</span> How Points Work
+        <div class="bg-white rounded-2xl shadow-xl p-6 border-2 border-g1-green/20">
+            <h3 class="font-display text-xl font-black text-g1-navy mb-4 flex items-center gap-2">
+                <span class="text-3xl">📊</span> How Points Work
             </h3>
-            <div class="space-y-5">
-                <div class="flex items-center gap-5 p-5 bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 rounded-xl border-2 border-amber-300 shadow-lg">
-                    <div class="w-16 h-16 pos-1 rounded-full flex items-center justify-center font-black text-2xl trophy-bounce">🥇</div>
+            <div class="space-y-3">
+                <div class="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 rounded-xl border-2 border-amber-300 shadow">
+                    <div class="w-12 h-12 pos-1 rounded-full flex items-center justify-center font-black text-xl trophy-bounce">🥇</div>
                     <div class="flex-1">
-                        <div class="font-black text-g1-navy text-xl">YOUR PICK WINS!</div>
-                        <div class="text-gray-500">First place finish</div>
+                        <div class="font-black text-g1-navy">YOUR PICK WINS!</div>
+                        <div class="text-gray-500 text-sm">First place finish</div>
                     </div>
-                    <div class="text-4xl font-black text-g1-gold">+3</div>
+                    <div class="text-3xl font-black text-g1-gold">+3</div>
                 </div>
-                <div class="flex items-center gap-5 p-5 bg-gray-50 rounded-xl border border-gray-200">
-                    <div class="w-16 h-16 pos-2 rounded-full flex items-center justify-center font-black text-2xl">🥈</div>
+                <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div class="w-12 h-12 pos-2 rounded-full flex items-center justify-center font-black text-xl">🥈</div>
                     <div class="flex-1">
-                        <div class="font-black text-g1-navy text-xl">Second Place</div>
-                        <div class="text-gray-500">Silver position</div>
+                        <div class="font-black text-g1-navy">Second Place</div>
+                        <div class="text-gray-500 text-sm">Silver position</div>
                     </div>
-                    <div class="text-4xl font-black text-gray-400">+2</div>
+                    <div class="text-3xl font-black text-gray-400">+2</div>
                 </div>
-                <div class="flex items-center gap-5 p-5 bg-orange-50 rounded-xl border border-orange-200">
-                    <div class="w-16 h-16 pos-3 rounded-full flex items-center justify-center font-black text-2xl">🥉</div>
+                <div class="flex items-center gap-4 p-4 bg-orange-50 rounded-xl border border-orange-200">
+                    <div class="w-12 h-12 pos-3 rounded-full flex items-center justify-center font-black text-xl">🥉</div>
                     <div class="flex-1">
-                        <div class="font-black text-g1-navy text-xl">Third Place</div>
-                        <div class="text-gray-500">Bronze position</div>
+                        <div class="font-black text-g1-navy">Third Place</div>
+                        <div class="text-gray-500 text-sm">Bronze position</div>
                     </div>
-                    <div class="text-4xl font-black text-orange-500">+1</div>
+                    <div class="text-3xl font-black text-orange-500">+1</div>
                 </div>
             </div>
         </div>
@@ -305,40 +304,35 @@
 
     {% if competition %}
     <!-- LIVE Competition Section -->
-    <div class="bg-gradient-to-br from-g1-navy via-g1-green-dark to-g1-green rounded-2xl shadow-2xl p-10 text-white relative overflow-hidden">
-        <!-- Background pattern -->
-        <div class="absolute inset-0 opacity-5">
-            <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><circle cx=%2220%22 cy=%2220%22 r=%223%22 fill=%22white%22/></svg>'); background-size: 40px;"></div>
-        </div>
-
+    <div class="bg-gradient-to-br from-g1-navy via-g1-green-dark to-g1-green rounded-2xl shadow-xl p-6 text-white relative overflow-hidden">
         <div class="relative">
-            <div class="flex flex-wrap items-center gap-4 mb-8">
-                <span class="badge-live flex items-center gap-2 text-lg px-4 py-2">
-                    <span class="w-3 h-3 bg-white rounded-full animate-pulse"></span>
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <span class="badge-live flex items-center gap-2 px-3 py-1">
+                    <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                     LIVE NOW
                 </span>
-                <h2 class="font-display text-4xl font-black">{{ competition.name }}</h2>
+                <h2 class="font-display text-2xl md:text-3xl font-black">{{ competition.name }}</h2>
             </div>
 
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="bg-white/10 backdrop-blur rounded-2xl p-6">
-                    <div class="text-white/60 text-sm mb-2">Total Races</div>
-                    <div class="text-5xl font-black text-g1-gold">{{ competition.races|length }}</div>
-                    <div class="text-white/60 text-sm mt-1">Group 1 events</div>
+            <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-white/10 backdrop-blur rounded-xl p-4">
+                    <div class="text-white/60 text-xs mb-1">Total Races</div>
+                    <div class="text-3xl font-black text-g1-gold">{{ competition.races|length }}</div>
+                    <div class="text-white/60 text-xs">Group 1 events</div>
                 </div>
-                <div class="bg-white/10 backdrop-blur rounded-2xl p-6">
-                    <div class="text-white/60 text-sm mb-2">Dates</div>
-                    <div class="text-2xl font-black">{{ competition.start_date.strftime('%d %b') }}</div>
-                    <div class="text-white/60 text-sm mt-1">to {{ competition.end_date.strftime('%d %b %Y') }}</div>
+                <div class="bg-white/10 backdrop-blur rounded-xl p-4">
+                    <div class="text-white/60 text-xs mb-1">Dates</div>
+                    <div class="text-xl font-black">{{ competition.start_date.strftime('%d %b') }}</div>
+                    <div class="text-white/60 text-xs">to {{ competition.end_date.strftime('%d %b %Y') }}</div>
                 </div>
-                <div class="bg-white/10 backdrop-blur rounded-2xl p-6">
-                    <div class="text-white/60 text-sm mb-2">Your Status</div>
+                <div class="bg-white/10 backdrop-blur rounded-xl p-4">
+                    <div class="text-white/60 text-xs mb-1">Your Status</div>
                     {% if user %}
-                    <div class="text-2xl font-black text-green-400">✓ You're In!</div>
-                    <div class="text-white/60 text-sm mt-1">Ready to dominate</div>
+                    <div class="text-xl font-black text-green-400">✓ You're In!</div>
+                    <div class="text-white/60 text-xs">Ready to dominate</div>
                     {% else %}
-                    <div class="text-2xl font-black text-g1-gold">Not Entered</div>
-                    <a href="/group1glory/register" class="text-g1-gold-light text-sm hover:underline">Join now →</a>
+                    <div class="text-xl font-black text-g1-gold">Not Entered</div>
+                    <a href="/group1glory/register" class="text-g1-gold-light text-xs hover:underline">Join now →</a>
                     {% endif %}
                 </div>
             </div>
@@ -347,36 +341,36 @@
 
     <!-- Leaderboard Preview -->
     <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div class="bg-g1-green px-8 py-5 flex items-center justify-between">
-            <h2 class="font-display text-2xl font-bold text-white flex items-center gap-3">
-                <span class="text-3xl">🏆</span> Current Standings
+        <div class="bg-g1-green px-6 py-4 flex items-center justify-between">
+            <h2 class="font-display text-xl font-bold text-white flex items-center gap-2">
+                <span class="text-2xl">🏆</span> Current Standings
             </h2>
-            <a href="/group1glory/leaderboard" class="text-g1-gold font-bold hover:text-g1-gold-light transition-colors">
+            <a href="/group1glory/leaderboard" class="text-g1-gold font-bold text-sm hover:text-g1-gold-light transition-colors">
                 Full Leaderboard →
             </a>
         </div>
         {% if top_3 %}
-        <div class="p-8 space-y-4">
+        <div class="p-4 space-y-3">
             {% for entry in top_3 %}
-            <div class="flex items-center gap-5 p-5 rounded-xl transition-all hover:scale-[1.02] {% if loop.index == 1 %}bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 border-2 border-amber-300 shadow-lg{% elif loop.index == 2 %}bg-gradient-to-r from-gray-100 to-gray-50 border border-gray-200{% elif loop.index == 3 %}bg-gradient-to-r from-orange-100 to-orange-50 border border-orange-200{% endif %}">
-                <div class="w-14 h-14 rounded-full flex items-center justify-center font-black text-xl {% if loop.index == 1 %}pos-1 trophy-bounce{% elif loop.index == 2 %}pos-2{% else %}pos-3{% endif %}">
+            <div class="flex items-center gap-4 p-4 rounded-xl transition-all hover:scale-[1.01] {% if loop.index == 1 %}bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 border-2 border-amber-300{% elif loop.index == 2 %}bg-gradient-to-r from-gray-100 to-gray-50 border border-gray-200{% elif loop.index == 3 %}bg-gradient-to-r from-orange-100 to-orange-50 border border-orange-200{% endif %}">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center font-black text-lg {% if loop.index == 1 %}pos-1 trophy-bounce{% elif loop.index == 2 %}pos-2{% else %}pos-3{% endif %}">
                     {% if loop.index == 1 %}👑{% elif loop.index == 2 %}🥈{% else %}🥉{% endif %}
                 </div>
                 <div class="flex-1">
-                    <div class="font-black text-g1-navy text-xl">{{ entry.display_name }}</div>
-                    <div class="text-sm text-gray-500">{{ entry.winners or 0 }} winner{{ 's' if (entry.winners or 0) != 1 else '' }}</div>
+                    <div class="font-black text-g1-navy">{{ entry.display_name }}</div>
+                    <div class="text-xs text-gray-500">{{ entry.winners or 0 }} winner{{ 's' if (entry.winners or 0) != 1 else '' }}</div>
                 </div>
                 <div class="text-right">
-                    <div class="text-4xl font-black {% if loop.index == 1 %}text-g1-gold{% else %}text-g1-green{% endif %}">{{ entry.total_points }}</div>
-                    <div class="text-xs text-gray-500 uppercase tracking-wide">points</div>
+                    <div class="text-2xl font-black {% if loop.index == 1 %}text-g1-gold{% else %}text-g1-green{% endif %}">{{ entry.total_points }}</div>
+                    <div class="text-xs text-gray-500 uppercase">pts</div>
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div class="p-16 text-center">
-            <div class="text-7xl mb-6">🏇</div>
-            <p class="text-gray-500 text-xl">No results yet - be the first to dominate!</p>
+        <div class="p-10 text-center">
+            <div class="text-5xl mb-4">🏇</div>
+            <p class="text-gray-500">No results yet - be the first to dominate!</p>
         </div>
         {% endif %}
     </div>
@@ -384,30 +378,30 @@
     <!-- Upcoming Races -->
     {% if upcoming_races %}
     <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div class="bg-gradient-to-r from-g1-gold to-g1-gold-dark px-8 py-5 flex items-center justify-between">
-            <h2 class="font-display text-2xl font-bold text-g1-green-dark flex items-center gap-3">
-                <span class="text-3xl">🏁</span> Up Next
+        <div class="bg-gradient-to-r from-g1-gold to-g1-gold-dark px-6 py-4 flex items-center justify-between">
+            <h2 class="font-display text-xl font-bold text-g1-green-dark flex items-center gap-2">
+                <span class="text-2xl">🏁</span> Up Next
             </h2>
             {% if user %}
-            <a href="/group1glory/picks" class="text-g1-green-dark font-bold hover:underline">Pick Your Horses →</a>
+            <a href="/group1glory/picks" class="text-g1-green-dark font-bold text-sm hover:underline">Pick Your Horses →</a>
             {% endif %}
         </div>
-        <div class="p-8 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="p-4 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {% for race in upcoming_races %}
-            <div class="group border-2 border-gray-200 rounded-xl p-6 hover:border-g1-gold hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
-                <div class="absolute top-4 right-4"><span class="badge-g1">G1</span></div>
+            <div class="group border border-gray-200 rounded-xl p-4 hover:border-g1-gold hover:shadow-lg transition-all cursor-pointer relative">
+                <div class="absolute top-3 right-3"><span class="badge-g1 text-[10px] px-2 py-0.5">G1</span></div>
                 {% if race.status == 'open' %}
-                <div class="absolute top-4 left-4">
-                    <span class="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                        <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>OPEN
+                <div class="absolute top-3 left-3">
+                    <span class="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>OPEN
                     </span>
                 </div>
                 {% endif %}
-                <div class="mt-10">
-                    <h3 class="font-display font-bold text-g1-navy text-xl mb-2 group-hover:text-g1-green transition-colors">{{ race.race_name }}</h3>
-                    <p class="text-gray-500 mb-4"><span class="font-semibold">{{ race.venue }}</span> • {{ race.distance }}m</p>
-                    <div class="flex items-center gap-2 text-g1-gold font-bold text-lg">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="mt-6">
+                    <h3 class="font-display font-bold text-g1-navy text-sm mb-1 group-hover:text-g1-green transition-colors">{{ race.race_name }}</h3>
+                    <p class="text-gray-500 text-xs mb-2"><span class="font-semibold">{{ race.venue }}</span> • {{ race.distance }}m</p>
+                    <div class="flex items-center gap-1 text-g1-gold font-bold text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                         </svg>
                         {{ race.race_date|melb_date }}
@@ -421,18 +415,14 @@
 
     {% else %}
     <!-- No Active Competition -->
-    <div class="bg-gradient-to-br from-g1-green to-g1-navy rounded-2xl shadow-2xl p-16 text-center text-white relative overflow-hidden">
-        <div class="absolute inset-0 opacity-10">
-            <div class="absolute top-10 left-10 text-9xl">🏇</div>
-            <div class="absolute bottom-10 right-10 text-9xl">🏆</div>
-        </div>
+    <div class="bg-gradient-to-br from-g1-green to-g1-navy rounded-2xl shadow-xl p-10 text-center text-white relative overflow-hidden">
         <div class="relative">
-            <div class="text-8xl mb-6">⏳</div>
-            <h2 class="font-display text-4xl font-black mb-6">Coming Soon!</h2>
-            <p class="text-white/80 text-xl max-w-lg mx-auto mb-8">
+            <div class="text-6xl mb-4">⏳</div>
+            <h2 class="font-display text-3xl font-black mb-4">Coming Soon!</h2>
+            <p class="text-white/80 max-w-lg mx-auto mb-6">
                 The next competition is being prepared. Register now so you're ready when the gates open!
             </p>
-            <a href="/group1glory/register" class="inline-flex items-center gap-3 bg-g1-gold text-g1-green-dark font-bold text-lg px-10 py-5 rounded-xl hover:bg-g1-gold-light transition-colors shadow-lg">
+            <a href="/group1glory/register" class="inline-flex items-center gap-2 bg-g1-gold text-g1-green-dark font-bold px-8 py-4 rounded-xl hover:bg-g1-gold-light transition-colors shadow-lg">
                 <span>🎯</span> Get Ready
             </a>
         </div>
@@ -440,32 +430,32 @@
     {% endif %}
 
     <!-- Why This Comp -->
-    <div class="grid md:grid-cols-3 gap-8">
-        <div class="bg-white rounded-2xl shadow-xl p-8 text-center hover:shadow-2xl hover:-translate-y-2 transition-all">
-            <div class="text-6xl mb-4">🎯</div>
-            <h3 class="font-display text-2xl font-bold text-g1-navy mb-3">Dead Simple</h3>
-            <p class="text-gray-600 text-lg">Pick 1 horse per race. That's it. No multi-legs, no complex betting. Pure tipping skill.</p>
+    <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center hover:shadow-xl hover:-translate-y-1 transition-all">
+            <div class="text-4xl mb-3">🎯</div>
+            <h3 class="font-display text-lg font-bold text-g1-navy mb-2">Dead Simple</h3>
+            <p class="text-gray-600 text-sm">Pick 1 horse per race. That's it. No multi-legs, no complex betting.</p>
         </div>
-        <div class="bg-white rounded-2xl shadow-xl p-8 text-center hover:shadow-2xl hover:-translate-y-2 transition-all">
-            <div class="text-6xl mb-4">🔥</div>
-            <h3 class="font-display text-2xl font-bold text-g1-navy mb-3">Maximum Glory</h3>
-            <p class="text-gray-600 text-lg">Winners immortalised on the Honour Board forever. Losers shout the drinks at the next race day.</p>
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center hover:shadow-xl hover:-translate-y-1 transition-all">
+            <div class="text-4xl mb-3">🔥</div>
+            <h3 class="font-display text-lg font-bold text-g1-navy mb-2">Maximum Glory</h3>
+            <p class="text-gray-600 text-sm">Winners immortalised on the Honour Board forever. Losers shout drinks.</p>
         </div>
-        <div class="bg-white rounded-2xl shadow-xl p-8 text-center hover:shadow-2xl hover:-translate-y-2 transition-all">
-            <div class="text-6xl mb-4">💸</div>
-            <h3 class="font-display text-2xl font-bold text-g1-navy mb-3">Zero Risk</h3>
-            <p class="text-gray-600 text-lg">100% free to play. All the glory, none of the financial carnage. Unlike real punting...</p>
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center hover:shadow-xl hover:-translate-y-1 transition-all">
+            <div class="text-4xl mb-3">💸</div>
+            <h3 class="font-display text-lg font-bold text-g1-navy mb-2">Zero Risk</h3>
+            <p class="text-gray-600 text-sm">100% free to play. All the glory, none of the financial carnage.</p>
         </div>
     </div>
 
     <!-- Final CTA -->
     {% if not user %}
-    <div class="bg-gradient-to-r from-g1-gold via-g1-gold-light to-g1-gold rounded-2xl shadow-2xl p-12 text-center">
-        <h2 class="font-display text-4xl font-black text-g1-green-dark mb-6">Ready to Prove You're the Best Tipster?</h2>
-        <p class="text-g1-green-dark/80 text-xl mb-8 max-w-2xl mx-auto">Join Mat's Group One Glory and show your mates who REALLY knows racing.</p>
-        <a href="/group1glory/register" class="inline-flex items-center gap-3 bg-g1-green text-white font-black text-xl px-12 py-5 rounded-xl hover:bg-g1-green-dark transition-colors shadow-xl hover-shake">
-            <span class="text-2xl">🏇</span>
-            <span>ENTER THE COMP NOW</span>
+    <div class="bg-gradient-to-r from-g1-gold via-g1-gold-light to-g1-gold rounded-xl shadow-xl p-8 text-center">
+        <h2 class="font-display text-2xl md:text-3xl font-black text-g1-green-dark mb-4">Ready to Prove You're the Best Tipster?</h2>
+        <p class="text-g1-green-dark/80 mb-6 max-w-xl mx-auto">Join Mat's Group One Glory and show your mates who REALLY knows racing.</p>
+        <a href="/group1glory/register" class="inline-flex items-center gap-2 bg-g1-green text-white font-black text-lg px-8 py-4 rounded-xl hover:bg-g1-green-dark transition-colors shadow-lg hover-shake">
+            <span class="text-xl">🏇</span>
+            <span>ENTER THE COMP</span>
         </a>
     </div>
     {% endif %}
