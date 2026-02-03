@@ -292,14 +292,13 @@ class TwitterDelivery:
 
     def _format_long_post(self, raw_content: str, content_type: str, venue: str) -> str:
         """Format content for a single long-form X post."""
+        from punty.formatters.twitter import TwitterFormatter
+
         # Add header
         header = f"🏇 PUNTY'S {venue.upper()} TIPS\n\n"
 
-        # Clean up the content - remove markdown formatting for cleaner look
-        text = raw_content
-
-        # Convert markdown bold to plain text or keep asterisks
-        # X renders *text* as italic, so we'll keep the formatting
+        # Clean markdown - X doesn't render markdown, shows raw asterisks/hashes
+        text = TwitterFormatter._clean_markdown(raw_content)
 
         # Add footer with hashtags
         footer = f"\n\n#AusRacing #HorseRacing #{venue.replace(' ', '')}Racing\n\nGamble Responsibly. 1800 858 858"
