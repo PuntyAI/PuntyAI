@@ -68,19 +68,55 @@
         {% endif %}
     </div>
 
-    <!-- Scrape Calendar -->
+    <!-- Import Races Section -->
     <div class="bg-white rounded-2xl shadow-lg p-6">
-        <h2 class="font-display text-xl font-bold text-g1-navy mb-2">Import Race Calendar</h2>
-        <p class="text-gray-600 mb-4">
-            Scrape the Racing Australia website to get Group 1 race dates for the current year.
-        </p>
-        <button @click="scrapeCalendar()" class="btn-gold" :disabled="scraping">
-            <span x-show="!scraping">Scrape Racing Australia Calendar</span>
-            <span x-show="scraping"><span class="spinner"></span> Scraping...</span>
-        </button>
-        <div x-show="scrapeResults" x-cloak class="mt-4 p-4 bg-g1-green/5 border border-g1-green/20 rounded-xl">
-            <div class="font-semibold text-g1-navy mb-2">Found <span x-text="scrapeResults?.races_found || 0" class="text-g1-green"></span> Group 1 races</div>
-            <div x-show="scrapeResults?.races?.length > 0" class="max-h-60 overflow-y-auto text-sm text-gray-600 space-y-1">
+        <h2 class="font-display text-xl font-bold text-g1-navy mb-4">Import Race Calendar</h2>
+
+        <!-- Method 1: Hardcoded (Recommended) -->
+        <div class="bg-g1-gold/10 border-2 border-g1-gold/30 rounded-xl p-5 mb-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 bg-g1-gold rounded-xl flex items-center justify-center text-2xl flex-shrink-0">📅</div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-g1-navy text-lg mb-1">Import Standard Calendar (Recommended)</h3>
+                    <p class="text-gray-600 text-sm mb-3">
+                        Import the standard Melbourne & Sydney Group 1 calendar for 2026. This includes all major races like Melbourne Cup, Cox Plate, Golden Slipper, etc.
+                    </p>
+                    <div class="flex flex-wrap gap-3">
+                        <button @click="importHardcodedCalendar()" class="btn-gold flex items-center gap-2" :disabled="importingHardcoded">
+                            <span x-show="!importingHardcoded">Import 2026 Calendar</span>
+                            <span x-show="importingHardcoded"><span class="spinner"></span> Importing...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Method 2: Scrape (Fallback) -->
+        <div class="border border-gray-200 rounded-xl p-5">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">🔍</div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-g1-navy text-lg mb-1">Scrape Racing Australia (Advanced)</h3>
+                    <p class="text-gray-600 text-sm mb-3">
+                        Try to scrape live data from Racing Australia. This may not always work due to website changes.
+                    </p>
+                    <button @click="scrapeCalendar()" class="btn-outline flex items-center gap-2" :disabled="scraping">
+                        <span x-show="!scraping">Try Scraping</span>
+                        <span x-show="scraping"><span class="spinner"></span> Scraping...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div x-show="scrapeResults || importResults" x-cloak class="mt-6 p-4 bg-g1-green/10 border border-g1-green/30 rounded-xl">
+            <div x-show="scrapeResults" class="font-semibold text-g1-navy mb-2">
+                Scrape found <span x-text="scrapeResults?.races_found || 0" class="text-g1-green font-bold"></span> races
+            </div>
+            <div x-show="importResults" class="font-semibold text-g1-green">
+                <span x-text="importResults?.message"></span>
+            </div>
+            <div x-show="scrapeResults?.races?.length > 0" class="max-h-48 overflow-y-auto text-sm text-gray-600 space-y-1 mt-2">
                 <template x-for="race in scrapeResults?.races || []">
                     <div x-text="`${race.race_name} - ${race.venue} (${race.distance}m)`"></div>
                 </template>
@@ -132,6 +168,8 @@ function competitionsApp() {
         showCreateModal: false,
         scraping: false,
         scrapeResults: null,
+        importingHardcoded: false,
+        importResults: null,
         newComp: {
             name: '',
             start_date: '',
@@ -184,6 +222,7 @@ function competitionsApp() {
 
         async scrapeCalendar() {
             this.scraping = true;
+            this.importResults = null;
             try {
                 const response = await fetch('/group1glory/api/admin/scrape-calendar', {
                     method: 'POST',
@@ -200,6 +239,46 @@ function competitionsApp() {
                 showToast('An error occurred', 'error');
             } finally {
                 this.scraping = false;
+            }
+        },
+
+        async importHardcodedCalendar() {
+            // Need a competition to import into
+            const competitions = document.querySelectorAll('table tbody tr');
+            if (competitions.length === 0) {
+                showToast('Create a competition first!', 'warning');
+                return;
+            }
+
+            // Get the first (most recent) competition ID from the Manage link
+            const manageLinks = document.querySelectorAll('a[href*="/admin/competitions/"]');
+            if (manageLinks.length === 0) {
+                showToast('Create a competition first!', 'warning');
+                return;
+            }
+
+            const href = manageLinks[0].getAttribute('href');
+            const competitionId = href.split('/').pop();
+
+            this.importingHardcoded = true;
+            this.scrapeResults = null;
+            try {
+                const response = await fetch(`/group1glory/api/admin/import-hardcoded-calendar?competition_id=${competitionId}`, {
+                    method: 'POST',
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.importResults = data;
+                    showToast(data.message || `Imported ${data.races_imported} races!`, 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showToast(data.detail || 'Import failed', 'error');
+                }
+            } catch (err) {
+                showToast('An error occurred', 'error');
+            } finally {
+                this.importingHardcoded = false;
             }
         },
     };

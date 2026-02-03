@@ -288,3 +288,15 @@ class RaceService:
             grouped[date_key].append(race)
 
         return grouped
+
+    async def find_race_by_name_and_date(
+        self, competition_id: str, race_name: str, race_date: datetime
+    ) -> Optional[G1Race]:
+        """Find a race by name and date to avoid duplicates."""
+        result = await self.db.execute(
+            select(G1Race)
+            .where(G1Race.competition_id == competition_id)
+            .where(G1Race.race_name == race_name)
+            .where(G1Race.race_date == race_date)
+        )
+        return result.scalar_one_or_none()

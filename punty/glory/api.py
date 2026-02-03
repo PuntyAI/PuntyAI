@@ -768,3 +768,53 @@ async def import_calendar_races(
         imported += 1
 
     return {"status": "ok", "races_imported": imported}
+
+
+@router.post("/admin/import-hardcoded-calendar")
+async def import_hardcoded_calendar(
+    request: Request,
+    competition_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Import hardcoded Group 1 calendar into a competition (admin only).
+
+    This is a reliable fallback that doesn't require scraping.
+    """
+    require_admin(request)
+
+    from punty.glory.services.calendar_scraper import get_hardcoded_races
+
+    year = datetime.now().year
+    races = get_hardcoded_races(year)
+
+    # Import races into competition
+    race_service = RaceService(db)
+    imported = 0
+    skipped = 0
+
+    for race_data in races:
+        # Check if race already exists (by name and date)
+        existing = await race_service.find_race_by_name_and_date(
+            competition_id, race_data["race_name"], race_data["race_date"]
+        )
+        if existing:
+            skipped += 1
+            continue
+
+        await race_service.create_race(
+            competition_id=competition_id,
+            race_name=race_data["race_name"],
+            venue=race_data["venue"],
+            race_date=race_data["race_date"],
+            distance=race_data["distance"],
+            prize_money=race_data.get("prize_money"),
+            external_id=race_data.get("external_id"),
+        )
+        imported += 1
+
+    return {
+        "status": "ok",
+        "races_imported": imported,
+        "races_skipped": skipped,
+        "message": f"Imported {imported} races ({skipped} already existed)",
+    }
