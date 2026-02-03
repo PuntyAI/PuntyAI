@@ -125,9 +125,6 @@ Required buckets:
 - Sequences
 - Big 3 Multi
 
-Final line:
-*TOTAL* — <total_staked>U staked | <total_returned>U back | *<net>U*
-
 *Big 3 Multi Result*
 State clearly whether it hit or missed.
 Name the three legs with race numbers.
