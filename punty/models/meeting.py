@@ -6,6 +6,7 @@ from typing import Optional, List
 from sqlalchemy import Boolean, Index, String, Integer, Float, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from punty.config import melb_now_naive
 from punty.models.database import Base
 
 
@@ -33,9 +34,9 @@ class Meeting(Base):
     weather_wind_dir: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     rail_bias_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=melb_now_naive, onupdate=melb_now_naive
     )
 
     # Relationships
@@ -97,9 +98,9 @@ class Race(Base):
     results_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     exotic_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=melb_now_naive, onupdate=melb_now_naive
     )
 
     # Relationships
@@ -222,9 +223,9 @@ class Runner(Base):
     # Trainer details
     trainer_location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=melb_now_naive, onupdate=melb_now_naive
     )
 
     # Relationships
@@ -306,7 +307,7 @@ class Result(Base):
     finish_time: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     dividend_win: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     dividend_place: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
 
     # Relationships
     race: Mapped["Race"] = relationship("Race", back_populates="results")

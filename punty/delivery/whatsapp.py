@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from punty.config import settings
+from punty.config import settings, melb_now_naive
 from punty.formatters.whatsapp import format_whatsapp
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ class WhatsAppDelivery:
 
             # Update content status
             content.sent_to_whatsapp = True
-            content.sent_at = datetime.now()
+            content.sent_at = melb_now_naive()
             content.status = ContentStatus.SENT.value
             await self.db.commit()
 

@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import Column, DateTime, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from punty.config import melb_now_naive
 from punty.models.database import Base
 
 
@@ -24,8 +25,8 @@ class AnalysisWeights(Base):
     # Each weight can be: "low", "low-med", "med", "med-high", "high"
     weights_json = Column(Text, default="{}")
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=melb_now_naive)
+    updated_at = Column(DateTime, default=melb_now_naive, onupdate=melb_now_naive)
 
     # Default weights from PUNTY_MASTER v3.13
     DEFAULT_WEIGHTS = {
@@ -119,7 +120,7 @@ class AppSettings(Base):
     key = Column(String, primary_key=True)
     value = Column(Text)
     description = Column(String)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=melb_now_naive, onupdate=melb_now_naive)
 
     # Default settings
     DEFAULTS = {

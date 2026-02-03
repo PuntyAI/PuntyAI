@@ -1,7 +1,7 @@
-"""Scrape racing.com/calendar for today's meetings list."""
+"""Scrape racing.com/calendar for meetings on a specific date."""
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from punty.config import melb_today
 from typing import Any
@@ -14,12 +14,12 @@ CALENDAR_URL = "https://www.racing.com/calendar"
 
 
 async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]:
-    """Scrape racing.com calendar page for today's meetings.
+    """Scrape racing.com calendar page for meetings on a specific date.
 
-    Uses Playwright to render the JS-heavy Next.js calendar page, locates
-    today's column, clicks "Show more" if present, then extracts meeting
-    data using Playwright locators (avoids page.content() / BS4 issues
-    with React-hydrated classes).
+    Uses Playwright to render the JS-heavy Next.js calendar page, finds the
+    column matching the requested date by checking the displayed day number
+    (not relying on CSS "today" class which uses racing.com's server timezone),
+    then extracts meeting data.
 
     Returns a list of dicts with: venue, state, num_races, race_type, status, date.
     """
@@ -32,11 +32,10 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
         await page.goto(CALENDAR_URL, wait_until="load")
 
         # Wait for the calendar grid to render
-        today_locator = page.locator(".calendar__grid-item-day--today")
         try:
-            await today_locator.wait_for(timeout=30000)
+            await page.locator(".calendar__grid-item-container").first.wait_for(timeout=30000)
         except Exception:
-            logger.warning("Could not find today's cell on calendar page")
+            logger.warning("Could not find calendar grid on page")
             return meetings
 
         # Dismiss cookie banner
@@ -51,24 +50,70 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
             except Exception:
                 pass
 
-        # Find the container that holds today's cell by checking each
-        # grid-item-container for the --today element inside it
+        # Find the container matching our target date
+        # The calendar shows a week, with day numbers in .calendar__grid-item-day
         containers = page.locator(".calendar__grid-item-container")
         container_count = await containers.count()
-        today_container = None
+
+        target_day = race_date.day
+        target_container = None
+        found_date_info = None
+
+        logger.debug(f"Looking for day {target_day} in {container_count} containers")
+
         for ci in range(container_count):
             c = containers.nth(ci)
-            today_inside = c.locator(".calendar__grid-item-day--today")
-            if await today_inside.count() > 0:
-                today_container = c
-                break
+            # Each container has a day element with the date number
+            day_elem = c.locator(".calendar__grid-item-day").first
+            try:
+                day_text = (await day_elem.text_content() or "").strip()
+                # Day text is usually just the number (e.g., "3" for Feb 3)
+                # Sometimes it might have additional text
+                day_num = None
+                for part in day_text.split():
+                    if part.isdigit():
+                        day_num = int(part)
+                        break
 
-        if today_container is None:
-            logger.warning("Could not locate today's container among grid items")
+                if day_num is not None and day_num == target_day:
+                    # Verify this is the right month by checking we're in the right range
+                    # The calendar typically shows ~7 days, so if our target is within
+                    # a reasonable range of today, we're good
+                    target_container = c
+                    found_date_info = f"day {day_num}"
+                    logger.info(f"Found target date column: {found_date_info}")
+                    break
+            except Exception as e:
+                logger.debug(f"Error reading day from container {ci}: {e}")
+                continue
+
+        # If we couldn't find by day number, try the --today class as fallback
+        # but only if the requested date IS actually today
+        if target_container is None and race_date == melb_today():
+            logger.info("Falling back to CSS --today class for today's date")
+            for ci in range(container_count):
+                c = containers.nth(ci)
+                today_inside = c.locator(".calendar__grid-item-day--today")
+                if await today_inside.count() > 0:
+                    target_container = c
+                    found_date_info = "CSS --today class"
+                    break
+
+        if target_container is None:
+            logger.warning(f"Could not locate column for {race_date} (day {target_day}) among {container_count} grid items")
+            # Log what days we did find for debugging
+            try:
+                for ci in range(min(container_count, 7)):
+                    c = containers.nth(ci)
+                    day_elem = c.locator(".calendar__grid-item-day").first
+                    day_text = (await day_elem.text_content() or "").strip()
+                    logger.debug(f"  Container {ci}: day text = '{day_text}'")
+            except Exception:
+                pass
             return meetings
 
         # Click "Show more" if present
-        show_more = today_container.locator(".calendar__grid-item-list-show-more")
+        show_more = target_container.locator(".calendar__grid-item-list-show-more")
         try:
             if await show_more.is_visible(timeout=2000):
                 await show_more.click()
@@ -77,9 +122,9 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
             pass
 
         # Extract meetings using Playwright locators
-        btns = today_container.locator(".calendar__grid-item-btn")
+        btns = target_container.locator(".calendar__grid-item-btn")
         count = await btns.count()
-        logger.info(f"Found {count} meeting buttons in today's column")
+        logger.info(f"Found {count} meeting buttons in column for {race_date}")
 
         for i in range(count):
             btn = btns.nth(i)

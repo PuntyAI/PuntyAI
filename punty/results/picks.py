@@ -2,12 +2,13 @@
 
 import json
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import select, delete, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from punty.config import melb_now_naive
 from punty.models.pick import Pick
 from punty.models.meeting import Meeting, Race, Runner
 from punty.models.content import Content
@@ -41,7 +42,7 @@ async def settle_picks_for_race(
     db: AsyncSession, meeting_id: str, race_number: int
 ) -> int:
     """Settle unsettled picks that involve this race. Returns count settled."""
-    now = datetime.now(UTC)
+    now = melb_now_naive()
     settled_count = 0
 
     # Load race + runners for this race

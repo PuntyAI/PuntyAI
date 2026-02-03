@@ -13,6 +13,16 @@ def melb_now() -> datetime:
     return datetime.now(MELB_TZ)
 
 
+def melb_now_naive() -> datetime:
+    """Current time in Melbourne as naive datetime (for SQLAlchemy defaults).
+
+    SQLite doesn't handle timezone-aware datetimes well, so we store
+    Melbourne local time as naive datetime. This function is used as
+    the default factory for model created_at/updated_at fields.
+    """
+    return melb_now().replace(tzinfo=None)
+
+
 def melb_today() -> date:
     """Today's date in Melbourne timezone."""
     return melb_now().date()

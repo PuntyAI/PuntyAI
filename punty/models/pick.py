@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import Index, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from punty.config import melb_now_naive
 from punty.models.database import Base
 
 
@@ -58,7 +59,7 @@ class Pick(Base):
     settled: Mapped[bool] = mapped_column(Boolean, default=False)
     settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
 
     # Relationships
     content: Mapped["Content"] = relationship("Content")

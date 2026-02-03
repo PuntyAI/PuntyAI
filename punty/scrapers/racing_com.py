@@ -12,6 +12,7 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any, AsyncGenerator, Optional
 
+from punty.config import melb_now
 from punty.scrapers.base import BaseScraper, ScraperError
 from punty.scrapers.playwright_base import new_page
 
@@ -478,7 +479,8 @@ class RacingComScraper(BaseScraper):
         if last_race_str:
             try:
                 last_dt = datetime.fromisoformat(last_race_str.replace("Z", ""))
-                days_since = (datetime.utcnow() - last_dt).days
+                # Use Melbourne time for "today" comparison
+                days_since = (melb_now().replace(tzinfo=None) - last_dt).days
             except Exception:
                 pass
 
@@ -659,12 +661,13 @@ class RacingComScraper(BaseScraper):
     def _parse_time(self, time_str: str) -> Optional[datetime]:
         """Parse time string like '6:15pm' to datetime."""
         try:
+            now = melb_now()
             for fmt in ["%I:%M%p", "%I:%M %p", "%H:%M"]:
                 try:
                     parsed = datetime.strptime(time_str.strip().upper(), fmt.upper())
-                    return parsed.replace(year=datetime.now().year,
-                                         month=datetime.now().month,
-                                         day=datetime.now().day)
+                    return parsed.replace(year=now.year,
+                                         month=now.month,
+                                         day=now.day)
                 except ValueError:
                     continue
         except Exception:

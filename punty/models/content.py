@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy import Index, String, Integer, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from punty.config import melb_now_naive
 from punty.models.database import Base
 
 
@@ -47,7 +48,7 @@ class ContextSnapshot(Base):
     significant_changes: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # JSON list of changes from previous
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
 
     # Relationships
     meeting: Mapped["Meeting"] = relationship("Meeting")
@@ -104,9 +105,9 @@ class Content(Base):
     sent_to_twitter: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=melb_now_naive, onupdate=melb_now_naive
     )
 
     # Relationships
@@ -152,7 +153,7 @@ class ScheduledJob(Base):
     last_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""

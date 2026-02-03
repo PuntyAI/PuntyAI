@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from punty.config import settings
+from punty.config import settings, melb_now_naive
 from punty.formatters.twitter import format_twitter
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ class TwitterDelivery:
             tweet_id = response.data["id"]
 
             # Update content status
-            content.sent_at = datetime.now()
+            content.sent_at = melb_now_naive()
             content.status = ContentStatus.SENT.value
             await self.db.commit()
 
@@ -184,7 +184,7 @@ class TwitterDelivery:
             raise ValueError(f"Twitter API error: {e}")
 
         # Update content status
-        content.sent_at = datetime.now()
+        content.sent_at = melb_now_naive()
         content.status = ContentStatus.SENT.value
         await self.db.commit()
 
@@ -272,7 +272,7 @@ class TwitterDelivery:
             tweet_id = response.data["id"]
 
             # Update content status
-            content.sent_at = datetime.now()
+            content.sent_at = melb_now_naive()
             content.status = ContentStatus.SENT.value
             await self.db.commit()
 

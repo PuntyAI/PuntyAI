@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from punty.config import melb_now
 from punty.formatters.whatsapp import format_whatsapp
 from punty.formatters.twitter import format_twitter
 
@@ -116,7 +117,7 @@ class ConsoleDelivery:
 
         print(f"\n{separator}")
         print(f"  {platform.upper()} PREVIEW - {content_type.replace('_', ' ').upper()}")
-        print(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print(f"  Generated: {melb_now().strftime('%Y-%m-%d %H:%M')}")
         print(separator)
         print()
         print(formatted)
@@ -135,7 +136,7 @@ class ConsoleDelivery:
 
         print(f"\n{separator}")
         print(f"  TWITTER THREAD PREVIEW - {content_type.replace('_', ' ').upper()}")
-        print(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print(f"  Generated: {melb_now().strftime('%Y-%m-%d %H:%M')}")
         print(f"  Tweets: {len(tweets)}")
         print(separator)
 
