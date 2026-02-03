@@ -33,10 +33,10 @@
     </div>
 
     <!-- Content Table -->
-    <div class="bg-white rounded-lg shadow">
+    <div class="bg-punty-card rounded-lg shadow">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+            <table class="min-w-full divide-y divide-punty-border">
+                <thead class="bg-punty-card2">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting</th>
@@ -47,9 +47,9 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="divide-y divide-punty-border">
                     {% for item in content_items %}
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-punty-card2">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="text-sm font-medium text-gray-900">
                                 {{ item.content_type|replace('_', ' ')|title }}

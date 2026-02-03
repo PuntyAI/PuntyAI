@@ -13,7 +13,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Analysis Framework Weights -->
         <div class="bg-white rounded-lg shadow lg:col-span-2">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">Analysis Framework Weights</h2>
                     <p class="text-sm text-gray-500">Configure how Punty weighs different factors when analysing horses</p>
@@ -31,7 +31,7 @@
                     <div class="space-y-1">
                         <label class="block text-sm font-medium text-gray-700">{{ label }}</label>
                         <select name="weights[{{ key }}]"
-                                class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-punty-coral focus:border-punty-coral">
+                                class="w-full bg-punty-card2 border border-punty-border text-white rounded px-3 py-1.5 text-sm focus:ring-punty-coral focus:border-punty-coral">
                             {% for option in weight_options %}
                             <option value="{{ option }}" {% if weights.get(key) == option %}selected{% endif %}>
                                 {{ option|title }}
@@ -49,7 +49,7 @@
 
         <!-- Favorites Detection Settings -->
         <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-punty-border">
                 <h2 class="text-lg font-semibold text-gray-900">Value vs Favorites</h2>
                 <p class="text-sm text-gray-500">Configure how Punty handles market favorites</p>
             </div>
@@ -57,7 +57,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Favorites Odds Threshold</label>
                     <input type="number" step="0.10" min="1.00" max="5.00"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
                            value="{{ settings.get('favorites_threshold', {}).get('value', '2.50') }}"
                            hx-put="/api/settings/favorites_threshold"
                            hx-trigger="change"
@@ -69,7 +69,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Max Favorites Per Card</label>
                     <input type="number" min="1" max="10"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
                            value="{{ settings.get('max_favorites_per_card', {}).get('value', '3') }}"
                            hx-put="/api/settings/max_favorites_per_card"
                            hx-trigger="change"
@@ -96,14 +96,14 @@
 
         <!-- WhatsApp Settings -->
         <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-punty-border">
                 <h2 class="text-lg font-semibold text-gray-900">WhatsApp Settings</h2>
             </div>
             <div class="p-6 space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Group Invite Link</label>
                     <input type="url"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
                            placeholder="https://chat.whatsapp.com/..."
                            value="{{ settings.get('whatsapp_invite_link', {}).get('value', '') }}"
                            hx-put="/api/settings/whatsapp_invite_link"
@@ -145,7 +145,7 @@
 
         <!-- API Keys -->
         <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-punty-border">
                 <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
             </div>
             <div class="p-6 space-y-6">
@@ -154,7 +154,7 @@
                 <div id="openai-section">
                     <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
                     <div id="openai-display" class="flex items-center space-x-2">
-                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-600">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
                             {{ api_key_status.openai if api_key_status.openai else 'Not configured' }}
                         </span>
                         <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.openai else 'bg-red-100 text-red-700' }}">
@@ -165,7 +165,7 @@
                     </div>
                     <div id="openai-edit" class="hidden space-y-2 mt-2">
                         <input type="text" id="oai_key" placeholder="sk-proj-..."
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
                             <button onclick="saveApiKeys('openai', {openai_api_key: document.getElementById('oai_key').value})"
                                     class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
@@ -179,7 +179,7 @@
                 <div id="twitter-section">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Twitter/X API</label>
                     <div id="twitter-display" class="flex items-center space-x-2">
-                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-600">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
                             {{ api_key_status.twitter if api_key_status.twitter else 'Not configured' }}
                         </span>
                         <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.twitter else 'bg-red-100 text-red-700' }}">
@@ -190,13 +190,13 @@
                     </div>
                     <div id="twitter-edit" class="hidden space-y-2 mt-2">
                         <input type="text" id="tw_api_key" placeholder="API Key (Consumer Key)"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <input type="text" id="tw_api_secret" placeholder="API Secret (Consumer Secret)"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <input type="text" id="tw_access_token" placeholder="Access Token"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <input type="text" id="tw_access_secret" placeholder="Access Secret"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
                             <button onclick="saveApiKeys('twitter', {twitter_api_key: document.getElementById('tw_api_key').value, twitter_api_secret: document.getElementById('tw_api_secret').value, twitter_access_token: document.getElementById('tw_access_token').value, twitter_access_secret: document.getElementById('tw_access_secret').value})"
                                     class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
@@ -210,7 +210,7 @@
                 <div id="whatsapp-section">
                     <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Business API</label>
                     <div id="whatsapp-display" class="flex items-center space-x-2">
-                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-600">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
                             {{ api_key_status.whatsapp if api_key_status.whatsapp else 'Not configured' }}
                         </span>
                         <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.whatsapp else 'bg-red-100 text-red-700' }}">
@@ -221,9 +221,9 @@
                     </div>
                     <div id="whatsapp-edit" class="hidden space-y-2 mt-2">
                         <input type="text" id="wa_api_token" placeholder="API Token"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <input type="text" id="wa_phone_id" placeholder="Phone Number ID"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
                             <button onclick="saveApiKeys('whatsapp', {whatsapp_api_token: document.getElementById('wa_api_token').value, whatsapp_phone_number_id: document.getElementById('wa_phone_id').value})"
                                     class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
@@ -238,7 +238,7 @@
 
         <!-- Approval Settings -->
         <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-punty-border">
                 <h2 class="text-lg font-semibold text-gray-900">Approval Settings</h2>
             </div>
             <div class="p-6 space-y-4">
@@ -271,13 +271,13 @@
 
         <!-- Scheduled Jobs -->
         <div class="bg-white rounded-lg shadow lg:col-span-2">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-gray-900">Scheduled Jobs</h2>
                 <button class="text-punty-coral hover:underline text-sm">+ Add Job</button>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                <table class="min-w-full divide-y divide-punty-border">
+                    <thead class="bg-punty-card2">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job Type</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting</th>
@@ -287,9 +287,9 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody class="bg-white divide-y divide-punty-border">
                         {% for job in jobs %}
-                        <tr class="hover:bg-gray-50">
+                        <tr class="hover:bg-punty-card2">
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                 {{ job.job_type|replace('_', ' ')|title }}
                             </td>
@@ -334,7 +334,7 @@
 
         <!-- Punty Personality -->
         <div class="bg-white rounded-lg shadow lg:col-span-2">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-punty-border">
                 <h2 class="text-lg font-semibold text-gray-900">Punty's Personality (PUNTY_MASTER v3.13)</h2>
             </div>
             <div class="p-6">
@@ -342,7 +342,7 @@
                     Edit the personality prompt that defines how Punty writes content.
                     This is loaded from <code class="bg-gray-100 px-1 rounded">prompts/personality.md</code>
                 </p>
-                <textarea class="w-full h-64 border border-gray-300 rounded-lg p-4 font-mono text-sm"
+                <textarea class="w-full h-64 bg-punty-card2 border border-punty-border text-white rounded-lg p-4 font-mono text-sm"
                           placeholder="Loading personality prompt...">{{ personality_prompt }}</textarea>
                 <div class="mt-4 flex justify-end space-x-3">
                     <button class="text-gray-500 hover:text-gray-700 px-4 py-2">
