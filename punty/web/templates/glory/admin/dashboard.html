@@ -5,106 +5,107 @@
 {% block content %}
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h1 class="text-3xl font-display text-gold">Admin Dashboard</h1>
+        <h1 class="font-display text-3xl font-bold text-g1-navy">Admin Dashboard</h1>
     </div>
 
     <!-- Quick Stats -->
     {% if active_competition %}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-card rounded-xl p-4">
-            <div class="text-3xl font-bold text-gold">{{ stats.total_races }}</div>
-            <div class="text-sm text-muted">Total Races</div>
+        <div class="bg-white rounded-2xl shadow-lg p-5">
+            <div class="text-3xl font-black text-g1-gold">{{ stats.total_races }}</div>
+            <div class="text-sm text-gray-500">Total Races</div>
         </div>
-        <div class="bg-card rounded-xl p-4">
-            <div class="text-3xl font-bold text-glory-green-300">{{ stats.resulted_races }}</div>
-            <div class="text-sm text-muted">Resulted</div>
+        <div class="bg-white rounded-2xl shadow-lg p-5">
+            <div class="text-3xl font-black text-green-600">{{ stats.resulted_races }}</div>
+            <div class="text-sm text-gray-500">Resulted</div>
         </div>
-        <div class="bg-card rounded-xl p-4">
-            <div class="text-3xl font-bold text-glory-gold-400">{{ stats.open_races }}</div>
-            <div class="text-sm text-muted">Open for Tips</div>
+        <div class="bg-white rounded-2xl shadow-lg p-5">
+            <div class="text-3xl font-black text-g1-green">{{ stats.open_races }}</div>
+            <div class="text-sm text-gray-500">Open for Tips</div>
         </div>
-        <div class="bg-card rounded-xl p-4">
-            <div class="text-3xl font-bold text-secondary">{{ stats.upcoming_races }}</div>
-            <div class="text-sm text-muted">Upcoming</div>
+        <div class="bg-white rounded-2xl shadow-lg p-5">
+            <div class="text-3xl font-black text-gray-600">{{ stats.upcoming_races }}</div>
+            <div class="text-sm text-gray-500">Upcoming</div>
         </div>
     </div>
     {% endif %}
 
     <!-- Admin Navigation -->
-    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <a href="/group1glory/admin/competitions" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
-            <div class="text-2xl mb-2">🏆</div>
-            <h3 class="font-semibold text-white">Competitions</h3>
-            <p class="text-sm text-muted">Create and manage competitions</p>
+    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <a href="/group1glory/admin/competitions" class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl hover:border-g1-gold border-2 border-transparent transition-all group">
+            <div class="text-3xl mb-3">🏆</div>
+            <h3 class="font-bold text-g1-navy group-hover:text-g1-green transition-colors">Competitions</h3>
+            <p class="text-sm text-gray-500">Create and manage competitions</p>
         </a>
 
-        <a href="/group1glory/admin/races" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
-            <div class="text-2xl mb-2">🏇</div>
-            <h3 class="font-semibold text-white">Races</h3>
-            <p class="text-sm text-muted">Manage races and import horses</p>
+        <a href="/group1glory/admin/races" class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl hover:border-g1-gold border-2 border-transparent transition-all group">
+            <div class="text-3xl mb-3">🏇</div>
+            <h3 class="font-bold text-g1-navy group-hover:text-g1-green transition-colors">Races</h3>
+            <p class="text-sm text-gray-500">Manage races and import horses</p>
         </a>
 
-        <a href="/group1glory/admin/results" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
-            <div class="text-2xl mb-2">📊</div>
-            <h3 class="font-semibold text-white">Results</h3>
-            <p class="text-sm text-muted">Enter race results</p>
+        <a href="/group1glory/admin/results" class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl hover:border-g1-gold border-2 border-transparent transition-all group">
+            <div class="text-3xl mb-3">📊</div>
+            <h3 class="font-bold text-g1-navy group-hover:text-g1-green transition-colors">Results</h3>
+            <p class="text-sm text-gray-500">Enter race results</p>
         </a>
 
-        <a href="/group1glory/admin/picks" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
-            <div class="text-2xl mb-2">📝</div>
-            <h3 class="font-semibold text-white">All Picks</h3>
-            <p class="text-sm text-muted">View all user picks</p>
+        <a href="/group1glory/admin/picks" class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl hover:border-g1-gold border-2 border-transparent transition-all group">
+            <div class="text-3xl mb-3">📝</div>
+            <h3 class="font-bold text-g1-navy group-hover:text-g1-green transition-colors">All Picks</h3>
+            <p class="text-sm text-gray-500">View all user picks</p>
         </a>
 
-        <a href="/group1glory/admin/users" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
-            <div class="text-2xl mb-2">👥</div>
-            <h3 class="font-semibold text-white">Users</h3>
-            <p class="text-sm text-muted">Manage users and admins</p>
+        <a href="/group1glory/admin/users" class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl hover:border-g1-gold border-2 border-transparent transition-all group">
+            <div class="text-3xl mb-3">👥</div>
+            <h3 class="font-bold text-g1-navy group-hover:text-g1-green transition-colors">Users</h3>
+            <p class="text-sm text-gray-500">Manage users and admins</p>
         </a>
     </div>
 
     <!-- Active Competition -->
     {% if active_competition %}
-    <div class="bg-card rounded-xl p-6">
+    <div class="bg-white rounded-2xl shadow-lg p-6">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-display text-gold">Active Competition</h2>
-            <span class="g1-badge">ACTIVE</span>
+            <h2 class="font-display text-xl font-bold text-g1-navy">Active Competition</h2>
+            <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">ACTIVE</span>
         </div>
-        <div class="text-xl font-semibold mb-2">{{ active_competition.name }}</div>
-        <div class="text-secondary">
+        <div class="text-xl font-bold text-g1-navy mb-2">{{ active_competition.name }}</div>
+        <div class="text-gray-600">
             {{ active_competition.start_date.strftime('%d %B %Y') }} - {{ active_competition.end_date.strftime('%d %B %Y') }}
         </div>
         <div class="mt-4">
-            <a href="/group1glory/admin/competitions/{{ active_competition.id }}" class="text-glory-gold-400 hover:text-glory-gold-300">
-                View details &rarr;
+            <a href="/group1glory/admin/competitions/{{ active_competition.id }}" class="text-g1-gold hover:text-g1-gold-dark font-semibold">
+                View details →
             </a>
         </div>
     </div>
     {% else %}
-    <div class="bg-card rounded-xl p-6 text-center">
-        <p class="text-secondary mb-4">No active competition</p>
+    <div class="bg-white rounded-2xl shadow-lg p-8 text-center">
+        <div class="text-5xl mb-4">📋</div>
+        <p class="text-gray-500 mb-4">No active competition</p>
         <a href="/group1glory/admin/competitions" class="btn-gold">Create Competition</a>
     </div>
     {% endif %}
 
     <!-- All Competitions -->
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-xl font-display text-gold mb-4">All Competitions</h2>
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="font-display text-xl font-bold text-g1-navy mb-4">All Competitions</h2>
         {% if competitions %}
         <div class="space-y-3">
             {% for comp in competitions %}
-            <div class="flex items-center justify-between py-3 border-b border-glory-gold/10 last:border-0">
+            <div class="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
                 <div>
-                    <div class="font-semibold">{{ comp.name }}</div>
-                    <div class="text-sm text-muted">
+                    <div class="font-semibold text-g1-navy">{{ comp.name }}</div>
+                    <div class="text-sm text-gray-500">
                         {{ comp.start_date.strftime('%d %b') }} - {{ comp.end_date.strftime('%d %b %Y') }}
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
                     {% if comp.is_active %}
-                    <span class="text-xs bg-glory-green-600 text-white px-2 py-1 rounded">Active</span>
+                    <span class="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full">Active</span>
                     {% endif %}
-                    <a href="/group1glory/admin/competitions/{{ comp.id }}" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">
+                    <a href="/group1glory/admin/competitions/{{ comp.id }}" class="text-g1-gold hover:text-g1-gold-dark font-semibold text-sm">
                         Manage
                     </a>
                 </div>
@@ -112,7 +113,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-muted">No competitions created yet.</p>
+        <p class="text-gray-500">No competitions created yet.</p>
         {% endif %}
     </div>
 </div>
