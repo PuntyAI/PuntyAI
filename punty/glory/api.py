@@ -31,7 +31,7 @@ from punty.glory.services.leaderboard import LeaderboardService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/group1glory/api")
+router = APIRouter(prefix="/group1glory/api", redirect_slashes=False)
 
 
 # --- Pydantic Models ---

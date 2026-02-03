@@ -1,94 +1,107 @@
 {% extends "glory/base.html" %}
 
-{% block title %}About - Group One Glory{% endblock %}
+{% block title %}How It Works - Mat's Group 1 Glory{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-8">
+<div class="max-w-4xl mx-auto space-y-8">
+    <!-- Header -->
     <div class="text-center">
-        <h1 class="text-4xl font-display text-gold mb-4">About Group One Glory</h1>
-        <p class="text-xl text-secondary">The ultimate tipping competition for Melbourne and Sydney Group 1 racing</p>
+        <img src="/static/glory/logo.png" alt="Mat's Group 1 Glory" class="h-28 mx-auto mb-6">
+        <h1 class="font-display text-4xl font-bold text-g1-navy mb-4">How It Works</h1>
+        <p class="text-lg text-gray-600">The ultimate tipping competition for Melbourne and Sydney Group 1 racing</p>
+        <div class="mt-4 inline-flex items-center gap-2 bg-g1-gold/10 border border-g1-gold/30 px-5 py-2 rounded-full">
+            <span class="font-bold text-g1-green">FREE to play for the 2026 Autumn Carnival!</span>
+        </div>
     </div>
 
-    <!-- Rules -->
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-2xl font-display text-gold mb-4">How It Works</h2>
-
-        <div class="space-y-4 text-secondary">
-            <div class="flex gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-glory-green-600 flex items-center justify-center font-bold">1</div>
+    <!-- Steps -->
+    <div class="bg-white rounded-2xl shadow-lg p-8">
+        <div class="space-y-8">
+            <div class="flex gap-6">
+                <div class="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-g1-gold to-g1-gold-dark rounded-2xl flex items-center justify-center text-g1-green font-bold text-xl">1</div>
                 <div>
-                    <h3 class="font-semibold text-white">Pick One Horse Per Race</h3>
-                    <p>For each Group 1 race in the competition, select the horse you think will win. You can only pick one horse per race.</p>
+                    <h3 class="font-display text-xl font-bold text-g1-navy mb-2">Pick One Horse Per Race</h3>
+                    <p class="text-gray-600">For each Group 1 race in the competition, select the horse you think will win. You can only pick one horse per race, so choose wisely!</p>
                 </div>
             </div>
 
-            <div class="flex gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-glory-green-600 flex items-center justify-center font-bold">2</div>
+            <div class="flex gap-6">
+                <div class="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-g1-gold to-g1-gold-dark rounded-2xl flex items-center justify-center text-g1-green font-bold text-xl">2</div>
                 <div>
-                    <h3 class="font-semibold text-white">Submit Before Tipping Closes</h3>
-                    <p>Tipping closes before each race starts. Make sure to get your picks in early! You can change your pick until tipping closes.</p>
+                    <h3 class="font-display text-xl font-bold text-g1-navy mb-2">Submit Before Tipping Closes</h3>
+                    <p class="text-gray-600">Tipping closes before each race starts. Make sure to get your picks in early! You can change your pick until tipping closes.</p>
                 </div>
             </div>
 
-            <div class="flex gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-glory-green-600 flex items-center justify-center font-bold">3</div>
+            <div class="flex gap-6">
+                <div class="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-g1-gold to-g1-gold-dark rounded-2xl flex items-center justify-center text-g1-green font-bold text-xl">3</div>
                 <div>
-                    <h3 class="font-semibold text-white">Earn Points</h3>
-                    <p>Points are awarded based on where your pick finishes:</p>
-                    <ul class="mt-2 space-y-1 ml-4">
-                        <li class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded pos-1st flex items-center justify-center text-sm font-bold">1st</span>
-                            <span>3 points</span>
-                        </li>
-                        <li class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded pos-2nd flex items-center justify-center text-sm font-bold">2nd</span>
-                            <span>2 points</span>
-                        </li>
-                        <li class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded pos-3rd flex items-center justify-center text-sm font-bold">3rd</span>
-                            <span>1 point</span>
-                        </li>
-                    </ul>
+                    <h3 class="font-display text-xl font-bold text-g1-navy mb-2">Earn Points</h3>
+                    <p class="text-gray-600 mb-3">Points are awarded based on where your pick finishes:</p>
+                    <div class="flex gap-4">
+                        <div class="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-xl">
+                            <div class="w-8 h-8 pos-1 rounded-full flex items-center justify-center font-bold text-sm">1st</div>
+                            <span class="font-semibold text-g1-navy">3 points</span>
+                        </div>
+                        <div class="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl">
+                            <div class="w-8 h-8 pos-2 rounded-full flex items-center justify-center font-bold text-sm">2nd</div>
+                            <span class="font-semibold text-g1-navy">2 points</span>
+                        </div>
+                        <div class="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-xl">
+                            <div class="w-8 h-8 pos-3 rounded-full flex items-center justify-center font-bold text-sm">3rd</div>
+                            <span class="font-semibold text-g1-navy">1 point</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="flex gap-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-glory-green-600 flex items-center justify-center font-bold">4</div>
+            <div class="flex gap-6">
+                <div class="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-g1-gold to-g1-gold-dark rounded-2xl flex items-center justify-center text-g1-green font-bold text-xl">4</div>
                 <div>
-                    <h3 class="font-semibold text-white">Top the Leaderboard</h3>
-                    <p>The tipster with the most points at the end of the carnival wins! Tie-breakers are decided by number of winners picked.</p>
+                    <h3 class="font-display text-xl font-bold text-g1-navy mb-2">Top the Leaderboard</h3>
+                    <p class="text-gray-600">The tipster with the most points at the end of the carnival wins! Tie-breakers are decided by number of winners picked.</p>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Races Covered -->
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-2xl font-display text-gold mb-4">Races Covered</h2>
-        <p class="text-secondary mb-4">Group One Glory covers all Group 1 thoroughbred races in Melbourne and Sydney, including:</p>
+    <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h2 class="font-display text-2xl font-bold text-g1-navy mb-6">Races Covered</h2>
+        <p class="text-gray-600 mb-6">Group One Glory covers all Group 1 thoroughbred races in Melbourne and Sydney:</p>
 
-        <div class="grid md:grid-cols-2 gap-6">
-            <div>
-                <h3 class="font-semibold text-glory-gold-400 mb-2">Melbourne Venues</h3>
-                <ul class="text-secondary space-y-1">
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <div class="bg-g1-green/5 rounded-xl p-5">
+                <h3 class="font-semibold text-g1-green mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    </svg>
+                    Melbourne Venues
+                </h3>
+                <ul class="text-gray-600 space-y-1">
                     <li>Flemington</li>
                     <li>Caulfield</li>
                     <li>Moonee Valley</li>
                     <li>Sandown</li>
                 </ul>
             </div>
-            <div>
-                <h3 class="font-semibold text-glory-gold-400 mb-2">Sydney Venues</h3>
-                <ul class="text-secondary space-y-1">
+            <div class="bg-g1-green/5 rounded-xl p-5">
+                <h3 class="font-semibold text-g1-green mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    </svg>
+                    Sydney Venues
+                </h3>
+                <ul class="text-gray-600 space-y-1">
                     <li>Royal Randwick</li>
                     <li>Rosehill</li>
                 </ul>
             </div>
         </div>
 
-        <div class="mt-6 p-4 bg-glory-green-800/30 rounded-lg">
-            <h3 class="font-semibold text-glory-gold-400 mb-2">Featured Races Include:</h3>
-            <p class="text-secondary text-sm">
+        <div class="bg-gradient-to-r from-g1-green to-g1-navy rounded-xl p-5 text-white">
+            <h3 class="font-semibold mb-2">Featured Races Include:</h3>
+            <p class="text-white/80 text-sm">
                 Melbourne Cup, Cox Plate, Caulfield Cup, Golden Slipper, The Everest,
                 Victoria Derby, Kennedy Oaks, Doncaster Mile, Queen Elizabeth Stakes,
                 Australian Guineas, Newmarket Handicap, and many more!
@@ -96,65 +109,68 @@
         </div>
     </div>
 
-    <!-- Carnivals -->
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-2xl font-display text-gold mb-4">Competition Schedule</h2>
-        <p class="text-secondary mb-4">Competitions are run for each major carnival:</p>
+    <!-- FAQ -->
+    <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h2 class="font-display text-2xl font-bold text-g1-navy mb-6">FAQ</h2>
 
-        <div class="space-y-4">
-            <div class="flex items-center gap-4 p-4 bg-glory-green-800/30 rounded-lg">
-                <span class="text-3xl">🍂</span>
-                <div>
-                    <h3 class="font-semibold text-white">Autumn Carnival</h3>
-                    <p class="text-secondary text-sm">February - April (Golden Slipper, Doncaster, Queen Elizabeth Stakes)</p>
-                </div>
+        <div class="space-y-6">
+            <div class="border-b border-gray-100 pb-6">
+                <h3 class="font-semibold text-g1-navy mb-2">Can I change my pick after submitting?</h3>
+                <p class="text-gray-600">Yes, you can change your pick any time before tipping closes for that race.</p>
             </div>
 
-            <div class="flex items-center gap-4 p-4 bg-glory-green-800/30 rounded-lg">
-                <span class="text-3xl">🌸</span>
-                <div>
-                    <h3 class="font-semibold text-white">Spring Carnival</h3>
-                    <p class="text-secondary text-sm">September - November (Melbourne Cup, Cox Plate, Caulfield Cup)</p>
-                </div>
+            <div class="border-b border-gray-100 pb-6">
+                <h3 class="font-semibold text-g1-navy mb-2">What happens if my horse is scratched?</h3>
+                <p class="text-gray-600">If your selected horse is scratched, you'll need to pick a new horse before tipping closes. Your scratched pick won't count.</p>
+            </div>
+
+            <div class="border-b border-gray-100 pb-6">
+                <h3 class="font-semibold text-g1-navy mb-2">What if I miss a race?</h3>
+                <p class="text-gray-600">If you don't submit a pick before tipping closes, you'll receive 0 points for that race. Every race counts!</p>
+            </div>
+
+            <div class="border-b border-gray-100 pb-6">
+                <h3 class="font-semibold text-g1-navy mb-2">How are ties broken?</h3>
+                <p class="text-gray-600">If two or more tipsters have the same points, the winner is whoever has picked the most winners. If still tied, we look at second places.</p>
+            </div>
+
+            <div>
+                <h3 class="font-semibold text-g1-navy mb-2">Is there a cost to enter?</h3>
+                <p class="text-gray-600">Group One Glory is <strong>completely free</strong> to play for the 2026 Autumn Carnival! It's all about glory and bragging rights among mates.</p>
             </div>
         </div>
     </div>
 
-    <!-- FAQ -->
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-2xl font-display text-gold mb-4">FAQ</h2>
-
-        <div class="space-y-4">
-            <div>
-                <h3 class="font-semibold text-white">Can I change my pick after submitting?</h3>
-                <p class="text-secondary">Yes, you can change your pick any time before tipping closes for that race.</p>
-            </div>
-
-            <div>
-                <h3 class="font-semibold text-white">What happens if my horse is scratched?</h3>
-                <p class="text-secondary">If your selected horse is scratched, you'll need to pick a new horse before tipping closes. Your scratched pick won't count.</p>
-            </div>
-
-            <div>
-                <h3 class="font-semibold text-white">What if I miss a race?</h3>
-                <p class="text-secondary">If you don't submit a pick before tipping closes, you'll receive 0 points for that race. Every race counts!</p>
-            </div>
-
-            <div>
-                <h3 class="font-semibold text-white">How are ties broken?</h3>
-                <p class="text-secondary">If two or more tipsters have the same points, the winner is whoever has picked the most winners. If still tied, we look at second places.</p>
-            </div>
-
-            <div>
-                <h3 class="font-semibold text-white">Is there a cost to enter?</h3>
-                <p class="text-secondary">Group One Glory is free to play. It's all about glory and bragging rights!</p>
-            </div>
+    <!-- Why Group One Glory -->
+    <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h2 class="font-display text-2xl font-bold text-g1-navy mb-4">Why Group One Glory?</h2>
+        <div class="text-gray-600 space-y-4">
+            <p>
+                Group 1 races are the pinnacle of Australian thoroughbred racing. These are the races that produce champions,
+                create legends, and deliver unforgettable moments. From the roar of the crowd as they round the final bend
+                at Flemington to the electric atmosphere of The Everest at Royal Randwick.
+            </p>
+            <p>
+                Mat's Group 1 Glory lets you test your form reading skills against your mates across the entire carnival.
+                No complex betting, no money at stake - just pick your horse for each G1 race and see who comes out on top.
+            </p>
+            <p>
+                Whether you're a seasoned punter or just love the big races, Group One Glory is the perfect way to add
+                some friendly competition to the carnival season.
+            </p>
         </div>
     </div>
 
     <!-- Contact -->
-    <div class="text-center text-secondary">
-        <p>Questions? Contact the administrator.</p>
+    <div class="bg-gradient-to-br from-g1-green to-g1-navy rounded-2xl shadow-lg p-8 text-white text-center">
+        <h2 class="font-display text-2xl font-bold mb-4">Questions?</h2>
+        <p class="text-white/80 mb-4">Got questions, feedback, or found a bug? We'd love to hear from you!</p>
+        <a href="mailto:mat@grouponeglory.com" class="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-6 py-3 rounded-xl font-semibold transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            Contact Mat
+        </a>
     </div>
 </div>
 {% endblock %}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Group One Glory{% endblock %}</title>
+    <title>{% block title %}Mat's Group 1 Glory{% endblock %}</title>
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- HTMX -->
@@ -14,395 +14,299 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        glory: {
-                            green: {
-                                50: '#f0f7f2',
-                                100: '#d4e8d9',
-                                200: '#a9d1b4',
-                                300: '#7eba8e',
-                                400: '#4a9961',
-                                500: '#2d5a3d',
-                                600: '#1e4a2d',
-                                700: '#163a22',
-                                800: '#0f2a18',
-                                900: '#081a0f',
-                            },
-                            gold: {
-                                50: '#fefaf0',
-                                100: '#fdf3d4',
-                                200: '#fae7a9',
-                                300: '#f7d97e',
-                                400: '#d4af37',
-                                500: '#c9a227',
-                                600: '#a8861f',
-                                700: '#876a18',
-                                800: '#664f11',
-                                900: '#44350a',
-                            },
-                            dark: '#0a1a0f',
-                            card: '#12261a',
-                            card2: '#1a3024',
-                            border: 'rgba(212,175,55,0.15)',
+                        'g1': {
+                            'green': '#1B4D3E',
+                            'green-light': '#2D6A4F',
+                            'green-dark': '#0F3328',
+                            'gold': '#D4A537',
+                            'gold-light': '#F0C850',
+                            'gold-dark': '#B8860B',
+                            'navy': '#1A2744',
+                            'turf': '#228B22',
                         },
-                        form: {
-                            1: '#ffd700',
-                            2: '#c0c0c0',
-                            3: '#cd7f32',
+                        'surface': {
+                            '50': '#FAFBFC',
+                            '100': '#F1F5F9',
+                            '200': '#E2E8F0',
                         }
                     },
                     fontFamily: {
-                        display: ['"Playfair Display"', 'serif'],
-                        body: ['"Source Sans Pro"', 'sans-serif'],
+                        'display': ['Outfit', 'sans-serif'],
+                        'body': ['Inter', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+                        'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+                        'glow-gold': '0 0 20px rgba(212, 165, 55, 0.3)',
                     }
                 }
             }
         }
     </script>
     <style>
-        :root {
-            --glory-green: #2d5a3d;
-            --glory-green-dark: #1e4a2d;
-            --glory-green-darker: #163a22;
-            --glory-gold: #d4af37;
-            --glory-gold-light: #f7d97e;
-            --bg-dark: #0a1a0f;
-            --bg-card: #12261a;
-            --bg-card-alt: #1a3024;
-            --text-primary: #ffffff;
-            --text-secondary: #a0b8a8;
-            --text-muted: #607868;
-            --border-subtle: rgba(212,175,55,0.15);
-            --gradient-gold: linear-gradient(180deg, #ffd700 0%, #d4af37 50%, #c9a227 100%);
-            --gradient-header: linear-gradient(90deg, #2d5a3d 0%, #163a22 100%);
-        }
-
         * { box-sizing: border-box; }
-
         body {
-            font-family: 'Source Sans Pro', sans-serif;
-            background: var(--bg-dark);
-            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
             min-height: 100vh;
-            line-height: 1.5;
-            margin: 0;
         }
 
-        .htmx-indicator { display: none; }
-        .htmx-request .htmx-indicator { display: inline-block; }
-        .htmx-request.htmx-indicator { display: inline-block; }
+        /* Header gradient */
+        .header-gradient {
+            background: linear-gradient(135deg, #1B4D3E 0%, #0F3328 50%, #1A2744 100%);
+        }
+
+        /* Gold gradient text */
+        .text-gold-gradient {
+            background: linear-gradient(180deg, #F0C850 0%, #D4A537 50%, #B8860B 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Card styles */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .card-elevated {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+        .card-elevated:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* Button styles */
+        .btn-gold {
+            background: linear-gradient(180deg, #F0C850 0%, #D4A537 100%);
+            color: #1B4D3E;
+            font-weight: 700;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px 0 rgba(212, 165, 55, 0.4);
+        }
+        .btn-gold:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px 0 rgba(212, 165, 55, 0.5);
+        }
+
+        .btn-outline {
+            border: 2px solid #1B4D3E;
+            color: #1B4D3E;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            background: transparent;
+        }
+        .btn-outline:hover {
+            background: #1B4D3E;
+            color: white;
+        }
+
+        /* Nav link styles */
+        .nav-link {
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.15s ease;
+        }
+        .nav-link:hover {
+            color: white;
+            background: rgba(255,255,255,0.1);
+        }
+        .nav-link.active {
+            color: #F0C850;
+            background: rgba(240, 200, 80, 0.1);
+        }
+
+        /* Input styles */
+        .input-modern {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+        .input-modern:focus {
+            outline: none;
+            border-color: #1B4D3E;
+            box-shadow: 0 0 0 3px rgba(27, 77, 62, 0.1);
+        }
+
+        /* Badge styles */
+        .badge-g1 {
+            background: linear-gradient(180deg, #F0C850 0%, #D4A537 100%);
+            color: #1B4D3E;
+            font-weight: 800;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-live {
+            background: #EF4444;
+            color: white;
+            font-weight: 700;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Position badges */
+        .pos-1 { background: linear-gradient(180deg, #FFD700 0%, #FFA500 100%); color: #1A2744; }
+        .pos-2 { background: linear-gradient(180deg, #E8E8E8 0%, #B8B8B8 100%); color: #1A2744; }
+        .pos-3 { background: linear-gradient(180deg, #CD8032 0%, #B87333 100%); color: white; }
+
+        /* Spinner */
         @keyframes spin { to { transform: rotate(360deg); } }
         .spinner {
             display: inline-block;
-            width: 14px; height: 14px;
+            width: 16px; height: 16px;
             border: 2px solid currentColor;
             border-right-color: transparent;
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
-            vertical-align: middle;
         }
-        button:disabled { pointer-events: none; }
-
-        /* Header */
-        .site-header {
-            background: linear-gradient(180deg, #163a22 0%, var(--bg-dark) 100%);
-            border-bottom: 1px solid var(--border-subtle);
-            position: relative;
-            overflow: hidden;
-        }
-        .site-header::before {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            height: 2px;
-            background: var(--gradient-gold);
-            opacity: 0.8;
-        }
-
-        .logo-text {
-            font-family: 'Playfair Display', serif;
-            font-size: 1.75rem;
-            font-weight: 700;
-            background: var(--gradient-gold);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: 1px;
-        }
-
-        .logo-tagline {
-            font-family: 'Source Sans Pro', sans-serif;
-            font-size: 0.65rem;
-            color: var(--text-muted);
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        /* Headlines */
-        h1, h2, h3 { font-family: 'Playfair Display', serif; }
-
-        /* Card backgrounds */
-        .bg-card { background: var(--bg-card) !important; border: 1px solid var(--border-subtle) !important; }
-        .bg-card-alt { background: var(--bg-card-alt) !important; }
-
-        /* Text colors */
-        .text-muted { color: var(--text-muted) !important; }
-        .text-secondary { color: var(--text-secondary) !important; }
-
-        /* Gold accent */
-        .text-gold { color: var(--glory-gold) !important; }
-        .bg-gold { background: var(--glory-gold) !important; }
-        .border-gold { border-color: var(--glory-gold) !important; }
-
-        /* Green accent */
-        .text-green { color: var(--glory-green) !important; }
-        .bg-green { background: var(--glory-green) !important; }
-
-        /* Nav links */
-        .nav-link {
-            font-family: 'Source Sans Pro', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-            padding: 0.5rem 0.75rem;
-            border-radius: 6px;
-            transition: all 0.15s ease;
-        }
-        .nav-link:hover { color: #fff; background: rgba(212,175,55,0.1); }
-        .nav-link.active { color: var(--glory-gold); background: rgba(212,175,55,0.15); }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-card); }
-        ::-webkit-scrollbar-thumb { background: var(--glory-green); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--glory-gold); }
-        * { scrollbar-color: var(--glory-green) var(--bg-card); scrollbar-width: thin; }
+        ::-webkit-scrollbar-track { background: #F1F5F9; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
-        /* Button styles */
-        .btn-primary {
-            background: var(--glory-green);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: all 0.15s ease;
+        /* Money float animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(5deg); }
         }
-        .btn-primary:hover { background: var(--glory-green-dark); }
-
-        .btn-gold {
-            background: var(--gradient-gold);
-            color: #163a22;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-weight: 700;
-            transition: all 0.15s ease;
-        }
-        .btn-gold:hover { opacity: 0.9; }
-
-        .btn-outline {
-            border: 1px solid var(--glory-gold);
-            color: var(--glory-gold);
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: all 0.15s ease;
-            background: transparent;
-        }
-        .btn-outline:hover { background: rgba(212,175,55,0.1); }
-
-        /* Form inputs */
-        .input-field {
-            background: var(--bg-card-alt);
-            border: 1px solid var(--border-subtle);
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
-            color: white;
-            width: 100%;
-        }
-        .input-field:focus {
-            outline: none;
-            border-color: var(--glory-gold);
-            box-shadow: 0 0 0 2px rgba(212,175,55,0.2);
-        }
-
-        /* Race card */
-        .race-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .race-card-header {
-            background: linear-gradient(90deg, var(--glory-green) 0%, var(--glory-green-dark) 100%);
-            padding: 1rem;
-            border-bottom: 2px solid var(--glory-gold);
-        }
-
-        /* Horse row */
-        .horse-row {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--border-subtle);
-            transition: background 0.15s ease;
-        }
-        .horse-row:hover { background: rgba(212,175,55,0.05); }
-        .horse-row.selected {
-            background: rgba(212,175,55,0.15);
-            border-left: 3px solid var(--glory-gold);
-        }
-
-        /* Position badges */
-        .pos-1st {
-            background: linear-gradient(180deg, #ffd700 0%, #d4af37 100%);
-            color: #163a22;
-        }
-        .pos-2nd {
-            background: linear-gradient(180deg, #e8e8e8 0%, #c0c0c0 100%);
-            color: #333;
-        }
-        .pos-3rd {
-            background: linear-gradient(180deg, #e6a750 0%, #cd7f32 100%);
-            color: #333;
-        }
-
-        /* Leaderboard */
-        .leaderboard-row {
-            display: flex;
-            align-items: center;
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        .leaderboard-row:nth-child(1) { background: rgba(255,215,0,0.1); }
-        .leaderboard-row:nth-child(2) { background: rgba(192,192,192,0.08); }
-        .leaderboard-row:nth-child(3) { background: rgba(205,127,50,0.08); }
-
-        /* Footer */
-        .site-footer {
-            font-family: 'Source Sans Pro', sans-serif;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            letter-spacing: 0.5px;
-        }
-        .footer-brand {
-            font-family: 'Playfair Display', serif;
-            background: var(--gradient-gold);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        /* G1 badge */
-        .g1-badge {
-            background: var(--gradient-gold);
-            color: #163a22;
-            font-weight: 700;
-            font-size: 0.65rem;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            letter-spacing: 0.5px;
-        }
-
-        /* TAB receipt style */
-        .receipt {
-            background: #f5f5dc;
-            color: #333;
-            font-family: 'Courier New', monospace;
-            padding: 1.5rem;
-            border-radius: 4px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-        .receipt-header {
-            text-align: center;
-            border-bottom: 1px dashed #999;
-            padding-bottom: 0.75rem;
-            margin-bottom: 0.75rem;
-        }
-        .receipt-line {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.25rem 0;
-        }
+        .float-animation { animation: float 3s ease-in-out infinite; }
     </style>
     {% block head %}{% endblock %}
 </head>
-<body class="min-h-screen font-body">
+<body class="min-h-screen font-body text-gray-800">
     <!-- Header -->
-    <header class="site-header">
-        <div class="max-w-6xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-6">
-                <a href="/group1glory/" class="flex items-center gap-3">
-                    <span class="text-2xl">🏆</span>
-                    <div>
-                        <div class="logo-text">Group One Glory</div>
-                        <div class="logo-tagline">Melbourne & Sydney Tipping</div>
-                    </div>
+    <header class="header-gradient sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <a href="/group1glory/" class="flex items-center gap-3 group">
+                    <img src="/static/glory/logo.png" alt="Mat's Group 1 Glory" class="h-12 w-auto group-hover:scale-105 transition-transform">
                 </a>
+
+                <!-- Desktop Nav -->
                 {% if user %}
-                <nav class="hidden md:flex gap-1 ml-6">
-                    <a href="/group1glory/picks" class="nav-link {% if request.url.path == '/group1glory/picks' %}active{% endif %}">Pick Your Horses</a>
-                    <a href="/group1glory/leaderboard" class="nav-link {% if request.url.path == '/group1glory/leaderboard' %}active{% endif %}">Leaderboard</a>
-                    <a href="/group1glory/about" class="nav-link {% if request.url.path == '/group1glory/about' %}active{% endif %}">About</a>
+                <nav class="hidden md:flex items-center gap-1">
+                    <a href="/group1glory/picks" class="nav-link {% if request.url.path == '/group1glory/picks' %}active{% endif %}">
+                        Pick Horses
+                    </a>
+                    <a href="/group1glory/leaderboard" class="nav-link {% if request.url.path == '/group1glory/leaderboard' %}active{% endif %}">
+                        Leaderboard
+                    </a>
+                    <a href="/group1glory/about" class="nav-link {% if request.url.path == '/group1glory/about' %}active{% endif %}">
+                        How It Works
+                    </a>
                     {% if user.is_admin %}
-                    <a href="/group1glory/admin" class="nav-link {% if '/admin' in request.url.path %}active{% endif %}">Admin</a>
+                    <a href="/group1glory/admin" class="nav-link {% if '/admin' in request.url.path %}active{% endif %}">
+                        Admin
+                    </a>
                     {% endif %}
                 </nav>
                 {% endif %}
-            </div>
-            <div class="flex items-center gap-3">
-                {% if user %}
-                    <span class="text-sm hidden sm:inline text-secondary">{{ user.display_name }}</span>
-                    <a href="#" onclick="logout()" class="text-xs text-muted hover:text-glory-gold-400 transition-colors">[Logout]</a>
-                {% else %}
-                    <a href="/group1glory/login" class="btn-outline text-sm">Login</a>
-                {% endif %}
-                <!-- Mobile menu button -->
-                {% if user %}
-                <button id="mobile-menu-btn" class="md:hidden ml-2 p-1.5 rounded text-secondary" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                    </svg>
-                </button>
-                {% endif %}
+
+                <!-- Right side -->
+                <div class="flex items-center gap-4">
+                    {% if user %}
+                    <div class="hidden sm:flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-g1-gold flex items-center justify-center text-g1-green font-bold text-sm">
+                            {{ user.display_name[0]|upper }}
+                        </div>
+                        <span class="text-white/90 font-medium text-sm">{{ user.display_name }}</span>
+                    </div>
+                    <button onclick="logout()" class="text-white/70 hover:text-white text-sm font-medium transition-colors">
+                        Logout
+                    </button>
+                    {% else %}
+                    <a href="/group1glory/login" class="btn-gold text-sm">Login</a>
+                    {% endif %}
+
+                    <!-- Mobile menu button -->
+                    {% if user %}
+                    <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="md:hidden p-2 text-white/80 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
-        <!-- Mobile nav -->
+
+        <!-- Mobile Nav -->
         {% if user %}
-        <nav id="mobile-menu" class="hidden md:hidden border-t px-4 pb-3 pt-2" style="border-color: var(--border-subtle); background: var(--bg-card);">
-            <a href="/group1glory/picks" class="block py-2 text-sm font-semibold text-secondary">Pick Your Horses</a>
-            <a href="/group1glory/leaderboard" class="block py-2 text-sm font-semibold text-secondary">Leaderboard</a>
-            <a href="/group1glory/about" class="block py-2 text-sm font-semibold text-secondary">About</a>
-            {% if user.is_admin %}
-            <a href="/group1glory/admin" class="block py-2 text-sm font-semibold text-secondary">Admin</a>
-            {% endif %}
+        <nav id="mobile-menu" class="hidden md:hidden border-t border-white/10 bg-g1-green-dark/50 backdrop-blur">
+            <div class="px-4 py-3 space-y-1">
+                <a href="/group1glory/picks" class="block py-2 px-3 rounded-lg text-white/90 font-medium hover:bg-white/10">Pick Horses</a>
+                <a href="/group1glory/leaderboard" class="block py-2 px-3 rounded-lg text-white/90 font-medium hover:bg-white/10">Leaderboard</a>
+                <a href="/group1glory/about" class="block py-2 px-3 rounded-lg text-white/90 font-medium hover:bg-white/10">How It Works</a>
+                {% if user.is_admin %}
+                <a href="/group1glory/admin" class="block py-2 px-3 rounded-lg text-white/90 font-medium hover:bg-white/10">Admin</a>
+                {% endif %}
+            </div>
         </nav>
         {% endif %}
     </header>
 
     <!-- Main Content -->
-    <main class="max-w-6xl mx-auto py-6 px-4 sm:px-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="max-w-6xl mx-auto px-4 sm:px-8 py-6 mt-4 site-footer text-center" style="border-top: 1px solid var(--border-subtle);">
-        <p><span class="footer-brand">Group One Glory</span> &bull; Melbourne & Sydney Group 1 Racing</p>
-        <p class="mt-1 text-xs">Gamble Responsibly</p>
+    <footer class="border-t border-gray-200 bg-white/50 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <img src="/static/glory/logo.png" alt="Mat's Group 1 Glory" class="h-8 w-auto opacity-80">
+                    <span class="text-sm text-gray-500">Melbourne & Sydney Group 1 Racing</span>
+                </div>
+                <p class="text-sm text-gray-400">Please gamble responsibly</p>
+            </div>
+        </div>
     </footer>
 
-    <!-- Toast notifications -->
+    <!-- Toast container -->
     <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
     <script>
-        // CSRF token management
+        // CSRF token
         var csrfToken = '{{ csrf_token }}';
         document.body.setAttribute('hx-headers', JSON.stringify({'X-CSRF-Token': csrfToken}));
 
-        // Fetch wrapper for CSRF
+        // Fetch wrapper
         var _origFetch = window.fetch;
         window.fetch = function(url, opts) {
             opts = opts || {};
@@ -418,7 +322,7 @@
             return _origFetch.call(this, url, opts);
         };
 
-        // Logout function
+        // Logout
         async function logout() {
             await fetch('/group1glory/api/auth/logout', { method: 'POST' });
             window.location.href = '/group1glory/';
@@ -427,14 +331,13 @@
         // Toast notifications
         function showToast(message, type = 'info') {
             const colors = {
-                'info': 'background:rgba(45,90,61,0.95);border:1px solid rgba(212,175,55,0.5)',
-                'success': 'background:rgba(45,90,61,0.95);border:1px solid rgba(74,222,128,0.5)',
-                'error': 'background:rgba(139,69,69,0.95);border:1px solid rgba(248,113,113,0.5)',
-                'warning': 'background:rgba(212,175,55,0.95);border:1px solid rgba(212,175,55,0.5)'
+                'info': 'bg-g1-green text-white',
+                'success': 'bg-green-500 text-white',
+                'error': 'bg-red-500 text-white',
+                'warning': 'bg-amber-500 text-white'
             };
             const toast = document.createElement('div');
-            toast.style.cssText = colors[type] + ';color:white;padding:0.75rem 1.5rem;border-radius:8px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
-            toast.className = 'transform transition-all duration-300';
+            toast.className = `${colors[type]} px-6 py-3 rounded-xl font-semibold shadow-lg transform transition-all duration-300`;
             toast.textContent = message;
             document.getElementById('toast-container').appendChild(toast);
             setTimeout(() => {
@@ -444,29 +347,7 @@
         }
 
         // HTMX events
-        document.body.addEventListener('htmx:responseError', function(evt) {
-            showToast('An error occurred', 'error');
-        });
-
-        document.body.addEventListener('htmx:beforeRequest', function(evt) {
-            var btn = evt.detail.elt;
-            if (btn.tagName === 'BUTTON') {
-                btn._origHTML = btn.innerHTML;
-                btn.disabled = true;
-                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = '<span class="spinner"></span> Working...';
-            }
-        });
-
-        document.body.addEventListener('htmx:afterRequest', function(evt) {
-            var btn = evt.detail.elt;
-            if (btn.tagName === 'BUTTON' && btn._origHTML) {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = btn._origHTML;
-                delete btn._origHTML;
-            }
-        });
+        document.body.addEventListener('htmx:responseError', () => showToast('An error occurred', 'error'));
     </script>
     {% block scripts %}{% endblock %}
 </body>

@@ -60,7 +60,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # --- CSRF middleware ----------------------------------------------------------
 
 CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-CSRF_EXEMPT_PREFIXES = ("/api/webhook/",)
+CSRF_EXEMPT_PREFIXES = ("/api/webhook/", "/group1glory/")
 
 
 def _get_session_csrf_secret(request) -> str:

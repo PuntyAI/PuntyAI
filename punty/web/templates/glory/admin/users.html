@@ -1,0 +1,112 @@
+{% extends "glory/base.html" %}
+
+{% block title %}Manage Users - Group One Glory{% endblock %}
+
+{% block content %}
+<div x-data="usersApp()" class="space-y-6">
+    <div>
+        <h1 class="text-3xl font-display text-gold">Manage Users</h1>
+        <p class="text-secondary">View and manage user accounts and admin access</p>
+    </div>
+
+    <!-- Users Table -->
+    <div class="bg-card rounded-xl overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-glory-green-800/50 text-sm text-secondary">
+                <tr>
+                    <th class="px-4 py-3 text-left">Display Name</th>
+                    <th class="px-4 py-3 text-left">Email</th>
+                    <th class="px-4 py-3 text-center">Admin</th>
+                    <th class="px-4 py-3 text-left">Joined</th>
+                    <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-glory-gold/10">
+                {% for u in users %}
+                <tr class="{% if u.is_admin %}bg-glory-gold/5{% endif %}">
+                    <td class="px-4 py-3 font-semibold">
+                        {{ u.display_name }}
+                        {% if u.id == user.id %}
+                        <span class="text-glory-gold-400 text-xs ml-1">(You)</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-secondary">{{ u.email }}</td>
+                    <td class="px-4 py-3 text-center">
+                        {% if u.is_admin %}
+                        <span class="bg-glory-gold-400 text-glory-green-800 px-2 py-0.5 rounded text-xs font-semibold">Admin</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-secondary text-sm">{{ u.created_at[:10] }}</td>
+                    <td class="px-4 py-3 text-right">
+                        {% if u.id != user.id %}
+                            {% if u.is_admin %}
+                            <button @click="setAdmin('{{ u.id }}', false, '{{ u.display_name }}')"
+                                    class="text-red-400 hover:text-red-300 text-sm">
+                                Remove Admin
+                            </button>
+                            {% else %}
+                            <button @click="setAdmin('{{ u.id }}', true, '{{ u.display_name }}')"
+                                    class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">
+                                Make Admin
+                            </button>
+                            {% endif %}
+                        {% else %}
+                        <span class="text-muted text-sm">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="bg-card rounded-xl p-6">
+        <h2 class="text-lg font-display text-gold mb-4">User Stats</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <div class="text-2xl font-bold text-gold">{{ users|length }}</div>
+                <div class="text-sm text-muted">Total Users</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-glory-gold-400">{{ users|selectattr('is_admin')|list|length }}</div>
+                <div class="text-sm text-muted">Admins</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function usersApp() {
+    return {
+        async setAdmin(userId, isAdmin, displayName) {
+            const action = isAdmin ? 'make admin' : 'remove admin access from';
+            if (!confirm(`Are you sure you want to ${action} ${displayName}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/group1glory/api/admin/users/${userId}/admin`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, is_admin: isAdmin }),
+                });
+
+                if (response.ok) {
+                    showToast(isAdmin ? 'User promoted to admin' : 'Admin access removed', 'success');
+                    window.location.reload();
+                } else {
+                    const data = await response.json();
+                    showToast(data.detail || 'Failed', 'error');
+                }
+            } catch (err) {
+                showToast('An error occurred', 'error');
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,94 +1,140 @@
 {% extends "glory/base.html" %}
 
-{% block title %}Group One Glory - Melbourne & Sydney Group 1 Tipping{% endblock %}
+{% block title %}Mat's Group 1 Glory - Melbourne & Sydney Tipping{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
     <!-- Hero Section -->
-    <div class="text-center py-12 bg-card rounded-xl">
-        <h1 class="text-4xl md:text-5xl font-display text-gold mb-4">Group One Glory</h1>
-        <p class="text-xl text-secondary max-w-2xl mx-auto">
-            Tip the winners of Melbourne and Sydney's biggest Group 1 races.
-            Compete against friends for glory and bragging rights.
-        </p>
+    <div class="relative overflow-hidden bg-white rounded-3xl shadow-lg">
+        <!-- Background pattern -->
+        <div class="absolute inset-0 opacity-5">
+            <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22><path d=%22M30 0L60 30L30 60L0 30Z%22 fill=%22%231B4D3E%22/></svg>'); background-size: 30px;"></div>
+        </div>
 
-        {% if not user %}
-        <div class="mt-8 flex justify-center gap-4">
-            <a href="/group1glory/register" class="btn-gold px-8 py-3 text-lg">Join Now</a>
-            <a href="/group1glory/login" class="btn-outline px-8 py-3 text-lg">Login</a>
+        <div class="relative px-6 py-12 md:py-16 text-center">
+            <!-- Logo -->
+            <img src="/static/glory/logo.png" alt="Mat's Group 1 Glory" class="h-40 md:h-52 mx-auto mb-6 drop-shadow-xl">
+
+            <!-- Tagline -->
+            <h1 class="font-display text-3xl md:text-4xl font-bold text-g1-navy mb-4">
+                Tip the Biggest Races. <span class="text-gold-gradient">Win Glory.</span>
+            </h1>
+            <p class="text-lg text-gray-600 max-w-xl mx-auto mb-6">
+                Pick your winners for Melbourne and Sydney's elite Group 1 races.
+                Compete against mates for bragging rights and glory!
+            </p>
+
+            <!-- Free Badge -->
+            <div class="inline-flex items-center gap-2 bg-gradient-to-r from-g1-gold/20 to-g1-gold/10 border border-g1-gold/30 px-5 py-2 rounded-full mb-8">
+                <svg class="w-5 h-5 text-g1-gold" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+                <span class="font-bold text-g1-green">FREE to play for Autumn 2026!</span>
+            </div>
+
+            {% if not user %}
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="/group1glory/register" class="btn-gold px-8 py-4 text-lg">
+                    Join Now - It's Free!
+                </a>
+                <a href="/group1glory/login" class="btn-outline px-8 py-4 text-lg">
+                    Login
+                </a>
+            </div>
+            {% else %}
+            <a href="/group1glory/picks" class="btn-gold px-10 py-4 text-lg inline-flex items-center gap-2">
+                <span>Pick Your Horses</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+            </a>
+            {% endif %}
         </div>
-        {% else %}
-        <div class="mt-8">
-            <a href="/group1glory/picks" class="btn-gold px-8 py-3 text-lg">Pick Your Horses</a>
-        </div>
-        {% endif %}
     </div>
 
     {% if competition %}
-    <!-- Active Competition -->
-    <div class="grid md:grid-cols-2 gap-6">
-        <!-- Current Competition -->
-        <div class="bg-card rounded-xl p-6">
+    <!-- Active Competition & Leaderboard -->
+    <div class="grid lg:grid-cols-5 gap-6">
+        <!-- Competition Info -->
+        <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
             <div class="flex items-center gap-3 mb-4">
-                <span class="g1-badge">ACTIVE</span>
-                <h2 class="text-2xl font-display text-gold">{{ competition.name }}</h2>
+                <span class="badge-g1">ACTIVE</span>
+                <span class="text-sm text-gray-500">Competition</span>
             </div>
-            <p class="text-secondary mb-4">
-                {{ competition.start_date.strftime('%d %B') }} - {{ competition.end_date.strftime('%d %B %Y') }}
+            <h2 class="font-display text-2xl font-bold text-g1-navy mb-2">{{ competition.name }}</h2>
+            <p class="text-gray-600 mb-4">
+                {{ competition.start_date.strftime('%d %b') }} - {{ competition.end_date.strftime('%d %b %Y') }}
             </p>
-            <div class="text-sm text-muted">
-                {{ competition.races|length }} Group 1 races
+            <div class="flex items-center gap-6 text-sm">
+                <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 rounded-xl bg-g1-green/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-g1-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="font-bold text-g1-navy">{{ competition.races|length }}</div>
+                        <div class="text-gray-500 text-xs">Group 1 Races</div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Leaderboard Preview -->
-        <div class="bg-card rounded-xl p-6">
-            <h2 class="text-xl font-display text-gold mb-4">Current Leaders</h2>
+        <div class="lg:col-span-3 bg-white rounded-2xl shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-display text-xl font-bold text-g1-navy">Leaderboard</h2>
+                <a href="/group1glory/leaderboard" class="text-g1-green font-semibold text-sm hover:underline">View All</a>
+            </div>
             {% if top_3 %}
             <div class="space-y-3">
                 {% for entry in top_3 %}
-                <div class="leaderboard-row rounded-lg">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center mr-3 {% if loop.index == 1 %}pos-1st{% elif loop.index == 2 %}pos-2nd{% else %}pos-3rd{% endif %}">
+                <div class="flex items-center gap-4 p-3 rounded-xl {% if loop.index == 1 %}bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200{% elif loop.index == 2 %}bg-gray-50{% elif loop.index == 3 %}bg-orange-50/50{% endif %}">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm {% if loop.index == 1 %}pos-1{% elif loop.index == 2 %}pos-2{% else %}pos-3{% endif %}">
                         {{ loop.index }}
                     </div>
                     <div class="flex-1">
-                        <div class="font-semibold">{{ entry.display_name }}</div>
+                        <div class="font-semibold text-g1-navy">{{ entry.display_name }}</div>
+                        <div class="text-xs text-gray-500">{{ entry.winners or 0 }} winners</div>
                     </div>
-                    <div class="text-gold font-bold">{{ entry.total_points }} pts</div>
+                    <div class="text-right">
+                        <div class="font-bold text-g1-green text-lg">{{ entry.total_points }}</div>
+                        <div class="text-xs text-gray-500">points</div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
-            <div class="mt-4">
-                <a href="/group1glory/leaderboard" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">View full leaderboard &rarr;</a>
-            </div>
             {% else %}
-            <p class="text-muted">No results yet. Be the first to pick!</p>
+            <div class="text-center py-8 text-gray-500">
+                <p>No results yet. Be the first to pick!</p>
+            </div>
             {% endif %}
         </div>
     </div>
 
     <!-- Upcoming Races -->
     {% if upcoming_races %}
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-xl font-display text-gold mb-4">Upcoming Races</h2>
-        <div class="space-y-3">
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="font-display text-xl font-bold text-g1-navy">Upcoming Races</h2>
+            {% if user %}
+            <a href="/group1glory/picks" class="text-g1-green font-semibold text-sm hover:underline">Pick Horses</a>
+            {% endif %}
+        </div>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {% for race in upcoming_races %}
-            <div class="flex items-center justify-between py-3 border-b border-glory-gold/10 last:border-0">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="g1-badge">G1</span>
-                        <span class="font-semibold">{{ race.race_name }}</span>
-                    </div>
-                    <div class="text-sm text-muted">{{ race.venue }} &bull; {{ race.distance }}m</div>
-                </div>
-                <div class="text-right">
-                    <div class="text-gold">{{ race.race_date|melb_date }}</div>
+            <div class="border border-gray-200 rounded-xl p-4 hover:border-g1-gold hover:shadow-md transition-all">
+                <div class="flex items-start justify-between mb-3">
+                    <span class="badge-g1">G1</span>
                     {% if race.status == 'open' %}
-                    <span class="text-xs bg-glory-green-500 text-white px-2 py-0.5 rounded">Open for Tips</span>
+                    <span class="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-full">Open</span>
                     {% else %}
-                    <span class="text-xs text-muted">{{ race.status|title }}</span>
+                    <span class="bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">{{ race.status|title }}</span>
                     {% endif %}
                 </div>
+                <h3 class="font-semibold text-g1-navy mb-1">{{ race.race_name }}</h3>
+                <p class="text-sm text-gray-500 mb-3">{{ race.venue }} &bull; {{ race.distance }}m</p>
+                <div class="text-sm font-medium text-g1-gold">{{ race.race_date|melb_date }}</div>
             </div>
             {% endfor %}
         </div>
@@ -96,33 +142,43 @@
     {% endif %}
     {% else %}
     <!-- No Active Competition -->
-    <div class="bg-card rounded-xl p-8 text-center">
-        <h2 class="text-2xl font-display text-gold mb-4">Coming Soon</h2>
-        <p class="text-secondary">
-            The next tipping competition will be announced shortly.
-            Register now to be ready when it opens!
+    <div class="bg-white rounded-2xl shadow-lg p-12 text-center">
+        <div class="w-16 h-16 bg-g1-gold/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-g1-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <h2 class="font-display text-2xl font-bold text-g1-navy mb-2">Coming Soon</h2>
+        <p class="text-gray-600 max-w-md mx-auto">
+            The next tipping competition is being prepared. Register now to be ready when it opens!
         </p>
     </div>
     {% endif %}
 
     <!-- How It Works -->
-    <div class="bg-card rounded-xl p-6">
-        <h2 class="text-xl font-display text-gold mb-6 text-center">How It Works</h2>
-        <div class="grid md:grid-cols-3 gap-6">
+    <div class="bg-gradient-to-br from-g1-green to-g1-navy rounded-2xl shadow-lg p-8 text-white">
+        <h2 class="font-display text-2xl font-bold text-center mb-8">How It Works</h2>
+        <div class="grid md:grid-cols-3 gap-8">
             <div class="text-center">
-                <div class="text-3xl mb-3">1</div>
-                <h3 class="font-semibold text-glory-gold-400 mb-2">Pick Your Horse</h3>
-                <p class="text-sm text-secondary">Select one horse for each Group 1 race before tipping closes</p>
+                <div class="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl font-bold text-g1-gold">1</span>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Pick Your Horse</h3>
+                <p class="text-white/70 text-sm">Select one horse for each Group 1 race before tipping closes</p>
             </div>
             <div class="text-center">
-                <div class="text-3xl mb-3">2</div>
-                <h3 class="font-semibold text-glory-gold-400 mb-2">Earn Points</h3>
-                <p class="text-sm text-secondary">3 points for 1st, 2 points for 2nd, 1 point for 3rd</p>
+                <div class="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl font-bold text-g1-gold">2</span>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Earn Points</h3>
+                <p class="text-white/70 text-sm">3 pts for 1st, 2 pts for 2nd, 1 pt for 3rd place</p>
             </div>
             <div class="text-center">
-                <div class="text-3xl mb-3">3</div>
-                <h3 class="font-semibold text-glory-gold-400 mb-2">Win Glory</h3>
-                <p class="text-sm text-secondary">Top the leaderboard and claim your place on the Honor Board</p>
+                <div class="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl font-bold text-g1-gold">3</span>
+                </div>
+                <h3 class="font-semibold text-lg mb-2">Win Glory</h3>
+                <p class="text-white/70 text-sm">Top the leaderboard and claim your place on the Honor Board!</p>
             </div>
         </div>
     </div>

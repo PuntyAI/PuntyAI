@@ -188,11 +188,13 @@ GLORY_PUBLIC_PATHS = {
     "/group1glory/login",
     "/group1glory/register",
     "/group1glory/about",
+    "/group1glory/setup",
 }
 
 # Prefixes that are public
 GLORY_PUBLIC_PREFIXES = (
     "/group1glory/api/auth/",
+    "/group1glory/api/setup",
     "/group1glory/static/",
 )
 

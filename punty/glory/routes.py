@@ -27,7 +27,7 @@ from punty.glory.services.pick import PickService
 from punty.glory.services.leaderboard import LeaderboardService
 
 
-router = APIRouter(prefix="/group1glory")
+router = APIRouter(prefix="/group1glory", redirect_slashes=False)
 
 # Templates directory (parent folder so 'glory/base.html' resolves correctly)
 templates_dir = Path(__file__).parent.parent / "web" / "templates"
