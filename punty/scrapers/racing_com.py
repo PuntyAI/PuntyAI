@@ -33,9 +33,24 @@ class RacingComScraper(BaseScraper):
 
     BASE_URL = "https://www.racing.com"
 
+    # Common sponsor prefixes to strip from venue names
+    SPONSOR_PREFIXES = [
+        "ladbrokes", "tab", "bet365", "sportsbet", "neds", "pointsbet",
+        "unibet", "betfair", "palmerbet", "bluebet", "topsport",
+    ]
+
     def _venue_slug(self, venue: str) -> str:
-        """Convert venue name to URL slug."""
-        return venue.lower().replace(" ", "-")
+        """Convert venue name to URL slug, stripping sponsor prefixes."""
+        slug = venue.lower().strip()
+        # Strip sponsor prefixes (e.g., "Ladbrokes Geelong" -> "geelong")
+        for prefix in self.SPONSOR_PREFIXES:
+            if slug.startswith(prefix + " "):
+                slug = slug[len(prefix) + 1:]
+                break
+            if slug.startswith(prefix + "-"):
+                slug = slug[len(prefix) + 1:]
+                break
+        return slug.replace(" ", "-")
 
     def _build_meeting_url(self, venue: str, race_date: date) -> str:
         slug = self._venue_slug(venue)
