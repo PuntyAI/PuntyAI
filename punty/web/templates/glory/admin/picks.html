@@ -1,0 +1,88 @@
+{% extends "glory/base.html" %}
+
+{% block title %}All Picks - Group One Glory{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-3xl font-display text-gold">All User Picks</h1>
+        {% if competition %}
+        <p class="text-secondary">{{ competition.name }}</p>
+        {% endif %}
+    </div>
+
+    {% if not competition %}
+    <div class="bg-card rounded-xl p-8 text-center">
+        <p class="text-secondary">No active competition.</p>
+    </div>
+    {% elif not races_with_picks %}
+    <div class="bg-card rounded-xl p-8 text-center">
+        <p class="text-muted">No resulted races with picks yet.</p>
+    </div>
+    {% else %}
+
+    {% for item in races_with_picks %}
+    <div class="bg-card rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-glory-gold/10 bg-glory-green-800/30">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="g1-badge">G1</span>
+                        <span class="font-semibold">{{ item.race.race_name }}</span>
+                    </div>
+                    <div class="text-sm text-muted">
+                        {{ item.race.venue }} &bull; {{ item.race.race_date|melb_date }}
+                    </div>
+                </div>
+                <span class="text-secondary">{{ item.picks|length }} picks</span>
+            </div>
+        </div>
+
+        {% if item.picks %}
+        <table class="w-full">
+            <thead class="bg-glory-green-800/50 text-sm text-secondary">
+                <tr>
+                    <th class="px-4 py-2 text-left">User</th>
+                    <th class="px-4 py-2 text-left">Pick</th>
+                    <th class="px-4 py-2 text-center">Result</th>
+                    <th class="px-4 py-2 text-center">Points</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-glory-gold/10">
+                {% for pick in item.picks %}
+                <tr>
+                    <td class="px-4 py-2">{{ pick.user.display_name }}</td>
+                    <td class="px-4 py-2 font-semibold">{{ pick.horse.name }}</td>
+                    <td class="px-4 py-2 text-center">
+                        {% if pick.horse.finish_position %}
+                        <span class="px-2 py-0.5 rounded text-xs font-bold
+                            {% if pick.horse.finish_position == 1 %}pos-1st
+                            {% elif pick.horse.finish_position == 2 %}pos-2nd
+                            {% elif pick.horse.finish_position == 3 %}pos-3rd
+                            {% else %}bg-gray-700{% endif %}">
+                            {{ pick.horse.finish_position }}{{ 'st' if pick.horse.finish_position == 1 else 'nd' if pick.horse.finish_position == 2 else 'rd' if pick.horse.finish_position == 3 else 'th' }}
+                        </span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2 text-center font-bold
+                        {% if pick.points_earned == 3 %}text-form-1
+                        {% elif pick.points_earned == 2 %}text-form-2
+                        {% elif pick.points_earned == 1 %}text-form-3
+                        {% else %}text-muted{% endif %}">
+                        {{ pick.points_earned if pick.points_earned is not none else '-' }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-4 text-center text-muted">No picks for this race.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% endif %}
+</div>
+{% endblock %}

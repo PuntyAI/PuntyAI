@@ -1,0 +1,130 @@
+{% extends "glory/base.html" %}
+
+{% block title %}Group One Glory - Melbourne & Sydney Group 1 Tipping{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Hero Section -->
+    <div class="text-center py-12 bg-card rounded-xl">
+        <h1 class="text-4xl md:text-5xl font-display text-gold mb-4">Group One Glory</h1>
+        <p class="text-xl text-secondary max-w-2xl mx-auto">
+            Tip the winners of Melbourne and Sydney's biggest Group 1 races.
+            Compete against friends for glory and bragging rights.
+        </p>
+
+        {% if not user %}
+        <div class="mt-8 flex justify-center gap-4">
+            <a href="/group1glory/register" class="btn-gold px-8 py-3 text-lg">Join Now</a>
+            <a href="/group1glory/login" class="btn-outline px-8 py-3 text-lg">Login</a>
+        </div>
+        {% else %}
+        <div class="mt-8">
+            <a href="/group1glory/picks" class="btn-gold px-8 py-3 text-lg">Pick Your Horses</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if competition %}
+    <!-- Active Competition -->
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Current Competition -->
+        <div class="bg-card rounded-xl p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="g1-badge">ACTIVE</span>
+                <h2 class="text-2xl font-display text-gold">{{ competition.name }}</h2>
+            </div>
+            <p class="text-secondary mb-4">
+                {{ competition.start_date.strftime('%d %B') }} - {{ competition.end_date.strftime('%d %B %Y') }}
+            </p>
+            <div class="text-sm text-muted">
+                {{ competition.races|length }} Group 1 races
+            </div>
+        </div>
+
+        <!-- Leaderboard Preview -->
+        <div class="bg-card rounded-xl p-6">
+            <h2 class="text-xl font-display text-gold mb-4">Current Leaders</h2>
+            {% if top_3 %}
+            <div class="space-y-3">
+                {% for entry in top_3 %}
+                <div class="leaderboard-row rounded-lg">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center mr-3 {% if loop.index == 1 %}pos-1st{% elif loop.index == 2 %}pos-2nd{% else %}pos-3rd{% endif %}">
+                        {{ loop.index }}
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-semibold">{{ entry.display_name }}</div>
+                    </div>
+                    <div class="text-gold font-bold">{{ entry.total_points }} pts</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-4">
+                <a href="/group1glory/leaderboard" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">View full leaderboard &rarr;</a>
+            </div>
+            {% else %}
+            <p class="text-muted">No results yet. Be the first to pick!</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Upcoming Races -->
+    {% if upcoming_races %}
+    <div class="bg-card rounded-xl p-6">
+        <h2 class="text-xl font-display text-gold mb-4">Upcoming Races</h2>
+        <div class="space-y-3">
+            {% for race in upcoming_races %}
+            <div class="flex items-center justify-between py-3 border-b border-glory-gold/10 last:border-0">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="g1-badge">G1</span>
+                        <span class="font-semibold">{{ race.race_name }}</span>
+                    </div>
+                    <div class="text-sm text-muted">{{ race.venue }} &bull; {{ race.distance }}m</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-gold">{{ race.race_date|melb_date }}</div>
+                    {% if race.status == 'open' %}
+                    <span class="text-xs bg-glory-green-500 text-white px-2 py-0.5 rounded">Open for Tips</span>
+                    {% else %}
+                    <span class="text-xs text-muted">{{ race.status|title }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <!-- No Active Competition -->
+    <div class="bg-card rounded-xl p-8 text-center">
+        <h2 class="text-2xl font-display text-gold mb-4">Coming Soon</h2>
+        <p class="text-secondary">
+            The next tipping competition will be announced shortly.
+            Register now to be ready when it opens!
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- How It Works -->
+    <div class="bg-card rounded-xl p-6">
+        <h2 class="text-xl font-display text-gold mb-6 text-center">How It Works</h2>
+        <div class="grid md:grid-cols-3 gap-6">
+            <div class="text-center">
+                <div class="text-3xl mb-3">1</div>
+                <h3 class="font-semibold text-glory-gold-400 mb-2">Pick Your Horse</h3>
+                <p class="text-sm text-secondary">Select one horse for each Group 1 race before tipping closes</p>
+            </div>
+            <div class="text-center">
+                <div class="text-3xl mb-3">2</div>
+                <h3 class="font-semibold text-glory-gold-400 mb-2">Earn Points</h3>
+                <p class="text-sm text-secondary">3 points for 1st, 2 points for 2nd, 1 point for 3rd</p>
+            </div>
+            <div class="text-center">
+                <div class="text-3xl mb-3">3</div>
+                <h3 class="font-semibold text-glory-gold-400 mb-2">Win Glory</h3>
+                <p class="text-sm text-secondary">Top the leaderboard and claim your place on the Honor Board</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

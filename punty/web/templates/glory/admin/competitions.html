@@ -1,0 +1,202 @@
+{% extends "glory/base.html" %}
+
+{% block title %}Manage Competitions - Group One Glory{% endblock %}
+
+{% block content %}
+<div x-data="competitionsApp()" class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display text-gold">Competitions</h1>
+            <p class="text-secondary">Create and manage tipping competitions</p>
+        </div>
+        <button @click="showCreateModal = true" class="btn-gold">Create Competition</button>
+    </div>
+
+    <!-- Competitions List -->
+    <div class="bg-card rounded-xl overflow-hidden">
+        {% if competitions %}
+        <table class="w-full">
+            <thead class="bg-glory-green-800/50 text-sm text-secondary">
+                <tr>
+                    <th class="px-4 py-3 text-left">Name</th>
+                    <th class="px-4 py-3 text-left">Dates</th>
+                    <th class="px-4 py-3 text-center">Races</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-glory-gold/10">
+                {% for comp in competitions %}
+                <tr>
+                    <td class="px-4 py-3 font-semibold">{{ comp.name }}</td>
+                    <td class="px-4 py-3 text-secondary">
+                        {{ comp.start_date.strftime('%d %b') }} - {{ comp.end_date.strftime('%d %b %Y') }}
+                    </td>
+                    <td class="px-4 py-3 text-center">{{ comp.races|length }}</td>
+                    <td class="px-4 py-3 text-center">
+                        {% if comp.is_active %}
+                        <span class="bg-glory-green-600 text-white px-2 py-1 rounded text-xs">Active</span>
+                        {% else %}
+                        <span class="bg-gray-600 text-white px-2 py-1 rounded text-xs">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right space-x-2">
+                        {% if not comp.is_active %}
+                        <button @click="activateCompetition('{{ comp.id }}')" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">
+                            Activate
+                        </button>
+                        {% endif %}
+                        <a href="/group1glory/admin/competitions/{{ comp.id }}" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">
+                            Manage
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-muted mb-4">No competitions created yet.</p>
+            <button @click="showCreateModal = true" class="btn-outline">Create Your First Competition</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Scrape Calendar -->
+    <div class="bg-card rounded-xl p-6">
+        <h2 class="text-xl font-display text-gold mb-4">Import Race Calendar</h2>
+        <p class="text-secondary mb-4">
+            Scrape the Racing Australia website to get Group 1 race dates for the current year.
+        </p>
+        <button @click="scrapeCalendar()" class="btn-primary" :disabled="scraping">
+            <span x-show="!scraping">Scrape Racing Australia Calendar</span>
+            <span x-show="scraping"><span class="spinner"></span> Scraping...</span>
+        </button>
+        <div x-show="scrapeResults" x-cloak class="mt-4 p-4 bg-glory-green-800/30 rounded-lg">
+            <div class="font-semibold mb-2">Found <span x-text="scrapeResults?.races_found || 0"></span> Group 1 races</div>
+            <div x-show="scrapeResults?.races?.length > 0" class="max-h-60 overflow-y-auto text-sm text-secondary space-y-1">
+                <template x-for="race in scrapeResults?.races || []">
+                    <div x-text="`${race.race_name} - ${race.venue} (${race.distance}m)`"></div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Competition Modal -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div @click.away="showCreateModal = false" class="bg-glory-green-800 rounded-xl p-6 max-w-md w-full">
+            <h2 class="text-xl font-display text-gold mb-4">Create Competition</h2>
+
+            <form @submit.prevent="createCompetition()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-secondary mb-1">Name</label>
+                    <input type="text" x-model="newComp.name" required class="input-field" placeholder="e.g., Autumn Carnival 2026">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-secondary mb-1">Start Date</label>
+                        <input type="date" x-model="newComp.start_date" required class="input-field">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-secondary mb-1">End Date</label>
+                        <input type="date" x-model="newComp.end_date" required class="input-field">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-secondary mb-1">Prize Pool (optional, in dollars)</label>
+                    <input type="number" x-model="newComp.prize_pool" class="input-field" placeholder="0">
+                </div>
+
+                <div class="flex gap-3 justify-end pt-4">
+                    <button type="button" @click="showCreateModal = false" class="btn-outline">Cancel</button>
+                    <button type="submit" class="btn-gold">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function competitionsApp() {
+    return {
+        showCreateModal: false,
+        scraping: false,
+        scrapeResults: null,
+        newComp: {
+            name: '',
+            start_date: '',
+            end_date: '',
+            prize_pool: null,
+        },
+
+        async createCompetition() {
+            try {
+                const response = await fetch('/group1glory/api/admin/competitions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: this.newComp.name,
+                        start_date: this.newComp.start_date,
+                        end_date: this.newComp.end_date,
+                        prize_pool: this.newComp.prize_pool ? parseInt(this.newComp.prize_pool) * 100 : null,
+                    }),
+                });
+
+                if (response.ok) {
+                    showToast('Competition created!', 'success');
+                    window.location.reload();
+                } else {
+                    const data = await response.json();
+                    showToast(data.detail || 'Failed to create competition', 'error');
+                }
+            } catch (err) {
+                showToast('An error occurred', 'error');
+            }
+        },
+
+        async activateCompetition(id) {
+            try {
+                const response = await fetch(`/group1glory/api/admin/competitions/${id}/activate`, {
+                    method: 'POST',
+                });
+
+                if (response.ok) {
+                    showToast('Competition activated!', 'success');
+                    window.location.reload();
+                } else {
+                    const data = await response.json();
+                    showToast(data.detail || 'Failed to activate', 'error');
+                }
+            } catch (err) {
+                showToast('An error occurred', 'error');
+            }
+        },
+
+        async scrapeCalendar() {
+            this.scraping = true;
+            try {
+                const response = await fetch('/group1glory/api/admin/scrape-calendar', {
+                    method: 'POST',
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.scrapeResults = data;
+                    showToast(`Found ${data.races_found} races!`, 'success');
+                } else {
+                    showToast(data.detail || 'Scrape failed', 'error');
+                }
+            } catch (err) {
+                showToast('An error occurred', 'error');
+            } finally {
+                this.scraping = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

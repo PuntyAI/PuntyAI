@@ -1,0 +1,113 @@
+{% extends "glory/base.html" %}
+
+{% block title %}Admin Dashboard - Group One Glory{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-display text-gold">Admin Dashboard</h1>
+    </div>
+
+    <!-- Quick Stats -->
+    {% if active_competition %}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-card rounded-xl p-4">
+            <div class="text-3xl font-bold text-gold">{{ stats.total_races }}</div>
+            <div class="text-sm text-muted">Total Races</div>
+        </div>
+        <div class="bg-card rounded-xl p-4">
+            <div class="text-3xl font-bold text-glory-green-300">{{ stats.resulted_races }}</div>
+            <div class="text-sm text-muted">Resulted</div>
+        </div>
+        <div class="bg-card rounded-xl p-4">
+            <div class="text-3xl font-bold text-glory-gold-400">{{ stats.open_races }}</div>
+            <div class="text-sm text-muted">Open for Tips</div>
+        </div>
+        <div class="bg-card rounded-xl p-4">
+            <div class="text-3xl font-bold text-secondary">{{ stats.upcoming_races }}</div>
+            <div class="text-sm text-muted">Upcoming</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Admin Navigation -->
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <a href="/group1glory/admin/competitions" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
+            <div class="text-2xl mb-2">🏆</div>
+            <h3 class="font-semibold text-white">Competitions</h3>
+            <p class="text-sm text-muted">Create and manage competitions</p>
+        </a>
+
+        <a href="/group1glory/admin/races" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
+            <div class="text-2xl mb-2">🏇</div>
+            <h3 class="font-semibold text-white">Races</h3>
+            <p class="text-sm text-muted">Manage races and import horses</p>
+        </a>
+
+        <a href="/group1glory/admin/results" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
+            <div class="text-2xl mb-2">📊</div>
+            <h3 class="font-semibold text-white">Results</h3>
+            <p class="text-sm text-muted">Enter race results</p>
+        </a>
+
+        <a href="/group1glory/admin/picks" class="bg-card rounded-xl p-6 hover:bg-glory-gold/10 transition-colors">
+            <div class="text-2xl mb-2">📝</div>
+            <h3 class="font-semibold text-white">All Picks</h3>
+            <p class="text-sm text-muted">View all user picks</p>
+        </a>
+    </div>
+
+    <!-- Active Competition -->
+    {% if active_competition %}
+    <div class="bg-card rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-display text-gold">Active Competition</h2>
+            <span class="g1-badge">ACTIVE</span>
+        </div>
+        <div class="text-xl font-semibold mb-2">{{ active_competition.name }}</div>
+        <div class="text-secondary">
+            {{ active_competition.start_date.strftime('%d %B %Y') }} - {{ active_competition.end_date.strftime('%d %B %Y') }}
+        </div>
+        <div class="mt-4">
+            <a href="/group1glory/admin/competitions/{{ active_competition.id }}" class="text-glory-gold-400 hover:text-glory-gold-300">
+                View details &rarr;
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-card rounded-xl p-6 text-center">
+        <p class="text-secondary mb-4">No active competition</p>
+        <a href="/group1glory/admin/competitions" class="btn-gold">Create Competition</a>
+    </div>
+    {% endif %}
+
+    <!-- All Competitions -->
+    <div class="bg-card rounded-xl p-6">
+        <h2 class="text-xl font-display text-gold mb-4">All Competitions</h2>
+        {% if competitions %}
+        <div class="space-y-3">
+            {% for comp in competitions %}
+            <div class="flex items-center justify-between py-3 border-b border-glory-gold/10 last:border-0">
+                <div>
+                    <div class="font-semibold">{{ comp.name }}</div>
+                    <div class="text-sm text-muted">
+                        {{ comp.start_date.strftime('%d %b') }} - {{ comp.end_date.strftime('%d %b %Y') }}
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    {% if comp.is_active %}
+                    <span class="text-xs bg-glory-green-600 text-white px-2 py-1 rounded">Active</span>
+                    {% endif %}
+                    <a href="/group1glory/admin/competitions/{{ comp.id }}" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">
+                        Manage
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">No competitions created yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

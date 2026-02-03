@@ -1,0 +1,76 @@
+{% extends "glory/base.html" %}
+
+{% block title %}Login - Group One Glory{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-8">
+    <div class="bg-card rounded-xl p-8">
+        <h1 class="text-2xl font-display text-gold text-center mb-6">Login</h1>
+
+        {% if error %}
+        <div class="bg-red-900/30 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg mb-6">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-secondary mb-1">Email</label>
+                <input type="email" name="email" required class="input-field" placeholder="you@example.com">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-secondary mb-1">Password</label>
+                <input type="password" name="password" required class="input-field" placeholder="Your password">
+            </div>
+
+            <button type="submit" class="btn-gold w-full py-3">Login</button>
+        </form>
+
+        <div class="mt-6 text-center text-sm text-muted">
+            Don't have an account?
+            <a href="/group1glory/register" class="text-glory-gold-400 hover:text-glory-gold-300">Register here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const origText = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Logging in...';
+
+    try {
+        const response = await fetch('/group1glory/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: form.email.value,
+                password: form.password.value,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('Welcome back!', 'success');
+            window.location.href = '/group1glory/picks';
+        } else {
+            showToast(data.detail || 'Login failed', 'error');
+        }
+    } catch (err) {
+        showToast('An error occurred', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
+});
+</script>
+{% endblock %}

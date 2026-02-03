@@ -1,0 +1,152 @@
+{% extends "glory/base.html" %}
+
+{% block title %}Enter Result - {{ race.race_name }} - Group One Glory{% endblock %}
+
+{% block content %}
+<div x-data="resultEntryApp()" class="space-y-6">
+    <!-- Header -->
+    <div>
+        <a href="/group1glory/admin/results" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm">&larr; Back to Results</a>
+        <h1 class="text-3xl font-display text-gold mt-2">Enter Result</h1>
+        <p class="text-xl text-secondary">{{ race.race_name }}</p>
+        <p class="text-muted">{{ race.venue }} &bull; {{ race.race_date|melb_date }}</p>
+    </div>
+
+    {% if race.status == 'resulted' %}
+    <div class="bg-glory-green-800/30 border border-glory-green-600 rounded-xl p-6">
+        <p class="text-glory-green-300">This race has already been resulted.</p>
+        <a href="/group1glory/admin/races/{{ race.id }}" class="text-glory-gold-400 hover:text-glory-gold-300 text-sm mt-2 inline-block">View race details</a>
+    </div>
+    {% else %}
+
+    <!-- Result Entry Form -->
+    <div class="bg-card rounded-xl p-6">
+        <h2 class="text-lg font-display text-gold mb-4">Select Placings</h2>
+
+        <div class="space-y-4">
+            <!-- 1st Place -->
+            <div>
+                <label class="flex items-center gap-3 text-lg mb-2">
+                    <span class="w-10 h-10 rounded-lg pos-1st flex items-center justify-center font-bold">1st</span>
+                    <span>Winner (3 points)</span>
+                </label>
+                <select x-model="first" class="input-field">
+                    <option value="">-- Select Winner --</option>
+                    {% for horse in horses %}
+                    <option value="{{ horse.id }}">{{ horse.saddlecloth }}. {{ horse.name }} ({{ horse.jockey or 'TBA' }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- 2nd Place -->
+            <div>
+                <label class="flex items-center gap-3 text-lg mb-2">
+                    <span class="w-10 h-10 rounded-lg pos-2nd flex items-center justify-center font-bold">2nd</span>
+                    <span>Second (2 points)</span>
+                </label>
+                <select x-model="second" class="input-field">
+                    <option value="">-- Select Second --</option>
+                    {% for horse in horses %}
+                    <option value="{{ horse.id }}">{{ horse.saddlecloth }}. {{ horse.name }} ({{ horse.jockey or 'TBA' }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- 3rd Place -->
+            <div>
+                <label class="flex items-center gap-3 text-lg mb-2">
+                    <span class="w-10 h-10 rounded-lg pos-3rd flex items-center justify-center font-bold">3rd</span>
+                    <span>Third (1 point)</span>
+                </label>
+                <select x-model="third" class="input-field">
+                    <option value="">-- Select Third --</option>
+                    {% for horse in horses %}
+                    <option value="{{ horse.id }}">{{ horse.saddlecloth }}. {{ horse.name }} ({{ horse.jockey or 'TBA' }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Validation Errors -->
+        <div x-show="error" x-cloak class="mt-4 p-4 bg-red-900/30 border border-red-500/30 rounded-lg text-red-300">
+            <span x-text="error"></span>
+        </div>
+
+        <!-- Submit -->
+        <div class="mt-6 flex gap-4">
+            <button @click="submitResults()" class="btn-gold px-8" :disabled="submitting || !isValid()">
+                <span x-show="!submitting">Save Results</span>
+                <span x-show="submitting"><span class="spinner"></span> Saving...</span>
+            </button>
+            <a href="/group1glory/admin/results" class="btn-outline">Cancel</a>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function resultEntryApp() {
+    return {
+        first: '',
+        second: '',
+        third: '',
+        error: '',
+        submitting: false,
+
+        isValid() {
+            if (!this.first || !this.second || !this.third) return false;
+            // Check no duplicates
+            const selections = [this.first, this.second, this.third];
+            return new Set(selections).size === 3;
+        },
+
+        async submitResults() {
+            this.error = '';
+
+            // Validate
+            if (!this.first || !this.second || !this.third) {
+                this.error = 'Please select all three placings';
+                return;
+            }
+
+            if (this.first === this.second || this.first === this.third || this.second === this.third) {
+                this.error = 'Each position must have a different horse';
+                return;
+            }
+
+            this.submitting = true;
+
+            try {
+                const response = await fetch('/group1glory/api/admin/results/{{ race.id }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        results: [
+                            [this.first, 1],
+                            [this.second, 2],
+                            [this.third, 3],
+                        ],
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showToast('Results saved! Points calculated.', 'success');
+                    window.location.href = '/group1glory/admin/races/{{ race.id }}';
+                } else {
+                    this.error = data.detail || 'Failed to save results';
+                }
+            } catch (err) {
+                this.error = 'An error occurred';
+            } finally {
+                this.submitting = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

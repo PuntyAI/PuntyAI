@@ -14,6 +14,9 @@ from punty.models.database import init_db
 from punty.web.routes import router as web_router
 from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api
 from punty.results.monitor import ResultsMonitor
+from punty.glory.routes import router as glory_router
+from punty.glory.api import router as glory_api_router
+from punty.glory.auth import GloryAuthMiddleware, GloryCSRFMiddleware
 
 
 # Configure logging
@@ -78,6 +81,9 @@ app = FastAPI(
 # SessionMiddleware → AuthMiddleware → CSRFMiddleware
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(AuthMiddleware)
+# Glory-specific middleware (runs after general auth, handles /group1glory/ paths)
+app.add_middleware(GloryCSRFMiddleware)
+app.add_middleware(GloryAuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
@@ -101,6 +107,10 @@ app.include_router(scheduler.router, prefix="/api/scheduler", tags=["scheduler"]
 app.include_router(delivery.router, prefix="/api/delivery", tags=["delivery"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["settings"])
 app.include_router(results_api.router, prefix="/api/results", tags=["results"])
+
+# Group One Glory routes (separate tipping competition module)
+app.include_router(glory_router, tags=["glory"])
+app.include_router(glory_api_router, tags=["glory-api"])
 
 
 @app.get("/health")
