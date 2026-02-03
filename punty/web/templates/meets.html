@@ -43,7 +43,7 @@
             </div>
             <span id="scrape-progress-pct" class="text-sm text-gray-500">0%</span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
+        <div class="w-full bg-punty-card2 rounded-full h-3">
             <div id="scrape-progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
         </div>
         <div id="scrape-progress-detail" class="text-xs text-gray-500"></div>
@@ -54,14 +54,14 @@
     </div>
 
     <!-- Today's Meetings -->
-    <div id="meetings-container" class="bg-white rounded-lg shadow">
-        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+    <div id="meetings-container" class="bg-punty-card rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-punty-border flex items-center justify-between">
             <h2 class="text-lg font-semibold text-gray-900">Meetings</h2>
             <span id="selected-count" class="text-sm text-gray-500"></span>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+            <table class="min-w-full divide-y divide-punty-border">
+                <thead class="bg-punty-card2">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Active</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
@@ -73,9 +73,9 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="meetings-body" class="bg-white divide-y divide-gray-200">
+                <tbody id="meetings-body" class="divide-y divide-punty-border">
                     {% for meeting in meetings %}
-                    <tr class="hover:bg-gray-50" data-meeting-id="{{ meeting.id }}" data-state="{{ meeting.source or '' }}">
+                    <tr class="hover:bg-punty-card2" data-meeting-id="{{ meeting.id }}" data-state="{{ meeting.source or '' }}">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <button onclick="toggleSelect('{{ meeting.id }}', this)"
                                     class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none {{ 'bg-punty-coral' if meeting.selected else 'bg-gray-300' }}"
