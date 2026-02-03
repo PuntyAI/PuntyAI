@@ -34,16 +34,23 @@
         <button onclick="quickSelect('metro')" class="text-xs bg-punty-gold/20 hover:bg-punty-gold/40 text-yellow-800 px-3 py-1.5 rounded-md">All Metro</button>
     </div>
 
-    <!-- Scrape Progress Bar (hidden by default) -->
-    <div id="scrape-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-2">
+    <!-- Scrape Progress / Status Panel -->
+    <div id="scrape-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
         <div class="flex items-center justify-between">
-            <span id="scrape-progress-label" class="text-sm font-medium text-gray-700">Scraping...</span>
+            <div class="flex items-center space-x-2">
+                <div id="scrape-spinner" class="animate-spin h-5 w-5 border-2 border-punty-coral border-t-transparent rounded-full"></div>
+                <span id="scrape-progress-label" class="text-sm font-medium text-gray-700">Scraping...</span>
+            </div>
             <span id="scrape-progress-pct" class="text-sm text-gray-500">0%</span>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-3">
             <div id="scrape-progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
         </div>
-        <p id="scrape-progress-detail" class="text-xs text-gray-500"></p>
+        <div id="scrape-progress-detail" class="text-xs text-gray-500"></div>
+        <!-- Results summary (shown after completion) -->
+        <div id="scrape-results" class="hidden mt-2 p-3 rounded-lg text-sm">
+            <div id="scrape-results-content"></div>
+        </div>
     </div>
 
     <!-- Today's Meetings -->
@@ -193,27 +200,65 @@
         const progressBar = document.getElementById('scrape-progress-bar');
         const progressLabel = document.getElementById('scrape-progress-label');
         const progressPct = document.getElementById('scrape-progress-pct');
+        const progressDetail = document.getElementById('scrape-progress-detail');
+        const spinner = document.getElementById('scrape-spinner');
+        const resultsDiv = document.getElementById('scrape-results');
+        const resultsContent = document.getElementById('scrape-results-content');
 
         btn.disabled = true;
         btn.querySelector('span').textContent = 'Scraping...';
 
         // Show indeterminate progress
         progressDiv.classList.remove('hidden');
+        resultsDiv.classList.add('hidden');
         progressBar.style.width = '100%';
         progressBar.classList.add('animate-pulse');
+        progressBar.classList.remove('bg-green-500', 'bg-red-500');
+        progressBar.classList.add('bg-punty-coral');
+        spinner.classList.remove('hidden');
         progressLabel.textContent = 'Fetching calendar from racing.com...';
         progressPct.textContent = '';
+        progressDetail.textContent = 'This can take 1-3 minutes due to page rendering';
+        progressDetail.className = 'text-xs text-gray-500';
 
         try {
             const resp = await fetch('/api/meets/scrape-calendar', { method: 'POST' });
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
             const data = await resp.json();
-            progressBar.classList.remove('animate-pulse');
-            progressLabel.textContent = `Found ${data.count} meetings`;
-            showToast(`Found ${data.count} meetings`, 'success');
-            setTimeout(() => location.reload(), 1000);
+
+            // Success state
+            progressBar.classList.remove('animate-pulse', 'bg-punty-coral');
+            progressBar.classList.add('bg-green-500');
+            spinner.classList.add('hidden');
+            progressLabel.textContent = '✓ Calendar scraped successfully';
+            progressPct.textContent = '';
+            progressDetail.textContent = '';
+
+            // Show results summary
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.className = 'mt-2 p-3 rounded-lg text-sm bg-green-50 border border-green-200';
+            resultsContent.innerHTML = `
+                <div class="font-medium text-green-800 mb-1">Found ${data.count} meetings</div>
+                <div class="text-green-700">Page will reload in 2 seconds...</div>
+            `;
+
+            setTimeout(() => location.reload(), 2000);
         } catch (e) {
-            progressDiv.classList.add('hidden');
-            showToast('Calendar scrape failed', 'error');
+            // Error state
+            progressBar.classList.remove('animate-pulse', 'bg-punty-coral');
+            progressBar.classList.add('bg-red-500');
+            spinner.classList.add('hidden');
+            progressLabel.textContent = '✗ Calendar scrape failed';
+            progressPct.textContent = '';
+
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.className = 'mt-2 p-3 rounded-lg text-sm bg-red-50 border border-red-200';
+            resultsContent.innerHTML = `
+                <div class="font-medium text-red-800 mb-1">Error: ${e.message}</div>
+                <div class="text-red-700">Check server logs or try again</div>
+            `;
         } finally {
             btn.disabled = false;
             btn.querySelector('span').textContent = 'Refresh Calendar';
@@ -227,15 +272,28 @@
         const progressLabel = document.getElementById('scrape-progress-label');
         const progressPct = document.getElementById('scrape-progress-pct');
         const progressDetail = document.getElementById('scrape-progress-detail');
+        const spinner = document.getElementById('scrape-spinner');
+        const resultsDiv = document.getElementById('scrape-results');
+        const resultsContent = document.getElementById('scrape-results-content');
 
+        // Reset and show progress
         progressDiv.classList.remove('hidden');
+        resultsDiv.classList.add('hidden');
         progressBar.style.width = '0%';
-        progressLabel.textContent = 'Starting scrape...';
+        progressBar.classList.remove('animate-pulse', 'bg-green-500', 'bg-red-500', 'bg-yellow-500');
+        progressBar.classList.add('bg-punty-coral');
+        spinner.classList.remove('hidden');
+        progressLabel.textContent = 'Connecting...';
         progressPct.textContent = '0%';
         progressDetail.textContent = '';
+        progressDetail.className = 'text-xs text-gray-500';
+
+        // Track steps for summary
+        const stepResults = [];
 
         try {
             const eventSource = new EventSource(`/api/meets/${meetingId}/scrape-stream`);
+            let lastStep = -1;
 
             eventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
@@ -247,42 +305,96 @@
                 progressPct.textContent = pct + '%';
                 progressLabel.textContent = data.label || 'Scraping...';
 
+                // Track each step result
+                if (step !== lastStep && data.status !== 'running') {
+                    stepResults.push({
+                        step: step,
+                        label: data.label,
+                        status: data.status
+                    });
+                    lastStep = step;
+                }
+
                 if (data.status === 'error') {
-                    progressDetail.textContent = 'Error occurred - continuing...';
-                    progressDetail.className = 'text-xs text-red-500';
+                    progressDetail.innerHTML = `<span class="text-red-600">⚠ ${data.label}</span>`;
                 } else if (data.status === 'done') {
-                    progressDetail.textContent = '';
-                    progressDetail.className = 'text-xs text-gray-500';
+                    progressDetail.innerHTML = `<span class="text-green-600">✓ Step ${step} complete</span>`;
+                } else if (data.status === 'running') {
+                    progressDetail.innerHTML = `<span class="text-gray-500">Processing...</span>`;
                 }
 
                 if (data.status === 'complete') {
                     eventSource.close();
-                    progressLabel.textContent = 'Complete!';
+                    spinner.classList.add('hidden');
+
+                    const hasErrors = data.errors && data.errors.length > 0;
+                    const hasData = data.label && data.label.includes('races');
+
+                    // Set final bar color
+                    progressBar.classList.remove('bg-punty-coral');
+                    if (hasErrors) {
+                        progressBar.classList.add('bg-yellow-500');
+                        progressLabel.textContent = '⚠ Completed with errors';
+                    } else {
+                        progressBar.classList.add('bg-green-500');
+                        progressLabel.textContent = '✓ Scrape complete';
+                    }
                     progressBar.style.width = '100%';
                     progressPct.textContent = '100%';
+                    progressDetail.textContent = '';
 
-                    if (data.errors && data.errors.length > 0) {
-                        showToast(`Done with ${data.errors.length} error(s)`, 'warning');
-                    } else {
-                        showToast('Scrape complete', 'success');
+                    // Build results summary
+                    resultsDiv.classList.remove('hidden');
+                    resultsDiv.className = hasErrors
+                        ? 'mt-2 p-3 rounded-lg text-sm bg-yellow-50 border border-yellow-200'
+                        : 'mt-2 p-3 rounded-lg text-sm bg-green-50 border border-green-200';
+
+                    let summaryHtml = '<div class="space-y-1">';
+                    for (const sr of stepResults) {
+                        const icon = sr.status === 'error' ? '✗' : '✓';
+                        const color = sr.status === 'error' ? 'text-red-600' : 'text-green-700';
+                        summaryHtml += `<div class="${color}">${icon} ${sr.label}</div>`;
                     }
+                    if (hasErrors) {
+                        summaryHtml += `<div class="text-yellow-700 mt-2 font-medium">Errors: ${data.errors.join(', ')}</div>`;
+                    }
+                    summaryHtml += '<div class="text-gray-600 mt-2">Page will reload in 3 seconds...</div>';
+                    summaryHtml += '</div>';
+                    resultsContent.innerHTML = summaryHtml;
 
-                    // Hide progress bar and reload after a moment
                     setTimeout(() => {
                         progressDiv.classList.add('hidden');
                         location.reload();
-                    }, 1500);
+                    }, 3000);
                 }
             };
 
-            eventSource.onerror = function() {
+            eventSource.onerror = function(e) {
                 eventSource.close();
-                progressDiv.classList.add('hidden');
-                showToast('Scrape connection lost', 'error');
+                spinner.classList.add('hidden');
+                progressBar.classList.remove('bg-punty-coral');
+                progressBar.classList.add('bg-red-500');
+                progressLabel.textContent = '✗ Connection lost';
+
+                resultsDiv.classList.remove('hidden');
+                resultsDiv.className = 'mt-2 p-3 rounded-lg text-sm bg-red-50 border border-red-200';
+                resultsContent.innerHTML = `
+                    <div class="font-medium text-red-800 mb-1">Scrape connection lost</div>
+                    <div class="text-red-700">The server may still be processing. Check the meeting page or try again.</div>
+                `;
             };
         } catch (e) {
-            progressDiv.classList.add('hidden');
-            showToast('Scrape failed', 'error');
+            spinner.classList.add('hidden');
+            progressBar.classList.remove('bg-punty-coral');
+            progressBar.classList.add('bg-red-500');
+            progressLabel.textContent = '✗ Scrape failed';
+
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.className = 'mt-2 p-3 rounded-lg text-sm bg-red-50 border border-red-200';
+            resultsContent.innerHTML = `
+                <div class="font-medium text-red-800 mb-1">Error: ${e.message}</div>
+                <div class="text-red-700">Check server logs or try again</div>
+            `;
         }
     }
 
