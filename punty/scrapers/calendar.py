@@ -126,111 +126,51 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
         except Exception:
             pass
 
-        # Extract meetings, detecting which section they're in (Races vs Jumpouts/Trials)
-        # The page has section headers like "Races" and "Jumpouts/Trials"
-        # We need to determine which section each meeting button belongs to
-
-        # Get all section headers and meeting buttons to determine context
-        # Use JavaScript to extract meetings with their section context
+        # Extract meetings, detecting races vs trials/jumpouts
+        # The abbr element contains a code: F = Full form (race), W = Working (trial/jumpout)
         meetings_data = await page.evaluate("""(containerIndex) => {
             const containers = document.querySelectorAll('.calendar__grid-item-container');
             const container = containers[containerIndex];
             if (!container) return [];
 
             const results = [];
+            const btns = container.querySelectorAll('.calendar__grid-item-btn');
 
-            // Find all section headers (h3 or similar) and meeting buttons
-            // The structure typically has headers followed by lists of meetings
-            const sections = container.querySelectorAll('.calendar__grid-item-list');
+            btns.forEach(btn => {
+                const span = btn.querySelector('span');
+                const venue = span?.textContent?.trim() || '';
+                if (!venue) return;
 
-            sections.forEach(section => {
-                // Check if this section is for trials/jumpouts by looking at preceding header
-                // or by checking a data attribute or class
-                let isTrialSection = false;
-
-                // Look for section header text
-                const prevHeader = section.previousElementSibling;
-                if (prevHeader) {
-                    const headerText = prevHeader.textContent?.toLowerCase() || '';
-                    if (headerText.includes('trial') || headerText.includes('jumpout')) {
-                        isTrialSection = true;
-                    }
+                const right = btn.querySelector('.calendar__grid-item-right');
+                let state = '';
+                if (right) {
+                    state = (right.textContent || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
                 }
 
-                // Also check section itself for trial indicators
-                const sectionText = section.textContent?.toLowerCase() || '';
-                const sectionClass = section.className?.toLowerCase() || '';
-                if (sectionClass.includes('trial') || sectionClass.includes('jumpout')) {
-                    isTrialSection = true;
-                }
+                const abbr = btn.querySelector('abbr');
+                const status = abbr?.getAttribute('title') || '';
+                // The abbr text content indicates type: F = race, W = trial/jumpout
+                const abbrCode = abbr?.textContent?.trim().toUpperCase() || 'F';
+                const isTrialOrJumpout = abbrCode === 'W';
 
-                // Check parent elements for trial indicators
-                let parent = section.parentElement;
-                for (let i = 0; i < 3 && parent; i++) {
-                    const parentClass = parent.className?.toLowerCase() || '';
-                    const parentText = parent.querySelector('h2, h3, h4, .calendar__grid-item-label')?.textContent?.toLowerCase() || '';
-                    if (parentClass.includes('trial') || parentClass.includes('jumpout') ||
-                        parentText.includes('trial') || parentText.includes('jumpout')) {
-                        isTrialSection = true;
-                        break;
-                    }
-                    parent = parent.parentElement;
-                }
-
-                const btns = section.querySelectorAll('.calendar__grid-item-btn');
-                btns.forEach(btn => {
-                    const span = btn.querySelector('span');
-                    const venue = span?.textContent?.trim() || '';
-                    if (!venue) return;
-
-                    const right = btn.querySelector('.calendar__grid-item-right');
-                    let state = '';
-                    if (right) {
-                        state = (right.textContent || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
-                    }
-
-                    const abbr = btn.querySelector('abbr');
-                    const status = abbr?.getAttribute('title') || '';
-
-                    results.push({
-                        venue: venue,
-                        state: state,
-                        status: status,
-                        isTrialOrJumpout: isTrialSection
-                    });
+                results.push({
+                    venue: venue,
+                    state: state,
+                    status: status,
+                    abbrCode: abbrCode,
+                    isTrialOrJumpout: isTrialOrJumpout
                 });
             });
-
-            // Fallback: if no sections found, try direct button extraction
-            if (results.length === 0) {
-                const btns = container.querySelectorAll('.calendar__grid-item-btn');
-                btns.forEach(btn => {
-                    const span = btn.querySelector('span');
-                    const venue = span?.textContent?.trim() || '';
-                    if (!venue) return;
-
-                    const right = btn.querySelector('.calendar__grid-item-right');
-                    let state = '';
-                    if (right) {
-                        state = (right.textContent || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
-                    }
-
-                    const abbr = btn.querySelector('abbr');
-                    const status = abbr?.getAttribute('title') || '';
-
-                    results.push({
-                        venue: venue,
-                        state: state,
-                        status: status,
-                        isTrialOrJumpout: false
-                    });
-                });
-            }
 
             return results;
         }""", target_container_index)
 
-        logger.info(f"Found {len(meetings_data)} meetings in column for {race_date}")
+        # Log what we found
+        races = [m for m in meetings_data if not m.get("isTrialOrJumpout")]
+        trials = [m for m in meetings_data if m.get("isTrialOrJumpout")]
+        logger.info(f"Found {len(meetings_data)} meetings: {len(races)} races, {len(trials)} trials")
+        for m in trials:
+            logger.info(f"  Trial detected: {m.get('venue')} (code={m.get('abbrCode')})")
 
         for m in meetings_data:
             venue = m.get("venue", "")
