@@ -151,5 +151,10 @@ Tone varies by result:
 - Loss day: self-deprecating, resilient, "we go again"
 - Break even: measured, still sharp
 
+IMPORTANT tone guidance:
+- Sequences, Big 3 Multi, and Exotics are long-shot bets — don't dwell on them missing. They're expected to lose most days.
+- Focus excitement on selection wins (Win, Place, Each Way) — these are the bread and butter.
+- BUT if a sequence, exotic, or Big 3 hits — brag the absolute fuck out of it. That's a massive day.
+
 Always end with:
 *Gamble Responsibly.*
