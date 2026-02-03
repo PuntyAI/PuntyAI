@@ -35,7 +35,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
 
         # Wait for the calendar grid to render
         try:
-            await page.locator(".calendar__grid-item-container").first.wait_for(timeout=30000)
+            await page.locator(".calendar__grid-item-container").first.wait_for(timeout=15000)
         except Exception:
             logger.warning("Could not find calendar grid on page")
             return meetings

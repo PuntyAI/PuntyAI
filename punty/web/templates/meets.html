@@ -24,14 +24,53 @@
     </div>
 
     <!-- Quick-select buttons -->
-    <div class="bg-white rounded-lg shadow p-4 flex flex-wrap gap-2 items-center">
+    <div class="bg-punty-card rounded-lg shadow p-4 flex flex-wrap gap-2 items-center">
         <span class="text-sm font-medium text-gray-700 mr-2">Quick select:</span>
-        <button onclick="quickSelect('all')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-md">Select All</button>
-        <button onclick="quickSelect('none')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-md">Clear All</button>
+        <button onclick="quickSelect('all')" class="text-xs bg-punty-card2 hover:bg-punty-card2/80 px-3 py-1.5 rounded-md">Select All</button>
+        <button onclick="quickSelect('none')" class="text-xs bg-punty-card2 hover:bg-punty-card2/80 px-3 py-1.5 rounded-md">Clear All</button>
         <button onclick="quickSelect('VIC')" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-md">All VIC</button>
         <button onclick="quickSelect('NSW')" class="text-xs bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded-md">All NSW</button>
         <button onclick="quickSelect('QLD')" class="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded-md">All QLD</button>
         <button onclick="quickSelect('metro')" class="text-xs bg-punty-gold/20 hover:bg-punty-gold/40 text-yellow-800 px-3 py-1.5 rounded-md">All Metro</button>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div class="bg-punty-card rounded-lg shadow p-4">
+        <div class="flex flex-wrap gap-3 items-center">
+            <span class="text-sm font-medium text-gray-700 mr-2">Bulk actions:</span>
+            <button onclick="bulkScrape()" id="btn-bulk-scrape"
+                    class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 text-sm flex items-center gap-2">
+                <span>&#x1F504;</span> Scrape All
+            </button>
+            <button onclick="bulkSpeedMaps()" id="btn-bulk-speed"
+                    class="bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90 text-sm flex items-center gap-2">
+                <span>&#x1F3C3;</span> Fetch All Speed Maps
+            </button>
+            <button onclick="bulkGenerate()" id="btn-bulk-generate"
+                    class="bg-punty-gold text-white px-4 py-2 rounded-lg hover:bg-punty-gold/90 text-sm flex items-center gap-2">
+                <span>&#x1F4E7;</span> Generate All Early Mail
+            </button>
+            <button onclick="cancelBulk()" id="btn-bulk-cancel" class="hidden text-red-500 hover:text-red-700 text-sm px-3 py-2">
+                Cancel
+            </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Actions run sequentially on selected meetings only</p>
+    </div>
+
+    <!-- Bulk Progress Panel -->
+    <div id="bulk-progress" class="hidden bg-punty-card rounded-lg shadow p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div id="bulk-spinner" class="animate-spin h-5 w-5 border-2 border-punty-coral border-t-transparent rounded-full"></div>
+                <span id="bulk-progress-label" class="text-sm font-medium text-gray-700">Processing...</span>
+            </div>
+            <span id="bulk-progress-pct" class="text-sm text-gray-500">0/0</span>
+        </div>
+        <div class="w-full bg-punty-card2 rounded-full h-3">
+            <div id="bulk-progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <div id="bulk-progress-detail" class="text-xs text-gray-500"></div>
+        <div id="bulk-log" class="text-xs space-y-1 max-h-48 overflow-y-auto font-mono mt-2"></div>
     </div>
 
     <!-- Scrape Progress / Status Panel -->
@@ -439,6 +478,155 @@
                 await toggleSelect(row.dataset.meetingId, btn);
             }
         }
+    }
+
+    // --- Bulk Actions ---
+    var bulkEventSource = null;
+
+    function setBulkButtonsDisabled(disabled) {
+        ['btn-bulk-scrape', 'btn-bulk-speed', 'btn-bulk-generate'].forEach(function(id) {
+            var btn = document.getElementById(id);
+            if (btn) {
+                btn.disabled = disabled;
+                if (disabled) {
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }
+        });
+        var cancelBtn = document.getElementById('btn-bulk-cancel');
+        if (cancelBtn) {
+            if (disabled) {
+                cancelBtn.classList.remove('hidden');
+            } else {
+                cancelBtn.classList.add('hidden');
+            }
+        }
+    }
+
+    function cancelBulk() {
+        if (bulkEventSource) {
+            bulkEventSource.close();
+            bulkEventSource = null;
+        }
+        setBulkButtonsDisabled(false);
+        var bar = document.getElementById('bulk-progress-bar');
+        bar.classList.remove('bg-punty-coral', 'bg-punty-blue', 'bg-punty-gold');
+        bar.classList.add('bg-yellow-500');
+        var spinner = document.getElementById('bulk-spinner');
+        spinner.classList.add('hidden');
+        document.getElementById('bulk-progress-label').textContent = 'Cancelled';
+        addBulkLog('Cancelled by user', 'warning');
+        showToast('Bulk operation cancelled', 'warning');
+    }
+
+    function addBulkLog(message, type) {
+        var log = document.getElementById('bulk-log');
+        var line = document.createElement('div');
+        line.className = 'flex items-center gap-2 py-0.5';
+        var icon = '';
+        var textClass = 'text-gray-600';
+        if (type === 'running') {
+            icon = '<span class="inline-block w-3 h-3 border-2 border-punty-coral border-t-transparent rounded-full animate-spin"></span>';
+        } else if (type === 'done') {
+            icon = '<span class="text-green-600">&#10003;</span>';
+            textClass = 'text-green-700';
+        } else if (type === 'error') {
+            icon = '<span class="text-red-600">&#10007;</span>';
+            textClass = 'text-red-600';
+        } else if (type === 'warning') {
+            icon = '<span class="text-yellow-500">&#x26A0;</span>';
+            textClass = 'text-yellow-600';
+        } else if (type === 'complete') {
+            icon = '<span class="text-punty-coral">&#9679;</span>';
+            textClass = 'font-semibold text-gray-900';
+        }
+        line.innerHTML = icon + '<span class="' + textClass + '">' + message + '</span>';
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function runBulkStream(endpoint, barColor, actionName) {
+        var panel = document.getElementById('bulk-progress');
+        var bar = document.getElementById('bulk-progress-bar');
+        var label = document.getElementById('bulk-progress-label');
+        var pct = document.getElementById('bulk-progress-pct');
+        var detail = document.getElementById('bulk-progress-detail');
+        var spinner = document.getElementById('bulk-spinner');
+        var log = document.getElementById('bulk-log');
+
+        // Reset UI
+        panel.classList.remove('hidden');
+        bar.style.width = '0%';
+        bar.className = barColor + ' h-3 rounded-full transition-all duration-300';
+        spinner.classList.remove('hidden');
+        label.textContent = 'Starting ' + actionName + '...';
+        pct.textContent = '0/0';
+        detail.textContent = '';
+        log.innerHTML = '';
+
+        setBulkButtonsDisabled(true);
+
+        bulkEventSource = new EventSource(endpoint);
+
+        bulkEventSource.onmessage = function(e) {
+            var data = JSON.parse(e.data);
+            var step = data.step || 0;
+            var total = data.total_meetings || data.total || 1;
+            var percent = total > 0 ? Math.round((step / total) * 100) : 0;
+
+            bar.style.width = percent + '%';
+            pct.textContent = step + '/' + total;
+            label.textContent = data.label || 'Processing...';
+
+            if (data.meeting) {
+                detail.textContent = 'Current: ' + data.meeting;
+            }
+
+            // Log significant events
+            if (data.status === 'done' && data.meeting) {
+                addBulkLog(data.label || data.meeting + ' complete', 'done');
+            } else if (data.status === 'error') {
+                addBulkLog(data.label || 'Error', 'error');
+            } else if (data.status === 'complete') {
+                bulkEventSource.close();
+                bulkEventSource = null;
+                setBulkButtonsDisabled(false);
+                spinner.classList.add('hidden');
+                bar.classList.remove('bg-punty-coral', 'bg-punty-blue', 'bg-punty-gold');
+                bar.classList.add('bg-green-500');
+                bar.style.width = '100%';
+                addBulkLog(data.label || 'Complete', 'complete');
+                showToast(actionName + ' complete!', 'success');
+                // Reload after short delay
+                setTimeout(function() { location.reload(); }, 2000);
+            }
+        };
+
+        bulkEventSource.onerror = function() {
+            bulkEventSource.close();
+            bulkEventSource = null;
+            setBulkButtonsDisabled(false);
+            spinner.classList.add('hidden');
+            bar.classList.remove('bg-punty-coral', 'bg-punty-blue', 'bg-punty-gold');
+            bar.classList.add('bg-red-500');
+            label.textContent = 'Connection lost';
+            addBulkLog('Connection lost - check server logs', 'error');
+            showToast('Connection lost', 'error');
+        };
+    }
+
+    function bulkScrape() {
+        runBulkStream('/api/meets/bulk/scrape-stream', 'bg-punty-coral', 'Scrape All');
+    }
+
+    function bulkSpeedMaps() {
+        runBulkStream('/api/meets/bulk/speed-maps-stream', 'bg-punty-blue', 'Fetch Speed Maps');
+    }
+
+    function bulkGenerate() {
+        runBulkStream('/api/meets/bulk/generate-early-mail-stream', 'bg-punty-gold', 'Generate Early Mail');
     }
 
     updateSelectedCount();

@@ -196,7 +196,7 @@ class RacingComScraper(BaseScraper):
                 resp = await page.goto(meeting_url, wait_until="load")
                 if resp and resp.status == 404:
                     raise ScraperError(f"HTTP 404: {meeting_url}")
-                await page.wait_for_timeout(5000)
+                await page.wait_for_timeout(3000)  # Reduced from 5000
 
                 # Dismiss cookie banner
                 try:
@@ -233,14 +233,14 @@ class RacingComScraper(BaseScraper):
                     logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
 
                     await page.goto(race_url, wait_until="load")
-                    await page.wait_for_timeout(4000)
+                    await page.wait_for_timeout(2500)  # Reduced from 4000
 
                     # Try clicking "Full Form" tab to trigger getRaceEntriesForField_CD
                     try:
                         ff_btn = page.locator("button:has-text('Full Form'), a:has-text('Full Form')").first
-                        if await ff_btn.is_visible(timeout=2000):
+                        if await ff_btn.is_visible(timeout=1500):
                             await ff_btn.click()
-                            await page.wait_for_timeout(3000)
+                            await page.wait_for_timeout(1500)  # Reduced from 3000
                         else:
                             logger.info(f"Race {race_num}: 'Full Form' button not found, trying 'Form' tab")
                             # Try alternative tab names
@@ -249,7 +249,7 @@ class RacingComScraper(BaseScraper):
                                     alt_btn = page.locator(f"button:has-text('{tab_text}'), a:has-text('{tab_text}')").first
                                     if await alt_btn.is_visible(timeout=1000):
                                         await alt_btn.click()
-                                        await page.wait_for_timeout(3000)
+                                        await page.wait_for_timeout(1500)  # Reduced from 3000
                                         break
                                 except Exception:
                                     continue
@@ -258,9 +258,9 @@ class RacingComScraper(BaseScraper):
 
                     # Scroll down to trigger lazy loading of getRaceEntryItemByHorsePaged_CD
                     # Each horse's form history loads as it scrolls into view
-                    for _ in range(15):
-                        await page.evaluate("window.scrollBy(0, 600)")
-                        await page.wait_for_timeout(800)
+                    for _ in range(8):  # Reduced from 15
+                        await page.evaluate("window.scrollBy(0, 800)")  # Larger scroll
+                        await page.wait_for_timeout(500)  # Reduced from 800
 
                     # Check if we got entries for this race
                     if race_num not in race_entries_by_num:
@@ -747,7 +747,7 @@ class RacingComScraper(BaseScraper):
                     page.on("response", capture_graphql)
 
                     await page.goto(race_url, wait_until="load")
-                    await page.wait_for_timeout(5000)
+                    await page.wait_for_timeout(3000)  # Reduced from 5000
 
                     page.remove_listener("response", capture_graphql)
 

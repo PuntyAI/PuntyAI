@@ -138,3 +138,159 @@ async def speed_maps_stream_endpoint(meeting_id: str):
 async def scrape_meeting(venue: str, date: str, db: AsyncSession = Depends(get_db)):
     """Trigger scraping for a race meeting (legacy endpoint)."""
     return {"status": "queued", "venue": venue, "date": date}
+
+
+@router.get("/bulk/scrape-stream")
+async def bulk_scrape_stream():
+    """SSE stream for scraping all selected meetings sequentially."""
+    from punty.scrapers.orchestrator import scrape_meeting_full_stream
+    from punty.models.database import async_session
+
+    async def event_generator():
+        async with async_session() as db:
+            # Get selected meetings
+            today = melb_today()
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type != "trial"
+                ).order_by(Meeting.venue)
+            )
+            meetings = result.scalars().all()
+
+            if not meetings:
+                yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
+                return
+
+            total_meetings = len(meetings)
+            yield f"data: {json.dumps({'step': 0, 'total': total_meetings, 'label': f'Starting scrape of {total_meetings} meetings...', 'status': 'running'})}\n\n"
+
+            for idx, meeting in enumerate(meetings):
+                meeting_num = idx + 1
+                yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'Scraping {meeting.venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
+
+                try:
+                    errors = []
+                    async for event in scrape_meeting_full_stream(meeting.id, db):
+                        # Forward sub-events with meeting context
+                        event['meeting'] = meeting.venue
+                        event['meeting_num'] = meeting_num
+                        event['total_meetings'] = total_meetings
+                        yield f"data: {json.dumps(event)}\n\n"
+                        if event.get('status') == 'error':
+                            errors.append(event.get('label', 'Unknown error'))
+
+                    if errors:
+                        yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: completed with errors', 'status': 'done', 'errors': errors})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: complete', 'status': 'done'})}\n\n"
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: error - {str(e)}', 'status': 'error'})}\n\n"
+
+                # Brief delay between meetings to avoid rate limiting
+                import asyncio
+                await asyncio.sleep(2)
+
+            yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'All {total_meetings} meetings scraped', 'status': 'complete'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/bulk/speed-maps-stream")
+async def bulk_speed_maps_stream():
+    """SSE stream for fetching speed maps for all selected meetings."""
+    from punty.scrapers.orchestrator import scrape_speed_maps_stream
+    from punty.models.database import async_session
+
+    async def event_generator():
+        async with async_session() as db:
+            today = melb_today()
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type != "trial"
+                ).order_by(Meeting.venue)
+            )
+            meetings = result.scalars().all()
+
+            if not meetings:
+                yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
+                return
+
+            total_meetings = len(meetings)
+            yield f"data: {json.dumps({'step': 0, 'total': total_meetings, 'label': f'Fetching speed maps for {total_meetings} meetings...', 'status': 'running'})}\n\n"
+
+            for idx, meeting in enumerate(meetings):
+                meeting_num = idx + 1
+                yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'Fetching {meeting.venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
+
+                try:
+                    async for event in scrape_speed_maps_stream(meeting.id, db):
+                        event['meeting'] = meeting.venue
+                        event['meeting_num'] = meeting_num
+                        event['total_meetings'] = total_meetings
+                        yield f"data: {json.dumps(event)}\n\n"
+
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: complete', 'status': 'done'})}\n\n"
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: error - {str(e)}', 'status': 'error'})}\n\n"
+
+                import asyncio
+                await asyncio.sleep(2)
+
+            yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'Speed maps complete for {total_meetings} meetings', 'status': 'complete'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/bulk/generate-early-mail-stream")
+async def bulk_generate_early_mail_stream():
+    """SSE stream for generating early mail for all selected meetings."""
+    from punty.ai.generator import generate_content_stream
+    from punty.models.database import async_session
+
+    async def event_generator():
+        async with async_session() as db:
+            today = melb_today()
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type != "trial"
+                ).order_by(Meeting.venue)
+            )
+            meetings = result.scalars().all()
+
+            if not meetings:
+                yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
+                return
+
+            total_meetings = len(meetings)
+            yield f"data: {json.dumps({'step': 0, 'total': total_meetings, 'label': f'Generating early mail for {total_meetings} meetings...', 'status': 'running'})}\n\n"
+
+            for idx, meeting in enumerate(meetings):
+                meeting_num = idx + 1
+                yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'Generating {meeting.venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
+
+                try:
+                    async for event in generate_content_stream(meeting.id, "early_mail", db):
+                        event['meeting'] = meeting.venue
+                        event['meeting_num'] = meeting_num
+                        event['total_meetings'] = total_meetings
+                        yield f"data: {json.dumps(event)}\n\n"
+
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: complete', 'status': 'done'})}\n\n"
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: error - {str(e)}', 'status': 'error'})}\n\n"
+
+                import asyncio
+                await asyncio.sleep(1)
+
+            yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'Early mail generated for {total_meetings} meetings', 'status': 'complete'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
