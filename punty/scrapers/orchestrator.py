@@ -57,10 +57,14 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
         if existing:
             if not existing.source:
                 existing.source = "racing.com/calendar"
+            # Update meeting_type if calendar detected it as trial/jumpout
+            if m.get("meeting_type") in ("trial", "jumpout"):
+                existing.meeting_type = m["meeting_type"]
             results.append(existing.to_dict())
             continue
 
-        meeting_type = _classify_meeting_type(venue)
+        # Use meeting_type from calendar data if available, otherwise classify by venue name
+        meeting_type = m.get("meeting_type") or _classify_meeting_type(venue)
         meeting = Meeting(
             id=meeting_id,
             venue=venue,
@@ -78,6 +82,7 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
             "num_races": m.get("num_races", 0),
             "selected": False,
             "source": "racing.com/calendar",
+            "meeting_type": meeting_type,
         })
 
     await db.commit()

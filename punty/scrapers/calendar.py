@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 CALENDAR_URL = "https://www.racing.com/calendar"
 
 
+
+
 async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]:
     """Scrape racing.com calendar page for meetings on a specific date.
 
@@ -57,6 +59,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
 
         target_day = race_date.day
         target_container = None
+        target_container_index = 0
         found_date_info = None
 
         logger.debug(f"Looking for day {target_day} in {container_count} containers")
@@ -80,6 +83,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
                     # The calendar typically shows ~7 days, so if our target is within
                     # a reasonable range of today, we're good
                     target_container = c
+                    target_container_index = ci
                     found_date_info = f"day {day_num}"
                     logger.info(f"Found target date column: {found_date_info}")
                     break
@@ -96,6 +100,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
                 today_inside = c.locator(".calendar__grid-item-day--today")
                 if await today_inside.count() > 0:
                     target_container = c
+                    target_container_index = ci
                     found_date_info = "CSS --today class"
                     break
 
@@ -121,44 +126,128 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
         except Exception:
             pass
 
-        # Extract meetings using Playwright locators
-        btns = target_container.locator(".calendar__grid-item-btn")
-        count = await btns.count()
-        logger.info(f"Found {count} meeting buttons in column for {race_date}")
+        # Extract meetings, detecting which section they're in (Races vs Jumpouts/Trials)
+        # The page has section headers like "Races" and "Jumpouts/Trials"
+        # We need to determine which section each meeting button belongs to
 
-        for i in range(count):
-            btn = btns.nth(i)
-            try:
-                span = btn.locator("span").first
-                venue = (await span.text_content() or "").strip()
-                if not venue:
-                    continue
+        # Get all section headers and meeting buttons to determine context
+        # Use JavaScript to extract meetings with their section context
+        meetings_data = await page.evaluate("""(containerIndex) => {
+            const containers = document.querySelectorAll('.calendar__grid-item-container');
+            const container = containers[containerIndex];
+            if (!container) return [];
 
-                right = btn.locator(".calendar__grid-item-right").first
-                state = ""
-                try:
-                    raw_state = (await right.text_content() or "").strip()
-                    state = "".join(c for c in raw_state if c.isalpha()).upper()
-                except Exception:
-                    pass
+            const results = [];
 
-                abbr = btn.locator("abbr").first
-                status = ""
-                try:
-                    status = await abbr.get_attribute("title") or ""
-                except Exception:
-                    pass
+            // Find all section headers (h3 or similar) and meeting buttons
+            // The structure typically has headers followed by lists of meetings
+            const sections = container.querySelectorAll('.calendar__grid-item-list');
 
-                meetings.append({
-                    "venue": venue,
-                    "state": state,
-                    "num_races": 0,
-                    "race_type": "Thoroughbred",
-                    "status": status,
-                    "date": race_date,
-                })
-            except Exception as e:
-                logger.debug(f"Error extracting meeting button {i}: {e}")
+            sections.forEach(section => {
+                // Check if this section is for trials/jumpouts by looking at preceding header
+                // or by checking a data attribute or class
+                let isTrialSection = false;
+
+                // Look for section header text
+                const prevHeader = section.previousElementSibling;
+                if (prevHeader) {
+                    const headerText = prevHeader.textContent?.toLowerCase() || '';
+                    if (headerText.includes('trial') || headerText.includes('jumpout')) {
+                        isTrialSection = true;
+                    }
+                }
+
+                // Also check section itself for trial indicators
+                const sectionText = section.textContent?.toLowerCase() || '';
+                const sectionClass = section.className?.toLowerCase() || '';
+                if (sectionClass.includes('trial') || sectionClass.includes('jumpout')) {
+                    isTrialSection = true;
+                }
+
+                // Check parent elements for trial indicators
+                let parent = section.parentElement;
+                for (let i = 0; i < 3 && parent; i++) {
+                    const parentClass = parent.className?.toLowerCase() || '';
+                    const parentText = parent.querySelector('h2, h3, h4, .calendar__grid-item-label')?.textContent?.toLowerCase() || '';
+                    if (parentClass.includes('trial') || parentClass.includes('jumpout') ||
+                        parentText.includes('trial') || parentText.includes('jumpout')) {
+                        isTrialSection = true;
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+
+                const btns = section.querySelectorAll('.calendar__grid-item-btn');
+                btns.forEach(btn => {
+                    const span = btn.querySelector('span');
+                    const venue = span?.textContent?.trim() || '';
+                    if (!venue) return;
+
+                    const right = btn.querySelector('.calendar__grid-item-right');
+                    let state = '';
+                    if (right) {
+                        state = (right.textContent || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+                    }
+
+                    const abbr = btn.querySelector('abbr');
+                    const status = abbr?.getAttribute('title') || '';
+
+                    results.push({
+                        venue: venue,
+                        state: state,
+                        status: status,
+                        isTrialOrJumpout: isTrialSection
+                    });
+                });
+            });
+
+            // Fallback: if no sections found, try direct button extraction
+            if (results.length === 0) {
+                const btns = container.querySelectorAll('.calendar__grid-item-btn');
+                btns.forEach(btn => {
+                    const span = btn.querySelector('span');
+                    const venue = span?.textContent?.trim() || '';
+                    if (!venue) return;
+
+                    const right = btn.querySelector('.calendar__grid-item-right');
+                    let state = '';
+                    if (right) {
+                        state = (right.textContent || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+                    }
+
+                    const abbr = btn.querySelector('abbr');
+                    const status = abbr?.getAttribute('title') || '';
+
+                    results.push({
+                        venue: venue,
+                        state: state,
+                        status: status,
+                        isTrialOrJumpout: false
+                    });
+                });
+            }
+
+            return results;
+        }""", target_container_index)
+
+        logger.info(f"Found {len(meetings_data)} meetings in column for {race_date}")
+
+        for m in meetings_data:
+            venue = m.get("venue", "")
+            if not venue:
+                continue
+
+            meeting_type = "trial" if m.get("isTrialOrJumpout") else "race"
+
+            meetings.append({
+                "venue": venue,
+                "state": m.get("state", ""),
+                "num_races": 0,
+                "race_type": "Thoroughbred",
+                "status": m.get("status", ""),
+                "date": race_date,
+                "meeting_type": meeting_type,
+            })
 
     # Deduplicate by venue
     seen: set[str] = set()
