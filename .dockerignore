@@ -1,0 +1,17 @@
+.git
+.github
+__pycache__
+*.pyc
+.env
+.env.*
+data/
+*.db
+.ruff_cache
+.pytest_cache
+.mypy_cache
+*.egg-info
+dist/
+build/
+node_modules/
+.vscode/
+.idea/

@@ -162,6 +162,20 @@ async def about_page(request: Request):
     return templates.TemplateResponse("glory/about.html", context)
 
 
+@router.get("/terms", response_class=HTMLResponse)
+async def terms_page(request: Request):
+    """Terms and conditions page."""
+    context = _base_context(request)
+    return templates.TemplateResponse("glory/terms.html", context)
+
+
+@router.get("/contact", response_class=HTMLResponse)
+async def contact_page(request: Request):
+    """Contact us page."""
+    context = _base_context(request)
+    return templates.TemplateResponse("glory/contact.html", context)
+
+
 # --- Authenticated Routes ---
 
 
