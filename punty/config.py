@@ -1,11 +1,15 @@
 """Application configuration using Pydantic settings."""
 
+import secrets
 from datetime import date, datetime
 from pathlib import Path
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 MELB_TZ = ZoneInfo("Australia/Melbourne")
+
+# Generate a random secret key for development if not configured
+_DEFAULT_SECRET_KEY = secrets.token_hex(32)
 
 
 def melb_now() -> datetime:
@@ -44,7 +48,7 @@ class Settings(BaseSettings):
     db_path: Path = Path("./data/punty.db")
 
     # App
-    secret_key: str = "change-me-in-production"
+    secret_key: str = ""  # Will use random key if not set
     debug: bool = False
     log_level: str = "INFO"
 
@@ -64,7 +68,12 @@ class Settings(BaseSettings):
     # Google OAuth
     google_client_id: str = ""
     google_client_secret: str = ""
-    allowed_emails: str = "gerardr@gmail.com,punty@punty.ai"
+    allowed_emails: str = ""  # Required: comma-separated list of allowed emails
+
+    def model_post_init(self, __context) -> None:
+        """Ensure secret_key is set (generate random if not configured)."""
+        if not self.secret_key:
+            object.__setattr__(self, 'secret_key', _DEFAULT_SECRET_KEY)
 
     @property
     def database_url(self) -> str:

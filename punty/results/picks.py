@@ -41,7 +41,23 @@ async def store_picks_from_content(
 async def settle_picks_for_race(
     db: AsyncSession, meeting_id: str, race_number: int
 ) -> int:
-    """Settle unsettled picks that involve this race. Returns count settled."""
+    """Settle unsettled picks that involve this race. Returns count settled.
+
+    Uses try/except to ensure partial settlement doesn't corrupt data.
+    On error, changes are rolled back and exception is re-raised.
+    """
+    try:
+        return await _settle_picks_for_race_impl(db, meeting_id, race_number)
+    except Exception as e:
+        logger.error(f"Settlement failed for {meeting_id} R{race_number}: {e}")
+        await db.rollback()
+        raise
+
+
+async def _settle_picks_for_race_impl(
+    db: AsyncSession, meeting_id: str, race_number: int
+) -> int:
+    """Internal implementation of pick settlement."""
     now = melb_now_naive()
     settled_count = 0
 
@@ -149,7 +165,7 @@ async def settle_picks_for_race(
             pick.settled_at = now
             settled_count += 1
 
-    # --- Big3 multi — only settle when all 3 individual big3 picks are settled ---
+    # --- Big3 multi — only settle when all 3 individual big3 picks are settled AND races complete ---
     result = await db.execute(
         select(Pick).where(
             Pick.meeting_id == meeting_id,
@@ -173,6 +189,21 @@ async def settle_picks_for_race(
         if not all_settled:
             continue
 
+        # CRITICAL: Verify all Big3 races have actually completed (not just picks settled)
+        # This prevents race condition when multiple races complete simultaneously
+        all_races_complete = True
+        for b3_pick in big3_picks:
+            if b3_pick.race_number:
+                b3_race_id = f"{meeting_id}-r{b3_pick.race_number}"
+                b3_race_result = await db.execute(select(Race).where(Race.id == b3_race_id))
+                b3_race = b3_race_result.scalar_one_or_none()
+                if not b3_race or b3_race.results_status not in ("Paying", "Closed"):
+                    all_races_complete = False
+                    break
+
+        if not all_races_complete:
+            continue
+
         all_won = all(p.hit for p in big3_picks)
         stake = multi_pick.exotic_stake or 10.0
         if all_won and multi_pick.multi_odds:
@@ -194,76 +225,81 @@ async def settle_picks_for_race(
         )
     )
     for pick in result.scalars().all():
-        exotic_runners = json.loads(pick.exotic_runners) if pick.exotic_runners else []
-        stake = pick.exotic_stake or 1.0
-        exotic_type = (pick.exotic_type or "").lower()
+        try:
+            exotic_runners = json.loads(pick.exotic_runners) if pick.exotic_runners else []
+            stake = pick.exotic_stake or 1.0
+            exotic_type = (pick.exotic_type or "").lower()
 
-        # Get finish order
-        finish_order = sorted(
-            [r for r in runners if r.finish_position and r.finish_position <= 4],
-            key=lambda r: r.finish_position,
-        )
-        top_saddlecloths = [r.saddlecloth for r in finish_order]
+            # Get finish order
+            finish_order = sorted(
+                [r for r in runners if r.finish_position and r.finish_position <= 4],
+                key=lambda r: r.finish_position,
+            )
+            top_saddlecloths = [r.saddlecloth for r in finish_order]
 
-        hit = False
-        dividend = 0.0
+            hit = False
+            dividend = 0.0
 
-        # Parse exotic dividends from race
-        exotic_divs = {}
-        if race and race.exotic_results:
-            try:
-                exotic_divs = json.loads(race.exotic_results)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            # Parse exotic dividends from race
+            exotic_divs = {}
+            if race and race.exotic_results:
+                try:
+                    exotic_divs = json.loads(race.exotic_results)
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
-        # Normalise saddlecloths to ints for consistent comparison
-        exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
-        top_sc_int = [int(x) for x in top_saddlecloths if x is not None]
+            # Normalise saddlecloths to ints for consistent comparison
+            exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
+            top_sc_int = [int(x) for x in top_saddlecloths if x is not None]
 
-        is_boxed = "box" in exotic_type or "standout" in exotic_type
-        if "trifecta" in exotic_type:
-            if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:
-                if is_boxed:
-                    # Boxed/standout: our runners in top 3 in any order
-                    hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
-                else:
-                    # Straight trifecta: exact order match
-                    hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
-            if hit:
-                dividend = _find_dividend(exotic_divs, "trifecta")
-        elif "exacta" in exotic_type:
-            if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                if is_boxed:
+            is_boxed = "box" in exotic_type or "standout" in exotic_type
+            if "trifecta" in exotic_type:
+                if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:
+                    if is_boxed:
+                        # Boxed/standout: our runners in top 3 in any order
+                        hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
+                    else:
+                        # Straight trifecta: exact order match
+                        hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
+                if hit:
+                    dividend = _find_dividend(exotic_divs, "trifecta")
+            elif "exacta" in exotic_type:
+                if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
+                    if is_boxed:
+                        hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
+                    else:
+                        hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
+                if hit:
+                    dividend = _find_dividend(exotic_divs, "exacta")
+            elif "quinella" in exotic_type:
+                if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
                     hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
-                else:
-                    hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
-            if hit:
-                dividend = _find_dividend(exotic_divs, "exacta")
-        elif "quinella" in exotic_type:
-            if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
-            if hit:
-                dividend = _find_dividend(exotic_divs, "quinella")
-        elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
-            if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
-                if is_boxed:
-                    hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
-                else:
-                    hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
-            if hit:
-                dividend = _find_dividend(exotic_divs, "first4")
+                if hit:
+                    dividend = _find_dividend(exotic_divs, "quinella")
+            elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
+                if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
+                    if is_boxed:
+                        hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
+                    else:
+                        hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
+                if hit:
+                    dividend = _find_dividend(exotic_divs, "first4")
 
-        # Stake is the total outlay for this exotic bet
-        cost = stake
+            # Stake is the total outlay for this exotic bet
+            cost = stake
 
-        if hit and dividend > 0:
-            pick.pnl = round(dividend * stake - stake, 2)
-        else:
-            pick.pnl = round(-cost, 2)
-        pick.hit = hit
-        pick.settled = True
-        pick.settled_at = now
-        settled_count += 1
+            if hit and dividend > 0:
+                pick.pnl = round(dividend * stake - stake, 2)
+            else:
+                pick.pnl = round(-cost, 2)
+            pick.hit = hit
+            pick.settled = True
+            pick.settled_at = now
+            settled_count += 1
+        except Exception as e:
+            logger.error(f"Failed to settle exotic pick {pick.id}: {e}")
+            # Continue with other exotics rather than crashing entire settlement
+            continue
 
     # --- Sequences ---
     result = await db.execute(

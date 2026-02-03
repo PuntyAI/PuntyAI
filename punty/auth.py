@@ -110,11 +110,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if path in {"/auth/callback"}:
             return await call_next(request)
 
-        # Check token from header (htmx/fetch) or form field
-        token = (
-            request.headers.get("X-CSRF-Token")
-            or request.query_params.get("_csrf")
-        )
+        # Check token from header (htmx/fetch) only - query params can leak in logs/referer
+        token = request.headers.get("X-CSRF-Token")
 
         csrf_secret = request.session.get("_csrf_secret", "")
         if not csrf_secret or not _verify_csrf_token(csrf_secret, token or ""):

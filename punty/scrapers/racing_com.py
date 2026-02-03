@@ -191,8 +191,9 @@ class RacingComScraper(BaseScraper):
             page.remove_listener("response", capture_graphql)
             page.on("response", capture_graphql_debug)
 
-            # 1. Load meeting page to get meeting info and race list
-            resp = await page.goto(meeting_url, wait_until="load")
+            try:
+                # 1. Load meeting page to get meeting info and race list
+                resp = await page.goto(meeting_url, wait_until="load")
             if resp and resp.status == 404:
                 raise ScraperError(f"HTTP 404: {meeting_url}")
             await page.wait_for_timeout(5000)
@@ -264,9 +265,12 @@ class RacingComScraper(BaseScraper):
                 # Check if we got entries for this race
                 if race_num not in race_entries_by_num:
                     logger.warning(f"Race {race_num}: no entries captured after page load")
-
-            # Remove listener
-            page.remove_listener("response", capture_graphql_debug)
+            finally:
+                # Always remove listener to prevent memory leaks
+                try:
+                    page.remove_listener("response", capture_graphql_debug)
+                except Exception:
+                    pass
 
         logger.info(f"Captured GraphQL queries: {captured_queries}")
         logger.info(f"Entries captured for races: {list(race_entries_by_num.keys())}")

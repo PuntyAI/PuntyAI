@@ -400,6 +400,51 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
                 runner.scratching_reason = odds.get("scratching_reason") or runner.scratching_reason
 
 
+def _validate_result(result: dict, race_id: str) -> dict | None:
+    """Validate and sanitize a single result entry. Returns None if invalid."""
+    # Validate position
+    position = result.get("position")
+    if position is not None:
+        try:
+            position = int(position)
+            if position < 1 or position > 30:
+                logger.warning(f"{race_id}: Invalid position {position}, skipping")
+                return None
+        except (ValueError, TypeError):
+            logger.warning(f"{race_id}: Non-integer position '{position}', skipping")
+            return None
+        result["position"] = position
+
+    # Validate dividends (must be positive if present)
+    for div_field in ("win_dividend", "place_dividend"):
+        val = result.get(div_field)
+        if val is not None:
+            try:
+                val = float(val)
+                if val < 0:
+                    logger.warning(f"{race_id}: Negative {div_field} {val}, setting to None")
+                    result[div_field] = None
+                else:
+                    result[div_field] = val
+            except (ValueError, TypeError):
+                logger.warning(f"{race_id}: Invalid {div_field} '{val}', setting to None")
+                result[div_field] = None
+
+    # Validate saddlecloth
+    saddlecloth = result.get("saddlecloth")
+    if saddlecloth is not None:
+        try:
+            saddlecloth = int(saddlecloth)
+            if saddlecloth < 1 or saddlecloth > 30:
+                result["saddlecloth"] = None
+            else:
+                result["saddlecloth"] = saddlecloth
+        except (ValueError, TypeError):
+            result["saddlecloth"] = None
+
+    return result
+
+
 async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: int, results_data: dict) -> None:
     """Update Runner result fields and Race status from scraped results."""
     race_id = f"{meeting_id}-r{race_number}"
@@ -408,9 +453,18 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
         logger.warning(f"Race not found for results: {race_id}")
         return
 
+    # Validate: check for duplicate winners
+    positions = [r.get("position") for r in results_data.get("results", []) if r.get("position") is not None]
+    if positions.count(1) > 1:
+        logger.warning(f"{race_id}: Multiple winners detected ({positions.count(1)}), data may be corrupt")
+
     # Update runner result fields
     matched = 0
     for result in results_data.get("results", []):
+        # Validate result before processing
+        result = _validate_result(result, race_id)
+        if result is None:
+            continue
         horse_name = result.get("horse_name", "")
         saddlecloth = result.get("saddlecloth")
 

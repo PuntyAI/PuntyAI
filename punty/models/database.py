@@ -1,11 +1,14 @@
 """Database setup and session management."""
 
+import logging
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from punty.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -46,8 +49,11 @@ async def init_db() -> None:
         ]:
             try:
                 await conn.execute(_text(col))
-            except Exception:
-                pass  # Column already exists
+            except Exception as e:
+                # Log non-"column exists" errors for debugging
+                err_msg = str(e).lower()
+                if "duplicate column" not in err_msg and "already exists" not in err_msg:
+                    logger.warning(f"DB migration warning: {col[:50]}... - {e}")
 
         # Create indexes on existing tables (IF NOT EXISTS handled by SQLite)
         for idx in [
