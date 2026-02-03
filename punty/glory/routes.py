@@ -10,8 +10,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from sqlalchemy import select, func
+
 from punty.config import melb_now, MELB_TZ
 from punty.models.database import get_db
+from punty.models.glory import G1User
 from punty.glory.auth import (
     get_current_user,
     require_user,
@@ -26,8 +29,8 @@ from punty.glory.services.leaderboard import LeaderboardService
 
 router = APIRouter(prefix="/group1glory")
 
-# Templates directory
-templates_dir = Path(__file__).parent.parent / "web" / "templates" / "glory"
+# Templates directory (parent folder so 'glory/base.html' resolves correctly)
+templates_dir = Path(__file__).parent.parent / "web" / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else {}
 
@@ -67,6 +70,32 @@ def _base_context(request: Request, db: AsyncSession = None) -> dict:
     }
 
 
+# --- Setup Route (for creating first admin) ---
+
+
+@router.get("/setup", response_class=HTMLResponse)
+async def setup_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Setup page for creating the first admin user."""
+    import os
+
+    # Check if any users exist
+    result = await db.execute(select(func.count(G1User.id)))
+    user_count = result.scalar() or 0
+
+    # Check if setup key is configured
+    setup_key_configured = bool(os.environ.get("G1_SETUP_KEY", ""))
+
+    return templates.TemplateResponse(
+        "glory/setup.html",
+        {
+            "request": request,
+            "already_setup": user_count > 0 and not setup_key_configured,
+            "need_setup_key": user_count > 0 and setup_key_configured,
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
 # --- Public Routes ---
 
 
@@ -95,7 +124,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
         upcoming_races.sort(key=lambda r: r.race_date)
         context["upcoming_races"] = upcoming_races[:5]
 
-    return templates.TemplateResponse("home.html", context)
+    return templates.TemplateResponse("glory/home.html", context)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -107,7 +136,7 @@ async def login_page(request: Request):
 
     error = request.query_params.get("error")
     return templates.TemplateResponse(
-        "login.html",
+        "glory/login.html",
         {"request": request, "error": error, "csrf_token": generate_csrf_token(request)},
     )
 
@@ -121,7 +150,7 @@ async def register_page(request: Request):
 
     error = request.query_params.get("error")
     return templates.TemplateResponse(
-        "register.html",
+        "glory/register.html",
         {"request": request, "error": error, "csrf_token": generate_csrf_token(request)},
     )
 
@@ -130,7 +159,7 @@ async def register_page(request: Request):
 async def about_page(request: Request):
     """About/rules page."""
     context = _base_context(request)
-    return templates.TemplateResponse("about.html", context)
+    return templates.TemplateResponse("glory/about.html", context)
 
 
 # --- Authenticated Routes ---
@@ -147,7 +176,7 @@ async def picks_page(request: Request, db: AsyncSession = Depends(get_db)):
     competition = await comp_service.get_active_competition(include_races=True)
 
     if not competition:
-        return templates.TemplateResponse("picks.html", context)
+        return templates.TemplateResponse("glory/picks.html", context)
 
     context["competition"] = competition
 
@@ -171,7 +200,7 @@ async def picks_page(request: Request, db: AsyncSession = Depends(get_db)):
     )
     context["pick_summary"] = pick_summary
 
-    return templates.TemplateResponse("picks.html", context)
+    return templates.TemplateResponse("glory/picks.html", context)
 
 
 @router.get("/leaderboard", response_class=HTMLResponse)
@@ -185,7 +214,7 @@ async def leaderboard_page(request: Request, db: AsyncSession = Depends(get_db))
     competition = await comp_service.get_active_competition(include_races=True)
 
     if not competition:
-        return templates.TemplateResponse("leaderboard.html", context)
+        return templates.TemplateResponse("glory/leaderboard.html", context)
 
     context["competition"] = competition
 
@@ -202,7 +231,7 @@ async def leaderboard_page(request: Request, db: AsyncSession = Depends(get_db))
     user_rank = await lb_service.get_user_rank(user["id"], competition.id)
     context["user_rank"] = user_rank
 
-    return templates.TemplateResponse("leaderboard.html", context)
+    return templates.TemplateResponse("glory/leaderboard.html", context)
 
 
 # --- Admin Routes ---
@@ -226,7 +255,23 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         context["active_competition"] = active_comp
         context["stats"] = stats
 
-    return templates.TemplateResponse("admin/dashboard.html", context)
+    return templates.TemplateResponse("glory/admin/dashboard.html", context)
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
+    """Manage users."""
+    user = require_admin(request)
+    context = _base_context(request)
+
+    # Get all users
+    result = await db.execute(
+        select(G1User).order_by(G1User.created_at.desc())
+    )
+    users = result.scalars().all()
+    context["users"] = [u.to_dict() for u in users]
+
+    return templates.TemplateResponse("glory/admin/users.html", context)
 
 
 @router.get("/admin/competitions", response_class=HTMLResponse)
@@ -239,7 +284,7 @@ async def admin_competitions(request: Request, db: AsyncSession = Depends(get_db
     competitions = await comp_service.list_competitions(include_races=True)
     context["competitions"] = competitions
 
-    return templates.TemplateResponse("admin/competitions.html", context)
+    return templates.TemplateResponse("glory/admin/competitions.html", context)
 
 
 @router.get("/admin/competitions/{competition_id}", response_class=HTMLResponse)
@@ -257,7 +302,7 @@ async def admin_competition_detail(
 
     if not competition:
         return templates.TemplateResponse(
-            "admin/error.html",
+            "glory/admin/error.html",
             {"request": request, "error": "Competition not found"},
             status_code=404,
         )
@@ -268,7 +313,7 @@ async def admin_competition_detail(
     stats = await comp_service.get_competition_stats(competition_id)
     context["stats"] = stats
 
-    return templates.TemplateResponse("admin/competition_detail.html", context)
+    return templates.TemplateResponse("glory/admin/competition_detail.html", context)
 
 
 @router.get("/admin/races", response_class=HTMLResponse)
@@ -298,7 +343,7 @@ async def admin_races(request: Request, db: AsyncSession = Depends(get_db)):
 
         context["races_by_status"] = races_by_status
 
-    return templates.TemplateResponse("admin/races.html", context)
+    return templates.TemplateResponse("glory/admin/races.html", context)
 
 
 @router.get("/admin/races/{race_id}", response_class=HTMLResponse)
@@ -316,7 +361,7 @@ async def admin_race_detail(
 
     if not race:
         return templates.TemplateResponse(
-            "admin/error.html",
+            "glory/admin/error.html",
             {"request": request, "error": "Race not found"},
             status_code=404,
         )
@@ -328,7 +373,7 @@ async def admin_race_detail(
     picks = await pick_service.get_all_picks_for_race(race_id)
     context["picks"] = picks
 
-    return templates.TemplateResponse("admin/race_detail.html", context)
+    return templates.TemplateResponse("glory/admin/race_detail.html", context)
 
 
 @router.get("/admin/results", response_class=HTMLResponse)
@@ -360,7 +405,7 @@ async def admin_results(request: Request, db: AsyncSession = Depends(get_db)):
         resulted.sort(key=lambda r: r.race_date, reverse=True)
         context["resulted_races"] = resulted[:10]
 
-    return templates.TemplateResponse("admin/results.html", context)
+    return templates.TemplateResponse("glory/admin/results.html", context)
 
 
 @router.get("/admin/results/{race_id}", response_class=HTMLResponse)
@@ -378,7 +423,7 @@ async def admin_result_entry(
 
     if not race:
         return templates.TemplateResponse(
-            "admin/error.html",
+            "glory/admin/error.html",
             {"request": request, "error": "Race not found"},
             status_code=404,
         )
@@ -390,7 +435,7 @@ async def admin_result_entry(
     horses.sort(key=lambda h: (h.saddlecloth or 99, h.barrier or 99, h.name))
     context["horses"] = horses
 
-    return templates.TemplateResponse("admin/result_entry.html", context)
+    return templates.TemplateResponse("glory/admin/result_entry.html", context)
 
 
 @router.get("/admin/picks", response_class=HTMLResponse)
@@ -425,4 +470,4 @@ async def admin_picks(request: Request, db: AsyncSession = Depends(get_db)):
 
         context["races_with_picks"] = races_with_picks
 
-    return templates.TemplateResponse("admin/picks.html", context)
+    return templates.TemplateResponse("glory/admin/picks.html", context)
