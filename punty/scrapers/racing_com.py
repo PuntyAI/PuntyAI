@@ -194,77 +194,77 @@ class RacingComScraper(BaseScraper):
             try:
                 # 1. Load meeting page to get meeting info and race list
                 resp = await page.goto(meeting_url, wait_until="load")
-            if resp and resp.status == 404:
-                raise ScraperError(f"HTTP 404: {meeting_url}")
-            await page.wait_for_timeout(5000)
+                if resp and resp.status == 404:
+                    raise ScraperError(f"HTTP 404: {meeting_url}")
+                await page.wait_for_timeout(5000)
 
-            # Dismiss cookie banner
-            try:
-                btn = page.locator("button:has-text('Decline')").first
-                if await btn.is_visible(timeout=2000):
-                    await btn.click()
-            except Exception:
-                pass
-
-            # Determine race count from GraphQL race list or DOM
-            race_count = len(race_list_gql)
-            if race_count == 0:
-                # Fallback: count from DOM links
-                race_count = await page.evaluate("""() => {
-                    var links = document.querySelectorAll('a[href*="/race/"]');
-                    var maxNum = 0;
-                    for (var i = 0; i < links.length; i++) {
-                        var m = links[i].href.match(/\\/race\\/(\\d+)$/);
-                        if (m) { var n = parseInt(m[1]); if (n > maxNum) maxNum = n; }
-                    }
-                    return maxNum;
-                }""")
-
-            if race_count == 0:
-                logger.warning(f"No races found on {meeting_url}")
-                return {"meeting": self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql),
-                        "races": [], "runners": []}
-
-            logger.info(f"Found {race_count} races for {venue}")
-
-            # 2. Navigate to each race page to trigger GraphQL queries
-            for race_num in range(1, race_count + 1):
-                race_url = self._build_race_url(venue, race_date, race_num)
-                logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
-
-                await page.goto(race_url, wait_until="load")
-                await page.wait_for_timeout(4000)
-
-                # Try clicking "Full Form" tab to trigger getRaceEntriesForField_CD
+                # Dismiss cookie banner
                 try:
-                    ff_btn = page.locator("button:has-text('Full Form'), a:has-text('Full Form')").first
-                    if await ff_btn.is_visible(timeout=2000):
-                        await ff_btn.click()
-                        await page.wait_for_timeout(3000)
-                    else:
-                        logger.info(f"Race {race_num}: 'Full Form' button not found, trying 'Form' tab")
-                        # Try alternative tab names
-                        for tab_text in ["Form", "Field", "Runners"]:
-                            try:
-                                alt_btn = page.locator(f"button:has-text('{tab_text}'), a:has-text('{tab_text}')").first
-                                if await alt_btn.is_visible(timeout=1000):
-                                    await alt_btn.click()
-                                    await page.wait_for_timeout(3000)
-                                    break
-                            except Exception:
-                                continue
+                    btn = page.locator("button:has-text('Decline')").first
+                    if await btn.is_visible(timeout=2000):
+                        await btn.click()
                 except Exception:
                     pass
 
-                # Scroll down to trigger lazy loading of getRaceEntryItemByHorsePaged_CD
-                # Each horse's form history loads as it scrolls into view
-                for _ in range(15):
-                    await page.evaluate("window.scrollBy(0, 600)")
-                    await page.wait_for_timeout(800)
+                # Determine race count from GraphQL race list or DOM
+                race_count = len(race_list_gql)
+                if race_count == 0:
+                    # Fallback: count from DOM links
+                    race_count = await page.evaluate("""() => {
+                        var links = document.querySelectorAll('a[href*="/race/"]');
+                        var maxNum = 0;
+                        for (var i = 0; i < links.length; i++) {
+                            var m = links[i].href.match(/\\/race\\/(\\d+)$/);
+                            if (m) { var n = parseInt(m[1]); if (n > maxNum) maxNum = n; }
+                        }
+                        return maxNum;
+                    }""")
 
-                # Check if we got entries for this race
-                if race_num not in race_entries_by_num:
-                    logger.warning(f"Race {race_num}: no entries captured after page load")
+                if race_count == 0:
+                    logger.warning(f"No races found on {meeting_url}")
+                    return {"meeting": self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql),
+                            "races": [], "runners": []}
+
+                logger.info(f"Found {race_count} races for {venue}")
+
+                # 2. Navigate to each race page to trigger GraphQL queries
+                for race_num in range(1, race_count + 1):
+                    race_url = self._build_race_url(venue, race_date, race_num)
+                    logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
+
+                    await page.goto(race_url, wait_until="load")
+                    await page.wait_for_timeout(4000)
+
+                    # Try clicking "Full Form" tab to trigger getRaceEntriesForField_CD
+                    try:
+                        ff_btn = page.locator("button:has-text('Full Form'), a:has-text('Full Form')").first
+                        if await ff_btn.is_visible(timeout=2000):
+                            await ff_btn.click()
+                            await page.wait_for_timeout(3000)
+                        else:
+                            logger.info(f"Race {race_num}: 'Full Form' button not found, trying 'Form' tab")
+                            # Try alternative tab names
+                            for tab_text in ["Form", "Field", "Runners"]:
+                                try:
+                                    alt_btn = page.locator(f"button:has-text('{tab_text}'), a:has-text('{tab_text}')").first
+                                    if await alt_btn.is_visible(timeout=1000):
+                                        await alt_btn.click()
+                                        await page.wait_for_timeout(3000)
+                                        break
+                                except Exception:
+                                    continue
+                    except Exception:
+                        pass
+
+                    # Scroll down to trigger lazy loading of getRaceEntryItemByHorsePaged_CD
+                    # Each horse's form history loads as it scrolls into view
+                    for _ in range(15):
+                        await page.evaluate("window.scrollBy(0, 600)")
+                        await page.wait_for_timeout(800)
+
+                    # Check if we got entries for this race
+                    if race_num not in race_entries_by_num:
+                        logger.warning(f"Race {race_num}: no entries captured after page load")
             finally:
                 # Always remove listener to prevent memory leaks
                 try:
