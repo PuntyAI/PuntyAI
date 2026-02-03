@@ -50,7 +50,9 @@ class CompetitionService:
         """Get a competition by ID."""
         query = select(G1Competition).where(G1Competition.id == competition_id)
         if include_races:
-            query = query.options(selectinload(G1Competition.races))
+            query = query.options(
+                selectinload(G1Competition.races).selectinload(G1Race.horses)
+            )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -72,7 +74,9 @@ class CompetitionService:
         """List all competitions, ordered by start date descending."""
         query = select(G1Competition).order_by(G1Competition.start_date.desc())
         if include_races:
-            query = query.options(selectinload(G1Competition.races))
+            query = query.options(
+                selectinload(G1Competition.races).selectinload(G1Race.horses)
+            )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
