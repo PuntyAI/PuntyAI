@@ -93,13 +93,16 @@ async def scrape_full_endpoint(meeting_id: str, db: AsyncSession = Depends(get_d
 
 
 @router.get("/{meeting_id}/scrape-stream")
-async def scrape_stream_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
+async def scrape_stream_endpoint(meeting_id: str):
     """SSE stream of scrape progress for a meeting."""
     from punty.scrapers.orchestrator import scrape_meeting_full_stream
+    from punty.models.database import async_session
 
     async def event_generator():
-        async for event in scrape_meeting_full_stream(meeting_id, db):
-            yield f"data: {json.dumps(event)}\n\n"
+        # Create session inside generator to avoid FastAPI closing it before streaming starts
+        async with async_session() as db:
+            async for event in scrape_meeting_full_stream(meeting_id, db):
+                yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -117,13 +120,16 @@ async def refresh_odds_endpoint(meeting_id: str, db: AsyncSession = Depends(get_
 
 
 @router.get("/{meeting_id}/speed-maps-stream")
-async def speed_maps_stream_endpoint(meeting_id: str, db: AsyncSession = Depends(get_db)):
+async def speed_maps_stream_endpoint(meeting_id: str):
     """SSE stream of speed map scrape progress for a meeting."""
     from punty.scrapers.orchestrator import scrape_speed_maps_stream
+    from punty.models.database import async_session
 
     async def event_generator():
-        async for event in scrape_speed_maps_stream(meeting_id, db):
-            yield f"data: {json.dumps(event)}\n\n"
+        # Create session inside generator to avoid FastAPI closing it before streaming starts
+        async with async_session() as db:
+            async for event in scrape_speed_maps_stream(meeting_id, db):
+                yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
