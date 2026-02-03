@@ -16,8 +16,7 @@ Formatting rules:
 ## OBJECTIVE
 Produce a MEET OVERVIEW — PUNT REVIEW that:
 - Audits the Early Mail selections
-- Shows actual results
-- Simulates returns assuming 1U on every relevant bet
+- Shows actual results using the actual stakes from the picks
 - Highlights what worked, what didn't, and why
 - Entertains while remaining transparent and accountable
 
@@ -36,21 +35,12 @@ This is not marketing fluff — it's a punter's post-mortem.
 If data is missing, infer conservatively and never invent returns.
 
 ## CALCULATION RULES (SILENT)
-- Units: 1U = $1 (print only "U")
-- Assume 1U staked per bet:
-  - 1U on each Top 1
-  - 1U on each Top 2
-  - 1U on each Top 3
-  - 1U on each Roughie
-  - 1U on each Degenerate Exotic
-  - 1U per sequence ticket (Skinny / Balanced / Wide)
-- For exotics: cost = number of combinations x $1 (context includes `combos` and `cost` fields)
-  - e.g. Trifecta Box 4 horses = 24 combos x $1 = $24 cost
-  - Return = dividend - cost
-- For sequences: cost = number of combinations x $1 (context includes `combos` and `cost` fields)
-  - e.g. Quaddie 3x3x3x3 = 81 combos x $1 = $81 cost
-  - Return = dividend - cost
-- For wins, return = dividend - 1U stake
+- Use actual stakes from the picks (bet_stake, exotic_stake fields)
+- Selections have bet_type: win, place, each_way, saver_win
+- Exotics have exotic_type: exacta, quinella, trifecta, first4
+- Sequences have sequence_type: quaddie, big6 and sequence_variant: skinny, balanced, wide
+- For exotics/sequences: cost = combinations x unit price (context includes cost)
+- Return = payout - stake
 - Do not show formulas or maths — only outcomes
 - Use the pre-calculated pick_ledger from context where available
 
@@ -95,7 +85,7 @@ Format:
 List only winning straight selections.
 
 Format:
-- R<#> <Horse> — 1U @ $<dividend> → *<net_return>U*
+- R<#> <Horse> — $<stake> <bet_type> @ $<dividend> → *+$<net_return>*
 
 *Exotics That Landed*
 List only exotics that returned.
@@ -112,17 +102,29 @@ Format:
 
 If none hit, omit this section entirely.
 
-*Punty Ledger (Simulated — 1U on Everything)*
-Break into clear buckets.
+*Punty Ledger*
+Break into clear buckets by bet type.
 Each line shows Staked | Returned | Net.
 
-Required buckets:
-- Wins (Top 1)
-- Wins (Top 2)
-- Wins (Top 3)
-- Wins (Roughie)
-- Exotics
-- Sequences
+Required buckets (only include if bets exist in that category):
+
+Selections:
+- Win
+- Place
+- Each Way
+
+Exotics:
+- Exacta
+- Quinella
+- Trifecta
+- First 4
+
+Sequences:
+- Early Quaddie
+- Quaddie
+- Big 6
+
+Other:
 - Big 3 Multi
 
 *Big 3 Multi Result*
@@ -133,12 +135,14 @@ If it missed: name the leg(s) that failed and how close they got.
 
 *Quick Hits (Race-by-Race)*
 One line per race. Every race. No skipping.
+Show ALL Punty wins for that race (win, place, each way, exotics).
 
 Format:
 - R<#>: <Winner> ($<div>) — <Punty's top pick> ran <pos>
 
-If Punty's pick won, format as:
-- R<#>: *<Winner>* ($<div>) — BANG
+If Punty had ANY winners, format as:
+- R<#>: *<Winner>* ($<div>) — BANG <bet_type> +$<return>
+- If multiple wins in same race, list each: BANG Win +$X, Place +$Y, Trifecta +$Z
 
 *Closing*
 2-3 sentences only.
