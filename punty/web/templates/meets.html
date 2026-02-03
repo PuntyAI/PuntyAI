@@ -34,6 +34,18 @@
         <button onclick="quickSelect('metro')" class="text-xs bg-punty-gold/20 hover:bg-punty-gold/40 text-yellow-800 px-3 py-1.5 rounded-md">All Metro</button>
     </div>
 
+    <!-- Scrape Progress Bar (hidden by default) -->
+    <div id="scrape-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-2">
+        <div class="flex items-center justify-between">
+            <span id="scrape-progress-label" class="text-sm font-medium text-gray-700">Scraping...</span>
+            <span id="scrape-progress-pct" class="text-sm text-gray-500">0%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+            <div id="scrape-progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p id="scrape-progress-detail" class="text-xs text-gray-500"></p>
+    </div>
+
     <!-- Today's Meetings -->
     <div id="meetings-container" class="bg-white rounded-lg shadow">
         <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -177,14 +189,30 @@
 
     async function scrapeCalendar() {
         const btn = document.getElementById('btn-refresh');
+        const progressDiv = document.getElementById('scrape-progress');
+        const progressBar = document.getElementById('scrape-progress-bar');
+        const progressLabel = document.getElementById('scrape-progress-label');
+        const progressPct = document.getElementById('scrape-progress-pct');
+
         btn.disabled = true;
         btn.querySelector('span').textContent = 'Scraping...';
+
+        // Show indeterminate progress
+        progressDiv.classList.remove('hidden');
+        progressBar.style.width = '100%';
+        progressBar.classList.add('animate-pulse');
+        progressLabel.textContent = 'Fetching calendar from racing.com...';
+        progressPct.textContent = '';
+
         try {
             const resp = await fetch('/api/meets/scrape-calendar', { method: 'POST' });
             const data = await resp.json();
+            progressBar.classList.remove('animate-pulse');
+            progressLabel.textContent = `Found ${data.count} meetings`;
             showToast(`Found ${data.count} meetings`, 'success');
-            setTimeout(() => location.reload(), 500);
+            setTimeout(() => location.reload(), 1000);
         } catch (e) {
+            progressDiv.classList.add('hidden');
             showToast('Calendar scrape failed', 'error');
         } finally {
             btn.disabled = false;
@@ -193,16 +221,67 @@
     }
 
     async function scrapeFull(meetingId) {
-        showToast('Scraping meeting data...', 'info');
+        // Show progress bar
+        const progressDiv = document.getElementById('scrape-progress');
+        const progressBar = document.getElementById('scrape-progress-bar');
+        const progressLabel = document.getElementById('scrape-progress-label');
+        const progressPct = document.getElementById('scrape-progress-pct');
+        const progressDetail = document.getElementById('scrape-progress-detail');
+
+        progressDiv.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        progressLabel.textContent = 'Starting scrape...';
+        progressPct.textContent = '0%';
+        progressDetail.textContent = '';
+
         try {
-            const resp = await fetch(`/api/meets/${meetingId}/scrape-full`, { method: 'POST' });
-            const data = await resp.json();
-            if (data.errors && data.errors.length > 0) {
-                showToast(`Done with ${data.errors.length} error(s)`, 'warning');
-            } else {
-                showToast('Scrape complete', 'success');
-            }
+            const eventSource = new EventSource(`/api/meets/${meetingId}/scrape-stream`);
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const step = data.step || 0;
+                const total = data.total || 3;
+                const pct = Math.round((step / total) * 100);
+
+                progressBar.style.width = pct + '%';
+                progressPct.textContent = pct + '%';
+                progressLabel.textContent = data.label || 'Scraping...';
+
+                if (data.status === 'error') {
+                    progressDetail.textContent = 'Error occurred - continuing...';
+                    progressDetail.className = 'text-xs text-red-500';
+                } else if (data.status === 'done') {
+                    progressDetail.textContent = '';
+                    progressDetail.className = 'text-xs text-gray-500';
+                }
+
+                if (data.status === 'complete') {
+                    eventSource.close();
+                    progressLabel.textContent = 'Complete!';
+                    progressBar.style.width = '100%';
+                    progressPct.textContent = '100%';
+
+                    if (data.errors && data.errors.length > 0) {
+                        showToast(`Done with ${data.errors.length} error(s)`, 'warning');
+                    } else {
+                        showToast('Scrape complete', 'success');
+                    }
+
+                    // Hide progress bar and reload after a moment
+                    setTimeout(() => {
+                        progressDiv.classList.add('hidden');
+                        location.reload();
+                    }, 1500);
+                }
+            };
+
+            eventSource.onerror = function() {
+                eventSource.close();
+                progressDiv.classList.add('hidden');
+                showToast('Scrape connection lost', 'error');
+            };
         } catch (e) {
+            progressDiv.classList.add('hidden');
             showToast('Scrape failed', 'error');
         }
     }
