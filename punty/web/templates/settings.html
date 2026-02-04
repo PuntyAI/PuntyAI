@@ -50,6 +50,66 @@
         </div>
     </div>
 
+    <!-- Email Notifications (SMTP) -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-punty-border">
+            <h2 class="text-lg font-semibold text-gray-900">Email Notifications</h2>
+            <p class="text-sm text-gray-500">SMTP settings for scheduler notifications</p>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+                    <input type="text" id="smtp_host"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                           placeholder="smtp.gmail.com"
+                           value="{{ settings.get('smtp_host', {}).get('value', '') }}">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
+                    <input type="number" id="smtp_port"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                           placeholder="587"
+                           value="{{ settings.get('smtp_port', {}).get('value', '587') }}">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Username</label>
+                    <input type="email" id="smtp_user"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                           placeholder="your-email@gmail.com"
+                           value="{{ settings.get('smtp_user', {}).get('value', '') }}">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
+                    <input type="password" id="smtp_password"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                           placeholder="App password or SMTP password"
+                           value="{{ settings.get('smtp_password', {}).get('value', '') }}">
+                    <p class="text-xs text-gray-500 mt-1">For Gmail, use an App Password</p>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">From Email (optional)</label>
+                    <input type="email" id="smtp_from"
+                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                           placeholder="notifications@punty.ai"
+                           value="{{ settings.get('smtp_from', {}).get('value', '') }}">
+                    <p class="text-xs text-gray-500 mt-1">Defaults to SMTP username if not set</p>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center gap-3">
+                <button onclick="saveSmtpSettings()"
+                        class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
+                    Save SMTP Settings
+                </button>
+                <button onclick="testEmail()"
+                        class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-500 text-sm">
+                    Send Test Email
+                </button>
+                <span id="smtp-status" class="text-sm text-gray-500"></span>
+            </div>
+        </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Analysis Framework Weights -->
         <div class="bg-white rounded-lg shadow lg:col-span-2">
@@ -468,5 +528,64 @@ async function rescheduleMorningPrep() {
 
 // Load scheduler status on page load
 loadSchedulerStatus();
+
+// SMTP settings functions
+async function saveSmtpSettings() {
+    const keys = {
+        smtp_host: document.getElementById('smtp_host').value,
+        smtp_port: document.getElementById('smtp_port').value,
+        smtp_user: document.getElementById('smtp_user').value,
+        smtp_password: document.getElementById('smtp_password').value,
+        smtp_from: document.getElementById('smtp_from').value,
+    };
+
+    try {
+        const resp = await fetch('/api/settings/api-keys/smtp', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keys: keys})
+        });
+        if (resp.ok) {
+            document.getElementById('smtp-status').textContent = 'Saved!';
+            document.getElementById('smtp-status').style.color = 'green';
+            showToast('SMTP settings saved', 'success');
+        } else {
+            throw new Error('Save failed');
+        }
+    } catch (e) {
+        document.getElementById('smtp-status').textContent = 'Error saving';
+        document.getElementById('smtp-status').style.color = 'red';
+        showToast('Failed to save SMTP settings', 'error');
+    }
+}
+
+async function testEmail() {
+    const statusEl = document.getElementById('smtp-status');
+    statusEl.textContent = 'Sending test email...';
+    statusEl.style.color = 'orange';
+
+    try {
+        const resp = await fetch('/api/settings/test-email', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({to_email: 'punty@punty.ai'})
+        });
+        const data = await resp.json();
+
+        if (data.status === 'sent') {
+            statusEl.textContent = 'Test email sent!';
+            statusEl.style.color = 'green';
+            showToast('Test email sent to punty@punty.ai', 'success');
+        } else {
+            statusEl.textContent = 'Error: ' + (data.message || 'Unknown error');
+            statusEl.style.color = 'red';
+            showToast('Email failed: ' + (data.message || 'Check SMTP settings'), 'error');
+        }
+    } catch (e) {
+        statusEl.textContent = 'Error sending';
+        statusEl.style.color = 'red';
+        showToast('Failed to send test email', 'error');
+    }
+}
 </script>
 {% endblock %}

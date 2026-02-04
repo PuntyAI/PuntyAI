@@ -162,6 +162,25 @@ async def daily_morning_prep() -> dict:
 
     results["completed_at"] = melb_now().isoformat()
     logger.info(f"Daily morning prep complete: {results}")
+
+    # Send email notification
+    try:
+        from punty.delivery.email import send_email, format_morning_prep_email
+
+        subject, body_html, body_text = format_morning_prep_email(results)
+        email_result = await send_email(
+            to_email="punty@punty.ai",
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+        )
+        logger.info(f"Morning prep email notification: {email_result}")
+        results["email_sent"] = email_result.get("status") == "sent"
+    except Exception as e:
+        logger.error(f"Failed to send morning prep email: {e}")
+        results["email_sent"] = False
+        results["email_error"] = str(e)
+
     return results
 
 

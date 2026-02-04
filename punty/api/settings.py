@@ -165,6 +165,7 @@ PROVIDER_KEYS = {
     "openai": ["openai_api_key"],
     "twitter": ["twitter_api_key", "twitter_api_secret", "twitter_access_token", "twitter_access_secret"],
     "whatsapp": ["whatsapp_api_token", "whatsapp_phone_number_id"],
+    "smtp": ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from"],
 }
 
 
@@ -218,3 +219,31 @@ async def initialize_settings(db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return {"status": "initialized"}
+
+
+class TestEmailRequest(BaseModel):
+    """Test email request."""
+    to_email: str
+
+
+@router.post("/test-email")
+async def test_email(request: TestEmailRequest):
+    """Send a test email to verify SMTP settings."""
+    from punty.delivery.email import send_email
+
+    result = await send_email(
+        to_email=request.to_email,
+        subject="PuntyAI Test Email",
+        body_html="""
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <h1 style="color: #e91e63;">PuntyAI Email Test</h1>
+            <p>If you're reading this, your SMTP settings are working correctly!</p>
+            <p style="color: #666;">This is a test email from PuntyAI.</p>
+        </body>
+        </html>
+        """,
+        body_text="PuntyAI Email Test\n\nIf you're reading this, your SMTP settings are working correctly!",
+    )
+
+    return result
