@@ -150,56 +150,65 @@ async def bulk_scrape_stream():
     logger = logging.getLogger(__name__)
 
     async def event_generator():
-        async with async_session() as db:
-            # Get selected meetings
-            today = melb_today()
-            logger.info(f"Bulk scrape: querying for date={today}")
-            result = await db.execute(
-                select(Meeting).where(
-                    Meeting.date == today,
-                    Meeting.selected == True,
-                    # Include NULL meeting_type (legacy) and non-trial meetings
-                    or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
-                ).order_by(Meeting.venue)
-            )
-            meetings = result.scalars().all()
-            logger.info(f"Bulk scrape: found {len(meetings)} meetings")
+        try:
+            async with async_session() as db:
+                # Get selected meetings
+                today = melb_today()
+                logger.info(f"Bulk scrape: querying for date={today}")
+                result = await db.execute(
+                    select(Meeting).where(
+                        Meeting.date == today,
+                        Meeting.selected == True,
+                        # Include NULL meeting_type (legacy) and non-trial meetings
+                        or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
+                    ).order_by(Meeting.venue)
+                )
+                meetings = result.scalars().all()
+                # Store meeting IDs and venues to avoid lazy loading issues
+                meeting_list = [(m.id, m.venue) for m in meetings]
+                logger.info(f"Bulk scrape: found {len(meeting_list)} meetings: {[v for _, v in meeting_list]}")
 
-            if not meetings:
-                yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
-                return
+                if not meeting_list:
+                    yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
+                    return
 
-            total_meetings = len(meetings)
-            yield f"data: {json.dumps({'step': 0, 'total': total_meetings, 'label': f'Starting scrape of {total_meetings} meetings...', 'status': 'running'})}\n\n"
+                total_meetings = len(meeting_list)
+                yield f"data: {json.dumps({'step': 0, 'total': total_meetings, 'label': f'Starting scrape of {total_meetings} meetings...', 'status': 'running'})}\n\n"
 
-            for idx, meeting in enumerate(meetings):
-                meeting_num = idx + 1
-                yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'Scraping {meeting.venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
+                for idx, (meeting_id, venue) in enumerate(meeting_list):
+                    meeting_num = idx + 1
+                    logger.info(f"Bulk scrape: starting {venue} ({meeting_num}/{total_meetings})")
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue, 'label': f'Scraping {venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
 
-                try:
-                    errors = []
-                    async for event in scrape_meeting_full_stream(meeting.id, db):
-                        # Forward sub-events with meeting context
-                        event['meeting'] = meeting.venue
-                        event['meeting_num'] = meeting_num
-                        event['total_meetings'] = total_meetings
-                        yield f"data: {json.dumps(event)}\n\n"
-                        if event.get('status') == 'error':
-                            errors.append(event.get('label', 'Unknown error'))
+                    try:
+                        errors = []
+                        async for event in scrape_meeting_full_stream(meeting_id, db):
+                            # Forward sub-events with meeting context
+                            event['meeting'] = venue
+                            event['meeting_num'] = meeting_num
+                            event['total_meetings'] = total_meetings
+                            yield f"data: {json.dumps(event)}\n\n"
+                            if event.get('status') == 'error':
+                                errors.append(event.get('label', 'Unknown error'))
 
-                    if errors:
-                        yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: completed with errors', 'status': 'done', 'errors': errors})}\n\n"
-                    else:
-                        yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: complete', 'status': 'done'})}\n\n"
+                        if errors:
+                            yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue, 'label': f'{venue}: completed with errors', 'status': 'done', 'errors': errors})}\n\n"
+                        else:
+                            yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue, 'label': f'{venue}: complete', 'status': 'done'})}\n\n"
 
-                except Exception as e:
-                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: error - {str(e)}', 'status': 'error'})}\n\n"
+                    except Exception as e:
+                        logger.error(f"Bulk scrape error for {venue}: {e}")
+                        yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue, 'label': f'{venue}: error - {str(e)}', 'status': 'error'})}\n\n"
 
-                # Brief delay between meetings to avoid rate limiting
-                import asyncio
-                await asyncio.sleep(2)
+                    # Brief delay between meetings to avoid rate limiting
+                    import asyncio
+                    await asyncio.sleep(2)
 
-            yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'All {total_meetings} meetings scraped', 'status': 'complete'})}\n\n"
+                yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'All {total_meetings} meetings scraped', 'status': 'complete'})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Bulk scrape fatal error: {e}")
+            yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': f'Fatal error: {str(e)}', 'status': 'error'})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
