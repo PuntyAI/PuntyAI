@@ -91,3 +91,65 @@ async def run_job_now(job_type: str, meeting_id: str, db: AsyncSession = Depends
     """Manually trigger a job to run immediately."""
     # Will be implemented with scheduler
     return {"status": "triggered", "job_type": job_type, "meeting_id": meeting_id}
+
+
+@router.get("/status")
+async def scheduler_status():
+    """Get scheduler status and scheduled jobs."""
+    from punty.scheduler.manager import scheduler_manager
+
+    jobs = scheduler_manager.get_jobs()
+    job_info = []
+    for job in jobs:
+        next_run = job.next_run_time.isoformat() if job.next_run_time else None
+        job_info.append({
+            "id": job.id,
+            "name": job.name,
+            "next_run": next_run,
+            "next_run_formatted": job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z") if job.next_run_time else None,
+        })
+
+    morning_time = scheduler_manager.get_morning_job_time()
+
+    return {
+        "running": scheduler_manager._started,
+        "jobs": job_info,
+        "morning_prep_time": morning_time,
+    }
+
+
+@router.post("/morning-prep/run")
+async def run_morning_prep_now():
+    """Manually trigger the morning prep job to run immediately."""
+    from punty.scheduler.jobs import daily_morning_prep
+    import asyncio
+
+    # Run in background
+    asyncio.create_task(daily_morning_prep())
+
+    return {"status": "triggered", "message": "Morning prep job started in background"}
+
+
+@router.post("/morning-prep/reschedule")
+async def reschedule_morning_prep():
+    """Reschedule the morning prep job with a new random time."""
+    from punty.scheduler.manager import scheduler_manager, get_random_morning_time
+    from punty.scheduler.jobs import daily_morning_prep
+    from punty.config import MELB_TZ
+
+    scheduler_manager.remove_job("daily-morning-prep")
+
+    hour, minute = get_random_morning_time()
+    scheduler_manager.add_job(
+        "daily-morning-prep",
+        daily_morning_prep,
+        trigger_type="cron",
+        hour=hour,
+        minute=minute,
+        timezone=MELB_TZ,
+    )
+
+    return {
+        "status": "rescheduled",
+        "new_time": f"{hour:02d}:{minute:02d}",
+    }

@@ -47,8 +47,12 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info(f"Database initialized at {settings.db_path}")
 
-    # Start scheduler (will be implemented later)
-    # await scheduler_manager.start()
+    # Start scheduler
+    from punty.scheduler.manager import scheduler_manager
+    await scheduler_manager.start()
+    await scheduler_manager.setup_daily_morning_job()
+    morning_time = scheduler_manager.get_morning_job_time()
+    logger.info(f"Scheduler started - morning prep scheduled for {morning_time}")
 
     # Initialize results monitor
     monitor = ResultsMonitor(app)
@@ -59,7 +63,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down PuntyAI...")
     monitor.stop()
-    # await scheduler_manager.stop()
+    await scheduler_manager.stop()
 
     # Close Playwright browser if it was started
     try:

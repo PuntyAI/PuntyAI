@@ -1,7 +1,8 @@
 """Scheduler manager for background jobs."""
 
 import logging
-from datetime import datetime, timedelta
+import random
+from datetime import datetime, timedelta, time
 from typing import Optional, Callable, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -12,6 +13,18 @@ from apscheduler.triggers.date import DateTrigger
 from punty.scheduler.jobs import JobType
 
 logger = logging.getLogger(__name__)
+
+
+def get_random_morning_time() -> tuple[int, int]:
+    """Get a random time between 7:30 AM and 8:30 AM.
+
+    Returns (hour, minute) tuple.
+    """
+    # Random minute between 7:30 (450 mins) and 8:30 (510 mins)
+    total_minutes = random.randint(7 * 60 + 30, 8 * 60 + 30)
+    hour = total_minutes // 60
+    minute = total_minutes % 60
+    return hour, minute
 
 
 class SchedulerManager:
@@ -201,6 +214,63 @@ class SchedulerManager:
         for suffix in job_suffixes:
             job_id = f"{meeting_id}-{suffix}"
             self.remove_job(job_id)
+
+    async def setup_daily_morning_job(self) -> None:
+        """Set up the daily morning preparation job.
+
+        Runs at a random time between 7:30-8:30 AM Melbourne time every day.
+        The job scrapes calendar, data, and generates early mail for selected meetings.
+        """
+        from punty.scheduler.jobs import daily_morning_prep
+        from punty.config import MELB_TZ
+
+        # Get random time for today/tomorrow
+        hour, minute = get_random_morning_time()
+
+        logger.info(f"Scheduling daily morning prep job for {hour:02d}:{minute:02d} Melbourne time")
+
+        self.add_job(
+            "daily-morning-prep",
+            daily_morning_prep,
+            trigger_type="cron",
+            hour=hour,
+            minute=minute,
+            timezone=MELB_TZ,
+        )
+
+        # Also schedule a job to reschedule the morning job with a new random time each day
+        # This runs at midnight to pick a new random time for the next day
+        async def reschedule_morning_job():
+            new_hour, new_minute = get_random_morning_time()
+            logger.info(f"Rescheduling morning prep for {new_hour:02d}:{new_minute:02d}")
+
+            self.remove_job("daily-morning-prep")
+            self.add_job(
+                "daily-morning-prep",
+                daily_morning_prep,
+                trigger_type="cron",
+                hour=new_hour,
+                minute=new_minute,
+                timezone=MELB_TZ,
+            )
+
+        self.add_job(
+            "daily-reschedule",
+            reschedule_morning_job,
+            trigger_type="cron",
+            hour=0,
+            minute=5,  # 12:05 AM Melbourne time
+            timezone=MELB_TZ,
+        )
+
+        logger.info("Daily morning job and reschedule job configured")
+
+    def get_morning_job_time(self) -> Optional[str]:
+        """Get the scheduled time for the morning prep job."""
+        job = self.get_job("daily-morning-prep")
+        if job and job.next_run_time:
+            return job.next_run_time.strftime("%H:%M")
+        return None
 
 
 # Global scheduler instance

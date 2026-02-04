@@ -1,7 +1,8 @@
 """Job definitions for scheduled tasks."""
 
 import logging
-from datetime import date, datetime
+import random
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Optional
 
@@ -21,6 +22,147 @@ class JobType(str, Enum):
     GENERATE_EARLY_MAIL = "generate_early_mail"
     GENERATE_RACE_PREVIEW = "generate_race_preview"
     CHECK_CONTEXT_CHANGES = "check_context_changes"
+    DAILY_MORNING_PREP = "daily_morning_prep"
+
+
+async def daily_morning_prep() -> dict:
+    """
+    Daily morning preparation job that runs between 7:30-8:30 AM Melbourne time.
+
+    This job:
+    1. Scrapes the racing calendar to get today's meetings
+    2. Auto-selects metro meetings
+    3. Scrapes all data (form + speed maps) for selected meetings
+    4. Generates early mail for all selected meetings
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting, Race, Runner
+    from punty.config import melb_today, melb_now
+    from punty.scrapers.calendar import scrape_todays_meetings
+    from punty.scrapers.orchestrator import scrape_meeting, scrape_speed_maps
+    from punty.ai.generator import ContentGenerator
+    from sqlalchemy import select, or_
+
+    logger.info("Starting daily morning prep job")
+    results = {
+        "started_at": melb_now().isoformat(),
+        "calendar_scraped": False,
+        "meetings_found": 0,
+        "meetings_scraped": [],
+        "early_mail_generated": [],
+        "errors": [],
+    }
+
+    today = melb_today()
+
+    async with async_session() as db:
+        # Step 1: Scrape calendar
+        try:
+            logger.info("Step 1: Scraping racing calendar...")
+            meetings_data = await scrape_todays_meetings(db)
+            results["calendar_scraped"] = True
+            results["meetings_found"] = len(meetings_data) if meetings_data else 0
+            logger.info(f"Found {results['meetings_found']} meetings")
+        except Exception as e:
+            logger.error(f"Calendar scrape failed: {e}")
+            results["errors"].append(f"Calendar: {str(e)}")
+
+        # Step 2: Auto-select metro meetings
+        try:
+            logger.info("Step 2: Auto-selecting metro meetings...")
+            metro_venues = [
+                'flemington', 'caulfield', 'moonee valley', 'sandown',
+                'randwick', 'rosehill', 'warwick farm', 'canterbury',
+                'doomben', 'eagle farm', 'morphettville', 'ascot'
+            ]
+
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.meeting_type.in_(["race", None]),
+                )
+            )
+            meetings = result.scalars().all()
+
+            for meeting in meetings:
+                venue_lower = meeting.venue.lower()
+                is_metro = any(metro in venue_lower for metro in metro_venues)
+                if is_metro and not meeting.selected:
+                    meeting.selected = True
+                    logger.info(f"Auto-selected: {meeting.venue}")
+
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Auto-select failed: {e}")
+            results["errors"].append(f"Auto-select: {str(e)}")
+
+        # Step 3: Scrape all data for selected meetings
+        try:
+            logger.info("Step 3: Scraping data for selected meetings...")
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type == "race")
+                ).order_by(Meeting.venue)
+            )
+            selected_meetings = result.scalars().all()
+
+            for meeting in selected_meetings:
+                try:
+                    logger.info(f"Scraping data for {meeting.venue}...")
+                    # Scrape meeting data
+                    await scrape_meeting(db, meeting.id, meeting.venue, meeting.date)
+
+                    # Scrape speed maps
+                    race_count = len(meeting.races) if meeting.races else 8
+                    async for _ in scrape_speed_maps(db, meeting.id, meeting.venue, meeting.date, race_count):
+                        pass  # Just run through the generator
+
+                    results["meetings_scraped"].append(meeting.venue)
+                    logger.info(f"Completed scraping {meeting.venue}")
+                except Exception as e:
+                    logger.error(f"Scrape failed for {meeting.venue}: {e}")
+                    results["errors"].append(f"Scrape {meeting.venue}: {str(e)}")
+
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Data scrape step failed: {e}")
+            results["errors"].append(f"Data scrape: {str(e)}")
+
+        # Step 4: Generate early mail for selected meetings
+        try:
+            logger.info("Step 4: Generating early mail...")
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type == "race")
+                ).order_by(Meeting.venue)
+            )
+            selected_meetings = result.scalars().all()
+
+            generator = ContentGenerator(db)
+
+            for meeting in selected_meetings:
+                try:
+                    logger.info(f"Generating early mail for {meeting.venue}...")
+                    async for event in generator.generate_early_mail_stream(meeting.id):
+                        if event.get("status") == "error":
+                            raise Exception(event.get("label", "Unknown error"))
+
+                    results["early_mail_generated"].append(meeting.venue)
+                    logger.info(f"Early mail generated for {meeting.venue}")
+                except Exception as e:
+                    logger.error(f"Early mail failed for {meeting.venue}: {e}")
+                    results["errors"].append(f"Early mail {meeting.venue}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Early mail step failed: {e}")
+            results["errors"].append(f"Early mail: {str(e)}")
+
+    results["completed_at"] = melb_now().isoformat()
+    logger.info(f"Daily morning prep complete: {results}")
+    return results
 
 
 async def scrape_race_cards(

@@ -10,6 +10,46 @@
         <p class="text-gray-500">Configure Punty's behaviour and integrations</p>
     </div>
 
+    <!-- Scheduler Status -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Daily Automation</h2>
+                <p class="text-sm text-gray-500">Automatic morning prep runs daily between 7:30-8:30 AM Melbourne time</p>
+            </div>
+            <div id="scheduler-status" class="flex items-center gap-3">
+                <span class="text-sm text-gray-500">Loading...</span>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="flex flex-wrap items-center gap-4">
+                <div id="morning-time" class="text-center px-6 py-3 bg-punty-card2 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider">Today's Run Time</div>
+                    <div class="text-2xl font-bold text-punty-coral font-mono" id="scheduled-time">--:--</div>
+                </div>
+                <div class="space-y-2">
+                    <button onclick="runMorningPrepNow()"
+                            class="block w-full bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
+                        &#x25B6; Run Now
+                    </button>
+                    <button onclick="rescheduleMorningPrep()"
+                            class="block w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-500 text-sm">
+                        &#x1F504; Pick New Time
+                    </button>
+                </div>
+                <div class="text-sm text-gray-500 flex-1">
+                    <p><strong>Morning prep includes:</strong></p>
+                    <ul class="list-disc list-inside mt-1 space-y-0.5">
+                        <li>Scrape racing calendar</li>
+                        <li>Auto-select metro meetings</li>
+                        <li>Scrape form data + speed maps</li>
+                        <li>Generate early mail for all selected</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Analysis Framework Weights -->
         <div class="bg-white rounded-lg shadow lg:col-span-2">
@@ -375,5 +415,58 @@ async function saveApiKeys(provider, keys) {
         alert('Save failed: ' + e.message);
     }
 }
+
+// Scheduler functions
+async function loadSchedulerStatus() {
+    try {
+        const resp = await fetch('/api/scheduler/status');
+        const data = await resp.json();
+
+        const statusEl = document.getElementById('scheduler-status');
+        const timeEl = document.getElementById('scheduled-time');
+
+        if (data.running) {
+            statusEl.innerHTML = '<span class="px-2 py-1 rounded bg-green-100 text-green-800 text-sm">Running</span>';
+        } else {
+            statusEl.innerHTML = '<span class="px-2 py-1 rounded bg-red-100 text-red-800 text-sm">Stopped</span>';
+        }
+
+        if (data.morning_prep_time) {
+            timeEl.textContent = data.morning_prep_time;
+        } else {
+            timeEl.textContent = 'Not scheduled';
+        }
+    } catch (e) {
+        console.error('Failed to load scheduler status:', e);
+    }
+}
+
+async function runMorningPrepNow() {
+    if (!confirm('Run the morning prep job now? This will scrape all data and generate early mail for selected meetings.')) {
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/scheduler/morning-prep/run', { method: 'POST' });
+        const data = await resp.json();
+        showToast('Morning prep started in background', 'success');
+    } catch (e) {
+        showToast('Failed to start morning prep: ' + e.message, 'error');
+    }
+}
+
+async function rescheduleMorningPrep() {
+    try {
+        const resp = await fetch('/api/scheduler/morning-prep/reschedule', { method: 'POST' });
+        const data = await resp.json();
+        document.getElementById('scheduled-time').textContent = data.new_time;
+        showToast('Morning prep rescheduled to ' + data.new_time, 'success');
+    } catch (e) {
+        showToast('Failed to reschedule: ' + e.message, 'error');
+    }
+}
+
+// Load scheduler status on page load
+loadSchedulerStatus();
 </script>
 {% endblock %}
