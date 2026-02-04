@@ -266,9 +266,17 @@ async def _settle_picks_for_race_impl(
             elif "exacta" in exotic_type:
                 if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
                     if is_boxed:
+                        # Boxed: our runners in top 2 in any order
                         hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
-                    else:
+                    elif len(exotic_runners_int) == 2:
+                        # Straight exacta: exact order match
                         hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
+                    else:
+                        # Standout/flexi: first runner must win, any of rest for second
+                        # e.g., "1 to win, 2, 4 for second" = [1, 2, 4]
+                        first_ok = top_sc_int[0] == exotic_runners_int[0]
+                        second_ok = top_sc_int[1] in exotic_runners_int[1:]
+                        hit = first_ok and second_ok
                 if hit:
                     dividend = _find_dividend(exotic_divs, "exacta")
             elif "quinella" in exotic_type:
