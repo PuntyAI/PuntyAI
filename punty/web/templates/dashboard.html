@@ -234,24 +234,28 @@
             <canvas id="pnlChart"></canvas>
         </div>
 
-        <!-- Day-by-day breakdown table -->
+        <!-- Period breakdown table -->
         <div class="mt-4 overflow-x-auto">
             <table class="min-w-full text-sm">
                 <thead>
                     <tr class="text-xs text-gray-500 uppercase">
-                        <th class="text-left py-2 px-3">Date</th>
+                        <th class="text-left py-2 px-3">Period</th>
                         <th class="text-right py-2 px-3">Bets</th>
                         <th class="text-right py-2 px-3">Winners</th>
                         <th class="text-right py-2 px-3">Staked</th>
                         <th class="text-right py-2 px-3">Returned</th>
-                        <th class="text-right py-2 px-3">Day P&L</th>
+                        <th class="text-right py-2 px-3">P&L</th>
                         <th class="text-right py-2 px-3">Cumulative</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for day in cumulative_pnl|reverse %}
+                    {% set period_icons = {'hour': '⏱', 'day': '📅', 'week': '📆'} %}
                     <tr class="border-t" style="border-color: var(--border-subtle);">
-                        <td class="py-2 px-3 font-medium">{{ day.date }}</td>
+                        <td class="py-2 px-3 font-medium">
+                            <span class="text-gray-400 mr-1">{{ period_icons.get(day.period_type, '') }}</span>
+                            {{ day.label or day.date }}
+                        </td>
                         <td class="py-2 px-3 text-right">{{ day.bets }}</td>
                         <td class="py-2 px-3 text-right">{{ day.winners }}</td>
                         <td class="py-2 px-3 text-right">{{ '%.2f'|format(day.staked) }}U</td>
@@ -487,9 +491,9 @@ function updateMonitorUI() {
 {% if cumulative_pnl and cumulative_pnl|length > 0 %}
 (function() {
     var rawData = {{ cumulative_pnl | tojson }};
+    // Use the label field which has adaptive formatting (hour, day, week)
     var labels = rawData.map(function(d) {
-        var parts = d.date.split('-');
-        return parts[2] + '/' + parts[1];
+        return d.label || d.date;
     });
     var cumulativeValues = rawData.map(function(d) { return d.cumulative_pnl; });
 
@@ -537,13 +541,15 @@ function updateMonitorUI() {
                     callbacks: {
                         title: function(items) {
                             var d = rawData[items[0].dataIndex];
-                            return d.date;
+                            var periodLabel = {hour: 'Hour', day: 'Day', week: 'Week'}[d.period_type] || 'Period';
+                            return d.date + ' (' + periodLabel + ')';
                         },
                         label: function(ctx) {
                             var d = rawData[ctx.dataIndex];
+                            var periodLabel = {hour: 'Hour', day: 'Day', week: 'Week'}[d.period_type] || 'Period';
                             return [
                                 'Cumulative: ' + (d.cumulative_pnl >= 0 ? '+' : '') + d.cumulative_pnl.toFixed(2) + 'U',
-                                'Day P&L: ' + (d.pnl >= 0 ? '+' : '') + d.pnl.toFixed(2) + 'U',
+                                periodLabel + ' P&L: ' + (d.pnl >= 0 ? '+' : '') + d.pnl.toFixed(2) + 'U',
                                 'Bets: ' + d.bets + ' | Winners: ' + d.winners,
                                 'Staked: ' + d.staked.toFixed(2) + 'U | Returned: ' + d.returned.toFixed(2) + 'U',
                             ];
