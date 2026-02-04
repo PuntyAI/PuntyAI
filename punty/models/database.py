@@ -51,6 +51,8 @@ async def init_db() -> None:
             "ALTER TABLE runners ADD COLUMN pf_settle FLOAT",
             "ALTER TABLE runners ADD COLUMN pf_map_factor FLOAT",
             "ALTER TABLE runners ADD COLUMN pf_jockey_factor FLOAT",
+            # Data completeness tracking
+            "ALTER TABLE meetings ADD COLUMN speed_map_complete BOOLEAN",
         ]:
             try:
                 await conn.execute(_text(col))

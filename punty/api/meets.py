@@ -46,6 +46,24 @@ async def list_selected(db: AsyncSession = Depends(get_db)):
     return [m.to_dict() for m in meetings]
 
 
+@router.get("/incomplete-data-check")
+async def check_incomplete_data(db: AsyncSession = Depends(get_db)):
+    """Check for selected meetings with incomplete speed map data."""
+    today = melb_today()
+    result = await db.execute(
+        select(Meeting).where(
+            Meeting.date == today,
+            Meeting.selected == True,
+            Meeting.speed_map_complete == False,
+        ).order_by(Meeting.venue)
+    )
+    incomplete = result.scalars().all()
+    return {
+        "incomplete_meetings": [{"id": m.id, "venue": m.venue} for m in incomplete],
+        "count": len(incomplete),
+    }
+
+
 # =============================================================================
 # BULK ENDPOINTS - Must be defined BEFORE /{meeting_id} routes to avoid
 # FastAPI matching "bulk" as a meeting_id

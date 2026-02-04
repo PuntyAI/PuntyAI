@@ -25,6 +25,7 @@ class Meeting(Base):
     selected: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     meeting_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # race, trial, jumpout
+    speed_map_complete: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # None=not checked, True=complete, False=incomplete
 
     # New GraphQL fields
     penetrometer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -56,6 +57,7 @@ class Meeting(Base):
             "selected": self.selected,
             "source": self.source,
             "meeting_type": self.meeting_type,
+            "speed_map_complete": self.speed_map_complete,
             "penetrometer": self.penetrometer,
             "weather_condition": self.weather_condition,
             "weather_temp": self.weather_temp,

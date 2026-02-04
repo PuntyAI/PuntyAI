@@ -123,9 +123,16 @@
                             </button>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline font-medium">
-                                {{ meeting.venue }}
-                            </a>
+                            <div class="flex items-center gap-2">
+                                <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline font-medium">
+                                    {{ meeting.venue }}
+                                </a>
+                                {% if meeting.speed_map_complete == false %}
+                                <span class="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 font-medium" title="Speed map data incomplete or unavailable">
+                                    ⚠ Data Issue
+                                </span>
+                                {% endif %}
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {{ meeting.date.strftime('%a %d %b %Y') if meeting.date else '-' }}
@@ -625,7 +632,29 @@
         runBulkStream('/api/meets/bulk/speed-maps-stream', 'bg-punty-blue', 'Fetch Speed Maps');
     }
 
-    function bulkGenerate() {
+    async function bulkGenerate() {
+        // Check for meetings with incomplete data
+        const response = await fetch('/api/meets/incomplete-data-check');
+        const data = await response.json();
+
+        if (data.incomplete_meetings && data.incomplete_meetings.length > 0) {
+            const venues = data.incomplete_meetings.map(m => m.venue).join(', ');
+            const proceed = confirm(
+                `⚠️ DATA WARNING\n\n` +
+                `The following meetings have incomplete or missing speed map data:\n\n` +
+                `${venues}\n\n` +
+                `Generating Early Mail with incomplete data may result in:\n` +
+                `• Missing pace analysis\n` +
+                `• Incorrect race shape predictions\n` +
+                `• Less accurate selections\n\n` +
+                `Do you want to proceed anyway?`
+            );
+            if (!proceed) {
+                showToast('Generation cancelled', 'warning');
+                return;
+            }
+        }
+
         runBulkStream('/api/meets/bulk/generate-early-mail-stream', 'bg-punty-gold', 'Generate Early Mail');
     }
 

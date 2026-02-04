@@ -29,6 +29,23 @@
         </div>
     </div>
 
+    <!-- Data Incomplete Warning Banner -->
+    {% if meeting.speed_map_complete == false %}
+    <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
+        <span class="text-2xl">⚠️</span>
+        <div>
+            <h3 class="font-semibold text-red-400">Speed Map Data Incomplete</h3>
+            <p class="text-sm text-red-300/80 mt-1">
+                This meeting has missing or incomplete speed map data. Generating Early Mail may result in
+                inaccurate pace analysis and race shape predictions.
+            </p>
+            <p class="text-sm text-red-300/80 mt-1">
+                Try clicking "Fetch Speed Maps" again, or proceed with caution.
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Quick Actions -->
     <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px;" class="p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
         <button onclick="startScrape()" id="scrape-btn"
@@ -163,6 +180,17 @@
                                         </div>
                                         {% if race.track_condition %}
                                         <p class="text-xs text-gray-400">Track: {{ race.track_condition }}{% if race.field_size %} | Field: {{ race.field_size }}{% endif %}</p>
+                                        {% endif %}
+                                        {% set active_runners = race.runners|rejectattr('scratched')|list %}
+                                        {% set runners_with_speedmap = active_runners|selectattr('speed_map_position')|list %}
+                                        {% if active_runners and runners_with_speedmap|length == 0 %}
+                                        <span class="inline-block mt-1 px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-400 border border-red-500/30">
+                                            ⚠ No Speed Map Data
+                                        </span>
+                                        {% elif active_runners and runners_with_speedmap|length < (active_runners|length * 0.5) %}
+                                        <span class="inline-block mt-1 px-2 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                                            ⚠ Partial Speed Map ({{ runners_with_speedmap|length }}/{{ active_runners|length }})
+                                        </span>
                                         {% endif %}
                                         {% if race.results_status %}
                                         {% set rs_colors = {
@@ -867,6 +895,23 @@ function startSpeedMaps() {
 }
 
 function startGenerate() {
+    // Check for incomplete data
+    {% if meeting.speed_map_complete == false %}
+    var proceed = confirm(
+        '⚠️ DATA WARNING\n\n' +
+        'This meeting has incomplete or missing speed map data.\n\n' +
+        'Generating Early Mail with incomplete data may result in:\n' +
+        '• Missing pace analysis\n' +
+        '• Incorrect race shape predictions\n' +
+        '• Less accurate selections\n\n' +
+        'Do you want to proceed anyway?'
+    );
+    if (!proceed) {
+        showToast('Generation cancelled', 'warning');
+        return;
+    }
+    {% endif %}
+
     var btn = document.getElementById('generate-btn');
     var panel = document.getElementById('generate-progress');
     var bar = document.getElementById('generate-bar');

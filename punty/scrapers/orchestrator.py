@@ -360,10 +360,54 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
             logger.error(f"Racing.com speed map scrape failed: {e}")
             yield {"step": 0, "total": 1, "label": f"Racing.com fallback failed: {e}", "status": "error"}
 
+    # Calculate completeness - count active (non-scratched) runners vs those with speed maps
+    total_active_runners = 0
+    runners_with_speedmap = 0
+    for race in races:
+        runner_result = await db.execute(
+            select(Runner).where(Runner.race_id == race.id, Runner.scratched == False)
+        )
+        race_runners = runner_result.scalars().all()
+        total_active_runners += len(race_runners)
+        runners_with_speedmap += sum(1 for r in race_runners if r.speed_map_position)
+
+    # Consider complete if at least 50% of runners have speed map data
+    # (some horses genuinely don't have sectional history)
+    completeness_ratio = runners_with_speedmap / total_active_runners if total_active_runners > 0 else 0
+    is_complete = completeness_ratio >= 0.5
+
+    # Update meeting status
+    meeting.speed_map_complete = is_complete
+
     if total_positions_found == 0:
         logger.warning(f"No speed map data found for {meeting.venue} from any source")
+        meeting.speed_map_complete = False
+        # Unselect meetings with no data
+        if meeting.selected:
+            meeting.selected = False
+            logger.info(f"Auto-unselected {meeting.venue} due to missing speed map data")
+            yield {
+                "step": race_count + 1,
+                "total": race_count + 1,
+                "label": f"WARNING: No speed map data available - meeting unselected",
+                "status": "warning",
+                "incomplete": True,
+            }
+    elif not is_complete:
+        logger.warning(f"Incomplete speed map data for {meeting.venue}: {runners_with_speedmap}/{total_active_runners} ({completeness_ratio:.0%})")
+        # Unselect meetings with very incomplete data (less than 30%)
+        if completeness_ratio < 0.3 and meeting.selected:
+            meeting.selected = False
+            logger.info(f"Auto-unselected {meeting.venue} due to very incomplete speed map data ({completeness_ratio:.0%})")
+            yield {
+                "step": race_count + 1,
+                "total": race_count + 1,
+                "label": f"WARNING: Only {completeness_ratio:.0%} speed map coverage - meeting unselected",
+                "status": "warning",
+                "incomplete": True,
+            }
     else:
-        logger.info(f"Set {total_positions_found} speed map positions for {meeting.venue}")
+        logger.info(f"Set {total_positions_found} speed map positions for {meeting.venue} ({completeness_ratio:.0%} coverage)")
 
     await db.commit()
 
