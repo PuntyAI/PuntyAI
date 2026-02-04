@@ -279,68 +279,36 @@ class TRCTrainerScraper:
             rows = table.find_all("tr")
             for row in rows:
                 cells = row.find_all("td")
-                if len(cells) < 8:
+                # TRC table has 14 columns:
+                # 0: Empty, 1: Rank, 2: Last week, 3: Name, 4: Country,
+                # 5: Runners, 6: Runs, 7: SR, 8: Rating, 9: G1, 10: G2, 11: G3, 12: Points, 13: Change
+                if len(cells) < 13:
                     continue
 
                 try:
-                    # Parse trainer data from row
-                    # Column order: Rank, Name, Country, Runners, Runs, SR, Rating, G1, G2, G3, Points
-                    rank_text = cells[0].get_text(strip=True)
-                    rank = self._parse_int(rank_text)
+                    # Parse rank from column 1 (not 0 which is empty)
+                    rank = self._parse_int(cells[1].get_text(strip=True))
                     if rank is None:
                         continue
 
-                    # Name is usually in cell 1 or 2 (after rank and possibly last week rank)
-                    name_cell = None
-                    for cell in cells[1:4]:
-                        text = cell.get_text(strip=True)
-                        # Name cell has letters, not just numbers
-                        if text and re.search(r"[a-zA-Z]{2,}", text):
-                            name_cell = cell
-                            break
-
-                    if not name_cell:
-                        continue
-
-                    name = name_cell.get_text(strip=True)
+                    # Name is in column 3
+                    name = cells[3].get_text(strip=True)
                     if not name or len(name) < 3:
                         continue
 
-                    # Extract numeric stats from remaining cells
-                    stats = []
-                    for cell in cells:
-                        text = cell.get_text(strip=True)
-                        # Skip name-like cells
-                        if re.search(r"^[a-zA-Z\s&]+$", text) and len(text) > 3:
-                            continue
-                        num = self._parse_int(text)
-                        if num is not None:
-                            stats.append(num)
-                        else:
-                            # Try float for rating
-                            try:
-                                fval = float(text.replace(",", ""))
-                                stats.append(fval)
-                            except:
-                                pass
-
-                    # We expect: rank, runners, runs, sr, rating, g1, g2, g3, points
-                    # But stats array might have extra values
-                    if len(stats) < 6:
-                        continue
-
+                    # Parse stats from fixed columns
                     trainer_data = {
                         "name": name,
                         "name_normalized": self._normalize_trainer_name(name),
                         "global_rank": rank,
-                        "runners": stats[1] if len(stats) > 1 else 0,
-                        "runs": stats[2] if len(stats) > 2 else 0,
-                        "strike_rate": float(stats[3]) if len(stats) > 3 else 0.0,
-                        "rating": float(stats[4]) if len(stats) > 4 else 0.0,
-                        "g1_wins": stats[5] if len(stats) > 5 else 0,
-                        "g2_wins": stats[6] if len(stats) > 6 else 0,
-                        "g3_wins": stats[7] if len(stats) > 7 else 0,
-                        "points": stats[8] if len(stats) > 8 else 0,
+                        "runners": self._parse_int(cells[5].get_text(strip=True)) or 0,
+                        "runs": self._parse_int(cells[6].get_text(strip=True)) or 0,
+                        "strike_rate": self._parse_float(cells[7].get_text(strip=True)) or 0.0,
+                        "rating": self._parse_float(cells[8].get_text(strip=True)) or 0.0,
+                        "g1_wins": self._parse_int(cells[9].get_text(strip=True)) or 0,
+                        "g2_wins": self._parse_int(cells[10].get_text(strip=True)) or 0,
+                        "g3_wins": self._parse_int(cells[11].get_text(strip=True)) or 0,
+                        "points": self._parse_int(cells[12].get_text(strip=True)) or 0,
                         "source": "TRC",
                     }
 
@@ -369,6 +337,16 @@ class TRCTrainerScraper:
         try:
             cleaned = re.sub(r"[^\d]", "", value)
             return int(cleaned) if cleaned else None
+        except ValueError:
+            return None
+
+    def _parse_float(self, value: str) -> Optional[float]:
+        """Parse float from string."""
+        if not value:
+            return None
+        try:
+            cleaned = value.replace(",", "").replace("%", "").strip()
+            return float(cleaned) if cleaned else None
         except ValueError:
             return None
 
