@@ -557,180 +557,177 @@ async def get_performance_history(
 
 
 async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
-    """Get all-time P&L with adaptive time scaling for the chart.
+    """Get all-time P&L with adaptive time scaling based on race start times.
 
-    - Today: hourly granularity
+    - Today: hourly granularity (by race time)
     - Last 7 days: daily granularity
     - Last 60 days: daily granularity
     - Older: weekly granularity
+
+    Sequences and big3_multi are attributed to their concluding race time.
+    Chart starts at zero.
     """
     from punty.config import melb_today
+    import json as _json
 
     today = melb_today()
     week_ago = today - timedelta(days=7)
     two_months_ago = today - timedelta(days=60)
 
-    periods = []
+    # Get all settled picks with their race times
+    # For selections/exotics: use their race_number
+    # For sequences: use sequence_start_race + len(legs) - 1
+    # For big3_multi: need to find the max race among the 3 picks
 
-    # 1. Get hourly data for today (using settled_at)
-    hourly_result = await db.execute(
-        select(
-            func.strftime('%Y-%m-%d %H:00', Pick.settled_at).label("hour"),
-            func.count(Pick.id).label("count"),
-            func.sum(Pick.pnl).label("total_pnl"),
-            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
-            func.sum(Pick.bet_stake).label("total_bet_stake"),
-            func.sum(Pick.exotic_stake).label("total_exotic_stake"),
-        )
+    result = await db.execute(
+        select(Pick, Race.start_time, Meeting.date)
         .join(Meeting, Pick.meeting_id == Meeting.id)
+        .outerjoin(Race, (Race.meeting_id == Pick.meeting_id) & (Race.race_number == Pick.race_number))
         .where(
             Pick.settled == True,
-            Pick.pick_type != "big3",
-            Meeting.date == today,
-            Pick.settled_at.isnot(None),
+            Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
         )
-        .group_by(func.strftime('%Y-%m-%d %H:00', Pick.settled_at))
-        .order_by(func.strftime('%Y-%m-%d %H:00', Pick.settled_at))
     )
-    hourly_rows = hourly_result.all()
+    rows = result.all()
 
-    # 2. Get daily data for last 7 days (excluding today)
-    daily_recent_result = await db.execute(
-        select(
-            Meeting.date,
-            func.count(Pick.id).label("count"),
-            func.sum(Pick.pnl).label("total_pnl"),
-            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
-            func.sum(Pick.bet_stake).label("total_bet_stake"),
-            func.sum(Pick.exotic_stake).label("total_exotic_stake"),
-        )
-        .join(Meeting, Pick.meeting_id == Meeting.id)
-        .where(
-            Pick.settled == True,
-            Pick.pick_type != "big3",
-            Meeting.date < today,
-            Meeting.date >= week_ago,
-        )
-        .group_by(Meeting.date)
-        .order_by(Meeting.date)
-    )
-    daily_recent_rows = daily_recent_result.all()
+    # For sequences and big3_multi, we need to look up the concluding race time
+    # Build a cache of race start times by meeting_id and race_number
+    race_times_cache = {}
+    all_meeting_ids = set(r[0].meeting_id for r in rows)
 
-    # 3. Get daily data for 8-60 days ago
-    daily_older_result = await db.execute(
-        select(
-            Meeting.date,
-            func.count(Pick.id).label("count"),
-            func.sum(Pick.pnl).label("total_pnl"),
-            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
-            func.sum(Pick.bet_stake).label("total_bet_stake"),
-            func.sum(Pick.exotic_stake).label("total_exotic_stake"),
+    if all_meeting_ids:
+        race_result = await db.execute(
+            select(Race.meeting_id, Race.race_number, Race.start_time)
+            .where(Race.meeting_id.in_(all_meeting_ids))
         )
-        .join(Meeting, Pick.meeting_id == Meeting.id)
-        .where(
-            Pick.settled == True,
-            Pick.pick_type != "big3",
-            Meeting.date < week_ago,
-            Meeting.date >= two_months_ago,
-        )
-        .group_by(Meeting.date)
-        .order_by(Meeting.date)
-    )
-    daily_older_rows = daily_older_result.all()
+        for race_row in race_result.all():
+            key = (race_row.meeting_id, race_row.race_number)
+            race_times_cache[key] = race_row.start_time
 
-    # 4. Get weekly data for older than 60 days
-    weekly_result = await db.execute(
-        select(
-            func.strftime('%Y-W%W', Meeting.date).label("week"),
-            func.min(Meeting.date).label("week_start"),
-            func.count(Pick.id).label("count"),
-            func.sum(Pick.pnl).label("total_pnl"),
-            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
-            func.sum(Pick.bet_stake).label("total_bet_stake"),
-            func.sum(Pick.exotic_stake).label("total_exotic_stake"),
-        )
-        .join(Meeting, Pick.meeting_id == Meeting.id)
-        .where(
-            Pick.settled == True,
-            Pick.pick_type != "big3",
-            Meeting.date < two_months_ago,
-        )
-        .group_by(func.strftime('%Y-W%W', Meeting.date))
-        .order_by(func.strftime('%Y-W%W', Meeting.date))
-    )
-    weekly_rows = weekly_result.all()
+    # Process each pick and determine its effective race time
+    pick_events = []
+    for pick, race_start_time, meeting_date in rows:
+        effective_time = race_start_time
+        effective_race_num = pick.race_number
 
-    # Build combined timeline with sort keys
-    all_periods = []
+        if pick.pick_type == "sequence" and pick.sequence_start_race and pick.sequence_legs:
+            # Concluding race = start_race + num_legs - 1
+            try:
+                legs = _json.loads(pick.sequence_legs)
+                concluding_race = pick.sequence_start_race + len(legs) - 1
+                effective_race_num = concluding_race
+                effective_time = race_times_cache.get((pick.meeting_id, concluding_race))
+            except:
+                pass
 
-    # Add weekly periods (oldest first)
-    for row in weekly_rows:
-        week_start = row.week_start
-        if isinstance(week_start, str):
-            week_start = datetime.strptime(week_start, '%Y-%m-%d').date()
-        all_periods.append({
-            "sort_key": week_start.isoformat() + " 00:00",
-            "label": f"W{row.week.split('-W')[1]}" if row.week else week_start.strftime('%d/%m'),
-            "period_type": "week",
-            "bets": row.count or 0,
-            "winners": int(row.winners or 0),
-            "pnl": float(row.total_pnl or 0),
-            "staked": float(row.total_bet_stake or 0) + float(row.total_exotic_stake or 0),
+        elif pick.pick_type == "big3_multi":
+            # Find the max race number among the big3 picks for this content
+            big3_result = await db.execute(
+                select(func.max(Pick.race_number))
+                .where(
+                    Pick.content_id == pick.content_id,
+                    Pick.pick_type == "big3",
+                )
+            )
+            max_race = big3_result.scalar()
+            if max_race:
+                effective_race_num = max_race
+                effective_time = race_times_cache.get((pick.meeting_id, max_race))
+
+        # Use meeting date + race time for sorting, fallback to just date
+        if effective_time:
+            sort_datetime = datetime.combine(meeting_date, effective_time.time()) if hasattr(effective_time, 'time') else effective_time
+        else:
+            # Fallback: use meeting date with estimated time based on race number
+            estimated_hour = 12 + (effective_race_num or 1) - 1  # Race 1 at 12:00, Race 2 at 13:00, etc.
+            sort_datetime = datetime.combine(meeting_date, datetime.min.time().replace(hour=min(estimated_hour, 18)))
+
+        pick_events.append({
+            "sort_datetime": sort_datetime,
+            "meeting_date": meeting_date,
+            "pnl": float(pick.pnl or 0),
+            "staked": float(pick.bet_stake or 0) + float(pick.exotic_stake or 0),
+            "hit": pick.hit or False,
         })
 
-    # Add daily periods (8-60 days ago)
-    for row in daily_older_rows:
-        d = row.date
-        if isinstance(d, str):
-            d = datetime.strptime(d, '%Y-%m-%d').date()
-        all_periods.append({
-            "sort_key": d.isoformat() + " 00:00",
-            "label": d.strftime('%d/%m'),
-            "period_type": "day",
-            "bets": row.count or 0,
-            "winners": int(row.winners or 0),
-            "pnl": float(row.total_pnl or 0),
-            "staked": float(row.total_bet_stake or 0) + float(row.total_exotic_stake or 0),
+    # Sort by race time
+    pick_events.sort(key=lambda x: x["sort_datetime"])
+
+    # Group picks into periods based on adaptive granularity
+    periods_dict = {}  # key -> {bets, winners, pnl, staked}
+
+    for event in pick_events:
+        meeting_date = event["meeting_date"]
+        sort_dt = event["sort_datetime"]
+
+        if meeting_date == today:
+            # Hourly for today
+            period_key = sort_dt.strftime('%Y-%m-%d %H:00')
+            period_type = "hour"
+            label = sort_dt.strftime('%H:00')
+        elif meeting_date >= week_ago:
+            # Daily for last 7 days
+            period_key = meeting_date.isoformat()
+            period_type = "day"
+            label = meeting_date.strftime('%a %d')
+        elif meeting_date >= two_months_ago:
+            # Daily for 8-60 days ago
+            period_key = meeting_date.isoformat()
+            period_type = "day"
+            label = meeting_date.strftime('%d/%m')
+        else:
+            # Weekly for older
+            week_num = meeting_date.isocalendar()[1]
+            year = meeting_date.year
+            period_key = f"{year}-W{week_num:02d}"
+            period_type = "week"
+            label = f"W{week_num:02d}"
+
+        if period_key not in periods_dict:
+            periods_dict[period_key] = {
+                "sort_key": period_key,
+                "label": label,
+                "period_type": period_type,
+                "date": meeting_date.isoformat() if isinstance(meeting_date, date) else str(meeting_date),
+                "bets": 0,
+                "winners": 0,
+                "pnl": 0.0,
+                "staked": 0.0,
+            }
+
+        periods_dict[period_key]["bets"] += 1
+        periods_dict[period_key]["winners"] += 1 if event["hit"] else 0
+        periods_dict[period_key]["pnl"] += event["pnl"]
+        periods_dict[period_key]["staked"] += event["staked"]
+
+    # Sort periods chronologically
+    sorted_periods = sorted(periods_dict.values(), key=lambda x: x["sort_key"])
+
+    # Build result with cumulative values, starting at zero
+    result_periods = []
+
+    # Add starting zero point
+    if sorted_periods:
+        first_date = sorted_periods[0]["date"]
+        result_periods.append({
+            "date": first_date,
+            "label": "Start",
+            "period_type": "start",
+            "bets": 0,
+            "winners": 0,
+            "pnl": 0,
+            "staked": 0,
+            "returned": 0,
+            "cumulative_pnl": 0,
+            "cumulative_staked": 0,
+            "cumulative_returned": 0,
         })
 
-    # Add recent daily periods (last 7 days)
-    for row in daily_recent_rows:
-        d = row.date
-        if isinstance(d, str):
-            d = datetime.strptime(d, '%Y-%m-%d').date()
-        all_periods.append({
-            "sort_key": d.isoformat() + " 00:00",
-            "label": d.strftime('%a %d'),
-            "period_type": "day",
-            "bets": row.count or 0,
-            "winners": int(row.winners or 0),
-            "pnl": float(row.total_pnl or 0),
-            "staked": float(row.total_bet_stake or 0) + float(row.total_exotic_stake or 0),
-        })
-
-    # Add today's hourly periods
-    for row in hourly_rows:
-        hour_str = row.hour  # Format: 'YYYY-MM-DD HH:00'
-        all_periods.append({
-            "sort_key": hour_str.replace(' ', 'T') if hour_str else today.isoformat() + "T00:00",
-            "label": hour_str.split(' ')[1] if hour_str and ' ' in hour_str else "Now",
-            "period_type": "hour",
-            "bets": row.count or 0,
-            "winners": int(row.winners or 0),
-            "pnl": float(row.total_pnl or 0),
-            "staked": float(row.total_bet_stake or 0) + float(row.total_exotic_stake or 0),
-        })
-
-    # Sort all periods chronologically
-    all_periods.sort(key=lambda x: x["sort_key"])
-
-    # Calculate running cumulative values
     cumulative = 0.0
     cumulative_staked = 0.0
     cumulative_returned = 0.0
-    result_periods = []
 
-    for p in all_periods:
+    for p in sorted_periods:
         pnl = p["pnl"]
         staked = p["staked"]
         returned = staked + pnl
@@ -739,7 +736,7 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         cumulative_returned += returned
 
         result_periods.append({
-            "date": p["sort_key"].split('T')[0] if 'T' in p["sort_key"] else p["sort_key"].split(' ')[0],
+            "date": p["date"],
             "label": p["label"],
             "period_type": p["period_type"],
             "bets": p["bets"],

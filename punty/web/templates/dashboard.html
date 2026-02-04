@@ -250,6 +250,7 @@
                 </thead>
                 <tbody>
                     {% for day in cumulative_pnl|reverse %}
+                    {% if day.period_type == 'start' %}{% continue %}{% endif %}
                     {% set period_icons = {'hour': '⏱', 'day': '📅', 'week': '📆'} %}
                     <tr class="border-t" style="border-color: var(--border-subtle);">
                         <td class="py-2 px-3 font-medium">
