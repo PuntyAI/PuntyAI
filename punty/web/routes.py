@@ -142,31 +142,51 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/meets", response_class=HTMLResponse)
-async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Race meetings management page — shows today's meetings first."""
+async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends(get_db)):
+    """Race meetings management page — shows today's meetings + paginated archive."""
     today = melb_now().date()
     now = melb_now()
     now_naive = now.replace(tzinfo=None)
 
-    # Today's meetings first (exclude trials/jumpouts)
+    # Today's meetings (exclude trials/jumpouts)
     result = await db.execute(
         select(Meeting).where(
             Meeting.date == today,
             Meeting.meeting_type.in_(["race", None]),
         ).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
-    todays = result.scalars().all()
+    todays_meetings = result.scalars().all()
 
-    # If no today meetings, fall back to all recent
-    if todays:
-        meetings = todays
-    else:
-        result = await db.execute(select(Meeting).options(selectinload(Meeting.races)).order_by(Meeting.date.desc()).limit(50))
-        meetings = result.scalars().all()
+    # Past meetings (paginated) - exclude today
+    per_page = 20
+    offset = (page - 1) * per_page
 
-    # Calculate race progress for each meeting
+    # Count total past meetings
+    count_result = await db.execute(
+        select(func.count(Meeting.id)).where(
+            Meeting.date < today,
+            Meeting.meeting_type.in_(["race", None]),
+        )
+    )
+    total_past = count_result.scalar() or 0
+    total_pages = (total_past + per_page - 1) // per_page if total_past > 0 else 0
+
+    # Get past meetings for current page
+    past_result = await db.execute(
+        select(Meeting).where(
+            Meeting.date < today,
+            Meeting.meeting_type.in_(["race", None]),
+        ).options(selectinload(Meeting.races))
+        .order_by(Meeting.date.desc(), Meeting.venue)
+        .offset(offset)
+        .limit(per_page)
+    )
+    past_meetings = past_result.scalars().all()
+
+    # Calculate race progress for all meetings
+    all_meetings = list(todays_meetings) + list(past_meetings)
     meeting_progress = {}
-    for meeting in meetings:
+    for meeting in all_meetings:
         races = meeting.races or []
         total_races = len(races)
         if total_races == 0:
@@ -196,8 +216,12 @@ async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
         "meets.html",
         {
             "request": request,
-            "meetings": meetings,
+            "meetings": todays_meetings,
+            "past_meetings": past_meetings,
             "meeting_progress": meeting_progress,
+            "page": page,
+            "total_pages": total_pages,
+            "total_past": total_past,
         },
     )
 
