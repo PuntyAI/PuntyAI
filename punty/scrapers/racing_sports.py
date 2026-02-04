@@ -3,7 +3,7 @@
 import logging
 import re
 from datetime import date
-from typing import Any, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from bs4 import BeautifulSoup
 
@@ -170,3 +170,292 @@ class RacingSportsScraper(BaseScraper):
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
         """Results scraping — not primary source, returns empty."""
         return []
+
+    def _build_speed_map_url(self, venue: str, race_date: date, race_num: int) -> str:
+        """Build URL for a specific race's speed map page."""
+        venue_slug = venue.lower().replace(" ", "-")
+        date_str = race_date.strftime("%Y-%m-%d")
+        return f"{self.BASE_URL}/form-guide/thoroughbred/australia/{venue_slug}/{date_str}/R{race_num}/speedmap"
+
+    # Position keywords to look for in page text/classes
+    POSITION_KEYWORDS = {
+        "leader": "leader",
+        "leaders": "leader",
+        "lead": "leader",
+        "on pace": "on_pace",
+        "on the pace": "on_pace",
+        "on-pace": "on_pace",
+        "pace": "on_pace",
+        "stalker": "on_pace",
+        "stalking": "on_pace",
+        "prominent": "on_pace",
+        "midfield": "midfield",
+        "mid-field": "midfield",
+        "middle": "midfield",
+        "off pace": "backmarker",
+        "off-pace": "backmarker",
+        "back": "backmarker",
+        "backmarker": "backmarker",
+        "backmarkers": "backmarker",
+        "rear": "backmarker",
+        "tail": "backmarker",
+    }
+
+    def _normalize_position(self, text: Optional[str]) -> Optional[str]:
+        """Normalize position text to standard values."""
+        if not text:
+            return None
+        text_lower = text.lower().strip()
+        # Direct match
+        if text_lower in self.POSITION_KEYWORDS:
+            return self.POSITION_KEYWORDS[text_lower]
+        # Partial match
+        for keyword, position in self.POSITION_KEYWORDS.items():
+            if keyword in text_lower:
+                return position
+        return None
+
+    async def scrape_speed_maps(
+        self, venue: str, race_date: date, race_count: int
+    ) -> AsyncGenerator[dict, None]:
+        """Scrape speed maps for all races, yielding progress events.
+
+        Racing and Sports provides speed maps at URLs like:
+        /form-guide/thoroughbred/australia/{venue}/{date}/R{num}/speedmap
+
+        The page contains a visual speed map with horses grouped by expected
+        settling position (Leaders, On Pace, Midfield, Backmarkers).
+        """
+        total = race_count + 1  # +1 for completion event
+        venue_slug = venue.lower().replace(" ", "-")
+
+        async with new_page() as page:
+            for race_num in range(1, race_count + 1):
+                yield {
+                    "step": race_num - 1,
+                    "total": total,
+                    "label": f"Fetching speed map for Race {race_num}...",
+                    "status": "running",
+                }
+
+                speed_map_url = self._build_speed_map_url(venue, race_date, race_num)
+                positions = []
+
+                try:
+                    # Navigate to speed map page
+                    await page.goto(speed_map_url, wait_until="domcontentloaded")
+                    await page.wait_for_timeout(2000)  # Allow JS to render
+
+                    # Get page content
+                    html = await page.content()
+                    soup = BeautifulSoup(html, "lxml")
+
+                    # Strategy 1: Look for speed map sections with position headers
+                    # Racing and Sports typically groups horses under position headings
+                    for section_class in [".speedmap", ".speed-map", ".pace-map",
+                                          ".settling-positions", "[data-speedmap]"]:
+                        container = soup.select_one(section_class)
+                        if container:
+                            positions = self._parse_speed_map_container(container)
+                            if positions:
+                                break
+
+                    # Strategy 2: Look for tables with position columns
+                    if not positions:
+                        tables = soup.select("table")
+                        for table in tables:
+                            positions = self._parse_speed_map_table(table)
+                            if positions:
+                                break
+
+                    # Strategy 3: Look for grouped runners by position keywords
+                    if not positions:
+                        positions = self._parse_speed_map_from_groups(soup)
+
+                    # Strategy 4: Look for any runner elements with position data
+                    if not positions:
+                        positions = self._parse_speed_map_from_runners(soup)
+
+                    count = len(positions)
+                    if count > 0:
+                        yield {
+                            "step": race_num,
+                            "total": total,
+                            "label": f"Race {race_num}: {count} positions found",
+                            "status": "done",
+                            "race_number": race_num,
+                            "positions": positions,
+                        }
+                    else:
+                        yield {
+                            "step": race_num,
+                            "total": total,
+                            "label": f"Race {race_num}: no speed map data found",
+                            "status": "done",
+                            "race_number": race_num,
+                            "positions": [],
+                        }
+
+                except Exception as e:
+                    logger.error(f"Error scraping speed map for race {race_num}: {e}")
+                    yield {
+                        "step": race_num,
+                        "total": total,
+                        "label": f"Race {race_num}: error - {e}",
+                        "status": "error",
+                        "race_number": race_num,
+                        "positions": [],
+                    }
+
+        yield {
+            "step": total,
+            "total": total,
+            "label": "Speed maps complete",
+            "status": "complete",
+        }
+
+    def _parse_speed_map_container(self, container) -> list[dict]:
+        """Parse a speed map container element."""
+        positions = []
+
+        # Look for position group sections
+        for pos_name, norm_pos in [
+            ("leader", "leader"),
+            ("on pace", "on_pace"),
+            ("on-pace", "on_pace"),
+            ("midfield", "midfield"),
+            ("backmarker", "backmarker"),
+            ("back", "backmarker"),
+        ]:
+            # Find sections containing position keywords
+            for elem in container.find_all(string=re.compile(pos_name, re.IGNORECASE)):
+                parent = elem.find_parent(["div", "section", "li", "td", "tr"])
+                if parent:
+                    # Find horse names near this element
+                    horses = parent.select(".horse-name, .runner-name, .horse, a[href*='horse']")
+                    for horse in horses:
+                        horse_name = self.clean_text(horse.get_text())
+                        if horse_name and len(horse_name) > 1:
+                            positions.append({
+                                "horse_name": horse_name,
+                                "position": norm_pos,
+                            })
+
+        return positions
+
+    def _parse_speed_map_table(self, table) -> list[dict]:
+        """Parse speed map from a table format."""
+        positions = []
+        headers = [th.get_text().lower().strip() for th in table.select("th")]
+
+        # Find position column index
+        pos_col = None
+        name_col = None
+        for i, h in enumerate(headers):
+            if any(kw in h for kw in ["position", "settling", "pace", "map"]):
+                pos_col = i
+            if any(kw in h for kw in ["horse", "runner", "name"]):
+                name_col = i
+
+        if pos_col is None or name_col is None:
+            return []
+
+        for row in table.select("tr"):
+            cells = row.select("td")
+            if len(cells) > max(pos_col, name_col):
+                horse_name = self.clean_text(cells[name_col].get_text())
+                pos_text = cells[pos_col].get_text()
+                position = self._normalize_position(pos_text)
+
+                if horse_name and position:
+                    positions.append({
+                        "horse_name": horse_name,
+                        "position": position,
+                    })
+
+        return positions
+
+    def _parse_speed_map_from_groups(self, soup) -> list[dict]:
+        """Parse speed map by finding position group headings."""
+        positions = []
+
+        # Common heading patterns for position groups
+        position_headings = [
+            (r"leader", "leader"),
+            (r"on[\s-]?pace", "on_pace"),
+            (r"stalker", "on_pace"),
+            (r"midfield", "midfield"),
+            (r"mid[\s-]?field", "midfield"),
+            (r"backmarker", "backmarker"),
+            (r"back[\s-]?marker", "backmarker"),
+        ]
+
+        for pattern, norm_pos in position_headings:
+            # Find headings matching the pattern
+            for heading in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "strong", "b"]):
+                if re.search(pattern, heading.get_text(), re.IGNORECASE):
+                    # Get the next sibling elements until another heading
+                    sibling = heading.find_next_sibling()
+                    while sibling and sibling.name not in ["h1", "h2", "h3", "h4", "h5", "h6"]:
+                        # Look for horse names in this section
+                        text = self.clean_text(sibling.get_text())
+                        if text and len(text) > 2 and len(text) < 50:
+                            # Could be a horse name
+                            # Check it's not another position keyword
+                            if not self._normalize_position(text):
+                                positions.append({
+                                    "horse_name": text,
+                                    "position": norm_pos,
+                                })
+                        sibling = sibling.find_next_sibling()
+
+        return positions
+
+    def _parse_speed_map_from_runners(self, soup) -> list[dict]:
+        """Parse speed map from individual runner elements with position data."""
+        positions = []
+
+        # Look for runner elements with position indicators
+        runner_selectors = [
+            ".runner", ".horse", ".runner-row", ".horse-row",
+            "[data-runner]", "[data-horse]", "tr"
+        ]
+
+        for selector in runner_selectors:
+            for elem in soup.select(selector):
+                # Get horse name
+                name_elem = elem.select_one(".horse-name, .runner-name, .name, a")
+                if not name_elem:
+                    continue
+                horse_name = self.clean_text(name_elem.get_text())
+                if not horse_name or len(horse_name) < 2:
+                    continue
+
+                # Look for position in various places
+                position = None
+
+                # Check data attributes
+                for attr in ["data-position", "data-pace", "data-settling"]:
+                    if elem.get(attr):
+                        position = self._normalize_position(elem.get(attr))
+                        if position:
+                            break
+
+                # Check class names
+                if not position:
+                    classes = " ".join(elem.get("class", []))
+                    position = self._normalize_position(classes)
+
+                # Check child elements
+                if not position:
+                    pos_elem = elem.select_one(".position, .pace, .settling, .map-position")
+                    if pos_elem:
+                        position = self._normalize_position(pos_elem.get_text())
+
+                if horse_name and position:
+                    positions.append({
+                        "horse_name": horse_name,
+                        "position": position,
+                    })
+
+        return positions

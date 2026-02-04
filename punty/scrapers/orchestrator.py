@@ -241,7 +241,11 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
 
 
 async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:
-    """Scrape speed maps for all races in a meeting, yielding progress events."""
+    """Scrape speed maps for all races in a meeting, yielding progress events.
+
+    Uses racing.com for Victorian meetings, falls back to Racing and Sports
+    for interstate meetings or when racing.com returns no data.
+    """
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
         yield {"step": 0, "total": 1, "label": "Meeting not found", "status": "error"}
@@ -267,36 +271,91 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
         "off_pace": "backmarker",
     }
 
-    try:
-        from punty.scrapers.racing_com import RacingComScraper
-        scraper = RacingComScraper()
-        try:
-            async for event in scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
-                if event.get("positions"):
-                    race_num = event["race_number"]
-                    race_id = f"{meeting_id}-r{race_num}"
-                    for pos in event["positions"]:
-                        horse_name = pos.get("horse_name", "")
-                        raw_pos = pos.get("position", "").lower()
-                        norm_pos = pos_map.get(raw_pos)
-                        if not norm_pos:
-                            continue
-                        runner_result = await db.execute(
-                            select(Runner).where(
-                                Runner.race_id == race_id,
-                                Runner.horse_name == horse_name,
-                            )
-                        )
-                        runner = runner_result.scalar_one_or_none()
-                        if runner:
-                            runner.speed_map_position = norm_pos
+    # Track how many positions we found
+    total_positions_found = 0
 
-                yield {k: v for k, v in event.items() if k != "positions"}
-        finally:
-            await scraper.close()
-    except Exception as e:
-        logger.error(f"Speed map scrape failed: {e}")
-        yield {"step": 0, "total": 1, "label": f"Speed map scrape failed: {e}", "status": "error"}
+    # Determine if this is a Victorian venue
+    vic_venues = {
+        "flemington", "caulfield", "moonee valley", "sandown", "sandown lakeside",
+        "cranbourne", "pakenham", "mornington", "geelong", "ballarat", "bendigo",
+        "sale", "wangaratta", "wodonga", "warrnambool", "hamilton", "colac",
+        "kilmore", "kyneton", "seymour", "echuca", "swan hill", "mildura",
+        "horsham", "stawell", "ararat", "bairnsdale", "traralgon", "moe",
+        "yarra valley", "sportsbet pakenham", "ladbrokes park",
+    }
+    venue_lower = meeting.venue.lower().strip()
+    is_victorian = venue_lower in vic_venues or any(v in venue_lower for v in vic_venues)
+
+    # Helper to update runners with positions
+    async def update_runner_positions(event: dict) -> int:
+        """Update runners with speed map positions. Returns count of positions set."""
+        count = 0
+        if event.get("positions"):
+            race_num = event["race_number"]
+            race_id = f"{meeting_id}-r{race_num}"
+            for pos in event["positions"]:
+                horse_name = pos.get("horse_name", "")
+                raw_pos = pos.get("position", "").lower()
+                norm_pos = pos_map.get(raw_pos)
+                if not norm_pos:
+                    continue
+                runner_result = await db.execute(
+                    select(Runner).where(
+                        Runner.race_id == race_id,
+                        Runner.horse_name == horse_name,
+                    )
+                )
+                runner = runner_result.scalar_one_or_none()
+                if runner:
+                    runner.speed_map_position = norm_pos
+                    count += 1
+        return count
+
+    # Try racing.com first for Victorian meetings
+    if is_victorian:
+        try:
+            from punty.scrapers.racing_com import RacingComScraper
+            scraper = RacingComScraper()
+            try:
+                async for event in scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
+                    positions_set = await update_runner_positions(event)
+                    total_positions_found += positions_set
+                    yield {k: v for k, v in event.items() if k != "positions"}
+            finally:
+                await scraper.close()
+        except Exception as e:
+            logger.error(f"Racing.com speed map scrape failed: {e}")
+            # Continue to fallback
+
+    # Use Racing and Sports for non-VIC meetings or as fallback if racing.com found nothing
+    if not is_victorian or total_positions_found == 0:
+        source_label = "Racing & Sports" if not is_victorian else "Racing & Sports (fallback)"
+        try:
+            from punty.scrapers.racing_sports import RacingSportsScraper
+            scraper = RacingSportsScraper()
+
+            if total_positions_found == 0:
+                yield {"step": 0, "total": race_count + 1,
+                       "label": f"Trying {source_label}...", "status": "running"}
+
+            try:
+                async for event in scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
+                    positions_set = await update_runner_positions(event)
+                    total_positions_found += positions_set
+                    # Add source indicator to label
+                    if "label" in event:
+                        event["label"] = f"[R&S] {event['label']}"
+                    yield {k: v for k, v in event.items() if k != "positions"}
+            finally:
+                await scraper.close()
+        except Exception as e:
+            logger.error(f"Racing & Sports speed map scrape failed: {e}")
+            yield {"step": 0, "total": 1, "label": f"Speed map scrape failed: {e}", "status": "error"}
+
+    if total_positions_found == 0:
+        logger.warning(f"No speed map data found for {meeting.venue}")
+    else:
+        logger.info(f"Set {total_positions_found} speed map positions for {meeting.venue}")
 
     await db.commit()
 
