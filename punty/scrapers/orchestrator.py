@@ -312,10 +312,28 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
             await scraper.close()
     except Exception as e:
         logger.error(f"Racing.com speed map scrape failed: {e}")
-        yield {"step": 0, "total": 1, "label": f"Speed map scrape failed: {e}", "status": "error"}
+        yield {"step": 0, "total": 1, "label": f"Racing.com error: {e}", "status": "error"}
+
+    # Fallback to Punting Form if racing.com found nothing
+    if total_positions_found == 0:
+        logger.info(f"No racing.com data for {meeting.venue}, trying Punting Form...")
+        yield {"step": 0, "total": race_count + 1, "label": "Trying Punting Form fallback...", "status": "running"}
+
+        try:
+            from punty.scrapers.punting_form import PuntingFormScraper
+            pf_scraper = await PuntingFormScraper.from_settings(db)
+
+            async for event in pf_scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
+                positions_set = await update_runner_positions(event)
+                total_positions_found += positions_set
+                yield {k: v for k, v in event.items() if k != "positions"}
+
+        except Exception as e:
+            logger.error(f"Punting Form speed map scrape failed: {e}")
+            yield {"step": 0, "total": 1, "label": f"Punting Form fallback failed: {e}", "status": "error"}
 
     if total_positions_found == 0:
-        logger.warning(f"No speed map data found for {meeting.venue}")
+        logger.warning(f"No speed map data found for {meeting.venue} from any source")
     else:
         logger.info(f"Set {total_positions_found} speed map positions for {meeting.venue}")
 
