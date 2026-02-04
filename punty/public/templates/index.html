@@ -49,23 +49,33 @@
 <!-- Stats Section -->
 <section class="py-16 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <div class="grid md:grid-cols-3 gap-8 text-center">
+        <div class="grid md:grid-cols-4 gap-6 text-center">
             <!-- Today's Winners -->
-            <div class="card p-8">
+            <div class="card p-6">
                 <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="text-lg font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Winners Today</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
+                    {% if stats.all_races_complete %}Winners Today{% else %}Winners So Far{% endif %}
+                </div>
             </div>
 
             <!-- All-Time Winners -->
-            <div class="card p-8">
+            <div class="card p-6">
                 <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
-                <div class="text-lg font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">All-Time Winners</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Total Winners</div>
+            </div>
+
+            <!-- All-Time Winnings -->
+            <div class="card p-6">
+                <div class="stat-number" id="alltime-winnings" style="color: var(--cyan);">
+                    ${{ "%.0f"|format(stats.alltime_winnings) }}
+                </div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Collected</div>
             </div>
 
             <!-- Meetings Today -->
-            <div class="card p-8">
+            <div class="card p-6">
                 <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="text-lg font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Covered Today</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
             </div>
         </div>
     </div>
@@ -108,7 +118,7 @@
 </section>
 {% endif %}
 
-<!-- YouTube Section -->
+<!-- Video Section -->
 <section class="py-16" style="background: var(--bg-card);">
     <div class="max-w-4xl mx-auto px-4 sm:px-8">
         <h2 class="text-3xl font-heading font-bold text-center mb-4">
@@ -118,19 +128,52 @@
             Watch how Punty analyses the form and finds the winners
         </p>
 
-        <!-- Intro Video -->
-        <div class="relative rounded-xl overflow-hidden glow-cyan mx-auto" style="max-width: 360px; aspect-ratio: 9/16;">
+        <!-- Intro Video with custom play button -->
+        <div class="relative rounded-xl overflow-hidden glow-cyan mx-auto" style="max-width: 360px; aspect-ratio: 9/16; background: #0a0a0f;" id="video-container">
             <video
-                class="absolute inset-0 w-full h-full object-cover"
-                controls
+                id="punty-video"
+                class="absolute inset-0 w-full h-full object-contain"
                 playsinline
                 poster="/static/punty-character.jpg">
                 <source src="/static/punty-intro.mp4" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
+            <!-- Custom play button overlay -->
+            <div id="play-overlay" class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/30 hover:bg-black/20 transition-colors">
+                <div class="w-20 h-20 rounded-full flex items-center justify-center" style="background: var(--magenta);">
+                    <svg class="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </div>
+            </div>
         </div>
     </div>
 </section>
+
+<script>
+(function() {
+    const video = document.getElementById('punty-video');
+    const overlay = document.getElementById('play-overlay');
+
+    overlay.addEventListener('click', function() {
+        overlay.style.display = 'none';
+        video.controls = true;
+        video.play();
+    });
+
+    video.addEventListener('pause', function() {
+        if (video.currentTime > 0 && !video.ended) {
+            overlay.style.display = 'flex';
+            video.controls = false;
+        }
+    });
+
+    video.addEventListener('ended', function() {
+        overlay.style.display = 'flex';
+        video.controls = false;
+    });
+})();
+</script>
 
 <!-- How It Works Preview -->
 <section class="py-16">
@@ -214,7 +257,9 @@
             .then(r => r.json())
             .then(data => {
                 document.getElementById('today-winners').textContent = data.today_winners;
+                document.getElementById('today-winners-label').textContent = data.all_races_complete ? 'Winners Today' : 'Winners So Far';
                 document.getElementById('alltime-winners').textContent = data.alltime_winners;
+                document.getElementById('alltime-winnings').textContent = '$' + Math.round(data.alltime_winnings);
                 document.getElementById('meetings-today').textContent = data.meetings_today;
             })
             .catch(() => {});

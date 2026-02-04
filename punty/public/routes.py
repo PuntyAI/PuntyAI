@@ -23,6 +23,8 @@ templates = Jinja2Templates(directory=templates_dir)
 
 async def get_winner_stats() -> dict:
     """Get winner statistics for today and all-time."""
+    from punty.models.meeting import Race
+
     async with async_session() as db:
         today = melb_today()
 
@@ -39,6 +41,32 @@ async def get_winner_stats() -> dict:
         )
         today_winners = today_result.scalar() or 0
 
+        # Check if all races today are complete
+        today_meetings_result = await db.execute(
+            select(Meeting).where(
+                and_(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                )
+            )
+        )
+        today_meetings = today_meetings_result.scalars().all()
+        meeting_ids = [m.id for m in today_meetings]
+
+        # Get races for today's meetings
+        all_races_complete = False
+        if meeting_ids:
+            races_result = await db.execute(
+                select(Race).where(Race.meeting_id.in_(meeting_ids))
+            )
+            races = races_result.scalars().all()
+            if races:
+                # Check if all races have final results (Paying or Closed)
+                complete_statuses = {"Paying", "Closed"}
+                all_races_complete = all(
+                    r.results_status in complete_statuses for r in races
+                )
+
         # All-time winners
         alltime_result = await db.execute(
             select(func.count(Pick.id)).where(
@@ -51,16 +79,18 @@ async def get_winner_stats() -> dict:
         )
         alltime_winners = alltime_result.scalar() or 0
 
-        # Today's meetings with early mail sent
-        today_meetings_result = await db.execute(
-            select(Meeting).where(
+        # All-time total winnings (sum of positive pnl from winning selections)
+        alltime_winnings_result = await db.execute(
+            select(func.sum(Pick.pnl)).where(
                 and_(
-                    Meeting.date == today,
-                    Meeting.selected == True,
+                    Pick.pick_type == "selection",
+                    Pick.hit == True,
+                    Pick.settled == True,
+                    Pick.pnl > 0,
                 )
             )
         )
-        today_meetings = today_meetings_result.scalars().all()
+        alltime_winnings = alltime_winnings_result.scalar() or 0.0
 
         # Get early mail content for today (sent to Twitter)
         early_mail_result = await db.execute(
@@ -68,7 +98,7 @@ async def get_winner_stats() -> dict:
                 and_(
                     Content.content_type == "early_mail",
                     Content.sent_to_twitter == True,
-                    Content.meeting_id.in_([m.id for m in today_meetings]) if today_meetings else False,
+                    Content.meeting_id.in_(meeting_ids) if meeting_ids else False,
                 )
             )
         )
@@ -87,8 +117,10 @@ async def get_winner_stats() -> dict:
         return {
             "today_winners": today_winners,
             "alltime_winners": alltime_winners,
+            "alltime_winnings": round(alltime_winnings, 2),
             "todays_tips": todays_tips,
             "meetings_today": len(today_meetings),
+            "all_races_complete": all_races_complete,
         }
 
 
