@@ -29,6 +29,17 @@ class PuntingFormScraper(BaseScraper):
 
     BASE_URL = "https://www.puntingform.com.au"
 
+    # Venue name mapping: racing.com name -> Punting Form slug
+    VENUE_MAP = {
+        "sportsbet sandown lakeside": "sandown_hillside",
+        "sandown lakeside": "sandown_hillside",
+        "sandown": "sandown_hillside",
+        "thomas farms rc murray bridge": "murray-bridge-gh",
+        "murray bridge": "murray-bridge-gh",
+        "ladbrokes geelong": "geelong",
+        "bet365 geelong": "geelong",
+    }
+
     # Position column mapping to standard values
     POSITION_MAP = {
         "leader": "leader",
@@ -168,7 +179,12 @@ class PuntingFormScraper(BaseScraper):
 
     def _build_race_url(self, venue: str, race_date: date, race_num: int) -> str:
         """Build URL for a specific race."""
-        venue_slug = venue.lower().replace(" ", "-")
+        venue_lower = venue.lower()
+        # Check venue mapping first
+        venue_slug = self.VENUE_MAP.get(venue_lower)
+        if not venue_slug:
+            # Default: convert to slug format
+            venue_slug = venue_lower.replace(" ", "-")
         date_str = race_date.strftime("%d-%m-%Y")
         return f"{self.BASE_URL}/form-guide/race/{venue_slug}-{date_str}-{race_num}-form"
 
