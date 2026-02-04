@@ -233,10 +233,11 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
 
     await db.commit()
     error_count = len(errors)
+    # Use "meeting_done" instead of "complete" to avoid bulk scrape JS thinking entire operation is done
     if error_count:
-        yield {"step": total_steps, "total": total_steps, "label": f"Complete with {error_count} error(s)", "status": "complete", "errors": errors}
+        yield {"step": total_steps, "total": total_steps, "label": f"Complete with {error_count} error(s)", "status": "meeting_done", "errors": errors}
     else:
-        yield {"step": total_steps, "total": total_steps, "label": "All scrapers complete!", "status": "complete", "errors": []}
+        yield {"step": total_steps, "total": total_steps, "label": "All scrapers complete!", "status": "meeting_done", "errors": []}
 
 
 async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:

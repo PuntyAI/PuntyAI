@@ -200,7 +200,8 @@ class ContentGenerator:
                 step += 1
                 yield evt("Save skipped", "done")
 
-            yield {"step": total_steps, "total": total_steps, "label": f"Early Mail generated for {venue}", "status": "complete", "result": result}
+            # Use "generation_done" instead of "complete" to avoid bulk generate JS thinking entire operation is done
+            yield {"step": total_steps, "total": total_steps, "label": f"Early Mail generated for {venue}", "status": "generation_done", "result": result}
 
         except Exception as e:
             logger.error(f"Early mail generation failed: {e}")
@@ -541,7 +542,7 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 step += 1
                 yield evt("Save skipped", "done")
 
-            yield {"step": total_steps, "total": total_steps, "label": f"Results generated for Race {race_number}", "status": "complete", "result": result}
+            yield {"step": total_steps, "total": total_steps, "label": f"Results generated for Race {race_number}", "status": "generation_done", "result": result}
 
         except Exception as e:
             logger.error(f"Results generation failed: {e}")
@@ -617,7 +618,7 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 step += 1
                 yield evt("Save skipped", "done")
 
-            yield {"step": total_steps, "total": total_steps, "label": f"Punt Review generated for {venue}", "status": "complete", "result": result}
+            yield {"step": total_steps, "total": total_steps, "label": f"Punt Review generated for {venue}", "status": "generation_done", "result": result}
 
         except Exception as e:
             logger.error(f"Meeting wrapup generation failed: {e}")
