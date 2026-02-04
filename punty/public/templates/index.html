@@ -54,7 +54,7 @@
             <div class="card p-6">
                 <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
                 <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
-                    {% if stats.all_races_complete %}Winners Today{% else %}Winners So Far{% endif %}
+                    {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
                 </div>
             </div>
 
@@ -257,7 +257,7 @@
             .then(r => r.json())
             .then(data => {
                 document.getElementById('today-winners').textContent = data.today_winners;
-                document.getElementById('today-winners-label').textContent = data.all_races_complete ? 'Winners Today' : 'Winners So Far';
+                document.getElementById('today-winners-label').textContent = data.all_races_complete ? "Today's Winners" : 'Today So Far';
                 document.getElementById('alltime-winners').textContent = data.alltime_winners;
                 document.getElementById('alltime-winnings').textContent = '$' + Math.round(data.alltime_winnings);
                 document.getElementById('meetings-today').textContent = data.meetings_today;
