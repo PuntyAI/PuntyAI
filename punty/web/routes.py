@@ -144,6 +144,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Race meetings management page — shows today's meetings first."""
     today = melb_now().date()
+    now = melb_now()
+    now_naive = now.replace(tzinfo=None)
 
     # Today's meetings first (exclude trials/jumpouts)
     result = await db.execute(
@@ -161,11 +163,40 @@ async def meets_page(request: Request, db: AsyncSession = Depends(get_db)):
         result = await db.execute(select(Meeting).options(selectinload(Meeting.races)).order_by(Meeting.date.desc()).limit(50))
         meetings = result.scalars().all()
 
+    # Calculate race progress for each meeting
+    meeting_progress = {}
+    for meeting in meetings:
+        races = meeting.races or []
+        total_races = len(races)
+        if total_races == 0:
+            meeting_progress[meeting.id] = {"status": "no_races", "label": "No races"}
+            continue
+
+        # Count completed races (Paying or Closed status)
+        completed = sum(1 for r in races if r.results_status in ("Paying", "Closed", "Final"))
+
+        # Get first race start time
+        races_with_time = [r for r in races if r.start_time]
+        first_race = min(races_with_time, key=lambda r: r.start_time) if races_with_time else None
+        first_start = first_race.start_time if first_race else None
+
+        if completed == total_races:
+            meeting_progress[meeting.id] = {"status": "completed", "label": "Completed"}
+        elif completed > 0:
+            remaining = total_races - completed
+            meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{remaining} to go"}
+        elif first_start and first_start > now_naive:
+            first_start_aware = first_start.replace(tzinfo=MELB_TZ)
+            meeting_progress[meeting.id] = {"status": "not_started", "label": "Starts soon", "first_race_iso": first_start_aware.isoformat()}
+        else:
+            meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{total_races} to go"}
+
     return templates.TemplateResponse(
         "meets.html",
         {
             "request": request,
             "meetings": meetings,
+            "meeting_progress": meeting_progress,
         },
     )
 

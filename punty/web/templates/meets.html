@@ -131,10 +131,19 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm">
                             {% set first_race = meeting.races|sort(attribute='race_number')|first if meeting.races else none %}
+                            {% set progress = meeting_progress.get(meeting.id, {}) %}
                             {% if first_race and first_race.start_time %}
                             <div class="flex flex-col">
                                 <span class="text-gray-700 font-medium">{{ first_race.start_time.strftime('%H:%M') }}</span>
+                                {% if progress.status == 'completed' %}
+                                <span class="text-xs text-green-600 font-medium">✓ Completed</span>
+                                {% elif progress.status == 'in_progress' %}
+                                <span class="text-xs text-blue-600 font-medium">{{ progress.label }}</span>
+                                {% elif progress.status == 'not_started' %}
+                                <span class="race-countdown text-xs text-punty-coral font-mono" data-start-time="{{ progress.first_race_iso }}"></span>
+                                {% else %}
                                 <span class="race-countdown text-xs text-punty-coral font-mono" data-start-time="{{ first_race.start_time|melb_iso }}"></span>
+                                {% endif %}
                             </div>
                             {% else %}
                             <span class="text-gray-400">TBC</span>
