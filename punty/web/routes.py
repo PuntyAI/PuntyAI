@@ -31,8 +31,9 @@ from datetime import timezone
 def _melb(dt, fmt='%H:%M'):
     if dt is None:
         return ''
+    # Datetimes are stored as naive Melbourne local time
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=MELB_TZ)
     return dt.astimezone(MELB_TZ).strftime(fmt)
 
 def _melb_iso(dt):
