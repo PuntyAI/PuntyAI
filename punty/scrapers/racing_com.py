@@ -39,6 +39,14 @@ class RacingComScraper(BaseScraper):
         "unibet", "betfair", "palmerbet", "bluebet", "topsport",
     ]
 
+    # Venue name aliases - map calendar names to racing.com URL slugs
+    VENUE_ALIASES = {
+        "sandown lakeside": "sandown",
+        "sandown-lakeside": "sandown",
+        "thomas farms rc murray bridge": "murray-bridge",
+        "thomas-farms-rc-murray-bridge": "murray-bridge",
+    }
+
     def _venue_slug(self, venue: str) -> str:
         """Convert venue name to URL slug, stripping sponsor prefixes."""
         slug = venue.lower().strip()
@@ -50,7 +58,13 @@ class RacingComScraper(BaseScraper):
             if slug.startswith(prefix + "-"):
                 slug = slug[len(prefix) + 1:]
                 break
-        return slug.replace(" ", "-")
+        # Check for venue aliases
+        if slug in self.VENUE_ALIASES:
+            return self.VENUE_ALIASES[slug]
+        slug_dashed = slug.replace(" ", "-")
+        if slug_dashed in self.VENUE_ALIASES:
+            return self.VENUE_ALIASES[slug_dashed]
+        return slug_dashed
 
     def _build_meeting_url(self, venue: str, race_date: date) -> str:
         slug = self._venue_slug(venue)
