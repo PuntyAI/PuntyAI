@@ -34,8 +34,12 @@ class HostnameRoutingMiddleware(BaseHTTPMiddleware):
         # If on public host and requesting a public site path, rewrite to /public prefix
         # This allows both routers to coexist
         if is_public_host and path in PUBLIC_SITE_PATHS:
-            # Modify scope to add internal prefix for routing (no trailing slash to avoid redirect)
-            request.scope["path"] = f"/public{path}"
+            # Modify scope to add internal prefix for routing
+            # Handle root path specially to avoid trailing slash redirect
+            if path == "/":
+                request.scope["path"] = "/public"
+            else:
+                request.scope["path"] = f"/public{path}"
 
         return await call_next(request)
 
