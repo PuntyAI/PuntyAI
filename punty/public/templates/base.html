@@ -277,6 +277,43 @@
 <body class="min-h-screen font-body">
     <div class="scanlines"></div>
 
+    <!-- Age Verification Modal -->
+    <div id="age-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center" style="background: rgba(0,0,0,0.95);">
+        <div class="card p-8 max-w-md mx-4 text-center">
+            <img src="/static/punty-character.jpg" alt="Punty" class="w-24 h-24 rounded-full mx-auto mb-6 object-cover border-4" style="border-color: var(--magenta);">
+            <h2 class="text-2xl font-heading font-bold mb-4">Age Verification</h2>
+            <p class="mb-6" style="color: var(--text-secondary);">
+                This site contains gambling-related content. You must be 18 years or older to enter.
+            </p>
+            <p class="text-lg font-heading font-semibold mb-6" style="color: var(--cyan);">
+                Are you 18 or over?
+            </p>
+            <div class="flex gap-4 justify-center">
+                <button onclick="confirmAge(true)" class="btn-primary">Yes, I'm 18+</button>
+                <button onclick="confirmAge(false)" class="btn-secondary">No, I'm Under 18</button>
+            </div>
+            <p class="mt-6 text-xs" style="color: var(--text-muted);">
+                Gamble Responsibly. Call 1800 858 858 for help.
+            </p>
+        </div>
+    </div>
+    <script>
+        function confirmAge(isAdult) {
+            if (isAdult) {
+                localStorage.setItem('punty_age_verified', 'true');
+                document.getElementById('age-modal').classList.add('hidden');
+                document.getElementById('age-modal').classList.remove('flex');
+            } else {
+                window.location.href = 'https://www.google.com';
+            }
+        }
+        // Check on page load
+        if (!localStorage.getItem('punty_age_verified')) {
+            document.getElementById('age-modal').classList.remove('hidden');
+            document.getElementById('age-modal').classList.add('flex');
+        }
+    </script>
+
     <!-- Header -->
     <header class="site-header sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
