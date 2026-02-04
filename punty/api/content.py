@@ -149,6 +149,15 @@ async def generate_content(request: GenerateRequest, db: AsyncSession = Depends(
         if request.content_type == "early_mail":
             result = await generator.generate_early_mail(request.meeting_id)
         elif request.content_type == "race_preview":
+            # Check if race previews are enabled
+            from punty.models.settings import AppSettings
+            setting_result = await db.execute(
+                select(AppSettings).where(AppSettings.key == "enable_race_previews")
+            )
+            setting = setting_result.scalar_one_or_none()
+            if not setting or setting.value != "true":
+                raise HTTPException(status_code=400, detail="Race previews are disabled. Enable in Settings.")
+
             if not request.race_id:
                 raise HTTPException(status_code=400, detail="race_id required for race_preview")
             # Extract race number from race_id

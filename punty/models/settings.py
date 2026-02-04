@@ -202,6 +202,10 @@ class AppSettings(Base):
             "value": "",
             "description": "Email address for scheduler notifications",
         },
+        "enable_race_previews": {
+            "value": "false",
+            "description": "Enable individual race preview generation (future feature)",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:

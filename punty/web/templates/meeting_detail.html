@@ -238,6 +238,7 @@
                                 {% if race.start_time %}
                                 <span style="font-family: Orbitron, sans-serif; font-size: 1.1rem; font-weight: 600; color: var(--cyan);">{{ race.start_time.strftime('%H:%M') }}</span>
                                 {% endif %}
+                                {% if race_previews_enabled %}
                                 <button hx-post="/api/content/generate"
                                         hx-ext="json-enc"
                                         hx-vals='{"meeting_id": "{{ meeting.id }}", "content_type": "race_preview", "race_id": "{{ race.id }}"}'
@@ -247,6 +248,7 @@
                                         @click.stop>
                                     Generate Preview
                                 </button>
+                                {% endif %}
                                 <span class="text-gray-400" x-text="open ? '&#x25B2;' : '&#x25BC;'"></span>
                             </div>
                         </div>

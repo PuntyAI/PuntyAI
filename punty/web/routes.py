@@ -198,6 +198,14 @@ async def meeting_detail(
         elif p.race_number is not None:
             picks_by_race.setdefault(p.race_number, []).append(p)
 
+    # Check if race previews are enabled
+    from punty.models.settings import AppSettings
+    setting_result = await db.execute(
+        select(AppSettings).where(AppSettings.key == "enable_race_previews")
+    )
+    setting = setting_result.scalar_one_or_none()
+    race_previews_enabled = setting and setting.value == "true"
+
     return templates.TemplateResponse(
         "meeting_detail.html",
         {
@@ -208,6 +216,7 @@ async def meeting_detail(
             "picks_by_race": picks_by_race,
             "meeting_picks": meeting_picks,
             "sequences_by_race": sequences_by_race,
+            "race_previews_enabled": race_previews_enabled,
         },
     )
 

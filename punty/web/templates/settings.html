@@ -328,6 +328,30 @@
             </div>
         </div>
 
+        <!-- Content Generation -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-punty-border">
+                <h2 class="text-lg font-semibold text-gray-900">Content Generation</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-500 mb-4">Enable or disable content types</p>
+
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('enable_race_previews', {}).get('value', 'false') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/enable_race_previews"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('enable_race_previews', {}).get('value', 'false') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Individual Race Previews</span>
+                        <p class="text-xs text-gray-500">Generate per-race commentary (future feature - requires sectionals)</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
         <!-- Approval Settings -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-punty-border">
