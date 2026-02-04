@@ -198,6 +198,7 @@ class Runner(Base):
     soft_track_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     heavy_track_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     jockey_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    trainer_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     class_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Gear & stewards
@@ -283,6 +284,7 @@ class Runner(Base):
             "soft_track_stats": self.soft_track_stats,
             "heavy_track_stats": self.heavy_track_stats,
             "jockey_stats": self.jockey_stats,
+            "trainer_stats": self.trainer_stats,
             "class_stats": self.class_stats,
             "gear": self.gear,
             "gear_changes": self.gear_changes,

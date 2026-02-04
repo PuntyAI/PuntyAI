@@ -20,7 +20,7 @@ RUNNER_FIELDS = [
     "days_since_last_run", "handicap_rating", "speed_value",
     "track_dist_stats", "track_stats", "distance_stats",
     "first_up_stats", "second_up_stats", "good_track_stats",
-    "soft_track_stats", "heavy_track_stats", "jockey_stats", "class_stats",
+    "soft_track_stats", "heavy_track_stats", "jockey_stats", "trainer_stats", "class_stats",
     "gear", "gear_changes", "stewards_comment", "comment_long", "comment_short",
     "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes",
     "odds_betfair", "odds_flucs", "trainer_location", "form_history",
@@ -170,7 +170,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     venue = meeting.venue
     race_date = meeting.date
     errors = []
-    total_steps = 3
+    total_steps = 4
 
     # Step 1: racing.com GraphQL data (form + speed maps + odds in one pass)
     yield {"step": 0, "total": total_steps, "label": "Scraping racing.com GraphQL data...", "status": "running"}
@@ -240,6 +240,18 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         logger.error(f"TAB scrape failed: {e}")
         errors.append(f"tab: {e}")
         yield {"step": 3, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
+
+    # Step 4: Trainer stats from Racing Australia
+    yield {"step": 3, "total": total_steps, "label": "Fetching trainer stats...", "status": "running"}
+    try:
+        result = await populate_trainer_stats(db, meeting_id)
+        matched = result.get("matched", 0)
+        total = result.get("total", 0)
+        yield {"step": 4, "total": total_steps, "label": f"Trainer stats: {matched}/{total} matched", "status": "done"}
+    except Exception as e:
+        logger.error(f"Trainer stats failed: {e}")
+        errors.append(f"trainer_stats: {e}")
+        yield {"step": 4, "total": total_steps, "label": f"Trainer stats failed: {e}", "status": "error"}
 
     await db.commit()
     error_count = len(errors)
@@ -788,3 +800,70 @@ def _guess_state(venue: str) -> str:
 
     # Default to VIC if unknown
     return "VIC"
+
+
+# ============ TRAINER STATS ============
+# Cache trainer premiership data (refreshed once per session/day)
+_trainer_premiership_cache: list[dict] = []
+_trainer_cache_loaded: bool = False
+
+
+async def fetch_trainer_premiership(force_refresh: bool = False) -> list[dict]:
+    """Fetch trainer premiership data, using cache if available."""
+    global _trainer_premiership_cache, _trainer_cache_loaded
+
+    if _trainer_cache_loaded and not force_refresh:
+        return _trainer_premiership_cache
+
+    try:
+        from punty.scrapers.racing_australia import RacingAustraliaScraper
+
+        scraper = RacingAustraliaScraper()
+        try:
+            trainers = await scraper.scrape_trainer_premiership(season="2025")
+            _trainer_premiership_cache = trainers
+            _trainer_cache_loaded = True
+            logger.info(f"Loaded {len(trainers)} trainers from Racing Australia premiership")
+            return trainers
+        finally:
+            await scraper.close()
+    except Exception as e:
+        logger.error(f"Failed to fetch trainer premiership: {e}")
+        return _trainer_premiership_cache  # Return stale cache if available
+
+
+async def populate_trainer_stats(db: AsyncSession, meeting_id: str) -> dict:
+    """Populate trainer_stats for all runners in a meeting.
+
+    Fetches trainer premiership data and matches to each runner's trainer.
+    Returns dict with count of matches.
+    """
+    from punty.scrapers.racing_australia import match_trainer_name, format_trainer_stats
+
+    # Get trainer premiership data
+    trainers = await fetch_trainer_premiership()
+    if not trainers:
+        return {"matched": 0, "total": 0, "error": "No trainer data available"}
+
+    # Get all runners for this meeting
+    result = await db.execute(
+        select(Runner)
+        .join(Race)
+        .where(Race.meeting_id == meeting_id)
+    )
+    runners = result.scalars().all()
+
+    matched = 0
+    for runner in runners:
+        if not runner.trainer:
+            continue
+
+        # Try to match trainer
+        trainer_data = match_trainer_name(runner.trainer, trainers)
+        if trainer_data:
+            runner.trainer_stats = format_trainer_stats(trainer_data)
+            matched += 1
+
+    await db.commit()
+    logger.info(f"Trainer stats: matched {matched}/{len(runners)} runners for {meeting_id}")
+    return {"matched": matched, "total": len(runners)}

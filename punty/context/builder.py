@@ -195,8 +195,9 @@ class ContextBuilder:
                     runner_data["soft_track_stats"] = runner.soft_track_stats
                     runner_data["heavy_track_stats"] = runner.heavy_track_stats
 
-                    # Jockey & class stats
+                    # Jockey, trainer & class stats
                     runner_data["jockey_stats"] = runner.jockey_stats
+                    runner_data["trainer_stats"] = runner.trainer_stats
                     runner_data["class_stats"] = runner.class_stats
 
                     # Gear
