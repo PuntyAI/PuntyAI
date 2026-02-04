@@ -46,18 +46,17 @@ If data is missing, infer conservatively and never invent returns.
 
 ## OUTPUT STRUCTURE (EXACT ORDER)
 
-*THE WRAP*
-Start EXACTLY like this (no variation):
+*The Wrap*
+Start EXACTLY like this (no variation) — all on ONE line:
 ```
-*THE WRAP*
-<Venue> — <1-5 word funny statement summarising the day>
+*The Wrap <Venue> - <1-5 word funny statement summarising the day>*
 ```
 
 Example openers:
-- "Eagle Farm — Cherry on bloody top!"
-- "Sandown — The lanes giveth, the lanes taketh"
-- "Warwick Farm — Roughies ran riot"
-- "Ascot — Back pocket took a beating"
+- "*The Wrap Eagle Farm - Cherry on bloody top!*"
+- "*The Wrap Sandown - The lanes giveth, the lanes taketh*"
+- "*The Wrap Warwick Farm - Roughies ran riot*"
+- "*The Wrap Ascot - Back pocket took a beating*"
 
 Then immediately follow with 2-3 sentences:
 - Call out 2-4 key wins or big moments
