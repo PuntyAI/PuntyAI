@@ -429,7 +429,7 @@
                                                 </div>
                                                 {% endif %}
                                                 <!-- Multi-provider odds -->
-                                                {% if runner.odds_tab or runner.odds_sportsbet or runner.odds_bet365 or runner.odds_ladbrokes %}
+                                                {% if runner.odds_tab or runner.odds_sportsbet or runner.odds_bet365 or runner.odds_ladbrokes or runner.odds_betfair %}
                                                 <div class="col-span-2 md:col-span-4">
                                                     <span style="color: var(--text-secondary);">Odds:</span>
                                                     {% if runner.odds_tab %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style="background: #00a651; color: #000;">TAB ${{ "%.2f"|format(runner.odds_tab) }}</span>{% endif %}
