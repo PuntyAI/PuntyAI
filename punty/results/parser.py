@@ -43,12 +43,16 @@ _BET_LINE = re.compile(
 _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
 
 # --- Exotics ---
+# Matches formats like:
+#   Exacta: 1, 2, 4 — $20
+#   Exacta: 1 to win, 2, 4 for second — $20
+#   Trifecta: 1/2,4/3,5,6 — $20
 _EXOTIC = re.compile(
     r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
     r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s+(?:Standout|Box(?:ed)?))?|"
     r"(?:Boxed?\s+)?(?:Trifecta|Exacta|Quinella)|"
     r"Standout\s+(?:Exacta|Quinella|Trifecta))"
-    r":\s*([0-9,/\s]+?)\s*"
+    r":\s*(.+?)\s*"  # Capture everything up to the stake
     r"(?:[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)|"    # — $20 or — 2U
     r"\(\$(\d+\.?\d*)\))",                               # ($20)
     re.IGNORECASE,
@@ -260,8 +264,12 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
         if exotic_m:
             exotic_type = exotic_m.group(1).strip()
             runners_str = exotic_m.group(2).strip()
-            # Parse runners — may use "/" for positional separators or "," for boxed
-            runners = [int(x.strip()) for x in re.split(r'[,/]', runners_str) if x.strip().isdigit()]
+            # Parse runners — handles various formats:
+            #   "1, 2, 4" (simple)
+            #   "1/2,4/3,5,6" (positional with slashes)
+            #   "1 to win, 2, 4 for second" (descriptive)
+            # Extract all numbers from the string
+            runners = [int(x) for x in re.findall(r'\d+', runners_str)]
             # $20 format: group 3 (— $X), group 4 (— XU), group 5 (($X))
             stake_str = exotic_m.group(3) or exotic_m.group(4) or exotic_m.group(5)
             stake = float(stake_str) if stake_str else 20.0
