@@ -58,6 +58,13 @@ async def lifespan(app: FastAPI):
     monitor = ResultsMonitor(app)
     app.state.results_monitor = monitor
 
+    # Auto-start monitor if within active monitoring period
+    if await monitor._should_be_monitoring():
+        monitor.start()
+        logger.info("Results monitor auto-started (within active monitoring period)")
+    else:
+        logger.info("Results monitor initialized but not started (outside monitoring period)")
+
     yield
 
     # Shutdown
