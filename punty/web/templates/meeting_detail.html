@@ -58,69 +58,69 @@
     </div>
 
     <!-- Scrape Progress -->
-    <div id="scrape-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+    <div id="scrape-progress" class="hidden rounded-lg shadow p-4 space-y-3" style="background: var(--bg-card);">
         <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-gray-900">Scraping Data</h3>
+            <h3 class="font-semibold" style="color: var(--text-primary);">Scraping Data</h3>
             <div class="flex items-center gap-3">
-                <span id="progress-pct" class="text-sm text-gray-500">0%</span>
+                <span id="progress-pct" class="text-sm" style="color: var(--text-secondary);">0%</span>
                 <button id="scrape-cancel" onclick="cancelProcess('scrape')" class="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Cancel</button>
             </div>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
+        <div class="w-full rounded-full h-3" style="background: var(--bg-card-alt);">
             <div id="progress-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         <div id="progress-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
     </div>
 
     <!-- Generate Progress -->
-    <div id="generate-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+    <div id="generate-progress" class="hidden rounded-lg shadow p-4 space-y-3" style="background: var(--bg-card);">
         <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-gray-900">Generating Early Mail</h3>
+            <h3 class="font-semibold" style="color: var(--text-primary);">Generating Early Mail</h3>
             <div class="flex items-center gap-3">
-                <span id="generate-pct" class="text-sm text-gray-500">0%</span>
+                <span id="generate-pct" class="text-sm" style="color: var(--text-secondary);">0%</span>
                 <button id="generate-cancel" onclick="cancelProcess('generate')" class="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Cancel</button>
             </div>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
+        <div class="w-full rounded-full h-3" style="background: var(--bg-card-alt);">
             <div id="generate-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         <div id="generate-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
     </div>
 
     <!-- Punt Review Progress -->
-    <div id="puntreview-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+    <div id="puntreview-progress" class="hidden rounded-lg shadow p-4 space-y-3" style="background: var(--bg-card);">
         <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-gray-900">Generating Punt Review</h3>
+            <h3 class="font-semibold" style="color: var(--text-primary);">Generating Punt Review</h3>
             <div class="flex items-center gap-3">
-                <span id="puntreview-pct" class="text-sm text-gray-500">0%</span>
+                <span id="puntreview-pct" class="text-sm" style="color: var(--text-secondary);">0%</span>
                 <button id="puntreview-cancel" onclick="cancelProcess('puntreview')" class="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Cancel</button>
             </div>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
+        <div class="w-full rounded-full h-3" style="background: var(--bg-card-alt);">
             <div id="puntreview-bar" class="bg-punty-gold h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         <div id="puntreview-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
     </div>
 
     <!-- Speed Map Progress -->
-    <div id="speedmap-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+    <div id="speedmap-progress" class="hidden rounded-lg shadow p-4 space-y-3" style="background: var(--bg-card);">
         <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-gray-900">Fetching Speed Maps</h3>
+            <h3 class="font-semibold" style="color: var(--text-primary);">Fetching Speed Maps</h3>
             <div class="flex items-center gap-3">
-                <span id="speedmap-pct" class="text-sm text-gray-500">0%</span>
+                <span id="speedmap-pct" class="text-sm" style="color: var(--text-secondary);">0%</span>
                 <button id="speedmap-cancel" onclick="cancelProcess('speedmap')" class="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Cancel</button>
             </div>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-3">
+        <div class="w-full rounded-full h-3" style="background: var(--bg-card-alt);">
             <div id="speedmap-bar" class="bg-punty-coral h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         <div id="speedmap-log" class="text-sm space-y-1 max-h-48 overflow-y-auto font-mono"></div>
     </div>
 
     <!-- Results Progress -->
-    <div id="results-progress" class="hidden bg-white rounded-lg shadow p-4 space-y-3">
+    <div id="results-progress" class="hidden rounded-lg shadow p-4 space-y-3" style="background: var(--bg-card);">
         <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-gray-900">Checking Results</h3>
+            <h3 class="font-semibold" style="color: var(--text-primary);">Checking Results</h3>
             <div class="flex items-center gap-3">
                 <span id="results-status" class="text-sm text-gray-500">
                     <span class="inline-block w-4 h-4 border-2 border-punty-coral border-t-transparent rounded-full animate-spin align-middle"></span>
@@ -138,13 +138,13 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Races -->
         <div class="lg:col-span-2">
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h2 class="text-lg font-semibold text-gray-900">
+            <div style="background: var(--bg-card);" class="rounded-lg shadow">
+                <div class="px-6 py-4" style="border-bottom: 1px solid var(--border-subtle);">
+                    <h2 class="text-lg font-semibold" style="color: var(--text-primary);">
                         Races ({{ meeting.races|length }})
                     </h2>
                 </div>
-                <div class="divide-y divide-gray-200">
+                <div style="border-color: var(--border-subtle);" class="divide-y">
                     {% for race in meeting.races|sort(attribute='race_number') %}
                     <div class="p-6" x-data="{ open: false, detail: null }">
                         <div class="flex justify-between items-start cursor-pointer" @click="open = !open">
@@ -608,19 +608,19 @@
         <!-- Sidebar -->
         <div class="space-y-4">
             <!-- Generated Content -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h2 class="text-lg font-semibold text-gray-900">Generated Content</h2>
+            <div style="background: var(--bg-card);" class="rounded-lg shadow">
+                <div class="px-6 py-4" style="border-bottom: 1px solid var(--border-subtle);">
+                    <h2 class="text-lg font-semibold" style="color: var(--text-primary);">Generated Content</h2>
                 </div>
                 <div class="p-4">
                     {% if content_items %}
-                    <ul class="divide-y divide-gray-200">
+                    <ul style="border-color: var(--border-subtle);" class="divide-y">
                         {% for item in content_items[:10] %}
                         <li class="py-3">
-                            <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:bg-gray-50 -mx-2 px-2 py-1 rounded">
+                            <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:opacity-80 -mx-2 px-2 py-1 rounded">
                                 <div>
-                                    <p class="font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</p>
-                                    <p class="text-xs text-gray-500">{{ item.created_at|melb('%H:%M') }}</p>
+                                    <p class="font-medium" style="color: var(--text-primary);">{{ item.content_type|replace('_', ' ')|title }}</p>
+                                    <p class="text-xs" style="color: var(--text-secondary);">{{ item.created_at|melb('%H:%M') }}</p>
                                 </div>
                                 {% set status_colors = {
                                     'draft': 'bg-gray-100 text-gray-600',
@@ -637,22 +637,22 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <p class="text-center text-gray-500 py-4">No content generated yet</p>
+                    <p class="text-center py-4" style="color: var(--text-secondary);">No content generated yet</p>
                     {% endif %}
                 </div>
             </div>
 
             <!-- Meeting Info -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Meeting Info</h3>
+            <div style="background: var(--bg-card);" class="rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4" style="color: var(--text-primary);">Meeting Info</h3>
                 <dl class="space-y-3 text-sm">
                     <div>
-                        <dt class="text-gray-500">Track Condition</dt>
-                        <dd class="font-medium">{{ meeting.track_condition or 'TBC' }}</dd>
+                        <dt style="color: var(--text-secondary);">Track Condition</dt>
+                        <dd class="font-medium" style="color: var(--text-primary);">{{ meeting.track_condition or 'TBC' }}</dd>
                     </div>
                     <div>
-                        <dt class="text-gray-500">Weather</dt>
-                        <dd class="font-medium">
+                        <dt style="color: var(--text-secondary);">Weather</dt>
+                        <dd class="font-medium" style="color: var(--text-primary);">
                             {{ meeting.weather_condition or meeting.weather or 'TBC' }}
                             {% if meeting.weather_temp %} &mdash; {{ meeting.weather_temp }}&deg;C{% endif %}
                         </dd>
