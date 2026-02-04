@@ -2,9 +2,10 @@
 
 import json
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -146,18 +147,23 @@ async def bulk_scrape_stream():
     from punty.scrapers.orchestrator import scrape_meeting_full_stream
     from punty.models.database import async_session
 
+    logger = logging.getLogger(__name__)
+
     async def event_generator():
         async with async_session() as db:
             # Get selected meetings
             today = melb_today()
+            logger.info(f"Bulk scrape: querying for date={today}")
             result = await db.execute(
                 select(Meeting).where(
                     Meeting.date == today,
                     Meeting.selected == True,
-                    Meeting.meeting_type != "trial"
+                    # Include NULL meeting_type (legacy) and non-trial meetings
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
                 ).order_by(Meeting.venue)
             )
             meetings = result.scalars().all()
+            logger.info(f"Bulk scrape: found {len(meetings)} meetings")
 
             if not meetings:
                 yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
@@ -211,7 +217,7 @@ async def bulk_speed_maps_stream():
                 select(Meeting).where(
                     Meeting.date == today,
                     Meeting.selected == True,
-                    Meeting.meeting_type != "trial"
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
                 ).order_by(Meeting.venue)
             )
             meetings = result.scalars().all()
@@ -260,7 +266,7 @@ async def bulk_generate_early_mail_stream():
                 select(Meeting).where(
                     Meeting.date == today,
                     Meeting.selected == True,
-                    Meeting.meeting_type != "trial"
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
                 ).order_by(Meeting.venue)
             )
             meetings = result.scalars().all()
