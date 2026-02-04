@@ -10,6 +10,15 @@
             <h1 class="text-3xl font-bold text-gray-900">Content</h1>
             <p class="text-gray-500">All generated content from Punty</p>
         </div>
+        {% if status_counts.get('pending_review', 0) > 0 %}
+        <button hx-post="/api/content/reject-all-pending"
+                hx-confirm="Reject all {{ status_counts.get('pending_review', 0) }} pending item(s)?"
+                hx-swap="none"
+                hx-on::after-request="if(event.detail.successful) { showToast('All pending rejected', 'info'); setTimeout(() => window.location.reload(), 500); } else showToast('Failed', 'error');"
+                class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-500 text-sm">
+            Reject All Pending ({{ status_counts.get('pending_review', 0) }})
+        </button>
+        {% endif %}
     </div>
 
     <!-- Status Filters -->
