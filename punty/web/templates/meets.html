@@ -100,8 +100,7 @@
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Active</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Race 1</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Track</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Weather</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Races</th>
@@ -130,11 +129,16 @@
                                 {% endif %}
                             </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ meeting.date.strftime('%a %d %b %Y') if meeting.date else '-' }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            —
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% set first_race = meeting.races|sort(attribute='race_number')|first if meeting.races else none %}
+                            {% if first_race and first_race.start_time %}
+                            <div class="flex flex-col">
+                                <span class="text-gray-700 font-medium">{{ first_race.start_time.strftime('%H:%M') }}</span>
+                                <span class="race-countdown text-xs text-punty-coral font-mono" data-start-time="{{ first_race.start_time|melb_iso }}"></span>
+                            </div>
+                            {% else %}
+                            <span class="text-gray-400">TBC</span>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             {% if meeting.track_condition %}
@@ -159,7 +163,7 @@
                     </tr>
                     {% else %}
                     <tr id="empty-row">
-                        <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                        <td colspan="7" class="px-6 py-8 text-center text-gray-500">
                             <p class="text-4xl mb-2">&#x1F3C7;</p>
                             <p>No meetings yet</p>
                             <p class="text-sm">Click "Refresh Calendar" to scrape today's meetings</p>
@@ -651,5 +655,42 @@
     }
 
     updateSelectedCount();
+
+    // Race countdown timer
+    function updateCountdowns() {
+        const countdowns = document.querySelectorAll('.race-countdown');
+        const now = new Date();
+
+        countdowns.forEach(el => {
+            const startTime = el.dataset.startTime;
+            if (!startTime) return;
+
+            const raceTime = new Date(startTime);
+            const diff = raceTime - now;
+
+            if (diff <= 0) {
+                el.textContent = 'Started';
+                el.classList.remove('text-punty-coral');
+                el.classList.add('text-gray-400');
+            } else {
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+                if (hours > 0) {
+                    el.textContent = `${hours}h ${mins}m`;
+                } else if (mins > 0) {
+                    el.textContent = `${mins}m ${secs}s`;
+                } else {
+                    el.textContent = `${secs}s`;
+                    el.classList.add('text-red-500', 'animate-pulse');
+                }
+            }
+        });
+    }
+
+    // Update every second
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
 </script>
 {% endblock %}

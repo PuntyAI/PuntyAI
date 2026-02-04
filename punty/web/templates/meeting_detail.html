@@ -27,6 +27,15 @@
                 {% endif %}
             </div>
         </div>
+        <!-- Race 1 Countdown -->
+        {% set first_race = meeting.races|sort(attribute='race_number')|first if meeting.races else none %}
+        {% if first_race and first_race.start_time %}
+        <div class="text-right" style="font-family: Orbitron, sans-serif;">
+            <div class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">Race 1</div>
+            <div class="text-lg font-bold" style="color: var(--cyan);">{{ first_race.start_time.strftime('%H:%M') }}</div>
+            <div id="race1-countdown" class="race-countdown text-sm font-mono" style="color: var(--magenta);" data-start-time="{{ first_race.start_time|melb_iso }}"></div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Data Incomplete Warning Banner -->
@@ -1203,5 +1212,42 @@ fetch('/api/results/monitor-status')
         }
     })
     .catch(function() {});
+
+// Race countdown timer
+function updateCountdowns() {
+    var countdowns = document.querySelectorAll('.race-countdown');
+    var now = new Date();
+
+    countdowns.forEach(function(el) {
+        var startTime = el.dataset.startTime;
+        if (!startTime) return;
+
+        var raceTime = new Date(startTime);
+        var diff = raceTime - now;
+
+        if (diff <= 0) {
+            el.textContent = 'Started';
+            el.style.color = 'var(--text-muted)';
+        } else {
+            var hours = Math.floor(diff / (1000 * 60 * 60));
+            var mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            var secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+            if (hours > 0) {
+                el.textContent = hours + 'h ' + mins + 'm';
+            } else if (mins > 0) {
+                el.textContent = mins + 'm ' + secs + 's';
+            } else {
+                el.textContent = secs + 's';
+                el.style.color = 'var(--red, #ef4444)';
+                el.classList.add('animate-pulse');
+            }
+        }
+    });
+}
+
+// Update every second
+updateCountdowns();
+setInterval(updateCountdowns, 1000);
 </script>
 {% endblock %}

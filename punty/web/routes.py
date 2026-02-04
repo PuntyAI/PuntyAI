@@ -35,7 +35,17 @@ def _melb(dt, fmt='%H:%M'):
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(MELB_TZ).strftime(fmt)
 
+def _melb_iso(dt):
+    """Convert naive Melbourne datetime to ISO format with timezone for JavaScript."""
+    if dt is None:
+        return ''
+    # The datetime is stored as naive Melbourne local time
+    # Attach Melbourne timezone then convert to ISO format
+    melb_dt = dt.replace(tzinfo=MELB_TZ)
+    return melb_dt.isoformat()
+
 templates.env.filters["melb"] = _melb
+templates.env.filters["melb_iso"] = _melb_iso
 
 
 @router.get("/", response_class=HTMLResponse)
