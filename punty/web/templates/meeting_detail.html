@@ -431,12 +431,12 @@
                                                 <!-- Multi-provider odds -->
                                                 {% if runner.odds_tab or runner.odds_sportsbet or runner.odds_bet365 or runner.odds_ladbrokes %}
                                                 <div class="col-span-2 md:col-span-4">
-                                                    <span class="text-gray-500">Odds:</span>
-                                                    {% if runner.odds_tab %}<span class="ml-1 px-1.5 py-0.5 bg-blue-50 rounded">TAB ${{ "%.2f"|format(runner.odds_tab) }}</span>{% endif %}
-                                                    {% if runner.odds_sportsbet %}<span class="ml-1 px-1.5 py-0.5 bg-green-50 rounded">SB ${{ "%.2f"|format(runner.odds_sportsbet) }}</span>{% endif %}
-                                                    {% if runner.odds_bet365 %}<span class="ml-1 px-1.5 py-0.5 bg-yellow-50 rounded">B365 ${{ "%.2f"|format(runner.odds_bet365) }}</span>{% endif %}
-                                                    {% if runner.odds_ladbrokes %}<span class="ml-1 px-1.5 py-0.5 bg-red-50 rounded">LAD ${{ "%.2f"|format(runner.odds_ladbrokes) }}</span>{% endif %}
-                                                    {% if runner.odds_betfair %}<span class="ml-1 px-1.5 py-0.5 bg-purple-50 rounded">BF ${{ "%.2f"|format(runner.odds_betfair) }}</span>{% endif %}
+                                                    <span style="color: var(--text-secondary);">Odds:</span>
+                                                    {% if runner.odds_tab %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style="background: #00a651; color: #000;">TAB ${{ "%.2f"|format(runner.odds_tab) }}</span>{% endif %}
+                                                    {% if runner.odds_sportsbet %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style="background: #ff6b00; color: #000;">SB ${{ "%.2f"|format(runner.odds_sportsbet) }}</span>{% endif %}
+                                                    {% if runner.odds_bet365 %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style="background: #ffdf00; color: #000;">B365 ${{ "%.2f"|format(runner.odds_bet365) }}</span>{% endif %}
+                                                    {% if runner.odds_ladbrokes %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style="background: #ec1c24; color: #fff;">LAD ${{ "%.2f"|format(runner.odds_ladbrokes) }}</span>{% endif %}
+                                                    {% if runner.odds_betfair %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style="background: #ffb80c; color: #000;">BF ${{ "%.2f"|format(runner.odds_betfair) }}</span>{% endif %}
                                                 </div>
                                                 {% endif %}
                                             </div>
