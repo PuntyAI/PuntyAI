@@ -11,7 +11,22 @@
                 <a href="/meets" class="hover:text-punty-coral" style="color: var(--text-secondary);">Meets</a> /
                 <span>{{ meeting.venue }}</span>
             </nav>
-            <h1 style="font-family: Orbitron, sans-serif; font-size: 1.8rem; font-weight: 700; letter-spacing: 1px;">{{ meeting.venue }}</h1>
+            <!-- Meeting Selector Dropdown -->
+            <div class="relative inline-block">
+                <select id="meeting-selector" onchange="switchMeeting(this.value)"
+                        style="font-family: Orbitron, sans-serif; font-size: 1.8rem; font-weight: 700; letter-spacing: 1px;
+                               background: transparent; border: none; color: var(--text-primary);
+                               cursor: pointer; appearance: none; padding-right: 2rem;"
+                        class="hover:text-punty-coral focus:outline-none">
+                    {% for m in all_meetings %}
+                    <option value="{{ m.id }}" {% if m.id == meeting.id %}selected{% endif %}
+                            style="background: var(--bg-card); color: var(--text-primary); font-size: 1rem;">
+                        {{ m.venue }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <span style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--magenta);">&#x25BC;</span>
+            </div>
             <div class="flex flex-wrap gap-4 mt-1" style="font-family: Rajdhani, sans-serif; font-size: 0.9rem; color: var(--text-secondary);">
                 <span>{{ meeting.date.strftime('%A, %d %B %Y') if meeting.date else '' }}</span>
                 {% if meeting.track_condition %}
@@ -1212,6 +1227,11 @@ fetch('/api/results/monitor-status')
         }
     })
     .catch(function() {});
+
+// Meeting switcher
+function switchMeeting(meetingId) {
+    window.location.href = '/meets/' + meetingId;
+}
 
 // Race countdown timer
 function updateCountdowns() {

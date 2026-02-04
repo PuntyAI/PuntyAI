@@ -156,6 +156,15 @@ async def meeting_detail(
             status_code=404,
         )
 
+    # Get all meetings for the same date (for the meeting switcher dropdown)
+    all_meetings_result = await db.execute(
+        select(Meeting).where(
+            Meeting.date == meeting.date,
+            Meeting.meeting_type.in_(["race", None]),
+        ).order_by(Meeting.venue)
+    )
+    all_meetings = all_meetings_result.scalars().all()
+
     # Get content for this meeting
     result = await db.execute(
         select(Content).where(Content.meeting_id == meeting_id).order_by(Content.created_at.desc())
@@ -194,6 +203,7 @@ async def meeting_detail(
         {
             "request": request,
             "meeting": meeting,
+            "all_meetings": all_meetings,
             "content_items": content_items,
             "picks_by_race": picks_by_race,
             "meeting_picks": meeting_picks,
@@ -266,11 +276,33 @@ async def review_detail(
             status_code=404,
         )
 
+    # Get all content items from the same date for prev/next navigation
+    today = melb_now().date()
+    all_content_result = await db.execute(
+        select(Content)
+        .where(Content.meeting_id.like(f"%-{today.isoformat()}%"))
+        .order_by(Content.meeting_id, Content.created_at.desc())
+    )
+    all_content = all_content_result.scalars().all()
+
+    # Find prev/next content
+    prev_content = None
+    next_content = None
+    for i, c in enumerate(all_content):
+        if c.id == content_id:
+            if i > 0:
+                prev_content = all_content[i - 1]
+            if i < len(all_content) - 1:
+                next_content = all_content[i + 1]
+            break
+
     return templates.TemplateResponse(
         "review_detail.html",
         {
             "request": request,
             "content": content,
+            "prev_content": prev_content,
+            "next_content": next_content,
         },
     )
 

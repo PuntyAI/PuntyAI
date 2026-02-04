@@ -16,7 +16,34 @@
             </h1>
             <p class="text-gray-500">{{ content.meeting_id }}</p>
         </div>
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center space-x-4">
+            <!-- Prev/Next Navigation -->
+            <div class="flex items-center space-x-2">
+                {% if prev_content %}
+                <a href="/review/{{ prev_content.id }}"
+                   class="px-3 py-1.5 rounded-lg border border-gray-600 hover:bg-gray-700 text-sm flex items-center gap-1"
+                   title="{{ prev_content.meeting_id }}">
+                    <span>&#x25C0;</span> Prev
+                </a>
+                {% else %}
+                <span class="px-3 py-1.5 rounded-lg border border-gray-700 text-gray-600 text-sm flex items-center gap-1 cursor-not-allowed">
+                    <span>&#x25C0;</span> Prev
+                </span>
+                {% endif %}
+
+                {% if next_content %}
+                <a href="/review/{{ next_content.id }}"
+                   class="px-3 py-1.5 rounded-lg border border-gray-600 hover:bg-gray-700 text-sm flex items-center gap-1"
+                   title="{{ next_content.meeting_id }}">
+                    Next <span>&#x25B6;</span>
+                </a>
+                {% else %}
+                <span class="px-3 py-1.5 rounded-lg border border-gray-700 text-gray-600 text-sm flex items-center gap-1 cursor-not-allowed">
+                    Next <span>&#x25B6;</span>
+                </span>
+                {% endif %}
+            </div>
+
             {% set status_colors = {
                 'draft': 'bg-gray-100 text-gray-800',
                 'pending_review': 'bg-yellow-100 text-yellow-800',
