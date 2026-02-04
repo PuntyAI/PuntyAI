@@ -38,7 +38,7 @@ async def daily_morning_prep() -> dict:
     from punty.models.database import async_session
     from punty.models.meeting import Meeting, Race, Runner
     from punty.config import melb_today, melb_now
-    from punty.scrapers.calendar import scrape_todays_meetings
+    from punty.scrapers.calendar import scrape_calendar
     from punty.scrapers.orchestrator import scrape_meeting, scrape_speed_maps
     from punty.ai.generator import ContentGenerator
     from sqlalchemy import select, or_
@@ -59,10 +59,26 @@ async def daily_morning_prep() -> dict:
         # Step 1: Scrape calendar
         try:
             logger.info("Step 1: Scraping racing calendar...")
-            meetings_data = await scrape_todays_meetings(db)
+            meetings_data = await scrape_calendar(today)
             results["calendar_scraped"] = True
             results["meetings_found"] = len(meetings_data) if meetings_data else 0
             logger.info(f"Found {results['meetings_found']} meetings")
+
+            # Create Meeting records for any new meetings found
+            from punty.models.meeting import Meeting
+            for m in meetings_data:
+                meeting_id = f"{m['venue'].lower().replace(' ', '-')}-{today.isoformat()}"
+                existing = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+                if not existing.scalar_one_or_none():
+                    new_meeting = Meeting(
+                        id=meeting_id,
+                        venue=m['venue'],
+                        date=today,
+                        meeting_type=m.get('meeting_type', 'race'),
+                    )
+                    db.add(new_meeting)
+                    logger.info(f"Created meeting: {m['venue']}")
+            await db.commit()
         except Exception as e:
             logger.error(f"Calendar scrape failed: {e}")
             results["errors"].append(f"Calendar: {str(e)}")
