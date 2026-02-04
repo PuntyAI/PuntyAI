@@ -26,8 +26,15 @@
     <!-- Quick-select buttons -->
     <div class="bg-punty-card rounded-lg shadow p-4 flex flex-wrap gap-2 items-center">
         <span class="text-sm font-medium text-gray-700 mr-2">Quick select:</span>
-        <button onclick="quickSelect('all')" class="text-xs bg-punty-card2 hover:bg-punty-card2/80 px-3 py-1.5 rounded-md">Select All</button>
-        <button onclick="quickSelect('none')" class="text-xs bg-punty-card2 hover:bg-punty-card2/80 px-3 py-1.5 rounded-md">Clear All</button>
+        <!-- Active All Toggle -->
+        <button onclick="toggleActiveAll(this)" id="btn-active-all"
+                class="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-100 hover:bg-purple-200 text-purple-800 font-medium">
+            <span class="relative inline-flex h-4 w-7 items-center rounded-full transition-colors bg-gray-300" id="active-all-toggle">
+                <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform translate-x-0.5" id="active-all-dot"></span>
+            </span>
+            <span id="active-all-label">Active All</span>
+        </button>
+        <span class="text-gray-300 mx-1">|</span>
         <button onclick="quickSelect('VIC')" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-md">All VIC</button>
         <button onclick="quickSelect('NSW')" class="text-xs bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded-md">All NSW</button>
         <button onclick="quickSelect('QLD')" class="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded-md">All QLD</button>
@@ -341,6 +348,7 @@
                 selected ? 'translate-x-6' : 'translate-x-1'
             );
             updateSelectedCount();
+            updateActiveAllToggle();
         } catch (e) {
             showToast('Failed to toggle selection', 'error');
         }
@@ -761,6 +769,74 @@
     }
 
     updateSelectedCount();
+    updateActiveAllToggle();
+
+    // Active All toggle
+    async function toggleActiveAll(btn) {
+        const toggleEl = document.getElementById('active-all-toggle');
+        const dotEl = document.getElementById('active-all-dot');
+        const labelEl = document.getElementById('active-all-label');
+
+        // Check current state (is everything selected?)
+        const allToggles = document.querySelectorAll('[data-selected]');
+        const allSelected = Array.from(allToggles).every(t => t.dataset.selected === 'true');
+
+        // Toggle to opposite state
+        const activate = !allSelected;
+
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+
+        try {
+            const resp = await fetch(`/api/meets/bulk/select-all?activate=${activate}`, { method: 'PUT' });
+            const data = await resp.json();
+
+            if (data.status === 'ok') {
+                // Update all toggles in UI
+                allToggles.forEach(toggle => {
+                    toggle.dataset.selected = activate ? 'true' : 'false';
+                    toggle.className = toggle.className.replace(
+                        activate ? 'bg-gray-300' : 'bg-punty-coral',
+                        activate ? 'bg-punty-coral' : 'bg-gray-300'
+                    );
+                    const dot = toggle.querySelector('span');
+                    dot.className = dot.className.replace(
+                        activate ? 'translate-x-1' : 'translate-x-6',
+                        activate ? 'translate-x-6' : 'translate-x-1'
+                    );
+                });
+
+                updateActiveAllToggle();
+                updateSelectedCount();
+                showToast(`${data.count} meetings ${activate ? 'activated' : 'deactivated'}`, 'success');
+            }
+        } catch (e) {
+            showToast('Failed to toggle all meetings', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50');
+        }
+    }
+
+    function updateActiveAllToggle() {
+        const toggleEl = document.getElementById('active-all-toggle');
+        const dotEl = document.getElementById('active-all-dot');
+        const labelEl = document.getElementById('active-all-label');
+
+        const allToggles = document.querySelectorAll('[data-selected]');
+        const selectedCount = Array.from(allToggles).filter(t => t.dataset.selected === 'true').length;
+        const allSelected = selectedCount === allToggles.length && allToggles.length > 0;
+
+        if (allSelected) {
+            toggleEl.className = 'relative inline-flex h-4 w-7 items-center rounded-full transition-colors bg-purple-600';
+            dotEl.className = 'inline-block h-3 w-3 transform rounded-full bg-white transition-transform translate-x-3.5';
+            labelEl.textContent = 'All Active';
+        } else {
+            toggleEl.className = 'relative inline-flex h-4 w-7 items-center rounded-full transition-colors bg-gray-300';
+            dotEl.className = 'inline-block h-3 w-3 transform rounded-full bg-white transition-transform translate-x-0.5';
+            labelEl.textContent = 'Active All';
+        }
+    }
 
     // Race countdown timer
     function updateCountdowns() {

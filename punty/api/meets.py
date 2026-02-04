@@ -64,6 +64,33 @@ async def check_incomplete_data(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.put("/bulk/select-all")
+async def bulk_select_all(activate: bool = True, db: AsyncSession = Depends(get_db)):
+    """Select or deselect all today's meetings at once."""
+    today = melb_today()
+    result = await db.execute(
+        select(Meeting).where(
+            Meeting.date == today,
+            or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
+        )
+    )
+    meetings = result.scalars().all()
+
+    count = 0
+    for meeting in meetings:
+        if meeting.selected != activate:
+            meeting.selected = activate
+            count += 1
+
+    await db.commit()
+    return {
+        "status": "ok",
+        "action": "activated" if activate else "deactivated",
+        "count": count,
+        "total": len(meetings),
+    }
+
+
 # =============================================================================
 # BULK ENDPOINTS - Must be defined BEFORE /{meeting_id} routes to avoid
 # FastAPI matching "bulk" as a meeting_id

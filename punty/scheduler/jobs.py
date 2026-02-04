@@ -83,14 +83,9 @@ async def daily_morning_prep() -> dict:
             logger.error(f"Calendar scrape failed: {e}")
             results["errors"].append(f"Calendar: {str(e)}")
 
-        # Step 2: Auto-select metro meetings
+        # Step 2: Auto-select ALL meetings
         try:
-            logger.info("Step 2: Auto-selecting metro meetings...")
-            metro_venues = [
-                'flemington', 'caulfield', 'moonee valley', 'sandown',
-                'randwick', 'rosehill', 'warwick farm', 'canterbury',
-                'doomben', 'eagle farm', 'morphettville', 'ascot'
-            ]
+            logger.info("Step 2: Auto-selecting all meetings...")
 
             result = await db.execute(
                 select(Meeting).where(
@@ -100,14 +95,15 @@ async def daily_morning_prep() -> dict:
             )
             meetings = result.scalars().all()
 
+            selected_count = 0
             for meeting in meetings:
-                venue_lower = meeting.venue.lower()
-                is_metro = any(metro in venue_lower for metro in metro_venues)
-                if is_metro and not meeting.selected:
+                if not meeting.selected:
                     meeting.selected = True
+                    selected_count += 1
                     logger.info(f"Auto-selected: {meeting.venue}")
 
             await db.commit()
+            logger.info(f"Auto-selected {selected_count} meetings")
         except Exception as e:
             logger.error(f"Auto-select failed: {e}")
             results["errors"].append(f"Auto-select: {str(e)}")
@@ -144,6 +140,38 @@ async def daily_morning_prep() -> dict:
         except Exception as e:
             logger.error(f"Data scrape step failed: {e}")
             results["errors"].append(f"Data scrape: {str(e)}")
+
+        # Step 3b: Deactivate meetings without speed maps
+        try:
+            logger.info("Step 3b: Checking for meetings without speed maps...")
+            from punty.models.meeting import Runner
+
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type == "race")
+                )
+            )
+            selected_meetings = result.scalars().all()
+
+            deactivated = []
+            for meeting in selected_meetings:
+                # Check if meeting has speed map data (False = incomplete, None = not attempted)
+                if meeting.speed_map_complete is not True:
+                    meeting.selected = False
+                    deactivated.append(meeting.venue)
+                    logger.info(f"Deactivated {meeting.venue} - no speed map data")
+
+            if deactivated:
+                await db.commit()
+                results["deactivated_no_speedmaps"] = deactivated
+                logger.info(f"Deactivated {len(deactivated)} meetings without speed maps: {deactivated}")
+            else:
+                logger.info("All meetings have speed map data")
+        except Exception as e:
+            logger.error(f"Speed map check failed: {e}")
+            results["errors"].append(f"Speed map check: {str(e)}")
 
         # Step 4: Generate early mail for selected meetings (if enabled)
         from punty.models.settings import AppSettings
