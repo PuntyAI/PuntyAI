@@ -24,6 +24,8 @@ RUNNER_FIELDS = [
     "gear", "gear_changes", "stewards_comment", "comment_long", "comment_short",
     "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes",
     "odds_betfair", "odds_flucs", "trainer_location", "form_history",
+    # Punting Form insights
+    "pf_speed_rank", "pf_settle", "pf_map_factor", "pf_jockey_factor",
 ]
 
 # Race fields from scraper
@@ -243,8 +245,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
 async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:
     """Scrape speed maps for all races in a meeting, yielding progress events.
 
-    Uses racing.com for Victorian meetings, falls back to Racing and Sports
-    for interstate meetings or when racing.com returns no data.
+    Uses Punting Form as PRIMARY source (has speed rank, settle, map factor, jockey factor).
+    Falls back to racing.com if Punting Form fails or has no data.
     """
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
@@ -274,9 +276,9 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
     # Track how many positions we found
     total_positions_found = 0
 
-    # Helper to update runners with positions
-    async def update_runner_positions(event: dict) -> int:
-        """Update runners with speed map positions. Returns count of positions set."""
+    # Helper to update runners with positions and PF insights
+    async def update_runner_positions(event: dict, include_pf_insights: bool = False) -> int:
+        """Update runners with speed map positions and optionally PF insights. Returns count of positions set."""
         count = 0
         if event.get("positions"):
             race_num = event["race_number"]
@@ -297,40 +299,66 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
                 if runner:
                     runner.speed_map_position = norm_pos
                     count += 1
+
+                    # Store Punting Form insights if available
+                    if include_pf_insights:
+                        if pos.get("pf_speed_rank"):
+                            try:
+                                runner.pf_speed_rank = int(pos["pf_speed_rank"])
+                            except (ValueError, TypeError):
+                                pass
+                        if pos.get("pf_settle"):
+                            try:
+                                runner.pf_settle = float(pos["pf_settle"])
+                            except (ValueError, TypeError):
+                                pass
+                        if pos.get("pf_map_factor"):
+                            try:
+                                runner.pf_map_factor = float(pos["pf_map_factor"])
+                            except (ValueError, TypeError):
+                                pass
+                        if pos.get("pf_jockey_factor"):
+                            try:
+                                runner.pf_jockey_factor = float(pos["pf_jockey_factor"])
+                            except (ValueError, TypeError):
+                                pass
         return count
 
-    # Always try racing.com first - they have data for all Australian meetings
+    # PRIMARY: Try Punting Form first (has richer data)
+    pf_failed = False
     try:
-        from punty.scrapers.racing_com import RacingComScraper
-        scraper = RacingComScraper()
-        try:
-            async for event in scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
-                positions_set = await update_runner_positions(event)
-                total_positions_found += positions_set
-                yield {k: v for k, v in event.items() if k != "positions"}
-        finally:
-            await scraper.close()
+        from punty.scrapers.punting_form import PuntingFormScraper
+        pf_scraper = await PuntingFormScraper.from_settings(db)
+
+        async for event in pf_scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
+            positions_set = await update_runner_positions(event, include_pf_insights=True)
+            total_positions_found += positions_set
+            yield {k: v for k, v in event.items() if k != "positions"}
+
     except Exception as e:
-        logger.error(f"Racing.com speed map scrape failed: {e}")
-        yield {"step": 0, "total": 1, "label": f"Racing.com error: {e}", "status": "error"}
+        logger.warning(f"Punting Form speed map scrape failed: {e}")
+        pf_failed = True
+        yield {"step": 0, "total": race_count + 1, "label": f"Punting Form unavailable: {e}", "status": "running"}
 
-    # Fallback to Punting Form if racing.com found nothing
-    if total_positions_found == 0:
-        logger.info(f"No racing.com data for {meeting.venue}, trying Punting Form...")
-        yield {"step": 0, "total": race_count + 1, "label": "Trying Punting Form fallback...", "status": "running"}
+    # FALLBACK: Use racing.com if Punting Form failed or found nothing
+    if pf_failed or total_positions_found == 0:
+        if not pf_failed:
+            logger.info(f"No Punting Form data for {meeting.venue}, trying racing.com fallback...")
+            yield {"step": 0, "total": race_count + 1, "label": "Trying racing.com fallback...", "status": "running"}
 
         try:
-            from punty.scrapers.punting_form import PuntingFormScraper
-            pf_scraper = await PuntingFormScraper.from_settings(db)
-
-            async for event in pf_scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
-                positions_set = await update_runner_positions(event)
-                total_positions_found += positions_set
-                yield {k: v for k, v in event.items() if k != "positions"}
-
+            from punty.scrapers.racing_com import RacingComScraper
+            scraper = RacingComScraper()
+            try:
+                async for event in scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
+                    positions_set = await update_runner_positions(event, include_pf_insights=False)
+                    total_positions_found += positions_set
+                    yield {k: v for k, v in event.items() if k != "positions"}
+            finally:
+                await scraper.close()
         except Exception as e:
-            logger.error(f"Punting Form speed map scrape failed: {e}")
-            yield {"step": 0, "total": 1, "label": f"Punting Form fallback failed: {e}", "status": "error"}
+            logger.error(f"Racing.com speed map scrape failed: {e}")
+            yield {"step": 0, "total": 1, "label": f"Racing.com fallback failed: {e}", "status": "error"}
 
     if total_positions_found == 0:
         logger.warning(f"No speed map data found for {meeting.venue} from any source")

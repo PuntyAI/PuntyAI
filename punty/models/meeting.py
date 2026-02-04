@@ -158,6 +158,13 @@ class Runner(Base):
     form: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     career_record: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     speed_map_position: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # Punting Form insights
+    pf_speed_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1-25, lower = faster early speed
+    pf_settle: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Historical avg settling position
+    pf_map_factor: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # >1.0 = pace advantage, <1.0 = disadvantage
+    pf_jockey_factor: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Jockey effectiveness factor
+
     current_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     opening_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scratched: Mapped[bool] = mapped_column(default=False)
@@ -245,6 +252,10 @@ class Runner(Base):
             "form": self.form,
             "career_record": self.career_record,
             "speed_map_position": self.speed_map_position,
+            "pf_speed_rank": self.pf_speed_rank,
+            "pf_settle": self.pf_settle,
+            "pf_map_factor": self.pf_map_factor,
+            "pf_jockey_factor": self.pf_jockey_factor,
             "current_odds": self.current_odds,
             "opening_odds": self.opening_odds,
             "scratched": self.scratched,

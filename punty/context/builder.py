@@ -199,6 +199,11 @@ class ContextBuilder:
                 if include_speed_maps:
                     runner_data["speed_map_position"] = runner.speed_map_position
                     runner_data["speed_value"] = runner.speed_value
+                    # Punting Form insights
+                    runner_data["pf_speed_rank"] = runner.pf_speed_rank  # 1-25, lower = faster early speed
+                    runner_data["pf_settle"] = runner.pf_settle  # Historical avg settling position
+                    runner_data["pf_map_factor"] = runner.pf_map_factor  # >1.0 = pace advantage
+                    runner_data["pf_jockey_factor"] = runner.pf_jockey_factor  # Jockey effectiveness
 
             race_context["runners"].append(runner_data)
 
@@ -234,6 +239,9 @@ class ContextBuilder:
             "likely_leaders": [],
             "backmarkers": [],
             "market_movers": [],
+            "pace_advantaged": [],  # Runners with pf_map_factor > 1.0
+            "pace_disadvantaged": [],  # Runners with pf_map_factor < 1.0
+            "early_speed_ranks": [],  # Top 5 by pf_speed_rank
         }
 
         leaders = [r for r in runners if r.speed_map_position == "leader"]
@@ -251,6 +259,29 @@ class ContextBuilder:
 
         analysis["likely_leaders"] = [r.horse_name for r in leaders]
         analysis["backmarkers"] = [r.horse_name for r in backmarkers]
+
+        # Punting Form map factor analysis
+        for runner in runners:
+            if runner.pf_map_factor:
+                if runner.pf_map_factor >= 1.1:
+                    analysis["pace_advantaged"].append({
+                        "horse": runner.horse_name,
+                        "map_factor": runner.pf_map_factor,
+                    })
+                elif runner.pf_map_factor <= 0.9:
+                    analysis["pace_disadvantaged"].append({
+                        "horse": runner.horse_name,
+                        "map_factor": runner.pf_map_factor,
+                    })
+
+        # Top early speed runners by PF speed rank
+        runners_with_speed = [r for r in runners if r.pf_speed_rank]
+        if runners_with_speed:
+            sorted_by_speed = sorted(runners_with_speed, key=lambda r: r.pf_speed_rank)[:5]
+            analysis["early_speed_ranks"] = [
+                {"horse": r.horse_name, "speed_rank": r.pf_speed_rank}
+                for r in sorted_by_speed
+            ]
 
         for runner in runners:
             if runner.current_odds and runner.opening_odds:

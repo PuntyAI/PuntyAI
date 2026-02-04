@@ -50,6 +50,11 @@ class AnalysisWeights(Base):
         "pedigree": "low-med",
         "money": "low-med",
         "tipsters_analysis": "high",
+        # Punting Form insights (pace/speed metrics)
+        "pf_map_factor": "high",  # Pace advantage/disadvantage factor
+        "pf_speed_rank": "high",  # Early speed rating (1=fastest)
+        "pf_settle_position": "high",  # Historical settling position
+        "pf_jockey_factor": "med-high",  # Jockey effectiveness metric
     }
 
     WEIGHT_LABELS = {
@@ -73,6 +78,11 @@ class AnalysisWeights(Base):
         "pedigree": "Pedigree / Breeding",
         "money": "Money / Stable Support",
         "tipsters_analysis": "Tipsters & Analysis",
+        # Punting Form insights
+        "pf_map_factor": "PF Pace Advantage (Map Factor)",
+        "pf_speed_rank": "PF Early Speed Rank",
+        "pf_settle_position": "PF Settle Position",
+        "pf_jockey_factor": "PF Jockey Factor",
     }
 
     WEIGHT_OPTIONS = ["low", "low-med", "med", "med-high", "high"]

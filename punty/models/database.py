@@ -46,6 +46,11 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN bet_stake FLOAT",
             "ALTER TABLE meetings ADD COLUMN meeting_type VARCHAR(20)",
             "ALTER TABLE runners ADD COLUMN form_history TEXT",
+            # Punting Form insights
+            "ALTER TABLE runners ADD COLUMN pf_speed_rank INTEGER",
+            "ALTER TABLE runners ADD COLUMN pf_settle FLOAT",
+            "ALTER TABLE runners ADD COLUMN pf_map_factor FLOAT",
+            "ALTER TABLE runners ADD COLUMN pf_jockey_factor FLOAT",
         ]:
             try:
                 await conn.execute(_text(col))

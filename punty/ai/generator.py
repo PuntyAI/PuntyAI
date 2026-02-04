@@ -757,19 +757,31 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             if analysis.get("likely_leaders"):
                 parts.append(f"Leaders: {', '.join(analysis['likely_leaders'])}")
 
+            # Show pace-advantaged/disadvantaged runners from PF data
+            if analysis.get("pace_advantaged"):
+                adv_list = [f"{p['horse']} ({p['map_factor']:.2f})" for p in analysis["pace_advantaged"]]
+                parts.append(f"Pace Advantaged: {', '.join(adv_list)}")
+            if analysis.get("pace_disadvantaged"):
+                dis_list = [f"{p['horse']} ({p['map_factor']:.2f})" for p in analysis["pace_disadvantaged"]]
+                parts.append(f"Pace Disadvantaged: {', '.join(dis_list)}")
+
             parts.append("")
-            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map |")
-            parts.append("|-----|-------|---------|--------|------|------|-----------|")
+            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | PF Speed | PF Settle | PF Map |")
+            parts.append("|-----|-------|---------|--------|------|------|-----------|----------|-----------|--------|")
 
             for runner in race.get("runners", []):
                 if runner.get("scratched"):
                     continue
                 saddlecloth = runner.get("saddlecloth", runner.get('barrier', '-'))
+                # Format PF fields
+                pf_speed = runner.get("pf_speed_rank") or "-"
+                pf_settle = f"{runner['pf_settle']:.1f}" if runner.get("pf_settle") else "-"
+                pf_map = f"{runner['pf_map_factor']:.2f}" if runner.get("pf_map_factor") else "-"
                 parts.append(
                     f"| {saddlecloth} | {runner.get('horse_name', 'Unknown')} | "
                     f"{runner.get('barrier', '-')} | {runner.get('jockey', '-')} | "
                     f"${runner.get('current_odds', '-')} | {runner.get('form', '-')} | "
-                    f"{runner.get('speed_map_position', '-')} |"
+                    f"{runner.get('speed_map_position', '-')} | {pf_speed} | {pf_settle} | {pf_map} |"
                 )
 
             parts.append("")
