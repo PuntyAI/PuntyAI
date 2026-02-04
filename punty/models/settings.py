@@ -214,6 +214,10 @@ class AppSettings(Base):
             "value": "true",
             "description": "Enable end of meet review generation",
         },
+        "enable_results": {
+            "value": "true",
+            "description": "Enable per-race results commentary generation",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:

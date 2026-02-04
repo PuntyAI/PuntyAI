@@ -206,8 +206,17 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
 
-                    generator = ContentGenerator(db)
-                    await generator.generate_results(meeting_id, race_num, save=True)
+                    # Check if results generation is enabled
+                    from punty.models.settings import AppSettings
+                    results_setting = await db.execute(
+                        select(AppSettings).where(AppSettings.key == "enable_results")
+                    )
+                    results_enabled = results_setting.scalar_one_or_none()
+                    if not results_enabled or results_enabled.value == "true":
+                        generator = ContentGenerator(db)
+                        await generator.generate_results(meeting_id, race_num, save=True)
+                    else:
+                        logger.info(f"Results generation disabled — skipping {meeting.venue} R{race_num}")
 
                     self.processed_races[meeting_id].add(race_num)
                     logger.info(f"Processed result: {meeting.venue} R{race_num}")
