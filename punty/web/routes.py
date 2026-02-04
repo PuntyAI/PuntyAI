@@ -63,6 +63,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
     # Calculate race progress for each meeting
     meeting_progress = {}
+    now_naive = now.replace(tzinfo=None)  # For comparing with naive DB times
     for meeting in todays_meetings:
         races = meeting.races or []
         total_races = len(races)
@@ -73,8 +74,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         # Count completed races (Paying or Closed status)
         completed = sum(1 for r in races if r.results_status in ("Paying", "Closed", "Final"))
 
-        # Get first race start time
-        first_race = min(races, key=lambda r: r.start_time or now) if races else None
+        # Get first race start time (start_time is naive Melbourne time in DB)
+        races_with_time = [r for r in races if r.start_time]
+        first_race = min(races_with_time, key=lambda r: r.start_time) if races_with_time else None
         first_start = first_race.start_time if first_race else None
 
         if completed == total_races:
@@ -82,9 +84,10 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         elif completed > 0:
             remaining = total_races - completed
             meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{remaining} to go", "completed": completed, "total": total_races}
-        elif first_start and first_start > now:
-            # Races haven't started - show countdown
-            meeting_progress[meeting.id] = {"status": "not_started", "label": "Starts soon", "first_race_iso": first_start.isoformat()}
+        elif first_start and first_start > now_naive:
+            # Races haven't started - show countdown (attach tz for JS)
+            first_start_aware = first_start.replace(tzinfo=MELB_TZ)
+            meeting_progress[meeting.id] = {"status": "not_started", "label": "Starts soon", "first_race_iso": first_start_aware.isoformat()}
         else:
             meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{total_races} to go", "completed": 0, "total": total_races}
 
