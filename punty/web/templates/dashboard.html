@@ -86,7 +86,7 @@
                                 {% elif progress.status == 'in_progress' %}
                                 <span class="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-medium">{{ progress.label }}</span>
                                 {% elif progress.status == 'not_started' %}
-                                <span class="countdown-timer bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded font-medium" data-start-time="{{ progress.first_race_iso }}">
+                                <span class="countdown-timer bg-amber-100 text-amber-900 text-xs px-2 py-1 rounded font-medium" data-start-time="{{ progress.first_race_iso }}">
                                     {{ progress.label }}
                                 </span>
                                 {% elif progress.status == 'no_races' %}
@@ -473,7 +473,7 @@ function updateMonitorUI() {
             var diff = start - now;
             if (diff <= 0) {
                 el.textContent = 'Starting now';
-                el.classList.remove('bg-amber-100', 'text-amber-700');
+                el.classList.remove('bg-amber-100', 'text-amber-900');
                 el.classList.add('bg-blue-100', 'text-blue-700');
             } else {
                 var hours = Math.floor(diff / (1000 * 60 * 60));
