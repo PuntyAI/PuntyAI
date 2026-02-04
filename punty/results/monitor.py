@@ -85,7 +85,7 @@ class ResultsMonitor:
         self.consecutive_errors = 0
         while self.running:
             try:
-                if self._is_racing_hours() or self._has_unfinished_meetings():
+                if self._is_racing_hours() or await self._has_unfinished_meetings():
                     await self._check_all_meetings()
                     self.last_check = datetime.now(AEST)
                     self.consecutive_errors = 0
@@ -104,12 +104,36 @@ class ResultsMonitor:
             logger.debug(f"Next poll in {interval:.0f}s")
             await asyncio.sleep(interval)
 
-    def _has_unfinished_meetings(self) -> bool:
-        """Check if any tracked meetings still have unprocessed races."""
-        for meeting_id, processed in self.processed_races.items():
-            # If we've started tracking but haven't generated a wrapup, there's work to do
-            if meeting_id not in self.wrapups_generated:
-                return True
+    async def _has_unfinished_meetings(self) -> bool:
+        """Check database for selected meetings with incomplete races."""
+        from punty.models.database import async_session
+        from punty.models.meeting import Meeting, Race
+        from punty.config import melb_today
+
+        async with async_session() as db:
+            today = melb_today()
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                )
+            )
+            meetings = result.scalars().all()
+
+            for meeting in meetings:
+                if meeting.id in self.wrapups_generated:
+                    continue
+                # Check if meeting has races with incomplete results
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting.id)
+                )
+                races = race_result.scalars().all()
+                if not races:
+                    continue
+                # If any race is not Paying/Closed/Final, there's work to do
+                for race in races:
+                    if race.results_status not in ("Paying", "Closed", "Final"):
+                        return True
         return False
 
     async def _check_all_meetings(self):
