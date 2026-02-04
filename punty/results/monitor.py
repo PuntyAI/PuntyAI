@@ -120,7 +120,10 @@ class ResultsMonitor:
             from punty.config import melb_today
             today = melb_today()
             result = await db.execute(
-                select(Meeting).where(Meeting.date == today)
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,  # Only process active/selected meetings
+                )
             )
             meetings = result.scalars().all()
 
