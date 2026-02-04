@@ -31,6 +31,9 @@ class HostnameRoutingMiddleware(BaseHTTPMiddleware):
         # Check if this is a public site host (punty.ai, not app.punty.ai)
         is_public_host = any(host.startswith(h) or host == h for h in PUBLIC_SITE_HOSTS)
 
+        # Debug logging
+        logger.debug(f"HostnameRouting: host={host}, path={path}, is_public={is_public_host}, in_paths={path in PUBLIC_SITE_PATHS}")
+
         # If on public host and requesting a public site path, rewrite to /public prefix
         # This allows both routers to coexist
         if is_public_host and path in PUBLIC_SITE_PATHS:
@@ -40,6 +43,7 @@ class HostnameRoutingMiddleware(BaseHTTPMiddleware):
                 request.scope["path"] = "/public"
             else:
                 request.scope["path"] = f"/public{path}"
+            logger.debug(f"HostnameRouting: rewrote path to {request.scope['path']}")
 
         return await call_next(request)
 
