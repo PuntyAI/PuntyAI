@@ -242,10 +242,19 @@
                         <dt class="text-gray-500">Created</dt>
                         <dd class="font-medium">{{ content.context_snapshot.created_at|melb('%d %b %H:%M') or '-' }}</dd>
                     </div>
-                    {% if content.context_snapshot.significant_changes %}
+                    {% if content.context_snapshot.changes_list %}
                     <div>
-                        <dt class="text-gray-500">Changes</dt>
-                        <dd class="text-orange-600">{{ content.context_snapshot.significant_changes }}</dd>
+                        <dt class="text-gray-500 mb-2">Changes</dt>
+                        <dd class="space-y-1 max-h-48 overflow-y-auto">
+                            {% for change in content.context_snapshot.changes_list %}
+                            <div class="text-xs px-2 py-1 rounded {% if change.direction == 'firmed' %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                <span class="font-medium">R{{ change.race }}</span>
+                                {{ change.horse }}:
+                                ${{ "%.2f"|format(change.old_odds) }} → ${{ "%.2f"|format(change.new_odds) }}
+                                <span class="opacity-70">({{ change.direction }} {{ "%.0f"|format(change.pct_change) }}%)</span>
+                            </div>
+                            {% endfor %}
+                        </dd>
                     </div>
                     {% endif %}
                 </dl>

@@ -1,5 +1,6 @@
 """Models for content generation, context, and scheduling."""
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -52,6 +53,16 @@ class ContextSnapshot(Base):
 
     # Relationships
     meeting: Mapped["Meeting"] = relationship("Meeting")
+
+    @property
+    def changes_list(self) -> list[dict]:
+        """Parse significant_changes JSON into a list."""
+        if not self.significant_changes:
+            return []
+        try:
+            return json.loads(self.significant_changes)
+        except (json.JSONDecodeError, TypeError):
+            return []
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
