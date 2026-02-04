@@ -4,19 +4,40 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from punty.config import settings
-from punty.auth import AuthMiddleware, CSRFMiddleware, router as auth_router
+from punty.auth import AuthMiddleware, CSRFMiddleware, router as auth_router, PUBLIC_SITE_HOSTS, PUBLIC_SITE_PATHS
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
+from punty.public.routes import router as public_router
 from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api
 from punty.results.monitor import ResultsMonitor
 from punty.glory.routes import router as glory_router
 from punty.glory.api import router as glory_api_router
 from punty.glory.auth import GloryAuthMiddleware, GloryCSRFMiddleware
+
+
+class HostnameRoutingMiddleware(BaseHTTPMiddleware):
+    """Route requests based on hostname: punty.ai -> public site, app.punty.ai -> admin."""
+
+    async def dispatch(self, request: Request, call_next):
+        host = request.headers.get("host", "").lower()
+        path = request.url.path
+
+        # Check if this is a public site host (punty.ai, not app.punty.ai)
+        is_public_host = any(host.startswith(h) or host == h for h in PUBLIC_SITE_HOSTS)
+
+        # If on public host and requesting a public site path, rewrite to /public prefix
+        # This allows both routers to coexist
+        if is_public_host and path in PUBLIC_SITE_PATHS:
+            # Modify scope to add internal prefix for routing
+            request.scope["path"] = f"/public{path}" if path != "/" else "/public/"
+
+        return await call_next(request)
 
 
 # Configure logging
@@ -89,12 +110,13 @@ app = FastAPI(
 )
 
 # Middleware stack (order matters — added in reverse, outermost first):
-# SessionMiddleware → AuthMiddleware → CSRFMiddleware
+# SessionMiddleware → HostnameRoutingMiddleware → AuthMiddleware → CSRFMiddleware
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(AuthMiddleware)
 # Glory-specific middleware (runs after general auth, handles /group1glory/ paths)
 app.add_middleware(GloryCSRFMiddleware)
 app.add_middleware(GloryAuthMiddleware)
+app.add_middleware(HostnameRoutingMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
@@ -111,6 +133,9 @@ if static_path.exists():
     app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 # Include routers
+# Public site routes (served via hostname routing middleware on punty.ai)
+app.include_router(public_router, prefix="/public", tags=["public"])
+# Admin dashboard routes (served on app.punty.ai)
 app.include_router(web_router)
 app.include_router(meets.router, prefix="/api/meets", tags=["meets"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])
@@ -128,6 +153,13 @@ app.include_router(glory_api_router, tags=["glory-api"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "version": "0.1.0"}
+
+
+@app.get("/api/public/stats")
+async def public_stats():
+    """Get public stats for homepage."""
+    from punty.public.routes import get_winner_stats
+    return await get_winner_stats()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}PuntyAI - AI Horse Racing Tips That Don't Suck{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="relative overflow-hidden py-16 md:py-24">
+    <!-- Background glow effects -->
+    <div class="absolute top-1/2 left-1/4 w-96 h-96 bg-punty-magenta/20 rounded-full blur-3xl -translate-y-1/2"></div>
+    <div class="absolute top-1/2 right-1/4 w-96 h-96 bg-punty-cyan/10 rounded-full blur-3xl -translate-y-1/2"></div>
+
+    <div class="max-w-6xl mx-auto px-4 sm:px-8 relative">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+            <!-- Left: Content -->
+            <div>
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 leading-tight">
+                    AI Racing Tips That
+                    <span class="block" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Don't Fuck Around</span>
+                </h1>
+
+                <div class="punty-quote mb-8">
+                    <p class="text-lg italic" style="color: var(--text-secondary);">
+                        "I'm Punty. I crunch the form, read the track, and find the bloody winners.
+                        No tipster bullshit, no 'best bets' that cost you your rent money.
+                        Just honest picks backed by AI smarts."
+                    </p>
+                </div>
+
+                <div class="flex flex-wrap gap-4">
+                    <a href="https://twitter.com/PuntyAI" target="_blank" class="btn-primary inline-flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                        Follow @PuntyAI
+                    </a>
+                    <a href="/how-it-works" class="btn-secondary">
+                        How It Works
+                    </a>
+                </div>
+            </div>
+
+            <!-- Right: Punty Character -->
+            <div class="relative flex justify-center">
+                <img src="/static/punty-character.jpg" alt="Punty the Racing Analyst"
+                     class="w-72 md:w-96 rounded-2xl glow-magenta animate-pulse-glow">
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section class="py-16 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8">
+        <div class="grid md:grid-cols-3 gap-8 text-center">
+            <!-- Today's Winners -->
+            <div class="card p-8">
+                <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
+                <div class="text-lg font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Winners Today</div>
+            </div>
+
+            <!-- All-Time Winners -->
+            <div class="card p-8">
+                <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
+                <div class="text-lg font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">All-Time Winners</div>
+            </div>
+
+            <!-- Meetings Today -->
+            <div class="card p-8">
+                <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
+                <div class="text-lg font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Covered Today</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Today's Tips Section -->
+{% if stats.todays_tips %}
+<section class="py-16">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8">
+        <h2 class="text-3xl font-heading font-bold text-center mb-12">
+            Today's <span style="color: var(--magenta);">Early Mail</span>
+        </h2>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for tip in stats.todays_tips %}
+            <a href="{{ tip.twitter_url }}" target="_blank"
+               class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background: var(--gradient-sunset);">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="font-heading font-bold text-lg">{{ tip.venue }}</div>
+                        <div class="text-sm" style="color: var(--cyan);">View on X →</div>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+
+        <div class="text-center mt-8">
+            <a href="https://twitter.com/PuntyAI" target="_blank" class="btn-secondary inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                See All Tips on X
+            </a>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- YouTube Section -->
+<section class="py-16" style="background: var(--bg-card);">
+    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+        <h2 class="text-3xl font-heading font-bold text-center mb-4">
+            Meet <span style="color: var(--magenta);">Punty</span>
+        </h2>
+        <p class="text-center mb-8" style="color: var(--text-secondary);">
+            Watch how Punty analyses the form and finds the winners
+        </p>
+
+        <!-- Video embed placeholder - replace VIDEO_ID with actual YouTube video ID -->
+        <div class="relative aspect-video rounded-xl overflow-hidden glow-cyan">
+            <iframe
+                class="absolute inset-0 w-full h-full"
+                src="https://www.youtube.com/embed/VIDEO_ID"
+                title="PuntyAI Introduction"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen>
+            </iframe>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works Preview -->
+<section class="py-16">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8">
+        <h2 class="text-3xl font-heading font-bold text-center mb-12">
+            How <span style="color: var(--cyan);">Punty</span> Picks Winners
+        </h2>
+
+        <div class="grid md:grid-cols-3 gap-8">
+            <!-- Step 1 -->
+            <div class="text-center">
+                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                    1
+                </div>
+                <h3 class="font-heading font-bold text-xl mb-3">Crunch The Form</h3>
+                <p style="color: var(--text-secondary);">
+                    AI analyses thousands of data points - form, track conditions, barriers, jockeys, trainers, and more.
+                </p>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="text-center">
+                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                    2
+                </div>
+                <h3 class="font-heading font-bold text-xl mb-3">Read The Track</h3>
+                <p style="color: var(--text-secondary);">
+                    Speed maps, rail positions, weather conditions - all factored in to find where the winners will come from.
+                </p>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="text-center">
+                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                    3
+                </div>
+                <h3 class="font-heading font-bold text-xl mb-3">Find The Value</h3>
+                <p style="color: var(--text-secondary);">
+                    Not just picking favourites - Punty finds value across the card, including roughies that can pop.
+                </p>
+            </div>
+        </div>
+
+        <div class="text-center mt-12">
+            <a href="/how-it-works" class="btn-primary">
+                Learn More
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="py-20 relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-r from-punty-magenta/20 via-punty-purple/10 to-punty-cyan/20"></div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-8 text-center relative">
+        <img src="/static/punty-character.jpg" alt="Punty"
+             class="w-24 h-24 rounded-full mx-auto mb-6 object-cover border-4" style="border-color: var(--magenta);">
+
+        <h2 class="text-3xl md:text-4xl font-heading font-bold mb-6">
+            Ready to Stop Losing Your Arse?
+        </h2>
+        <p class="text-lg mb-8" style="color: var(--text-secondary);">
+            Follow Punty on X for free daily tips. No signup bullshit, no paywalls (yet).
+            Just solid picks delivered straight to your feed.
+        </p>
+
+        <a href="https://twitter.com/PuntyAI" target="_blank" class="btn-primary inline-flex items-center gap-2 text-lg">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            Follow @PuntyAI
+        </a>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Refresh stats every 60 seconds
+    setInterval(function() {
+        fetch('/api/public/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('today-winners').textContent = data.today_winners;
+                document.getElementById('alltime-winners').textContent = data.alltime_winners;
+                document.getElementById('meetings-today').textContent = data.meetings_today;
+            })
+            .catch(() => {});
+    }, 60000);
+</script>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}About Us - PuntyAI{% endblock %}
+
+{% block content %}
+<section class="py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+        <!-- Hero -->
+        <div class="text-center mb-16">
+            <h1 class="text-4xl md:text-5xl font-heading font-bold mb-6">
+                About <span style="color: var(--magenta);">PuntyAI</span>
+            </h1>
+            <p class="text-xl" style="color: var(--text-secondary);">
+                Where AI meets the punt. And occasionally, the pub.
+            </p>
+        </div>
+
+        <!-- Punty intro -->
+        <div class="grid md:grid-cols-2 gap-12 items-center mb-16">
+            <div>
+                <img src="/static/punty-character.jpg" alt="Punty"
+                     class="rounded-2xl glow-magenta w-full max-w-sm mx-auto">
+            </div>
+            <div>
+                <h2 class="text-2xl font-heading font-bold mb-4">G'day, I'm Punty</h2>
+                <div class="space-y-4" style="color: var(--text-secondary);">
+                    <p>
+                        Look, I've seen every tipster under the sun. The ones who promise you the world
+                        and deliver sweet fuck all. The "best bet" merchants who couldn't pick their nose.
+                        The "guaranteed winners" that guarantee nothing but lighter pockets.
+                    </p>
+                    <p>
+                        I'm different. I'm an AI - which means I don't have a bookie mate to steer you wrong,
+                        I don't have a vested interest in any horse, and I sure as shit don't have a
+                        subscription to sell you (well, not yet anyway).
+                    </p>
+                    <p>
+                        I crunch the numbers. I read the form. I factor in every bloody variable from
+                        track conditions to jockey combinations to gear changes. Then I tell you straight
+                        what I reckon.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- The Story -->
+        <div class="card p-8 mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--cyan);">The Story</h2>
+            <div class="space-y-4" style="color: var(--text-secondary);">
+                <p>
+                    PuntyAI was born from a simple frustration: most racing tips are rubbish.
+                    They're either pulled from someone's arse, designed to shift the market,
+                    or so generic they might as well tell you to "bet on the one with four legs."
+                </p>
+                <p>
+                    We figured there had to be a better way. What if you took all the data -
+                    and I mean ALL of it - and let AI find the patterns humans miss?
+                    What if you stripped away the ego, the emotion, and the bias?
+                </p>
+                <p>
+                    The result is Punty. An AI that analyses form like a seasoned form student,
+                    reads tracks like a lifelong local, and picks value like a sharp who's been
+                    doing this for decades. Except Punty never gets tired, never gets emotional,
+                    and never chases losses.
+                </p>
+            </div>
+        </div>
+
+        <!-- Values -->
+        <div class="grid md:grid-cols-3 gap-6 mb-12">
+            <div class="card p-6 text-center">
+                <div class="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-content" style="background: var(--gradient-sunset);">
+                    <svg class="w-6 h-6 text-white mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h3 class="font-heading font-bold text-lg mb-2">Transparent</h3>
+                <p class="text-sm" style="color: var(--text-secondary);">
+                    We publish our picks before the race, track every result, and own our losses.
+                </p>
+            </div>
+
+            <div class="card p-6 text-center">
+                <div class="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-content" style="background: var(--gradient-sunset);">
+                    <svg class="w-6 h-6 text-white mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h3 class="font-heading font-bold text-lg mb-2">Data-Driven</h3>
+                <p class="text-sm" style="color: var(--text-secondary);">
+                    No gut feels or hunches. Every pick is backed by comprehensive analysis.
+                </p>
+            </div>
+
+            <div class="card p-6 text-center">
+                <div class="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-content" style="background: var(--gradient-sunset);">
+                    <svg class="w-6 h-6 text-white mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h3 class="font-heading font-bold text-lg mb-2">Value-Focused</h3>
+                <p class="text-sm" style="color: var(--text-secondary);">
+                    It's not about picking winners at any price - it's about finding value.
+                </p>
+            </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="text-center">
+            <p class="text-lg mb-6" style="color: var(--text-secondary);">
+                Ready to see what Punty can do for your punt?
+            </p>
+            <a href="https://twitter.com/PuntyAI" target="_blank" class="btn-primary inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                Follow @PuntyAI
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

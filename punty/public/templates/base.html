@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PuntyAI - AI Horse Racing Tips{% endblock %}</title>
+    <meta name="description" content="Free daily horse racing tips powered by AI. Punty analyses form, track conditions, and market moves to find winners.">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="PuntyAI - AI Horse Racing Tips">
+    <meta property="og:description" content="Free daily horse racing tips powered by AI. No bullshit, just picks.">
+    <meta property="og:image" content="/static/punty-logo.png">
+    <meta property="og:type" content="website">
+
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        punty: {
+                            dark: '#0a0a0f',
+                            card: '#12121a',
+                            card2: '#1a1a25',
+                            border: 'rgba(255,255,255,0.08)',
+                            magenta: '#e91e8c',
+                            mbright: '#ff2d9e',
+                            cyan: '#00d4ff',
+                            orange: '#ff6b35',
+                            yellow: '#ffc107',
+                            purple: '#9d4edd',
+                            muted: '#606070',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['"Orbitron"', 'sans-serif'],
+                        heading: ['"Rajdhani"', 'sans-serif'],
+                        body: ['"Source Sans Pro"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --bg-card-alt: #1a1a25;
+            --magenta: #e91e8c;
+            --cyan: #00d4ff;
+            --orange: #ff6b35;
+            --yellow: #ffc107;
+            --purple: #9d4edd;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --text-muted: #606070;
+            --border-subtle: rgba(255,255,255,0.08);
+            --gradient-sunset: linear-gradient(180deg, #ff2d9e 0%, #ff6b35 50%, #ffc107 100%);
+            --gradient-header: linear-gradient(90deg, #e91e8c 0%, #9d4edd 50%, #00d4ff 100%);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans Pro', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        /* Scanlines */
+        .scanlines {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 2px);
+            z-index: 1000;
+        }
+
+        /* Header */
+        .site-header {
+            background: linear-gradient(180deg, #15151f 0%, var(--bg-dark) 100%);
+            border-bottom: 1px solid var(--border-subtle);
+            position: relative;
+            overflow: hidden;
+        }
+        .site-header::before {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 2px;
+            background: var(--gradient-header);
+            opacity: 0.8;
+        }
+
+        .logo-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 900;
+            background: var(--gradient-sunset);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
+        }
+
+        /* Headlines */
+        h1, h2, h3, h4 { font-family: 'Rajdhani', sans-serif; }
+
+        /* Nav links */
+        .nav-link {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
+        .nav-link.active { color: var(--magenta); }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--gradient-sunset);
+            color: white;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(233, 30, 140, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--cyan);
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            border: 2px solid var(--cyan);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-secondary:hover {
+            background: rgba(0, 212, 255, 0.1);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+        }
+
+        /* Stats counter */
+        .stat-number {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            background: var(--gradient-sunset);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Glow effects */
+        .glow-magenta {
+            box-shadow: 0 0 30px rgba(233, 30, 140, 0.3);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-card); }
+        ::-webkit-scrollbar-thumb { background: var(--magenta); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ff2d9e; }
+        * { scrollbar-color: var(--magenta) var(--bg-card); scrollbar-width: thin; }
+
+        /* Footer */
+        .site-footer {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+        .footer-brand {
+            font-family: 'Orbitron', sans-serif;
+            background: var(--gradient-sunset);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Social icons */
+        .social-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+        .social-icon:hover {
+            color: var(--magenta);
+            border-color: var(--magenta);
+            box-shadow: 0 0 15px rgba(233, 30, 140, 0.3);
+        }
+
+        /* Punty quote bubble */
+        .punty-quote {
+            position: relative;
+            background: var(--bg-card);
+            border: 2px solid var(--magenta);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+        .punty-quote::before {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 30px;
+            border: 12px solid transparent;
+            border-top-color: var(--magenta);
+            border-bottom: 0;
+        }
+        .punty-quote::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 32px;
+            border: 10px solid transparent;
+            border-top-color: var(--bg-card);
+            border-bottom: 0;
+        }
+
+        /* Animations */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(233, 30, 140, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(233, 30, 140, 0.5); }
+        }
+        .animate-pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen font-body">
+    <div class="scanlines"></div>
+
+    <!-- Header -->
+    <header class="site-header sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-3">
+                <img src="/static/punty-logo-wide.png" alt="PuntyAI" class="h-12 w-auto" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <span class="logo-text hidden">PUNTYAI</span>
+            </a>
+
+            <nav class="hidden md:flex items-center gap-1">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/about" class="nav-link">About</a>
+                <a href="/how-it-works" class="nav-link">How It Works</a>
+                <a href="/contact" class="nav-link">Contact</a>
+            </nav>
+
+            <div class="flex items-center gap-3">
+                <!-- Social Links -->
+                <a href="https://twitter.com/PuntyAI" target="_blank" class="social-icon" title="Follow on X">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+                <a href="https://facebook.com/PuntyAI" target="_blank" class="social-icon" title="Follow on Facebook">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+
+                <!-- Mobile menu button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded" style="color: var(--text-secondary);" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile nav -->
+        <nav id="mobile-menu" class="hidden md:hidden border-t px-4 pb-4" style="border-color: var(--border-subtle); background: var(--bg-card);">
+            <a href="/" class="block py-3 nav-link">Home</a>
+            <a href="/about" class="block py-3 nav-link">About</a>
+            <a href="/how-it-works" class="block py-3 nav-link">How It Works</a>
+            <a href="/contact" class="block py-3 nav-link">Contact</a>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer border-t mt-16" style="border-color: var(--border-subtle);">
+        <div class="max-w-6xl mx-auto px-4 sm:px-8 py-12">
+            <div class="grid md:grid-cols-4 gap-8">
+                <!-- Brand -->
+                <div class="md:col-span-2">
+                    <div class="logo-text text-xl mb-4">PUNTYAI</div>
+                    <p class="text-sm mb-4" style="color: var(--text-secondary);">
+                        AI-powered horse racing tips. No bullshit, just picks.
+                    </p>
+                    <div class="flex gap-3">
+                        <a href="https://twitter.com/PuntyAI" target="_blank" class="social-icon">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                        </a>
+                        <a href="https://facebook.com/PuntyAI" target="_blank" class="social-icon">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        </a>
+                        <a href="https://youtube.com/@PuntyAI" target="_blank" class="social-icon">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Links -->
+                <div>
+                    <h4 class="font-heading font-bold text-white mb-4 uppercase tracking-wider text-sm">Links</h4>
+                    <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+                        <li><a href="/about" class="hover:text-white transition-colors">About Us</a></li>
+                        <li><a href="/how-it-works" class="hover:text-white transition-colors">How It Works</a></li>
+                        <li><a href="/contact" class="hover:text-white transition-colors">Contact</a></li>
+                    </ul>
+                </div>
+
+                <!-- Legal -->
+                <div>
+                    <h4 class="font-heading font-bold text-white mb-4 uppercase tracking-wider text-sm">Legal</h4>
+                    <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+                        <li><a href="/terms" class="hover:text-white transition-colors">Terms of Service</a></li>
+                        <li><a href="/privacy" class="hover:text-white transition-colors">Privacy Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="border-t mt-8 pt-8 text-center text-sm" style="border-color: var(--border-subtle);">
+                <p>&copy; 2026 <span class="footer-brand">PUNTYAI</span>. All rights reserved.</p>
+                <p class="mt-2" style="color: var(--text-muted);">Gamble Responsibly. If you need help, call Gambling Help on 1800 858 858.</p>
+            </div>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

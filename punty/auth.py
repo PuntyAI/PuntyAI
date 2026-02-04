@@ -32,8 +32,12 @@ if settings.google_client_id:
 # --- Auth middleware ----------------------------------------------------------
 
 # Paths that never require login
-PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health", "/privacy", "/group1glory"}
-PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/group1glory/")
+PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health", "/group1glory"}
+PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/group1glory/", "/api/public/")
+
+# Public site paths (served on punty.ai, not app.punty.ai)
+PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/terms", "/privacy"}
+PUBLIC_SITE_HOSTS = {"punty.ai", "www.punty.ai", "localhost:8000", "127.0.0.1:8000"}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -41,9 +45,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         path = request.url.path
+        host = request.headers.get("host", "").lower()
 
         # Allow public paths
         if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
+            return await call_next(request)
+
+        # Allow public site paths on public domains (punty.ai, not app.punty.ai)
+        # This lets the public website work without authentication
+        is_public_host = any(host.startswith(h) or host == h for h in PUBLIC_SITE_HOSTS)
+        if is_public_host and path in PUBLIC_SITE_PATHS:
             return await call_next(request)
 
         # Check session

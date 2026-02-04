@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}How It Works - PuntyAI{% endblock %}
+
+{% block content %}
+<section class="py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+        <!-- Hero -->
+        <div class="text-center mb-16">
+            <h1 class="text-4xl md:text-5xl font-heading font-bold mb-6">
+                How <span style="color: var(--cyan);">Punty</span> Works
+            </h1>
+            <p class="text-xl" style="color: var(--text-secondary);">
+                The method behind the madness (spoiler: it's actually quite methodical)
+            </p>
+        </div>
+
+        <!-- The Process -->
+        <div class="space-y-12 mb-16">
+            <!-- Step 1 -->
+            <div class="card p-8">
+                <div class="flex items-start gap-6">
+                    <div class="w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                        1
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold mb-4">Data Collection</h3>
+                        <p class="mb-4" style="color: var(--text-secondary);">
+                            Every morning, Punty wakes up early (well, the servers do) and scrapes
+                            comprehensive data for every race meeting:
+                        </p>
+                        <ul class="grid md:grid-cols-2 gap-2 text-sm" style="color: var(--text-secondary);">
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Full form history for every runner
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Jockey and trainer statistics
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Track conditions and weather
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Barrier draws and rail positions
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Speed maps and pace predictions
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Market movements and odds
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Gear changes and comments
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span style="color: var(--magenta);">→</span> Sectional times and ratings
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="card p-8">
+                <div class="flex items-start gap-6">
+                    <div class="w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                        2
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold mb-4">AI Analysis</h3>
+                        <p class="mb-4" style="color: var(--text-secondary);">
+                            Punty's AI engine processes all this data using a weighted analysis framework.
+                            Different factors carry different importance depending on the race conditions:
+                        </p>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="p-4 rounded-lg" style="background: rgba(233, 30, 140, 0.1);">
+                                <div class="font-heading font-bold mb-2" style="color: var(--magenta);">High Priority</div>
+                                <ul class="text-sm space-y-1" style="color: var(--text-secondary);">
+                                    <li>• Recent Form</li>
+                                    <li>• Class Assessment</li>
+                                    <li>• Track/Distance Fit</li>
+                                    <li>• Speed Map Position</li>
+                                </ul>
+                            </div>
+                            <div class="p-4 rounded-lg" style="background: rgba(0, 212, 255, 0.1);">
+                                <div class="font-heading font-bold mb-2" style="color: var(--cyan);">Contextual Factors</div>
+                                <ul class="text-sm space-y-1" style="color: var(--text-secondary);">
+                                    <li>• Barrier Draw + Bias</li>
+                                    <li>• Jockey/Trainer Stats</li>
+                                    <li>• First/Second Up</li>
+                                    <li>• Gear Changes</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="card p-8">
+                <div class="flex items-start gap-6">
+                    <div class="w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                        3
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold mb-4">Selection Output</h3>
+                        <p class="mb-4" style="color: var(--text-secondary);">
+                            For each race, Punty outputs a structured selection set:
+                        </p>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded text-sm font-bold" style="background: var(--magenta); color: white;">TOP PICK</span>
+                                <span style="color: var(--text-secondary);">The horse Punty rates highest - backed with conviction</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded text-sm font-bold" style="background: rgba(0, 212, 255, 0.2); color: var(--cyan);">2ND</span>
+                                <span style="color: var(--text-secondary);">Strong contender, often the main danger</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded text-sm font-bold" style="background: rgba(255, 193, 7, 0.2); color: var(--yellow);">3RD</span>
+                                <span style="color: var(--text-secondary);">Capable of running into the placings</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded text-sm font-bold" style="background: rgba(157, 78, 221, 0.2); color: var(--purple);">ROUGHIE</span>
+                                <span style="color: var(--text-secondary);">Value pick at longer odds - can upset</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="card p-8">
+                <div class="flex items-start gap-6">
+                    <div class="w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                        4
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold mb-4">Daily Early Mail</h3>
+                        <p class="mb-4" style="color: var(--text-secondary);">
+                            Each morning, Punty publishes the "Early Mail" - a complete rundown of every
+                            race at selected meetings. This includes:
+                        </p>
+                        <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+                            <li class="flex items-start gap-2">
+                                <span style="color: var(--magenta);">→</span>
+                                <span><strong class="text-white">Big 3:</strong> Punty's three most confident picks of the day, combined into a multi</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span style="color: var(--magenta);">→</span>
+                                <span><strong class="text-white">Race-by-Race:</strong> Top 3 + Roughie for every race with brief analysis</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span style="color: var(--magenta);">→</span>
+                                <span><strong class="text-white">Exotics:</strong> Trifecta and exacta boxes where value presents</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span style="color: var(--magenta);">→</span>
+                                <span><strong class="text-white">Quaddie:</strong> Multiple coverage options for the quaddie legs</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="card p-8">
+                <div class="flex items-start gap-6">
+                    <div class="w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                        5
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-heading font-bold mb-4">Results & Accountability</h3>
+                        <p class="mb-4" style="color: var(--text-secondary);">
+                            After the races, Punty tracks every result and publishes "The Wrap" -
+                            a full breakdown of how the day went. No hiding from bad days, no
+                            selective memory. Just honest reporting.
+                        </p>
+                        <p style="color: var(--text-secondary);">
+                            Every winner is recorded. Every loss is owned. That's how you know
+                            you're getting the real picture, not some curated highlight reel.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="mb-16">
+            <h2 class="text-2xl font-heading font-bold mb-8 text-center">Frequently Asked Questions</h2>
+
+            <div class="space-y-4">
+                <div class="card p-6">
+                    <h3 class="font-heading font-bold text-lg mb-2" style="color: var(--cyan);">Is Punty always right?</h3>
+                    <p style="color: var(--text-secondary);">
+                        Fuck no. Anyone who claims to always be right is lying to you. Horse racing
+                        is unpredictable - that's what makes it exciting. Punty aims for consistent
+                        value over time, not perfection.
+                    </p>
+                </div>
+
+                <div class="card p-6">
+                    <h3 class="font-heading font-bold text-lg mb-2" style="color: var(--cyan);">How much should I bet?</h3>
+                    <p style="color: var(--text-secondary);">
+                        Only what you can afford to lose. Seriously. Punty provides analysis and picks,
+                        but you're responsible for your own bankroll management. If you're betting the
+                        rent money, you've got bigger problems than which horse to back.
+                    </p>
+                </div>
+
+                <div class="card p-6">
+                    <h3 class="font-heading font-bold text-lg mb-2" style="color: var(--cyan);">Why is it free?</h3>
+                    <p style="color: var(--text-secondary);">
+                        For now, we're building the audience and proving the model works. Premium
+                        features are coming - but the core picks will always be accessible.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="text-center">
+            <a href="https://twitter.com/PuntyAI" target="_blank" class="btn-primary inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                Get Daily Tips on X
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}
