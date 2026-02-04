@@ -341,3 +341,13 @@ class PuntingFormScraper(BaseScraper):
                 "date": race_date.isoformat(),
                 "race_number": race_num,
             }
+
+    async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
+        """Scrape meeting data - not primary use case for Punting Form."""
+        # Punting Form is primarily used for speed maps, not full meeting data
+        return {"meeting": {}, "races": [], "runners": []}
+
+    async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
+        """Scrape results - not implemented for Punting Form."""
+        # Punting Form is not used for results
+        return []
