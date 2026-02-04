@@ -153,3 +153,35 @@ async def reschedule_morning_prep():
         "status": "rescheduled",
         "new_time": f"{hour:02d}:{minute:02d}",
     }
+
+
+@router.post("/morning-prep/toggle")
+async def toggle_morning_prep():
+    """Pause or resume the morning prep automation."""
+    from punty.scheduler.manager import scheduler_manager
+
+    job = scheduler_manager.get_job("daily-morning-prep")
+    if not job:
+        return {"status": "error", "message": "Job not found"}
+
+    # Check if job is paused by looking at next_run_time
+    if job.next_run_time is None:
+        # Job is paused, resume it
+        scheduler_manager.resume_job("daily-morning-prep")
+        return {"status": "resumed", "paused": False}
+    else:
+        # Job is running, pause it
+        scheduler_manager.pause_job("daily-morning-prep")
+        return {"status": "paused", "paused": True}
+
+
+@router.get("/morning-prep/paused")
+async def get_morning_prep_paused():
+    """Check if morning prep is paused."""
+    from punty.scheduler.manager import scheduler_manager
+
+    job = scheduler_manager.get_job("daily-morning-prep")
+    if not job:
+        return {"paused": True, "exists": False}
+
+    return {"paused": job.next_run_time is None, "exists": True}

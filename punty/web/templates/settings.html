@@ -26,8 +26,13 @@
                 <div id="morning-time" class="text-center px-6 py-3 bg-punty-card2 rounded-lg">
                     <div class="text-xs text-gray-500 uppercase tracking-wider">Today's Run Time</div>
                     <div class="text-2xl font-bold text-punty-coral font-mono" id="scheduled-time">--:--</div>
+                    <div id="automation-status" class="text-xs mt-1 text-green-500">Active</div>
                 </div>
                 <div class="space-y-2">
+                    <button onclick="toggleAutomation()" id="btn-toggle-automation"
+                            class="block w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-500 text-sm">
+                        &#x23F8; Pause Automation
+                    </button>
                     <button onclick="runMorningPrepNow()"
                             class="block w-full bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
                         &#x25B6; Run Now
@@ -477,6 +482,8 @@ async function saveApiKeys(provider, keys) {
 }
 
 // Scheduler functions
+var automationPaused = false;
+
 async function loadSchedulerStatus() {
     try {
         const resp = await fetch('/api/scheduler/status');
@@ -496,8 +503,50 @@ async function loadSchedulerStatus() {
         } else {
             timeEl.textContent = 'Not scheduled';
         }
+
+        // Check if paused
+        const pausedResp = await fetch('/api/scheduler/morning-prep/paused');
+        const pausedData = await pausedResp.json();
+        automationPaused = pausedData.paused;
+        updateToggleButton();
     } catch (e) {
         console.error('Failed to load scheduler status:', e);
+    }
+}
+
+function updateToggleButton() {
+    const btn = document.getElementById('btn-toggle-automation');
+    const statusEl = document.getElementById('automation-status');
+
+    if (automationPaused) {
+        btn.innerHTML = '&#x25B6; Resume Automation';
+        btn.className = 'block w-full bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-500 text-sm';
+        statusEl.textContent = 'Paused';
+        statusEl.className = 'text-xs mt-1 text-yellow-500';
+    } else {
+        btn.innerHTML = '&#x23F8; Pause Automation';
+        btn.className = 'block w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-500 text-sm';
+        statusEl.textContent = 'Active';
+        statusEl.className = 'text-xs mt-1 text-green-500';
+    }
+}
+
+async function toggleAutomation() {
+    try {
+        const resp = await fetch('/api/scheduler/morning-prep/toggle', { method: 'POST' });
+        const data = await resp.json();
+
+        automationPaused = data.paused;
+        updateToggleButton();
+
+        if (data.paused) {
+            showToast('Automation paused', 'warning');
+        } else {
+            showToast('Automation resumed', 'success');
+            loadSchedulerStatus(); // Refresh to get new time
+        }
+    } catch (e) {
+        showToast('Failed to toggle automation', 'error');
     }
 }
 
