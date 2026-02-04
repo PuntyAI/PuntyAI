@@ -122,8 +122,9 @@ async def generate_content_stream(
     is_enabled = (setting.value if setting else defaults.get(setting_key, "true")) == "true"
 
     if not is_enabled:
+        label = f"{content_type.replace('_', ' ').title()} is disabled in Settings"
         async def disabled_generator():
-            yield f"data: {json.dumps({'step': 1, 'total': 1, 'label': f'{content_type.replace(\"_\", \" \").title()} is disabled in Settings', 'status': 'error'})}\n\n"
+            yield f"data: {json.dumps({'step': 1, 'total': 1, 'label': label, 'status': 'error'})}\n\n"
         return StreamingResponse(disabled_generator(), media_type="text/event-stream")
 
     generator = ContentGenerator(db)
