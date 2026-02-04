@@ -148,11 +148,23 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
 
 async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:
     """Run all scrapers for a meeting, yielding progress events."""
-    meeting = await db.get(Meeting, meeting_id)
-    if not meeting:
-        yield {"step": 0, "total": 1, "label": "Meeting not found", "status": "error"}
+    logger.info(f"scrape_meeting_full_stream called for meeting_id={meeting_id}")
+    # Use explicit select instead of db.get() to avoid session state issues
+    from sqlalchemy import select
+    try:
+        result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+        meeting = result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"DB query failed for {meeting_id}: {e}")
+        yield {"step": 0, "total": 1, "label": f"DB error: {e}", "status": "error"}
         return
 
+    if not meeting:
+        logger.error(f"Meeting not found in DB: {meeting_id}")
+        yield {"step": 0, "total": 1, "label": f"Meeting not found: {meeting_id}", "status": "error"}
+        return
+
+    logger.info(f"Found meeting: {meeting.venue} on {meeting.date}")
     venue = meeting.venue
     race_date = meeting.date
     errors = []
