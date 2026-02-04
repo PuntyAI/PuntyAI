@@ -209,9 +209,17 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             if found:
                 yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
             else:
-                yield {"step": 2, "total": total_steps, "label": "Track conditions: venue not found in data", "status": "done"}
+                # Supplementary source didn't have venue, but show GraphQL data if available
+                if meeting.track_condition:
+                    yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
+                else:
+                    yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
         else:
-            yield {"step": 2, "total": total_steps, "label": "Track conditions: unknown state", "status": "done"}
+            # Unknown state, but show GraphQL data if available
+            if meeting.track_condition:
+                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
+            else:
+                yield {"step": 2, "total": total_steps, "label": "Track conditions: unknown state", "status": "done"}
     except Exception as e:
         logger.error(f"track conditions scrape failed: {e}")
         errors.append(f"track_conditions: {e}")
