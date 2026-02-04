@@ -809,12 +809,33 @@ _trainer_cache_loaded: bool = False
 
 
 async def fetch_trainer_premiership(force_refresh: bool = False) -> list[dict]:
-    """Fetch trainer premiership data, using cache if available."""
+    """Fetch trainer ranking data, using cache if available.
+
+    Tries TRC (Thoroughbred Racing) global rankings first, falls back to Racing Australia.
+    """
     global _trainer_premiership_cache, _trainer_cache_loaded
 
     if _trainer_cache_loaded and not force_refresh:
         return _trainer_premiership_cache
 
+    # Try TRC first (better data with global rankings, group wins, etc.)
+    try:
+        from punty.scrapers.racing_australia import TRCTrainerScraper
+
+        scraper = TRCTrainerScraper()
+        try:
+            trainers = await scraper.scrape_trainer_rankings(country="AUS", pages=2)
+            if trainers:
+                _trainer_premiership_cache = trainers
+                _trainer_cache_loaded = True
+                logger.info(f"Loaded {len(trainers)} trainers from TRC global rankings")
+                return trainers
+        finally:
+            await scraper.close()
+    except Exception as e:
+        logger.warning(f"TRC trainer scrape failed, trying Racing Australia: {e}")
+
+    # Fallback to Racing Australia premiership
     try:
         from punty.scrapers.racing_australia import RacingAustraliaScraper
 
@@ -828,7 +849,7 @@ async def fetch_trainer_premiership(force_refresh: bool = False) -> list[dict]:
         finally:
             await scraper.close()
     except Exception as e:
-        logger.error(f"Failed to fetch trainer premiership: {e}")
+        logger.error(f"Failed to fetch trainer data from both sources: {e}")
         return _trainer_premiership_cache  # Return stale cache if available
 
 

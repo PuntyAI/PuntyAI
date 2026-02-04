@@ -1,4 +1,4 @@
-"""Scraper for Racing Australia trainer/jockey premierships."""
+"""Scraper for Racing Australia and TRC trainer rankings."""
 
 import logging
 import re
@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 
 TRAINER_PREMIERSHIP_URL = "https://www.racingaustralia.horse/FreeServices/Premierships.aspx"
+TRC_TRAINER_RANKINGS_URL = "https://www.thoroughbredracing.com/rankings/category/trainer/"
 
 
 class RacingAustraliaScraper:
@@ -198,10 +199,185 @@ class RacingAustraliaScraper:
             return None
 
 
+class TRCTrainerScraper:
+    """Scraper for TRC (Thoroughbred Racing Commentary) global trainer rankings."""
+
+    DEFAULT_HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
+    }
+
+    def __init__(self, timeout: float = 30.0):
+        self.timeout = timeout
+        self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                headers=self.DEFAULT_HEADERS,
+                timeout=self.timeout,
+                follow_redirects=True,
+            )
+        return self._client
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def scrape_trainer_rankings(
+        self,
+        country: str = "AUS",
+        pages: int = 2,  # Scrape first 2 pages (100 trainers at 50/page)
+    ) -> list[dict]:
+        """Scrape TRC global trainer rankings.
+
+        Returns list of dicts with trainer stats:
+        - name: Trainer name
+        - name_normalized: Uppercase normalized name for matching
+        - global_rank: Global ranking position
+        - runners: Number of horses trained
+        - runs: Total race starts
+        - strike_rate: Win percentage
+        - rating: TRC performance rating
+        - g1_wins: Group 1 wins
+        - g2_wins: Group 2 wins
+        - g3_wins: Group 3 wins
+        - points: Ranking points
+        """
+        trainers = []
+
+        for page in range(1, pages + 1):
+            url = f"{TRC_TRAINER_RANKINGS_URL}?page={page}&countries={country}"
+            logger.info(f"Scraping TRC trainer rankings page {page}: {url}")
+
+            try:
+                response = await self.client.get(url)
+                response.raise_for_status()
+                html = response.text
+            except Exception as e:
+                logger.error(f"Failed to fetch TRC trainer rankings page {page}: {e}")
+                continue
+
+            soup = BeautifulSoup(html, "lxml")
+
+            # Find trainer rows - they're in a table with ranking data
+            table = soup.find("table", class_=lambda x: x and "ranking" in str(x).lower())
+            if not table:
+                # Try finding by structure
+                table = soup.find("table")
+
+            if not table:
+                logger.warning(f"Could not find rankings table on page {page}")
+                continue
+
+            rows = table.find_all("tr")
+            for row in rows:
+                cells = row.find_all("td")
+                if len(cells) < 8:
+                    continue
+
+                try:
+                    # Parse trainer data from row
+                    # Column order: Rank, Name, Country, Runners, Runs, SR, Rating, G1, G2, G3, Points
+                    rank_text = cells[0].get_text(strip=True)
+                    rank = self._parse_int(rank_text)
+                    if rank is None:
+                        continue
+
+                    # Name is usually in cell 1 or 2 (after rank and possibly last week rank)
+                    name_cell = None
+                    for cell in cells[1:4]:
+                        text = cell.get_text(strip=True)
+                        # Name cell has letters, not just numbers
+                        if text and re.search(r"[a-zA-Z]{2,}", text):
+                            name_cell = cell
+                            break
+
+                    if not name_cell:
+                        continue
+
+                    name = name_cell.get_text(strip=True)
+                    if not name or len(name) < 3:
+                        continue
+
+                    # Extract numeric stats from remaining cells
+                    stats = []
+                    for cell in cells:
+                        text = cell.get_text(strip=True)
+                        # Skip name-like cells
+                        if re.search(r"^[a-zA-Z\s&]+$", text) and len(text) > 3:
+                            continue
+                        num = self._parse_int(text)
+                        if num is not None:
+                            stats.append(num)
+                        else:
+                            # Try float for rating
+                            try:
+                                fval = float(text.replace(",", ""))
+                                stats.append(fval)
+                            except:
+                                pass
+
+                    # We expect: rank, runners, runs, sr, rating, g1, g2, g3, points
+                    # But stats array might have extra values
+                    if len(stats) < 6:
+                        continue
+
+                    trainer_data = {
+                        "name": name,
+                        "name_normalized": self._normalize_trainer_name(name),
+                        "global_rank": rank,
+                        "runners": stats[1] if len(stats) > 1 else 0,
+                        "runs": stats[2] if len(stats) > 2 else 0,
+                        "strike_rate": float(stats[3]) if len(stats) > 3 else 0.0,
+                        "rating": float(stats[4]) if len(stats) > 4 else 0.0,
+                        "g1_wins": stats[5] if len(stats) > 5 else 0,
+                        "g2_wins": stats[6] if len(stats) > 6 else 0,
+                        "g3_wins": stats[7] if len(stats) > 7 else 0,
+                        "points": stats[8] if len(stats) > 8 else 0,
+                        "source": "TRC",
+                    }
+
+                    trainers.append(trainer_data)
+
+                except Exception as e:
+                    logger.debug(f"Error parsing TRC trainer row: {e}")
+                    continue
+
+        logger.info(f"Scraped {len(trainers)} trainers from TRC rankings")
+        return trainers
+
+    def _normalize_trainer_name(self, name: str) -> str:
+        """Normalize trainer name for matching."""
+        if not name:
+            return ""
+        normalized = name.upper().strip()
+        normalized = re.sub(r"\s*\(.*?\)\s*", "", normalized)
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized
+
+    def _parse_int(self, value: str) -> Optional[int]:
+        """Parse integer from string."""
+        if not value:
+            return None
+        try:
+            cleaned = re.sub(r"[^\d]", "", value)
+            return int(cleaned) if cleaned else None
+        except ValueError:
+            return None
+
+
 def match_trainer_name(runner_trainer: str, premiership_trainers: list[dict]) -> Optional[dict]:
-    """Match a runner's trainer name to premiership data.
+    """Match a runner's trainer name to premiership/rankings data.
 
     Handles common variations in trainer name formatting.
+    Works with both Racing Australia and TRC data formats.
     """
     if not runner_trainer:
         return None
@@ -212,15 +388,22 @@ def match_trainer_name(runner_trainer: str, premiership_trainers: list[dict]) ->
 
     # Try exact match first
     for trainer in premiership_trainers:
-        if trainer["name"] == runner_normalized:
+        # Handle both TRC (name_normalized) and Racing Australia (name) formats
+        trainer_name = trainer.get("name_normalized") or trainer.get("name", "")
+        trainer_name_upper = trainer_name.upper() if trainer_name else ""
+
+        if trainer_name_upper == runner_normalized:
             return trainer
-        if trainer["name_original"].upper() == runner_normalized:
+        # Also try original name field
+        original_name = trainer.get("name_original") or trainer.get("name", "")
+        if original_name.upper() == runner_normalized:
             return trainer
 
     # Try partial matching for partnership trainers (e.g., "Waterhouse" matches "G Waterhouse & A Bott")
     runner_parts = runner_normalized.split()
     for trainer in premiership_trainers:
-        trainer_parts = trainer["name"].split()
+        trainer_name = trainer.get("name_normalized") or trainer.get("name", "")
+        trainer_parts = trainer_name.upper().split()
         # Check if last name matches
         if runner_parts and trainer_parts:
             runner_surname = runner_parts[-1]
@@ -229,7 +412,9 @@ def match_trainer_name(runner_trainer: str, premiership_trainers: list[dict]) ->
 
     # Try fuzzy matching - check if runner name is contained in trainer name or vice versa
     for trainer in premiership_trainers:
-        if runner_normalized in trainer["name"] or trainer["name"] in runner_normalized:
+        trainer_name = trainer.get("name_normalized") or trainer.get("name", "")
+        trainer_name_upper = trainer_name.upper() if trainer_name else ""
+        if runner_normalized in trainer_name_upper or trainer_name_upper in runner_normalized:
             return trainer
 
     return None
@@ -240,8 +425,24 @@ def format_trainer_stats(trainer_data: dict) -> str:
     if not trainer_data:
         return ""
 
-    return (
-        f"{trainer_data['wins']}-{trainer_data['seconds']}-{trainer_data['thirds']} "
-        f"from {trainer_data['starts']} ({trainer_data['strike_rate']}% SR), "
-        f"${trainer_data['prize_money']:,} prize money"
-    )
+    # Check if it's TRC data (has global_rank) or Racing Australia data (has wins)
+    if trainer_data.get("source") == "TRC" or "global_rank" in trainer_data:
+        # TRC format: global ranking, strike rate, rating, group wins
+        parts = [f"Global #{trainer_data.get('global_rank', '?')}"]
+        if trainer_data.get("strike_rate"):
+            parts.append(f"{trainer_data['strike_rate']}% SR")
+        if trainer_data.get("rating"):
+            parts.append(f"Rating {trainer_data['rating']}")
+        g1 = trainer_data.get("g1_wins", 0)
+        g2 = trainer_data.get("g2_wins", 0)
+        g3 = trainer_data.get("g3_wins", 0)
+        if g1 or g2 or g3:
+            parts.append(f"G1/G2/G3: {g1}/{g2}/{g3}")
+        return ", ".join(parts)
+    else:
+        # Racing Australia format
+        return (
+            f"{trainer_data.get('wins', 0)}-{trainer_data.get('seconds', 0)}-{trainer_data.get('thirds', 0)} "
+            f"from {trainer_data.get('starts', 0)} ({trainer_data.get('strike_rate', 0)}% SR), "
+            f"${trainer_data.get('prize_money', 0):,} prize money"
+        )
