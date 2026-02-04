@@ -76,6 +76,11 @@
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
+                                {% if progress.selected %}
+                                <span class="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded font-medium" title="Active - tracking picks">Active</span>
+                                {% else %}
+                                <span class="bg-gray-100 text-gray-400 text-xs px-2 py-1 rounded" title="Not selected">Inactive</span>
+                                {% endif %}
                                 {% if progress.status == 'completed' %}
                                 <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-medium">&#x2714; Completed</span>
                                 {% elif progress.status == 'in_progress' %}

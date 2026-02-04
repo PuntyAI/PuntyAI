@@ -68,7 +68,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         races = meeting.races or []
         total_races = len(races)
         if total_races == 0:
-            meeting_progress[meeting.id] = {"status": "no_races", "label": "No races"}
+            meeting_progress[meeting.id] = {"status": "no_races", "label": "No races", "selected": meeting.selected or False}
             continue
 
         # Count completed races (Paying or Closed status)
@@ -79,17 +79,19 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         first_race = min(races_with_time, key=lambda r: r.start_time) if races_with_time else None
         first_start = first_race.start_time if first_race else None
 
+        progress = {"selected": meeting.selected or False}
         if completed == total_races:
-            meeting_progress[meeting.id] = {"status": "completed", "label": "Completed"}
+            progress.update({"status": "completed", "label": "Completed"})
         elif completed > 0:
             remaining = total_races - completed
-            meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{remaining} to go", "completed": completed, "total": total_races}
+            progress.update({"status": "in_progress", "label": f"{remaining} to go", "completed": completed, "total": total_races})
         elif first_start and first_start > now_naive:
             # Races haven't started - show countdown (attach tz for JS)
             first_start_aware = first_start.replace(tzinfo=MELB_TZ)
-            meeting_progress[meeting.id] = {"status": "not_started", "label": "Starts soon", "first_race_iso": first_start_aware.isoformat()}
+            progress.update({"status": "not_started", "label": "Starts soon", "first_race_iso": first_start_aware.isoformat()})
         else:
-            meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{total_races} to go", "completed": 0, "total": total_races}
+            progress.update({"status": "in_progress", "label": f"{total_races} to go", "completed": 0, "total": total_races})
+        meeting_progress[meeting.id] = progress
 
     # Get pending reviews count
     result = await db.execute(
