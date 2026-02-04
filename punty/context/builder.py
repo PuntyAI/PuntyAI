@@ -135,6 +135,7 @@ class ContextBuilder:
                 "horse_name": runner.horse_name,
                 "jockey": runner.jockey,
                 "trainer": runner.trainer,
+                "trainer_location": runner.trainer_location,
                 "weight": runner.weight,
                 "scratched": runner.scratched,
             }
@@ -172,11 +173,13 @@ class ContextBuilder:
                     runner_data["odds_bet365"] = runner.odds_bet365
                     runner_data["odds_ladbrokes"] = runner.odds_ladbrokes
                     runner_data["odds_betfair"] = runner.odds_betfair
+                    runner_data["odds_flucs"] = runner.odds_flucs
 
                 if include_form:
                     runner_data["form"] = runner.form
                     runner_data["last_five"] = runner.last_five
                     runner_data["career_record"] = runner.career_record
+                    runner_data["form_history"] = runner.form_history
                     runner_data["comments"] = runner.comments
                     runner_data["comment_long"] = runner.comment_long
                     runner_data["comment_short"] = runner.comment_short
@@ -191,6 +194,10 @@ class ContextBuilder:
                     runner_data["good_track_stats"] = runner.good_track_stats
                     runner_data["soft_track_stats"] = runner.soft_track_stats
                     runner_data["heavy_track_stats"] = runner.heavy_track_stats
+
+                    # Jockey & class stats
+                    runner_data["jockey_stats"] = runner.jockey_stats
+                    runner_data["class_stats"] = runner.class_stats
 
                     # Gear
                     runner_data["gear"] = runner.gear
