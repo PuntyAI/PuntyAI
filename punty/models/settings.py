@@ -218,14 +218,6 @@ class AppSettings(Base):
             "value": "true",
             "description": "Enable per-race results commentary generation",
         },
-        "racing_hours_start": {
-            "value": "10:30",
-            "description": "Racing hours start time (HH:MM AEST) for results monitor",
-        },
-        "racing_hours_end": {
-            "value": "22:00",
-            "description": "Racing hours end time (HH:MM AEST) for results monitor",
-        },
     }
 
     def to_dict(self) -> dict[str, Any]:
