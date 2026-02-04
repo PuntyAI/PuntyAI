@@ -394,6 +394,41 @@
             </div>
         </div>
 
+        <!-- Results Monitor Settings -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-punty-border">
+                <h2 class="text-lg font-semibold text-gray-900">Results Monitor</h2>
+                <p class="text-sm text-gray-500">Configure racing hours for automatic results polling</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Racing Hours Start (AEST)</label>
+                        <input type="time"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                               value="{{ settings.get('racing_hours_start', {}).get('value', '10:30') }}"
+                               hx-put="/api/settings/racing_hours_start"
+                               hx-trigger="change"
+                               hx-swap="none"
+                               name="value">
+                        <p class="text-xs text-gray-500 mt-1">Monitor polls actively from this time</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Racing Hours End (AEST)</label>
+                        <input type="time"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
+                               value="{{ settings.get('racing_hours_end', {}).get('value', '22:00') }}"
+                               hx-put="/api/settings/racing_hours_end"
+                               hx-trigger="change"
+                               hx-swap="none"
+                               name="value">
+                        <p class="text-xs text-gray-500 mt-1">Extended to 10pm for twilight/night/WA racing</p>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500">The monitor will also check for unfinished races outside these hours.</p>
+            </div>
+        </div>
+
         <!-- Approval Settings -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-punty-border">

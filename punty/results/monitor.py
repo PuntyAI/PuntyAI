@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 AEST = ZoneInfo("Australia/Melbourne")
 
-# Racing typically runs between 11:00 and 18:30 AEST
-RACING_START = time(10, 30)
-RACING_END = time(19, 0)
+# Default racing hours (can be overridden via settings)
+DEFAULT_RACING_START = time(10, 30)
+DEFAULT_RACING_END = time(22, 0)  # Extended to cover twilight/night/WA racing
 
 # Poll interval range (seconds) — randomised each cycle
 POLL_MIN = 90
@@ -65,16 +65,43 @@ class ResultsMonitor:
             "consecutive_errors": self.consecutive_errors,
         }
 
-    def _is_racing_hours(self) -> bool:
-        """Check if current AEST time is within typical racing hours."""
-        now_aest = datetime.now(AEST).time()
-        return RACING_START <= now_aest <= RACING_END
+    async def _get_racing_hours(self) -> tuple[time, time]:
+        """Get racing hours from settings, with defaults."""
+        from punty.models.database import async_session
+        from punty.models.settings import AppSettings
 
-    def _next_interval(self) -> float:
+        start_time = DEFAULT_RACING_START
+        end_time = DEFAULT_RACING_END
+
+        try:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(AppSettings).where(AppSettings.key.in_(["racing_hours_start", "racing_hours_end"]))
+                )
+                settings = {s.key: s.value for s in result.scalars().all()}
+
+                if "racing_hours_start" in settings and settings["racing_hours_start"]:
+                    h, m = map(int, settings["racing_hours_start"].split(":"))
+                    start_time = time(h, m)
+                if "racing_hours_end" in settings and settings["racing_hours_end"]:
+                    h, m = map(int, settings["racing_hours_end"].split(":"))
+                    end_time = time(h, m)
+        except Exception as e:
+            logger.warning(f"Failed to load racing hours from settings: {e}")
+
+        return start_time, end_time
+
+    async def _is_racing_hours(self) -> bool:
+        """Check if current AEST time is within racing hours from settings."""
+        now_aest = datetime.now(AEST).time()
+        start_time, end_time = await self._get_racing_hours()
+        return start_time <= now_aest <= end_time
+
+    async def _next_interval(self) -> float:
         """Calculate next poll interval with jitter."""
         if self.consecutive_errors >= 5:
             interval = random.uniform(ERROR_POLL_MIN, ERROR_POLL_MAX)
-        elif not self._is_racing_hours():
+        elif not await self._is_racing_hours():
             interval = IDLE_POLL + random.uniform(0, 60)
         else:
             interval = random.uniform(POLL_MIN, POLL_MAX)
@@ -85,7 +112,7 @@ class ResultsMonitor:
         self.consecutive_errors = 0
         while self.running:
             try:
-                if self._is_racing_hours() or await self._has_unfinished_meetings():
+                if await self._is_racing_hours() or await self._has_unfinished_meetings():
                     await self._check_all_meetings()
                     self.last_check = datetime.now(AEST)
                     self.consecutive_errors = 0
@@ -100,7 +127,7 @@ class ResultsMonitor:
                 if self.consecutive_errors >= 5:
                     logger.critical("Results monitor hit 5 consecutive errors — backing off")
 
-            interval = self._next_interval()
+            interval = await self._next_interval()
             logger.debug(f"Next poll in {interval:.0f}s")
             await asyncio.sleep(interval)
 
