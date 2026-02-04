@@ -52,6 +52,7 @@ templates.env.filters["melb_iso"] = _melb_iso
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     """Main dashboard page."""
     today = melb_now().date()
+    now = melb_now()
     result = await db.execute(
         select(Meeting).where(
             Meeting.date == today,
@@ -59,6 +60,33 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         ).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
     todays_meetings = result.scalars().all()
+
+    # Calculate race progress for each meeting
+    meeting_progress = {}
+    for meeting in todays_meetings:
+        races = meeting.races or []
+        total_races = len(races)
+        if total_races == 0:
+            meeting_progress[meeting.id] = {"status": "no_races", "label": "No races"}
+            continue
+
+        # Count completed races (Paying or Closed status)
+        completed = sum(1 for r in races if r.results_status in ("Paying", "Closed", "Final"))
+
+        # Get first race start time
+        first_race = min(races, key=lambda r: r.start_time or now) if races else None
+        first_start = first_race.start_time if first_race else None
+
+        if completed == total_races:
+            meeting_progress[meeting.id] = {"status": "completed", "label": "Completed"}
+        elif completed > 0:
+            remaining = total_races - completed
+            meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{remaining} to go", "completed": completed, "total": total_races}
+        elif first_start and first_start > now:
+            # Races haven't started - show countdown
+            meeting_progress[meeting.id] = {"status": "not_started", "label": "Starts soon", "first_race_iso": first_start.isoformat()}
+        else:
+            meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{total_races} to go", "completed": 0, "total": total_races}
 
     # Get pending reviews count
     result = await db.execute(
@@ -96,6 +124,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "request": request,
             "now": melb_now,
             "todays_meetings": todays_meetings,
+            "meeting_progress": meeting_progress,
             "pending_reviews": pending_reviews,
             "recent_content": recent_content,
             "active_jobs": active_jobs,

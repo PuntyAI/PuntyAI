@@ -65,6 +65,7 @@
                 {% if todays_meetings %}
                 <ul class="divide-y divide-punty-border">
                     {% for meeting in todays_meetings %}
+                    {% set progress = meeting_progress.get(meeting.id, {}) %}
                     <li class="py-3">
                         <a href="/meets/{{ meeting.id }}" class="flex justify-between items-center hover:bg-punty-card2 -mx-2 px-2 py-1 rounded">
                             <div>
@@ -74,7 +75,21 @@
                                     {{ meeting.races|length if meeting.races else '?' }} races
                                 </p>
                             </div>
-                            <span class="text-punty-coral">&#x2192;</span>
+                            <div class="flex items-center gap-2">
+                                {% if progress.status == 'completed' %}
+                                <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-medium">&#x2714; Completed</span>
+                                {% elif progress.status == 'in_progress' %}
+                                <span class="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-medium">{{ progress.label }}</span>
+                                {% elif progress.status == 'not_started' %}
+                                <span class="countdown-timer bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded font-medium" data-start-time="{{ progress.first_race_iso }}">
+                                    {{ progress.label }}
+                                </span>
+                                {% elif progress.status == 'no_races' %}
+                                <span class="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">{{ progress.label }}</span>
+                                {% else %}
+                                <span class="text-punty-coral">&#x2192;</span>
+                                {% endif %}
+                            </div>
                         </a>
                     </li>
                     {% endfor %}
@@ -435,6 +450,35 @@ function updateMonitorUI() {
 }
 
 // --- P&L Chart ---
+// --- Countdown timers for meetings not started ---
+(function() {
+    function updateCountdowns() {
+        var timers = document.querySelectorAll('.countdown-timer');
+        var now = new Date();
+        timers.forEach(function(el) {
+            var startTime = el.getAttribute('data-start-time');
+            if (!startTime) return;
+            var start = new Date(startTime);
+            var diff = start - now;
+            if (diff <= 0) {
+                el.textContent = 'Starting now';
+                el.classList.remove('bg-amber-100', 'text-amber-700');
+                el.classList.add('bg-blue-100', 'text-blue-700');
+            } else {
+                var hours = Math.floor(diff / (1000 * 60 * 60));
+                var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                if (hours > 0) {
+                    el.textContent = hours + 'h ' + minutes + 'm';
+                } else {
+                    el.textContent = minutes + 'm';
+                }
+            }
+        });
+    }
+    updateCountdowns();
+    setInterval(updateCountdowns, 60000); // Update every minute
+})();
+
 {% if cumulative_pnl and cumulative_pnl|length > 0 %}
 (function() {
     var rawData = {{ cumulative_pnl | tojson }};
