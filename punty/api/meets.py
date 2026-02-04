@@ -278,7 +278,7 @@ async def bulk_scrape_and_speedmaps_stream():
 @router.get("/bulk/generate-early-mail-stream")
 async def bulk_generate_early_mail_stream():
     """SSE stream for generating early mail for all selected meetings."""
-    from punty.ai.generator import generate_content_stream
+    from punty.ai.generator import ContentGenerator
     from punty.models.database import async_session
 
     async def event_generator():
@@ -300,12 +300,14 @@ async def bulk_generate_early_mail_stream():
             total_meetings = len(meetings)
             yield f"data: {json.dumps({'step': 0, 'total': total_meetings, 'label': f'Generating early mail for {total_meetings} meetings...', 'status': 'running'})}\n\n"
 
+            generator = ContentGenerator(db)
+
             for idx, meeting in enumerate(meetings):
                 meeting_num = idx + 1
                 yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'Generating {meeting.venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
 
                 try:
-                    async for event in generate_content_stream(meeting.id, "early_mail", db):
+                    async for event in generator.generate_early_mail_stream(meeting.id):
                         event['meeting'] = meeting.venue
                         event['meeting_num'] = meeting_num
                         event['total_meetings'] = total_meetings
