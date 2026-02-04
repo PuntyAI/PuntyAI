@@ -38,13 +38,9 @@
     <div class="bg-punty-card rounded-lg shadow p-4">
         <div class="flex flex-wrap gap-3 items-center">
             <span class="text-sm font-medium text-gray-700 mr-2">Bulk actions:</span>
-            <button onclick="bulkScrape()" id="btn-bulk-scrape"
+            <button onclick="bulkScrapeAndSpeedMaps()" id="btn-bulk-scrape"
                     class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 text-sm flex items-center gap-2">
-                <span>&#x1F504;</span> Scrape All
-            </button>
-            <button onclick="bulkSpeedMaps()" id="btn-bulk-speed"
-                    class="bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90 text-sm flex items-center gap-2">
-                <span>&#x1F3C3;</span> Fetch All Speed Maps
+                <span>&#x1F504;</span> Scrape All Data
             </button>
             <button onclick="bulkGenerate()" id="btn-bulk-generate"
                     class="bg-punty-gold text-white px-4 py-2 rounded-lg hover:bg-punty-gold/90 text-sm flex items-center gap-2">
@@ -54,7 +50,7 @@
                 Cancel
             </button>
         </div>
-        <p class="text-xs text-gray-500 mt-2">Actions run sequentially on selected meetings only</p>
+        <p class="text-xs text-gray-500 mt-2">Scrape All Data includes form data + speed maps. Actions run sequentially on selected meetings.</p>
     </div>
 
     <!-- Bulk Progress Panel -->
@@ -127,7 +123,7 @@
                                 <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline font-medium">
                                     {{ meeting.venue }}
                                 </a>
-                                {% if meeting.speed_map_complete == false %}
+                                {% if meeting.speed_map_complete is sameas false %}
                                 <span class="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 font-medium" title="Speed map data incomplete or unavailable">
                                     ⚠ Data Issue
                                 </span>
@@ -491,7 +487,7 @@
     var bulkEventSource = null;
 
     function setBulkButtonsDisabled(disabled) {
-        ['btn-bulk-scrape', 'btn-bulk-speed', 'btn-bulk-generate'].forEach(function(id) {
+        ['btn-bulk-scrape', 'btn-bulk-generate'].forEach(function(id) {
             var btn = document.getElementById(id);
             if (btn) {
                 btn.disabled = disabled;
@@ -624,12 +620,8 @@
         };
     }
 
-    function bulkScrape() {
-        runBulkStream('/api/meets/bulk/scrape-stream', 'bg-punty-coral', 'Scrape All');
-    }
-
-    function bulkSpeedMaps() {
-        runBulkStream('/api/meets/bulk/speed-maps-stream', 'bg-punty-blue', 'Fetch Speed Maps');
+    function bulkScrapeAndSpeedMaps() {
+        runBulkStream('/api/meets/bulk/scrape-and-speedmaps-stream', 'bg-punty-coral', 'Scrape All Data');
     }
 
     async function bulkGenerate() {

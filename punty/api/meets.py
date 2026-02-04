@@ -190,6 +190,91 @@ async def bulk_speed_maps_stream():
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("/bulk/scrape-and-speedmaps-stream")
+async def bulk_scrape_and_speedmaps_stream():
+    """SSE stream for scraping all data AND speed maps for all selected meetings."""
+    from punty.scrapers.orchestrator import scrape_meeting_full_stream, scrape_speed_maps_stream
+    from punty.models.database import async_session
+
+    logger = logging.getLogger(__name__)
+
+    async def event_generator():
+        try:
+            async with async_session() as db:
+                today = melb_today()
+                result = await db.execute(
+                    select(Meeting).where(
+                        Meeting.date == today,
+                        Meeting.selected == True,
+                        or_(Meeting.meeting_type == None, Meeting.meeting_type != "trial")
+                    ).order_by(Meeting.venue)
+                )
+                meetings = result.scalars().all()
+                meeting_list = [(m.id, m.venue) for m in meetings]
+
+                if not meeting_list:
+                    yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': 'No meetings selected', 'status': 'complete'})}\n\n"
+                    return
+
+                total_meetings = len(meeting_list)
+                # Each meeting has 2 phases: scrape + speed maps
+                total_steps = total_meetings * 2
+                yield f"data: {json.dumps({'step': 0, 'total': total_steps, 'label': f'Starting full scrape of {total_meetings} meetings...', 'status': 'running'})}\n\n"
+
+                for idx, (meeting_id, venue) in enumerate(meeting_list):
+                    meeting_num = idx + 1
+                    scrape_step = (idx * 2) + 1
+                    speedmap_step = (idx * 2) + 2
+
+                    # Phase 1: Scrape form data
+                    logger.info(f"Bulk scrape+speed: scraping {venue} ({meeting_num}/{total_meetings})")
+                    yield f"data: {json.dumps({'step': scrape_step, 'total': total_steps, 'meeting': venue, 'label': f'[{meeting_num}/{total_meetings}] Scraping {venue}...', 'status': 'running'})}\n\n"
+
+                    try:
+                        async for event in scrape_meeting_full_stream(meeting_id, db):
+                            event['meeting'] = venue
+                            event['meeting_num'] = meeting_num
+                            event['total_meetings'] = total_meetings
+                            # Don't yield meeting_done as complete
+                            if event.get('status') != 'meeting_done':
+                                yield f"data: {json.dumps(event)}\n\n"
+
+                        yield f"data: {json.dumps({'step': scrape_step, 'total': total_steps, 'meeting': venue, 'label': f'{venue}: form data complete', 'status': 'done'})}\n\n"
+                    except Exception as e:
+                        logger.error(f"Scrape error for {venue}: {e}")
+                        yield f"data: {json.dumps({'step': scrape_step, 'total': total_steps, 'meeting': venue, 'label': f'{venue}: scrape error - {str(e)}', 'status': 'error'})}\n\n"
+
+                    # Phase 2: Speed maps
+                    logger.info(f"Bulk scrape+speed: fetching speed maps for {venue}")
+                    yield f"data: {json.dumps({'step': speedmap_step, 'total': total_steps, 'meeting': venue, 'label': f'[{meeting_num}/{total_meetings}] Fetching {venue} speed maps...', 'status': 'running'})}\n\n"
+
+                    try:
+                        async for event in scrape_speed_maps_stream(meeting_id, db):
+                            event['meeting'] = venue
+                            event['meeting_num'] = meeting_num
+                            event['total_meetings'] = total_meetings
+                            # Forward warnings about incomplete data
+                            if event.get('status') == 'warning':
+                                yield f"data: {json.dumps(event)}\n\n"
+
+                        yield f"data: {json.dumps({'step': speedmap_step, 'total': total_steps, 'meeting': venue, 'label': f'{venue}: complete', 'status': 'done'})}\n\n"
+                    except Exception as e:
+                        logger.error(f"Speed map error for {venue}: {e}")
+                        yield f"data: {json.dumps({'step': speedmap_step, 'total': total_steps, 'meeting': venue, 'label': f'{venue}: speed map error - {str(e)}', 'status': 'error'})}\n\n"
+
+                    # Brief delay between meetings
+                    import asyncio
+                    await asyncio.sleep(1)
+
+                yield f"data: {json.dumps({'step': total_steps, 'total': total_steps, 'label': f'All {total_meetings} meetings scraped with speed maps', 'status': 'complete'})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Bulk scrape+speed fatal error: {e}")
+            yield f"data: {json.dumps({'step': 0, 'total': 0, 'label': f'Fatal error: {str(e)}', 'status': 'error'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @router.get("/bulk/generate-early-mail-stream")
 async def bulk_generate_early_mail_stream():
     """SSE stream for generating early mail for all selected meetings."""
