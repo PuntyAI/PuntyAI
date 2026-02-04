@@ -166,6 +166,7 @@ PROVIDER_KEYS = {
     "twitter": ["twitter_api_key", "twitter_api_secret", "twitter_access_token", "twitter_access_secret"],
     "whatsapp": ["whatsapp_api_token", "whatsapp_phone_number_id"],
     "smtp": ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from"],
+    "resend": ["resend_api_key", "email_from", "notification_email"],
 }
 
 

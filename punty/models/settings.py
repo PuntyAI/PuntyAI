@@ -190,6 +190,18 @@ class AppSettings(Base):
             "value": "",
             "description": "WhatsApp phone number ID",
         },
+        "resend_api_key": {
+            "value": "",
+            "description": "Resend API key for email notifications",
+        },
+        "email_from": {
+            "value": "PuntyAI <noreply@punty.ai>",
+            "description": "From address for email notifications",
+        },
+        "notification_email": {
+            "value": "",
+            "description": "Email address for scheduler notifications",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:

@@ -166,10 +166,18 @@ async def daily_morning_prep() -> dict:
     # Send email notification
     try:
         from punty.delivery.email import send_email, format_morning_prep_email
+        from punty.models.settings import AppSettings
+        from sqlalchemy import select
+
+        # Get notification email from settings
+        async with async_session() as db:
+            result = await db.execute(select(AppSettings).where(AppSettings.key == "notification_email"))
+            setting = result.scalar_one_or_none()
+            notification_email = setting.value if setting and setting.value else "punty@punty.ai"
 
         subject, body_html, body_text = format_morning_prep_email(results)
         email_result = await send_email(
-            to_email="punty@punty.ai",
+            to_email=notification_email,
             subject=subject,
             body_html=body_html,
             body_text=body_text,

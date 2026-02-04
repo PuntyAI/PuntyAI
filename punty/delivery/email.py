@@ -1,12 +1,12 @@
-"""Email delivery for notifications."""
+"""Email delivery for notifications using Resend API."""
 
 import logging
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import httpx
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
 async def send_email(
@@ -15,14 +15,10 @@ async def send_email(
     body_html: str,
     body_text: Optional[str] = None,
 ) -> dict:
-    """Send an email notification.
+    """Send an email notification using Resend API.
 
-    Uses SMTP settings from app_settings table:
-    - smtp_host: SMTP server hostname
-    - smtp_port: SMTP server port (usually 587 for TLS)
-    - smtp_user: SMTP username/email
-    - smtp_password: SMTP password or app password
-    - smtp_from: From email address (optional, defaults to smtp_user)
+    Uses resend_api_key from app_settings table.
+    Falls back to SMTP settings if Resend key not configured.
 
     Returns dict with status and any error message.
     """
@@ -30,27 +26,113 @@ async def send_email(
     from punty.models.settings import AppSettings
     from sqlalchemy import select
 
-    # Load SMTP settings from database
+    # Load settings from database
     async with async_session() as db:
         settings = {}
-        for key in ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from"]:
+        keys_to_load = [
+            "resend_api_key",
+            "email_from",
+            "smtp_host",
+            "smtp_port",
+            "smtp_user",
+            "smtp_password",
+            "smtp_from",
+        ]
+        for key in keys_to_load:
             result = await db.execute(select(AppSettings).where(AppSettings.key == key))
             setting = result.scalar_one_or_none()
             if setting:
                 settings[key] = setting.value
 
-    # Validate required settings
+    # Try Resend first (HTTP-based, no firewall issues)
+    resend_api_key = settings.get("resend_api_key")
+    if resend_api_key:
+        return await _send_via_resend(
+            to_email=to_email,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            api_key=resend_api_key,
+            from_email=settings.get("email_from", "PuntyAI <noreply@punty.ai>"),
+        )
+
+    # Fallback to SMTP
     required = ["smtp_host", "smtp_port", "smtp_user", "smtp_password"]
     missing = [k for k in required if not settings.get(k)]
     if missing:
-        logger.warning(f"Email not sent - missing SMTP settings: {missing}")
-        return {"status": "error", "message": f"Missing SMTP settings: {missing}"}
+        logger.warning(f"Email not sent - no Resend API key and missing SMTP settings: {missing}")
+        return {"status": "error", "message": "No email provider configured. Add Resend API key or SMTP settings."}
 
-    smtp_host = settings["smtp_host"]
-    smtp_port = int(settings["smtp_port"])
-    smtp_user = settings["smtp_user"]
-    smtp_password = settings["smtp_password"]
-    smtp_from = settings.get("smtp_from", smtp_user)
+    return await _send_via_smtp(
+        to_email=to_email,
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
+        smtp_host=settings["smtp_host"],
+        smtp_port=int(settings["smtp_port"]),
+        smtp_user=settings["smtp_user"],
+        smtp_password=settings["smtp_password"],
+        smtp_from=settings.get("smtp_from", settings["smtp_user"]),
+    )
+
+
+async def _send_via_resend(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    body_text: Optional[str],
+    api_key: str,
+    from_email: str,
+) -> dict:
+    """Send email via Resend HTTP API."""
+    payload = {
+        "from": from_email,
+        "to": [to_email],
+        "subject": subject,
+        "html": body_html,
+    }
+    if body_text:
+        payload["text"] = body_text
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        logger.info(f"Sending email via Resend to {to_email}: {subject}")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(RESEND_API_URL, json=payload, headers=headers, timeout=30)
+
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"Email sent successfully via Resend to {to_email}, id={data.get('id')}")
+            return {"status": "sent", "to": to_email, "id": data.get("id")}
+        else:
+            error_msg = response.text
+            logger.error(f"Resend API error: {response.status_code} - {error_msg}")
+            return {"status": "error", "message": f"Resend API error: {response.status_code} - {error_msg}"}
+
+    except Exception as e:
+        logger.error(f"Failed to send email via Resend: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+async def _send_via_smtp(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    body_text: Optional[str],
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str,
+    smtp_password: str,
+    smtp_from: str,
+) -> dict:
+    """Send email via SMTP (fallback method)."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
 
     # Build email message
     msg = MIMEMultipart("alternative")
@@ -58,26 +140,22 @@ async def send_email(
     msg["From"] = smtp_from
     msg["To"] = to_email
 
-    # Add plain text part
     if body_text:
         msg.attach(MIMEText(body_text, "plain"))
-
-    # Add HTML part
     msg.attach(MIMEText(body_html, "html"))
 
     try:
-        # Connect and send
-        logger.info(f"Sending email to {to_email}: {subject}")
+        logger.info(f"Sending email via SMTP to {to_email}: {subject}")
         with smtplib.SMTP(smtp_host, smtp_port) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, to_email, msg.as_string())
 
-        logger.info(f"Email sent successfully to {to_email}")
+        logger.info(f"Email sent successfully via SMTP to {to_email}")
         return {"status": "sent", "to": to_email}
 
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error(f"Failed to send email via SMTP: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -110,7 +188,7 @@ def format_morning_prep_email(results: dict) -> tuple[str, str, str]:
     ]
 
     # Calendar summary
-    html_parts.append(f"<h2>📅 Calendar</h2>")
+    html_parts.append("<h2>📅 Calendar</h2>")
     if results.get("calendar_scraped"):
         html_parts.append(f"<p style='color: green;'>✓ Scraped successfully - {results.get('meetings_found', 0)} meetings found</p>")
     else:
