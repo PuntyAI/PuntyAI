@@ -39,7 +39,7 @@ async def daily_morning_prep() -> dict:
     from punty.models.meeting import Meeting, Race, Runner
     from punty.config import melb_today, melb_now
     from punty.scrapers.calendar import scrape_calendar
-    from punty.scrapers.orchestrator import scrape_meeting, scrape_speed_maps
+    from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
     from punty.ai.generator import ContentGenerator
     from sqlalchemy import select, or_
 
@@ -127,12 +127,11 @@ async def daily_morning_prep() -> dict:
             for meeting in selected_meetings:
                 try:
                     logger.info(f"Scraping data for {meeting.venue}...")
-                    # Scrape meeting data
-                    await scrape_meeting(db, meeting.id, meeting.venue, meeting.date)
+                    # Scrape meeting data (form, odds, etc)
+                    await scrape_meeting_full(meeting.id, db)
 
                     # Scrape speed maps
-                    race_count = len(meeting.races) if meeting.races else 8
-                    async for _ in scrape_speed_maps(db, meeting.id, meeting.venue, meeting.date, race_count):
+                    async for _ in scrape_speed_maps_stream(meeting.id, db):
                         pass  # Just run through the generator
 
                     results["meetings_scraped"].append(meeting.venue)
