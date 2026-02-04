@@ -227,6 +227,21 @@ class ResultsMonitor:
 
         for race_num, status in statuses.items():
             if status in ("Paying", "Closed") and race_num not in self.processed_races[meeting_id]:
+                # Check if race already has results in DB (from before restart)
+                from punty.models.meeting import Runner as RunnerModel
+                race_id = f"{meeting_id}-r{race_num}"
+                existing_check = await db.execute(
+                    select(RunnerModel).where(
+                        RunnerModel.race_id == race_id,
+                        RunnerModel.finish_position.isnot(None),
+                    ).limit(1)
+                )
+                if existing_check.scalar_one_or_none():
+                    # Already processed - just add to tracking and skip
+                    self.processed_races[meeting_id].add(race_num)
+                    logger.debug(f"Skipping {meeting.venue} R{race_num} — already has results")
+                    continue
+
                 logger.info(f"New result: {meeting.venue} R{race_num} ({status})")
                 try:
                     # Random delay before scraping detailed results
