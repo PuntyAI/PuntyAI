@@ -59,3 +59,11 @@ Do not always just pick favourites. If you have selected a favourite:
 We want to build VALUE PICKS for our users, mixed with your confidence.
 
 Respect honest, consistent types; account for gear/tactics/draw context; compare prior clashes; use stewards info for colour.
+
+## Age & Sex Domain Knowledge
+Apply these patterns when assessing horse profiles:
+- **Peak performance age**: 4-5 years old for most horses
+- **Melbourne Cup sweet spot**: 4-6 years old wins most frequently
+- **3yo caution at distance**: Rarely win staying races (2000m+) against older horses
+- **7+ years old**: Performance typically declines; need strong recent form to justify
+- **Fillies/mares in open company**: Can be competitive but factor in weight-for-age advantage when present

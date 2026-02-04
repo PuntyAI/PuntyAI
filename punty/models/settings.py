@@ -55,6 +55,10 @@ class AnalysisWeights(Base):
         "pf_speed_rank": "high",  # Early speed rating (1=fastest)
         "pf_settle_position": "high",  # Historical settling position
         "pf_jockey_factor": "med-high",  # Jockey effectiveness metric
+        # Additional factors
+        "horse_profile": "med-high",  # Age, sex - peak age 4-5yo
+        "odds_fluctuations": "low",  # Historical odds movement patterns
+        "stewards_comments": "med",  # Stewards notes on incidents
     }
 
     WEIGHT_LABELS = {
@@ -83,6 +87,10 @@ class AnalysisWeights(Base):
         "pf_speed_rank": "PF Early Speed Rank",
         "pf_settle_position": "PF Settle Position",
         "pf_jockey_factor": "PF Jockey Factor",
+        # Additional factors
+        "horse_profile": "Horse Profile (Age/Sex)",
+        "odds_fluctuations": "Odds Fluctuations",
+        "stewards_comments": "Stewards Comments",
     }
 
     WEIGHT_OPTIONS = ["low", "low-med", "med", "med-high", "high"]
