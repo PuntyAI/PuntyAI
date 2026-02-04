@@ -232,8 +232,9 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
                 bucket = buckets["roughie"]
             else:
                 bucket = buckets["top1"]  # fallback
-            bucket["staked"] += 1.0
-            bucket["returned"] += max(0.0, (p.pnl or 0.0) + 1.0) if p.hit else 0.0
+            stake = p.bet_stake or 1.0
+            bucket["staked"] += stake
+            bucket["returned"] += max(0.0, (p.pnl or 0.0) + stake) if p.hit else 0.0
             bucket["picks"].append(pick_info)
 
         elif p.pick_type == "exotic":
