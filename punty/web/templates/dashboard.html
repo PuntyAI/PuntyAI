@@ -497,32 +497,92 @@ function updateMonitorUI() {
     var labels = rawData.map(function(d) {
         return d.label || d.date;
     });
-    var cumulativeValues = rawData.map(function(d) { return d.cumulative_pnl; });
 
-    // Determine line colour based on final value
-    var finalVal = cumulativeValues[cumulativeValues.length - 1];
-    var lineColor = finalVal >= 0 ? '#4ade80' : '#f87171';
-    var fillColor = finalVal >= 0 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)';
+    // Extract cumulative values for each line
+    var totalValues = rawData.map(function(d) { return d.cumulative_pnl; });
+    var selectionValues = rawData.map(function(d) { return d.cumulative_selection || 0; });
+    var exoticValues = rawData.map(function(d) { return d.cumulative_exotic || 0; });
+    var sequenceValues = rawData.map(function(d) { return d.cumulative_sequence || 0; });
+    var big3Values = rawData.map(function(d) { return d.cumulative_big3_multi || 0; });
+
+    // Determine total line colour based on final value
+    var finalVal = totalValues[totalValues.length - 1];
+    var totalColor = finalVal >= 0 ? '#4ade80' : '#f87171';
+    var totalFill = finalVal >= 0 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)';
+
+    var pointRadius = rawData.length <= 30 ? 3 : rawData.length <= 60 ? 2 : 0;
 
     var ctx = document.getElementById('pnlChart').getContext('2d');
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [{
-                label: 'Cumulative P&L (U)',
-                data: cumulativeValues,
-                borderColor: lineColor,
-                backgroundColor: fillColor,
-                borderWidth: 2.5,
-                fill: true,
-                tension: 0.3,
-                pointRadius: rawData.length <= 30 ? 4 : rawData.length <= 60 ? 2 : 0,
-                pointHoverRadius: 6,
-                pointBackgroundColor: lineColor,
-                pointBorderColor: '#12121a',
-                pointBorderWidth: 2,
-            }]
+            datasets: [
+                {
+                    label: 'Total',
+                    data: totalValues,
+                    borderColor: totalColor,
+                    backgroundColor: totalFill,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: pointRadius,
+                    pointHoverRadius: 6,
+                    order: 0,
+                },
+                {
+                    label: 'Selections',
+                    data: selectionValues,
+                    borderColor: '#f472b6',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 1,
+                },
+                {
+                    label: 'Exotics',
+                    data: exoticValues,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 2,
+                },
+                {
+                    label: 'Sequences',
+                    data: sequenceValues,
+                    borderColor: '#facc15',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 3,
+                },
+                {
+                    label: 'Big 3 Multi',
+                    data: big3Values,
+                    borderColor: '#a78bfa',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 4,
+                }
+            ]
         },
         options: {
             responsive: true,
@@ -532,29 +592,33 @@ function updateMonitorUI() {
                 intersect: false,
             },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: '#9ca3af',
+                        usePointStyle: true,
+                        pointStyle: 'line',
+                        padding: 15,
+                        font: { family: 'Rajdhani', size: 12 }
+                    }
+                },
                 tooltip: {
                     backgroundColor: '#1a1a25',
                     borderColor: 'rgba(255,255,255,0.1)',
                     borderWidth: 1,
                     titleFont: { family: 'Rajdhani', size: 14, weight: '600' },
-                    bodyFont: { family: 'Source Sans Pro', size: 13 },
+                    bodyFont: { family: 'Source Sans Pro', size: 12 },
                     padding: 12,
                     callbacks: {
                         title: function(items) {
                             var d = rawData[items[0].dataIndex];
-                            var periodLabel = {hour: 'Hour', day: 'Day', week: 'Week'}[d.period_type] || 'Period';
-                            return d.date + ' (' + periodLabel + ')';
+                            var periodLabel = {hour: 'Hour', day: 'Day', week: 'Week', start: 'Start'}[d.period_type] || 'Period';
+                            return d.label + ' (' + periodLabel + ')';
                         },
                         label: function(ctx) {
-                            var d = rawData[ctx.dataIndex];
-                            var periodLabel = {hour: 'Hour', day: 'Day', week: 'Week'}[d.period_type] || 'Period';
-                            return [
-                                'Cumulative: ' + (d.cumulative_pnl >= 0 ? '+' : '') + d.cumulative_pnl.toFixed(2) + 'U',
-                                periodLabel + ' P&L: ' + (d.pnl >= 0 ? '+' : '') + d.pnl.toFixed(2) + 'U',
-                                'Bets: ' + d.bets + ' | Winners: ' + d.winners,
-                                'Staked: ' + d.staked.toFixed(2) + 'U | Returned: ' + d.returned.toFixed(2) + 'U',
-                            ];
+                            var val = ctx.parsed.y;
+                            return ctx.dataset.label + ': ' + (val >= 0 ? '+' : '') + val.toFixed(2) + 'U';
                         }
                     }
                 }

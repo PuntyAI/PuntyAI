@@ -648,6 +648,7 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             "pnl": float(pick.pnl or 0),
             "staked": float(pick.bet_stake or 0) + float(pick.exotic_stake or 0),
             "hit": pick.hit or False,
+            "pick_type": pick.pick_type,
         })
 
     # Sort by race time
@@ -693,12 +694,28 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
                 "winners": 0,
                 "pnl": 0.0,
                 "staked": 0.0,
+                # Track by pick type
+                "pnl_selection": 0.0,
+                "pnl_exotic": 0.0,
+                "pnl_sequence": 0.0,
+                "pnl_big3_multi": 0.0,
             }
 
         periods_dict[period_key]["bets"] += 1
         periods_dict[period_key]["winners"] += 1 if event["hit"] else 0
         periods_dict[period_key]["pnl"] += event["pnl"]
         periods_dict[period_key]["staked"] += event["staked"]
+
+        # Track P&L by pick type
+        ptype = event["pick_type"]
+        if ptype == "selection":
+            periods_dict[period_key]["pnl_selection"] += event["pnl"]
+        elif ptype == "exotic":
+            periods_dict[period_key]["pnl_exotic"] += event["pnl"]
+        elif ptype == "sequence":
+            periods_dict[period_key]["pnl_sequence"] += event["pnl"]
+        elif ptype == "big3_multi":
+            periods_dict[period_key]["pnl_big3_multi"] += event["pnl"]
 
     # Sort periods chronologically
     sorted_periods = sorted(periods_dict.values(), key=lambda x: x["sort_key"])
@@ -721,11 +738,19 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             "cumulative_pnl": 0,
             "cumulative_staked": 0,
             "cumulative_returned": 0,
+            "cumulative_selection": 0,
+            "cumulative_exotic": 0,
+            "cumulative_sequence": 0,
+            "cumulative_big3_multi": 0,
         })
 
     cumulative = 0.0
     cumulative_staked = 0.0
     cumulative_returned = 0.0
+    cumulative_selection = 0.0
+    cumulative_exotic = 0.0
+    cumulative_sequence = 0.0
+    cumulative_big3_multi = 0.0
 
     for p in sorted_periods:
         pnl = p["pnl"]
@@ -734,6 +759,10 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         cumulative += pnl
         cumulative_staked += staked
         cumulative_returned += returned
+        cumulative_selection += p.get("pnl_selection", 0)
+        cumulative_exotic += p.get("pnl_exotic", 0)
+        cumulative_sequence += p.get("pnl_sequence", 0)
+        cumulative_big3_multi += p.get("pnl_big3_multi", 0)
 
         result_periods.append({
             "date": p["date"],
@@ -747,6 +776,10 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             "cumulative_pnl": round(cumulative, 2),
             "cumulative_staked": round(cumulative_staked, 2),
             "cumulative_returned": round(cumulative_returned, 2),
+            "cumulative_selection": round(cumulative_selection, 2),
+            "cumulative_exotic": round(cumulative_exotic, 2),
+            "cumulative_sequence": round(cumulative_sequence, 2),
+            "cumulative_big3_multi": round(cumulative_big3_multi, 2),
         })
 
     return result_periods
