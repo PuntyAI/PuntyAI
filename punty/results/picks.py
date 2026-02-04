@@ -258,9 +258,15 @@ async def _settle_picks_for_race_impl(
                     if is_boxed:
                         # Boxed/standout: our runners in top 3 in any order
                         hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
-                    else:
+                    elif len(exotic_runners_int) == 3:
                         # Straight trifecta: exact order match
                         hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
+                    else:
+                        # Flexi trifecta: first must win, rest must include 2nd and 3rd
+                        # e.g., "1 to win, 2, 4 for second, 3, 5 for third" = [1, 2, 4, 3, 5]
+                        first_ok = top_sc_int[0] == exotic_runners_int[0]
+                        rest_ok = set(top_sc_int[1:3]).issubset(set(exotic_runners_int[1:]))
+                        hit = first_ok and rest_ok
                 if hit:
                     dividend = _find_dividend(exotic_divs, "trifecta")
             elif "exacta" in exotic_type:
@@ -288,8 +294,14 @@ async def _settle_picks_for_race_impl(
                 if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
                     if is_boxed:
                         hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
-                    else:
+                    elif len(exotic_runners_int) == 4:
+                        # Straight first 4: exact order match
                         hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
+                    else:
+                        # Flexi first 4: first must win, rest must include 2nd, 3rd, 4th
+                        first_ok = top_sc_int[0] == exotic_runners_int[0]
+                        rest_ok = set(top_sc_int[1:4]).issubset(set(exotic_runners_int[1:]))
+                        hit = first_ok and rest_ok
                 if hit:
                     dividend = _find_dividend(exotic_divs, "first4")
 
