@@ -206,6 +206,14 @@ class AppSettings(Base):
             "value": "false",
             "description": "Enable individual race preview generation (future feature)",
         },
+        "enable_early_mail": {
+            "value": "true",
+            "description": "Enable early mail generation",
+        },
+        "enable_meeting_wrapup": {
+            "value": "true",
+            "description": "Enable end of meet review generation",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:

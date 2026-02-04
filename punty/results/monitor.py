@@ -222,14 +222,24 @@ class ResultsMonitor:
         total_races = len(races)
         paying_count = sum(1 for s in statuses.values() if s in ("Paying", "Closed"))
         if paying_count >= total_races and meeting_id not in self.wrapups_generated:
-            logger.info(f"All races done for {meeting.venue} — generating wrap-up")
-            try:
-                generator = ContentGenerator(db)
-                await generator.generate_meeting_wrapup(meeting_id, save=True)
-                self.wrapups_generated.add(meeting_id)
-                logger.info(f"Wrap-up generated for {meeting.venue}")
-            except Exception as e:
-                logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
+            # Check if meeting wrapup is enabled
+            from punty.models.settings import AppSettings
+            wrapup_setting = await db.execute(
+                select(AppSettings).where(AppSettings.key == "enable_meeting_wrapup")
+            )
+            wrapup_enabled = wrapup_setting.scalar_one_or_none()
+            if wrapup_enabled and wrapup_enabled.value != "true":
+                logger.info(f"All races done for {meeting.venue} — skipping wrap-up (disabled in settings)")
+                self.wrapups_generated.add(meeting_id)  # Mark as done to avoid retrying
+            else:
+                logger.info(f"All races done for {meeting.venue} — generating wrap-up")
+                try:
+                    generator = ContentGenerator(db)
+                    await generator.generate_meeting_wrapup(meeting_id, save=True)
+                    self.wrapups_generated.add(meeting_id)
+                    logger.info(f"Wrap-up generated for {meeting.venue}")
+                except Exception as e:
+                    logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
 
     async def _backfill_tabtouch_exotics(self, db, meeting, statuses):
         """Fetch exotic dividends from TabTouch for races that are missing them."""

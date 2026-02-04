@@ -130,35 +130,44 @@ async def daily_morning_prep() -> dict:
             logger.error(f"Data scrape step failed: {e}")
             results["errors"].append(f"Data scrape: {str(e)}")
 
-        # Step 4: Generate early mail for selected meetings
-        try:
-            logger.info("Step 4: Generating early mail...")
-            result = await db.execute(
-                select(Meeting).where(
-                    Meeting.date == today,
-                    Meeting.selected == True,
-                    or_(Meeting.meeting_type == None, Meeting.meeting_type == "race")
-                ).order_by(Meeting.venue)
-            )
-            selected_meetings = result.scalars().all()
+        # Step 4: Generate early mail for selected meetings (if enabled)
+        from punty.models.settings import AppSettings
+        em_setting = await db.execute(select(AppSettings).where(AppSettings.key == "enable_early_mail"))
+        em_enabled = em_setting.scalar_one_or_none()
+        early_mail_enabled = not em_enabled or em_enabled.value == "true"  # Default on
 
-            generator = ContentGenerator(db)
+        if not early_mail_enabled:
+            logger.info("Step 4: Skipping early mail generation (disabled in settings)")
+            results["early_mail_skipped"] = True
+        else:
+            try:
+                logger.info("Step 4: Generating early mail...")
+                result = await db.execute(
+                    select(Meeting).where(
+                        Meeting.date == today,
+                        Meeting.selected == True,
+                        or_(Meeting.meeting_type == None, Meeting.meeting_type == "race")
+                    ).order_by(Meeting.venue)
+                )
+                selected_meetings = result.scalars().all()
 
-            for meeting in selected_meetings:
-                try:
-                    logger.info(f"Generating early mail for {meeting.venue}...")
-                    async for event in generator.generate_early_mail_stream(meeting.id):
-                        if event.get("status") == "error":
-                            raise Exception(event.get("label", "Unknown error"))
+                generator = ContentGenerator(db)
 
-                    results["early_mail_generated"].append(meeting.venue)
-                    logger.info(f"Early mail generated for {meeting.venue}")
-                except Exception as e:
-                    logger.error(f"Early mail failed for {meeting.venue}: {e}")
-                    results["errors"].append(f"Early mail {meeting.venue}: {str(e)}")
-        except Exception as e:
-            logger.error(f"Early mail step failed: {e}")
-            results["errors"].append(f"Early mail: {str(e)}")
+                for meeting in selected_meetings:
+                    try:
+                        logger.info(f"Generating early mail for {meeting.venue}...")
+                        async for event in generator.generate_early_mail_stream(meeting.id):
+                            if event.get("status") == "error":
+                                raise Exception(event.get("label", "Unknown error"))
+
+                        results["early_mail_generated"].append(meeting.venue)
+                        logger.info(f"Early mail generated for {meeting.venue}")
+                    except Exception as e:
+                        logger.error(f"Early mail failed for {meeting.venue}: {e}")
+                        results["errors"].append(f"Early mail {meeting.venue}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Early mail step failed: {e}")
+                results["errors"].append(f"Early mail: {str(e)}")
 
     results["completed_at"] = melb_now().isoformat()
     logger.info(f"Daily morning prep complete: {results}")

@@ -109,6 +109,22 @@ async def generate_content_stream(
 ):
     """SSE stream of content generation progress."""
     from punty.ai.generator import ContentGenerator
+    from punty.models.settings import AppSettings
+    from sqlalchemy import select
+
+    # Check if content type is enabled
+    setting_key = f"enable_{content_type}"
+    result = await db.execute(select(AppSettings).where(AppSettings.key == setting_key))
+    setting = result.scalar_one_or_none()
+
+    # Default: early_mail and meeting_wrapup are on, race_previews is off
+    defaults = {"enable_early_mail": "true", "enable_meeting_wrapup": "true", "enable_race_previews": "false"}
+    is_enabled = (setting.value if setting else defaults.get(setting_key, "true")) == "true"
+
+    if not is_enabled:
+        async def disabled_generator():
+            yield f"data: {json.dumps({'step': 1, 'total': 1, 'label': f'{content_type.replace(\"_\", \" \").title()} is disabled in Settings', 'status': 'error'})}\n\n"
+        return StreamingResponse(disabled_generator(), media_type="text/event-stream")
 
     generator = ContentGenerator(db)
 
@@ -142,11 +158,20 @@ async def get_content(content_id: str, db: AsyncSession = Depends(get_db)):
 async def generate_content(request: GenerateRequest, db: AsyncSession = Depends(get_db)):
     """Generate new content for a meeting."""
     from punty.ai.generator import ContentGenerator
+    from punty.models.settings import AppSettings
+    from sqlalchemy import select
 
     generator = ContentGenerator(db)
 
     try:
         if request.content_type == "early_mail":
+            # Check if early mail is enabled
+            setting_result = await db.execute(
+                select(AppSettings).where(AppSettings.key == "enable_early_mail")
+            )
+            setting = setting_result.scalar_one_or_none()
+            if setting and setting.value != "true":
+                raise HTTPException(status_code=400, detail="Early mail is disabled. Enable in Settings.")
             result = await generator.generate_early_mail(request.meeting_id)
         elif request.content_type == "race_preview":
             # Check if race previews are enabled

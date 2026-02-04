@@ -339,6 +339,34 @@
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('enable_early_mail', {}).get('value', 'true') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/enable_early_mail"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('enable_early_mail', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Early Mail</span>
+                        <p class="text-xs text-gray-500">Generate daily tips for meetings</p>
+                    </div>
+                </label>
+
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('enable_meeting_wrapup', {}).get('value', 'true') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/enable_meeting_wrapup"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('enable_meeting_wrapup', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Meet Review</span>
+                        <p class="text-xs text-gray-500">Generate end of meet summary and P&L review</p>
+                    </div>
+                </label>
+
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
                            {% if settings.get('enable_race_previews', {}).get('value', 'false') == 'true' %}checked{% endif %}
                            hx-put="/api/settings/enable_race_previews"
                            hx-trigger="change"
