@@ -5,7 +5,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import select, delete, func, case
+from sqlalchemy import select, delete, func, case, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.config import melb_now_naive
@@ -466,6 +466,30 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     )
     rows = result.all()
 
+    # For sequences, we need to calculate actual stake (combos × unit_price)
+    # Query all sequence picks to get their legs for proper stake calculation
+    seq_result = await db.execute(
+        select(Pick)
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Meeting.date == target_date,
+            Pick.settled == True,
+            Pick.pick_type == "sequence",
+        )
+    )
+    sequence_picks = seq_result.scalars().all()
+    sequence_total_stake = 0.0
+    for seq_pick in sequence_picks:
+        if seq_pick.sequence_legs and seq_pick.exotic_stake:
+            try:
+                legs = json.loads(seq_pick.sequence_legs)
+                combos = 1
+                for leg in legs:
+                    combos *= len(leg)
+                sequence_total_stake += combos * seq_pick.exotic_stake
+            except (json.JSONDecodeError, TypeError):
+                sequence_total_stake += seq_pick.exotic_stake or 0
+
     by_product = {}
     total_bets = 0
     total_winners = 0
@@ -485,6 +509,9 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             staked = 0.0  # P&L tracked on multi row
         elif pick_type == "big3_multi":
             staked = float(row.total_staked_exotic or 10.0)
+        elif pick_type == "sequence":
+            # Use properly calculated stake (combos × unit_price)
+            staked = sequence_total_stake
         else:
             staked = float(row.total_staked_exotic or count)
 
@@ -579,6 +606,8 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
     # For sequences: use sequence_start_race + len(legs) - 1
     # For big3_multi: need to find the max race among the 3 picks
 
+    # Exclude losing sequences from all-time P&L per user request
+    # Only include sequences if they hit (won)
     result = await db.execute(
         select(Pick, Race.start_time, Meeting.date)
         .join(Meeting, Pick.meeting_id == Meeting.id)
@@ -586,6 +615,11 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         .where(
             Pick.settled == True,
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
+            # Exclude losing sequences - only include if not a sequence OR if sequence that hit
+            or_(
+                Pick.pick_type != "sequence",
+                and_(Pick.pick_type == "sequence", Pick.hit == True)
+            ),
         )
     )
     rows = result.all()
@@ -642,11 +676,25 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             estimated_hour = 12 + (effective_race_num or 1) - 1  # Race 1 at 12:00, Race 2 at 13:00, etc.
             sort_datetime = datetime.combine(meeting_date, datetime.min.time().replace(hour=min(estimated_hour, 18)))
 
+        # Calculate actual staked amount
+        # For sequences, exotic_stake is unit price - need to multiply by combos
+        if pick.pick_type == "sequence" and pick.sequence_legs and pick.exotic_stake:
+            try:
+                legs = _json.loads(pick.sequence_legs)
+                combos = 1
+                for leg in legs:
+                    combos *= len(leg)
+                staked = combos * pick.exotic_stake
+            except (json.JSONDecodeError, TypeError):
+                staked = float(pick.exotic_stake or 0)
+        else:
+            staked = float(pick.bet_stake or 0) + float(pick.exotic_stake or 0)
+
         pick_events.append({
             "sort_datetime": sort_datetime,
             "meeting_date": meeting_date,
             "pnl": float(pick.pnl or 0),
-            "staked": float(pick.bet_stake or 0) + float(pick.exotic_stake or 0),
+            "staked": staked,
             "hit": pick.hit or False,
             "pick_type": pick.pick_type,
         })
