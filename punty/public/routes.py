@@ -79,9 +79,9 @@ async def get_winner_stats() -> dict:
         )
         alltime_winners = alltime_result.scalar() or 0
 
-        # All-time total winnings (sum of positive pnl from winning selections)
+        # All-time total collected (sum of returns from winning selections = pnl + stake)
         alltime_winnings_result = await db.execute(
-            select(func.sum(Pick.pnl)).where(
+            select(func.sum(Pick.pnl + Pick.bet_stake)).where(
                 and_(
                     Pick.pick_type == "selection",
                     Pick.hit == True,
