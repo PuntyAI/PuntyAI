@@ -906,6 +906,53 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 for s in stewards:
                     parts.append(f"- {s['horse']}: {s['comment']}")
 
+            # Extended form history (past starts with sectionals)
+            form_histories = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                fh_raw = runner.get("form_history")
+                if fh_raw:
+                    try:
+                        fh = json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+                        if fh and len(fh) > 0:
+                            form_histories.append({
+                                "horse": runner.get("horse_name"),
+                                "saddlecloth": runner.get("saddlecloth"),
+                                "starts": fh[:5],  # Last 5 starts
+                            })
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+            if form_histories:
+                parts.append("")
+                parts.append("**Extended Form (Last 5 Starts):**")
+                for fh in form_histories[:8]:  # Show up to 8 horses with form
+                    horse = fh["horse"]
+                    starts_str = []
+                    for start in fh["starts"]:
+                        # Format: venue distance pos (margin) track
+                        venue = start.get("venue", "?")
+                        dist = start.get("distance", "?")
+                        pos = start.get("pos", "?")
+                        margin = start.get("margin", "")
+                        track = start.get("track", "")
+                        settled = start.get("settled", "")
+                        at400 = start.get("at400", "")
+
+                        start_info = f"{venue} {dist}m-{pos}"
+                        if margin:
+                            start_info += f"({margin})"
+                        if track:
+                            start_info += f" {track}"
+                        if settled:
+                            start_info += f" Sett:{settled}"
+                        if at400:
+                            start_info += f" 400:{at400}"
+                        starts_str.append(start_info)
+
+                    parts.append(f"- No.{fh['saddlecloth']} {horse}: {' | '.join(starts_str)}")
+
             parts.append("")
 
         # Add summary insights

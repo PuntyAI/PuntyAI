@@ -132,7 +132,8 @@ class RacingComScraper(BaseScraper):
                         logger.debug(f"Captured {len(entries)} entries for race {race_num}")
 
                 if "getRaceEntryItemByHorsePaged_CD" in url:
-                    items = data.get("data", {}).get("getRaceEntryItemByHorsePaged", [])
+                    # Note: API returns key with capital G "GetRaceEntryItemByHorsePaged"
+                    items = data.get("data", {}).get("GetRaceEntryItemByHorsePaged", [])
                     if isinstance(items, list) and items:
                         # Identify horse by horseName from first item
                         horse_name = items[0].get("horseName", "")
@@ -243,38 +244,29 @@ class RacingComScraper(BaseScraper):
 
                 # 2. Navigate to each race page to trigger GraphQL queries
                 for race_num in range(1, race_count + 1):
-                    race_url = self._build_race_url(venue, race_date, race_num)
+                    # Use #/full-form hash to go directly to Full Form view
+                    # This triggers lazy loading of extended form history on scroll
+                    race_url = f"{self._build_race_url(venue, race_date, race_num)}#/full-form"
                     logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
 
-                    await page.goto(race_url, wait_until="load")
-                    await page.wait_for_timeout(2500)  # Reduced from 4000
+                    await page.goto(race_url, wait_until="networkidle")
+                    await page.wait_for_timeout(2500)
 
-                    # Try clicking "Full Form" tab to trigger getRaceEntriesForField_CD
-                    try:
-                        ff_btn = page.locator("button:has-text('Full Form'), a:has-text('Full Form')").first
-                        if await ff_btn.is_visible(timeout=1500):
-                            await ff_btn.click()
-                            await page.wait_for_timeout(1500)  # Reduced from 3000
-                        else:
-                            logger.info(f"Race {race_num}: 'Full Form' button not found, trying 'Form' tab")
-                            # Try alternative tab names
-                            for tab_text in ["Form", "Field", "Runners"]:
-                                try:
-                                    alt_btn = page.locator(f"button:has-text('{tab_text}'), a:has-text('{tab_text}')").first
-                                    if await alt_btn.is_visible(timeout=1000):
-                                        await alt_btn.click()
-                                        await page.wait_for_timeout(1500)  # Reduced from 3000
-                                        break
-                                except Exception:
-                                    continue
-                    except Exception:
-                        pass
+                    # Dismiss cookie banner on first race
+                    if race_num == 1:
+                        try:
+                            btn = page.locator("button:has-text('Decline')").first
+                            if await btn.is_visible(timeout=1500):
+                                await btn.click()
+                        except Exception:
+                            pass
 
                     # Scroll down to trigger lazy loading of getRaceEntryItemByHorsePaged_CD
-                    # Each horse's form history loads as it scrolls into view
-                    for _ in range(8):  # Reduced from 15
-                        await page.evaluate("window.scrollBy(0, 800)")  # Larger scroll
-                        await page.wait_for_timeout(500)  # Reduced from 800
+                    # The extended form history loads as each horse row scrolls into view
+                    # Scroll to bottom to ensure all horses are loaded
+                    for _ in range(15):
+                        await page.evaluate("window.scrollBy(0, 600)")
+                        await page.wait_for_timeout(400)
 
                     # Check if we got entries for this race
                     if race_num not in race_entries_by_num:
