@@ -795,6 +795,46 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                     f"{runner.get('speed_map_position', '-')} | {market_move} | {pf_speed} | {pf_map} |"
                 )
 
+            # Add detailed runner stats below the table
+            parts.append("")
+            parts.append("**Runner Details:**")
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                details = []
+                horse = runner.get("horse_name", "Unknown")
+
+                # Gear changes (important!)
+                if runner.get("gear_changes"):
+                    details.append(f"GEAR: {runner['gear_changes']}")
+                elif runner.get("gear"):
+                    details.append(f"Gear: {runner['gear']}")
+
+                # First/second up
+                if runner.get("first_up_stats"):
+                    details.append(f"1st-up: {runner['first_up_stats']}")
+                if runner.get("second_up_stats"):
+                    details.append(f"2nd-up: {runner['second_up_stats']}")
+
+                # Track/distance stats
+                if runner.get("track_stats"):
+                    details.append(f"Track: {runner['track_stats']}")
+                if runner.get("distance_stats"):
+                    details.append(f"Dist: {runner['distance_stats']}")
+
+                # Jockey/trainer at track
+                if runner.get("jockey_stats"):
+                    details.append(f"Jockey@track: {runner['jockey_stats']}")
+                if runner.get("trainer_stats"):
+                    details.append(f"Trainer@track: {runner['trainer_stats']}")
+
+                # Class stats
+                if runner.get("class_stats"):
+                    details.append(f"Class: {runner['class_stats']}")
+
+                if details:
+                    parts.append(f"- {horse}: {' | '.join(details)}")
+
             parts.append("")
 
         # Add summary insights
@@ -841,6 +881,47 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 label = "BIG DRIFT" if m.get("movement") == "big_drift" else "Drifting"
                 summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
                 parts.append(f"- Race {m['race']}: {m['horse']} — {summary} [{label}]")
+
+        # Collect gear changes across all races
+        gear_changes = []
+        first_uppers = []
+        for race in races:
+            race_num = race.get("race_number")
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                horse = runner.get("horse_name")
+                odds = runner.get("current_odds")
+                # Gear changes
+                if runner.get("gear_changes"):
+                    gear_changes.append({
+                        "race": race_num,
+                        "horse": horse,
+                        "change": runner["gear_changes"],
+                        "odds": odds,
+                    })
+                # First up runners (check days_since_last_run or first_up_stats)
+                days = runner.get("days_since_last_run")
+                first_up = runner.get("first_up_stats")
+                if days and days > 60:  # Resuming after 60+ days
+                    first_uppers.append({
+                        "race": race_num,
+                        "horse": horse,
+                        "days": days,
+                        "stats": first_up,
+                        "odds": odds,
+                    })
+
+        if gear_changes:
+            parts.append("\n## GEAR CHANGES (Important!)")
+            for g in gear_changes:
+                parts.append(f"- Race {g['race']}: {g['horse']} — {g['change']} (${g['odds']})")
+
+        if first_uppers:
+            parts.append("\n## FIRST-UP RUNNERS (Resuming)")
+            for f in first_uppers:
+                stats_str = f" | 1st-up record: {f['stats']}" if f.get("stats") else ""
+                parts.append(f"- Race {f['race']}: {f['horse']} — {f['days']} days off (${f['odds']}){stats_str}")
 
         # Sequence lanes (quaddie, early quaddie, big 6)
         total_races = summary.get("total_races", len(races))
