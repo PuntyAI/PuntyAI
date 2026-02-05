@@ -766,8 +766,8 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 parts.append(f"Pace Disadvantaged: {', '.join(dis_list)}")
 
             parts.append("")
-            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | PF Speed | PF Settle | PF Map |")
-            parts.append("|-----|-------|---------|--------|------|------|-----------|----------|-----------|--------|")
+            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | Market Move | PF Speed | PF Map |")
+            parts.append("|-----|-------|---------|--------|------|------|-----------|-------------|----------|--------|")
 
             for runner in race.get("runners", []):
                 if runner.get("scratched"):
@@ -775,13 +775,24 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 saddlecloth = runner.get("saddlecloth", runner.get('barrier', '-'))
                 # Format PF fields
                 pf_speed = runner.get("pf_speed_rank") or "-"
-                pf_settle = f"{runner['pf_settle']:.1f}" if runner.get("pf_settle") else "-"
                 pf_map = f"{runner['pf_map_factor']:.2f}" if runner.get("pf_map_factor") else "-"
+                # Format market movement
+                market_move = "-"
+                mm = runner.get("market_movement")
+                if mm and mm.get("direction") and mm.get("direction") != "stable":
+                    from_price = mm.get("from")
+                    to_price = mm.get("to")
+                    direction = mm.get("direction")
+                    if from_price and to_price:
+                        if direction in ("heavy_support", "firming"):
+                            market_move = f"${from_price:.0f}→${to_price:.0f} IN"
+                        else:
+                            market_move = f"${from_price:.0f}→${to_price:.0f} OUT"
                 parts.append(
                     f"| {saddlecloth} | {runner.get('horse_name', 'Unknown')} | "
                     f"{runner.get('barrier', '-')} | {runner.get('jockey', '-')} | "
                     f"${runner.get('current_odds', '-')} | {runner.get('form', '-')} | "
-                    f"{runner.get('speed_map_position', '-')} | {pf_speed} | {pf_settle} | {pf_map} |"
+                    f"{runner.get('speed_map_position', '-')} | {market_move} | {pf_speed} | {pf_map} |"
                 )
 
             parts.append("")
@@ -796,6 +807,40 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             parts.append("\n## Value/Roughies")
             for rough in summary["roughies"]:
                 parts.append(f"- Race {rough['race']}: {rough['horse']} @ ${rough['odds']} (form: {rough['form']})")
+
+        # Collect market movers from all races
+        market_in = []
+        market_out = []
+        for race in races:
+            race_num = race.get("race_number")
+            analysis = race.get("analysis", {})
+            for mover in analysis.get("market_movers", []):
+                entry = {
+                    "race": race_num,
+                    "horse": mover.get("horse"),
+                    "from": mover.get("from"),
+                    "to": mover.get("to"),
+                    "movement": mover.get("movement"),
+                    "summary": mover.get("summary"),
+                }
+                if mover.get("direction") == "in":
+                    market_in.append(entry)
+                else:
+                    market_out.append(entry)
+
+        if market_in:
+            parts.append("\n## MARKET SUPPORT (Horses Being Backed)")
+            for m in market_in:
+                label = "HEAVY" if m.get("movement") == "heavy_support" else "Firming"
+                summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
+                parts.append(f"- Race {m['race']}: {m['horse']} — {summary} [{label}]")
+
+        if market_out:
+            parts.append("\n## MARKET DRIFTERS (Horses Easing)")
+            for m in market_out:
+                label = "BIG DRIFT" if m.get("movement") == "big_drift" else "Drifting"
+                summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
+                parts.append(f"- Race {m['race']}: {m['horse']} — {summary} [{label}]")
 
         # Sequence lanes (quaddie, early quaddie, big 6)
         total_races = summary.get("total_races", len(races))
