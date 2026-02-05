@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Boolean
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Boolean, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from punty.config import melb_now_naive
@@ -15,13 +15,16 @@ class RaceMemory(Base):
     """Stores a prediction and its outcome for learning."""
 
     __tablename__ = "race_memories"
+    __table_args__ = (
+        UniqueConstraint("race_id", "saddlecloth", name="uq_race_memory_race_saddlecloth"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Race identification
     meeting_id: Mapped[str] = mapped_column(String, index=True)
     race_number: Mapped[int] = mapped_column(Integer)
-    race_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    race_id: Mapped[str] = mapped_column(String, index=True)  # Not unique alone - composite with saddlecloth
 
     # Race context (stored as JSON)
     # Includes: track condition, distance, class, field size, tempo, rail position
