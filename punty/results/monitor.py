@@ -285,8 +285,21 @@ class ResultsMonitor:
                     )
                     results_enabled = results_setting.scalar_one_or_none()
                     if not results_enabled or results_enabled.value == "true":
-                        generator = ContentGenerator(db)
-                        await generator.generate_results(meeting_id, race_num, save=True)
+                        # Check if result content already exists (prevents duplicates on restart)
+                        from punty.models.content import Content
+                        existing_result = await db.execute(
+                            select(Content).where(
+                                Content.meeting_id == meeting_id,
+                                Content.content_type == "race_result",
+                                Content.race_id == race_id,
+                                Content.status.notin_(["rejected", "superseded"]),
+                            )
+                        )
+                        if existing_result.scalar_one_or_none():
+                            logger.info(f"Result content already exists for {meeting.venue} R{race_num} — skipping")
+                        else:
+                            generator = ContentGenerator(db)
+                            await generator.generate_results(meeting_id, race_num, save=True)
                     else:
                         logger.info(f"Results generation disabled — skipping {meeting.venue} R{race_num}")
 
@@ -303,6 +316,20 @@ class ResultsMonitor:
         total_races = len(races)
         paying_count = sum(1 for s in statuses.values() if s in ("Paying", "Closed"))
         if paying_count >= total_races and meeting_id not in self.wrapups_generated:
+            # Check if a wrapup already exists in DB (prevents duplicates on restart)
+            from punty.models.content import Content
+            existing_wrapup = await db.execute(
+                select(Content).where(
+                    Content.meeting_id == meeting_id,
+                    Content.content_type == "meeting_wrapup",
+                    Content.status.notin_(["rejected", "superseded"]),
+                )
+            )
+            if existing_wrapup.scalar_one_or_none():
+                logger.info(f"Wrap-up already exists for {meeting.venue} — skipping")
+                self.wrapups_generated.add(meeting_id)
+                return
+
             # Check if meeting wrapup is enabled
             from punty.models.settings import AppSettings
             wrapup_setting = await db.execute(
