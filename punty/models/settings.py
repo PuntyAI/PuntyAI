@@ -51,10 +51,10 @@ class AnalysisWeights(Base):
         "money": "low-med",
         "tipsters_analysis": "high",
         # Punting Form insights (pace/speed metrics)
-        "pf_map_factor": "high",  # Pace advantage/disadvantage factor
-        "pf_speed_rank": "high",  # Early speed rating (1=fastest)
-        "pf_settle_position": "high",  # Historical settling position
-        "pf_jockey_factor": "med-high",  # Jockey effectiveness metric
+        "pf_map_factor": "med",  # Pace advantage/disadvantage factor
+        "pf_speed_rank": "med",  # Early speed rating (1=fastest)
+        "pf_settle_position": "med",  # Historical settling position
+        "pf_jockey_factor": "med",  # Jockey effectiveness metric
         # Additional factors
         "horse_profile": "med-high",  # Age, sex - peak age 4-5yo
         "odds_fluctuations": "low",  # Historical odds movement patterns
