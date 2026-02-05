@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,41 +44,62 @@ class LeaderboardService:
         """Calculate the leaderboard for a competition.
 
         Returns list of LeaderboardEntry sorted by points (desc), then winners (desc).
+        Includes all users who have made picks, even if no races have resulted yet.
         """
-        # Get all resulted races in competition
+        # Get all races in competition
         races_result = await self.db.execute(
+            select(G1Race.id)
+            .where(G1Race.competition_id == competition_id)
+        )
+        all_race_ids = [r[0] for r in races_result.all()]
+
+        if not all_race_ids:
+            return []
+
+        # Get resulted races for points calculation
+        resulted_result = await self.db.execute(
             select(G1Race.id)
             .where(G1Race.competition_id == competition_id)
             .where(G1Race.status == "resulted")
         )
-        resulted_race_ids = [r[0] for r in races_result.all()]
+        resulted_race_ids = [r[0] for r in resulted_result.all()]
 
-        if not resulted_race_ids:
-            return []
+        # Aggregate picks by user - include all users who have made ANY picks
+        # Build case expressions for resulted races only
+        points_case = case(
+            (G1Pick.race_id.in_(resulted_race_ids), func.coalesce(G1Pick.points_earned, 0)),
+            else_=0
+        ) if resulted_race_ids else 0
 
-        # Aggregate picks by user
+        winners_case = case(
+            (and_(G1Pick.race_id.in_(resulted_race_ids), G1Pick.points_earned == 3), 1),
+            else_=0
+        ) if resulted_race_ids else 0
+
+        places_case = case(
+            (and_(
+                G1Pick.race_id.in_(resulted_race_ids),
+                (G1Pick.points_earned == 2) | (G1Pick.points_earned == 1)
+            ), 1),
+            else_=0
+        ) if resulted_race_ids else 0
+
         query = (
             select(
                 G1Pick.user_id,
                 G1User.display_name,
-                func.sum(func.coalesce(G1Pick.points_earned, 0)).label("total_points"),
+                func.sum(points_case).label("total_points"),
                 func.count(G1Pick.id).label("races_picked"),
-                func.sum(
-                    func.cast(G1Pick.points_earned == 3, type_=type(1))
-                ).label("winners"),
-                func.sum(
-                    func.cast(
-                        (G1Pick.points_earned == 2) | (G1Pick.points_earned == 1),
-                        type_=type(1)
-                    )
-                ).label("places"),
+                func.sum(winners_case).label("winners"),
+                func.sum(places_case).label("places"),
             )
             .join(G1User)
-            .where(G1Pick.race_id.in_(resulted_race_ids))
+            .where(G1Pick.race_id.in_(all_race_ids))
             .group_by(G1Pick.user_id, G1User.display_name)
             .order_by(
-                func.sum(func.coalesce(G1Pick.points_earned, 0)).desc(),
-                func.sum(func.cast(G1Pick.points_earned == 3, type_=type(1))).desc(),
+                func.sum(points_case).desc(),
+                func.sum(winners_case).desc(),
+                G1User.display_name.asc(),  # Alphabetical for ties
             )
         )
 
