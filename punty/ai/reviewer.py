@@ -64,6 +64,12 @@ class ContentReviewer:
         content.status = ContentStatus.PENDING_REVIEW.value
         content.review_notes = f"AI Fix applied: {issue_type}" + (f" - {notes}" if notes else "")
 
+        # Re-format for platforms
+        from punty.formatters.whatsapp import format_whatsapp
+        from punty.formatters.twitter import format_twitter
+        content.whatsapp_formatted = format_whatsapp(content.raw_content, content.content_type)
+        content.twitter_formatted = format_twitter(content.raw_content, content.content_type)
+
         await self.db.commit()
 
         logger.info(f"Applied AI fix to {content_id}: {issue_type}")
@@ -130,6 +136,11 @@ class ContentReviewer:
                 race_number=race.race_number,
                 save=False,
             )
+        elif content.content_type == "meeting_wrapup":
+            new_result = await generator.generate_meeting_wrapup(
+                meeting_id=content.meeting_id,
+                save=False,
+            )
         else:
             raise ValueError(f"Cannot regenerate content type: {content.content_type}")
 
@@ -154,6 +165,12 @@ Generate the adjusted version.""",
         content.raw_content = new_result["raw_content"]
         content.status = ContentStatus.PENDING_REVIEW.value
         content.review_notes = "Regenerated" + (f": {additional_instructions}" if additional_instructions else "")
+
+        # Re-format for platforms
+        from punty.formatters.whatsapp import format_whatsapp
+        from punty.formatters.twitter import format_twitter
+        content.whatsapp_formatted = format_whatsapp(content.raw_content, content.content_type)
+        content.twitter_formatted = format_twitter(content.raw_content, content.content_type)
 
         await self.db.commit()
 

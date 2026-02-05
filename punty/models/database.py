@@ -103,6 +103,10 @@ async def init_db() -> None:
             # Fixed odds for settlement
             "ALTER TABLE picks ADD COLUMN place_odds_at_tip FLOAT",
             "ALTER TABLE runners ADD COLUMN place_odds FLOAT",
+            # Additional runner stats columns
+            "ALTER TABLE runners ADD COLUMN trainer_stats TEXT",
+            "ALTER TABLE runners ADD COLUMN class_stats TEXT",
+            "ALTER TABLE runners ADD COLUMN trainer_location VARCHAR(100)",
         ]:
             try:
                 await conn.execute(_text(col))

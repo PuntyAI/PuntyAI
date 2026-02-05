@@ -271,13 +271,46 @@ async def review_content(
         content.status = ContentStatus.REJECTED
         content.review_notes = action.notes
     elif action.action == "regenerate":
-        # Will trigger regeneration
+        # Trigger actual regeneration
         content.status = ContentStatus.REGENERATING
         content.review_notes = action.notes
+        await db.commit()
+
+        # Actually regenerate
+        from punty.ai.reviewer import ContentReviewer
+        reviewer = ContentReviewer(db)
+        try:
+            result = await reviewer.regenerate_content(content_id, action.notes)
+            # Refresh content after regeneration
+            await db.refresh(content)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Regeneration failed: {e}")
+            content.status = ContentStatus.PENDING_REVIEW
+            content.review_notes = f"Regeneration failed: {e}"
+            await db.commit()
+        return content.to_dict()
+
     elif action.action == "ai_fix":
-        # Will trigger AI fix
+        # Trigger actual AI fix
         content.status = ContentStatus.REGENERATING
         content.review_notes = f"AI Fix requested: {action.issue_type} - {action.notes}"
+        await db.commit()
+
+        # Actually fix with AI
+        from punty.ai.reviewer import ContentReviewer
+        reviewer = ContentReviewer(db)
+        try:
+            result = await reviewer.fix_content(content_id, action.issue_type, action.notes)
+            # Refresh content after fix
+            await db.refresh(content)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"AI Fix failed: {e}")
+            content.status = ContentStatus.PENDING_REVIEW
+            content.review_notes = f"AI Fix failed: {e}"
+            await db.commit()
+        return content.to_dict()
 
     await db.commit()
     return content.to_dict()
