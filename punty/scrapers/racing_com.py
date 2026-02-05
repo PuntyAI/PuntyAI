@@ -1000,7 +1000,7 @@ class RacingComScraper(BaseScraper):
         _find(data)
 
     async def scrape_sectional_times(
-        self, venue: str, race_date: str, race_number: int
+        self, venue: str, race_date: date, race_number: int
     ) -> Optional[dict]:
         """Scrape post-race sectional times data.
 
