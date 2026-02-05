@@ -1,11 +1,15 @@
 """Embedding service for generating and comparing race context embeddings."""
 
-import json
+import asyncio
 import logging
 import math
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# Simple retry configuration
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0  # seconds
 
 
 class EmbeddingService:
@@ -98,20 +102,28 @@ class EmbeddingService:
         return " | ".join(parts) if parts else "No context available"
 
     async def get_embedding(self, text: str) -> list[float] | None:
-        """Get embedding for text using OpenAI's embedding model."""
+        """Get embedding for text using OpenAI's embedding model with retry."""
         client = await self._get_client()
         if not client:
             return None
 
-        try:
-            response = await client.embeddings.create(
-                model="text-embedding-3-small",
-                input=text,
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            logger.error(f"Failed to get embedding: {e}")
-            return None
+        last_error = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = await client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=text,
+                )
+                return response.data[0].embedding
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"Embedding attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                    await asyncio.sleep(delay)
+
+        logger.error(f"Failed to get embedding after {MAX_RETRIES} attempts: {last_error}")
+        return None
 
     async def embed_context(
         self, context: dict[str, Any], runner: dict[str, Any]

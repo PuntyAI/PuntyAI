@@ -2,16 +2,21 @@
 
 import json
 import logging
-from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from punty.config import melb_now_naive
 from punty.memory.models import RaceMemory, PatternInsight
 from punty.memory.embeddings import EmbeddingService
 
 logger = logging.getLogger(__name__)
+
+
+def _escape_like_pattern(s: str) -> str:
+    """Escape SQL LIKE special characters to prevent injection."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class MemoryStore:
@@ -103,7 +108,7 @@ class MemoryStore:
             memory.hit = hit
             memory.pnl = pnl
             memory.sp_odds = sp_odds
-            memory.settled_at = datetime.utcnow()
+            memory.settled_at = melb_now_naive()
             await self.db.flush()
 
         return memory
@@ -255,9 +260,10 @@ class MemoryStore:
             pattern_key = None
 
         if pattern_key:
+            safe_pattern = _escape_like_pattern(pattern_key[:10])
             result = await self.db.execute(
                 select(PatternInsight).where(
-                    PatternInsight.pattern_key.like(f"%{pattern_key[:10]}%")
+                    PatternInsight.pattern_key.like(f"%{safe_pattern}%", escape="\\")
                 ).limit(3)
             )
             patterns = result.scalars().all()
@@ -268,10 +274,11 @@ class MemoryStore:
         # Market movement patterns
         movement = runner.get("odds_movement", "stable")
         if movement in ("heavy_support", "firming"):
+            safe_movement = _escape_like_pattern(movement)
             result = await self.db.execute(
                 select(PatternInsight).where(
                     PatternInsight.pattern_type == "market_move",
-                    PatternInsight.pattern_key.like(f"%{movement}%"),
+                    PatternInsight.pattern_key.like(f"%{safe_movement}%", escape="\\"),
                 ).limit(2)
             )
             patterns = result.scalars().all()

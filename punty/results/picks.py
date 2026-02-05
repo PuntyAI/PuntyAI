@@ -438,6 +438,14 @@ async def _settle_picks_for_race_impl(
 
     await db.flush()
     logger.info(f"Settled {settled_count} picks for {meeting_id} R{race_number}")
+
+    # Update memory outcomes for the learning system
+    if settled_count > 0:
+        try:
+            await update_memory_outcomes(db, meeting_id, race_number)
+        except Exception as e:
+            logger.warning(f"Failed to update memory outcomes: {e}")
+
     return settled_count
 
 

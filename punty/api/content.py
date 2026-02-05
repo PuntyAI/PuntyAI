@@ -254,11 +254,13 @@ async def review_content(
                 await db.execute(sa_delete(Pick).where(Pick.content_id == old.id))
 
             try:
-                from punty.results.picks import store_picks_from_content
+                from punty.results.picks import store_picks_from_content, store_picks_as_memories
                 await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)
+                # Store picks as memories for learning system
+                await store_picks_as_memories(db, content.meeting_id, content.id)
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).error(f"Failed to store picks: {e}")
+                logging.getLogger(__name__).error(f"Failed to store picks/memories: {e}")
     elif action.action == "unapprove":
         content.status = ContentStatus.PENDING_REVIEW.value
         content.review_notes = action.notes or "Unapproved by user"

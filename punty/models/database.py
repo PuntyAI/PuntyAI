@@ -39,8 +39,54 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Add columns that may be missing on existing databases
         _text = __import__("sqlalchemy").text
+
+        # Create memory tables if they don't exist (for existing databases)
+        for table_sql in [
+            """CREATE TABLE IF NOT EXISTS race_memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                meeting_id VARCHAR NOT NULL,
+                race_number INTEGER NOT NULL,
+                race_id VARCHAR NOT NULL,
+                context_json TEXT NOT NULL,
+                runner_json TEXT NOT NULL,
+                horse_name VARCHAR NOT NULL,
+                saddlecloth INTEGER NOT NULL,
+                tip_rank INTEGER NOT NULL,
+                confidence VARCHAR,
+                odds_at_tip FLOAT,
+                bet_type VARCHAR,
+                finish_position INTEGER,
+                hit BOOLEAN,
+                pnl FLOAT,
+                sp_odds FLOAT,
+                embedding_json TEXT,
+                created_at DATETIME NOT NULL,
+                settled_at DATETIME,
+                UNIQUE(race_id, saddlecloth)
+            )""",
+            """CREATE TABLE IF NOT EXISTS pattern_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern_type VARCHAR NOT NULL,
+                pattern_key VARCHAR NOT NULL,
+                sample_count INTEGER DEFAULT 0,
+                hit_rate FLOAT DEFAULT 0.0,
+                avg_pnl FLOAT DEFAULT 0.0,
+                avg_odds FLOAT DEFAULT 0.0,
+                insight_text TEXT NOT NULL,
+                conditions_json TEXT DEFAULT '{}',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )""",
+        ]:
+            try:
+                await conn.execute(_text(table_sql))
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "already exists" not in err_msg:
+                    logger.debug(f"Memory table note: {e}")
+
+        # Add columns that may be missing on existing databases
         for col in [
             "ALTER TABLE picks ADD COLUMN estimated_return_pct FLOAT",
             "ALTER TABLE picks ADD COLUMN bet_type VARCHAR(20)",
@@ -77,6 +123,11 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_picks_settled ON picks(settled)",
             "CREATE INDEX IF NOT EXISTS ix_content_meeting_id ON content(meeting_id)",
             "CREATE INDEX IF NOT EXISTS ix_content_status ON content(status)",
+            # Memory system indexes
+            "CREATE INDEX IF NOT EXISTS ix_race_memories_race_id ON race_memories(race_id)",
+            "CREATE INDEX IF NOT EXISTS ix_race_memories_meeting_id ON race_memories(meeting_id)",
+            "CREATE INDEX IF NOT EXISTS ix_race_memories_settled ON race_memories(settled_at)",
+            "CREATE INDEX IF NOT EXISTS ix_pattern_insights_type_key ON pattern_insights(pattern_type, pattern_key)",
         ]:
             try:
                 await conn.execute(_text(idx))

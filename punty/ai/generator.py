@@ -365,7 +365,7 @@ class ContentGenerator:
 
             # For each race, find similar past situations
             races = context.get("races", [])
-            for race in races[:4]:  # Limit to first 4 races to keep context manageable
+            for race in races:
                 race_context = {
                     "track_condition": context.get("meeting", {}).get("track_condition"),
                     "distance": race.get("distance"),
