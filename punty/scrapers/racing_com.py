@@ -1023,25 +1023,22 @@ class RacingComScraper(BaseScraper):
 
         sectional_data = {}
 
-        async with self._browser_context() as (browser, context):
-            page = await context.new_page()
-
+        async with new_page() as page:
             async def capture_sectionals(response):
-                if "graphql" not in response.url:
+                if "graphql.rmdprod.racing.com" not in response.url:
                     return
                 try:
-                    data = await response.json()
+                    body = await response.text()
+                    data = _json.loads(body)
                     # Look for sectionaltimes_callback
                     self._try_extract_sectional_times(data, sectional_data)
                 except Exception:
                     pass
 
             page.on("response", capture_sectionals)
-
             try:
-                await page.goto(race_url, wait_until="networkidle", timeout=30000)
-                # Wait a bit for sectional data to load
-                await asyncio.sleep(2)
+                await page.goto(race_url, wait_until="load", timeout=30000)
+                await page.wait_for_timeout(3000)  # Wait for sectional data to load
             except Exception as e:
                 logger.warning(f"Error loading sectional times page: {e}")
             finally:
