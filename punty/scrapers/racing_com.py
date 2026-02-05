@@ -1018,7 +1018,7 @@ class RacingComScraper(BaseScraper):
             }]
         }
         """
-        race_url = self._build_race_url(venue, race_date, race_number) + "#/speed-data"
+        race_url = self._build_race_url(venue, race_date, race_number)
         logger.info(f"Scraping sectional times: {race_url}")
 
         sectional_data = {}
@@ -1039,8 +1039,18 @@ class RacingComScraper(BaseScraper):
 
             page.on("response", capture_sectionals)
             try:
+                # Load the race page first
                 await page.goto(race_url, wait_until="load", timeout=30000)
-                await page.wait_for_timeout(5000)  # Wait for sectional data to load
+                await page.wait_for_timeout(2000)
+
+                # Click on the Speed Data tab to trigger sectional times GraphQL request
+                try:
+                    speed_tab = page.locator('text="Speed Data"').first
+                    if await speed_tab.is_visible(timeout=3000):
+                        await speed_tab.click()
+                        await page.wait_for_timeout(4000)  # Wait for sectional data
+                except Exception as e:
+                    logger.debug(f"Could not click Speed Data tab: {e}")
             except Exception as e:
                 logger.warning(f"Error loading sectional times page: {e}")
             finally:
