@@ -864,6 +864,7 @@ async def store_picks_as_memories(
     """
     from punty.memory.models import RaceMemory
     from punty.memory.embeddings import EmbeddingService
+    from punty.models.settings import get_api_key
 
     # Get all selection picks for this content
     result = await db.execute(
@@ -884,7 +885,9 @@ async def store_picks_as_memories(
     if not meeting:
         return 0
 
-    embedding_service = EmbeddingService()
+    # Get API key from same session to avoid database locking
+    api_key = await get_api_key(db, "openai_api_key")
+    embedding_service = EmbeddingService(api_key=api_key)
     stored = 0
 
     for pick in picks:
