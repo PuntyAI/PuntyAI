@@ -91,7 +91,11 @@ async def _settle_picks_for_race_impl(
         elif pick.horse_name:
             runner = runners_by_name.get(pick.horse_name.upper())
 
-        if runner and runner.finish_position is not None:
+        # Settle if runner has finish position, OR if race is paying/closed (unplaced = loss)
+        race_final = race and race.results_status in ("Paying", "Closed")
+        has_result = runner and (runner.finish_position is not None or race_final)
+
+        if has_result:
             bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
 
             # "Exotics only" picks have no straight bet — settle with $0 P&L
@@ -162,7 +166,11 @@ async def _settle_picks_for_race_impl(
         elif pick.horse_name:
             runner = runners_by_name.get(pick.horse_name.upper())
 
-        if runner and runner.finish_position is not None:
+        # Settle if runner has finish position, OR if race is paying/closed (unplaced = loss)
+        race_final = race and race.results_status in ("Paying", "Closed")
+        has_result = runner and (runner.finish_position is not None or race_final)
+
+        if has_result:
             pick.hit = runner.finish_position == 1
             pick.pnl = 0.0  # P&L tracked on the multi row
             pick.settled = True
