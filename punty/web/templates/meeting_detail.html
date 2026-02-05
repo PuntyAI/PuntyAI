@@ -505,6 +505,91 @@
                                                 <span class="font-medium">Stewards:</span> {{ runner.stewards_comment }}
                                             </div>
                                             {% endif %}
+                                            <!-- Extended Form History -->
+                                            {% if runner.form_history %}
+                                            {% set form_runs = runner.form_history|fromjson if runner.form_history is string else runner.form_history %}
+                                            {% if form_runs and form_runs|length > 0 %}
+                                            <div class="mt-3 border-t border-gray-200 pt-2" x-data="{ showForm: false }">
+                                                <button @click="showForm = !showForm" class="flex items-center gap-1 text-xs font-medium text-punty-coral hover:underline">
+                                                    <svg x-show="!showForm" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                                    </svg>
+                                                    <svg x-show="showForm" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                                    </svg>
+                                                    Extended Form ({{ form_runs|length }} runs)
+                                                </button>
+                                                <div x-show="showForm" x-collapse class="mt-2 overflow-x-auto">
+                                                    <table class="min-w-full text-xs">
+                                                        <thead class="bg-gray-100">
+                                                            <tr>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Date</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Venue</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">Dist</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Class</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Track</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Fld</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Pos</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">Marg</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">Wgt</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Jockey</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Bar</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">SP</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">800m</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">400m</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-gray-100">
+                                                            {% for run in form_runs %}
+                                                            <tr class="hover:bg-gray-50">
+                                                                <td class="px-2 py-1 whitespace-nowrap">{{ run.date or '-' }}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap font-medium">{{ run.venue or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right">{{ run.distance or '-' }}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap">{{ run.class or '-' }}</td>
+                                                                <td class="px-2 py-1 text-center">
+                                                                    {% if run.track %}
+                                                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium
+                                                                        {% if 'Heavy' in run.track %}bg-blue-200 text-blue-800
+                                                                        {% elif 'Soft' in run.track %}bg-green-200 text-green-800
+                                                                        {% elif 'Good' in run.track %}bg-gray-200 text-gray-700
+                                                                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                                                                        {{ run.track }}
+                                                                    </span>
+                                                                    {% else %}-{% endif %}
+                                                                </td>
+                                                                <td class="px-2 py-1 text-center">{{ run.field or '-' }}</td>
+                                                                <td class="px-2 py-1 text-center">
+                                                                    {% if run.pos %}
+                                                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold
+                                                                        {% if run.pos == '1' %}bg-yellow-400 text-yellow-900
+                                                                        {% elif run.pos in ['2', '3'] %}bg-green-200 text-green-800
+                                                                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                                                                        {{ run.pos }}
+                                                                    </span>
+                                                                    {% else %}-{% endif %}
+                                                                </td>
+                                                                <td class="px-2 py-1 text-right">{{ run.margin or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right">{{ run.weight or '-' }}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap">{{ run.jockey or '-' }}</td>
+                                                                <td class="px-2 py-1 text-center">{{ run.barrier or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right font-medium">{{ run.sp or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-500">{{ run.at800 or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-500">{{ run.at400 or '-' }}</td>
+                                                            </tr>
+                                                            {% if run.comment %}
+                                                            <tr class="bg-gray-50">
+                                                                <td colspan="14" class="px-2 py-1 text-[10px] text-gray-500 italic">
+                                                                    {{ run.comment }}
+                                                                </td>
+                                                            </tr>
+                                                            {% endif %}
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endif %}
