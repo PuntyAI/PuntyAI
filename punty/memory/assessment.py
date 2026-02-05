@@ -549,7 +549,7 @@ async def generate_race_assessment(
         logger.warning(f"Failed to generate embedding for assessment: {e}")
 
     db.add(assessment)
-    await db.flush()
+    await db.commit()
 
     logger.info(f"Generated assessment for {race_id}: top_pick_hit={top_pick_hit}, pnl={total_pnl:.2f}")
     return assessment
