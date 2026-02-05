@@ -155,9 +155,6 @@
                     <p class="text-xs text-gray-400">{{ performance.date }}</p>
                 </div>
             </div>
-            <div class="text-xl font-bold {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
-                {{ '%+.1f'|format(performance.total_pnl) }}U
-            </div>
         </div>
 
         <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3 text-center">
