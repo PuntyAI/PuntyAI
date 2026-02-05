@@ -803,6 +803,16 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                     continue
                 details = []
                 horse = runner.get("horse_name", "Unknown")
+                saddlecloth = runner.get("saddlecloth", "?")
+
+                # Days since last run
+                days = runner.get("days_since_last_run")
+                if days:
+                    details.append(f"{days}d")
+
+                # Career record
+                if runner.get("career_record"):
+                    details.append(f"Career: {runner['career_record']}")
 
                 # Gear changes (important!)
                 if runner.get("gear_changes"):
@@ -822,6 +832,15 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 if runner.get("distance_stats"):
                     details.append(f"Dist: {runner['distance_stats']}")
 
+                # Track condition stats
+                track_cond = meeting.get("track_condition", "").lower()
+                if "heavy" in track_cond and runner.get("heavy_track_stats"):
+                    details.append(f"Heavy: {runner['heavy_track_stats']}")
+                elif "soft" in track_cond and runner.get("soft_track_stats"):
+                    details.append(f"Soft: {runner['soft_track_stats']}")
+                elif runner.get("good_track_stats"):
+                    details.append(f"Good: {runner['good_track_stats']}")
+
                 # Jockey/trainer at track
                 if runner.get("jockey_stats"):
                     details.append(f"Jockey@track: {runner['jockey_stats']}")
@@ -832,8 +851,60 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 if runner.get("class_stats"):
                     details.append(f"Class: {runner['class_stats']}")
 
+                # Sectionals (last run)
+                sec_400 = runner.get("sectional_400")
+                sec_800 = runner.get("sectional_800")
+                if sec_400 or sec_800:
+                    sec_str = f"L400: {sec_400}s" if sec_400 else ""
+                    if sec_800:
+                        sec_str += f" L800: {sec_800}s" if sec_str else f"L800: {sec_800}s"
+                    details.append(sec_str)
+
+                # Pedigree
+                sire = runner.get("sire")
+                dam = runner.get("dam")
+                if sire:
+                    pedigree = f"by {sire}"
+                    if dam:
+                        pedigree += f" x {dam}"
+                    details.append(pedigree)
+
                 if details:
-                    parts.append(f"- {horse}: {' | '.join(details)}")
+                    parts.append(f"- No.{saddlecloth} {horse}: {' | '.join(details)}")
+
+            # Tipster comments / analysis for this race
+            race_comments = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                comment = runner.get("comment_long") or runner.get("comment_short") or runner.get("comments")
+                if comment and len(comment) > 10:
+                    race_comments.append({
+                        "horse": runner.get("horse_name"),
+                        "comment": comment[:200],  # Truncate long comments
+                    })
+            if race_comments:
+                parts.append("")
+                parts.append("**Tipster/Form Comments:**")
+                for c in race_comments[:6]:  # Top 6 comments per race
+                    parts.append(f"- {c['horse']}: {c['comment']}")
+
+            # Stewards comments
+            stewards = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                stew = runner.get("stewards_comment")
+                if stew and len(stew) > 5:
+                    stewards.append({
+                        "horse": runner.get("horse_name"),
+                        "comment": stew[:150],
+                    })
+            if stewards:
+                parts.append("")
+                parts.append("**Stewards Comments:**")
+                for s in stewards:
+                    parts.append(f"- {s['horse']}: {s['comment']}")
 
             parts.append("")
 
