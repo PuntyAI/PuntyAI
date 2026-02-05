@@ -45,7 +45,7 @@ class AnalysisWeights(Base):
         "first_second_up": "med-high",
         "course": "med-high",
         "gear": "med",
-        "market": "med",
+        "market": "med-high",
         "trials": "med-high",
         "pedigree": "low-med",
         "money": "low-med",

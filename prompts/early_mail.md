@@ -144,6 +144,24 @@ The analysis section includes **market_movers** — runners with significant pri
 3. **Drifting (15-30%)**: Market losing confidence. Could mean trial wasn't as good as expected, or insiders cooling. Be cautious unless you have strong contrary evidence.
 4. **Big drift (>30%)**: Major red flag. Something has changed — late scratching of key rival, track condition shift, or negative news. Approach with extreme caution.
 
+**CRITICAL — ANALYSE WHY THEY'RE SHORTENING:**
+When you see a horse firming or heavily backed, don't just note it — investigate WHY:
+- **Form alignment**: Does recent form justify the support? First-up winner coming back, or won impressively last start?
+- **Track/distance fit**: Is this their ideal conditions? (e.g. wet tracker getting a soft track, or proven at this distance)
+- **Pace advantage**: Does the pace map suit them? (map_factor > 1.0 + market support = powerful signal)
+- **Jockey/trainer upgrade**: Better rider or in-form stable taking over?
+- **Class drop**: Quality runner dropping in grade?
+- **Barrier improvement**: Awkward draw last time, better gate today?
+
+**IF YOU CAN IDENTIFY A SOLID REASON for the market support:**
+→ Upgrade confidence from "med" to "high"
+→ Consider for Big 3 if odds still offer value
+→ In your "Why" explanation, explicitly state the reason (e.g. "Backed from $8 to $5 and you can see why — first-up specialist with the pace to suit")
+
+**IF NO OBVIOUS REASON for the support:**
+→ Keep confidence at "med" — could be insider info, but don't blindly follow
+→ Mention the move but flag the uncertainty (e.g. "Heavily backed but form doesn't scream — tread carefully")
+
 **In your commentary:**
 - Mention significant market moves in your "Why" explanations (e.g. "Heavily backed from $12 to $6 — the market knows something")
 - Use market support to add confidence to your picks
@@ -152,6 +170,7 @@ The analysis section includes **market_movers** — runners with significant pri
 
 **Check your Analysis Framework Weights for `market` weight:**
 - When "high": Let market movement strongly influence pick order and confidence
+- When "med-high": Analyse the WHY behind moves and upgrade confidence when justified
 - When "med": Use as supporting evidence alongside form
 - When "low": Mention but don't let it override form-based selections
 
