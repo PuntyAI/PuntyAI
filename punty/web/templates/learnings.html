@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}Learnings - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Learnings</h1>
+            <p class="text-gray-500">Post-race assessments that improve future predictions</p>
+        </div>
+        <a href="/settings" class="text-punty-coral hover:text-punty-mbright text-sm">
+            &larr; Back to Settings
+        </a>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="bg-white rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold text-punty-cyan">{{ stats.total }}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Total Learnings</div>
+        </div>
+        <div class="bg-white rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold {% if stats.top_pick_hit_rate >= 30 %}text-green-500{% else %}text-punty-orange{% endif %}">
+                {{ stats.top_pick_hit_rate }}%
+            </div>
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Top Pick Hit Rate</div>
+        </div>
+        <div class="bg-white rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold {% if stats.any_pick_hit_rate >= 50 %}text-green-500{% else %}text-punty-orange{% endif %}">
+                {{ stats.any_pick_hit_rate }}%
+            </div>
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Any Pick Hit Rate</div>
+        </div>
+        <div class="bg-white rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold">{{ stats.top_pick_hits }}/{{ stats.total }}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Top Pick Wins</div>
+        </div>
+        <div class="bg-white rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold {% if stats.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                ${{ stats.total_pnl }}
+            </div>
+            <div class="text-xs text-gray-500 uppercase tracking-wider">Total P&L</div>
+        </div>
+    </div>
+
+    <!-- Meetings with Learnings -->
+    {% if meetings %}
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-punty-border">
+            <h2 class="text-lg font-semibold text-gray-900">Meetings with Learnings</h2>
+            <p class="text-sm text-gray-500">Click to filter assessments by meeting</p>
+        </div>
+        <div class="divide-y divide-punty-border">
+            {% for m in meetings %}
+            <div class="px-6 py-3 hover:bg-punty-card2 cursor-pointer meeting-filter"
+                 data-meeting-id="{{ m.meeting_id }}"
+                 onclick="filterByMeeting('{{ m.meeting_id }}')">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="font-semibold text-punty-cyan">{{ m.track }}</span>
+                        <span class="text-gray-500 text-sm ml-2">{{ m.meeting_id }}</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm">
+                        <span class="text-gray-400">{{ m.count }} races</span>
+                        <span class="{% if m.hit_rate >= 30 %}text-green-500{% else %}text-punty-orange{% endif %}">
+                            {{ m.hit_rate }}% top pick
+                        </span>
+                        <span class="{% if m.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %} font-mono">
+                            ${{ m.total_pnl }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Assessments -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Race Assessments</h2>
+                <p class="text-sm text-gray-500" id="filter-status">Showing all assessments</p>
+            </div>
+            <button onclick="clearFilter()" id="clear-filter-btn" class="hidden text-sm text-punty-coral hover:text-punty-mbright">
+                Clear Filter
+            </button>
+        </div>
+        <div id="assessments-list" class="divide-y divide-punty-border">
+            {% for a in recent_assessments %}
+            <div class="assessment-item px-6 py-4" data-meeting-id="{{ a.meeting_id }}">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-lg font-semibold text-punty-cyan">{{ a.track }}</span>
+                            <span class="bg-punty-card2 text-punty-orange px-2 py-0.5 rounded text-sm font-mono">
+                                R{{ a.race_number }}
+                            </span>
+                            <span class="text-sm text-gray-400">{{ a.distance }}m {{ a.race_class }}</span>
+                            <span class="text-sm text-gray-500">{{ a.going }}</span>
+                            <!-- Result indicator -->
+                            {% if a.top_pick_hit %}
+                            <span class="bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs uppercase">Top Pick Won</span>
+                            {% elif a.any_pick_hit %}
+                            <span class="bg-punty-cyan/20 text-punty-cyan px-2 py-0.5 rounded text-xs uppercase">Pick Hit</span>
+                            {% else %}
+                            <span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-xs uppercase">No Hit</span>
+                            {% endif %}
+                            <span class="font-mono text-sm {% if a.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                                {% if a.total_pnl >= 0 %}+{% endif %}${{ "%.2f"|format(a.total_pnl or 0) }}
+                            </span>
+                        </div>
+
+                        <!-- Key Learnings -->
+                        <div class="text-sm text-gray-300 mb-3 bg-punty-card2 p-3 rounded-lg border-l-4 border-punty-magenta">
+                            <strong class="text-punty-mbright">Key Learning:</strong> {{ a.key_learnings }}
+                        </div>
+
+                        <!-- Expandable Details -->
+                        <details class="text-sm">
+                            <summary class="cursor-pointer text-punty-cyan hover:text-punty-mbright">
+                                View Full Assessment
+                            </summary>
+                            <div class="mt-3 space-y-3 pl-4 border-l border-punty-border">
+                                {% if a.assessment %}
+                                <!-- Prediction Accuracy -->
+                                {% if a.assessment.prediction_accuracy %}
+                                <div>
+                                    <h4 class="font-semibold text-punty-orange mb-1">Prediction Accuracy</h4>
+                                    <ul class="space-y-1 text-gray-400">
+                                        {% if a.assessment.prediction_accuracy.top_pick_result %}
+                                        <li><strong>Top Pick:</strong> {{ a.assessment.prediction_accuracy.top_pick_result }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.prediction_accuracy.value_assessment %}
+                                        <li><strong>Value:</strong> {{ a.assessment.prediction_accuracy.value_assessment }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.prediction_accuracy.pace_prediction_accuracy %}
+                                        <li><strong>Pace:</strong> {{ a.assessment.prediction_accuracy.pace_prediction_accuracy }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.prediction_accuracy.key_misses %}
+                                        <li><strong>Key Misses:</strong> {{ a.assessment.prediction_accuracy.key_misses }}</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+
+                                <!-- Decisive Factors -->
+                                {% if a.assessment.decisive_factors %}
+                                <div>
+                                    <h4 class="font-semibold text-punty-orange mb-1">Decisive Factors</h4>
+                                    <ul class="space-y-1 text-gray-400">
+                                        {% if a.assessment.decisive_factors.what_won_the_race %}
+                                        <li><strong>What Won:</strong> {{ a.assessment.decisive_factors.what_won_the_race }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.decisive_factors.undervalued_factors %}
+                                        <li><strong>Undervalued:</strong> {{ a.assessment.decisive_factors.undervalued_factors | join(', ') }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.decisive_factors.overvalued_factors %}
+                                        <li><strong>Overvalued:</strong> {{ a.assessment.decisive_factors.overvalued_factors | join(', ') }}</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+
+                                <!-- Track Learnings -->
+                                {% if a.assessment.track_learnings %}
+                                <div>
+                                    <h4 class="font-semibold text-punty-orange mb-1">Track Learnings</h4>
+                                    <ul class="space-y-1 text-gray-400">
+                                        {% if a.assessment.track_learnings.observed_bias %}
+                                        <li><strong>Bias:</strong> {{ a.assessment.track_learnings.observed_bias }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.track_learnings.pace_dynamics %}
+                                        <li><strong>Pace Dynamics:</strong> {{ a.assessment.track_learnings.pace_dynamics }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.track_learnings.barrier_impact %}
+                                        <li><strong>Barrier Impact:</strong> {{ a.assessment.track_learnings.barrier_impact }}</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+
+                                <!-- Market Analysis -->
+                                {% if a.assessment.market_analysis %}
+                                <div>
+                                    <h4 class="font-semibold text-punty-orange mb-1">Market Analysis</h4>
+                                    <ul class="space-y-1 text-gray-400">
+                                        {% if a.assessment.market_analysis.market_accuracy %}
+                                        <li><strong>Market Accuracy:</strong> {{ a.assessment.market_analysis.market_accuracy }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.market_analysis.overlays_identified %}
+                                        <li><strong>Overlays:</strong> {{ a.assessment.market_analysis.overlays_identified }}</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+
+                                <!-- Improvement Recommendations -->
+                                {% if a.assessment.improvement_recommendations %}
+                                <div>
+                                    <h4 class="font-semibold text-punty-orange mb-1">Improvements</h4>
+                                    <ul class="space-y-1 text-gray-400">
+                                        {% if a.assessment.improvement_recommendations.what_worked %}
+                                        <li class="text-green-400"><strong>Worked:</strong> {{ a.assessment.improvement_recommendations.what_worked }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.improvement_recommendations.what_failed %}
+                                        <li class="text-red-400"><strong>Failed:</strong> {{ a.assessment.improvement_recommendations.what_failed }}</li>
+                                        {% endif %}
+                                        {% if a.assessment.improvement_recommendations.actionable_recommendation %}
+                                        <li class="text-punty-cyan"><strong>Recommendation:</strong> {{ a.assessment.improvement_recommendations.actionable_recommendation }}</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </details>
+                    </div>
+
+                    <!-- Delete Button -->
+                    <button onclick="deleteAssessment({{ a.id }}, '{{ a.race_id }}')"
+                            class="ml-4 text-gray-500 hover:text-red-500 p-2"
+                            title="Remove this learning if it's incorrect">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="px-6 py-8 text-center text-gray-500">
+                <p>No learnings yet. Assessments are generated automatically after races settle.</p>
+                <p class="text-sm mt-2">As more races are analyzed, learnings will appear here and be used to improve future predictions.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+function filterByMeeting(meetingId) {
+    // Hide all items, show only matching
+    document.querySelectorAll('.assessment-item').forEach(item => {
+        if (item.dataset.meetingId === meetingId) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+
+    // Update UI
+    document.getElementById('filter-status').textContent = `Filtered by: ${meetingId}`;
+    document.getElementById('clear-filter-btn').classList.remove('hidden');
+
+    // Highlight selected meeting
+    document.querySelectorAll('.meeting-filter').forEach(m => {
+        if (m.dataset.meetingId === meetingId) {
+            m.classList.add('bg-punty-magenta/10');
+        } else {
+            m.classList.remove('bg-punty-magenta/10');
+        }
+    });
+}
+
+function clearFilter() {
+    // Show all items
+    document.querySelectorAll('.assessment-item').forEach(item => {
+        item.style.display = '';
+    });
+
+    // Update UI
+    document.getElementById('filter-status').textContent = 'Showing all assessments';
+    document.getElementById('clear-filter-btn').classList.add('hidden');
+
+    // Remove highlights
+    document.querySelectorAll('.meeting-filter').forEach(m => {
+        m.classList.remove('bg-punty-magenta/10');
+    });
+}
+
+async function deleteAssessment(id, raceId) {
+    if (!confirm(`Remove learning for ${raceId}?\n\nThis will stop this assessment from being used in future predictions.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/settings/learnings/${id}`, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            // Remove the item from the DOM
+            const items = document.querySelectorAll('.assessment-item');
+            items.forEach(item => {
+                if (item.querySelector(`[onclick*="deleteAssessment(${id},"]`)) {
+                    item.remove();
+                }
+            });
+
+            // Reload to update stats
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            alert(`Failed to delete: ${error.detail || 'Unknown error'}`);
+        }
+    } catch (err) {
+        alert(`Error: ${err.message}`);
+    }
+}
+</script>
+{% endblock %}

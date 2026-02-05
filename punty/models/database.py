@@ -78,6 +78,24 @@ async def init_db() -> None:
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS race_assessments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                race_id VARCHAR NOT NULL UNIQUE,
+                meeting_id VARCHAR NOT NULL,
+                race_number INTEGER NOT NULL,
+                track VARCHAR NOT NULL,
+                distance INTEGER NOT NULL,
+                race_class VARCHAR NOT NULL,
+                going VARCHAR NOT NULL,
+                rail_position VARCHAR,
+                assessment_json TEXT NOT NULL,
+                key_learnings TEXT NOT NULL,
+                embedding_json TEXT,
+                top_pick_hit BOOLEAN,
+                any_pick_hit BOOLEAN,
+                total_pnl FLOAT,
+                created_at DATETIME NOT NULL
+            )""",
         ]:
             try:
                 await conn.execute(_text(table_sql))
@@ -132,6 +150,12 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_race_memories_meeting_id ON race_memories(meeting_id)",
             "CREATE INDEX IF NOT EXISTS ix_race_memories_settled ON race_memories(settled_at)",
             "CREATE INDEX IF NOT EXISTS ix_pattern_insights_type_key ON pattern_insights(pattern_type, pattern_key)",
+            # Race assessment indexes for RAG retrieval
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_meeting_id ON race_assessments(meeting_id)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_track ON race_assessments(track)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_distance ON race_assessments(distance)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_race_class ON race_assessments(race_class)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_going ON race_assessments(going)",
         ]:
             try:
                 await conn.execute(_text(idx))

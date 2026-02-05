@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, Integer
 from sqlalchemy.orm import selectinload
 
 from punty.config import melb_now
@@ -469,5 +469,96 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
             "settings": settings,
             "personality_prompt": personality_prompt,
             "api_key_status": api_key_status,
+        },
+    )
+
+
+@router.get("/settings/learnings", response_class=HTMLResponse)
+async def learnings_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Learnings page showing race assessment history."""
+    from punty.memory.models import RaceAssessment
+    from sqlalchemy import desc, func
+    import json
+
+    # Get meetings with assessments
+    meetings_result = await db.execute(
+        select(
+            RaceAssessment.meeting_id,
+            RaceAssessment.track,
+            func.count(RaceAssessment.id).label("count"),
+            func.sum(RaceAssessment.total_pnl).label("total_pnl"),
+            func.sum(func.cast(RaceAssessment.top_pick_hit == True, Integer)).label("top_hits"),
+            func.max(RaceAssessment.created_at).label("latest"),
+        )
+        .group_by(RaceAssessment.meeting_id, RaceAssessment.track)
+        .order_by(desc("latest"))
+        .limit(20)
+    )
+    meetings = [
+        {
+            "meeting_id": row.meeting_id,
+            "track": row.track,
+            "count": row.count,
+            "total_pnl": round(row.total_pnl or 0, 2),
+            "top_hits": row.top_hits or 0,
+            "hit_rate": round((row.top_hits or 0) / row.count * 100, 1) if row.count > 0 else 0,
+            "latest": row.latest,
+        }
+        for row in meetings_result.all()
+    ]
+
+    # Get recent assessments
+    recent_result = await db.execute(
+        select(RaceAssessment)
+        .order_by(desc(RaceAssessment.created_at))
+        .limit(50)
+    )
+    recent = [
+        {
+            "id": a.id,
+            "race_id": a.race_id,
+            "meeting_id": a.meeting_id,
+            "race_number": a.race_number,
+            "track": a.track,
+            "distance": a.distance,
+            "race_class": a.race_class,
+            "going": a.going,
+            "key_learnings": a.key_learnings,
+            "top_pick_hit": a.top_pick_hit,
+            "any_pick_hit": a.any_pick_hit,
+            "total_pnl": a.total_pnl,
+            "assessment": json.loads(a.assessment_json) if a.assessment_json else {},
+            "created_at": a.created_at,
+        }
+        for a in recent_result.scalars().all()
+    ]
+
+    # Get overall stats
+    stats_result = await db.execute(
+        select(
+            func.count(RaceAssessment.id),
+            func.sum(func.cast(RaceAssessment.top_pick_hit == True, Integer)),
+            func.sum(func.cast(RaceAssessment.any_pick_hit == True, Integer)),
+            func.sum(RaceAssessment.total_pnl),
+        )
+    )
+    stats_row = stats_result.one()
+    total = stats_row[0] or 0
+    stats = {
+        "total": total,
+        "top_pick_hits": stats_row[1] or 0,
+        "any_pick_hits": stats_row[2] or 0,
+        "total_pnl": round(stats_row[3] or 0, 2),
+        "top_pick_hit_rate": round((stats_row[1] or 0) / total * 100, 1) if total > 0 else 0,
+        "any_pick_hit_rate": round((stats_row[2] or 0) / total * 100, 1) if total > 0 else 0,
+    }
+
+    return templates.TemplateResponse(
+        "learnings.html",
+        {
+            "request": request,
+            "meetings": meetings,
+            "recent_assessments": recent,
+            "stats": stats,
         },
     )

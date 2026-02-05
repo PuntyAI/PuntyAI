@@ -153,3 +153,83 @@ class PatternInsight(Base):
     def conditions(self, value: dict[str, Any]):
         """Set conditions from dictionary."""
         self.conditions_json = json.dumps(value)
+
+
+class RaceAssessment(Base):
+    """Stores post-race LLM assessments for learning from predictions.
+
+    After each race settles, the LLM reviews what happened vs what was predicted
+    and extracts structured learnings. These are stored here for RAG retrieval
+    when generating future Early Mail for similar races.
+    """
+
+    __tablename__ = "race_assessments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Race identification
+    race_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    meeting_id: Mapped[str] = mapped_column(String, index=True)
+    race_number: Mapped[int] = mapped_column(Integer)
+
+    # Filterable attributes (denormalized for fast SQL queries)
+    track: Mapped[str] = mapped_column(String, index=True)
+    distance: Mapped[int] = mapped_column(Integer, index=True)
+    race_class: Mapped[str] = mapped_column(String, index=True)
+    going: Mapped[str] = mapped_column(String, index=True)
+    rail_position: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    # Full structured assessment from LLM (JSON)
+    assessment_json: Mapped[str] = mapped_column(Text)
+
+    # Summary text for embedding and quick retrieval
+    key_learnings: Mapped[str] = mapped_column(Text)
+
+    # Embedding for similarity search (JSON array of floats)
+    embedding_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Prediction accuracy metrics
+    top_pick_hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    any_pick_hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    total_pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
+
+    @property
+    def assessment(self) -> dict[str, Any]:
+        """Get assessment as dictionary."""
+        if self.assessment_json:
+            return json.loads(self.assessment_json)
+        return {}
+
+    @assessment.setter
+    def assessment(self, value: dict[str, Any]):
+        """Set assessment from dictionary."""
+        self.assessment_json = json.dumps(value)
+
+    @property
+    def embedding(self) -> list[float] | None:
+        """Get embedding as list of floats."""
+        if self.embedding_json:
+            return json.loads(self.embedding_json)
+        return None
+
+    @embedding.setter
+    def embedding(self, value: list[float] | None):
+        """Set embedding from list of floats."""
+        if value is not None:
+            self.embedding_json = json.dumps(value)
+        else:
+            self.embedding_json = None
+
+    def to_retrieval_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for RAG retrieval context."""
+        return {
+            "track": self.track,
+            "distance": self.distance,
+            "class": self.race_class,
+            "going": self.going,
+            "key_learnings": self.key_learnings,
+            "top_pick_hit": self.top_pick_hit,
+            "total_pnl": self.total_pnl,
+        }

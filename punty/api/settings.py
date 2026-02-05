@@ -248,3 +248,196 @@ async def test_email(request: TestEmailRequest):
     )
 
     return result
+
+
+# --- Race Learnings / Assessments ---
+
+@router.get("/learnings")
+async def get_learnings(
+    db: AsyncSession = Depends(get_db),
+    meeting_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Get race assessments/learnings with optional meeting filter."""
+    from punty.memory.models import RaceAssessment
+    from sqlalchemy import desc
+    import json
+
+    query = select(RaceAssessment).order_by(desc(RaceAssessment.created_at))
+
+    if meeting_id:
+        query = query.where(RaceAssessment.meeting_id == meeting_id)
+
+    query = query.limit(limit).offset(offset)
+    result = await db.execute(query)
+    assessments = result.scalars().all()
+
+    # Also get total count
+    from sqlalchemy import func
+    count_query = select(func.count(RaceAssessment.id))
+    if meeting_id:
+        count_query = count_query.where(RaceAssessment.meeting_id == meeting_id)
+    count_result = await db.execute(count_query)
+    total = count_result.scalar_one()
+
+    return {
+        "assessments": [
+            {
+                "id": a.id,
+                "race_id": a.race_id,
+                "meeting_id": a.meeting_id,
+                "race_number": a.race_number,
+                "track": a.track,
+                "distance": a.distance,
+                "race_class": a.race_class,
+                "going": a.going,
+                "key_learnings": a.key_learnings,
+                "top_pick_hit": a.top_pick_hit,
+                "any_pick_hit": a.any_pick_hit,
+                "total_pnl": a.total_pnl,
+                "assessment": json.loads(a.assessment_json) if a.assessment_json else {},
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in assessments
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/learnings/meetings")
+async def get_learnings_meetings(db: AsyncSession = Depends(get_db)):
+    """Get list of meetings that have learnings."""
+    from punty.memory.models import RaceAssessment
+    from sqlalchemy import func, desc
+
+    result = await db.execute(
+        select(
+            RaceAssessment.meeting_id,
+            RaceAssessment.track,
+            func.count(RaceAssessment.id).label("count"),
+            func.sum(RaceAssessment.total_pnl).label("total_pnl"),
+            func.max(RaceAssessment.created_at).label("latest"),
+        )
+        .group_by(RaceAssessment.meeting_id, RaceAssessment.track)
+        .order_by(desc("latest"))
+    )
+    rows = result.all()
+
+    return [
+        {
+            "meeting_id": row.meeting_id,
+            "track": row.track,
+            "assessment_count": row.count,
+            "total_pnl": round(row.total_pnl or 0, 2),
+            "latest": row.latest.isoformat() if row.latest else None,
+        }
+        for row in rows
+    ]
+
+
+@router.get("/learnings/{assessment_id}")
+async def get_learning(assessment_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific learning/assessment by ID."""
+    from punty.memory.models import RaceAssessment
+    import json
+
+    result = await db.execute(
+        select(RaceAssessment).where(RaceAssessment.id == assessment_id)
+    )
+    a = result.scalar_one_or_none()
+
+    if not a:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    return {
+        "id": a.id,
+        "race_id": a.race_id,
+        "meeting_id": a.meeting_id,
+        "race_number": a.race_number,
+        "track": a.track,
+        "distance": a.distance,
+        "race_class": a.race_class,
+        "going": a.going,
+        "rail_position": a.rail_position,
+        "key_learnings": a.key_learnings,
+        "top_pick_hit": a.top_pick_hit,
+        "any_pick_hit": a.any_pick_hit,
+        "total_pnl": a.total_pnl,
+        "assessment": json.loads(a.assessment_json) if a.assessment_json else {},
+        "has_embedding": a.embedding_json is not None,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+@router.delete("/learnings/{assessment_id}")
+async def delete_learning(assessment_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a learning/assessment if it's incorrect."""
+    from punty.memory.models import RaceAssessment
+
+    result = await db.execute(
+        select(RaceAssessment).where(RaceAssessment.id == assessment_id)
+    )
+    assessment = result.scalar_one_or_none()
+
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    race_id = assessment.race_id
+    await db.delete(assessment)
+    await db.commit()
+
+    return {"status": "deleted", "race_id": race_id}
+
+
+@router.get("/learnings/stats/summary")
+async def get_learnings_stats(db: AsyncSession = Depends(get_db)):
+    """Get overall learnings statistics."""
+    from punty.memory.models import RaceAssessment
+    from sqlalchemy import func
+
+    # Total assessments
+    total_result = await db.execute(select(func.count(RaceAssessment.id)))
+    total = total_result.scalar_one()
+
+    if total == 0:
+        return {
+            "total_assessments": 0,
+            "top_pick_hit_rate": 0,
+            "any_pick_hit_rate": 0,
+            "avg_pnl": 0,
+            "total_pnl": 0,
+        }
+
+    # Top pick hit rate
+    top_hit_result = await db.execute(
+        select(func.count(RaceAssessment.id)).where(RaceAssessment.top_pick_hit == True)
+    )
+    top_hits = top_hit_result.scalar_one()
+
+    # Any pick hit rate
+    any_hit_result = await db.execute(
+        select(func.count(RaceAssessment.id)).where(RaceAssessment.any_pick_hit == True)
+    )
+    any_hits = any_hit_result.scalar_one()
+
+    # PNL stats
+    pnl_result = await db.execute(
+        select(
+            func.avg(RaceAssessment.total_pnl),
+            func.sum(RaceAssessment.total_pnl),
+        )
+    )
+    pnl_row = pnl_result.one()
+    avg_pnl = pnl_row[0] or 0
+    total_pnl = pnl_row[1] or 0
+
+    return {
+        "total_assessments": total,
+        "top_pick_hit_rate": round(top_hits / total * 100, 1) if total > 0 else 0,
+        "any_pick_hit_rate": round(any_hits / total * 100, 1) if total > 0 else 0,
+        "avg_pnl": round(avg_pnl, 2),
+        "total_pnl": round(total_pnl, 2),
+    }

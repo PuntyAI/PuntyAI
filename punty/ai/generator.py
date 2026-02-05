@@ -344,58 +344,98 @@ class ContentGenerator:
         """Build learning context from past predictions for inclusion in prompt.
 
         Finds similar past situations and includes insights about what worked/didn't.
+        Uses both individual race_memories AND structured race_assessments.
         """
         try:
             from punty.memory.store import MemoryStore
             from punty.memory.embeddings import EmbeddingService
+            from punty.memory.assessment import retrieve_assessment_context, build_rag_context_from_assessments
+            from punty.models.settings import get_api_key
 
             memory_store = MemoryStore(self.db, EmbeddingService())
             stats = await memory_store.get_stats()
 
-            # Only include learning context if we have enough settled memories
-            if stats.get("settled_memories", 0) < 10:
-                return ""
+            learning_parts = []
+            meeting = context.get("meeting", {})
+            track = meeting.get("venue", "")
+            going = meeting.get("track_condition", "Unknown")
 
-            learning_parts = [
-                "",
-                "## LEARNING FROM PAST PREDICTIONS",
-                f"(Based on {stats['settled_memories']} settled predictions, {stats['hit_rate']:.1f}% hit rate, avg PNL: {stats['avg_pnl']:+.2f}U)",
-                "",
-            ]
+            # Get API key for embedding-based retrieval
+            api_key = await get_api_key(self.db, "openai_api_key")
 
-            # For each race, find similar past situations
+            # First, retrieve track-level learnings from race assessments
             races = context.get("races", [])
+            assessment_learnings = []
+            seen_assessments = set()
+
             for race in races:
-                race_context = {
-                    "track_condition": context.get("meeting", {}).get("track_condition"),
-                    "distance": race.get("distance"),
-                    "class": race.get("class"),
-                }
+                distance = race.get("distance", 1200)
+                race_class = race.get("class", "Unknown")
 
-                runners = race.get("runners", [])[:3]  # Top 3 by odds
-                for runner in runners:
-                    if runner.get("scratched"):
-                        continue
+                assessments = await retrieve_assessment_context(
+                    self.db, track, distance, going, race_class,
+                    api_key=api_key, max_results=2
+                )
 
-                    runner_data = {
-                        "horse_name": runner.get("horse_name"),
-                        "form": runner.get("form"),
-                        "current_odds": runner.get("current_odds"),
-                        "speed_map_position": runner.get("speed_map_position"),
-                        "odds_movement": runner.get("odds_movement"),
-                        "pf_map_factor": runner.get("pf_map_factor"),
+                for a in assessments:
+                    # Deduplicate by key learnings
+                    learning_key = a.get("key_learnings", "")
+                    if learning_key and learning_key not in seen_assessments:
+                        seen_assessments.add(learning_key)
+                        assessment_learnings.append(a)
+
+            # Add assessment-based learnings
+            if assessment_learnings:
+                rag_context = build_rag_context_from_assessments(assessment_learnings[:5])
+                if rag_context:
+                    learning_parts.append(rag_context)
+                    learning_parts.append("")
+
+            # Only include runner-level memories if we have enough settled data
+            if stats.get("settled_memories", 0) >= 10:
+                runner_learning_parts = [
+                    "## INDIVIDUAL RUNNER PATTERNS",
+                    f"(Based on {stats['settled_memories']} settled predictions, {stats['hit_rate']:.1f}% hit rate, avg PNL: {stats['avg_pnl']:+.2f}U)",
+                    "",
+                ]
+
+                # For each race, find similar past situations for runners
+                has_runner_content = False
+                for race in races:
+                    race_context = {
+                        "track_condition": going,
+                        "distance": race.get("distance"),
+                        "class": race.get("class"),
                     }
 
-                    learning = await memory_store.build_learning_context(
-                        race_context, runner_data, max_memories=2
-                    )
+                    runners = race.get("runners", [])[:3]  # Top 3 by odds
+                    for runner in runners:
+                        if runner.get("scratched"):
+                            continue
 
-                    if learning:
-                        learning_parts.append(f"**R{race['race_number']} {runner.get('horse_name')}:**")
-                        learning_parts.append(learning)
-                        learning_parts.append("")
+                        runner_data = {
+                            "horse_name": runner.get("horse_name"),
+                            "form": runner.get("form"),
+                            "current_odds": runner.get("current_odds"),
+                            "speed_map_position": runner.get("speed_map_position"),
+                            "odds_movement": runner.get("odds_movement"),
+                            "pf_map_factor": runner.get("pf_map_factor"),
+                        }
 
-            if len(learning_parts) > 4:  # Has actual content beyond header
+                        learning = await memory_store.build_learning_context(
+                            race_context, runner_data, max_memories=2
+                        )
+
+                        if learning:
+                            runner_learning_parts.append(f"**R{race['race_number']} {runner.get('horse_name')}:**")
+                            runner_learning_parts.append(learning)
+                            runner_learning_parts.append("")
+                            has_runner_content = True
+
+                if has_runner_content:
+                    learning_parts.extend(runner_learning_parts)
+
+            if learning_parts:
                 return "\n".join(learning_parts)
             return ""
 

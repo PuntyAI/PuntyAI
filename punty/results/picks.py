@@ -446,6 +446,14 @@ async def _settle_picks_for_race_impl(
         except Exception as e:
             logger.warning(f"Failed to update memory outcomes: {e}")
 
+        # Generate post-race assessment for RAG learning
+        try:
+            race_id = f"{meeting_id}-r{race_number}"
+            from punty.memory.assessment import generate_race_assessment
+            await generate_race_assessment(db, race_id)
+        except Exception as e:
+            logger.warning(f"Failed to generate race assessment: {e}")
+
     return settled_count
 
 
