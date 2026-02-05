@@ -843,3 +843,201 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         })
 
     return result_periods
+
+
+async def store_picks_as_memories(
+    db: AsyncSession, meeting_id: str, content_id: str
+) -> int:
+    """Store selection picks as memories for pattern learning.
+
+    Should be called after content is approved and picks are parsed.
+    Only stores 'selection' picks (not exotics/sequences) as these
+    represent our core predictions.
+    """
+    from punty.memory.models import RaceMemory
+    from punty.memory.embeddings import EmbeddingService
+
+    # Get all selection picks for this content
+    result = await db.execute(
+        select(Pick).where(
+            Pick.content_id == content_id,
+            Pick.pick_type == "selection",
+        )
+    )
+    picks = result.scalars().all()
+    if not picks:
+        return 0
+
+    # Get meeting and race data for context
+    meeting_result = await db.execute(
+        select(Meeting).where(Meeting.id == meeting_id)
+    )
+    meeting = meeting_result.scalar_one_or_none()
+    if not meeting:
+        return 0
+
+    embedding_service = EmbeddingService()
+    stored = 0
+
+    for pick in picks:
+        race_id = f"{meeting_id}-r{pick.race_number}"
+
+        # Check if memory already exists
+        existing = await db.execute(
+            select(RaceMemory).where(
+                RaceMemory.race_id == race_id,
+                RaceMemory.saddlecloth == pick.saddlecloth,
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        # Get race and runner data
+        race_result = await db.execute(select(Race).where(Race.id == race_id))
+        race = race_result.scalar_one_or_none()
+
+        runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.saddlecloth == pick.saddlecloth,
+            )
+        )
+        runner = runner_result.scalar_one_or_none()
+
+        if not race or not runner:
+            continue
+
+        # Build context and runner dictionaries
+        race_context = {
+            "track_condition": meeting.track_condition,
+            "distance": race.distance,
+            "class": race.class_,
+            "rail_position": meeting.rail_position,
+            "weather": meeting.weather,
+        }
+
+        runner_data = {
+            "horse_name": runner.horse_name,
+            "saddlecloth": runner.saddlecloth,
+            "barrier": runner.barrier,
+            "jockey": runner.jockey,
+            "trainer": runner.trainer,
+            "form": runner.form,
+            "current_odds": runner.current_odds,
+            "speed_map_position": runner.speed_map_position,
+            "days_since_last_run": runner.days_since_last_run,
+            "horse_age": runner.horse_age,
+            "pf_map_factor": runner.pf_map_factor,
+        }
+
+        # Parse market movement from flucs if available
+        if runner.odds_flucs:
+            try:
+                flucs = json.loads(runner.odds_flucs)
+                if flucs and len(flucs) >= 2:
+                    opening = flucs[-1].get("odds", 0)
+                    current = flucs[0].get("odds", 0)
+                    if opening and current:
+                        pct_change = (current - opening) / opening * 100
+                        if pct_change <= -20:
+                            runner_data["odds_movement"] = "heavy_support"
+                        elif pct_change <= -10:
+                            runner_data["odds_movement"] = "firming"
+                        elif pct_change >= 30:
+                            runner_data["odds_movement"] = "big_drift"
+                        elif pct_change >= 15:
+                            runner_data["odds_movement"] = "drifting"
+                        else:
+                            runner_data["odds_movement"] = "stable"
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Create memory
+        memory = RaceMemory(
+            meeting_id=meeting_id,
+            race_number=pick.race_number,
+            race_id=race_id,
+            horse_name=pick.horse_name or runner.horse_name,
+            saddlecloth=pick.saddlecloth,
+            tip_rank=pick.tip_rank or 0,
+            confidence=None,  # Could extract from content parsing
+            odds_at_tip=pick.odds_at_tip,
+            bet_type=pick.bet_type,
+        )
+        memory.context = race_context
+        memory.runner = runner_data
+
+        # Generate embedding (async)
+        try:
+            embedding = await embedding_service.embed_context(race_context, runner_data)
+            if embedding:
+                memory.embedding = embedding
+        except Exception as e:
+            logger.warning(f"Failed to generate embedding for {race_id}: {e}")
+
+        db.add(memory)
+        stored += 1
+
+    await db.flush()
+    logger.info(f"Stored {stored} memories for content {content_id}")
+    return stored
+
+
+async def update_memory_outcomes(
+    db: AsyncSession, meeting_id: str, race_number: int
+) -> int:
+    """Update memories with race outcomes after settlement.
+
+    Should be called after settle_picks_for_race.
+    """
+    from punty.memory.models import RaceMemory
+
+    race_id = f"{meeting_id}-r{race_number}"
+    now = melb_now_naive()
+
+    # Get race results
+    result = await db.execute(select(Runner).where(Runner.race_id == race_id))
+    runners = result.scalars().all()
+    if not runners:
+        return 0
+
+    runners_by_saddlecloth = {r.saddlecloth: r for r in runners if r.saddlecloth}
+
+    # Get corresponding picks to get settlement info
+    picks_result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.race_number == race_number,
+            Pick.pick_type == "selection",
+            Pick.settled == True,
+        )
+    )
+    picks_by_sc = {p.saddlecloth: p for p in picks_result.scalars().all()}
+
+    # Update memories
+    mem_result = await db.execute(
+        select(RaceMemory).where(
+            RaceMemory.race_id == race_id,
+            RaceMemory.settled_at.is_(None),
+        )
+    )
+    updated = 0
+    for memory in mem_result.scalars().all():
+        runner = runners_by_saddlecloth.get(memory.saddlecloth)
+        pick = picks_by_sc.get(memory.saddlecloth)
+
+        if runner:
+            memory.finish_position = runner.finish_position
+            memory.sp_odds = runner.current_odds  # Use current as SP proxy
+
+        if pick:
+            memory.hit = pick.hit
+            memory.pnl = pick.pnl
+
+        memory.settled_at = now
+        updated += 1
+
+    await db.flush()
+    if updated:
+        logger.info(f"Updated {updated} memory outcomes for {race_id}")
+    return updated

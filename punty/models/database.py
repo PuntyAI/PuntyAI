@@ -34,7 +34,8 @@ async_session = async_sessionmaker(
 async def init_db() -> None:
     """Initialize the database, creating all tables."""
     # Import models to ensure they're registered with Base
-    from punty.models import meeting, content, settings, pick  # noqa: F401  # registers models with Base
+    from punty.models import meeting, content, settings, pick  # noqa: F401
+    from punty.memory import models as memory_models  # noqa: F401  # registers memory models
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

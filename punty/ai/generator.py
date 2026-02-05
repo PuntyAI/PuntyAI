@@ -142,6 +142,12 @@ class ContentGenerator:
 
             yield evt("Generating Early Mail with AI (this may take a moment)...")
             context_str = self._format_context_for_prompt(context)
+
+            # Add learning from past predictions if available
+            learning_context = await self._build_learning_context(context)
+            if learning_context:
+                context_str += "\n" + learning_context
+
             system_prompt = f"""{personality}
 
 ## Analysis Framework Weights
@@ -333,6 +339,69 @@ class ContentGenerator:
             "favorites_before": len(favorites_detected),
             "status": "widened",
         }
+
+    async def _build_learning_context(self, context: dict) -> str:
+        """Build learning context from past predictions for inclusion in prompt.
+
+        Finds similar past situations and includes insights about what worked/didn't.
+        """
+        try:
+            from punty.memory.store import MemoryStore
+            from punty.memory.embeddings import EmbeddingService
+
+            memory_store = MemoryStore(self.db, EmbeddingService())
+            stats = await memory_store.get_stats()
+
+            # Only include learning context if we have enough settled memories
+            if stats.get("settled_memories", 0) < 10:
+                return ""
+
+            learning_parts = [
+                "",
+                "## LEARNING FROM PAST PREDICTIONS",
+                f"(Based on {stats['settled_memories']} settled predictions, {stats['hit_rate']:.1f}% hit rate, avg PNL: {stats['avg_pnl']:+.2f}U)",
+                "",
+            ]
+
+            # For each race, find similar past situations
+            races = context.get("races", [])
+            for race in races[:4]:  # Limit to first 4 races to keep context manageable
+                race_context = {
+                    "track_condition": context.get("meeting", {}).get("track_condition"),
+                    "distance": race.get("distance"),
+                    "class": race.get("class"),
+                }
+
+                runners = race.get("runners", [])[:3]  # Top 3 by odds
+                for runner in runners:
+                    if runner.get("scratched"):
+                        continue
+
+                    runner_data = {
+                        "horse_name": runner.get("horse_name"),
+                        "form": runner.get("form"),
+                        "current_odds": runner.get("current_odds"),
+                        "speed_map_position": runner.get("speed_map_position"),
+                        "odds_movement": runner.get("odds_movement"),
+                        "pf_map_factor": runner.get("pf_map_factor"),
+                    }
+
+                    learning = await memory_store.build_learning_context(
+                        race_context, runner_data, max_memories=2
+                    )
+
+                    if learning:
+                        learning_parts.append(f"**R{race['race_number']} {runner.get('horse_name')}:**")
+                        learning_parts.append(learning)
+                        learning_parts.append("")
+
+            if len(learning_parts) > 4:  # Has actual content beyond header
+                return "\n".join(learning_parts)
+            return ""
+
+        except Exception as e:
+            logger.warning(f"Failed to build learning context: {e}")
+            return ""
 
     async def _detect_favorites(
         self,
