@@ -25,12 +25,14 @@ _BIG3_MULTI = re.compile(
 _RACE_HEADER = re.compile(
     r"\*Race\s+(\d+)\s*[–\-—]", re.IGNORECASE,
 )
+# New format: "1. *HORSE* (No.1) — $3.50 / $1.45" (win / place)
+# Also supports old format: "1. *HORSE* (No.1) — $3.50" (win only)
 _SELECTION = re.compile(
-    r"(\d)\.\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)",
+    r"(\d)\.\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 _ROUGHIE = re.compile(
-    r"Roughie:\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)",
+    r"Roughie:\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 
@@ -130,6 +132,7 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "saddlecloth": int(m.group(4)),
             "tip_rank": int(m.group(1)),
             "odds_at_tip": float(m.group(5)),
+            "place_odds_at_tip": None,
             "pick_type": "big3",
             "bet_type": None,
             "bet_stake": None,
@@ -155,6 +158,7 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "saddlecloth": None,
             "tip_rank": None,
             "odds_at_tip": None,
+            "place_odds_at_tip": None,
             "pick_type": "big3_multi",
             "bet_type": None,
             "bet_stake": None,
@@ -199,6 +203,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             else:
                 bet_stake = None
                 bet_type = None
+            win_odds = float(m.group(4))
+            place_odds = float(m.group(5)) if m.group(5) else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -207,7 +213,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "horse_name": m.group(2).strip(),
                 "saddlecloth": int(m.group(3)),
                 "tip_rank": int(m.group(1)),
-                "odds_at_tip": float(m.group(4)),
+                "odds_at_tip": win_odds,
+                "place_odds_at_tip": place_odds,
                 "pick_type": "selection",
                 "bet_type": bet_type,
                 "bet_stake": bet_stake,
@@ -236,6 +243,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             else:
                 bet_stake = None
                 bet_type = None
+            win_odds = float(roughie_m.group(3))
+            place_odds = float(roughie_m.group(4)) if roughie_m.group(4) else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -244,7 +253,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "horse_name": roughie_m.group(1).strip(),
                 "saddlecloth": int(roughie_m.group(2)),
                 "tip_rank": 4,
-                "odds_at_tip": float(roughie_m.group(3)),
+                "odds_at_tip": win_odds,
+                "place_odds_at_tip": place_odds,
                 "pick_type": "selection",
                 "bet_type": bet_type,
                 "bet_stake": bet_stake,
@@ -285,6 +295,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "saddlecloth": None,
                 "tip_rank": None,
                 "odds_at_tip": None,
+                "place_odds_at_tip": None,
                 "pick_type": "exotic",
                 "bet_type": None,
                 "bet_stake": None,
@@ -373,6 +384,7 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
                 "saddlecloth": None,
                 "tip_rank": None,
                 "odds_at_tip": None,
+                "place_odds_at_tip": None,
                 "pick_type": "sequence",
                 "bet_type": None,
                 "bet_stake": None,

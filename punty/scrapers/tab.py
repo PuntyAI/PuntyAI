@@ -74,12 +74,14 @@ class TabScraper(BaseScraper):
         runners_odds = []
         for race in meeting.get("races", []):
             for runner in race.get("runners", []):
+                fixed_odds = runner.get("fixedOdds", {})
                 runners_odds.append({
                     "race_number": race.get("raceNumber"),
                     "horse_name": runner.get("runnerName"),
                     "barrier": runner.get("barrierNumber"),
-                    "current_odds": runner.get("fixedOdds", {}).get("returnWin"),
-                    "opening_odds": runner.get("fixedOdds", {}).get("openingPrice"),
+                    "current_odds": fixed_odds.get("returnWin"),
+                    "opening_odds": fixed_odds.get("openingPrice"),
+                    "place_odds": fixed_odds.get("returnPlace"),
                     "scratched": runner.get("scratched", False),
                     "scratching_reason": runner.get("scratchingReason"),
                 })

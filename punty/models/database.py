@@ -34,7 +34,7 @@ async_session = async_sessionmaker(
 async def init_db() -> None:
     """Initialize the database, creating all tables."""
     # Import models to ensure they're registered with Base
-    from punty.models import meeting, content, settings, pick, glory  # noqa: F401  # registers models with Base
+    from punty.models import meeting, content, settings, pick  # noqa: F401  # registers models with Base
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -53,6 +53,9 @@ async def init_db() -> None:
             "ALTER TABLE runners ADD COLUMN pf_jockey_factor FLOAT",
             # Data completeness tracking
             "ALTER TABLE meetings ADD COLUMN speed_map_complete BOOLEAN",
+            # Fixed odds for settlement
+            "ALTER TABLE picks ADD COLUMN place_odds_at_tip FLOAT",
+            "ALTER TABLE runners ADD COLUMN place_odds FLOAT",
         ]:
             try:
                 await conn.execute(_text(col))

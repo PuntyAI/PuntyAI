@@ -169,6 +169,7 @@ class Runner(Base):
 
     current_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     opening_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    place_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Fixed place odds
     scratched: Mapped[bool] = mapped_column(default=False)
     scratching_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -261,6 +262,7 @@ class Runner(Base):
             "pf_jockey_factor": self.pf_jockey_factor,
             "current_odds": self.current_odds,
             "opening_odds": self.opening_odds,
+            "place_odds": self.place_odds,
             "scratched": self.scratched,
             "scratching_reason": self.scratching_reason,
             "comments": self.comments,

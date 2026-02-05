@@ -28,6 +28,7 @@ class Pick(Base):
     saddlecloth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     tip_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     odds_at_tip: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    place_odds_at_tip: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Pick type: selection | big3 | big3_multi | exotic | sequence
     pick_type: Mapped[str] = mapped_column(String(20))
@@ -75,6 +76,7 @@ class Pick(Base):
             "saddlecloth": self.saddlecloth,
             "tip_rank": self.tip_rank,
             "odds_at_tip": self.odds_at_tip,
+            "place_odds_at_tip": self.place_odds_at_tip,
             "pick_type": self.pick_type,
             "exotic_type": self.exotic_type,
             "exotic_runners": self.exotic_runners,

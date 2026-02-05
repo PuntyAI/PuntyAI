@@ -163,6 +163,7 @@ class ContextBuilder:
                 if include_odds:
                     runner_data["current_odds"] = runner.current_odds
                     runner_data["opening_odds"] = runner.opening_odds
+                    runner_data["place_odds"] = runner.place_odds  # Fixed place odds
                     if runner.current_odds and runner.opening_odds:
                         runner_data["odds_movement"] = self._calculate_odds_movement(
                             runner.opening_odds, runner.current_odds

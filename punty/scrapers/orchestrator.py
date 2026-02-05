@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # All Runner fields that come from the scraper
 RUNNER_FIELDS = [
-    "saddlecloth", "weight", "jockey", "trainer", "form", "current_odds", "opening_odds",
+    "saddlecloth", "weight", "jockey", "trainer", "form", "current_odds", "opening_odds", "place_odds",
     "scratched", "comments", "horse_age", "horse_sex", "horse_colour",
     "sire", "dam", "dam_sire", "career_prize_money", "last_five",
     "days_since_last_run", "handicap_rating", "speed_value",
@@ -539,6 +539,8 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
                 runner.current_odds = odds["current_odds"]
             if odds.get("opening_odds") is not None and not runner.opening_odds:
                 runner.opening_odds = odds["opening_odds"]
+            if odds.get("place_odds") is not None:
+                runner.place_odds = odds["place_odds"]
             if odds.get("scratched"):
                 runner.scratched = True
                 runner.scratching_reason = odds.get("scratching_reason") or runner.scratching_reason

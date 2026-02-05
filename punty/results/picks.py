@@ -107,25 +107,29 @@ async def _settle_picks_for_race_impl(
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= 3
 
+            # Use fixed odds from tip time, fall back to tote dividends for backwards compatibility
+            win_odds = pick.odds_at_tip or runner.win_dividend
+            place_odds = pick.place_odds_at_tip or runner.place_dividend
+
             if bet_type in ("win", "saver_win"):
                 pick.hit = won
-                if won and runner.win_dividend:
-                    pick.pnl = round(runner.win_dividend * stake - stake, 2)
+                if won and win_odds:
+                    pick.pnl = round(win_odds * stake - stake, 2)
                 else:
                     pick.pnl = round(-stake, 2)
             elif bet_type == "place":
                 pick.hit = placed
-                if placed and runner.place_dividend:
-                    pick.pnl = round(runner.place_dividend * stake - stake, 2)
+                if placed and place_odds:
+                    pick.pnl = round(place_odds * stake - stake, 2)
                 else:
                     pick.pnl = round(-stake, 2)
             elif bet_type == "each_way":
                 half = stake / 2
-                if won and runner.win_dividend and runner.place_dividend:
-                    pick.pnl = round(runner.win_dividend * half + runner.place_dividend * half - stake, 2)
+                if won and win_odds and place_odds:
+                    pick.pnl = round(win_odds * half + place_odds * half - stake, 2)
                     pick.hit = True
-                elif placed and runner.place_dividend:
-                    pick.pnl = round(runner.place_dividend * half - stake, 2)
+                elif placed and place_odds:
+                    pick.pnl = round(place_odds * half - stake, 2)
                     pick.hit = True
                 else:
                     pick.pnl = round(-stake, 2)
@@ -133,8 +137,8 @@ async def _settle_picks_for_race_impl(
             else:
                 # Fallback: treat as win
                 pick.hit = won
-                if won and runner.win_dividend:
-                    pick.pnl = round(runner.win_dividend * stake - stake, 2)
+                if won and win_odds:
+                    pick.pnl = round(win_odds * stake - stake, 2)
                 else:
                     pick.pnl = round(-stake, 2)
 

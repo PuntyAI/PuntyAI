@@ -32,8 +32,8 @@ if settings.google_client_id:
 # --- Auth middleware ----------------------------------------------------------
 
 # Paths that never require login
-PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health", "/group1glory"}
-PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/group1glory/", "/api/public/", "/public")
+PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health"}
+PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/api/public/", "/public")
 
 # Public site paths (served on punty.ai, not app.punty.ai)
 PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/terms", "/privacy"}
@@ -71,7 +71,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # --- CSRF middleware ----------------------------------------------------------
 
 CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-CSRF_EXEMPT_PREFIXES = ("/api/webhook/", "/group1glory/")
+CSRF_EXEMPT_PREFIXES = ("/api/webhook/",)
 
 
 def _get_session_csrf_secret(request) -> str:

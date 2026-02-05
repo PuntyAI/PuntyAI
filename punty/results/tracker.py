@@ -28,6 +28,7 @@ async def _load_meeting_tips(db: AsyncSession, meeting_id: str) -> list[dict]:
             "race_number": p.race_number,
             "saddlecloth": p.saddlecloth,
             "odds_at_tip": p.odds_at_tip,
+            "place_odds_at_tip": p.place_odds_at_tip,
             "confidence": "best_bet" if p.tip_rank == 1 else "standard",
             "is_big3": False,
             "is_roughie": (p.odds_at_tip or 0) >= 10.0,
@@ -65,18 +66,25 @@ def _compare_tips_to_runners(tips: list[dict], runners) -> list[dict]:
 
         won = runner.finish_position == 1
         placed = runner.finish_position is not None and runner.finish_position <= 3
-        pnl = 0.0
-        if won and runner.win_dividend:
-            pnl = runner.win_dividend - 1.0  # 1 unit stake
-        elif placed and runner.place_dividend:
-            pnl = runner.place_dividend - 1.0
+
+        # Use settled P&L from Pick model if available (uses fixed odds)
+        # Otherwise fall back to tote dividend calculation for unsettled
+        if tip.get("_settled") and tip.get("_pnl") is not None:
+            pnl = tip["_pnl"]
         else:
-            pnl = -1.0 if runner.finish_position is not None else 0.0
+            pnl = 0.0
+            if won and runner.win_dividend:
+                pnl = runner.win_dividend - 1.0  # 1 unit stake
+            elif placed and runner.place_dividend:
+                pnl = runner.place_dividend - 1.0
+            else:
+                pnl = -1.0 if runner.finish_position is not None else 0.0
 
         tip_results.append({
             "horse": tip["horse_name"],
             "saddlecloth": tip.get("saddlecloth") or runner.saddlecloth,
             "tip_odds": tip["odds_at_tip"],
+            "place_odds": tip.get("place_odds_at_tip"),
             "starting_price": runner.starting_price,
             "finish_pos": runner.finish_position,
             "margin": runner.result_margin,
