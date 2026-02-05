@@ -278,6 +278,12 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
 
+                    # Try to scrape sectional times (may not be available yet - typically 10-15min delay)
+                    try:
+                        await self._scrape_sectional_times(db, meeting, race_num)
+                    except Exception as e:
+                        logger.debug(f"Sectional times not yet available for {meeting.venue} R{race_num}: {e}")
+
                     # Check if results generation is enabled
                     from punty.models.settings import AppSettings
                     results_setting = await db.execute(
@@ -311,6 +317,9 @@ class ResultsMonitor:
 
         # Backfill exotic dividends from TabTouch for races missing them
         await self._backfill_tabtouch_exotics(db, meeting, statuses)
+
+        # Backfill sectional times for races that are missing them (10-15min delay after race)
+        await self._backfill_sectionals(db, meeting, races)
 
         # Check if all races done for wrap-up
         total_races = len(races)
@@ -348,6 +357,66 @@ class ResultsMonitor:
                     logger.info(f"Wrap-up generated for {meeting.venue}")
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
+
+    async def _scrape_sectional_times(self, db: AsyncSession, meeting, race_num: int):
+        """Scrape and store post-race sectional times for a race.
+
+        Sectional times are typically available 10-15 minutes after the race finishes.
+        This captures position and time at each checkpoint to compare with speed map predictions.
+        """
+        import json as _json
+        from punty.models.meeting import Race
+        from punty.scrapers.racing_com import RacingComScraper
+
+        race_id = f"{meeting.id}-r{race_num}"
+        race = await db.get(Race, race_id)
+        if not race:
+            return
+
+        # Skip if we already have sectional data
+        if race.sectional_times:
+            return
+
+        scraper = RacingComScraper()
+        try:
+            sectional_data = await scraper.scrape_sectional_times(
+                meeting.venue, meeting.date, race_num
+            )
+        finally:
+            await scraper.close()
+
+        if not sectional_data or not sectional_data.get("horses"):
+            # Sectionals not available yet - will be picked up on future poll
+            race.has_sectionals = False
+            await db.flush()
+            return
+
+        # Store the sectional data
+        race.sectional_times = _json.dumps(sectional_data)
+        race.has_sectionals = True
+        await db.flush()
+
+        logger.info(f"Sectional times captured for {meeting.venue} R{race_num} ({len(sectional_data['horses'])} horses)")
+
+    async def _backfill_sectionals(self, db: AsyncSession, meeting, races):
+        """Try to backfill sectional times for races that are missing them."""
+        import json as _json
+        from punty.models.meeting import Race
+
+        for race in races:
+            # Skip if already has sectionals or explicitly marked as not having them
+            if race.sectional_times:
+                continue
+            if race.has_sectionals is False:
+                continue
+            # Only try for races with results
+            if race.results_status not in ("Paying", "Closed", "Final"):
+                continue
+
+            try:
+                await self._scrape_sectional_times(db, meeting, race.race_number)
+            except Exception as e:
+                logger.debug(f"Sectional backfill failed for {meeting.venue} R{race.race_number}: {e}")
 
     async def _backfill_tabtouch_exotics(self, db, meeting, statuses):
         """Fetch exotic dividends from TabTouch for races that are missing them."""

@@ -154,11 +154,60 @@ def _format_prediction_results(picks: list[Pick], runners: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_sectional_times(sectional_data: Optional[dict]) -> str:
+    """Format sectional times data for the prompt."""
+    if not sectional_data or not sectional_data.get("horses"):
+        return "Sectional times not available for this race."
+
+    lines = ["### Post-Race Sectional Times (Actual Running)"]
+    lines.append("Position and time at each checkpoint during the race:\n")
+
+    for horse in sorted(sectional_data["horses"], key=lambda x: x.get("final_position") or 99):
+        name = horse.get("horse_name", "Unknown")
+        saddle = horse.get("saddlecloth", "?")
+        pos = horse.get("final_position_abbr") or horse.get("final_position", "?")
+        race_time = horse.get("race_time", "?")
+        margin = horse.get("beaten_margin", 0)
+        comment = horse.get("comment", "")
+
+        lines.append(f"**{saddle}. {name}** - {pos} (Time: {race_time}, Margin: {margin}L)")
+
+        # Show position progression through race
+        sectionals = horse.get("sectional_times", [])
+        if sectionals:
+            positions = []
+            for s in sectionals:
+                dist = s.get("distance", "")
+                sect_pos = s.get("position", "?")
+                sect_time = s.get("time", "?")
+                positions.append(f"{dist}: P{sect_pos} ({sect_time}s)")
+            lines.append(f"  Positions: {' → '.join(positions)}")
+
+        # Show split times (time between checkpoints)
+        splits = horse.get("split_times", [])
+        if splits:
+            split_strs = []
+            for s in splits:
+                dist = s.get("distance", "")
+                split_time = s.get("time", "?")
+                split_strs.append(f"{dist}: {split_time}s")
+            lines.append(f"  Splits: {' | '.join(split_strs)}")
+
+        # Include the generated comment if available
+        if comment:
+            lines.append(f"  Comment: {comment}")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _build_assessment_prompt(
     meeting: Meeting,
     race: Race,
     runners: list[dict],
     picks: list[Pick],
+    sectional_data: Optional[dict] = None,
 ) -> str:
     """Build the comprehensive post-race assessment prompt."""
 
@@ -287,12 +336,18 @@ def _build_assessment_prompt(
 ## Full Result
 {_format_runners_table(runners)}
 
+## Post-Race Sectional Times
+{_format_sectional_times(sectional_data)}
+
 ## Detailed Runner Profiles (Pre-Race Data + Result)
 {chr(10).join(runner_details)}
 
 ---
 
 ## Your Analysis Task
+
+IMPORTANT: Compare the actual sectional running (positions at each checkpoint) with our pre-race speed map predictions.
+This tells us if horses ran where we expected them to, and how the pace unfolded.
 
 Review what happened vs what we predicted. Be honest and analytical - we want to learn.
 
@@ -310,6 +365,12 @@ Respond with a JSON object containing:
         "what_won_the_race": "The key factor(s) that determined the winner (barrier/pace/class/fitness/jockey/track position/wet form/etc)",
         "undervalued_factors": ["List factors we should have weighted MORE heavily"],
         "overvalued_factors": ["List factors we weighted too heavily that didn't matter"]
+    }},
+    "sectional_analysis": {{
+        "speed_map_accuracy": "How accurate was our speed map? Did horses settle where predicted?",
+        "pace_scenario": "How did the pace unfold? (e.g., slow/fast early, sprint home, even tempo)",
+        "key_moves": "Which horses made significant moves through the race? When and where?",
+        "winner_run_style": "How did the winner run the race? (led, stalked, came from back, etc.)"
     }},
     "track_learnings": {{
         "track": "{meeting.venue}",
@@ -405,8 +466,16 @@ async def generate_race_assessment(
     # Format runner data
     runners = [_format_runner_for_assessment(r) for r in race.runners]
 
+    # Parse sectional times if available
+    sectional_data = None
+    if race.sectional_times:
+        try:
+            sectional_data = json.loads(race.sectional_times)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     # Build prompt
-    prompt = _build_assessment_prompt(meeting, race, runners, picks)
+    prompt = _build_assessment_prompt(meeting, race, runners, picks, sectional_data)
 
     # Get API key
     if not api_key:

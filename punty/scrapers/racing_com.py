@@ -6,6 +6,7 @@ from graphql.rmdprod.racing.com, extracting 70+ fields per runner.
 URL pattern: racing.com/form/{date}/{venue-slug}/race/{n}
 """
 
+import asyncio
 import json as _json
 import logging
 import re
@@ -996,6 +997,126 @@ class RacingComScraper(BaseScraper):
             elif isinstance(obj, list):
                 for item in obj:
                     _find(item, depth + 1)
+        _find(data)
+
+    async def scrape_sectional_times(
+        self, venue: str, race_date: str, race_number: int
+    ) -> Optional[dict]:
+        """Scrape post-race sectional times data.
+
+        This data is typically available 10-15 minutes after a race finishes.
+        It shows actual running positions and times at each checkpoint.
+
+        Returns: {
+            race_number, has_sectionals,
+            horses: [{
+                saddlecloth, horse_name, final_position,
+                sectional_times: [{distance, position, time, avg_speed}],
+                split_times: [{distance, position, time, avg_speed}],
+                comment, race_time, beaten_margin, time_var_to_winner,
+                six_hundred_time, two_hundred_time, distance_run
+            }]
+        }
+        """
+        race_url = self._build_race_url(venue, race_date, race_number) + "#/speed-data"
+        logger.info(f"Scraping sectional times: {race_url}")
+
+        sectional_data = {}
+
+        async with self._browser_context() as (browser, context):
+            page = await context.new_page()
+
+            async def capture_sectionals(response):
+                if "graphql" not in response.url:
+                    return
+                try:
+                    data = await response.json()
+                    # Look for sectionaltimes_callback
+                    self._try_extract_sectional_times(data, sectional_data)
+                except Exception:
+                    pass
+
+            page.on("response", capture_sectionals)
+
+            try:
+                await page.goto(race_url, wait_until="networkidle", timeout=30000)
+                # Wait a bit for sectional data to load
+                await asyncio.sleep(2)
+            except Exception as e:
+                logger.warning(f"Error loading sectional times page: {e}")
+            finally:
+                page.remove_listener("response", capture_sectionals)
+
+        if not sectional_data.get("horses"):
+            logger.info(f"No sectional data found for {venue} R{race_number}")
+            return None
+
+        sectional_data["race_number"] = race_number
+        return sectional_data
+
+    def _try_extract_sectional_times(self, data: dict, result: dict) -> None:
+        """Extract sectional times from GraphQL response."""
+        def _find(obj, depth=0):
+            if depth > 6:
+                return
+            if isinstance(obj, dict):
+                # Check for sectionaltimes_callback data
+                if "sectionaltimes_callback" in obj:
+                    callback = obj["sectionaltimes_callback"]
+                    if callback and "Horses" in callback:
+                        horses = []
+                        for h in callback["Horses"]:
+                            horse_data = {
+                                "saddlecloth": h.get("SaddleNumber"),
+                                "horse_name": h.get("FullName"),
+                                "final_position": h.get("FinalPosition"),
+                                "final_position_abbr": h.get("FinalPositionAbbreviation"),
+                                "barrier": h.get("BarrierNumber"),
+                                "jockey": h.get("Jockey"),
+                                "trainer": h.get("Trainer"),
+                                "comment": h.get("Comment"),
+                                "race_time": h.get("RaceTime"),
+                                "beaten_margin": h.get("BeatenMargin"),
+                                "time_var_to_winner": h.get("TimeVarToWinner"),
+                                "distance_run": h.get("DistanceRun"),
+                                "six_hundred_time": h.get("SixHundredMetresTime"),
+                                "two_hundred_time": h.get("TwoHundredMetresTime"),
+                                "sectional_times": [
+                                    {
+                                        "distance": s.get("Distance"),
+                                        "position": s.get("Position"),
+                                        "time": s.get("Time"),
+                                        "avg_speed": s.get("AvgSpeed"),
+                                    }
+                                    for s in (h.get("SectionalTimes") or [])
+                                ],
+                                "split_times": [
+                                    {
+                                        "distance": s.get("Distance"),
+                                        "position": s.get("Position"),
+                                        "time": s.get("Time"),
+                                        "avg_speed": s.get("AvgSpeed"),
+                                    }
+                                    for s in (h.get("SplitTimes") or [])
+                                ],
+                            }
+                            horses.append(horse_data)
+
+                        if horses:
+                            result["horses"] = horses
+                            result["has_sectionals"] = True
+                        return
+
+                # Check for hasSectionals flag in race data
+                if obj.get("hasSectionals") is True:
+                    result["has_sectionals"] = True
+
+                for v in obj.values():
+                    _find(v, depth + 1)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _find(item, depth + 1)
+
         _find(data)
 
     @staticmethod

@@ -126,3 +126,89 @@ async def meeting_summary(meeting_id: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Summary failed: {e}")
         return {"error": str(e)}
+
+
+@router.post("/{meeting_id}/race/{race_number}/sectionals")
+async def scrape_race_sectionals(
+    meeting_id: str,
+    race_number: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually scrape sectional times for a race.
+
+    Sectional times show actual running positions at each checkpoint.
+    These are typically available 10-15 minutes after a race finishes.
+    """
+    import json as _json
+    from punty.models.meeting import Meeting, Race
+    from punty.scrapers.racing_com import RacingComScraper
+
+    # Get meeting
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        return {"error": f"Meeting not found: {meeting_id}"}
+
+    race_id = f"{meeting_id}-r{race_number}"
+    race = await db.get(Race, race_id)
+    if not race:
+        return {"error": f"Race not found: {race_id}"}
+
+    # Scrape sectionals
+    scraper = RacingComScraper()
+    try:
+        sectional_data = await scraper.scrape_sectional_times(
+            meeting.venue, meeting.date, race_number
+        )
+    finally:
+        await scraper.close()
+
+    if not sectional_data or not sectional_data.get("horses"):
+        return {
+            "status": "not_available",
+            "message": "Sectional times not yet available for this race. Try again in a few minutes.",
+        }
+
+    # Store the data
+    race.sectional_times = _json.dumps(sectional_data)
+    race.has_sectionals = True
+    await db.commit()
+
+    return {
+        "status": "success",
+        "race_id": race_id,
+        "horses_count": len(sectional_data.get("horses", [])),
+        "data": sectional_data,
+    }
+
+
+@router.get("/{meeting_id}/race/{race_number}/sectionals")
+async def get_race_sectionals(
+    meeting_id: str,
+    race_number: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get stored sectional times for a race."""
+    import json as _json
+    from punty.models.meeting import Race
+
+    race_id = f"{meeting_id}-r{race_number}"
+    race = await db.get(Race, race_id)
+    if not race:
+        return {"error": f"Race not found: {race_id}"}
+
+    if not race.sectional_times:
+        return {
+            "status": "not_available",
+            "has_sectionals": race.has_sectionals,
+            "message": "No sectional times stored for this race.",
+        }
+
+    try:
+        data = _json.loads(race.sectional_times)
+        return {
+            "status": "available",
+            "race_id": race_id,
+            "data": data,
+        }
+    except (_json.JSONDecodeError, TypeError):
+        return {"error": "Failed to parse stored sectional data"}

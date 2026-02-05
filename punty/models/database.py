@@ -125,6 +125,9 @@ async def init_db() -> None:
             "ALTER TABLE runners ADD COLUMN trainer_stats TEXT",
             "ALTER TABLE runners ADD COLUMN class_stats TEXT",
             "ALTER TABLE runners ADD COLUMN trainer_location VARCHAR(100)",
+            # Post-race sectional times
+            "ALTER TABLE races ADD COLUMN sectional_times TEXT",
+            "ALTER TABLE races ADD COLUMN has_sectionals BOOLEAN",
         ]:
             try:
                 await conn.execute(_text(col))
