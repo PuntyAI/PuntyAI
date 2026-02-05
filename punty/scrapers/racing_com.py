@@ -1032,13 +1032,15 @@ class RacingComScraper(BaseScraper):
                     data = _json.loads(body)
                     # Look for sectionaltimes_callback
                     self._try_extract_sectional_times(data, sectional_data)
-                except Exception:
-                    pass
+                    if sectional_data.get("horses"):
+                        logger.debug(f"Captured sectional data for {len(sectional_data['horses'])} horses")
+                except Exception as e:
+                    logger.debug(f"Error parsing graphql response: {e}")
 
             page.on("response", capture_sectionals)
             try:
                 await page.goto(race_url, wait_until="load", timeout=30000)
-                await page.wait_for_timeout(3000)  # Wait for sectional data to load
+                await page.wait_for_timeout(5000)  # Wait for sectional data to load
             except Exception as e:
                 logger.warning(f"Error loading sectional times page: {e}")
             finally:
