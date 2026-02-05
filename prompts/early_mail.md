@@ -129,6 +129,32 @@ The analysis section now includes:
 - **pace_disadvantaged**: Runners where map_factor <= 0.9 (pace hurts them)
 - **early_speed_ranks**: Top 5 runners by early speed rating
 
+## MARKET MOVEMENT INSIGHTS
+Each runner may include **market_movement** data showing how their odds have shifted:
+- **direction**: "heavy_support" / "firming" / "stable" / "drifting" / "big_drift"
+- **summary**: Human-readable summary (e.g. "Heavily backed $8.00 → $4.50")
+- **from/to**: Opening price → current price
+- **pct_change**: Percentage change (negative = firming, positive = drifting)
+
+The analysis section includes **market_movers** — runners with significant price movements.
+
+**HOW TO USE MARKET MOVEMENT:**
+1. **Heavy support (>20% firmed)**: Smart money indicator. These runners are getting serious attention. Consider upgrading confidence if form backs it up.
+2. **Firming (10-20%)**: Positive market sentiment. Connections or informed punters see something they like.
+3. **Drifting (15-30%)**: Market losing confidence. Could mean trial wasn't as good as expected, or insiders cooling. Be cautious unless you have strong contrary evidence.
+4. **Big drift (>30%)**: Major red flag. Something has changed — late scratching of key rival, track condition shift, or negative news. Approach with extreme caution.
+
+**In your commentary:**
+- Mention significant market moves in your "Why" explanations (e.g. "Heavily backed from $12 to $6 — the market knows something")
+- Use market support to add confidence to your picks
+- Flag drifters as risks even if form looks okay
+- Include notable movers in the Meet Snapshot or Nuggets section
+
+**Check your Analysis Framework Weights for `market` weight:**
+- When "high": Let market movement strongly influence pick order and confidence
+- When "med": Use as supporting evidence alongside form
+- When "low": Mention but don't let it override form-based selections
+
 ## GENERAL RULES
 1) Top 3 + Roughie: $20 total pool per race. The four stakes must NOT exceed $20 (you don't have to use all $20 — pick the best value bets).
    BET TYPE RULES:

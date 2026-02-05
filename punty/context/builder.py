@@ -2,14 +2,16 @@
 
 import json
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
+MELB = ZoneInfo("Australia/Melbourne")
 
 
 class ContextBuilder:
@@ -162,19 +164,33 @@ class ContextBuilder:
 
                 if include_odds:
                     runner_data["current_odds"] = runner.current_odds
-                    runner_data["opening_odds"] = runner.opening_odds
                     runner_data["place_odds"] = runner.place_odds  # Fixed place odds
-                    if runner.current_odds and runner.opening_odds:
-                        runner_data["odds_movement"] = self._calculate_odds_movement(
-                            runner.opening_odds, runner.current_odds
-                        )
-                    # Multi-provider odds
+
+                    # Parse flucs for true opening price and market movement
+                    flucs_data = self._parse_flucs(runner.odds_flucs)
+                    if flucs_data:
+                        runner_data["opening_odds"] = flucs_data.get("opening_price")
+                        runner_data["market_movement"] = {
+                            "direction": flucs_data.get("direction"),
+                            "summary": flucs_data.get("summary"),
+                            "pct_change": flucs_data.get("pct_change"),
+                            "from": flucs_data.get("opening_price"),
+                            "to": flucs_data.get("latest_price"),
+                        }
+                        runner_data["odds_movement"] = flucs_data.get("direction", "stable")
+                    else:
+                        runner_data["opening_odds"] = runner.opening_odds
+                        if runner.current_odds and runner.opening_odds:
+                            runner_data["odds_movement"] = self._calculate_odds_movement(
+                                runner.opening_odds, runner.current_odds
+                            )
+
+                    # Multi-provider odds (keep for reference)
                     runner_data["odds_tab"] = runner.odds_tab
                     runner_data["odds_sportsbet"] = runner.odds_sportsbet
                     runner_data["odds_bet365"] = runner.odds_bet365
                     runner_data["odds_ladbrokes"] = runner.odds_ladbrokes
                     runner_data["odds_betfair"] = runner.odds_betfair
-                    runner_data["odds_flucs"] = runner.odds_flucs
 
                 if include_form:
                     runner_data["form"] = runner.form
@@ -241,6 +257,75 @@ class ContextBuilder:
         else:
             return "stable"
 
+    def _parse_flucs(self, flucs_json: Optional[str]) -> dict[str, Any]:
+        """Parse odds fluctuation data and calculate market movement."""
+        if not flucs_json:
+            return {}
+
+        try:
+            flucs = json.loads(flucs_json)
+            if not flucs or not isinstance(flucs, list):
+                return {}
+
+            # Parse odds values (remove $ sign if present)
+            def parse_odds(val):
+                if isinstance(val, str):
+                    return float(val.replace("$", "").strip())
+                return float(val) if val else None
+
+            # Get opening (first) and latest (last) prices
+            opening_entry = flucs[0]
+            latest_entry = flucs[-1]
+
+            opening_price = parse_odds(opening_entry.get("odds"))
+            latest_price = parse_odds(latest_entry.get("odds"))
+
+            if not opening_price or not latest_price:
+                return {}
+
+            # Calculate movement
+            price_change = latest_price - opening_price
+            pct_change = (price_change / opening_price) * 100
+
+            # Determine direction and strength
+            if pct_change <= -20:
+                direction = "heavy_support"
+                summary = f"Heavily backed ${opening_price:.2f} → ${latest_price:.2f}"
+            elif pct_change <= -10:
+                direction = "firming"
+                summary = f"Firming ${opening_price:.2f} → ${latest_price:.2f}"
+            elif pct_change >= 30:
+                direction = "big_drift"
+                summary = f"Big drift ${opening_price:.2f} → ${latest_price:.2f}"
+            elif pct_change >= 15:
+                direction = "drifting"
+                summary = f"Drifting ${opening_price:.2f} → ${latest_price:.2f}"
+            else:
+                direction = "stable"
+                summary = f"Stable around ${latest_price:.2f}"
+
+            # Format timestamps
+            opening_time = None
+            if opening_entry.get("time"):
+                try:
+                    opening_time = datetime.fromtimestamp(opening_entry["time"], MELB).strftime("%H:%M")
+                except (ValueError, OSError):
+                    pass
+
+            return {
+                "opening_price": opening_price,
+                "latest_price": latest_price,
+                "price_change": round(price_change, 2),
+                "pct_change": round(pct_change, 1),
+                "direction": direction,
+                "summary": summary,
+                "num_movements": len(flucs),
+                "opening_time": opening_time,
+            }
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.debug(f"Failed to parse flucs: {e}")
+            return {}
+
     def _analyze_race(self, runners: list) -> dict[str, Any]:
         """Generate race analysis from runner data."""
         analysis = {
@@ -292,8 +377,33 @@ class ContextBuilder:
                 for r in sorted_by_speed
             ]
 
+        # Market movers using flucs data
         for runner in runners:
-            if runner.current_odds and runner.opening_odds:
+            flucs_data = self._parse_flucs(runner.odds_flucs)
+            if flucs_data and flucs_data.get("direction"):
+                direction = flucs_data["direction"]
+                if direction in ["heavy_support", "firming"]:
+                    analysis["market_movers"].append({
+                        "horse": runner.horse_name,
+                        "direction": "in",
+                        "movement": direction,
+                        "summary": flucs_data.get("summary"),
+                        "from": flucs_data.get("opening_price"),
+                        "to": flucs_data.get("latest_price"),
+                        "pct_change": flucs_data.get("pct_change"),
+                    })
+                elif direction in ["drifting", "big_drift"]:
+                    analysis["market_movers"].append({
+                        "horse": runner.horse_name,
+                        "direction": "out",
+                        "movement": direction,
+                        "summary": flucs_data.get("summary"),
+                        "from": flucs_data.get("opening_price"),
+                        "to": flucs_data.get("latest_price"),
+                        "pct_change": flucs_data.get("pct_change"),
+                    })
+            # Fallback to simple comparison if no flucs
+            elif runner.current_odds and runner.opening_odds:
                 movement = self._calculate_odds_movement(
                     runner.opening_odds, runner.current_odds
                 )
@@ -301,6 +411,7 @@ class ContextBuilder:
                     analysis["market_movers"].append({
                         "horse": runner.horse_name,
                         "direction": "in",
+                        "movement": movement,
                         "from": runner.opening_odds,
                         "to": runner.current_odds,
                     })
@@ -308,6 +419,7 @@ class ContextBuilder:
                     analysis["market_movers"].append({
                         "horse": runner.horse_name,
                         "direction": "out",
+                        "movement": movement,
                         "from": runner.opening_odds,
                         "to": runner.current_odds,
                     })
