@@ -94,6 +94,8 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
 
 async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
     """Run all scrapers for a selected meeting and merge data into DB."""
+    from punty.scrapers.playwright_base import scrape_lock
+
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
         raise ValueError(f"Meeting not found: {meeting_id}")
@@ -102,49 +104,51 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
     race_date = meeting.date
     errors = []
 
-    # Primary form data — racing.com GraphQL
-    try:
-        from punty.scrapers.racing_com import RacingComScraper
-        scraper = RacingComScraper()
+    # Acquire scrape lock to prevent concurrent Playwright operations
+    async with scrape_lock(venue):
+        # Primary form data — racing.com GraphQL
         try:
-            data = await scraper.scrape_meeting(venue, race_date)
-            await _upsert_meeting_data(db, meeting, data)
-        finally:
-            await scraper.close()
-    except Exception as e:
-        logger.error(f"racing.com scrape failed: {e}")
-        errors.append(f"racing.com: {e}")
+            from punty.scrapers.racing_com import RacingComScraper
+            scraper = RacingComScraper()
+            try:
+                data = await scraper.scrape_meeting(venue, race_date)
+                await _upsert_meeting_data(db, meeting, data)
+            finally:
+                await scraper.close()
+        except Exception as e:
+            logger.error(f"racing.com scrape failed: {e}")
+            errors.append(f"racing.com: {e}")
 
-    # Track conditions (supplementary)
-    try:
-        from punty.scrapers.track_conditions import scrape_track_conditions
-        state = _guess_state(venue)
-        if state:
-            conditions = await scrape_track_conditions(state)
-            for cond in conditions:
-                if cond["venue"] and cond["venue"].lower() in venue.lower():
-                    meeting.track_condition = cond.get("condition") or meeting.track_condition
-                    meeting.rail_position = cond.get("rail") or meeting.rail_position
-                    meeting.weather = cond.get("weather") or meeting.weather
-                    break
-    except Exception as e:
-        logger.error(f"track conditions scrape failed: {e}")
-        errors.append(f"track_conditions: {e}")
+        # Track conditions (supplementary)
+        try:
+            from punty.scrapers.track_conditions import scrape_track_conditions
+            state = _guess_state(venue)
+            if state:
+                conditions = await scrape_track_conditions(state)
+                for cond in conditions:
+                    if cond["venue"] and cond["venue"].lower() in venue.lower():
+                        meeting.track_condition = cond.get("condition") or meeting.track_condition
+                        meeting.rail_position = cond.get("rail") or meeting.rail_position
+                        meeting.weather = cond.get("weather") or meeting.weather
+                        break
+        except Exception as e:
+            logger.error(f"track conditions scrape failed: {e}")
+            errors.append(f"track_conditions: {e}")
 
-    # If no races were found and not already classified, mark as trial/jumpout
-    if not meeting.meeting_type or meeting.meeting_type == "race":
-        race_count = await db.execute(
-            select(Race).where(Race.meeting_id == meeting_id).limit(1)
-        )
-        if not race_count.scalar_one_or_none():
-            meeting.meeting_type = _classify_meeting_type(venue)
-            if meeting.meeting_type == "race":
-                # No races found but venue name didn't match trial patterns —
-                # still likely a trial/jumpout if racing.com has no form data
-                meeting.meeting_type = "trial"
-                logger.info(f"No races found for {venue} — classified as trial")
+        # If no races were found and not already classified, mark as trial/jumpout
+        if not meeting.meeting_type or meeting.meeting_type == "race":
+            race_count = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id).limit(1)
+            )
+            if not race_count.scalar_one_or_none():
+                meeting.meeting_type = _classify_meeting_type(venue)
+                if meeting.meeting_type == "race":
+                    # No races found but venue name didn't match trial patterns —
+                    # still likely a trial/jumpout if racing.com has no form data
+                    meeting.meeting_type = "trial"
+                    logger.info(f"No races found for {venue} — classified as trial")
 
-    await db.commit()
+        await db.commit()
     return {"meeting_id": meeting_id, "errors": errors}
 
 
