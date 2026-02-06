@@ -142,11 +142,23 @@ class RacingComScraper(BaseScraper):
                             existing = form_history_by_horse.get(horse_name, [])
                             for item in items:
                                 race_info = item.get("race", {}) or {}
+                                # Try multiple field names for class
+                                race_class = (
+                                    race_info.get("rdcClass")
+                                    or race_info.get("raceClass")
+                                    or race_info.get("className")
+                                    or race_info.get("class")
+                                    or race_info.get("raceClassName")
+                                    or race_info.get("classCode")
+                                )
+                                # Also try to get prize money which often indicates class
+                                prize = race_info.get("prizeMoney") or race_info.get("prize") or race_info.get("totalPrizeMoney")
                                 start = {
                                     "date": race_info.get("date"),
                                     "venue": race_info.get("venueAbbr") or race_info.get("location"),
                                     "distance": race_info.get("distance"),
-                                    "class": race_info.get("rdcClass"),
+                                    "class": race_class,
+                                    "prize": prize,
                                     "track": ((race_info.get("trackCondition") or "") + " " + (race_info.get("trackRating") or "")).strip(),
                                     "field": race_info.get("runnersCount"),
                                     "pos": item.get("finish") or item.get("finishAbv"),

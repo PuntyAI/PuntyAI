@@ -545,7 +545,7 @@
                                                                 <td class="px-2 py-1 whitespace-nowrap text-gray-300">{% if run.date %}{{ run.date[8:10] }}-{{ run.date[5:7] }}-{{ run.date[2:4] }}{% else %}-{% endif %}</td>
                                                                 <td class="px-2 py-1 whitespace-nowrap font-medium text-gray-200">{{ run.venue or '-' }}</td>
                                                                 <td class="px-2 py-1 text-right text-gray-300">{{ run.distance or '-' }}</td>
-                                                                <td class="px-2 py-1 whitespace-nowrap text-gray-300">{{ run.class or run.raceClass or '-' }}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap text-gray-300">{% if run.class %}{{ run.class }}{% elif runner.career_record and runner.career_record.split(':')[1].split('-')[0] == '0' %}MDN{% else %}-{% endif %}</td>
                                                                 <td class="px-2 py-1 text-center">
                                                                     {% if run.track %}
                                                                     <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold
