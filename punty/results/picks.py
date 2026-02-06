@@ -1060,3 +1060,102 @@ async def update_memory_outcomes(
     if updated:
         logger.info(f"Updated {updated} memory outcomes for {race_id}")
     return updated
+
+
+async def get_recent_wins(db: AsyncSession, limit: int = 20) -> list[dict]:
+    """Get recent winning picks with celebration phrases.
+
+    Returns list of dicts with win details and a Punty celebration phrase.
+    """
+    from punty.results.celebrations import get_celebration
+
+    # Get recent settled wins, ordered by settled_at descending
+    result = await db.execute(
+        select(Pick, Meeting)
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Pick.settled == True,
+            Pick.hit == True,
+            Pick.pnl > 0,  # Only profitable wins
+        )
+        .order_by(Pick.settled_at.desc())
+        .limit(limit)
+    )
+    rows = result.all()
+
+    wins = []
+    for pick, meeting in rows:
+        # Calculate stake and return
+        stake = pick.bet_stake or pick.exotic_stake or 1.0
+        returned = stake + (pick.pnl or 0)
+
+        # Build display name
+        if pick.pick_type == "selection":
+            display_name = f"{pick.horse_name or 'Runner'} R{pick.race_number}"
+        elif pick.pick_type == "exotic":
+            display_name = f"{pick.exotic_type or 'Exotic'} R{pick.race_number}"
+        elif pick.pick_type == "sequence":
+            display_name = f"{pick.sequence_type or 'Sequence'}"
+        elif pick.pick_type == "big3_multi":
+            display_name = "Big 3 Multi"
+        else:
+            display_name = f"Win R{pick.race_number}"
+
+        wins.append({
+            "id": pick.id,
+            "venue": meeting.venue,
+            "display_name": display_name,
+            "pick_type": pick.pick_type,
+            "stake": round(stake, 2),
+            "returned": round(returned, 2),
+            "pnl": round(pick.pnl, 2),
+            "celebration": get_celebration(pick.pnl, pick.pick_type),
+            "settled_at": pick.settled_at.isoformat() if pick.settled_at else None,
+        })
+
+    return wins
+
+
+async def get_all_time_stats(db: AsyncSession) -> dict:
+    """Get all-time win statistics for dashboard display."""
+    today = melb_now_naive().date()
+
+    # Today's winners
+    today_result = await db.execute(
+        select(func.count(Pick.id))
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Pick.settled == True,
+            Pick.hit == True,
+            Meeting.date == today,
+        )
+    )
+    today_winners = today_result.scalar() or 0
+
+    # All-time winners
+    total_result = await db.execute(
+        select(func.count(Pick.id)).where(
+            Pick.settled == True,
+            Pick.hit == True,
+        )
+    )
+    total_winners = total_result.scalar() or 0
+
+    # All-time collected (returned from wins)
+    collected_result = await db.execute(
+        select(
+            func.sum(Pick.bet_stake + Pick.pnl).filter(Pick.bet_stake.isnot(None)),
+            func.sum(Pick.exotic_stake + Pick.pnl).filter(Pick.exotic_stake.isnot(None)),
+        ).where(
+            Pick.settled == True,
+            Pick.hit == True,
+        )
+    )
+    row = collected_result.one()
+    collected = (row[0] or 0) + (row[1] or 0)
+
+    return {
+        "today_winners": today_winners,
+        "total_winners": total_winners,
+        "collected": round(collected, 0),
+    }

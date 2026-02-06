@@ -20,6 +20,89 @@
         </div>
     </div>
 
+    <!-- Hero Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ all_time_stats.today_winners or 0 }}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Today So Far</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ all_time_stats.total_winners or 0 }}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Total Winners</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                ${{ all_time_stats.collected|int or 0 }}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Collected</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ todays_meetings|length }}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Meetings Today</div>
+        </div>
+    </div>
+
+    <!-- Wins Ticker -->
+    <div id="wins-ticker" class="bg-punty-card rounded-xl border border-punty-border overflow-hidden">
+        <div class="flex items-center px-4 py-2 border-b border-punty-border">
+            <span class="text-punty-magenta text-lg mr-2">&#x1F3C6;</span>
+            <span class="font-heading font-semibold text-sm uppercase tracking-wider text-gray-400">Recent Wins</span>
+        </div>
+        <div class="ticker-container relative overflow-hidden" style="height: 48px;">
+            <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-4 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+                <span class="text-gray-500 text-sm">Loading wins...</span>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker-scroll:hover {
+            animation-play-state: paused;
+        }
+        .win-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .win-celebration {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 0.9rem;
+            background: var(--gradient-sunset);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .win-horse {
+            color: #fff;
+            font-weight: 600;
+        }
+        .win-venue {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .win-amounts {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+        }
+        .win-stake { color: var(--text-muted); }
+        .win-return { color: #4ade80; }
+    </style>
+
     <!-- 1) Results Monitor Status -->
     <div class="bg-white rounded-lg shadow p-4 sm:p-6">
         <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
@@ -415,6 +498,52 @@
 
 {% block scripts %}
 <script>
+// --- Wins Ticker ---
+(function() {
+    async function loadWinsTicker() {
+        try {
+            const resp = await fetch('/api/results/wins/recent?limit=15');
+            const data = await resp.json();
+            const ticker = document.getElementById('ticker-content');
+
+            if (!data.wins || data.wins.length === 0) {
+                ticker.innerHTML = '<span class="text-gray-500 text-sm px-4">No wins yet today - let\'s change that!</span>';
+                ticker.style.animation = 'none';
+                return;
+            }
+
+            // Build ticker items - duplicate for seamless loop
+            let items = '';
+            for (let i = 0; i < 2; i++) {
+                data.wins.forEach(function(win) {
+                    items += '<div class="win-item">' +
+                        '<span class="win-celebration">' + win.celebration + '</span>' +
+                        '<span class="win-horse">' + win.display_name + '</span>' +
+                        '<span class="win-venue">' + win.venue + '</span>' +
+                        '<span class="win-amounts">' +
+                            '<span class="win-stake">$' + win.stake.toFixed(0) + '</span>' +
+                            ' → ' +
+                            '<span class="win-return">$' + win.returned.toFixed(0) + '</span>' +
+                        '</span>' +
+                    '</div>';
+                });
+            }
+            ticker.innerHTML = items;
+
+            // Adjust animation speed based on content width
+            const totalWidth = ticker.scrollWidth / 2;
+            const speed = Math.max(20, totalWidth / 50); // ~50px per second
+            ticker.style.animation = 'ticker-scroll ' + speed + 's linear infinite';
+        } catch (e) {
+            console.error('Failed to load wins ticker:', e);
+        }
+    }
+
+    loadWinsTicker();
+    // Refresh ticker every 60 seconds
+    setInterval(loadWinsTicker, 60000);
+})();
+
 var monitorRunning = {{ 'true' if monitor_status.running else 'false' }};
 
 function toggleMonitor() {

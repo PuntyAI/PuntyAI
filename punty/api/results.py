@@ -212,3 +212,30 @@ async def get_race_sectionals(
         }
     except (_json.JSONDecodeError, TypeError):
         return {"error": "Failed to parse stored sectional data"}
+
+
+@router.get("/wins/recent")
+async def get_recent_wins_api(
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get recent winning picks with Punty celebration phrases."""
+    from punty.results.picks import get_recent_wins
+    try:
+        wins = await get_recent_wins(db, limit=limit)
+        return {"wins": wins}
+    except Exception as e:
+        logger.error(f"Recent wins failed: {e}")
+        return {"error": str(e), "wins": []}
+
+
+@router.get("/wins/stats")
+async def get_all_time_stats_api(db: AsyncSession = Depends(get_db)):
+    """Get all-time win statistics for dashboard hero stats."""
+    from punty.results.picks import get_all_time_stats
+    try:
+        stats = await get_all_time_stats(db)
+        return stats
+    except Exception as e:
+        logger.error(f"All-time stats failed: {e}")
+        return {"today_winners": 0, "total_winners": 0, "collected": 0}
