@@ -456,6 +456,7 @@ class RacingComScraper(BaseScraper):
             "weather_wind_speed": weather_wind_speed,
             "weather_wind_dir": gql.get("weatherWindDirection"),
             "rail_bias_comment": rail_bias_comment,
+            "meet_code": gql.get("id"),  # Internal racing.com meeting ID for CSV downloads
         }
 
     def _parse_graphql_entry(self, entry: dict, race_id: str, betting_by_horse: dict) -> Optional[dict]:
@@ -1000,21 +1001,28 @@ class RacingComScraper(BaseScraper):
         _find(data)
 
     async def scrape_sectional_times(
-        self, venue: str, race_date: date, race_number: int
+        self, venue: str, race_date: date, race_number: int, meet_code: Optional[str] = None
     ) -> Optional[dict]:
         """Scrape post-race sectional times data.
 
         This data is typically available 10-15 minutes after a race finishes.
         It shows actual running positions and times at each checkpoint.
 
+        Args:
+            venue: Venue name
+            race_date: Date of the meeting
+            race_number: Race number
+            meet_code: Optional racing.com internal meeting ID for CSV fallback
+
         Returns: {
-            race_number, has_sectionals,
+            race_number, has_sectionals, meet_code,
             horses: [{
                 saddlecloth, horse_name, final_position,
                 sectional_times: [{distance, position, time, avg_speed}],
                 split_times: [{distance, position, time, avg_speed}],
                 comment, race_time, beaten_margin, time_var_to_winner,
-                six_hundred_time, two_hundred_time, distance_run
+                six_hundred_time, two_hundred_time, distance_run,
+                early_speed, mid_speed, late_speed, peak_speed, avg_speed
             }]
         }
         """
@@ -1022,9 +1030,11 @@ class RacingComScraper(BaseScraper):
         logger.info(f"Scraping sectional times: {race_url}")
 
         sectional_data = {}
+        captured_meet_code = None
 
         async with new_page() as page:
             async def capture_sectionals(response):
+                nonlocal captured_meet_code
                 if "graphql.rmdprod.racing.com" not in response.url:
                     return
                 try:
@@ -1034,6 +1044,11 @@ class RacingComScraper(BaseScraper):
                     self._try_extract_sectional_times(data, sectional_data)
                     if sectional_data.get("horses"):
                         logger.debug(f"Captured sectional data for {len(sectional_data['horses'])} horses")
+                    # Try to extract meet_code from getMeeting response
+                    if "getMeeting" in body and not captured_meet_code:
+                        meeting_data = data.get("data", {}).get("getMeeting", {})
+                        if meeting_data and meeting_data.get("id"):
+                            captured_meet_code = meeting_data["id"]
                 except Exception as e:
                     logger.debug(f"Error parsing graphql response: {e}")
 
@@ -1056,12 +1071,135 @@ class RacingComScraper(BaseScraper):
             finally:
                 page.remove_listener("response", capture_sectionals)
 
+        # If GraphQL scraping failed, try CSV fallback
+        effective_meet_code = meet_code or captured_meet_code
+        if not sectional_data.get("horses") and effective_meet_code:
+            logger.info(f"Trying CSV fallback for {venue} R{race_number} (meet_code={effective_meet_code})")
+            csv_data = await self._fetch_sectional_csv(effective_meet_code, race_number)
+            if csv_data:
+                sectional_data = csv_data
+                sectional_data["source"] = "csv"
+
         if not sectional_data.get("horses"):
             logger.info(f"No sectional data found for {venue} R{race_number}")
             return None
 
         sectional_data["race_number"] = race_number
+        if captured_meet_code:
+            sectional_data["meet_code"] = captured_meet_code
         return sectional_data
+
+    async def _fetch_sectional_csv(self, meet_code: str, race_number: int) -> Optional[dict]:
+        """Fetch and parse sectional times from CSV download.
+
+        CSV URL pattern: https://d3qmfyv6ad9vwv.cloudfront.net/{meet_code}_{race_number:02d}.csv
+        """
+        csv_url = f"https://d3qmfyv6ad9vwv.cloudfront.net/{meet_code}_{race_number:02d}.csv"
+        logger.debug(f"Fetching sectional CSV: {csv_url}")
+
+        try:
+            response = await self.client.get(csv_url, timeout=10.0)
+            if response.status_code != 200:
+                logger.debug(f"CSV not available: {response.status_code}")
+                return None
+
+            csv_text = response.text
+            return self._parse_sectional_csv(csv_text, race_number)
+        except Exception as e:
+            logger.debug(f"Failed to fetch sectional CSV: {e}")
+            return None
+
+    def _parse_sectional_csv(self, csv_text: str, race_number: int) -> Optional[dict]:
+        """Parse sectional times CSV into our standard format.
+
+        CSV format (semicolon-delimited):
+        Row 1: date;venue-info;race_name;winning_time;track_info
+        Row 2+: horse_name;saddlecloth;dist1;speed1;time1;dist2;speed2;time2;...
+        """
+        lines = csv_text.strip().split("\n")
+        if len(lines) < 2:
+            return None
+
+        horses = []
+        for i, line in enumerate(lines[1:], start=1):  # Skip header
+            parts = line.split(";")
+            if len(parts) < 5:
+                continue
+
+            horse_name = parts[0]
+            try:
+                saddlecloth = int(parts[1])
+            except (ValueError, IndexError):
+                continue
+
+            # Parse distance/speed/time triplets (100m intervals)
+            sectional_times = []
+            split_times = []
+            j = 2
+            prev_time_seconds = 0.0
+            while j + 2 < len(parts):
+                try:
+                    distance = int(parts[j])
+                    speed = float(parts[j + 1])
+                    time_str = parts[j + 2]  # Format: 00:00:08.640
+
+                    # Parse time to seconds
+                    time_parts = time_str.split(":")
+                    if len(time_parts) == 3:
+                        time_seconds = (
+                            int(time_parts[0]) * 3600 +
+                            int(time_parts[1]) * 60 +
+                            float(time_parts[2])
+                        )
+                    else:
+                        time_seconds = 0.0
+
+                    # Cumulative time for sectionals
+                    cumulative_time = prev_time_seconds + time_seconds if prev_time_seconds else time_seconds
+
+                    sectional_times.append({
+                        "distance": f"{distance}m",
+                        "position": i,  # Use row order as rough position
+                        "time": f"{cumulative_time:.2f}",
+                        "avg_speed": speed,
+                    })
+
+                    # Split time for this segment
+                    split_times.append({
+                        "distance": f"{distance}m",
+                        "position": i,
+                        "time": f"{time_seconds:.2f}",
+                        "avg_speed": speed,
+                    })
+
+                    prev_time_seconds = cumulative_time
+                    j += 3
+                except (ValueError, IndexError):
+                    break
+
+            if sectional_times:
+                # Calculate early/mid/late speeds from the data
+                speeds = [s["avg_speed"] for s in sectional_times if s.get("avg_speed")]
+                third = len(speeds) // 3 if speeds else 0
+
+                horse_data = {
+                    "saddlecloth": saddlecloth,
+                    "horse_name": horse_name,
+                    "final_position": i,  # Approximate from row order
+                    "race_time": f"{prev_time_seconds:.2f}" if prev_time_seconds else None,
+                    "sectional_times": sectional_times,
+                    "split_times": split_times,
+                    # Calculate overview speeds
+                    "early_speed": round(sum(speeds[:third]) / third, 2) if third > 0 else None,
+                    "mid_speed": round(sum(speeds[third:2*third]) / third, 2) if third > 0 else None,
+                    "late_speed": round(sum(speeds[2*third:]) / (len(speeds) - 2*third), 2) if len(speeds) > 2*third else None,
+                    "avg_speed": round(sum(speeds) / len(speeds), 2) if speeds else None,
+                }
+                horses.append(horse_data)
+
+        if horses:
+            return {"horses": horses, "has_sectionals": True}
+        return None
 
     def _try_extract_sectional_times(self, data: dict, result: dict) -> None:
         """Extract sectional times from GraphQL response."""

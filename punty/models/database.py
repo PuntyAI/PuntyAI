@@ -128,6 +128,8 @@ async def init_db() -> None:
             # Post-race sectional times
             "ALTER TABLE races ADD COLUMN sectional_times TEXT",
             "ALTER TABLE races ADD COLUMN has_sectionals BOOLEAN",
+            # Meeting code for sectional CSV downloads
+            "ALTER TABLE meetings ADD COLUMN meet_code VARCHAR(20)",
         ]:
             try:
                 await conn.execute(_text(col))

@@ -379,9 +379,14 @@ class ResultsMonitor:
 
         scraper = RacingComScraper()
         try:
+            # Pass meet_code for CSV fallback if available
+            meet_code = getattr(meeting, 'meet_code', None)
             sectional_data = await scraper.scrape_sectional_times(
-                meeting.venue, meeting.date, race_num
+                meeting.venue, meeting.date, race_num, meet_code=meet_code
             )
+            # Store meet_code if we captured it
+            if sectional_data and sectional_data.get("meet_code") and not meeting.meet_code:
+                meeting.meet_code = sectional_data["meet_code"]
         finally:
             await scraper.close()
 

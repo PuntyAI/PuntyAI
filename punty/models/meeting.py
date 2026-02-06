@@ -26,6 +26,7 @@ class Meeting(Base):
     source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     meeting_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # race, trial, jumpout
     speed_map_complete: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # None=not checked, True=complete, False=incomplete
+    meet_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # racing.com internal meeting ID for CSV downloads
 
     # New GraphQL fields
     penetrometer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
