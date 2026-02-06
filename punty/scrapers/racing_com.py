@@ -1090,6 +1090,14 @@ class RacingComScraper(BaseScraper):
                                 "distance_run": h.get("DistanceRun"),
                                 "six_hundred_time": h.get("SixHundredMetresTime"),
                                 "two_hundred_time": h.get("TwoHundredMetresTime"),
+                                # Overview/Speed report data
+                                "early_speed": h.get("Early"),
+                                "mid_speed": h.get("Mid"),
+                                "late_speed": h.get("Late"),
+                                "peak_speed": h.get("OverallPeakSpeed"),
+                                "peak_speed_location": h.get("PeakSpeedLocation"),
+                                "avg_speed": h.get("OverallAvgSpeed"),
+                                "distance_from_rail": h.get("DistanceFromRail"),
                                 "sectional_times": [
                                     {
                                         "distance": s.get("Distance"),
