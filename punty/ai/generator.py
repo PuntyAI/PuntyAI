@@ -1117,15 +1117,15 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             parts.append("\n## MARKET SUPPORT (Horses Being Backed)")
             for m in market_in:
                 label = "HEAVY" if m.get("movement") == "heavy_support" else "Firming"
-                summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
-                parts.append(f"- Race {m['race']}: {m['horse']} — {summary} [{label}]")
+                move_summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
+                parts.append(f"- Race {m['race']}: {m['horse']} — {move_summary} [{label}]")
 
         if market_out:
             parts.append("\n## MARKET DRIFTERS (Horses Easing)")
             for m in market_out:
                 label = "BIG DRIFT" if m.get("movement") == "big_drift" else "Drifting"
-                summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
-                parts.append(f"- Race {m['race']}: {m['horse']} — {summary} [{label}]")
+                move_summary = m.get("summary") or f"${m.get('from', 0):.2f} → ${m.get('to', 0):.2f}"
+                parts.append(f"- Race {m['race']}: {m['horse']} — {move_summary} [{label}]")
 
         # Collect gear changes across all races
         gear_changes = []
