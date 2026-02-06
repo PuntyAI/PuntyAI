@@ -139,7 +139,9 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
             errors.append(f"track_conditions: {e}")
 
         # If no races were found and not already classified, mark as trial/jumpout
-        if not meeting.meeting_type or meeting.meeting_type == "race":
+        # BUT only if the racing.com scrape succeeded - otherwise we can't know for sure
+        racing_com_failed = any("racing.com" in e for e in errors)
+        if not racing_com_failed and (not meeting.meeting_type or meeting.meeting_type == "race"):
             race_count = await db.execute(
                 select(Race).where(Race.meeting_id == meeting_id).limit(1)
             )
