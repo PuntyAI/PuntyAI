@@ -1,5 +1,6 @@
 """Shared Playwright browser management for JS-heavy scraping."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -11,6 +12,10 @@ logger = logging.getLogger(__name__)
 # Module-level singleton for browser reuse
 _browser: Optional[Browser] = None
 _playwright = None
+
+# Lock to prevent concurrent scrapes (resource-intensive)
+_scrape_lock = asyncio.Lock()
+_current_scrape: Optional[str] = None  # Track what's being scraped
 
 
 async def get_browser() -> Browser:
@@ -36,6 +41,32 @@ async def close_browser() -> None:
         await _playwright.stop()
         _playwright = None
     logger.info("Playwright browser closed")
+
+
+def is_scrape_in_progress() -> tuple[bool, Optional[str]]:
+    """Check if a scrape is currently in progress."""
+    return _scrape_lock.locked(), _current_scrape
+
+
+@asynccontextmanager
+async def scrape_lock(meeting_name: str):
+    """Acquire exclusive lock for scraping. Prevents concurrent Playwright operations.
+
+    Raises RuntimeError if another scrape is already in progress.
+    """
+    global _current_scrape
+
+    if _scrape_lock.locked():
+        raise RuntimeError(f"Another scrape is in progress: {_current_scrape}. Please wait for it to complete.")
+
+    async with _scrape_lock:
+        _current_scrape = meeting_name
+        logger.info(f"Acquired scrape lock for {meeting_name}")
+        try:
+            yield
+        finally:
+            logger.info(f"Released scrape lock for {meeting_name}")
+            _current_scrape = None
 
 
 @asynccontextmanager

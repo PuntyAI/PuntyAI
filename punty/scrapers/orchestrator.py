@@ -151,6 +151,14 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
 async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:
     """Run all scrapers for a meeting, yielding progress events."""
     logger.info(f"scrape_meeting_full_stream called for meeting_id={meeting_id}")
+
+    # Check if another scrape is in progress
+    from punty.scrapers.playwright_base import is_scrape_in_progress, scrape_lock
+    in_progress, current = is_scrape_in_progress()
+    if in_progress:
+        yield {"step": 0, "total": 1, "label": f"Another scrape in progress: {current}. Please wait.", "status": "error"}
+        return
+
     # Use explicit select instead of db.get() to avoid session state issues
     from sqlalchemy import select
     try:
@@ -172,94 +180,113 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     errors = []
     total_steps = 4
 
-    # Step 1: racing.com GraphQL data (form + speed maps + odds in one pass)
-    yield {"step": 0, "total": total_steps, "label": "Scraping racing.com GraphQL data...", "status": "running"}
-    try:
-        from punty.scrapers.racing_com import RacingComScraper
-        scraper = RacingComScraper()
-        try:
-            data = await scraper.scrape_meeting(venue, race_date)
-            race_count = len(data.get("races", []))
-            runner_count = len(data.get("runners", []))
-            await _upsert_meeting_data(db, meeting, data)
-            yield {"step": 1, "total": total_steps,
-                   "label": f"GraphQL complete — {race_count} races, {runner_count} runners", "status": "done"}
-        finally:
-            await scraper.close()
-    except Exception as e:
-        logger.error(f"racing.com scrape failed: {e}")
-        errors.append(f"racing.com: {e}")
-        yield {"step": 1, "total": total_steps, "label": f"racing.com failed: {e}", "status": "error"}
+    # Acquire scrape lock
+    from punty.scrapers.playwright_base import _scrape_lock, _current_scrape
+    import punty.scrapers.playwright_base as pw_base
 
-    # Step 2: Track conditions (supplementary)
-    yield {"step": 1, "total": total_steps, "label": "Scraping track conditions...", "status": "running"}
     try:
-        from punty.scrapers.track_conditions import scrape_track_conditions
-        state = _guess_state(venue)
-        if state:
-            conditions = await scrape_track_conditions(state)
-            found = False
-            for cond in conditions:
-                if cond["venue"] and cond["venue"].lower() in venue.lower():
-                    meeting.track_condition = cond.get("condition") or meeting.track_condition
-                    meeting.rail_position = cond.get("rail") or meeting.rail_position
-                    meeting.weather = cond.get("weather") or meeting.weather
-                    found = True
-                    break
-            if found:
-                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
+        # Try to acquire lock (non-blocking check already done above)
+        await _scrape_lock.acquire()
+        pw_base._current_scrape = venue
+        logger.info(f"Acquired scrape lock for {venue}")
+    except Exception as e:
+        yield {"step": 0, "total": 1, "label": f"Failed to acquire scrape lock: {e}", "status": "error"}
+        return
+
+    try:
+        # Step 1: racing.com GraphQL data (form + speed maps + odds in one pass)
+        yield {"step": 0, "total": total_steps, "label": "Scraping racing.com GraphQL data...", "status": "running"}
+        try:
+            from punty.scrapers.racing_com import RacingComScraper
+            scraper = RacingComScraper()
+            try:
+                data = await scraper.scrape_meeting(venue, race_date)
+                race_count = len(data.get("races", []))
+                runner_count = len(data.get("runners", []))
+                await _upsert_meeting_data(db, meeting, data)
+                yield {"step": 1, "total": total_steps,
+                       "label": f"GraphQL complete — {race_count} races, {runner_count} runners", "status": "done"}
+            finally:
+                await scraper.close()
+        except Exception as e:
+            logger.error(f"racing.com scrape failed: {e}")
+            errors.append(f"racing.com: {e}")
+            yield {"step": 1, "total": total_steps, "label": f"racing.com failed: {e}", "status": "error"}
+
+        # Step 2: Track conditions (supplementary)
+        yield {"step": 1, "total": total_steps, "label": "Scraping track conditions...", "status": "running"}
+        try:
+            from punty.scrapers.track_conditions import scrape_track_conditions
+            state = _guess_state(venue)
+            if state:
+                conditions = await scrape_track_conditions(state)
+                found = False
+                for cond in conditions:
+                    if cond["venue"] and cond["venue"].lower() in venue.lower():
+                        meeting.track_condition = cond.get("condition") or meeting.track_condition
+                        meeting.rail_position = cond.get("rail") or meeting.rail_position
+                        meeting.weather = cond.get("weather") or meeting.weather
+                        found = True
+                        break
+                if found:
+                    yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
+                else:
+                    # Supplementary source didn't have venue, but show GraphQL data if available
+                    if meeting.track_condition:
+                        yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
+                    else:
+                        yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
             else:
-                # Supplementary source didn't have venue, but show GraphQL data if available
+                # Unknown state, but show GraphQL data if available
                 if meeting.track_condition:
                     yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
                 else:
-                    yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
-        else:
-            # Unknown state, but show GraphQL data if available
-            if meeting.track_condition:
-                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
-            else:
-                yield {"step": 2, "total": total_steps, "label": "Track conditions: unknown state", "status": "done"}
-    except Exception as e:
-        logger.error(f"track conditions scrape failed: {e}")
-        errors.append(f"track_conditions: {e}")
-        yield {"step": 2, "total": total_steps, "label": f"Track conditions failed: {e}", "status": "error"}
+                    yield {"step": 2, "total": total_steps, "label": "Track conditions: unknown state", "status": "done"}
+        except Exception as e:
+            logger.error(f"track conditions scrape failed: {e}")
+            errors.append(f"track_conditions: {e}")
+            yield {"step": 2, "total": total_steps, "label": f"Track conditions failed: {e}", "status": "error"}
 
-    # Step 3: TAB odds (supplementary — GraphQL already has multi-provider odds)
-    yield {"step": 2, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
-    try:
-        from punty.scrapers.tab import TabScraper
-        scraper = TabScraper()
+        # Step 3: TAB odds (supplementary — GraphQL already has multi-provider odds)
+        yield {"step": 2, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
         try:
-            data = await scraper.scrape_meeting(venue, race_date)
-            await _merge_odds(db, meeting_id, data.get("runners_odds", []))
-        finally:
-            await scraper.close()
-        yield {"step": 3, "total": total_steps, "label": "TAB odds complete", "status": "done"}
-    except Exception as e:
-        logger.error(f"TAB scrape failed: {e}")
-        errors.append(f"tab: {e}")
-        yield {"step": 3, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
+            from punty.scrapers.tab import TabScraper
+            scraper = TabScraper()
+            try:
+                data = await scraper.scrape_meeting(venue, race_date)
+                await _merge_odds(db, meeting_id, data.get("runners_odds", []))
+            finally:
+                await scraper.close()
+            yield {"step": 3, "total": total_steps, "label": "TAB odds complete", "status": "done"}
+        except Exception as e:
+            logger.error(f"TAB scrape failed: {e}")
+            errors.append(f"tab: {e}")
+            yield {"step": 3, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
 
-    # Step 4: Trainer stats from Racing Australia
-    yield {"step": 3, "total": total_steps, "label": "Fetching trainer stats...", "status": "running"}
-    try:
-        result = await populate_trainer_stats(db, meeting_id)
-        matched = result.get("matched", 0)
-        total = result.get("total", 0)
-        yield {"step": 4, "total": total_steps, "label": f"Trainer stats: {matched}/{total} matched", "status": "done"}
-    except Exception as e:
-        logger.error(f"Trainer stats failed: {e}")
-        errors.append(f"trainer_stats: {e}")
-        yield {"step": 4, "total": total_steps, "label": f"Trainer stats failed: {e}", "status": "error"}
+        # Step 4: Trainer stats from Racing Australia
+        yield {"step": 3, "total": total_steps, "label": "Fetching trainer stats...", "status": "running"}
+        try:
+            result = await populate_trainer_stats(db, meeting_id)
+            matched = result.get("matched", 0)
+            total = result.get("total", 0)
+            yield {"step": 4, "total": total_steps, "label": f"Trainer stats: {matched}/{total} matched", "status": "done"}
+        except Exception as e:
+            logger.error(f"Trainer stats failed: {e}")
+            errors.append(f"trainer_stats: {e}")
+            yield {"step": 4, "total": total_steps, "label": f"Trainer stats failed: {e}", "status": "error"}
 
-    await db.commit()
-    error_count = len(errors)
-    # Use "meeting_done" instead of "complete" to avoid bulk scrape JS thinking entire operation is done
-    if error_count:
-        yield {"step": total_steps, "total": total_steps, "label": f"Complete with {error_count} error(s)", "status": "meeting_done", "errors": errors}
-    else:
-        yield {"step": total_steps, "total": total_steps, "label": "All scrapers complete!", "status": "meeting_done", "errors": []}
+        await db.commit()
+        error_count = len(errors)
+        # Use "meeting_done" instead of "complete" to avoid bulk scrape JS thinking entire operation is done
+        if error_count:
+            yield {"step": total_steps, "total": total_steps, "label": f"Complete with {error_count} error(s)", "status": "meeting_done", "errors": errors}
+        else:
+            yield {"step": total_steps, "total": total_steps, "label": "All scrapers complete!", "status": "meeting_done", "errors": []}
+    finally:
+        # Always release the scrape lock
+        pw_base._current_scrape = None
+        _scrape_lock.release()
+        logger.info(f"Released scrape lock for {venue}")
 
 
 async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:
