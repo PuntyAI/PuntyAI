@@ -95,6 +95,7 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
 async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
     """Run all scrapers for a selected meeting and merge data into DB."""
     from punty.scrapers.playwright_base import scrape_lock
+    from punty.scheduler.activity_log import log_scrape_start, log_scrape_complete, log_scrape_error
 
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
@@ -103,6 +104,8 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
     venue = meeting.venue
     race_date = meeting.date
     errors = []
+
+    log_scrape_start(venue)
 
     # Acquire scrape lock to prevent concurrent Playwright operations
     async with scrape_lock(venue):
@@ -149,6 +152,12 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
                     logger.info(f"No races found for {venue} — classified as trial")
 
         await db.commit()
+
+    if errors:
+        log_scrape_error(venue, "; ".join(errors))
+    else:
+        log_scrape_complete(venue)
+
     return {"meeting_id": meeting_id, "errors": errors}
 
 

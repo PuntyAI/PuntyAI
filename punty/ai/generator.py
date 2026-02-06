@@ -106,8 +106,11 @@ class ContentGenerator:
         widen_if_favorites: bool = True,
     ):
         """Generate Early Mail with SSE progress events."""
+        from punty.scheduler.activity_log import log_generate_start, log_generate_complete, log_generate_error
+
         total_steps = 7
         step = 0
+        venue_name = meeting_id  # Will be updated once we have context
 
         def evt(label, status="running", **extra):
             nonlocal step
@@ -123,6 +126,8 @@ class ContentGenerator:
             if not context:
                 raise ValueError(f"Meeting not found: {meeting_id}")
             venue = context['meeting']['venue']
+            venue_name = venue  # For activity log
+            log_generate_start(venue)
             race_count = len(context.get('races', []))
             yield evt(f"Context built — {venue}, {race_count} races", "done")
 
@@ -207,10 +212,12 @@ class ContentGenerator:
                 yield evt("Save skipped", "done")
 
             # Use "generation_done" instead of "complete" to avoid bulk generate JS thinking entire operation is done
+            log_generate_complete(venue)
             yield {"step": total_steps, "total": total_steps, "label": f"Early Mail generated for {venue}", "status": "generation_done", "result": result}
 
         except Exception as e:
             logger.error(f"Early mail generation failed: {e}")
+            log_generate_error(venue_name, str(e))
             yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
     async def generate_initialise(

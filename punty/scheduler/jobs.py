@@ -41,9 +41,11 @@ async def daily_morning_prep() -> dict:
     from punty.scrapers.calendar import scrape_calendar
     from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
     from punty.ai.generator import ContentGenerator
+    from punty.scheduler.activity_log import log_scheduler_job, log_system
     from sqlalchemy import select, or_
 
     logger.info("Starting daily morning prep job")
+    log_scheduler_job("Morning Prep Started", status="info")
     results = {
         "started_at": melb_now().isoformat(),
         "calendar_scraped": False,
@@ -214,6 +216,15 @@ async def daily_morning_prep() -> dict:
 
     results["completed_at"] = melb_now().isoformat()
     logger.info(f"Daily morning prep complete: {results}")
+
+    # Log completion
+    scraped = len(results.get("meetings_scraped", []))
+    generated = len(results.get("early_mail_generated", []))
+    errors = len(results.get("errors", []))
+    if errors:
+        log_system(f"Morning Prep Complete: {scraped} scraped, {generated} generated, {errors} errors", status="warning")
+    else:
+        log_system(f"Morning Prep Complete: {scraped} scraped, {generated} generated", status="success")
 
     # Send email notification
     try:

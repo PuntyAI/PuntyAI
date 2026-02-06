@@ -185,3 +185,47 @@ async def get_morning_prep_paused():
         return {"paused": True, "exists": False}
 
     return {"paused": job.next_run_time is None, "exists": True}
+
+
+@router.get("/activity-log")
+async def get_activity_log(limit: int = 50):
+    """Get recent activity log entries."""
+    from punty.scheduler.activity_log import activity_log
+
+    entries = activity_log.get_entries(limit=limit)
+    return {"entries": entries}
+
+
+@router.get("/full-status")
+async def get_full_status():
+    """Get scheduler status, pending jobs, and activity log."""
+    from punty.scheduler.manager import scheduler_manager
+    from punty.scheduler.activity_log import activity_log
+    from punty.scrapers.playwright_base import is_scrape_in_progress
+
+    # Get APScheduler jobs
+    jobs = scheduler_manager.get_jobs()
+    pending_jobs = []
+    for job in jobs:
+        if job.next_run_time:
+            pending_jobs.append({
+                "id": job.id,
+                "name": job.name or job.id,
+                "next_run": job.next_run_time.strftime("%H:%M:%S") if job.next_run_time else None,
+                "next_run_date": job.next_run_time.strftime("%Y-%m-%d") if job.next_run_time else None,
+            })
+
+    # Sort by next run time
+    pending_jobs.sort(key=lambda x: x["next_run"] or "99:99:99")
+
+    # Check if scrape is in progress
+    scrape_active, current_scrape = is_scrape_in_progress()
+
+    return {
+        "scheduler_running": scheduler_manager._started,
+        "morning_prep_time": scheduler_manager.get_morning_job_time(),
+        "pending_jobs": pending_jobs[:10],  # Top 10 pending
+        "scrape_in_progress": scrape_active,
+        "current_scrape": current_scrape,
+        "activity_log": activity_log.get_entries(limit=30),
+    }
