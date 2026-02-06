@@ -237,7 +237,25 @@ class ResultsMonitor:
                     ).limit(1)
                 )
                 if existing_check.scalar_one_or_none():
-                    # Already processed - just add to tracking and skip
+                    # Results exist - but check if picks need settlement
+                    from punty.models.pick import Pick
+                    unsettled = await db.execute(
+                        select(Pick).where(
+                            Pick.meeting_id == meeting_id,
+                            Pick.race_number == race_num,
+                            Pick.settled == False,
+                            Pick.pick_type.in_(["selection", "big3", "exotic"]),
+                        ).limit(1)
+                    )
+                    if unsettled.scalar_one_or_none():
+                        # Run settlement for unsettled picks
+                        logger.info(f"Settling unsettled picks for {meeting.venue} R{race_num}")
+                        try:
+                            from punty.results.picks import settle_picks_for_race
+                            await settle_picks_for_race(db, meeting_id, race_num)
+                        except Exception as e:
+                            logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
+
                     self.processed_races[meeting_id].add(race_num)
                     logger.debug(f"Skipping {meeting.venue} R{race_num} — already has results")
                     continue
