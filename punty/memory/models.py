@@ -179,6 +179,17 @@ class RaceAssessment(Base):
     going: Mapped[str] = mapped_column(String, index=True)
     rail_position: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
+    # Additional race characteristics for better matching
+    age_restriction: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # 2YO, 3YO, Open
+    sex_restriction: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # F&M, C&G, Open
+    weight_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # Handicap, Set Weights, WFA
+    field_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Number of runners
+    prize_money: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Quality indicator
+    penetrometer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Precise track moisture
+    state: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # VIC, NSW, QLD, etc.
+    weather: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # Fine, Overcast, Showers, etc.
+    temperature: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Celsius
+
     # Full structured assessment from LLM (JSON)
     assessment_json: Mapped[str] = mapped_column(Text)
 
@@ -229,6 +240,16 @@ class RaceAssessment(Base):
             "distance": self.distance,
             "class": self.race_class,
             "going": self.going,
+            "rail_position": self.rail_position,
+            "age_restriction": self.age_restriction,
+            "sex_restriction": self.sex_restriction,
+            "weight_type": self.weight_type,
+            "field_size": self.field_size,
+            "prize_money": self.prize_money,
+            "penetrometer": self.penetrometer,
+            "state": self.state,
+            "weather": self.weather,
+            "temperature": self.temperature,
             "key_learnings": self.key_learnings,
             "top_pick_hit": self.top_pick_hit,
             "total_pnl": self.total_pnl,

@@ -130,6 +130,16 @@ async def init_db() -> None:
             "ALTER TABLE races ADD COLUMN has_sectionals BOOLEAN",
             # Meeting code for sectional CSV downloads
             "ALTER TABLE meetings ADD COLUMN meet_code VARCHAR(20)",
+            # Race assessment additional fields for better matching
+            "ALTER TABLE race_assessments ADD COLUMN age_restriction VARCHAR(50)",
+            "ALTER TABLE race_assessments ADD COLUMN sex_restriction VARCHAR(50)",
+            "ALTER TABLE race_assessments ADD COLUMN weight_type VARCHAR(50)",
+            "ALTER TABLE race_assessments ADD COLUMN field_size INTEGER",
+            "ALTER TABLE race_assessments ADD COLUMN prize_money INTEGER",
+            "ALTER TABLE race_assessments ADD COLUMN penetrometer FLOAT",
+            "ALTER TABLE race_assessments ADD COLUMN state VARCHAR(10)",
+            "ALTER TABLE race_assessments ADD COLUMN weather VARCHAR(50)",
+            "ALTER TABLE race_assessments ADD COLUMN temperature INTEGER",
         ]:
             try:
                 await conn.execute(_text(col))
@@ -161,6 +171,9 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_distance ON race_assessments(distance)",
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_race_class ON race_assessments(race_class)",
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_going ON race_assessments(going)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_age ON race_assessments(age_restriction)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_sex ON race_assessments(sex_restriction)",
+            "CREATE INDEX IF NOT EXISTS ix_race_assessments_state ON race_assessments(state)",
         ]:
             try:
                 await conn.execute(_text(idx))

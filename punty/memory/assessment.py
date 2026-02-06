@@ -20,6 +20,81 @@ from punty.models.pick import Pick
 
 logger = logging.getLogger(__name__)
 
+# Track to state mapping for Australian tracks
+TRACK_STATE_MAP = {
+    # Victoria
+    "flemington": "VIC", "caulfield": "VIC", "moonee valley": "VIC", "sandown": "VIC",
+    "pakenham": "VIC", "cranbourne": "VIC", "mornington": "VIC", "ballarat": "VIC",
+    "bendigo": "VIC", "geelong": "VIC", "sale": "VIC", "warrnambool": "VIC",
+    "wangaratta": "VIC", "stawell": "VIC", "hamilton": "VIC", "kilmore": "VIC",
+    "seymour": "VIC", "echuca": "VIC", "swan hill": "VIC", "mildura": "VIC",
+    "bairnsdale": "VIC", "stony creek": "VIC", "tatura": "VIC", "kyneton": "VIC",
+    "wodonga": "VIC", "ararat": "VIC", "horsham": "VIC", "moe": "VIC",
+    "donald": "VIC", "avoca": "VIC", "edenhope": "VIC", "terang": "VIC",
+    # NSW
+    "randwick": "NSW", "rosehill": "NSW", "canterbury": "NSW", "warwick farm": "NSW",
+    "newcastle": "NSW", "kembla grange": "NSW", "gosford": "NSW", "wyong": "NSW",
+    "hawkesbury": "NSW", "scone": "NSW", "tamworth": "NSW", "muswellbrook": "NSW",
+    "dubbo": "NSW", "bathurst": "NSW", "orange": "NSW", "goulburn": "NSW",
+    "wagga": "NSW", "albury": "NSW", "canberra": "NSW", "queanbeyan": "NSW",
+    "grafton": "NSW", "ballina": "NSW", "lismore": "NSW", "coffs harbour": "NSW",
+    "port macquarie": "NSW", "taree": "NSW", "moree": "NSW", "armidale": "NSW",
+    # Queensland
+    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD", "sunshine coast": "QLD",
+    "ipswich": "QLD", "toowoomba": "QLD", "rockhampton": "QLD", "mackay": "QLD",
+    "townsville": "QLD", "cairns": "QLD", "beaudesert": "QLD", "kilcoy": "QLD",
+    # South Australia
+    "morphettville": "SA", "gawler": "SA", "murray bridge": "SA", "mount gambier": "SA",
+    "strathalbyn": "SA", "balaklava": "SA", "port augusta": "SA", "port lincoln": "SA",
+    # Western Australia
+    "ascot": "WA", "belmont": "WA", "pinjarra": "WA", "bunbury": "WA",
+    "northam": "WA", "kalgoorlie": "WA", "geraldton": "WA", "albany": "WA",
+    # Tasmania
+    "hobart": "TAS", "launceston": "TAS", "devonport": "TAS",
+    # NT
+    "darwin": "NT", "alice springs": "NT",
+}
+
+
+def _get_state_from_track(track: str) -> Optional[str]:
+    """Derive state from track name."""
+    track_lower = track.lower().strip()
+    return TRACK_STATE_MAP.get(track_lower)
+
+
+def _get_sex_restriction(race_name: str, runners: list[dict]) -> Optional[str]:
+    """Derive sex restriction from race name or runner composition."""
+    name_lower = race_name.lower() if race_name else ""
+
+    # Check race name for explicit restrictions
+    if "fillies" in name_lower and "mares" in name_lower:
+        return "F&M"
+    if "fillies" in name_lower:
+        return "Fillies"
+    if "mares" in name_lower:
+        return "Mares"
+    if "colts" in name_lower and "geldings" in name_lower:
+        return "C&G"
+    if "colts" in name_lower:
+        return "Colts"
+
+    # Check runner composition if available
+    if runners:
+        sexes = set()
+        for r in runners:
+            sex = r.get("horse_sex", "").lower()
+            if sex:
+                sexes.add(sex)
+
+        # All fillies/mares
+        if sexes and all(s in ("f", "m", "filly", "mare") for s in sexes):
+            return "F&M"
+        # All colts/geldings/horses/ridglings
+        if sexes and all(s in ("c", "g", "h", "r", "colt", "gelding", "horse", "ridgling") for s in sexes):
+            return "C&G"
+
+    return None  # Open/Mixed
+
 
 def _format_runner_for_assessment(runner: Runner) -> dict[str, Any]:
     """Format a runner with ALL available data points for assessment."""
@@ -519,6 +594,11 @@ async def generate_race_assessment(
     any_pick_hit = any(p.hit for p in picks if p.hit is not None)
     total_pnl = sum(p.pnl or 0 for p in picks)
 
+    # Derive additional fields
+    state = _get_state_from_track(meeting.venue)
+    sex_restriction = _get_sex_restriction(race.name, runners)
+    field_size = len([r for r in runners if not r.get("scratched")])
+
     # Create assessment record
     assessment = RaceAssessment(
         race_id=race_id,
@@ -529,6 +609,17 @@ async def generate_race_assessment(
         race_class=race.class_ or "Unknown",
         going=meeting.track_condition or "Unknown",
         rail_position=meeting.rail_position,
+        # New fields for better matching
+        age_restriction=race.age_restriction,
+        sex_restriction=sex_restriction,
+        weight_type=race.weight_type,
+        field_size=field_size,
+        prize_money=race.prize_money,
+        penetrometer=meeting.penetrometer,
+        state=state,
+        weather=meeting.weather_condition or meeting.weather,
+        temperature=meeting.weather_temp,
+        # Metrics
         key_learnings=key_learnings,
         top_pick_hit=top_pick_hit,
         any_pick_hit=any_pick_hit,
@@ -540,8 +631,26 @@ async def generate_race_assessment(
     # Generate embedding for similarity search
     try:
         embedding_service = EmbeddingService(api_key=api_key)
-        # Create rich text for embedding
-        embed_text = f"{meeting.venue} {race.distance}m {race.class_} {meeting.track_condition} {key_learnings}"
+        # Create rich text for embedding with all relevant race characteristics
+        embed_parts = [
+            meeting.venue,
+            f"{race.distance}m",
+            race.class_ or "",
+            meeting.track_condition or "",
+        ]
+        if race.age_restriction:
+            embed_parts.append(race.age_restriction)
+        if sex_restriction:
+            embed_parts.append(sex_restriction)
+        if race.weight_type:
+            embed_parts.append(race.weight_type)
+        if state:
+            embed_parts.append(state)
+        if meeting.weather_condition or meeting.weather:
+            embed_parts.append(meeting.weather_condition or meeting.weather)
+        embed_parts.append(key_learnings)
+
+        embed_text = " ".join(filter(None, embed_parts))
         embedding = await embedding_service.get_embedding(embed_text)
         if embedding:
             assessment.embedding = embedding
@@ -563,12 +672,18 @@ async def retrieve_assessment_context(
     race_class: str,
     api_key: Optional[str] = None,
     max_results: int = 5,
+    # New optional parameters for better matching
+    age_restriction: Optional[str] = None,
+    sex_restriction: Optional[str] = None,
+    weight_type: Optional[str] = None,
+    field_size: Optional[int] = None,
+    weather: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Retrieve relevant past assessments for RAG context.
 
     Uses hybrid approach:
-    1. SQL filter by track, distance range, going
-    2. Rank by embedding similarity
+    1. SQL filter by track, distance range, and optional criteria
+    2. Rank by embedding similarity with bonus for matching attributes
 
     Args:
         db: Database session
@@ -578,10 +693,18 @@ async def retrieve_assessment_context(
         race_class: Race class (e.g., "BM78", "Maiden")
         api_key: OpenAI API key for embeddings
         max_results: Maximum assessments to return
+        age_restriction: Age restriction (e.g., "3YO", "Open")
+        sex_restriction: Sex restriction (e.g., "F&M", "C&G")
+        weight_type: Weight type (e.g., "Handicap", "WFA")
+        field_size: Number of runners
+        weather: Weather condition
 
     Returns:
         List of assessment dicts with key_learnings and context
     """
+    # Derive state from track for filtering
+    state = _get_state_from_track(track)
+
     # Step 1: SQL filter for candidates
     # Same track, distance within 200m
     query = (
@@ -593,70 +716,134 @@ async def retrieve_assessment_context(
             )
         )
         .order_by(RaceAssessment.created_at.desc())
-        .limit(20)
+        .limit(30)  # Get more candidates for better ranking
     )
     result = await db.execute(query)
     candidates = list(result.scalars().all())
 
-    # Broaden search if too few candidates
-    if len(candidates) < 3:
+    # Broaden search if too few candidates - try same state first
+    if len(candidates) < 5 and state:
+        query = (
+            select(RaceAssessment)
+            .where(
+                and_(
+                    RaceAssessment.state == state,
+                    RaceAssessment.distance.between(distance - 200, distance + 200),
+                )
+            )
+            .order_by(RaceAssessment.created_at.desc())
+            .limit(30)
+        )
+        result = await db.execute(query)
+        state_candidates = list(result.scalars().all())
+        # Add candidates we don't already have
+        existing_ids = {c.id for c in candidates}
+        for c in state_candidates:
+            if c.id not in existing_ids:
+                candidates.append(c)
+
+    # Further broaden if still too few - any track at similar distance
+    if len(candidates) < 5:
         query = (
             select(RaceAssessment)
             .where(
                 RaceAssessment.distance.between(distance - 200, distance + 200)
             )
             .order_by(RaceAssessment.created_at.desc())
-            .limit(20)
+            .limit(30)
         )
         result = await db.execute(query)
-        candidates = list(result.scalars().all())
+        all_candidates = list(result.scalars().all())
+        existing_ids = {c.id for c in candidates}
+        for c in all_candidates:
+            if c.id not in existing_ids:
+                candidates.append(c)
 
     if not candidates:
         return []
 
-    # Step 2: Rank by embedding similarity
+    # Step 2: Score candidates using embedding similarity + attribute bonuses
+    scored = []
+
+    # Build rich query text for embedding
+    query_parts = [track, f"{distance}m", race_class, going]
+    if age_restriction:
+        query_parts.append(age_restriction)
+    if sex_restriction:
+        query_parts.append(sex_restriction)
+    if weight_type:
+        query_parts.append(weight_type)
+    if weather:
+        query_parts.append(weather)
+    if state:
+        query_parts.append(state)
+    query_text = " ".join(filter(None, query_parts))
+
+    query_embedding = None
     if api_key:
         try:
             embedding_service = EmbeddingService(api_key=api_key)
-            query_text = f"{track} {distance}m {race_class} {going}"
             query_embedding = await embedding_service.get_embedding(query_text)
-
-            if query_embedding:
-                # Calculate similarities
-                scored = []
-                for a in candidates:
-                    if a.embedding:
-                        similarity = EmbeddingService.cosine_similarity(
-                            query_embedding, a.embedding
-                        )
-                        scored.append((similarity, a))
-                    else:
-                        # No embedding, give lower score
-                        scored.append((0.5, a))
-
-                # Sort by similarity
-                scored.sort(key=lambda x: x[0], reverse=True)
-                candidates = [a for _, a in scored[:max_results]]
         except Exception as e:
-            logger.warning(f"Embedding retrieval failed, using SQL order: {e}")
-            candidates = candidates[:max_results]
-    else:
-        candidates = candidates[:max_results]
+            logger.warning(f"Failed to get query embedding: {e}")
 
-    # Format for context
-    return [
-        {
-            "track": a.track,
-            "distance": a.distance,
-            "class": a.race_class,
-            "going": a.going,
-            "key_learnings": a.key_learnings,
-            "top_pick_hit": a.top_pick_hit,
-            "total_pnl": a.total_pnl,
-            "assessment": a.assessment,
-        }
-        for a in candidates
-    ]
+    for a in candidates:
+        base_score = 0.5  # Default score
+
+        # Embedding similarity (0-1 scale)
+        if query_embedding and a.embedding:
+            try:
+                base_score = EmbeddingService.cosine_similarity(query_embedding, a.embedding)
+            except Exception:
+                pass
+
+        # Attribute bonuses (add up to 0.3 total)
+        bonus = 0.0
+
+        # Same track is a strong signal
+        if a.track == track:
+            bonus += 0.1
+
+        # Same state is useful
+        if state and a.state == state:
+            bonus += 0.03
+
+        # Age restriction match
+        if age_restriction and a.age_restriction == age_restriction:
+            bonus += 0.05
+        elif age_restriction and a.age_restriction and age_restriction.lower() in a.age_restriction.lower():
+            bonus += 0.02
+
+        # Sex restriction match
+        if sex_restriction and a.sex_restriction == sex_restriction:
+            bonus += 0.05
+
+        # Weight type match
+        if weight_type and a.weight_type == weight_type:
+            bonus += 0.03
+
+        # Similar field size (within 3 runners)
+        if field_size and a.field_size:
+            if abs(field_size - a.field_size) <= 3:
+                bonus += 0.02
+
+        # Similar going (wet/dry category match)
+        going_lower = going.lower() if going else ""
+        a_going_lower = (a.going or "").lower()
+        is_wet_query = any(w in going_lower for w in ("heavy", "soft", "slow"))
+        is_wet_stored = any(w in a_going_lower for w in ("heavy", "soft", "slow"))
+        if is_wet_query == is_wet_stored:
+            bonus += 0.02
+
+        final_score = min(base_score + bonus, 1.0)
+        scored.append((final_score, a))
+
+    # Sort by score descending
+    scored.sort(key=lambda x: x[0], reverse=True)
+    candidates = [a for _, a in scored[:max_results]]
+
+    # Format for context with all available fields
+    return [a.to_retrieval_dict() | {"assessment": a.assessment} for a in candidates]
 
 
 def build_rag_context_from_assessments(assessments: list[dict[str, Any]]) -> str:
@@ -679,8 +866,32 @@ def build_rag_context_from_assessments(assessments: list[dict[str, Any]]) -> str
         pnl = a.get("total_pnl", 0)
         pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
 
-        lines.append(f"**{a['track']} {a['distance']}m {a['going']}** ({hit_marker} {pnl_str})")
-        lines.append(f"  → {a['key_learnings']}")
+        # Build descriptive header with available context
+        header_parts = [a.get("track", "Unknown"), f"{a.get('distance', 0)}m"]
+        if a.get("class"):
+            header_parts.append(a["class"])
+        if a.get("going"):
+            header_parts.append(a["going"])
+
+        # Add race type details if available
+        details = []
+        if a.get("age_restriction"):
+            details.append(a["age_restriction"])
+        if a.get("sex_restriction"):
+            details.append(a["sex_restriction"])
+        if a.get("weight_type"):
+            details.append(a["weight_type"])
+        if a.get("field_size"):
+            details.append(f"{a['field_size']} runners")
+        if a.get("weather"):
+            details.append(a["weather"])
+
+        header = " ".join(header_parts)
+        if details:
+            header += f" ({', '.join(details)})"
+
+        lines.append(f"**{header}** {hit_marker} {pnl_str}")
+        lines.append(f"  → {a.get('key_learnings', 'No learnings recorded')}")
         lines.append("")
 
     return "\n".join(lines)

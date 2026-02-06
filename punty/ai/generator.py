@@ -367,14 +367,32 @@ class ContentGenerator:
             races = context.get("races", [])
             assessment_learnings = []
             seen_assessments = set()
+            weather = meeting.get("weather_condition") or meeting.get("weather")
 
             for race in races:
                 distance = race.get("distance", 1200)
                 race_class = race.get("class", "Unknown")
+                age_restriction = race.get("age_restriction")
+                weight_type = race.get("weight_type")
+                field_size = race.get("field_size")
+
+                # Derive sex restriction from race name
+                race_name = race.get("name", "")
+                sex_restriction = None
+                race_name_lower = race_name.lower()
+                if "fillies" in race_name_lower or "mares" in race_name_lower:
+                    sex_restriction = "F&M"
+                elif "colts" in race_name_lower or "geldings" in race_name_lower:
+                    sex_restriction = "C&G"
 
                 assessments = await retrieve_assessment_context(
                     self.db, track, distance, going, race_class,
-                    api_key=api_key, max_results=2
+                    api_key=api_key, max_results=2,
+                    age_restriction=age_restriction,
+                    sex_restriction=sex_restriction,
+                    weight_type=weight_type,
+                    field_size=field_size,
+                    weather=weather,
                 )
 
                 for a in assessments:
