@@ -216,32 +216,44 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         # Step 2: Track conditions (supplementary)
         yield {"step": 1, "total": total_steps, "label": "Scraping track conditions...", "status": "running"}
         try:
-            from punty.scrapers.track_conditions import scrape_track_conditions
+            from punty.scrapers.track_conditions import scrape_track_conditions, scrape_sportsbetform_conditions
             state = _guess_state(venue)
+            found = False
+
+            # Try primary source (racingaustralia.horse)
             if state:
                 conditions = await scrape_track_conditions(state)
-                found = False
                 for cond in conditions:
-                    if cond["venue"] and cond["venue"].lower() in venue.lower():
+                    if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
                         meeting.track_condition = cond.get("condition") or meeting.track_condition
                         meeting.rail_position = cond.get("rail") or meeting.rail_position
                         meeting.weather = cond.get("weather") or meeting.weather
                         found = True
                         break
-                if found:
-                    yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
-                else:
-                    # Supplementary source didn't have venue, but show GraphQL data if available
-                    if meeting.track_condition:
-                        yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
-                    else:
-                        yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
+
+            # Try fallback source (sportsbetform.com.au) if not found
+            if not found and not meeting.track_condition:
+                logger.info(f"Primary track conditions not found for {venue}, trying sportsbetform...")
+                try:
+                    fallback = await scrape_sportsbetform_conditions()
+                    for cond in fallback:
+                        if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
+                            meeting.track_condition = cond.get("condition") or meeting.track_condition
+                            meeting.rail_position = cond.get("rail") or meeting.rail_position
+                            meeting.weather = cond.get("weather") or meeting.weather
+                            found = True
+                            logger.info(f"Found {venue} in sportsbetform: {meeting.track_condition}")
+                            break
+                except Exception as e:
+                    logger.warning(f"Sportsbetform fallback failed: {e}")
+
+            if found:
+                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
+            elif meeting.track_condition:
+                # GraphQL data available
+                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
             else:
-                # Unknown state, but show GraphQL data if available
-                if meeting.track_condition:
-                    yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
-                else:
-                    yield {"step": 2, "total": total_steps, "label": "Track conditions: unknown state", "status": "done"}
+                yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
         except Exception as e:
             logger.error(f"track conditions scrape failed: {e}")
             errors.append(f"track_conditions: {e}")
