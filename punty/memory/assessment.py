@@ -94,7 +94,7 @@ def _get_sex_restriction(race_name: Optional[str], runners: list[dict]) -> Optio
     if runners:
         sexes = set()
         for r in runners:
-            sex = r.get("horse_sex", "").lower()
+            sex = (r.get("horse_sex") or "").lower()
             if sex:
                 sexes.add(sex)
 
