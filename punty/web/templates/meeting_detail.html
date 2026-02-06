@@ -1071,7 +1071,7 @@ function startGenerate() {
             btn.textContent = '\u{1F4E7} Generate Early Mail';
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
             bar.className = 'bg-red-500 h-3 rounded-full transition-all duration-500';
-        } else if (data.status === 'complete') {
+        } else if (data.status === 'complete' || data.status === 'generation_done') {
             icon = '<span class="text-punty-coral font-bold">&#9679;</span>';
             textClass = 'font-semibold text-gray-900';
             bar.className = 'bg-green-500 h-3 rounded-full transition-all duration-500';
@@ -1147,7 +1147,7 @@ function startPuntReview() {
             btn.textContent = '\u{1F4CA} Generate Punt Review';
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
             bar.className = 'bg-red-500 h-3 rounded-full transition-all duration-500';
-        } else if (data.status === 'complete') {
+        } else if (data.status === 'complete' || data.status === 'generation_done') {
             icon = '<span class="text-punty-gold font-bold">&#9679;</span>';
             textClass = 'font-semibold text-gray-900';
             bar.className = 'bg-green-500 h-3 rounded-full transition-all duration-500';
