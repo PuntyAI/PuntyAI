@@ -528,5 +528,10 @@ class ResultsMonitor:
             if not races:
                 raise ValueError(f"No races found for {meeting_id}")
 
+            # Clear processed state so manual check re-processes all races
+            # This ensures settlement runs for any unsettled picks
+            if meeting_id in self.processed_races:
+                self.processed_races[meeting_id].clear()
+
             await self._check_meeting(db, meeting, races)
             await db.commit()
