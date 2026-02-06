@@ -58,13 +58,25 @@ TRACK_STATE_MAP = {
 
 def _get_state_from_track(track: str) -> Optional[str]:
     """Derive state from track name."""
+    if not track:
+        return None
     track_lower = track.lower().strip()
-    return TRACK_STATE_MAP.get(track_lower)
+
+    # Direct match first
+    if track_lower in TRACK_STATE_MAP:
+        return TRACK_STATE_MAP[track_lower]
+
+    # Try partial match (e.g., "Southside Pakenham" -> "pakenham")
+    for known_track, state in TRACK_STATE_MAP.items():
+        if known_track in track_lower or track_lower in known_track:
+            return state
+
+    return None
 
 
-def _get_sex_restriction(race_name: str, runners: list[dict]) -> Optional[str]:
+def _get_sex_restriction(race_name: Optional[str], runners: list[dict]) -> Optional[str]:
     """Derive sex restriction from race name or runner composition."""
-    name_lower = race_name.lower() if race_name else ""
+    name_lower = (race_name or "").lower()
 
     # Check race name for explicit restrictions
     if "fillies" in name_lower and "mares" in name_lower:
