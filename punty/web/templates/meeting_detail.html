@@ -521,64 +521,64 @@
                                                 </button>
                                                 <div x-show="showForm" x-collapse class="mt-2 overflow-x-auto">
                                                     <table class="min-w-full text-xs">
-                                                        <thead class="bg-gray-100">
+                                                        <thead class="bg-gray-700/50">
                                                             <tr>
-                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Date</th>
-                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Venue</th>
-                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">Dist</th>
-                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Class</th>
-                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Track</th>
-                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Fld</th>
-                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Pos</th>
-                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">Marg</th>
-                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">Wgt</th>
-                                                                <th class="px-2 py-1 text-left font-medium text-gray-600">Jockey</th>
-                                                                <th class="px-2 py-1 text-center font-medium text-gray-600">Bar</th>
-                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">SP</th>
-                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">800m</th>
-                                                                <th class="px-2 py-1 text-right font-medium text-gray-600">400m</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-300">Date</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-300">Venue</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-300">Dist</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-300">Class</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-300">Track</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-300">Fld</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-300">Pos</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-300">Marg</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-300">Wgt</th>
+                                                                <th class="px-2 py-1 text-left font-medium text-gray-300">Jockey</th>
+                                                                <th class="px-2 py-1 text-center font-medium text-gray-300">Bar</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-300">SP</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-300">800m</th>
+                                                                <th class="px-2 py-1 text-right font-medium text-gray-300">400m</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody class="divide-y divide-gray-100">
+                                                        <tbody class="divide-y divide-gray-700/30">
                                                             {% for run in form_runs %}
-                                                            <tr class="hover:bg-gray-50">
-                                                                <td class="px-2 py-1 whitespace-nowrap">{{ run.date or '-' }}</td>
-                                                                <td class="px-2 py-1 whitespace-nowrap font-medium">{{ run.venue or '-' }}</td>
-                                                                <td class="px-2 py-1 text-right">{{ run.distance or '-' }}</td>
-                                                                <td class="px-2 py-1 whitespace-nowrap">{{ run.class or '-' }}</td>
+                                                            <tr class="hover:bg-gray-700/20">
+                                                                <td class="px-2 py-1 whitespace-nowrap text-gray-300">{% if run.date %}{{ run.date[8:10] }}-{{ run.date[5:7] }}-{{ run.date[2:4] }}{% else %}-{% endif %}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap font-medium text-gray-200">{{ run.venue or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-300">{{ run.distance or '-' }}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap text-gray-300">{{ run.class or run.raceClass or '-' }}</td>
                                                                 <td class="px-2 py-1 text-center">
                                                                     {% if run.track %}
-                                                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium
-                                                                        {% if 'Heavy' in run.track %}bg-blue-200 text-blue-800
-                                                                        {% elif 'Soft' in run.track %}bg-green-200 text-green-800
-                                                                        {% elif 'Good' in run.track %}bg-gray-200 text-gray-700
-                                                                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                                                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold
+                                                                        {% if 'Heavy' in run.track %}bg-blue-500/80 text-white
+                                                                        {% elif 'Soft' in run.track %}bg-emerald-500/80 text-white
+                                                                        {% elif 'Good' in run.track %}bg-gray-500/80 text-white
+                                                                        {% else %}bg-gray-600/80 text-gray-200{% endif %}">
                                                                         {{ run.track }}
                                                                     </span>
                                                                     {% else %}-{% endif %}
                                                                 </td>
-                                                                <td class="px-2 py-1 text-center">{{ run.field or '-' }}</td>
+                                                                <td class="px-2 py-1 text-center text-gray-300">{{ run.field or '-' }}</td>
                                                                 <td class="px-2 py-1 text-center">
                                                                     {% if run.pos %}
                                                                     <span class="px-1.5 py-0.5 rounded text-[10px] font-bold
-                                                                        {% if run.pos == '1' %}bg-yellow-400 text-yellow-900
-                                                                        {% elif run.pos in ['2', '3'] %}bg-green-200 text-green-800
-                                                                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                                                                        {% if run.pos == '1' %}bg-yellow-500 text-yellow-900
+                                                                        {% elif run.pos in ['2', '3'] %}bg-emerald-500/80 text-white
+                                                                        {% else %}bg-gray-600/80 text-gray-200{% endif %}">
                                                                         {{ run.pos }}
                                                                     </span>
                                                                     {% else %}-{% endif %}
                                                                 </td>
-                                                                <td class="px-2 py-1 text-right">{{ run.margin or '-' }}</td>
-                                                                <td class="px-2 py-1 text-right">{{ run.weight or '-' }}</td>
-                                                                <td class="px-2 py-1 whitespace-nowrap">{{ run.jockey or '-' }}</td>
-                                                                <td class="px-2 py-1 text-center">{{ run.barrier or '-' }}</td>
-                                                                <td class="px-2 py-1 text-right font-medium">{{ run.sp or '-' }}</td>
-                                                                <td class="px-2 py-1 text-right text-gray-500">{{ run.at800 or '-' }}</td>
-                                                                <td class="px-2 py-1 text-right text-gray-500">{{ run.at400 or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-300">{{ run.margin or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-300">{{ run.weight or '-' }}</td>
+                                                                <td class="px-2 py-1 whitespace-nowrap text-gray-300">{{ run.jockey or '-' }}</td>
+                                                                <td class="px-2 py-1 text-center text-gray-300">{{ run.barrier or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right font-medium text-gray-200">{{ run.sp or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-400">{{ run.at800 or '-' }}</td>
+                                                                <td class="px-2 py-1 text-right text-gray-400">{{ run.at400 or '-' }}</td>
                                                             </tr>
                                                             {% if run.comment %}
-                                                            <tr class="bg-gray-50">
-                                                                <td colspan="14" class="px-2 py-1 text-[10px] text-gray-500 italic">
+                                                            <tr class="bg-gray-800/30">
+                                                                <td colspan="14" class="px-2 py-1 text-[10px] text-gray-400 italic">
                                                                     {{ run.comment }}
                                                                 </td>
                                                             </tr>
@@ -588,6 +588,8 @@
                                                     </table>
                                                 </div>
                                             </div>
+                                            <!-- Bottom separator after extended form -->
+                                            <div class="mt-3 border-b-2 border-gray-600"></div>
                                             {% endif %}
                                             {% endif %}
                                         </td>
