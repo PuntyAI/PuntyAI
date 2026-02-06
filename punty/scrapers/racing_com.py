@@ -276,10 +276,17 @@ class RacingComScraper(BaseScraper):
 
                     # Scroll down to trigger lazy loading of getRaceEntryItemByHorsePaged_CD
                     # The extended form history loads as each horse row scrolls into view
-                    # Scroll to bottom to ensure all horses are loaded
-                    for _ in range(15):
-                        await page.evaluate("window.scrollBy(0, 600)")
-                        await page.wait_for_timeout(400)
+                    # Slower scroll with longer waits to ensure GraphQL requests complete
+                    for _ in range(20):
+                        await page.evaluate("window.scrollBy(0, 400)")
+                        await page.wait_for_timeout(600)
+
+                    # Scroll back up and down again to catch any missed horses
+                    await page.evaluate("window.scrollTo(0, 0)")
+                    await page.wait_for_timeout(500)
+                    for _ in range(20):
+                        await page.evaluate("window.scrollBy(0, 400)")
+                        await page.wait_for_timeout(500)
 
                     # Check if we got entries for this race
                     if race_num not in race_entries_by_num:
