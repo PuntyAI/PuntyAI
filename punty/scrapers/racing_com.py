@@ -274,38 +274,45 @@ class RacingComScraper(BaseScraper):
                         except Exception:
                             pass
 
-                    # Scroll each horse row into view to trigger lazy loading of form history
-                    # Find all horse entry rows and scroll each into view
-                    horse_rows = await page.locator("[data-testid='runner-row'], .runner-row, [class*='EntryRow'], [class*='runner']").all()
-                    if horse_rows:
-                        logger.debug(f"Race {race_num}: Found {len(horse_rows)} horse rows to scroll")
-                        for row in horse_rows:
-                            try:
-                                await row.scroll_into_view_if_needed()
-                                await page.wait_for_timeout(800)  # Wait for GraphQL to fire
-                            except Exception:
-                                pass
-                    else:
-                        # Fallback to generic scroll if no rows found
-                        logger.debug(f"Race {race_num}: No horse rows found, using generic scroll")
-                        for _ in range(20):
-                            await page.evaluate("window.scrollBy(0, 400)")
-                            await page.wait_for_timeout(600)
+                    # Scroll to trigger lazy loading of form history
+                    # First pass: scroll through page slowly
+                    for _ in range(25):
+                        await page.evaluate("window.scrollBy(0, 350)")
+                        await page.wait_for_timeout(700)
 
-                    # Second pass - scroll back up and do another pass
+                    # Second pass: scroll back up and down again
                     await page.evaluate("window.scrollTo(0, 0)")
                     await page.wait_for_timeout(500)
-                    if horse_rows:
-                        for row in horse_rows:
+                    for _ in range(25):
+                        await page.evaluate("window.scrollBy(0, 350)")
+                        await page.wait_for_timeout(600)
+
+                    # Third pass: Check which horses we have form for and retry missing ones
+                    # Get list of horses we captured form for
+                    captured_horses = set(form_history_by_horse.keys())
+                    # Get horse names from race entries
+                    race_entries = race_entries_by_num.get(race_num, [])
+                    all_horses = {e.get("horseName") for e in race_entries if e.get("horseName")}
+                    missing_horses = all_horses - captured_horses
+
+                    if missing_horses:
+                        logger.info(f"Race {race_num}: Retrying {len(missing_horses)} horses missing form: {list(missing_horses)[:5]}...")
+                        # Try to click on each missing horse's row to trigger form load
+                        for horse_name in missing_horses:
                             try:
-                                await row.scroll_into_view_if_needed()
-                                await page.wait_for_timeout(600)
+                                # Try to find and click/scroll to the horse's element
+                                horse_el = page.locator(f"text='{horse_name}'").first
+                                if await horse_el.is_visible(timeout=1000):
+                                    await horse_el.scroll_into_view_if_needed()
+                                    await page.wait_for_timeout(1000)
+                                    # Try clicking to expand if needed
+                                    try:
+                                        await horse_el.click()
+                                        await page.wait_for_timeout(800)
+                                    except Exception:
+                                        pass
                             except Exception:
                                 pass
-                    else:
-                        for _ in range(20):
-                            await page.evaluate("window.scrollBy(0, 400)")
-                            await page.wait_for_timeout(500)
 
                     # Check if we got entries for this race
                     if race_num not in race_entries_by_num:
