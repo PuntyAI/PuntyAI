@@ -78,8 +78,63 @@
                 <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
             </div>
         </div>
+
+        <!-- Wins Ticker -->
+        <div id="wins-ticker" class="mt-8 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+            <div class="flex items-center px-4 py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                <span class="text-lg mr-2" style="color: var(--magenta);">&#x1F3C6;</span>
+                <span class="font-heading font-semibold text-sm uppercase tracking-wider" style="color: var(--text-muted);">Recent Wins</span>
+            </div>
+            <div class="ticker-container relative overflow-hidden" style="height: 52px;">
+                <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-4 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+                    <span class="text-sm" style="color: var(--text-muted);">Loading wins...</span>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
+
+<style>
+    @keyframes ticker-scroll {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+    }
+    .ticker-scroll:hover {
+        animation-play-state: paused;
+    }
+    .win-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255,255,255,0.03);
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .win-celebration {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.9rem;
+        background: var(--gradient-sunset);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .win-horse {
+        color: #fff;
+        font-weight: 600;
+    }
+    .win-venue {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+    }
+    .win-amounts {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.75rem;
+    }
+    .win-stake { color: var(--text-muted); }
+    .win-return { color: #4ade80; }
+</style>
 
 <!-- Today's Tips Section -->
 {% if stats.todays_tips %}
@@ -264,5 +319,51 @@
             })
             .catch(() => {});
     }, 60000);
+
+    // Wins Ticker
+    (function() {
+        async function loadWinsTicker() {
+            try {
+                const resp = await fetch('/api/public/wins?limit=15');
+                const data = await resp.json();
+                const ticker = document.getElementById('ticker-content');
+
+                if (!data.wins || data.wins.length === 0) {
+                    ticker.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;">No wins yet today - let\'s change that! Follow @PuntyAI for tips</span>';
+                    ticker.style.animation = 'none';
+                    return;
+                }
+
+                // Build ticker items - duplicate for seamless loop
+                let items = '';
+                for (let i = 0; i < 2; i++) {
+                    data.wins.forEach(function(win) {
+                        items += '<div class="win-item">' +
+                            '<span class="win-celebration">' + win.celebration + '</span>' +
+                            '<span class="win-horse">' + win.display_name + '</span>' +
+                            '<span class="win-venue">' + win.venue + '</span>' +
+                            '<span class="win-amounts">' +
+                                '<span class="win-stake">$' + win.stake.toFixed(0) + '</span>' +
+                                ' → ' +
+                                '<span class="win-return">$' + win.returned.toFixed(0) + '</span>' +
+                            '</span>' +
+                        '</div>';
+                    });
+                }
+                ticker.innerHTML = items;
+
+                // Adjust animation speed based on content width
+                const totalWidth = ticker.scrollWidth / 2;
+                const speed = Math.max(20, totalWidth / 50); // ~50px per second
+                ticker.style.animation = 'ticker-scroll ' + speed + 's linear infinite';
+            } catch (e) {
+                console.error('Failed to load wins ticker:', e);
+            }
+        }
+
+        loadWinsTicker();
+        // Refresh ticker every 60 seconds
+        setInterval(loadWinsTicker, 60000);
+    })();
 </script>
 {% endblock %}

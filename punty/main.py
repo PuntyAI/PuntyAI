@@ -160,6 +160,13 @@ async def public_stats():
     return await get_winner_stats()
 
 
+@app.get("/api/public/wins")
+async def public_recent_wins(limit: int = 15):
+    """Get recent wins for public ticker."""
+    from punty.public.routes import get_recent_wins_public
+    return await get_recent_wins_public(limit=limit)
+
+
 if __name__ == "__main__":
     import uvicorn
 
