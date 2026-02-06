@@ -532,7 +532,7 @@
 
             // Adjust animation speed based on content width
             const totalWidth = ticker.scrollWidth / 2;
-            const speed = Math.max(20, totalWidth / 50); // ~50px per second
+            const speed = Math.max(10, totalWidth / 120); // ~120px per second
             ticker.style.animation = 'ticker-scroll ' + speed + 's linear infinite';
         } catch (e) {
             console.error('Failed to load wins ticker:', e);

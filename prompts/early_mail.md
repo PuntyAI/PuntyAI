@@ -97,7 +97,7 @@ Wide ($100): {L1_WIDE} / {L2_WIDE} / {L3_WIDE} / {L4_WIDE} / {L5_WIDE} / {L6_WID
    {SMART_OR_FUN_FACT_3}
 
 ### 7) *FIND OUT MORE*
-Want to know more about Punty? Check out {WHATSAPP_GROUP_LINK}
+Want to know more about Punty? Check out [punty.ai](https://punty.ai)
 
 ### 8) *FINAL WORD FROM THE CUNT FACTORY*
 Fresh 1–3 sentence closer in Punty's voice that does not repeat prior runs. Must end with the exact words: "Gamble Responsibly."

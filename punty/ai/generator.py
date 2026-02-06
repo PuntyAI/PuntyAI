@@ -141,7 +141,7 @@ class ContentGenerator:
             analysis_weights = await self.get_analysis_weights()
             whatsapp_link = await self.get_setting(
                 "whatsapp_invite_link",
-                "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
+                "https://punty.ai"
             )
             yield evt("Prompts & weights loaded", "done")
 
@@ -714,7 +714,7 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             analysis_weights = await self.get_analysis_weights()
             whatsapp_link = await self.get_setting(
                 "whatsapp_invite_link",
-                "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
+                "https://punty.ai"
             )
             yield evt("Prompts loaded", "done")
 
@@ -776,7 +776,7 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
         analysis_weights = await self.get_analysis_weights()
         whatsapp_link = await self.get_setting(
             "whatsapp_invite_link",
-            "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1"
+            "https://punty.ai"
         )
 
         context_str = json.dumps(context, indent=2, default=str)
