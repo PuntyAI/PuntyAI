@@ -158,5 +158,35 @@ ssh root@app.punty.ai "journalctl -u puntyai --no-pager -n 50"
 # DB is at /opt/puntyai/data/punty.db
 ```
 
+## Testing
+
+**IMPORTANT:** Always run tests before committing code changes.
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run unit tests only (faster)
+pytest tests/unit -v
+
+# Run with coverage
+pytest tests/ --cov=punty --cov-report=term-missing
+```
+
+### Test Structure
+- `tests/unit/test_generator.py` - Content generation, context formatting
+- `tests/unit/test_parser.py` - Pick extraction from early mail
+- `tests/unit/test_picks.py` - Settlement calculations
+
+### CI/CD
+- GitHub Actions runs tests on every push to master
+- Tests must pass before deployment
+
+### Pre-commit Hook Setup
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+```
+
 ## Design Theme
 Cyberpunk neon: dark bg (#0a0a0f), Orbitron display font, Rajdhani headings, Source Sans Pro body. Magenta/cyan/orange gradient accents. Sunset gradient race number pills. Pick badges: magenta (top), cyan (2nd), yellow (3rd), purple (roughie).

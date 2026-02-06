@@ -1,0 +1,15 @@
+#!/bin/bash
+# Pre-commit hook: Run tests before allowing commit
+
+echo "Running tests..."
+python -m pytest tests/unit -q --tb=line
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Tests failed! Commit blocked."
+    echo "Fix the failing tests or use --no-verify to skip (not recommended)."
+    exit 1
+fi
+
+echo "All tests passed!"
+exit 0
