@@ -168,7 +168,7 @@ def mock_ai_client():
 def sample_early_mail_content() -> str:
     """Sample early mail content for parser testing."""
     return """*PUNTY EARLY MAIL – Test Venue (06-02-2026)*
-Rightio Cunts —
+Rightio Legends —
 Test opening paragraph.
 
 *PUNTY'S BIG 3 + MULTI*
