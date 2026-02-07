@@ -74,7 +74,10 @@ _SEQ_VARIANT = re.compile(
     re.IGNORECASE,
 )
 _SEQ_COSTING = re.compile(
-    r"\((\d+)\s*combos?\s*[×x]\s*\$(\d+\.?\d*)\s*=\s*\$(\d+\.?\d*)\)\s*(?:[–\-—]\s*est\.\s*return:\s*(\d+\.?\d*)%)?",
+    # Handles two formats:
+    # "(729 combos × $0.14 = $100) — est. return: 14%"
+    # "(1×1×1×1 = 1 combo × $1.00 = $1) — est. return: 100%"
+    r"\((?:[\d×x]+\s*=\s*)?(\d+)\s*combos?\s*[×x]\s*\$(\d+\.?\d*)\s*=\s*\$(\d+\.?\d*)\)\s*(?:[–\-—]\s*est\.\s*return:\s*(\d+\.?\d*)%)?",
     re.IGNORECASE,
 )
 
@@ -362,6 +365,7 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
             costing_m = _SEQ_COSTING.search(legs_raw)
             combo_count = int(costing_m.group(1)) if costing_m else None
             unit_price = float(costing_m.group(2)) if costing_m else None
+            # Store total outlay (not unit price) for accurate settlement
             total_outlay = float(costing_m.group(3)) if costing_m else None
             est_return_pct = float(costing_m.group(4)) if costing_m and costing_m.group(4) else None
 
@@ -390,7 +394,7 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
                 "bet_stake": None,
                 "exotic_type": None,
                 "exotic_runners": None,
-                "exotic_stake": unit_price,
+                "exotic_stake": total_outlay,  # Store total outlay, not unit price
                 "estimated_return_pct": est_return_pct,
                 "sequence_type": seq_type,
                 "sequence_variant": variant,

@@ -404,32 +404,24 @@ async def _settle_picks_for_race_impl(
                         if dividend > 0:
                             break
                 if dividend > 0:
-                    # Estimate cost from combinations
-                    legs = json.loads(pick.sequence_legs) if pick.sequence_legs else []
-                    num_combos = 1
-                    for leg in legs:
-                        num_combos *= len(leg)
-                    base_unit = pick.exotic_stake or 1.0
-                    cost = num_combos * base_unit
-                    seq_pnl = round(dividend - cost, 2)
-                else:
-                    # Hit but no dividend found — treat as loss of stake
+                    # exotic_stake stores total outlay directly
+                    # Calculate flexi return: dividend × (stake / num_combos)
                     legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []
                     num_combos = 1
                     for leg in legs_data:
                         num_combos *= len(leg)
-                    base_unit = pick.exotic_stake or 1.0
-                    cost = num_combos * base_unit
-                    seq_pnl = round(-cost, 2)
+                    total_stake = pick.exotic_stake or 1.0
+                    flexi_pct = total_stake / num_combos if num_combos > 0 else 1.0
+                    return_amount = dividend * flexi_pct
+                    seq_pnl = round(return_amount - total_stake, 2)
+                else:
+                    # Hit but no dividend found — treat as loss of stake
+                    total_stake = pick.exotic_stake or 1.0
+                    seq_pnl = round(-total_stake, 2)
         else:
-            # Lost — cost is combinations × base unit
-            legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []
-            num_combos = 1
-            for leg in legs_data:
-                num_combos *= len(leg)
-            base_unit = pick.exotic_stake or 1.0
-            cost = num_combos * base_unit
-            seq_pnl = round(-cost, 2)
+            # Lost — exotic_stake stores total outlay directly
+            total_stake = pick.exotic_stake or 1.0
+            seq_pnl = round(-total_stake, 2)
 
         pick.pnl = seq_pnl
         pick.settled = True

@@ -270,12 +270,12 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
             # Group by sequence_type (quaddie, early_quaddie, big6)
             seq_type = (p.sequence_type or "quaddie").lower().replace(" ", "_")
             bucket = buckets.get(seq_type, buckets["quaddie"])
+            # exotic_stake now stores total outlay directly (not unit price)
+            cost = p.exotic_stake or 1.0
             legs = json.loads(p.sequence_legs) if p.sequence_legs else []
             num_combos = 1
             for leg in legs:
                 num_combos *= len(leg)
-            base = p.exotic_stake or 1.0
-            cost = num_combos * base
             bucket["staked"] += cost
             bucket["returned"] += max(0.0, (p.pnl or 0.0) + cost) if p.hit else 0.0
             pick_info["sequence_type"] = p.sequence_type
