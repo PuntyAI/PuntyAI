@@ -208,7 +208,6 @@ async def get_winner_stats() -> dict:
         )
         row = alltime_winnings_result.one()
         alltime_winnings = (row[0] or 0) + (row[1] or 0)
-        alltime_winnings = alltime_winnings_result.scalar() or 0.0
 
         # Get early mail content for today (sent to Twitter)
         early_mail_result = await db.execute(
