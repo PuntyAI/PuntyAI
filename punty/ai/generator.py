@@ -33,7 +33,7 @@ def load_prompt(name: str) -> str:
 class ContentGenerator:
     """Orchestrates content generation with context and prompts."""
 
-    def __init__(self, db: AsyncSession, model: str = "gpt-4o"):
+    def __init__(self, db: AsyncSession, model: str = "gpt-5.2"):
         self.db = db
         self.ai_client = AIClient(model=model)
         self.context_builder = ContextBuilder(db)

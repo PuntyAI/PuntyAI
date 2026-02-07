@@ -1,22 +1,37 @@
 """OpenAI API client wrapper."""
 
+import asyncio
 import logging
-from typing import Optional
+import re
+from typing import Optional, Literal
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 
 from punty.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Retry settings for rate limits
+MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
+
+# Reasoning effort levels for GPT-5.2
+ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
+
 
 class AIClient:
     """Wrapper for OpenAI API client."""
 
-    def __init__(self, model: str = "gpt-4o", api_key: Optional[str] = None):
+    def __init__(
+        self,
+        model: str = "gpt-5.2",
+        api_key: Optional[str] = None,
+        reasoning_effort: ReasoningEffort = "medium",
+    ):
         self.model = model
         self._api_key = api_key
         self._client: Optional[AsyncOpenAI] = None
+        self.reasoning_effort = reasoning_effort
 
     @property
     def client(self) -> AsyncOpenAI:
@@ -27,6 +42,14 @@ class AIClient:
                 raise ValueError("OPENAI_API_KEY not configured")
             self._client = AsyncOpenAI(api_key=key)
         return self._client
+
+    def _parse_retry_after(self, error_message: str) -> float:
+        """Extract retry delay from rate limit error message."""
+        # Look for "Please try again in X.XXs" or "Please try again in Xs"
+        match = re.search(r"try again in (\d+\.?\d*)s", str(error_message))
+        if match:
+            return float(match.group(1)) + 1  # Add 1s buffer
+        return DEFAULT_RETRY_DELAY
 
     async def generate(
         self,
@@ -45,25 +68,59 @@ class AIClient:
 
         Returns:
             Generated content as string
+
+        Raises:
+            Exception: If all retries exhausted or non-rate-limit error
         """
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+        last_error = None
 
-            content = response.choices[0].message.content
-            logger.info(f"Generated {len(content)} characters with {self.model}")
-            return content
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                # Build request parameters
+                params = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
 
-        except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise
+                # Add reasoning for GPT-5+ models
+                if self.model.startswith("gpt-5"):
+                    params["reasoning"] = {"effort": self.reasoning_effort}
+                    logger.info(f"Using {self.model} with reasoning_effort={self.reasoning_effort}")
+
+                response = await self.client.chat.completions.create(**params)
+
+                content = response.choices[0].message.content
+                logger.info(f"Generated {len(content)} characters with {self.model}")
+                return content
+
+            except RateLimitError as e:
+                last_error = e
+                retry_after = self._parse_retry_after(str(e))
+
+                if attempt < MAX_RETRIES:
+                    logger.warning(
+                        f"Rate limit hit (attempt {attempt + 1}/{MAX_RETRIES + 1}). "
+                        f"Waiting {retry_after:.1f}s before retry..."
+                    )
+                    await asyncio.sleep(retry_after)
+                else:
+                    logger.error(
+                        f"Rate limit: All {MAX_RETRIES + 1} attempts exhausted. "
+                        f"OpenAI TPM limit reached. Try again in ~1 minute."
+                    )
+                    raise
+
+            except Exception as e:
+                logger.error(f"OpenAI API error: {e}")
+                raise
+
+        # Should not reach here, but just in case
+        raise last_error
 
     async def generate_with_context(
         self,
