@@ -118,6 +118,34 @@ async def get_all_settings(db: AsyncSession = Depends(get_db)):
     return settings_dict
 
 
+# --- Personality prompt (must come BEFORE /{key} catch-all) ---
+
+class PersonalityUpdate(BaseModel):
+    """Update personality prompt."""
+    content: str
+
+
+@router.get("/personality")
+async def get_personality():
+    """Get the personality prompt."""
+    from pathlib import Path
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
+    if prompt_path.exists():
+        return {"content": prompt_path.read_text(encoding="utf-8")}
+    return {"content": ""}
+
+
+@router.put("/personality")
+async def save_personality(update: PersonalityUpdate):
+    """Save the personality prompt."""
+    from pathlib import Path
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
+    prompt_path.write_text(update.content, encoding="utf-8")
+    return {"status": "saved", "length": len(update.content)}
+
+
+# --- Generic setting by key (catch-all, must come AFTER specific routes) ---
+
 @router.get("/{key}")
 async def get_setting(key: str, db: AsyncSession = Depends(get_db)):
     """Get a specific setting."""
@@ -225,30 +253,6 @@ async def initialize_settings(db: AsyncSession = Depends(get_db)):
 class TestEmailRequest(BaseModel):
     """Test email request."""
     to_email: str
-
-
-class PersonalityUpdate(BaseModel):
-    """Update personality prompt."""
-    content: str
-
-
-@router.get("/personality")
-async def get_personality():
-    """Get the personality prompt."""
-    from pathlib import Path
-    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
-    if prompt_path.exists():
-        return {"content": prompt_path.read_text(encoding="utf-8")}
-    return {"content": ""}
-
-
-@router.put("/personality")
-async def save_personality(update: PersonalityUpdate):
-    """Save the personality prompt."""
-    from pathlib import Path
-    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
-    prompt_path.write_text(update.content, encoding="utf-8")
-    return {"status": "saved", "length": len(update.content)}
 
 
 @router.post("/test-email")
