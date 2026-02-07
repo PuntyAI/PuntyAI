@@ -78,8 +78,11 @@ async def lifespan(app: FastAPI):
     from punty.scheduler.manager import scheduler_manager
     await scheduler_manager.start()
     await scheduler_manager.setup_daily_morning_job()
-    morning_time = scheduler_manager.get_morning_job_time()
-    logger.info(f"Scheduler started - morning prep scheduled for {morning_time}")
+
+    # Set up per-meeting automation jobs for today's meetings
+    automation_result = await scheduler_manager.setup_daily_automation()
+    scheduled_meetings = automation_result.get("meetings_scheduled", [])
+    logger.info(f"Scheduler started - calendar scrape at 00:05, {len(scheduled_meetings)} meetings scheduled for today")
 
     # Initialize results monitor
     monitor = ResultsMonitor(app)
