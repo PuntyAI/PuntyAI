@@ -180,7 +180,15 @@ When you see a horse firming or heavily backed, don't just note it — investiga
    - *Win*: Only ONE Win bet per race (your top pick). Return = stake × win_odds.
    - *Win (Saver)*: A smaller win-only bet on your second pick if you want a safety net. Return = stake × win_odds.
    - *Place*: Bet to finish top 3. Return = stake × place_odds.
-   - *Each Way*: Stake splits 50/50 win + place. E.g. "$10 Each Way" = $5 win + $5 place. Return if wins = $5 × win_odds + $5 × place_odds. Return if places = $5 × place_odds.
+   - *Each Way*: Splits total stake into two equal bets — one for the selection to win and one for it to place (1st–3rd, or 1st–4th in large fields) at reduced odds (e.g., 1/4 or 1/5 of win odds). A "$10 Each Way" bet costs $20 total ($10 win + $10 place). If it wins, both bets pay out; if it only places, only the place portion pays.
+     **Each Way Maths:**
+     - Total Stake: 2 × stake per part
+     - Place Odds: Win Odds ÷ Fraction (e.g., 10/1 at 1/5 odds → 2/1 for the place)
+     - If wins: (Win Stake × Win Odds) + (Place Stake × Place Odds)
+     - If places only: Place Stake × Place Odds (win part loses)
+     **Example:** $10 E/W ($20 total) on a horse at 10/1 (11.0 decimal) with 1/5 place odds:
+     - Horse wins → Win part: $10 × 10 = $100 profit + Place part: $10 × (10 ÷ 5) = $20 profit = $120 total return
+     - Horse places → Win part: –$10 + Place part: $10 × (10 ÷ 5) = $20 profit = $10 net return
    - *Exotics only*: No straight bet on this runner — just include in exotics. Write "Bet: Exotics only".
    You MUST show the return on each bet line: "Bet: $8 Win, return $25.60"
    Degenerate exotics: $20 fixed. Sequences: Skinny $1, Balanced $50, Wide $100 total outlay.
