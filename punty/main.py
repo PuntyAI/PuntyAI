@@ -93,6 +93,18 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info(f"Database initialized at {settings.db_path}")
 
+    # Load personality prompt from DB into cache
+    from punty.ai.generator import _personality_cache
+    from punty.models.database import async_session
+    from punty.models.settings import AppSettings
+    from sqlalchemy import select as sa_select
+    async with async_session() as db:
+        result = await db.execute(sa_select(AppSettings).where(AppSettings.key == "personality_prompt"))
+        setting = result.scalar_one_or_none()
+        if setting and setting.value:
+            _personality_cache.set(setting.value)
+            logger.info("Personality prompt loaded from database")
+
     # Start scheduler
     from punty.scheduler.manager import scheduler_manager
     await scheduler_manager.start()

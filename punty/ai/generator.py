@@ -29,11 +29,31 @@ PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 
 def load_prompt(name: str) -> str:
-    """Load prompt template from file."""
+    """Load prompt template from file (or DB cache for personality)."""
+    if name == "personality":
+        cached = _personality_cache.get()
+        if cached is not None:
+            return cached
     prompt_file = PROMPTS_DIR / f"{name}.md"
     if prompt_file.exists():
         return prompt_file.read_text(encoding="utf-8")
     return ""
+
+
+class _PersonalityCache:
+    """In-memory cache for personality prompt loaded from DB."""
+
+    def __init__(self):
+        self._content: str | None = None
+
+    def get(self) -> str | None:
+        return self._content
+
+    def set(self, content: str):
+        self._content = content
+
+
+_personality_cache = _PersonalityCache()
 
 
 class ContentGenerator:

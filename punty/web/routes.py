@@ -453,11 +453,17 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         "twitter": ("..." + twitter_key[-4:]) if twitter_key else "",
     }
 
-    # Load personality prompt
-    personality_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
-    personality_prompt = ""
-    if personality_path.exists():
-        personality_prompt = personality_path.read_text(encoding="utf-8")
+    # Load personality prompt (DB first, then file fallback)
+    from punty.models.settings import AppSettings
+    personality_result = await db.execute(select(AppSettings).where(AppSettings.key == "personality_prompt"))
+    personality_setting = personality_result.scalar_one_or_none()
+    if personality_setting and personality_setting.value:
+        personality_prompt = personality_setting.value
+    else:
+        personality_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
+        personality_prompt = ""
+        if personality_path.exists():
+            personality_prompt = personality_path.read_text(encoding="utf-8")
 
     return templates.TemplateResponse(
         "settings.html",

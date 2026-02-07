@@ -126,8 +126,16 @@ class PersonalityUpdate(BaseModel):
 
 
 @router.get("/personality")
-async def get_personality():
-    """Get the personality prompt."""
+async def get_personality(db: AsyncSession = Depends(get_db)):
+    """Get the personality prompt (from DB, falling back to file)."""
+    from punty.models.settings import AppSettings
+
+    result = await db.execute(select(AppSettings).where(AppSettings.key == "personality_prompt"))
+    setting = result.scalar_one_or_none()
+    if setting and setting.value:
+        return {"content": setting.value}
+
+    # Fall back to file for migration
     from pathlib import Path
     prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
     if prompt_path.exists():
@@ -136,11 +144,23 @@ async def get_personality():
 
 
 @router.put("/personality")
-async def save_personality(update: PersonalityUpdate):
-    """Save the personality prompt."""
-    from pathlib import Path
-    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
-    prompt_path.write_text(update.content, encoding="utf-8")
+async def save_personality(update: PersonalityUpdate, db: AsyncSession = Depends(get_db)):
+    """Save the personality prompt to DB (survives deploys)."""
+    from punty.models.settings import AppSettings
+    from punty.ai.generator import _personality_cache
+
+    # Save to DB
+    result = await db.execute(select(AppSettings).where(AppSettings.key == "personality_prompt"))
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.value = update.content
+    else:
+        db.add(AppSettings(key="personality_prompt", value=update.content))
+    await db.commit()
+
+    # Update in-memory cache
+    _personality_cache.set(update.content)
+
     return {"status": "saved", "length": len(update.content)}
 
 
