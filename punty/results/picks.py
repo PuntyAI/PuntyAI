@@ -370,7 +370,45 @@ async def _settle_picks_for_race_impl(
             Pick.settled == False,
         )
     )
-    for pick in result.scalars().all():
+    sequence_picks = result.scalars().all()
+
+    # Batch-load all races and winners needed for sequence settlement
+    if sequence_picks:
+        # Collect all race numbers that any sequence could reference
+        all_seq_race_nums = set()
+        for pick in sequence_picks:
+            if pick.sequence_legs and pick.sequence_start_race:
+                try:
+                    legs = json.loads(pick.sequence_legs)
+                    for i in range(len(legs)):
+                        all_seq_race_nums.add(pick.sequence_start_race + i)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # Load all referenced races in one query
+        seq_race_ids = [f"{meeting_id}-r{rn}" for rn in all_seq_race_nums]
+        if seq_race_ids:
+            seq_races_result = await db.execute(
+                select(Race).where(Race.id.in_(seq_race_ids))
+            )
+            seq_race_map = {r.id: r for r in seq_races_result.scalars().all()}
+
+            # Load all winners for those races in one query
+            seq_winners_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id.in_(seq_race_ids),
+                    Runner.finish_position == 1,
+                )
+            )
+            seq_winner_map = {r.race_id: r for r in seq_winners_result.scalars().all()}
+        else:
+            seq_race_map = {}
+            seq_winner_map = {}
+    else:
+        seq_race_map = {}
+        seq_winner_map = {}
+
+    for pick in sequence_picks:
         if not pick.sequence_legs or not pick.sequence_start_race:
             continue
 
@@ -382,28 +420,19 @@ async def _settle_picks_for_race_impl(
         if race_number < start or race_number >= start + num_legs:
             continue
 
-        # Check if ALL legs have results
+        # Check if ALL legs have results (using batch-loaded data)
         all_resolved = True
         all_hit = True
         for leg_idx, leg_saddlecloths in enumerate(legs):
             leg_race_num = start + leg_idx
             leg_race_id = f"{meeting_id}-r{leg_race_num}"
-            leg_race_result = await db.execute(
-                select(Race).where(Race.id == leg_race_id)
-            )
-            leg_race = leg_race_result.scalar_one_or_none()
+            leg_race = seq_race_map.get(leg_race_id)
             if not leg_race or leg_race.results_status not in ("Paying", "Closed"):
                 all_resolved = False
                 break
 
             # Find winner of this leg
-            winner_result = await db.execute(
-                select(Runner).where(
-                    Runner.race_id == leg_race_id,
-                    Runner.finish_position == 1,
-                )
-            )
-            winner = winner_result.scalar_one_or_none()
+            winner = seq_winner_map.get(leg_race_id)
             if not winner or winner.saddlecloth not in leg_saddlecloths:
                 all_hit = False
 

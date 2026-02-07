@@ -301,58 +301,96 @@ async def robots():
 
 async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
     """Get meetings with sent content, grouped by date for calendar view."""
-    from sqlalchemy import desc
+    from sqlalchemy import desc, distinct
     from collections import defaultdict
 
     async with async_session() as db:
-        # Get meetings that have sent early mail content
-        result = await db.execute(
-            select(Meeting, Content)
+        # Count total distinct dates with sent early mail content
+        count_result = await db.execute(
+            select(func.count(distinct(Meeting.date)))
             .join(Content, Content.meeting_id == Meeting.id)
             .where(
                 and_(
                     Content.content_type == "early_mail",
                     Content.status == "sent",
+                    Meeting.date.isnot(None),
+                )
+            )
+        )
+        total = count_result.scalar() or 0
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+
+        # Get the paginated distinct dates
+        offset = (page - 1) * per_page
+        dates_result = await db.execute(
+            select(distinct(Meeting.date))
+            .join(Content, Content.meeting_id == Meeting.id)
+            .where(
+                and_(
+                    Content.content_type == "early_mail",
+                    Content.status == "sent",
+                    Meeting.date.isnot(None),
+                )
+            )
+            .order_by(desc(Meeting.date))
+            .offset(offset)
+            .limit(per_page)
+        )
+        page_dates = [row[0] for row in dates_result.all()]
+
+        if not page_dates:
+            return {
+                "calendar": [],
+                "page": page,
+                "per_page": per_page,
+                "total_dates": total,
+                "total_pages": total_pages,
+                "has_next": False,
+                "has_prev": page > 1,
+            }
+
+        # Fetch meetings for only the paginated dates
+        result = await db.execute(
+            select(Meeting)
+            .join(Content, Content.meeting_id == Meeting.id)
+            .where(
+                and_(
+                    Content.content_type == "early_mail",
+                    Content.status == "sent",
+                    Meeting.date.in_(page_dates),
                 )
             )
             .order_by(desc(Meeting.date), Meeting.venue)
         )
-        rows = result.all()
+        meetings = result.scalars().all()
 
-        # Group by date
+        # Group by date (deduplicate by meeting id)
         meetings_by_date = defaultdict(list)
         seen_meetings = set()
-        for meeting, content in rows:
+        for meeting in meetings:
             if meeting.id in seen_meetings:
                 continue
             seen_meetings.add(meeting.id)
-            date_key = meeting.date.isoformat() if meeting.date else "unknown"
+            date_key = meeting.date.isoformat()
             meetings_by_date[date_key].append({
                 "id": meeting.id,
                 "venue": meeting.venue,
                 "date": meeting.date,
                 "date_formatted": meeting.date.strftime("%a %d %b %Y") if meeting.date else "",
                 "track_condition": meeting.track_condition,
-                "slug": meeting.id,  # Use meeting_id as URL slug
+                "slug": meeting.id,
             })
 
-        # Convert to list sorted by date desc
-        dates = sorted(meetings_by_date.keys(), reverse=True)
-        total = len(dates)
-        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-
-        # Paginate dates
-        offset = (page - 1) * per_page
-        paginated_dates = dates[offset:offset + per_page]
-
+        # Build calendar in date order (already sorted by query)
         calendar = []
-        for date_key in paginated_dates:
-            meetings = meetings_by_date[date_key]
-            if meetings:
+        for d in sorted(page_dates, reverse=True):
+            date_key = d.isoformat()
+            day_meetings = meetings_by_date.get(date_key, [])
+            if day_meetings:
                 calendar.append({
                     "date": date_key,
-                    "date_formatted": meetings[0]["date_formatted"],
-                    "meetings": meetings,
+                    "date_formatted": day_meetings[0]["date_formatted"],
+                    "meetings": day_meetings,
                 })
 
         return {

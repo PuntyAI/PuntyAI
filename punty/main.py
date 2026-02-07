@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -16,6 +17,24 @@ from punty.web.routes import router as web_router
 from punty.public.routes import router as public_router
 from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api
 from punty.results.monitor import ResultsMonitor
+
+
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    """Set Cache-Control headers for static assets and public API responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+
+        if path.startswith("/static/"):
+            if any(path.endswith(ext) for ext in (".mp4", ".webm", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff2", ".woff")):
+                response.headers["Cache-Control"] = "public, max-age=2592000, immutable"  # 30 days
+            elif any(path.endswith(ext) for ext in (".css", ".js")):
+                response.headers["Cache-Control"] = "public, max-age=86400"  # 1 day
+        elif path.startswith("/api/public/"):
+            response.headers["Cache-Control"] = "public, max-age=30"  # 30 seconds
+
+        return response
 
 
 class HostnameRoutingMiddleware(BaseHTTPMiddleware):
@@ -119,7 +138,9 @@ app = FastAPI(
 )
 
 # Middleware stack (order matters — added in reverse, outermost first):
-# SessionMiddleware → HostnameRoutingMiddleware → AuthMiddleware → CSRFMiddleware
+# SessionMiddleware → HostnameRoutingMiddleware → AuthMiddleware → CSRFMiddleware → GZip → CacheControl
+app.add_middleware(CacheControlMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(HostnameRoutingMiddleware)
