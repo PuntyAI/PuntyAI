@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Racing Tips Archive - PuntyAI{% endblock %}
+
+{% block head %}
+<meta name="description" content="Browse Punty's horse racing tips archive. Expert AI analysis for Australian thoroughbred racing.">
+{% endblock %}
+
+{% block content %}
+<section class="py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-heading font-bold mb-4">
+                <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Racing Tips</span>
+            </h1>
+            <p class="text-lg" style="color: var(--text-secondary);">
+                Browse Punty's tips archive. Click on a meeting to read the full early mail and wrap-up.
+            </p>
+        </div>
+
+        {% if calendar %}
+        <!-- Calendar View -->
+        <div class="space-y-8">
+            {% for day in calendar %}
+            <div>
+                <!-- Date Header -->
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-16 h-16 rounded-xl flex flex-col items-center justify-center flex-shrink-0" style="background: var(--gradient-sunset);">
+                        <span class="text-xs font-bold uppercase text-white/80">{{ day.meetings[0].date.strftime('%b') if day.meetings[0].date else '' }}</span>
+                        <span class="text-2xl font-display font-black text-white">{{ day.meetings[0].date.strftime('%d') if day.meetings[0].date else '' }}</span>
+                    </div>
+                    <div>
+                        <h2 class="font-heading font-bold text-xl text-white">{{ day.date_formatted }}</h2>
+                        <p class="text-sm" style="color: var(--text-muted);">{{ day.meetings|length }} meeting{% if day.meetings|length != 1 %}s{% endif %}</p>
+                    </div>
+                </div>
+
+                <!-- Meetings Grid -->
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 ml-20">
+                    {% for meeting in day.meetings %}
+                    <a href="/tips/{{ meeting.slug }}" class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(233, 30, 140, 0.15);">
+                                <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors truncate">{{ meeting.venue }}</div>
+                                {% if meeting.track_condition %}
+                                <div class="text-xs" style="color: var(--cyan);">{{ meeting.track_condition }}</div>
+                                {% endif %}
+                            </div>
+                            <svg class="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-center gap-2 mt-12">
+            {% if has_prev %}
+            <a href="/tips?page={{ page - 1 }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
+                &larr; Newer
+            </a>
+            {% endif %}
+
+            <span class="px-4 py-2 font-heading" style="color: var(--text-muted);">
+                Page {{ page }} of {{ total_pages }}
+            </span>
+
+            {% if has_next %}
+            <a href="/tips?page={{ page + 1 }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
+                Older &rarr;
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <!-- No tips yet -->
+        <div class="card p-12 text-center">
+            <div class="text-6xl mb-4">&#x1F3C7;</div>
+            <h2 class="text-2xl font-heading font-bold mb-2">No Tips Yet</h2>
+            <p style="color: var(--text-secondary);">
+                Check back soon! Punty's tips will appear here once they're published.
+            </p>
+            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-primary inline-flex items-center gap-2 mt-6">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                Follow @PuntyAI for Updates
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endblock %}
+
+{% block head %}
+<meta name="description" content="Punty's horse racing tips for {{ meeting.venue }} on {{ meeting.date_formatted }}. Expert AI analysis and wrap-up for Australian thoroughbred racing.">
+{% endblock %}
+
+{% block content %}
+<section class="py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+        <!-- Back Link -->
+        <a href="/tips" class="inline-flex items-center gap-2 mb-8 text-sm font-heading font-semibold transition-colors hover:text-punty-magenta" style="color: var(--text-secondary);">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to Tips
+        </a>
+
+        <!-- Meeting Header -->
+        <div class="card p-6 mb-8">
+            <div class="flex items-start gap-4">
+                <div class="w-16 h-16 rounded-xl flex flex-col items-center justify-center flex-shrink-0" style="background: var(--gradient-sunset);">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h1 class="text-3xl md:text-4xl font-heading font-bold mb-2">
+                        <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{{ meeting.venue }}</span>
+                    </h1>
+                    <p class="text-lg" style="color: var(--text-secondary);">{{ meeting.date_formatted }}</p>
+
+                    <!-- Meeting Details -->
+                    <div class="flex flex-wrap gap-4 mt-4">
+                        {% if meeting.track_condition %}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-heading font-semibold uppercase" style="color: var(--text-muted);">Track</span>
+                            <span class="px-2 py-1 rounded text-sm font-heading font-semibold" style="background: rgba(0, 212, 255, 0.15); color: var(--cyan);">{{ meeting.track_condition }}</span>
+                        </div>
+                        {% endif %}
+                        {% if meeting.weather %}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-heading font-semibold uppercase" style="color: var(--text-muted);">Weather</span>
+                            <span class="px-2 py-1 rounded text-sm font-heading font-semibold" style="background: rgba(233, 30, 140, 0.15); color: var(--magenta);">{{ meeting.weather }}</span>
+                        </div>
+                        {% endif %}
+                        {% if meeting.rail_position %}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-heading font-semibold uppercase" style="color: var(--text-muted);">Rail</span>
+                            <span class="text-sm" style="color: var(--text-secondary);">{{ meeting.rail_position }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Early Mail Section -->
+        {% if early_mail %}
+        <div class="mb-8">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(233, 30, 140, 0.15);">
+                    <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-heading font-bold text-white">Early Mail</h2>
+            </div>
+            <div class="card p-6">
+                <div class="prose prose-invert max-w-none tips-content">
+                    {{ early_mail.content | safe }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Wrap-up Section -->
+        {% if wrapup %}
+        <div class="mb-8">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(0, 212, 255, 0.15);">
+                    <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-heading font-bold text-white">Wrap-up</h2>
+            </div>
+            <div class="card p-6">
+                <div class="prose prose-invert max-w-none tips-content">
+                    {{ wrapup.content | safe }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- No Content Message -->
+        {% if not early_mail and not wrapup %}
+        <div class="card p-12 text-center">
+            <div class="text-6xl mb-4">&#x1F3C7;</div>
+            <h2 class="text-2xl font-heading font-bold mb-2">No Tips Available</h2>
+            <p style="color: var(--text-secondary);">
+                Tips for this meeting haven't been published yet. Check back soon!
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- CTA -->
+        <div class="card p-6 text-center mt-8" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.1), rgba(255, 107, 53, 0.1));">
+            <p class="font-heading font-semibold text-white mb-4">Want Punty's tips before the races?</p>
+            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-primary inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                Follow @PuntyAI
+            </a>
+        </div>
+    </div>
+</section>
+
+<style>
+    .tips-content {
+        white-space: pre-wrap;
+        font-family: 'Source Sans Pro', sans-serif;
+        line-height: 1.8;
+        color: var(--text-secondary);
+    }
+    .tips-content strong, .tips-content b {
+        color: white;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}

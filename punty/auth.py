@@ -36,7 +36,9 @@ PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health"}
 PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/api/public/", "/public")
 
 # Public site paths (served on punty.ai, not app.punty.ai)
-PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/terms", "/privacy"}
+PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/terms", "/privacy", "/tips"}
+# Also allow /tips/* paths for individual meeting pages
+PUBLIC_SITE_PREFIXES_EXTRA = ("/tips/",)
 PUBLIC_SITE_HOSTS = {"punty.ai", "www.punty.ai", "localhost:8000", "127.0.0.1:8000"}
 
 
@@ -54,8 +56,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Allow public site paths on public domains (punty.ai, not app.punty.ai)
         # This lets the public website work without authentication
         is_public_host = any(host.startswith(h) or host == h for h in PUBLIC_SITE_HOSTS)
-        if is_public_host and path in PUBLIC_SITE_PATHS:
-            return await call_next(request)
+        if is_public_host:
+            if path in PUBLIC_SITE_PATHS:
+                return await call_next(request)
+            # Also allow /tips/* paths for meeting detail pages
+            if any(path.startswith(p) for p in PUBLIC_SITE_PREFIXES_EXTRA):
+                return await call_next(request)
 
         # Check session
         user = request.session.get("user")
