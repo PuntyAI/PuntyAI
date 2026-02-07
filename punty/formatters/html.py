@@ -126,6 +126,13 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     content = re.sub(r'^(#{1,3})\s+(.+)$', convert_header, content, flags=re.MULTILINE)
 
+    # Convert markdown links [text](url) to <a> tags
+    content = re.sub(
+        r'\[([^\]]+)\]\(([^)]+)\)',
+        r'<a href="\2" target="_blank" class="tips-link">\1</a>',
+        content
+    )
+
     # Convert *bold* to <strong>
     content = re.sub(r'\*([^*\n]+)\*', r'<strong>\1</strong>', content)
 
