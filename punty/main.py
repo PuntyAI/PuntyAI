@@ -167,6 +167,13 @@ async def public_recent_wins(limit: int = 15):
     return await get_recent_wins_public(limit=limit)
 
 
+@app.get("/api/public/next-race")
+async def public_next_race():
+    """Get next upcoming race for countdown."""
+    from punty.public.routes import get_next_race
+    return await get_next_race()
+
+
 if __name__ == "__main__":
     import uvicorn
 

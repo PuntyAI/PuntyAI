@@ -8,17 +8,75 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, and_
 
-from punty.config import melb_today
+from punty.config import melb_today, melb_now, MELB_TZ
 from punty.models.database import async_session
 from punty.models.pick import Pick
 from punty.models.content import Content
-from punty.models.meeting import Meeting
+from punty.models.meeting import Meeting, Race
 
 router = APIRouter()
 
 # Templates directory
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=templates_dir)
+
+
+async def get_next_race() -> dict:
+    """Get the next upcoming race for countdown display."""
+    async with async_session() as db:
+        today = melb_today()
+        now = melb_now()
+        now_naive = now.replace(tzinfo=None)
+
+        # Get today's selected meetings
+        meetings_result = await db.execute(
+            select(Meeting).where(
+                and_(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type.in_(["race", None]),
+                )
+            )
+        )
+        meetings = {m.id: m for m in meetings_result.scalars().all()}
+
+        if not meetings:
+            return {"has_next": False}
+
+        # Get all races for today's meetings that haven't finished yet
+        races_result = await db.execute(
+            select(Race).where(
+                and_(
+                    Race.meeting_id.in_(list(meetings.keys())),
+                    Race.start_time.isnot(None),
+                    Race.results_status.notin_(["Paying", "Closed", "Final"]),
+                )
+            ).order_by(Race.start_time)
+        )
+        races = races_result.scalars().all()
+
+        # Find the next race (first one with start_time > now)
+        next_race = None
+        for race in races:
+            if race.start_time and race.start_time > now_naive:
+                next_race = race
+                break
+
+        if not next_race:
+            return {"has_next": False, "all_done": True}
+
+        meeting = meetings.get(next_race.meeting_id)
+        # Add timezone info for JavaScript
+        start_time_aware = next_race.start_time.replace(tzinfo=MELB_TZ)
+
+        return {
+            "has_next": True,
+            "venue": meeting.venue if meeting else "Unknown",
+            "race_number": next_race.race_number,
+            "race_name": next_race.name,
+            "start_time_iso": start_time_aware.isoformat(),
+            "start_time_formatted": next_race.start_time.strftime("%H:%M"),
+        }
 
 
 async def get_recent_wins_public(limit: int = 15) -> dict:

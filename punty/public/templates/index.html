@@ -56,6 +56,12 @@
                 <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
                     {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
                 </div>
+                <!-- Next Race Countdown -->
+                <div id="next-race-container" class="mt-3 pt-3" style="border-top: 1px solid var(--border-subtle); display: none;">
+                    <div class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
+                    <div id="next-race-venue" class="text-sm font-semibold" style="color: var(--cyan);"></div>
+                    <div id="next-race-countdown" class="text-lg font-display font-bold" style="color: var(--magenta);"></div>
+                </div>
             </div>
 
             <!-- All-Time Winners -->
@@ -364,6 +370,78 @@
         loadWinsTicker();
         // Refresh ticker every 60 seconds
         setInterval(loadWinsTicker, 60000);
+    })();
+
+    // Next Race Countdown
+    (function() {
+        let nextRaceTime = null;
+        let nextRaceVenue = '';
+        let nextRaceNum = 0;
+
+        function formatCountdown(ms) {
+            if (ms <= 0) return 'NOW!';
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            if (hours > 0) {
+                return hours + 'h ' + minutes + 'm';
+            } else if (minutes > 0) {
+                return minutes + 'm ' + seconds + 's';
+            } else {
+                return seconds + 's';
+            }
+        }
+
+        function updateCountdown() {
+            const container = document.getElementById('next-race-container');
+            const venueEl = document.getElementById('next-race-venue');
+            const countdownEl = document.getElementById('next-race-countdown');
+
+            if (!nextRaceTime) {
+                container.style.display = 'none';
+                return;
+            }
+
+            const now = new Date();
+            const diff = nextRaceTime - now;
+
+            if (diff <= -60000) {
+                // Race started over a minute ago, fetch new data
+                loadNextRace();
+                return;
+            }
+
+            container.style.display = 'block';
+            venueEl.textContent = nextRaceVenue + ' R' + nextRaceNum;
+            countdownEl.textContent = formatCountdown(diff);
+        }
+
+        async function loadNextRace() {
+            try {
+                const resp = await fetch('/api/public/next-race');
+                const data = await resp.json();
+
+                if (data.has_next) {
+                    nextRaceTime = new Date(data.start_time_iso);
+                    nextRaceVenue = data.venue;
+                    nextRaceNum = data.race_number;
+                    updateCountdown();
+                } else {
+                    nextRaceTime = null;
+                    document.getElementById('next-race-container').style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to load next race:', e);
+            }
+        }
+
+        loadNextRace();
+        // Update countdown every second
+        setInterval(updateCountdown, 1000);
+        // Refresh race data every 2 minutes
+        setInterval(loadNextRace, 120000);
     })();
 </script>
 {% endblock %}
