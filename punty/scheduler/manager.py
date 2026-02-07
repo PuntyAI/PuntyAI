@@ -216,54 +216,39 @@ class SchedulerManager:
             self.remove_job(job_id)
 
     async def setup_daily_morning_job(self) -> None:
-        """Set up the daily morning preparation job.
+        """Set up the daily calendar scrape job.
 
-        Runs at a random time between 7:30-8:30 AM Melbourne time every day.
-        The job scrapes calendar, data, and generates early mail for selected meetings.
+        Runs at 12:05 AM Melbourne time every day to:
+        1. Scrape the racing calendar
+        2. Auto-select meetings
+        3. Schedule per-meeting automation jobs
+
+        Early mail generation is now handled by meeting_pre_race_job
+        which runs 1.5 hours before each meeting's first race.
         """
-        from punty.scheduler.jobs import daily_morning_prep
+        from punty.scheduler.jobs import daily_calendar_scrape
         from punty.config import MELB_TZ
 
-        # Get random time for today/tomorrow
-        hour, minute = get_random_morning_time()
+        logger.info("Scheduling daily calendar scrape job for 00:05 Melbourne time")
 
-        logger.info(f"Scheduling daily morning prep job for {hour:02d}:{minute:02d} Melbourne time")
-
+        # Calendar scrape runs at 12:05 AM
         self.add_job(
-            "daily-morning-prep",
-            daily_morning_prep,
-            trigger_type="cron",
-            hour=hour,
-            minute=minute,
-            timezone=MELB_TZ,
-        )
-
-        # Also schedule a job to reschedule the morning job with a new random time each day
-        # This runs at midnight to pick a new random time for the next day
-        async def reschedule_morning_job():
-            new_hour, new_minute = get_random_morning_time()
-            logger.info(f"Rescheduling morning prep for {new_hour:02d}:{new_minute:02d}")
-
-            self.remove_job("daily-morning-prep")
-            self.add_job(
-                "daily-morning-prep",
-                daily_morning_prep,
-                trigger_type="cron",
-                hour=new_hour,
-                minute=new_minute,
-                timezone=MELB_TZ,
-            )
-
-        self.add_job(
-            "daily-reschedule",
-            reschedule_morning_job,
+            "daily-calendar-scrape",
+            daily_calendar_scrape,
             trigger_type="cron",
             hour=0,
-            minute=5,  # 12:05 AM Melbourne time
+            minute=5,
             timezone=MELB_TZ,
         )
 
-        logger.info("Daily morning job and reschedule job configured")
+        logger.info("Daily calendar scrape job configured")
+
+    async def setup_legacy_morning_job(self) -> None:
+        """Legacy method - kept for backwards compatibility.
+
+        This now just calls setup_daily_morning_job().
+        """
+        await self.setup_daily_morning_job()
 
     def get_morning_job_time(self) -> Optional[str]:
         """Get the scheduled time for the morning prep job."""
@@ -271,6 +256,145 @@ class SchedulerManager:
         if job and job.next_run_time:
             return job.next_run_time.strftime("%H:%M")
         return None
+
+    async def setup_meeting_automation(self, meeting_id: str) -> dict:
+        """Schedule automation jobs for a meeting based on race times.
+
+        - Pre-race job: 1.5 hours (90 min) before first race
+        - Post-race job: 30 min after last race
+
+        Returns: dict with scheduled job times
+        """
+        from punty.models.database import async_session
+        from punty.models.meeting import Meeting, Race
+        from punty.scheduler.jobs import meeting_pre_race_job, meeting_post_race_job
+        from punty.config import MELB_TZ, melb_now
+        from sqlalchemy import select, func
+
+        async with async_session() as db:
+            # Get meeting
+            result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+            meeting = result.scalar_one_or_none()
+
+            if not meeting:
+                logger.warning(f"Meeting not found for automation: {meeting_id}")
+                return {"error": f"Meeting not found: {meeting_id}"}
+
+            # Get first and last race times
+            race_result = await db.execute(
+                select(
+                    func.min(Race.start_time).label("first_race"),
+                    func.max(Race.start_time).label("last_race"),
+                ).where(Race.meeting_id == meeting_id)
+            )
+            row = race_result.one_or_none()
+
+            if not row or not row.first_race:
+                logger.warning(f"No race times found for {meeting_id}")
+                return {"error": f"No race times for: {meeting_id}"}
+
+            first_race_time = row.first_race
+            last_race_time = row.last_race
+
+            # Calculate job times
+            from datetime import timedelta
+
+            # Pre-race: 90 minutes before first race
+            pre_race_time = first_race_time - timedelta(minutes=90)
+
+            # Post-race: 30 minutes after last race
+            post_race_time = last_race_time + timedelta(minutes=30)
+
+            now = melb_now().replace(tzinfo=None)
+
+            scheduled = {
+                "meeting_id": meeting_id,
+                "venue": meeting.venue,
+                "first_race": first_race_time.strftime("%H:%M"),
+                "last_race": last_race_time.strftime("%H:%M"),
+                "jobs": [],
+            }
+
+            # Schedule pre-race job if still in the future
+            if pre_race_time > now:
+                # Create wrapper function for the job
+                async def pre_race_wrapper():
+                    return await meeting_pre_race_job(meeting_id)
+
+                self.add_job(
+                    f"{meeting_id}-pre-race",
+                    pre_race_wrapper,
+                    trigger_type="date",
+                    run_date=pre_race_time,
+                )
+                scheduled["jobs"].append({
+                    "type": "pre_race",
+                    "time": pre_race_time.strftime("%H:%M"),
+                })
+                logger.info(f"Scheduled pre-race job for {meeting.venue} at {pre_race_time.strftime('%H:%M')}")
+            else:
+                logger.info(f"Pre-race time already passed for {meeting.venue}")
+
+            # Schedule post-race job if still in the future
+            if post_race_time > now:
+                async def post_race_wrapper():
+                    return await meeting_post_race_job(meeting_id)
+
+                self.add_job(
+                    f"{meeting_id}-post-race",
+                    post_race_wrapper,
+                    trigger_type="date",
+                    run_date=post_race_time,
+                )
+                scheduled["jobs"].append({
+                    "type": "post_race",
+                    "time": post_race_time.strftime("%H:%M"),
+                })
+                logger.info(f"Scheduled post-race job for {meeting.venue} at {post_race_time.strftime('%H:%M')}")
+            else:
+                logger.info(f"Post-race time already passed for {meeting.venue}")
+
+            return scheduled
+
+    async def setup_daily_automation(self) -> dict:
+        """Set up automation for all selected meetings today.
+
+        Called after midnight calendar scrape or on app startup.
+        """
+        from punty.models.database import async_session
+        from punty.models.meeting import Meeting
+        from punty.config import melb_today
+        from sqlalchemy import select, or_
+
+        results = {
+            "meetings_scheduled": [],
+            "errors": [],
+        }
+
+        async with async_session() as db:
+            # Get all selected meetings for today
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == melb_today(),
+                    Meeting.selected == True,
+                    or_(Meeting.meeting_type == None, Meeting.meeting_type == "race")
+                )
+            )
+            meetings = result.scalars().all()
+
+            for meeting in meetings:
+                try:
+                    scheduled = await self.setup_meeting_automation(meeting.id)
+                    if "error" not in scheduled:
+                        results["meetings_scheduled"].append(scheduled)
+                    else:
+                        results["errors"].append(scheduled["error"])
+                except Exception as e:
+                    logger.error(f"Failed to setup automation for {meeting.venue}: {e}")
+                    results["errors"].append(f"{meeting.venue}: {str(e)}")
+
+        logger.info(f"Daily automation setup complete: {len(results['meetings_scheduled'])} meetings")
+        return results
 
 
 # Global scheduler instance

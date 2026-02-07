@@ -29,15 +29,156 @@ class JobType(str, Enum):
     DAILY_MORNING_PREP = "daily_morning_prep"
 
 
-async def daily_morning_prep() -> dict:
+async def daily_calendar_scrape() -> dict:
     """
-    Daily morning preparation job that runs between 7:30-8:30 AM Melbourne time.
+    Daily calendar scrape job that runs shortly after midnight (12:05 AM).
 
     This job:
     1. Scrapes the racing calendar to get today's meetings
-    2. Auto-selects metro meetings
-    3. Scrapes all data (form + speed maps) for selected meetings
-    4. Generates early mail for all selected meetings
+    2. Auto-selects all meetings
+    3. Schedules meeting-specific automation jobs (pre-race, post-race)
+
+    Note: Early mail generation is now handled by meeting_pre_race_job
+    which runs 1.5 hours before each meeting's first race.
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting, Race, Runner
+    from punty.config import melb_today, melb_now
+    from punty.scrapers.calendar import scrape_calendar
+    from punty.scheduler.activity_log import log_scheduler_job, log_system
+    from punty.scheduler.manager import scheduler_manager
+    from sqlalchemy import select, or_
+
+    logger.info("Starting daily calendar scrape job")
+    log_scheduler_job("Calendar Scrape Started", status="info")
+    results = {
+        "started_at": melb_now().isoformat(),
+        "calendar_scraped": False,
+        "meetings_found": 0,
+        "meetings_selected": 0,
+        "automation_scheduled": [],
+        "errors": [],
+    }
+
+    today = melb_today()
+
+    async with async_session() as db:
+        # Step 1: Scrape calendar
+        try:
+            logger.info("Step 1: Scraping racing calendar...")
+            meetings_data = await scrape_calendar(today)
+            results["calendar_scraped"] = True
+            results["meetings_found"] = len(meetings_data) if meetings_data else 0
+            logger.info(f"Found {results['meetings_found']} meetings")
+
+            # Create Meeting records for any new meetings found
+            for m in meetings_data:
+                meeting_id = f"{m['venue'].lower().replace(' ', '-')}-{today.isoformat()}"
+                existing = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+                if not existing.scalar_one_or_none():
+                    new_meeting = Meeting(
+                        id=meeting_id,
+                        venue=m['venue'],
+                        date=today,
+                        meeting_type=m.get('meeting_type', 'race'),
+                    )
+                    db.add(new_meeting)
+                    logger.info(f"Created meeting: {m['venue']}")
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Calendar scrape failed: {e}")
+            results["errors"].append(f"Calendar: {str(e)}")
+
+        # Step 2: Auto-select ALL meetings
+        try:
+            logger.info("Step 2: Auto-selecting all meetings...")
+
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.meeting_type.in_(["race", None]),
+                )
+            )
+            meetings = result.scalars().all()
+
+            selected_count = 0
+            for meeting in meetings:
+                if not meeting.selected:
+                    meeting.selected = True
+                    selected_count += 1
+                    logger.info(f"Auto-selected: {meeting.venue}")
+
+            await db.commit()
+            results["meetings_selected"] = selected_count
+            logger.info(f"Auto-selected {selected_count} meetings")
+        except Exception as e:
+            logger.error(f"Auto-select failed: {e}")
+            results["errors"].append(f"Auto-select: {str(e)}")
+
+    # Step 3: Schedule meeting automation
+    try:
+        logger.info("Step 3: Scheduling meeting automation...")
+        automation_result = await scheduler_manager.setup_daily_automation()
+        results["automation_scheduled"] = automation_result.get("meetings_scheduled", [])
+        if automation_result.get("errors"):
+            results["errors"].extend(automation_result["errors"])
+    except Exception as e:
+        logger.error(f"Automation setup failed: {e}")
+        results["errors"].append(f"Automation: {str(e)}")
+
+    results["completed_at"] = melb_now().isoformat()
+    logger.info(f"Daily calendar scrape complete: {results}")
+
+    # Log completion
+    scheduled = len(results.get("automation_scheduled", []))
+    errors = len(results.get("errors", []))
+    if errors:
+        log_system(f"Calendar scrape complete: {scheduled} meetings scheduled, {errors} errors", status="warning")
+    else:
+        log_system(f"Calendar scrape complete: {scheduled} meetings scheduled", status="success")
+
+    # Send email notification
+    try:
+        from punty.delivery.email import send_email
+        from punty.models.settings import AppSettings
+
+        async with async_session() as db:
+            result = await db.execute(select(AppSettings).where(AppSettings.key == "notification_email"))
+            setting = result.scalar_one_or_none()
+            notification_email = setting.value if setting and setting.value else None
+
+        if notification_email:
+            meetings_info = "\n".join([
+                f"- {m['venue']}: pre-race {m['jobs'][0]['time'] if m['jobs'] else 'N/A'}"
+                for m in results.get("automation_scheduled", [])
+            ])
+
+            await send_email(
+                to_email=notification_email,
+                subject=f"PuntyAI Calendar: {results['meetings_found']} meetings found",
+                body_html=f"""
+                <h2>Daily Calendar Scrape Complete</h2>
+                <p><strong>Meetings found:</strong> {results['meetings_found']}</p>
+                <p><strong>Scheduled for automation:</strong> {scheduled}</p>
+                <pre>{meetings_info}</pre>
+                {"<p style='color:red'>Errors: " + ", ".join(results['errors']) + "</p>" if errors else ""}
+                """,
+                body_text=f"Calendar: {results['meetings_found']} meetings, {scheduled} scheduled",
+            )
+            results["email_sent"] = True
+    except Exception as e:
+        logger.error(f"Failed to send notification: {e}")
+        results["email_sent"] = False
+
+    return results
+
+
+async def daily_morning_prep() -> dict:
+    """
+    Legacy daily morning preparation job - now redirects to calendar scrape.
+
+    Note: This job is deprecated. Use daily_calendar_scrape instead.
+    Keeping for backwards compatibility with existing scheduled jobs.
     """
     from punty.models.database import async_session
     from punty.models.meeting import Meeting, Race, Runner
@@ -568,3 +709,232 @@ async def check_context_changes(
         "changes": changes,
         "snapshot_version": snapshot.get("version"),
     }
+
+
+async def meeting_pre_race_job(meeting_id: str) -> dict:
+    """Run 1.5 hours before first race for a meeting.
+
+    Steps:
+    1. Scrape full meeting data (form, speed maps)
+    2. Scrape latest odds
+    3. Generate early mail
+    4. Auto-approve if valid
+    5. Post to Twitter
+    6. Log activity
+
+    Returns: job result dict
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting
+    from punty.models.content import Content, ContentStatus
+    from punty.config import melb_now
+    from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
+    from punty.ai.generator import ContentGenerator
+    from punty.scheduler.activity_log import log_scheduler_job, log_system
+    from punty.scheduler.automation import auto_approve_and_post
+    from sqlalchemy import select
+
+    logger.info(f"Starting pre-race job for {meeting_id}")
+    log_scheduler_job(f"Pre-race job started: {meeting_id}", status="info")
+
+    results = {
+        "meeting_id": meeting_id,
+        "started_at": melb_now().isoformat(),
+        "steps": [],
+        "errors": [],
+    }
+
+    async with async_session() as db:
+        # Get meeting
+        result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+        meeting = result.scalar_one_or_none()
+
+        if not meeting:
+            results["errors"].append(f"Meeting not found: {meeting_id}")
+            return results
+
+        venue = meeting.venue
+
+        # Step 1: Scrape full meeting data
+        try:
+            logger.info(f"Step 1: Scraping data for {venue}...")
+            await scrape_meeting_full(meeting_id, db)
+            results["steps"].append("scrape_data: success")
+        except Exception as e:
+            logger.error(f"Scrape failed for {venue}: {e}")
+            results["errors"].append(f"scrape_data: {str(e)}")
+
+        # Step 2: Scrape speed maps
+        try:
+            logger.info(f"Step 2: Scraping speed maps for {venue}...")
+            async for _ in scrape_speed_maps_stream(meeting_id, db):
+                pass
+            results["steps"].append("scrape_speed_maps: success")
+        except Exception as e:
+            logger.error(f"Speed maps failed for {venue}: {e}")
+            results["errors"].append(f"scrape_speed_maps: {str(e)}")
+
+        # Step 3: Generate early mail
+        content_id = None
+        try:
+            logger.info(f"Step 3: Generating early mail for {venue}...")
+            generator = ContentGenerator(db)
+
+            async for event in generator.generate_early_mail_stream(meeting_id):
+                if event.get("status") == "error":
+                    raise Exception(event.get("label", "Unknown error"))
+                if event.get("content_id"):
+                    content_id = event.get("content_id")
+
+            results["steps"].append("generate_early_mail: success")
+            results["content_id"] = content_id
+        except Exception as e:
+            logger.error(f"Early mail generation failed for {venue}: {e}")
+            results["errors"].append(f"generate_early_mail: {str(e)}")
+
+            # If rate limited, note it
+            error_str = str(e).lower()
+            if "rate limit" in error_str or "429" in error_str:
+                logger.warning(f"Rate limit detected for {venue}")
+                results["rate_limited"] = True
+
+        # Step 4 & 5: Auto-approve and post to Twitter
+        if content_id:
+            try:
+                logger.info(f"Step 4-5: Auto-approving and posting for {venue}...")
+                post_result = await auto_approve_and_post(content_id, db)
+                results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
+                results["post_result"] = post_result
+            except Exception as e:
+                logger.error(f"Auto-approve/post failed for {venue}: {e}")
+                results["errors"].append(f"auto_approve_post: {str(e)}")
+
+    results["completed_at"] = melb_now().isoformat()
+
+    # Log completion
+    if results["errors"]:
+        log_system(f"Pre-race job completed with errors: {venue}", status="warning")
+    else:
+        log_system(f"Pre-race job completed: {venue}", status="success")
+
+    logger.info(f"Pre-race job complete for {meeting_id}: {results}")
+    return results
+
+
+async def meeting_post_race_job(meeting_id: str, retry_count: int = 0) -> dict:
+    """Run 30 minutes after last race for a meeting.
+
+    Steps:
+    1. Check all picks are settled
+    2. If not settled, reschedule retry (max 3 retries)
+    3. Generate wrap-up
+    4. Auto-approve if valid
+    5. Post to Twitter
+    6. Log activity
+
+    Returns: job result dict
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting
+    from punty.config import melb_now
+    from punty.ai.generator import ContentGenerator
+    from punty.scheduler.activity_log import log_scheduler_job, log_system
+    from punty.scheduler.automation import auto_approve_and_post, check_all_settled
+    from sqlalchemy import select
+
+    MAX_RETRIES = 3
+    RETRY_DELAY_MINUTES = 10
+
+    logger.info(f"Starting post-race job for {meeting_id} (retry: {retry_count})")
+    log_scheduler_job(f"Post-race job started: {meeting_id}", status="info")
+
+    results = {
+        "meeting_id": meeting_id,
+        "started_at": melb_now().isoformat(),
+        "retry_count": retry_count,
+        "steps": [],
+        "errors": [],
+    }
+
+    async with async_session() as db:
+        # Get meeting
+        result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+        meeting = result.scalar_one_or_none()
+
+        if not meeting:
+            results["errors"].append(f"Meeting not found: {meeting_id}")
+            return results
+
+        venue = meeting.venue
+
+        # Step 1: Check all picks are settled
+        all_settled, settled_count, total_count = await check_all_settled(meeting_id, db)
+        results["settlement"] = {
+            "all_settled": all_settled,
+            "settled": settled_count,
+            "total": total_count,
+        }
+
+        if not all_settled and retry_count < MAX_RETRIES:
+            logger.info(f"Not all picks settled ({settled_count}/{total_count}), scheduling retry...")
+            results["steps"].append(f"settlement_check: incomplete ({settled_count}/{total_count})")
+            results["retry_scheduled"] = True
+
+            # Schedule retry
+            from punty.scheduler.manager import scheduler_manager
+            from datetime import timedelta
+
+            retry_time = melb_now() + timedelta(minutes=RETRY_DELAY_MINUTES)
+            scheduler_manager.add_job(
+                f"{meeting_id}-post-race-retry-{retry_count + 1}",
+                lambda: meeting_post_race_job(meeting_id, retry_count + 1),
+                trigger_type="date",
+                run_date=retry_time,
+            )
+
+            log_system(f"Settlement incomplete, retry scheduled: {venue}", status="info")
+            return results
+
+        if not all_settled:
+            logger.warning(f"Max retries reached, proceeding with unsettled picks: {meeting_id}")
+            results["steps"].append("settlement_check: max_retries_reached")
+
+        # Step 2: Generate wrap-up
+        content_id = None
+        try:
+            logger.info(f"Step 2: Generating wrap-up for {venue}...")
+            generator = ContentGenerator(db)
+
+            async for event in generator.generate_meeting_wrapup_stream(meeting_id):
+                if event.get("status") == "error":
+                    raise Exception(event.get("label", "Unknown error"))
+                if event.get("content_id"):
+                    content_id = event.get("content_id")
+
+            results["steps"].append("generate_wrapup: success")
+            results["content_id"] = content_id
+        except Exception as e:
+            logger.error(f"Wrap-up generation failed for {venue}: {e}")
+            results["errors"].append(f"generate_wrapup: {str(e)}")
+
+        # Step 3 & 4: Auto-approve and post to Twitter
+        if content_id:
+            try:
+                logger.info(f"Step 3-4: Auto-approving and posting wrap-up for {venue}...")
+                post_result = await auto_approve_and_post(content_id, db)
+                results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
+                results["post_result"] = post_result
+            except Exception as e:
+                logger.error(f"Auto-approve/post failed for {venue}: {e}")
+                results["errors"].append(f"auto_approve_post: {str(e)}")
+
+    results["completed_at"] = melb_now().isoformat()
+
+    # Log completion
+    if results["errors"]:
+        log_system(f"Post-race job completed with errors: {venue}", status="warning")
+    else:
+        log_system(f"Post-race job completed: {venue}", status="success")
+
+    logger.info(f"Post-race job complete for {meeting_id}: {results}")
+    return results

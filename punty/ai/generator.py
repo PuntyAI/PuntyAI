@@ -145,10 +145,6 @@ class ContentGenerator:
             personality = load_prompt("personality")
             early_mail_prompt = load_prompt("early_mail")
             analysis_weights = await self.get_analysis_weights()
-            whatsapp_link = await self.get_setting(
-                "whatsapp_invite_link",
-                "https://punty.ai"
-            )
             yield evt("Prompts & weights loaded", "done")
 
             yield evt("Generating Early Mail with AI (this may take a moment)...")
@@ -163,9 +159,6 @@ class ContentGenerator:
 
 ## Analysis Framework Weights
 {analysis_weights}
-
-## WhatsApp Invite Link
-{whatsapp_link}
 """
             # Generate with rate limit retry and status feedback
             raw_content = None
@@ -354,11 +347,9 @@ class ContentGenerator:
         )
 
         # Save as new version
-        from punty.formatters.whatsapp import format_whatsapp
         from punty.formatters.twitter import format_twitter
 
         content.raw_content = raw_content
-        content.whatsapp_formatted = format_whatsapp(raw_content, content.content_type)
         content.twitter_formatted = format_twitter(raw_content, content.content_type)
         content.review_notes = f"Widened selections (was {len(favorites_detected)} favorites)"
 
@@ -741,10 +732,6 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             personality = load_prompt("personality")
             wrapup_prompt = load_prompt("wrap_up")
             analysis_weights = await self.get_analysis_weights()
-            whatsapp_link = await self.get_setting(
-                "whatsapp_invite_link",
-                "https://punty.ai"
-            )
             yield evt("Prompts loaded", "done")
 
             yield evt("Generating punt review with AI...")
@@ -753,9 +740,6 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
 
 ## Analysis Framework Weights
 {analysis_weights}
-
-## WhatsApp Invite Link
-{whatsapp_link}
 """
             # Generate with rate limit retry and status feedback
             raw_content = None
@@ -823,19 +807,12 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
         personality = load_prompt("personality")
         wrapup_prompt = load_prompt("wrap_up")
         analysis_weights = await self.get_analysis_weights()
-        whatsapp_link = await self.get_setting(
-            "whatsapp_invite_link",
-            "https://punty.ai"
-        )
 
         context_str = json.dumps(context, indent=2, default=str)
         system_prompt = f"""{personality}
 
 ## Analysis Framework Weights
 {analysis_weights}
-
-## WhatsApp Invite Link
-{whatsapp_link}
 """
 
         raw_content = await self.ai_client.generate_with_context(
@@ -1250,7 +1227,6 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
     ) -> Content:
         """Save generated content to database."""
         from punty.models.meeting import Race
-        from punty.formatters.whatsapp import format_whatsapp
         from punty.formatters.twitter import format_twitter
 
         # Get race_id if race_number provided
@@ -1269,7 +1245,6 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
         # Format for platforms
         raw_content = result["raw_content"]
         content_type = result["content_type"]
-        whatsapp_formatted = format_whatsapp(raw_content, content_type)
         twitter_formatted = format_twitter(raw_content, content_type)
 
         content = Content(
@@ -1281,7 +1256,6 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             status=ContentStatus.PENDING_REVIEW.value if requires_review else ContentStatus.APPROVED.value,
             requires_review=requires_review,
             raw_content=raw_content,
-            whatsapp_formatted=whatsapp_formatted,
             twitter_formatted=twitter_formatted,
         )
 
