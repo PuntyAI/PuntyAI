@@ -100,7 +100,7 @@ async def scrape_meeting_exotics(
                 re.IGNORECASE,
             )
             if m and i + 2 < len(td_texts):
-                pool_name = m.group(1).lower()
+                pool_name = m.group(1).lower().replace(" ", "")
                 # combo is next, dividend after
                 combo = td_texts[i + 1].strip()
                 div_text = td_texts[i + 2].strip().replace(",", "")
