@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from punty.config import settings
-from punty.auth import AuthMiddleware, CSRFMiddleware, router as auth_router, PUBLIC_SITE_HOSTS, PUBLIC_SITE_PATHS
+from punty.auth import AuthMiddleware, CSRFMiddleware, router as auth_router, PUBLIC_SITE_HOSTS, PUBLIC_SITE_PATHS, PUBLIC_SITE_PREFIXES_EXTRA
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
 from punty.public.routes import router as public_router
@@ -33,7 +33,8 @@ class HostnameRoutingMiddleware(BaseHTTPMiddleware):
 
         # If on public host and requesting a public site path, rewrite to /public prefix
         # This allows both routers to coexist
-        if is_public_host and path in PUBLIC_SITE_PATHS:
+        is_public_path = path in PUBLIC_SITE_PATHS or any(path.startswith(p) for p in PUBLIC_SITE_PREFIXES_EXTRA)
+        if is_public_host and is_public_path:
             # Modify scope to add internal prefix for routing
             # Handle root path specially to avoid trailing slash redirect
             if path == "/":
