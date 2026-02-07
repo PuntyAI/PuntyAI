@@ -479,13 +479,13 @@
                     Edit the personality prompt that defines how Punty writes content.
                     This is loaded from <code class="bg-gray-100 px-1 rounded">prompts/personality.md</code>
                 </p>
-                <textarea class="w-full h-64 bg-punty-card2 border border-punty-border text-white rounded-lg p-4 font-mono text-sm"
+                <textarea id="personality-textarea" class="w-full h-64 bg-punty-card2 border border-punty-border text-white rounded-lg p-4 font-mono text-sm"
                           placeholder="Loading personality prompt...">{{ personality_prompt }}</textarea>
                 <div class="mt-4 flex justify-end space-x-3">
-                    <button class="text-gray-500 hover:text-gray-700 px-4 py-2">
+                    <button onclick="resetPersonality()" class="text-gray-500 hover:text-gray-700 px-4 py-2">
                         Reset to Default
                     </button>
-                    <button class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
+                    <button onclick="savePersonality()" class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
                         Save Personality
                     </button>
                 </div>
@@ -730,6 +730,47 @@ async function testEmail() {
         statusEl.textContent = 'Error sending';
         statusEl.style.color = 'red';
         showToast('Failed to send test email', 'error');
+    }
+}
+
+// Personality functions
+async function savePersonality() {
+    const textarea = document.getElementById('personality-textarea');
+    const content = textarea.value;
+
+    try {
+        const resp = await fetch('/api/settings/personality', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify({content: content})
+        });
+
+        if (!resp.ok) {
+            const err = await resp.text();
+            showToast('Save failed: ' + err, 'error');
+            return;
+        }
+
+        const data = await resp.json();
+        showToast('Personality saved (' + data.length + ' chars)', 'success');
+    } catch (e) {
+        showToast('Save failed: ' + e.message, 'error');
+    }
+}
+
+async function resetPersonality() {
+    if (!confirm('Reset personality to default? This will reload the page.')) return;
+
+    try {
+        const resp = await fetch('/api/settings/personality');
+        const data = await resp.json();
+        document.getElementById('personality-textarea').value = data.content;
+        showToast('Personality reloaded from file', 'success');
+    } catch (e) {
+        showToast('Reset failed: ' + e.message, 'error');
     }
 }
 </script>

@@ -1,13 +1,13 @@
 # EARLY_MAIL v1.3 — WhatsApp-safe, Email-ready, Lanes + Exotics
 
 ## JOB
-Produce a single, humorous, flowing PUNTY EARLY MAIL message for email and WhatsApp (pre-meeting only). Set the day's narrative and track expectations; highlight a clear "Big 3 + Multi" spine; walk race-by-race with Top 3 + Roughie (with odds); choose ONE high-value exotic per race ("Degenerate Exotic of the Race"); present Quaddie / Big 6 as lanes (Skinny, Balanced, Wide); finish with smart Nuggets, a one-line invite with link, and a fresh outro titled *FINAL WORD FROM THE CUNT FACTORY* that ends with "Gamble Responsibly."
+Produce a single, humorous, flowing PUNTY EARLY MAIL message for email and WhatsApp (pre-meeting only). Set the day's narrative and track expectations; highlight a clear "Big 3 + Multi" spine; walk race-by-race with Top 3 + Roughie (with odds); choose ONE high-value exotic per race ("Degenerate Exotic of the Race"); present Quaddie / Big 6 as lanes (Skinny, Balanced, Wide); finish with smart Nuggets, a one-line invite with link, and a fresh outro titled *FINAL WORD FROM THE SICKO SANCTUARY* (or similar — rotate between: THE CHAOS KITCHEN, THE DEGEN DEN, THE LOOSE UNIT LOUNGE, THE RATBAG REPORT, PUNTY'S PULPIT) that ends with "Gamble Responsibly."
 
 ## OUTPUT ORDER (exact, with these headings)
 
 ### 1) HEADER
 *PUNTY EARLY MAIL – {MEET_NAME} ({DATE})*
-Rightio Cunts —
+Rightio Legends — (rotate between: Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, You Feral Lot, Cooked Units, Absolute Units)
 Use a fresh, cheeky opening paragraph that sets the pre-meet vibe. Keep it punchy and unique each run.
 
 ### 2) *MEET SNAPSHOT*
@@ -99,7 +99,7 @@ Wide ($100): {L1_WIDE} / {L2_WIDE} / {L3_WIDE} / {L4_WIDE} / {L5_WIDE} / {L6_WID
 ### 7) *FIND OUT MORE*
 Want to know more about Punty? Check out [punty.ai](https://punty.ai)
 
-### 8) *FINAL WORD FROM THE CUNT FACTORY*
+### 8) *FINAL WORD FROM THE SICKO SANCTUARY* (or rotate: THE CHAOS KITCHEN, THE DEGEN DEN, PUNTY'S PULPIT, THE LOOSE UNIT LOUNGE)
 Fresh 1–3 sentence closer in Punty's voice that does not repeat prior runs. Must end with the exact words: "Gamble Responsibly."
 
 ## PUNTING FORM INSIGHTS

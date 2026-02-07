@@ -368,8 +368,9 @@ class TestGetMeetingTips:
             result = await get_meeting_tips(sample_meeting.id)
 
         assert result is not None
-        assert result["early_mail"]["content"] == "Early mail content"
-        assert result["wrapup"]["content"] == "Wrap-up content"
+        # Content is now HTML formatted
+        assert "<p>Early mail content</p>" in result["early_mail"]["content"]
+        assert "<p>Wrap-up content</p>" in result["wrapup"]["content"]
         assert result["meeting"]["venue"] == "Test Venue"
 
     @pytest.mark.asyncio

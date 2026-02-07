@@ -227,6 +227,30 @@ class TestEmailRequest(BaseModel):
     to_email: str
 
 
+class PersonalityUpdate(BaseModel):
+    """Update personality prompt."""
+    content: str
+
+
+@router.get("/personality")
+async def get_personality():
+    """Get the personality prompt."""
+    from pathlib import Path
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
+    if prompt_path.exists():
+        return {"content": prompt_path.read_text(encoding="utf-8")}
+    return {"content": ""}
+
+
+@router.put("/personality")
+async def save_personality(update: PersonalityUpdate):
+    """Save the personality prompt."""
+    from pathlib import Path
+    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "personality.md"
+    prompt_path.write_text(update.content, encoding="utf-8")
+    return {"status": "saved", "length": len(update.content)}
+
+
 @router.post("/test-email")
 async def test_email(request: TestEmailRequest):
     """Send a test email to verify SMTP settings."""

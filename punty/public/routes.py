@@ -405,6 +405,11 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not early_mail and not wrapup:
             return None
 
+        # Generate seed from meeting date for consistent rotation
+        seed = hash(meeting.id) if meeting.id else 0
+
+        from punty.formatters.html import format_html
+
         return {
             "meeting": {
                 "id": meeting.id,
@@ -416,11 +421,11 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "rail_position": meeting.rail_position,
             },
             "early_mail": {
-                "content": early_mail.raw_content,
+                "content": format_html(early_mail.raw_content, "early_mail", seed),
                 "created_at": early_mail.created_at.isoformat() if early_mail.created_at else None,
             } if early_mail else None,
             "wrapup": {
-                "content": wrapup.raw_content,
+                "content": format_html(wrapup.raw_content, "meeting_wrapup", seed + 1),
                 "created_at": wrapup.created_at.isoformat() if wrapup.created_at else None,
             } if wrapup else None,
         }
