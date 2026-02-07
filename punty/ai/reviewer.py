@@ -64,10 +64,8 @@ class ContentReviewer:
         content.status = ContentStatus.PENDING_REVIEW.value
         content.review_notes = f"AI Fix applied: {issue_type}" + (f" - {notes}" if notes else "")
 
-        # Re-format for platforms
-        from punty.formatters.whatsapp import format_whatsapp
+        # Re-format for Twitter
         from punty.formatters.twitter import format_twitter
-        content.whatsapp_formatted = format_whatsapp(content.raw_content, content.content_type)
         content.twitter_formatted = format_twitter(content.raw_content, content.content_type)
 
         await self.db.commit()
@@ -166,10 +164,8 @@ Generate the adjusted version.""",
         content.status = ContentStatus.PENDING_REVIEW.value
         content.review_notes = "Regenerated" + (f": {additional_instructions}" if additional_instructions else "")
 
-        # Re-format for platforms
-        from punty.formatters.whatsapp import format_whatsapp
+        # Re-format for Twitter
         from punty.formatters.twitter import format_twitter
-        content.whatsapp_formatted = format_whatsapp(content.raw_content, content.content_type)
         content.twitter_formatted = format_twitter(content.raw_content, content.content_type)
 
         await self.db.commit()

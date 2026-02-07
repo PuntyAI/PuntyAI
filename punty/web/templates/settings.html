@@ -196,25 +196,12 @@
             </div>
         </div>
 
-        <!-- WhatsApp Settings -->
+        <!-- Punty Persona Settings -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-punty-border">
-                <h2 class="text-lg font-semibold text-gray-900">WhatsApp Settings</h2>
+                <h2 class="text-lg font-semibold text-gray-900">Persona Settings</h2>
             </div>
             <div class="p-6 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Group Invite Link</label>
-                    <input type="url"
-                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
-                           placeholder="https://chat.whatsapp.com/..."
-                           value="{{ settings.get('whatsapp_invite_link', {}).get('value', '') }}"
-                           hx-put="/api/settings/whatsapp_invite_link"
-                           hx-trigger="change"
-                           hx-swap="none"
-                           name="value">
-                    <p class="text-xs text-gray-500 mt-1">The only link allowed in Early Mail</p>
-                </div>
-
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            class="rounded text-punty-coral focus:ring-punty-coral"
@@ -303,33 +290,6 @@
                             <button onclick="saveApiKeys('twitter', {twitter_api_key: document.getElementById('tw_api_key').value, twitter_api_secret: document.getElementById('tw_api_secret').value, twitter_access_token: document.getElementById('tw_access_token').value, twitter_access_secret: document.getElementById('tw_access_secret').value})"
                                     class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
                             <button onclick="document.getElementById('twitter-edit').classList.add('hidden'); document.getElementById('twitter-display').classList.remove('hidden')"
-                                    class="text-gray-500 hover:underline text-sm">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- WhatsApp -->
-                <div id="whatsapp-section">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Business API</label>
-                    <div id="whatsapp-display" class="flex items-center space-x-2">
-                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
-                            {{ api_key_status.whatsapp if api_key_status.whatsapp else 'Not configured' }}
-                        </span>
-                        <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.whatsapp else 'bg-red-100 text-red-700' }}">
-                            {{ 'Active' if api_key_status.whatsapp else 'Missing' }}
-                        </span>
-                        <button onclick="document.getElementById('whatsapp-edit').classList.remove('hidden'); this.parentElement.classList.add('hidden')"
-                                class="text-punty-coral hover:underline text-sm">Configure</button>
-                    </div>
-                    <div id="whatsapp-edit" class="hidden space-y-2 mt-2">
-                        <input type="text" id="wa_api_token" placeholder="API Token"
-                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
-                        <input type="text" id="wa_phone_id" placeholder="Phone Number ID"
-                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
-                        <div class="flex space-x-2">
-                            <button onclick="saveApiKeys('whatsapp', {whatsapp_api_token: document.getElementById('wa_api_token').value, whatsapp_phone_number_id: document.getElementById('wa_phone_id').value})"
-                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
-                            <button onclick="document.getElementById('whatsapp-edit').classList.add('hidden'); document.getElementById('whatsapp-display').classList.remove('hidden')"
                                     class="text-gray-500 hover:underline text-sm">Cancel</button>
                         </div>
                     </div>

@@ -87,29 +87,8 @@
                     <h2 class="text-lg font-semibold text-gray-900">Platform Previews</h2>
                 </div>
                 <div class="p-6">
-                    <div class="flex border-b border-gray-200 mb-4">
-                        <button class="px-4 py-2 border-b-2 border-punty-coral text-punty-coral font-medium"
-                                onclick="showPreview('whatsapp')">
-                            WhatsApp
-                        </button>
-                        <button class="px-4 py-2 text-gray-500 hover:text-gray-700"
-                                onclick="showPreview('twitter')">
-                            Twitter/X
-                        </button>
-                    </div>
-
-                    <!-- WhatsApp Preview -->
-                    <div id="preview-whatsapp" class="preview-panel">
-                        <div style="background: #efeae2; border-radius: 12px; padding: 0.75rem; max-width: 520px; margin-left: auto; background-image: url('data:image/svg+xml,&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;200&quot; height=&quot;200&quot;&gt;&lt;rect fill=&quot;%23efeae2&quot; width=&quot;200&quot; height=&quot;200&quot;/&gt;&lt;circle fill=&quot;%23e4dfd7&quot; cx=&quot;50&quot; cy=&quot;50&quot; r=&quot;1.5&quot;/&gt;&lt;circle fill=&quot;%23e4dfd7&quot; cx=&quot;150&quot; cy=&quot;150&quot; r=&quot;1.5&quot;/&gt;&lt;/svg&gt;');">
-                            <div id="wa-bubble" style="background: #d9fdd3; border-radius: 8px; padding: 0.75rem 1rem; color: #111b21; font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 0.85rem; line-height: 1.45; box-shadow: 0 1px 0.5px rgba(11,20,26,0.13);"></div>
-                            <div style="text-align: right; font-size: 0.65rem; color: #667781; margin-top: 0.25rem; padding-right: 0.5rem;">
-                                {{ content.created_at|melb('%H:%M') }} <span style="color:#53bdeb;">&#x2713;&#x2713;</span>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Twitter Preview -->
-                    <div id="preview-twitter" class="preview-panel hidden">
+                    <div id="preview-twitter" class="preview-panel">
                         <div class="border border-gray-200 rounded-xl p-4 max-w-md">
                             <div class="flex items-start space-x-3">
                                 <div class="w-12 h-12 bg-punty-coral rounded-full flex items-center justify-center text-white text-xl">
@@ -183,14 +162,6 @@
                         &#x21A9; Unapprove
                     </button>
                     <hr class="my-4">
-                    <button hx-post="/api/delivery/send"
-                            hx-ext="json-enc"
-                            hx-vals='{"content_id": "{{ content.id }}", "platform": "whatsapp"}'
-                            hx-swap="none"
-                            hx-on::after-request="if(event.detail.successful) showToast('Sent to WhatsApp!', 'success'); else showToast('Failed to send', 'error');"
-                            class="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
-                        Send to WhatsApp
-                    </button>
                     <button hx-post="/api/delivery/send"
                             hx-ext="json-enc"
                             hx-vals='{"content_id": "{{ content.id }}", "platform": "twitter"}'
@@ -273,38 +244,6 @@
 </div>
 
 <script>
-function showPreview(platform) {
-    document.querySelectorAll('.preview-panel').forEach(p => p.classList.add('hidden'));
-    document.getElementById('preview-' + platform).classList.remove('hidden');
-}
-
-// Render WhatsApp formatting as HTML
-(function() {
-    var raw = {{ (content.whatsapp_formatted or content.raw_content or 'No content')|tojson }};
-    var bubble = document.getElementById('wa-bubble');
-    if (!bubble) return;
-
-    // Escape HTML first
-    var html = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    // WhatsApp formatting (process line by line to avoid cross-line matches)
-    var lines = html.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-        // *bold* — but not inside words
-        lines[i] = lines[i].replace(/(^|[\s(])\*([^*\n]+?)\*([\s),.:;!?]|$)/g, '$1<b>$2</b>$3');
-        // _italic_
-        lines[i] = lines[i].replace(/(^|[\s(])_([^_\n]+?)_([\s),.:;!?]|$)/g, '$1<i>$2</i>$3');
-        // ~strikethrough~
-        lines[i] = lines[i].replace(/(^|[\s(])~([^~\n]+?)~([\s),.:;!?]|$)/g, '$1<s>$2</s>$3');
-        // ```monospace```
-        lines[i] = lines[i].replace(/```([^`]+?)```/g, '<code style="background:rgba(0,0,0,0.06);padding:0.1em 0.3em;border-radius:3px;font-family:monospace;font-size:0.85em;">$1</code>');
-    }
-    html = lines.join('\n');
-
-    // Preserve line breaks
-    html = html.replace(/\n/g, '<br>');
-
-    bubble.innerHTML = html;
-})();
+// No preview switching needed - only Twitter preview now
 </script>
 {% endblock %}

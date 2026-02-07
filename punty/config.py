@@ -61,10 +61,6 @@ class Settings(BaseSettings):
     twitter_access_token: str = ""
     twitter_access_secret: str = ""
 
-    # WhatsApp Business API
-    whatsapp_api_token: str = ""
-    whatsapp_phone_number_id: str = ""
-
     # Google OAuth
     google_client_id: str = ""
     google_client_secret: str = ""

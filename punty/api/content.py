@@ -322,7 +322,6 @@ async def update_content(
 ):
     """Update content manually."""
     from punty.models.content import Content
-    from punty.formatters.whatsapp import format_whatsapp
     from punty.formatters.twitter import format_twitter
     from sqlalchemy import select
 
@@ -332,8 +331,6 @@ async def update_content(
         raise HTTPException(status_code=404, detail="Content not found")
 
     content.raw_content = raw_content
-    # Re-format for platforms
-    content.whatsapp_formatted = format_whatsapp(raw_content, content.content_type)
     content.twitter_formatted = format_twitter(raw_content, content.content_type)
 
     await db.commit()
@@ -342,9 +339,8 @@ async def update_content(
 
 @router.post("/{content_id}/format")
 async def format_content(content_id: str, db: AsyncSession = Depends(get_db)):
-    """Re-format content for all platforms."""
+    """Re-format content for Twitter."""
     from punty.models.content import Content
-    from punty.formatters.whatsapp import format_whatsapp
     from punty.formatters.twitter import format_twitter
     from sqlalchemy import select
 
@@ -353,8 +349,6 @@ async def format_content(content_id: str, db: AsyncSession = Depends(get_db)):
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
 
-    # Re-format for platforms
-    content.whatsapp_formatted = format_whatsapp(content.raw_content, content.content_type)
     content.twitter_formatted = format_twitter(content.raw_content, content.content_type)
 
     await db.commit()

@@ -142,10 +142,6 @@ class AppSettings(Base):
 
     # Default settings
     DEFAULTS = {
-        "whatsapp_invite_link": {
-            "value": "https://chat.whatsapp.com/GfYvzcQ4f4L6o0XMw0lgx1",
-            "description": "WhatsApp group invite link for Early Mail",
-        },
         "unit_value": {
             "value": "1",
             "description": "Value of 1U in dollars",
@@ -189,14 +185,6 @@ class AppSettings(Base):
         "twitter_access_secret": {
             "value": "",
             "description": "Twitter/X access secret",
-        },
-        "whatsapp_api_token": {
-            "value": "",
-            "description": "WhatsApp Business API token",
-        },
-        "whatsapp_phone_number_id": {
-            "value": "",
-            "description": "WhatsApp phone number ID",
         },
         "resend_api_key": {
             "value": "",

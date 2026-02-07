@@ -28,7 +28,7 @@ class TwitterFormatter:
         "featured": ["#MelbourneCup", "#CoxPlate", "#GoldenSlipper"],
     }
 
-    # Emojis (same as WhatsApp but used more sparingly)
+    # Emojis (used sparingly per PUNTY_MASTER rules)
     EMOJIS = {
         "horse": "\U0001F40E",
         "racing": "\U0001F3C7",

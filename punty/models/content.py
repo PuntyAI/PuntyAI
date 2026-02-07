@@ -103,7 +103,6 @@ class Content(Base):
 
     # Content
     raw_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    whatsapp_formatted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     twitter_formatted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Review
@@ -112,7 +111,6 @@ class Content(Base):
     # Scheduling
     scheduled_send_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    sent_to_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
     sent_to_twitter: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Timestamps
@@ -136,14 +134,12 @@ class Content(Base):
             "status": self.status,
             "requires_review": self.requires_review,
             "raw_content": self.raw_content,
-            "whatsapp_formatted": self.whatsapp_formatted,
             "twitter_formatted": self.twitter_formatted,
             "review_notes": self.review_notes,
             "scheduled_send_at": (
                 self.scheduled_send_at.isoformat() if self.scheduled_send_at else None
             ),
             "sent_at": self.sent_at.isoformat() if self.sent_at else None,
-            "sent_to_whatsapp": self.sent_to_whatsapp,
             "sent_to_twitter": self.sent_to_twitter,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),

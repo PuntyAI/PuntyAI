@@ -91,13 +91,9 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm">
                             <div class="flex space-x-1">
-                                {% if item.sent_to_whatsapp %}
-                                <span class="text-green-600" title="Sent to WhatsApp">&#x2705; WA</span>
-                                {% endif %}
                                 {% if item.sent_to_twitter %}
                                 <span class="text-green-600" title="Sent to Twitter">&#x2705; X</span>
-                                {% endif %}
-                                {% if not item.sent_to_whatsapp and not item.sent_to_twitter %}
+                                {% else %}
                                 <span class="text-gray-400">-</span>
                                 {% endif %}
                             </div>

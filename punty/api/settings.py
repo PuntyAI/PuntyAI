@@ -192,7 +192,6 @@ async def update_setting(key: str, update: SettingUpdate, db: AsyncSession = Dep
 PROVIDER_KEYS = {
     "openai": ["openai_api_key"],
     "twitter": ["twitter_api_key", "twitter_api_secret", "twitter_access_token", "twitter_access_secret"],
-    "whatsapp": ["whatsapp_api_token", "whatsapp_phone_number_id"],
     "smtp": ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from"],
     "resend": ["resend_api_key", "email_from", "notification_email"],
 }
@@ -200,7 +199,7 @@ PROVIDER_KEYS = {
 
 @router.put("/api-keys/{provider}")
 async def update_api_keys(provider: str, update: ApiKeysUpdate, db: AsyncSession = Depends(get_db)):
-    """Update API keys for a provider (openai, twitter, whatsapp)."""
+    """Update API keys for a provider (openai, twitter, smtp, resend)."""
     from punty.models.settings import AppSettings
 
     allowed = PROVIDER_KEYS.get(provider)

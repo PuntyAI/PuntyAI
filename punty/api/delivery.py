@@ -14,7 +14,7 @@ class SendRequest(BaseModel):
     """Request to send content to a platform."""
 
     content_id: str
-    platform: str  # whatsapp, twitter
+    platform: str  # twitter
     schedule_at: Optional[str] = None  # ISO datetime, or None for immediate
 
 
@@ -156,12 +156,6 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    elif request.platform == "whatsapp":
-        # WhatsApp delivery not yet implemented
-        raise HTTPException(
-            status_code=501, detail="WhatsApp delivery not yet implemented"
-        )
-
     else:
         raise HTTPException(status_code=400, detail=f"Unknown platform: {request.platform}")
 
@@ -179,15 +173,7 @@ async def preview_content(
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
 
-    if platform == "whatsapp":
-        formatted = content.whatsapp_formatted or content.raw_content
-        return {
-            "content_id": content_id,
-            "platform": platform,
-            "formatted": formatted,
-            "character_count": len(formatted) if formatted else 0,
-        }
-    elif platform == "twitter":
+    if platform == "twitter":
         # For Twitter, show thread preview
         from punty.delivery.twitter import TwitterDelivery
 

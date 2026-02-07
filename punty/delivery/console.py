@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.config import melb_now
-from punty.formatters.whatsapp import format_whatsapp
 from punty.formatters.twitter import format_twitter
 
 logger = logging.getLogger(__name__)
@@ -23,13 +22,13 @@ class ConsoleDelivery:
     async def preview(
         self,
         content_id: str,
-        platform: str = "whatsapp",
+        platform: str = "twitter",
     ) -> dict:
         """Preview formatted content for a platform.
 
         Args:
             content_id: ID of content to preview
-            platform: Target platform (whatsapp, twitter)
+            platform: Target platform (twitter)
 
         Returns:
             Dict with formatted content and metadata
@@ -53,10 +52,8 @@ class ConsoleDelivery:
         meeting = meeting_result.scalar_one_or_none()
         venue = meeting.venue if meeting else None
 
-        # Format based on platform
-        if platform == "whatsapp":
-            formatted = format_whatsapp(content.raw_content, content.content_type)
-        elif platform == "twitter":
+        # Format for Twitter
+        if platform == "twitter":
             formatted = format_twitter(content.raw_content, content.content_type, venue)
         else:
             formatted = content.raw_content
