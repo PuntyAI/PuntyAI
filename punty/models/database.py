@@ -174,6 +174,9 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_age ON race_assessments(age_restriction)",
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_sex ON race_assessments(sex_restriction)",
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_state ON race_assessments(state)",
+            # Settlement query indexes
+            "CREATE INDEX IF NOT EXISTS ix_races_meeting_status ON races(meeting_id, results_status)",
+            "CREATE INDEX IF NOT EXISTS ix_picks_type_settled ON picks(meeting_id, pick_type, settled)",
         ]:
             try:
                 await conn.execute(_text(idx))

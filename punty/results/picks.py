@@ -185,15 +185,42 @@ async def _settle_picks_for_race_impl(
             Pick.settled == False,
         )
     )
-    for multi_pick in result.scalars().all():
-        # Find all big3 individual picks for same content
-        b3_result = await db.execute(
-            select(Pick).where(
-                Pick.content_id == multi_pick.content_id,
-                Pick.pick_type == "big3",
+    big3_multi_picks = result.scalars().all()
+
+    # Batch-load all big3 individual picks and their races for multi settlement
+    if big3_multi_picks:
+        content_ids = [mp.content_id for mp in big3_multi_picks if mp.content_id]
+        if content_ids:
+            b3_all_result = await db.execute(
+                select(Pick).where(
+                    Pick.content_id.in_(content_ids),
+                    Pick.pick_type == "big3",
+                )
             )
-        )
-        big3_picks = b3_result.scalars().all()
+            all_big3_picks = b3_all_result.scalars().all()
+            big3_by_content = {}
+            for p in all_big3_picks:
+                big3_by_content.setdefault(p.content_id, []).append(p)
+
+            # Batch-load all races referenced by big3 picks
+            b3_race_nums = {p.race_number for p in all_big3_picks if p.race_number}
+            b3_race_ids = [f"{meeting_id}-r{rn}" for rn in b3_race_nums]
+            if b3_race_ids:
+                b3_races_result = await db.execute(
+                    select(Race).where(Race.id.in_(b3_race_ids))
+                )
+                b3_race_map = {r.id: r for r in b3_races_result.scalars().all()}
+            else:
+                b3_race_map = {}
+        else:
+            big3_by_content = {}
+            b3_race_map = {}
+    else:
+        big3_by_content = {}
+        b3_race_map = {}
+
+    for multi_pick in big3_multi_picks:
+        big3_picks = big3_by_content.get(multi_pick.content_id, [])
         if not big3_picks:
             continue
 
@@ -207,8 +234,7 @@ async def _settle_picks_for_race_impl(
         for b3_pick in big3_picks:
             if b3_pick.race_number:
                 b3_race_id = f"{meeting_id}-r{b3_pick.race_number}"
-                b3_race_result = await db.execute(select(Race).where(Race.id == b3_race_id))
-                b3_race = b3_race_result.scalar_one_or_none()
+                b3_race = b3_race_map.get(b3_race_id)
                 if not b3_race or b3_race.results_status not in ("Paying", "Closed"):
                     all_races_complete = False
                     break

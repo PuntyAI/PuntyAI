@@ -160,17 +160,26 @@ class ContentGenerator:
 ## Analysis Framework Weights
 {analysis_weights}
 """
-            # Generate with rate limit retry and status feedback
+            # Generate with rate limit retry, timeout, and status feedback
             raw_content = None
             for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
                 try:
-                    raw_content = await self.ai_client.generate_with_context(
-                        system_prompt=system_prompt,
-                        context=context_str,
-                        instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
-                        temperature=0.8,
+                    raw_content = await asyncio.wait_for(
+                        self.ai_client.generate_with_context(
+                            system_prompt=system_prompt,
+                            context=context_str,
+                            instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
+                            temperature=0.8,
+                        ),
+                        timeout=180.0,  # 3 minute timeout
                     )
                     break  # Success
+                except asyncio.TimeoutError:
+                    logger.error(f"AI generation timed out for {venue} (attempt {attempt + 1})")
+                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                        yield evt(f"Generation timed out — retrying (attempt {attempt + 2})...", "warning")
+                    else:
+                        raise Exception(f"AI generation timed out after {MAX_RATE_LIMIT_RETRIES + 1} attempts")
                 except RateLimitError as e:
                     if attempt < MAX_RATE_LIMIT_RETRIES:
                         logger.warning(f"Rate limit hit for {venue}, pausing {RATE_LIMIT_PAUSE}s (attempt {attempt + 1}/{MAX_RATE_LIMIT_RETRIES + 1})")

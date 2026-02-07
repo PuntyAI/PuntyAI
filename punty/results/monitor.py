@@ -41,6 +41,7 @@ class ResultsMonitor:
         self.last_check: Optional[datetime] = None
         self.poll_interval = POLL_MIN  # display value
         self.consecutive_errors = 0
+        self._last_reset_date = datetime.now(AEST).date()
 
     def start(self):
         if self.running:
@@ -146,6 +147,16 @@ class ResultsMonitor:
     async def _poll_loop(self):
         self.consecutive_errors = 0
         while self.running:
+            # Reset tracking state at midnight to prevent unbounded growth
+            today = datetime.now(AEST).date()
+            if today > self._last_reset_date:
+                old_races = sum(len(s) for s in self.processed_races.values())
+                old_wrapups = len(self.wrapups_generated)
+                self.processed_races.clear()
+                self.wrapups_generated.clear()
+                self._last_reset_date = today
+                logger.info(f"Daily reset: cleared {old_races} processed races, {old_wrapups} wrapups")
+
             try:
                 if await self._should_be_monitoring():
                     await self._check_all_meetings()

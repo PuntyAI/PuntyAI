@@ -43,6 +43,12 @@ class AIClient:
             self._client = AsyncOpenAI(api_key=key)
         return self._client
 
+    async def close(self) -> None:
+        """Close the underlying HTTP client to free connections."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+
     def _parse_retry_after(self, error_message: str) -> float:
         """Extract retry delay from rate limit error message."""
         # Look for "Please try again in X.XXs" or "Please try again in Xs"
