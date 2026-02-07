@@ -225,6 +225,27 @@
         </div>
     </div>
 
+    <!-- Activity Log & Pending Jobs -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <h2 class="text-lg font-semibold text-gray-900">Activity Log</h2>
+                <span id="dash-scrape-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Idle</span>
+            </div>
+            <a href="/settings" class="text-punty-coral hover:underline text-sm">Settings</a>
+        </div>
+        <div class="p-4">
+            <!-- Pending Jobs -->
+            <div id="dash-pending-jobs" class="flex flex-wrap gap-2 mb-3">
+                <span class="text-xs text-gray-400">Loading jobs...</span>
+            </div>
+            <!-- Log Entries -->
+            <div id="dash-activity-log" class="font-mono text-xs max-h-64 overflow-y-auto space-y-0.5">
+                <span class="text-gray-400">Loading...</span>
+            </div>
+        </div>
+    </div>
+
     <!-- 3) Today's Performance -->
     {% if performance and performance.total_bets > 0 %}
     <div class="bg-white rounded-lg shadow p-4 sm:p-6">
@@ -610,6 +631,83 @@ function updateMonitorUI() {
     }
     updateCountdowns();
     setInterval(updateCountdowns, 60000); // Update every minute
+})();
+
+// --- Activity Log ---
+(function() {
+    var statusIcons = {success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u25CB'};
+    var statusColors = {
+        success: 'text-green-500',
+        error: 'text-red-500',
+        warning: 'text-yellow-500',
+        info: 'text-gray-400'
+    };
+
+    function refreshDashActivityLog() {
+        fetch('/api/scheduler/full-status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Scrape status badge
+                var badge = document.getElementById('dash-scrape-status');
+                if (badge) {
+                    if (data.scrape_in_progress) {
+                        badge.textContent = 'Scraping: ' + (data.current_scrape || '...');
+                        badge.className = 'text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse';
+                    } else {
+                        badge.textContent = 'Idle';
+                        badge.className = 'text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500';
+                    }
+                }
+
+                // Pending jobs
+                var jobsEl = document.getElementById('dash-pending-jobs');
+                if (jobsEl && data.pending_jobs) {
+                    if (data.pending_jobs.length === 0) {
+                        jobsEl.innerHTML = '<span class="text-xs text-gray-400">No pending jobs</span>';
+                    } else {
+                        var html = '';
+                        data.pending_jobs.forEach(function(job) {
+                            var name = job.name || job.id || '?';
+                            // Shorten job names
+                            name = name.replace(/-2026-\d{2}-\d{2}/, '').replace('setup_meeting_automation.<locals>.', '');
+                            var time = job.next_run || '';
+                            html += '<span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">' +
+                                '<span class="font-medium">' + name + '</span>' +
+                                (time ? '<span class="text-indigo-400">' + time + '</span>' : '') +
+                                '</span>';
+                        });
+                        jobsEl.innerHTML = html;
+                    }
+                }
+
+                // Activity log entries
+                var logEl = document.getElementById('dash-activity-log');
+                if (logEl && data.activity_log) {
+                    if (data.activity_log.length === 0) {
+                        logEl.innerHTML = '<span class="text-gray-400">No activity yet</span>';
+                    } else {
+                        var html = '';
+                        data.activity_log.forEach(function(entry) {
+                            var icon = statusIcons[entry.status] || '\u25CB';
+                            var colorClass = statusColors[entry.status] || 'text-gray-400';
+                            var time = entry.time_str || '';
+                            var msg = entry.message || '';
+                            var venue = entry.venue ? ' <span class="text-gray-500">[' + entry.venue + ']</span>' : '';
+                            html += '<div class="flex items-start gap-2 py-0.5">' +
+                                '<span class="text-gray-500 shrink-0 w-12">' + time + '</span>' +
+                                '<span class="' + colorClass + ' shrink-0">' + icon + '</span>' +
+                                '<span class="text-gray-300">' + msg + venue + '</span>' +
+                                '</div>';
+                        });
+                        logEl.innerHTML = html;
+                    }
+                }
+            })
+            .catch(function(e) { console.error('Activity log fetch failed:', e); });
+    }
+
+    refreshDashActivityLog();
+    setInterval(refreshDashActivityLog, 10000);
 })();
 
 {% if cumulative_pnl and cumulative_pnl|length > 0 %}
