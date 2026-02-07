@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-from typing import Optional
+from typing import Optional, Literal
 
 from openai import AsyncOpenAI, RateLimitError
 
@@ -15,18 +15,23 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
 
+# Reasoning effort levels for GPT-5.2 Responses API
+ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
+
 
 class AIClient:
-    """Wrapper for OpenAI API client."""
+    """Wrapper for OpenAI API client using Responses API for GPT-5.2."""
 
     def __init__(
         self,
         model: str = "gpt-5.2",
         api_key: Optional[str] = None,
+        reasoning_effort: ReasoningEffort = "high",
     ):
         self.model = model
         self._api_key = api_key
         self._client: Optional[AsyncOpenAI] = None
+        self.reasoning_effort = reasoning_effort
 
     @property
     def client(self) -> AsyncOpenAI:
@@ -53,7 +58,7 @@ class AIClient:
         temperature: float = 0.8,
         max_tokens: int = 16000,
     ) -> str:
-        """Generate content using OpenAI API.
+        """Generate content using OpenAI Responses API with reasoning.
 
         Args:
             system_prompt: System message defining Punty's personality
@@ -71,25 +76,34 @@ class AIClient:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                # Build request parameters
-                params = {
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                }
-
-                # Note: reasoning parameter requires Responses API, not Chat Completions
-                # GPT-5.2 still works well with Chat Completions, just without configurable reasoning effort
+                # Use Responses API for GPT-5.2 with reasoning
                 if self.model.startswith("gpt-5"):
-                    logger.info(f"Using {self.model}")
+                    logger.info(f"Using {self.model} with reasoning_effort={self.reasoning_effort}")
+                    response = await self.client.responses.create(
+                        model=self.model,
+                        input=[
+                            {"role": "developer", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        reasoning={"effort": self.reasoning_effort},
+                        temperature=temperature,
+                        max_output_tokens=max_tokens,
+                    )
+                    content = response.output_text
+                else:
+                    # Fallback to Chat Completions for older models
+                    logger.info(f"Using {self.model} (Chat Completions)")
+                    response = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                    content = response.choices[0].message.content
 
-                response = await self.client.chat.completions.create(**params)
-
-                content = response.choices[0].message.content
                 logger.info(f"Generated {len(content)} characters with {self.model}")
                 return content
 
