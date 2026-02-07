@@ -52,8 +52,8 @@ _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
 _EXOTIC = re.compile(
     r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
     r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s*\(?\s*(?:Standout|Box(?:ed)?)\s*\)?)?|"
-    r"(?:Boxed?\s+)?(?:Trifecta|Exacta|Quinella)|"
-    r"Standout\s+(?:Exacta|Quinella|Trifecta))"
+    r"(?:Box(?:ed)?\s+)?(?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))|"
+    r"Standout\s+(?:Exacta|Quinella|Trifecta|First\s*(?:Four|4)))"
     r":\s*(.+?)\s*"  # Capture everything up to the stake
     r"(?:[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)|"    # — $20 or — 2U
     r"\(\$(\d+\.?\d*)\))",                               # ($20)
