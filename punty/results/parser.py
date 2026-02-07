@@ -51,7 +51,7 @@ _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
 #   Trifecta: 1/2,4/3,5,6 — $20
 _EXOTIC = re.compile(
     r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
-    r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s+(?:Standout|Box(?:ed)?))?|"
+    r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s*\(?\s*(?:Standout|Box(?:ed)?)\s*\)?)?|"
     r"(?:Boxed?\s+)?(?:Trifecta|Exacta|Quinella)|"
     r"Standout\s+(?:Exacta|Quinella|Trifecta))"
     r":\s*(.+?)\s*"  # Capture everything up to the stake
