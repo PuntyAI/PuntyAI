@@ -178,7 +178,7 @@ class MemoryStore:
             conditions.append("good")
 
         # Match on distance range
-        dist = race_context.get("distance", 1200)
+        dist = race_context.get("distance") or 1200
         if dist <= 1200:
             dist_range = "sprint"
         elif dist <= 1600:

@@ -197,10 +197,11 @@ async def build_meeting_summary(db: AsyncSession, meeting_id: str) -> dict:
 
 
 async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
-    """Build per-tier P&L ledger for the punt review prompt.
+    """Build per-type P&L ledger for the punt review prompt.
 
-    Returns structured ledger with buckets: top1, top2, top3, roughie,
-    exotics, sequences, big3_multi — each with staked/returned/net.
+    Returns structured ledger with buckets grouped by bet_type for selections,
+    by exotic_type for exotics, and by sequence_type for sequences.
+    This matches the wrap_up prompt's expected format.
     """
     result = await db.execute(
         select(Pick).where(
@@ -210,13 +211,23 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
     )
     picks = result.scalars().all()
 
+    # Initialize buckets matching wrap_up prompt expectations
     buckets = {
-        "top1": {"label": "Wins (Top 1)", "staked": 0.0, "returned": 0.0, "picks": []},
-        "top2": {"label": "Wins (Top 2)", "staked": 0.0, "returned": 0.0, "picks": []},
-        "top3": {"label": "Wins (Top 3)", "staked": 0.0, "returned": 0.0, "picks": []},
-        "roughie": {"label": "Wins (Roughie)", "staked": 0.0, "returned": 0.0, "picks": []},
-        "exotics": {"label": "Exotics", "staked": 0.0, "returned": 0.0, "picks": []},
-        "sequences": {"label": "Sequences", "staked": 0.0, "returned": 0.0, "picks": []},
+        # Selections by bet_type
+        "win": {"label": "Win", "staked": 0.0, "returned": 0.0, "picks": []},
+        "place": {"label": "Place", "staked": 0.0, "returned": 0.0, "picks": []},
+        "each_way": {"label": "Each Way", "staked": 0.0, "returned": 0.0, "picks": []},
+        "saver_win": {"label": "Saver Win", "staked": 0.0, "returned": 0.0, "picks": []},
+        # Exotics by type
+        "exacta": {"label": "Exacta", "staked": 0.0, "returned": 0.0, "picks": []},
+        "quinella": {"label": "Quinella", "staked": 0.0, "returned": 0.0, "picks": []},
+        "trifecta": {"label": "Trifecta", "staked": 0.0, "returned": 0.0, "picks": []},
+        "first4": {"label": "First 4", "staked": 0.0, "returned": 0.0, "picks": []},
+        # Sequences by type
+        "quaddie": {"label": "Quaddie", "staked": 0.0, "returned": 0.0, "picks": []},
+        "early_quaddie": {"label": "Early Quaddie", "staked": 0.0, "returned": 0.0, "picks": []},
+        "big6": {"label": "Big 6", "staked": 0.0, "returned": 0.0, "picks": []},
+        # Big 3 Multi
         "big3_multi": {"label": "Big 3 Multi", "staked": 0.0, "returned": 0.0, "picks": []},
     }
 
@@ -229,46 +240,49 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
         }
 
         if p.pick_type == "selection":
-            rank = p.tip_rank
-            if rank == 1:
-                bucket = buckets["top1"]
-            elif rank == 2:
-                bucket = buckets["top2"]
-            elif rank == 3:
-                bucket = buckets["top3"]
-            elif rank == 4:
-                bucket = buckets["roughie"]
-            else:
-                bucket = buckets["top1"]  # fallback
-            stake = p.bet_stake or 1.0
-            bucket["staked"] += stake
-            bucket["returned"] += max(0.0, (p.pnl or 0.0) + stake) if p.hit else 0.0
-            bucket["picks"].append(pick_info)
+            # Group by bet_type (win, place, each_way, saver_win)
+            bet_type = (p.bet_type or "win").lower().replace(" ", "_")
+            # Skip exotics_only selections (no stake, just for exotic combos)
+            if bet_type == "exotics_only":
+                continue
+            bucket = buckets.get(bet_type, buckets["win"])
+            stake = p.bet_stake or 0.0
+            if stake > 0:
+                bucket["staked"] += stake
+                bucket["returned"] += max(0.0, (p.pnl or 0.0) + stake) if p.hit else 0.0
+                pick_info["bet_type"] = p.bet_type
+                pick_info["odds"] = p.odds_at_tip
+                bucket["picks"].append(pick_info)
 
         elif p.pick_type == "exotic":
-            # exotic_stake is the total outlay for this bet
+            # Group by exotic_type (exacta, quinella, trifecta, first4)
+            exotic_type = (p.exotic_type or "exacta").lower().replace(" ", "")
+            bucket = buckets.get(exotic_type, buckets["exacta"])
             cost = p.exotic_stake or 1.0
-            buckets["exotics"]["staked"] += cost
-            buckets["exotics"]["returned"] += max(0.0, (p.pnl or 0.0) + cost) if p.hit else 0.0
+            bucket["staked"] += cost
+            bucket["returned"] += max(0.0, (p.pnl or 0.0) + cost) if p.hit else 0.0
             pick_info["exotic_type"] = p.exotic_type
             pick_info["exotic_runners"] = p.exotic_runners
             pick_info["cost"] = cost
-            buckets["exotics"]["picks"].append(pick_info)
+            bucket["picks"].append(pick_info)
 
         elif p.pick_type == "sequence":
+            # Group by sequence_type (quaddie, early_quaddie, big6)
+            seq_type = (p.sequence_type or "quaddie").lower().replace(" ", "_")
+            bucket = buckets.get(seq_type, buckets["quaddie"])
             legs = json.loads(p.sequence_legs) if p.sequence_legs else []
             num_combos = 1
             for leg in legs:
                 num_combos *= len(leg)
             base = p.exotic_stake or 1.0
             cost = num_combos * base
-            buckets["sequences"]["staked"] += cost
-            buckets["sequences"]["returned"] += max(0.0, (p.pnl or 0.0) + cost) if p.hit else 0.0
+            bucket["staked"] += cost
+            bucket["returned"] += max(0.0, (p.pnl or 0.0) + cost) if p.hit else 0.0
             pick_info["sequence_type"] = p.sequence_type
             pick_info["sequence_variant"] = p.sequence_variant
             pick_info["combos"] = num_combos
             pick_info["cost"] = cost
-            buckets["sequences"]["picks"].append(pick_info)
+            bucket["picks"].append(pick_info)
 
         elif p.pick_type == "big3_multi":
             stake = p.exotic_stake or 10.0
@@ -288,8 +302,11 @@ async def build_pick_ledger(db: AsyncSession, meeting_id: str) -> dict:
         total_staked += b["staked"]
         total_returned += b["returned"]
 
+    # Remove empty buckets for cleaner output
+    non_empty_buckets = {k: v for k, v in buckets.items() if v["picks"]}
+
     return {
-        "buckets": buckets,
+        "buckets": non_empty_buckets,
         "total_staked": round(total_staked, 2),
         "total_returned": round(total_returned, 2),
         "total_net": round(total_returned - total_staked, 2),
