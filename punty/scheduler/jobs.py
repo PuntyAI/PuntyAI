@@ -745,7 +745,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
     """Run 2 hours before first race for a meeting.
 
     Steps:
-    1. Refresh odds and scratchings
+    1. Full re-scrape (scratchings, jockey/gear changes, track/weather, odds)
     2. Scrape speed maps
     3. Generate early mail
     4. Auto-approve if valid
@@ -757,7 +757,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
     from punty.models.meeting import Meeting
     from punty.models.content import Content, ContentStatus
     from punty.config import melb_now
-    from punty.scrapers.orchestrator import refresh_odds, scrape_speed_maps_stream
+    from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
     from punty.ai.generator import ContentGenerator
     from punty.scheduler.activity_log import log_scheduler_job, log_system
     from punty.scheduler.automation import auto_approve_and_post
@@ -784,14 +784,14 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
 
         venue = meeting.venue
 
-        # Step 1: Refresh odds and scratchings
+        # Step 1: Full re-scrape for latest scratchings, jockey/gear changes, track/weather, odds
         try:
-            logger.info(f"Step 1: Refreshing odds for {venue}...")
-            await refresh_odds(meeting_id, db)
-            results["steps"].append("refresh_odds: success")
+            logger.info(f"Step 1: Re-scraping data for {venue}...")
+            await scrape_meeting_full(meeting_id, db)
+            results["steps"].append("scrape_data: success")
         except Exception as e:
-            logger.error(f"Odds refresh failed for {venue}: {e}")
-            results["errors"].append(f"refresh_odds: {str(e)}")
+            logger.error(f"Scrape failed for {venue}: {e}")
+            results["errors"].append(f"scrape_data: {str(e)}")
 
         # Step 2: Scrape speed maps
         try:
