@@ -153,7 +153,8 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Convert numbered lists
     def convert_numbered(m):
         items = m.group(0).strip().split('\n')
-        list_items = ''.join(f'<li>{re.sub(r"^[0-9]+[.)]\s*", "", item).strip()}</li>' for item in items if item.strip())
+        strip_num = re.compile(r"^[0-9]+[.)]\s*")
+        list_items = ''.join(f'<li>{strip_num.sub("", item).strip()}</li>' for item in items if item.strip())
         return f'<ol class="tips-list">{list_items}</ol>'
 
     content = re.sub(r'(?:^[0-9]+[.)]\s+.+$\n?)+', convert_numbered, content, flags=re.MULTILINE)
