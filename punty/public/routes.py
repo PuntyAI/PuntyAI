@@ -143,14 +143,15 @@ async def get_winner_stats() -> dict:
     async with async_session() as db:
         today = melb_today()
 
-        # Today's winners (selections that hit)
+        # Today's winners (all pick types that hit)
         today_result = await db.execute(
-            select(func.count(Pick.id)).where(
+            select(func.count(Pick.id))
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .where(
                 and_(
-                    Pick.pick_type == "selection",
                     Pick.hit == True,
                     Pick.settled == True,
-                    Pick.created_at >= today.isoformat(),
+                    Meeting.date == today,
                 )
             )
         )
@@ -182,11 +183,10 @@ async def get_winner_stats() -> dict:
                     r.results_status in complete_statuses for r in races
                 )
 
-        # All-time winners
+        # All-time winners (all pick types)
         alltime_result = await db.execute(
             select(func.count(Pick.id)).where(
                 and_(
-                    Pick.pick_type == "selection",
                     Pick.hit == True,
                     Pick.settled == True,
                 )
@@ -194,17 +194,20 @@ async def get_winner_stats() -> dict:
         )
         alltime_winners = alltime_result.scalar() or 0
 
-        # All-time total collected (sum of returns from winning selections = pnl + stake)
+        # All-time total collected (sum of returns from all winning bets)
         alltime_winnings_result = await db.execute(
-            select(func.sum(Pick.pnl + Pick.bet_stake)).where(
+            select(
+                func.sum(Pick.bet_stake + Pick.pnl).filter(Pick.bet_stake.isnot(None)),
+                func.sum(Pick.exotic_stake + Pick.pnl).filter(Pick.exotic_stake.isnot(None)),
+            ).where(
                 and_(
-                    Pick.pick_type == "selection",
                     Pick.hit == True,
                     Pick.settled == True,
-                    Pick.pnl > 0,
                 )
             )
         )
+        row = alltime_winnings_result.one()
+        alltime_winnings = (row[0] or 0) + (row[1] or 0)
         alltime_winnings = alltime_winnings_result.scalar() or 0.0
 
         # Get early mail content for today (sent to Twitter)
