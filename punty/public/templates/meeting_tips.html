@@ -2,6 +2,12 @@
 
 {% block title %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endblock %}
 
+{% block og_title %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endblock %}
+{% block og_description %}Punty's horse racing tips for {{ meeting.venue }} on {{ meeting.date_formatted }}. Expert AI analysis for Australian thoroughbred racing.{% endblock %}
+{% block og_url %}https://punty.ai/tips/{{ meeting.id }}{% endblock %}
+{% block twitter_title %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endblock %}
+{% block twitter_description %}Punty's horse racing tips for {{ meeting.venue }} on {{ meeting.date_formatted }}. Expert AI analysis for Australian thoroughbred racing.{% endblock %}
+
 {% block head %}
 <meta name="description" content="Punty's horse racing tips for {{ meeting.venue }} on {{ meeting.date_formatted }}. Expert AI analysis and wrap-up for Australian thoroughbred racing.">
 {% endblock %}

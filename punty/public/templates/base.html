@@ -15,10 +15,20 @@
     <meta name="description" content="Free daily horse racing tips powered by AI. Punty analyses form, track conditions, and market moves to find winners.">
 
     <!-- Open Graph -->
-    <meta property="og:title" content="PuntyAI - AI Horse Racing Tips">
-    <meta property="og:description" content="Free daily horse racing tips powered by AI. No bullshit, just picks.">
-    <meta property="og:image" content="/static/punty-logo.png">
+    <meta property="og:title" content="{% block og_title %}PuntyAI - AI Horse Racing Tips{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Free daily horse racing tips powered by AI. No bullshit, just picks.{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}https://punty.ai/static/og-image.png{% endblock %}">
+    <meta property="og:url" content="{% block og_url %}https://punty.ai{% endblock %}">
     <meta property="og:type" content="website">
+    <meta property="og:site_name" content="PuntyAI">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@PuntyAI">
+    <meta name="twitter:creator" content="@PuntyAI">
+    <meta name="twitter:title" content="{% block twitter_title %}PuntyAI - AI Horse Racing Tips{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}Free daily horse racing tips powered by AI. No bullshit, just picks.{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}https://punty.ai/static/og-image.png{% endblock %}">
 
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
