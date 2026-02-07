@@ -36,7 +36,7 @@ PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health"}
 PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/api/public/", "/public")
 
 # Public site paths (served on punty.ai, not app.punty.ai)
-PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/terms", "/privacy", "/tips"}
+PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/terms", "/privacy", "/tips", "/sitemap.xml", "/robots.txt"}
 # Also allow /tips/* paths for individual meeting pages
 PUBLIC_SITE_PREFIXES_EXTRA = ("/tips/",)
 PUBLIC_SITE_HOSTS = {"punty.ai", "www.punty.ai", "localhost:8000", "127.0.0.1:8000"}
