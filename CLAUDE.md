@@ -146,8 +146,11 @@ Regex-based extraction from AI-generated early mail text:
 
 ## Common Operations
 ```bash
-# Deploy specific files
-ssh -i ~/.ssh/id_ed25519 root@app.punty.ai "cd /opt/puntyai && git fetch origin master && git checkout -f origin/master -- <files> && systemctl restart puntyai"
+# Deploy all files
+ssh -i ~/.ssh/id_ed25519 root@app.punty.ai "cd /opt/puntyai && git fetch origin master && git checkout -f origin/master && chmod 666 prompts/*.md && systemctl restart puntyai"
+
+# Deploy specific files (add chmod if deploying prompts)
+ssh -i ~/.ssh/id_ed25519 root@app.punty.ai "cd /opt/puntyai && git fetch origin master && git checkout -f origin/master -- <files> && chmod 666 prompts/*.md && systemctl restart puntyai"
 
 # Re-parse picks from approved content
 ssh root@app.punty.ai "cd /opt/puntyai && source venv/bin/activate && python3 -c '...asyncio script...'"
@@ -157,6 +160,8 @@ ssh root@app.punty.ai "journalctl -u puntyai --no-pager -n 50"
 
 # DB is at /opt/puntyai/data/punty.db
 ```
+
+**Note:** `chmod 666 prompts/*.md` is required after git checkout because git resets permissions, and the `punty` user needs write access to edit personality from the Settings UI.
 
 ## Testing
 
