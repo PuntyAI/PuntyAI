@@ -277,7 +277,7 @@
                                 {% for pick in exotics %}
                                 {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold pick-exotic">
-                                    {{ pick.exotic_type or 'Exotic' }}: {{ runners|join(', ') }}
+                                    {{ pick.exotic_type or 'Exotic' }}: {% if runners and runners[0] is sequence and runners[0] is not string %}{% for leg in runners %}{{ leg|join(', ') }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}{{ runners|join(', ') }}{% endif %}
                                     {% if pick.exotic_stake %}&bull; ${{ "%.0f"|format(pick.exotic_stake) }}{% endif %}
                                     {% if pick.estimated_return_pct %}({{ "%.0f"|format(pick.estimated_return_pct) }}%){% endif %}
                                     {% if pick.settled %}
@@ -707,7 +707,7 @@
                                             {% if pick.bet_stake %}<span class="text-gray-400">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                             {% elif pick.pick_type == 'exotic' %}
                                             {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
-                                            {{ pick.exotic_type or 'Exotic' }}: {{ runners|join(', ') }}
+                                            {{ pick.exotic_type or 'Exotic' }}: {% if runners and runners[0] is sequence and runners[0] is not string %}{% for leg in runners %}{{ leg|join(', ') }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}{{ runners|join(', ') }}{% endif %}
                                             {% endif %}
                                         </span>
                                         {% if (pick.pnl or 0) > 0 %}

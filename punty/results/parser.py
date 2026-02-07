@@ -278,11 +278,21 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             exotic_type = exotic_m.group(1).strip()
             runners_str = exotic_m.group(2).strip()
             # Parse runners — handles various formats:
-            #   "1, 2, 4" (simple)
-            #   "1/2,4/3,5,6" (positional with slashes)
-            #   "1 to win, 2, 4 for second" (descriptive)
-            # Extract all numbers from the string
-            runners = [int(x) for x in re.findall(r'\d+', runners_str)]
+            #   "1, 2, 4" (simple box)
+            #   "1/2,4/3,5,6" (positional with slashes - standout/flexi)
+            #   "1 / 2, 4" or "1 / 2, 4 / 3, 5" (with spaces around slashes)
+            # Store as legs array for display and combo calculation
+            if "/" in runners_str:
+                # Split by "/" to get legs, then extract numbers from each leg
+                legs = []
+                for leg in runners_str.split("/"):
+                    leg_runners = [int(x) for x in re.findall(r'\d+', leg)]
+                    if leg_runners:
+                        legs.append(leg_runners)
+                runners = legs  # Store as [[1], [2, 4], [3, 5, 6]]
+            else:
+                # Simple list - all numbers are boxed together
+                runners = [int(x) for x in re.findall(r'\d+', runners_str)]
             # $20 format: group 3 (— $X), group 4 (— XU), group 5 (($X))
             stake_str = exotic_m.group(3) or exotic_m.group(4) or exotic_m.group(5)
             stake = float(stake_str) if stake_str else 20.0

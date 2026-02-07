@@ -260,86 +260,88 @@ async def _settle_picks_for_race_impl(
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-            # Normalise saddlecloths to ints for consistent comparison
-            exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
             top_sc_int = [int(x) for x in top_saddlecloths if x is not None]
 
-            is_boxed = "box" in exotic_type or "standout" in exotic_type
-            if "trifecta" in exotic_type:
-                if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:
-                    if is_boxed:
-                        # Boxed/standout: our runners in top 3 in any order
-                        hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
-                    elif len(exotic_runners_int) == 3:
-                        # Straight trifecta: exact order match
-                        hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
+            # Check if legs format [[1], [5, 8], [8, 9]] vs flat [1, 5, 8, 9]
+            is_legs_format = exotic_runners and isinstance(exotic_runners[0], list)
+
+            if is_legs_format:
+                # Legs format: [[leg1], [leg2], ...]
+                # Check hit: each position winner must be in corresponding leg
+                legs = exotic_runners
+                required_positions = {"trifecta": 3, "exacta": 2, "quinella": 2, "first": 4}
+                req_pos = 3  # default for trifecta
+                for k, v in required_positions.items():
+                    if k in exotic_type:
+                        req_pos = v
+                        break
+
+                if len(legs) >= req_pos and len(top_sc_int) >= req_pos:
+                    if "quinella" in exotic_type:
+                        # Quinella: any order, check both in combined legs
+                        all_runners = set()
+                        for leg in legs:
+                            all_runners.update(leg)
+                        hit = set(top_sc_int[:2]).issubset(all_runners)
                     else:
-                        # Flexi trifecta: first must win, rest must include 2nd and 3rd
-                        # e.g., "1 to win, 2, 4 for second, 3, 5 for third" = [1, 2, 4, 3, 5]
-                        first_ok = top_sc_int[0] == exotic_runners_int[0]
-                        rest_ok = set(top_sc_int[1:3]).issubset(set(exotic_runners_int[1:]))
-                        hit = first_ok and rest_ok
+                        # Positional: check each position winner is in corresponding leg
+                        hit = all(top_sc_int[i] in legs[i] for i in range(req_pos))
+
                 if hit:
-                    dividend = _find_dividend(exotic_divs, "trifecta")
-            elif "exacta" in exotic_type:
-                if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                    if is_boxed:
-                        # Boxed: our runners in top 2 in any order
+                    div_key = "first4" if "first" in exotic_type else exotic_type.split()[0]
+                    dividend = _find_dividend(exotic_divs, div_key)
+
+                # Combos = product of leg sizes
+                combos = 1
+                for leg in legs:
+                    combos *= len(leg)
+
+            else:
+                # Flat format: [1, 5, 8, 9] - boxed bet
+                exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
+                is_boxed = "box" in exotic_type or "standout" in exotic_type
+
+                if "trifecta" in exotic_type:
+                    if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:
+                        if is_boxed or len(exotic_runners_int) > 3:
+                            hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
+                        else:
+                            hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
+                    if hit:
+                        dividend = _find_dividend(exotic_divs, "trifecta")
+                elif "exacta" in exotic_type:
+                    if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
+                        if is_boxed or len(exotic_runners_int) > 2:
+                            hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
+                        else:
+                            hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
+                    if hit:
+                        dividend = _find_dividend(exotic_divs, "exacta")
+                elif "quinella" in exotic_type:
+                    if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
                         hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
-                    elif len(exotic_runners_int) == 2:
-                        # Straight exacta: exact order match
-                        hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
-                    else:
-                        # Standout/flexi: first runner must win, any of rest for second
-                        # e.g., "1 to win, 2, 4 for second" = [1, 2, 4]
-                        first_ok = top_sc_int[0] == exotic_runners_int[0]
-                        second_ok = top_sc_int[1] in exotic_runners_int[1:]
-                        hit = first_ok and second_ok
-                if hit:
-                    dividend = _find_dividend(exotic_divs, "exacta")
-            elif "quinella" in exotic_type:
-                if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                    hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
-                if hit:
-                    dividend = _find_dividend(exotic_divs, "quinella")
-            elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
-                if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
-                    if is_boxed:
-                        hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
-                    elif len(exotic_runners_int) == 4:
-                        # Straight first 4: exact order match
-                        hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
-                    else:
-                        # Flexi first 4: first must win, rest must include 2nd, 3rd, 4th
-                        first_ok = top_sc_int[0] == exotic_runners_int[0]
-                        rest_ok = set(top_sc_int[1:4]).issubset(set(exotic_runners_int[1:]))
-                        hit = first_ok and rest_ok
-                if hit:
-                    dividend = _find_dividend(exotic_divs, "first4")
+                    if hit:
+                        dividend = _find_dividend(exotic_divs, "quinella")
+                elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
+                    if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
+                        if is_boxed or len(exotic_runners_int) > 4:
+                            hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
+                        else:
+                            hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
+                    if hit:
+                        dividend = _find_dividend(exotic_divs, "first4")
 
-            # Calculate combos for flexi betting
-            # For boxed/flexi bets, return = dividend × (stake / combos)
-            n = len(set(exotic_runners_int))  # unique runners
-            combos = 1
-
-            if "trifecta" in exotic_type:
-                if n == 3:
-                    combos = 1  # straight
-                elif n > 3:
-                    combos = n * (n - 1) * (n - 2)  # box
-            elif "exacta" in exotic_type:
-                if n == 2:
-                    combos = 1  # straight
-                elif n > 2:
-                    combos = n * (n - 1)  # box
-            elif "quinella" in exotic_type:
-                if n >= 2:
-                    combos = n * (n - 1) // 2
-            elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
-                if n == 4:
-                    combos = 1  # straight
-                elif n > 4:
-                    combos = n * (n - 1) * (n - 2) * (n - 3)  # box
+                # Calculate combos for flexi betting (box formula)
+                n = len(set(exotic_runners_int))
+                combos = 1
+                if "trifecta" in exotic_type:
+                    combos = n * (n - 1) * (n - 2) if n >= 3 else 1
+                elif "exacta" in exotic_type:
+                    combos = n * (n - 1) if n >= 2 else 1
+                elif "quinella" in exotic_type:
+                    combos = n * (n - 1) // 2 if n >= 2 else 1
+                elif "first" in exotic_type:
+                    combos = n * (n - 1) * (n - 2) * (n - 3) if n >= 4 else 1
 
             # Stake is the total outlay for this exotic bet
             cost = stake
