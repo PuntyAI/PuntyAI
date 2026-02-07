@@ -36,10 +36,11 @@ async def daily_calendar_scrape() -> dict:
     This job:
     1. Scrapes the racing calendar to get today's meetings
     2. Auto-selects all meetings
-    3. Schedules meeting-specific automation jobs (pre-race, post-race)
+    3. Scrapes full race data for each meeting (runners, form, odds, track conditions)
+    4. Schedules meeting-specific automation jobs (pre-race, post-race)
 
-    Note: Early mail generation is now handled by meeting_pre_race_job
-    which runs 1.5 hours before each meeting's first race.
+    Note: Early mail generation is handled by meeting_pre_race_job
+    which runs 2 hours before each meeting's first race.
     """
     from punty.models.database import async_session
     from punty.models.meeting import Meeting, Race, Runner
@@ -115,9 +116,38 @@ async def daily_calendar_scrape() -> dict:
             logger.error(f"Auto-select failed: {e}")
             results["errors"].append(f"Auto-select: {str(e)}")
 
-    # Step 3: Schedule meeting automation
+        # Step 3: Scrape full race data for each selected meeting
+        try:
+            from punty.scrapers.orchestrator import scrape_meeting_full
+
+            logger.info("Step 3: Scraping full race data for all meetings...")
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                )
+            )
+            selected_meetings = result.scalars().all()
+            scrape_count = 0
+
+            for meeting in selected_meetings:
+                try:
+                    logger.info(f"Scraping data for {meeting.venue}...")
+                    await scrape_meeting_full(meeting.id, db)
+                    scrape_count += 1
+                except Exception as e:
+                    logger.error(f"Scrape failed for {meeting.venue}: {e}")
+                    results["errors"].append(f"Scrape {meeting.venue}: {str(e)}")
+
+            results["meetings_scraped"] = scrape_count
+            logger.info(f"Scraped full data for {scrape_count}/{len(selected_meetings)} meetings")
+        except Exception as e:
+            logger.error(f"Full data scrape failed: {e}")
+            results["errors"].append(f"Full scrape: {str(e)}")
+
+    # Step 4: Schedule meeting automation
     try:
-        logger.info("Step 3: Scheduling meeting automation...")
+        logger.info("Step 4: Scheduling meeting automation...")
         automation_result = await scheduler_manager.setup_daily_automation()
         results["automation_scheduled"] = automation_result.get("meetings_scheduled", [])
         if automation_result.get("errors"):
@@ -712,15 +742,14 @@ async def check_context_changes(
 
 
 async def meeting_pre_race_job(meeting_id: str) -> dict:
-    """Run 1.5 hours before first race for a meeting.
+    """Run 2 hours before first race for a meeting.
 
     Steps:
-    1. Scrape full meeting data (form, speed maps)
-    2. Scrape latest odds
+    1. Refresh odds and scratchings
+    2. Scrape speed maps
     3. Generate early mail
     4. Auto-approve if valid
     5. Post to Twitter
-    6. Log activity
 
     Returns: job result dict
     """
@@ -728,7 +757,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
     from punty.models.meeting import Meeting
     from punty.models.content import Content, ContentStatus
     from punty.config import melb_now
-    from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
+    from punty.scrapers.orchestrator import refresh_odds, scrape_speed_maps_stream
     from punty.ai.generator import ContentGenerator
     from punty.scheduler.activity_log import log_scheduler_job, log_system
     from punty.scheduler.automation import auto_approve_and_post
@@ -755,14 +784,14 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
 
         venue = meeting.venue
 
-        # Step 1: Scrape full meeting data
+        # Step 1: Refresh odds and scratchings
         try:
-            logger.info(f"Step 1: Scraping data for {venue}...")
-            await scrape_meeting_full(meeting_id, db)
-            results["steps"].append("scrape_data: success")
+            logger.info(f"Step 1: Refreshing odds for {venue}...")
+            await refresh_odds(meeting_id, db)
+            results["steps"].append("refresh_odds: success")
         except Exception as e:
-            logger.error(f"Scrape failed for {venue}: {e}")
-            results["errors"].append(f"scrape_data: {str(e)}")
+            logger.error(f"Odds refresh failed for {venue}: {e}")
+            results["errors"].append(f"refresh_odds: {str(e)}")
 
         # Step 2: Scrape speed maps
         try:
