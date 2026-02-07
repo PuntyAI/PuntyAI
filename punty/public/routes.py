@@ -425,9 +425,9 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 )
             ).order_by(Content.created_at.desc())
         )
-        early_mail = early_mail_result.scalar_one_or_none()
+        early_mail = early_mail_result.scalars().first()
 
-        # Get wrap-up (sent)
+        # Get wrap-up (sent) — use .first() since meetings can have multiple wrapups
         wrapup_result = await db.execute(
             select(Content).where(
                 and_(
@@ -437,7 +437,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 )
             ).order_by(Content.created_at.desc())
         )
-        wrapup = wrapup_result.scalar_one_or_none()
+        wrapup = wrapup_result.scalars().first()
 
         # If no sent content at all, return None
         if not early_mail and not wrapup:
