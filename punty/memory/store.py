@@ -215,7 +215,7 @@ class MemoryStore:
                 score += 2
 
             # Distance range match
-            m_dist = ctx.get("distance", 1200)
+            m_dist = ctx.get("distance") or 1200
             if (dist <= 1200 and m_dist <= 1200) or \
                (1200 < dist <= 1600 and 1200 < m_dist <= 1600) or \
                (dist > 1600 and m_dist > 1600):

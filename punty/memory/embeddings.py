@@ -88,8 +88,8 @@ class EmbeddingService:
             parts.append(f"Pace advantage: {runner['pf_map_factor']:.2f}")
 
         # First/second up
-        if runner.get("days_since_last_run"):
-            days = runner["days_since_last_run"]
+        days = runner.get("days_since_last_run")
+        if days is not None:
             if days > 60:
                 parts.append("First-up")
             elif 14 < days <= 35:

@@ -377,8 +377,8 @@ class ContentGenerator:
             weather = meeting.get("weather_condition") or meeting.get("weather")
 
             for race in races:
-                distance = race.get("distance", 1200)
-                race_class = race.get("class", "Unknown")
+                distance = race.get("distance") or 1200
+                race_class = race.get("class") or "Unknown"
                 age_restriction = race.get("age_restriction")
                 weight_type = race.get("weight_type")
                 field_size = race.get("field_size")
