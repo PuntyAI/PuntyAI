@@ -50,44 +50,74 @@
     <div class="bg-white rounded-lg shadow">
         <div class="px-6 py-4 border-b border-punty-border">
             <h2 class="text-lg font-semibold text-gray-900">Meetings with Learnings</h2>
-            <p class="text-sm text-gray-500">Click to filter assessments by meeting</p>
+            <p class="text-sm text-gray-500">Click to expand assessments</p>
         </div>
         <div class="divide-y divide-punty-border">
             {% for m in meetings %}
-            <div class="px-6 py-3 hover:bg-punty-card2 cursor-pointer meeting-filter"
-                 data-meeting-id="{{ m.meeting_id }}"
-                 onclick="filterByMeeting('{{ m.meeting_id }}')">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <span class="font-semibold text-punty-cyan">{{ m.track }}</span>
-                        <span class="text-gray-500 text-sm ml-2">{{ m.meeting_id }}</span>
+            <details class="group">
+                <summary class="px-6 py-3 hover:bg-punty-card2 cursor-pointer list-none">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                            <span class="font-semibold text-punty-cyan">{{ m.track }}</span>
+                            <span class="text-gray-500 text-sm">{{ m.meeting_id }}</span>
+                        </div>
+                        <div class="flex items-center gap-4 text-sm">
+                            <span class="text-gray-400">{{ m.count }} races</span>
+                            <span class="{% if m.hit_rate >= 30 %}text-green-500{% else %}text-punty-orange{% endif %}">
+                                {{ m.hit_rate }}% top pick
+                            </span>
+                            <span class="{% if m.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %} font-mono">
+                                ${{ m.total_pnl }}
+                            </span>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-4 text-sm">
-                        <span class="text-gray-400">{{ m.count }} races</span>
-                        <span class="{% if m.hit_rate >= 30 %}text-green-500{% else %}text-punty-orange{% endif %}">
-                            {{ m.hit_rate }}% top pick
-                        </span>
-                        <span class="{% if m.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %} font-mono">
-                            ${{ m.total_pnl }}
-                        </span>
+                </summary>
+                <div class="bg-punty-card2/50 divide-y divide-punty-border/50">
+                    {% for a in recent_assessments %}
+                    {% if a.meeting_id == m.meeting_id %}
+                    <div class="px-6 py-4 pl-10">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="bg-punty-card2 text-punty-orange px-2 py-0.5 rounded text-sm font-mono">
+                                        R{{ a.race_number }}
+                                    </span>
+                                    <span class="text-sm text-gray-400">{{ a.distance }}m {{ a.race_class }}</span>
+                                    <span class="text-sm text-gray-500">{{ a.going }}</span>
+                                    {% if a.top_pick_hit %}
+                                    <span class="bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs uppercase">Top Pick Won</span>
+                                    {% elif a.any_pick_hit %}
+                                    <span class="bg-punty-cyan/20 text-punty-cyan px-2 py-0.5 rounded text-xs uppercase">Pick Hit</span>
+                                    {% else %}
+                                    <span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-xs uppercase">No Hit</span>
+                                    {% endif %}
+                                    <span class="font-mono text-sm {% if a.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                                        {% if a.total_pnl >= 0 %}+{% endif %}${{ "%.2f"|format(a.total_pnl or 0) }}
+                                    </span>
+                                </div>
+                                <div class="text-sm text-gray-300 bg-punty-card2 p-3 rounded-lg border-l-4 border-punty-magenta">
+                                    <strong class="text-punty-mbright">Key Learning:</strong> {{ a.key_learnings }}
+                                </div>
+                            </div>
+                        </div>
                     </div>
+                    {% endif %}
+                    {% endfor %}
                 </div>
-            </div>
+            </details>
             {% endfor %}
         </div>
     </div>
     {% endif %}
 
-    <!-- Recent Assessments -->
+    <!-- Full Assessments (Detailed View) -->
     <div class="bg-white rounded-lg shadow">
-        <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
-            <div>
-                <h2 class="text-lg font-semibold text-gray-900">Race Assessments</h2>
-                <p class="text-sm text-gray-500" id="filter-status">Showing all assessments</p>
-            </div>
-            <button onclick="clearFilter()" id="clear-filter-btn" class="hidden text-sm text-punty-coral hover:text-punty-mbright">
-                Clear Filter
-            </button>
+        <div class="px-6 py-4 border-b border-punty-border">
+            <h2 class="text-lg font-semibold text-gray-900">Detailed Assessments</h2>
+            <p class="text-sm text-gray-500">Expand for full analysis breakdown</p>
         </div>
         <div id="assessments-list" class="divide-y divide-punty-border">
             {% for a in recent_assessments %}
@@ -242,46 +272,6 @@
 </div>
 
 <script>
-function filterByMeeting(meetingId) {
-    // Hide all items, show only matching
-    document.querySelectorAll('.assessment-item').forEach(item => {
-        if (item.dataset.meetingId === meetingId) {
-            item.style.display = '';
-        } else {
-            item.style.display = 'none';
-        }
-    });
-
-    // Update UI
-    document.getElementById('filter-status').textContent = `Filtered by: ${meetingId}`;
-    document.getElementById('clear-filter-btn').classList.remove('hidden');
-
-    // Highlight selected meeting
-    document.querySelectorAll('.meeting-filter').forEach(m => {
-        if (m.dataset.meetingId === meetingId) {
-            m.classList.add('bg-punty-magenta/10');
-        } else {
-            m.classList.remove('bg-punty-magenta/10');
-        }
-    });
-}
-
-function clearFilter() {
-    // Show all items
-    document.querySelectorAll('.assessment-item').forEach(item => {
-        item.style.display = '';
-    });
-
-    // Update UI
-    document.getElementById('filter-status').textContent = 'Showing all assessments';
-    document.getElementById('clear-filter-btn').classList.add('hidden');
-
-    // Remove highlights
-    document.querySelectorAll('.meeting-filter').forEach(m => {
-        m.classList.remove('bg-punty-magenta/10');
-    });
-}
-
 async function deleteAssessment(id, raceId) {
     if (!confirm(`Remove learning for ${raceId}?\n\nThis will stop this assessment from being used in future predictions.`)) {
         return;
