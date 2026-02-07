@@ -78,7 +78,7 @@
                 <div class="bg-punty-card2/50 divide-y divide-punty-border/50">
                     {% for a in recent_assessments %}
                     {% if a.meeting_id == m.meeting_id %}
-                    <div class="px-6 py-4 pl-10">
+                    <div class="px-6 py-4 pl-10 assessment-item" data-assessment-id="{{ a.id }}">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center gap-3 mb-2">
@@ -98,10 +98,122 @@
                                         {% if a.total_pnl >= 0 %}+{% endif %}${{ "%.2f"|format(a.total_pnl or 0) }}
                                     </span>
                                 </div>
-                                <div class="text-sm text-gray-300 bg-punty-card2 p-3 rounded-lg border-l-4 border-punty-magenta">
+
+                                <!-- Key Learnings -->
+                                <div class="text-sm text-gray-300 mb-3 bg-punty-card2 p-3 rounded-lg border-l-4 border-punty-magenta">
                                     <strong class="text-punty-mbright">Key Learning:</strong> {{ a.key_learnings }}
                                 </div>
+
+                                <!-- Expandable Full Assessment -->
+                                <details class="text-sm">
+                                    <summary class="cursor-pointer text-punty-cyan hover:text-punty-mbright">
+                                        View Full Assessment
+                                    </summary>
+                                    <div class="mt-3 space-y-3 pl-4 border-l border-punty-border">
+                                        {% if a.assessment %}
+                                        <!-- Prediction Accuracy -->
+                                        {% if a.assessment.prediction_accuracy %}
+                                        <div>
+                                            <h4 class="font-semibold text-punty-orange mb-1">Prediction Accuracy</h4>
+                                            <ul class="space-y-1 text-gray-400">
+                                                {% if a.assessment.prediction_accuracy.top_pick_result %}
+                                                <li><strong>Top Pick:</strong> {{ a.assessment.prediction_accuracy.top_pick_result }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.prediction_accuracy.value_assessment %}
+                                                <li><strong>Value:</strong> {{ a.assessment.prediction_accuracy.value_assessment }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.prediction_accuracy.pace_prediction_accuracy %}
+                                                <li><strong>Pace:</strong> {{ a.assessment.prediction_accuracy.pace_prediction_accuracy }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.prediction_accuracy.key_misses %}
+                                                <li><strong>Key Misses:</strong> {{ a.assessment.prediction_accuracy.key_misses }}</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Decisive Factors -->
+                                        {% if a.assessment.decisive_factors %}
+                                        <div>
+                                            <h4 class="font-semibold text-punty-orange mb-1">Decisive Factors</h4>
+                                            <ul class="space-y-1 text-gray-400">
+                                                {% if a.assessment.decisive_factors.what_won_the_race %}
+                                                <li><strong>What Won:</strong> {{ a.assessment.decisive_factors.what_won_the_race }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.decisive_factors.undervalued_factors %}
+                                                <li><strong>Undervalued:</strong> {{ a.assessment.decisive_factors.undervalued_factors | join(', ') }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.decisive_factors.overvalued_factors %}
+                                                <li><strong>Overvalued:</strong> {{ a.assessment.decisive_factors.overvalued_factors | join(', ') }}</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Track Learnings -->
+                                        {% if a.assessment.track_learnings %}
+                                        <div>
+                                            <h4 class="font-semibold text-punty-orange mb-1">Track Learnings</h4>
+                                            <ul class="space-y-1 text-gray-400">
+                                                {% if a.assessment.track_learnings.observed_bias %}
+                                                <li><strong>Bias:</strong> {{ a.assessment.track_learnings.observed_bias }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.track_learnings.pace_dynamics %}
+                                                <li><strong>Pace Dynamics:</strong> {{ a.assessment.track_learnings.pace_dynamics }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.track_learnings.barrier_impact %}
+                                                <li><strong>Barrier Impact:</strong> {{ a.assessment.track_learnings.barrier_impact }}</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Market Analysis -->
+                                        {% if a.assessment.market_analysis %}
+                                        <div>
+                                            <h4 class="font-semibold text-punty-orange mb-1">Market Analysis</h4>
+                                            <ul class="space-y-1 text-gray-400">
+                                                {% if a.assessment.market_analysis.market_accuracy %}
+                                                <li><strong>Market Accuracy:</strong> {{ a.assessment.market_analysis.market_accuracy }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.market_analysis.overlays_identified %}
+                                                <li><strong>Overlays:</strong> {{ a.assessment.market_analysis.overlays_identified }}</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Improvement Recommendations -->
+                                        {% if a.assessment.improvement_recommendations %}
+                                        <div>
+                                            <h4 class="font-semibold text-punty-orange mb-1">Improvements</h4>
+                                            <ul class="space-y-1 text-gray-400">
+                                                {% if a.assessment.improvement_recommendations.what_worked %}
+                                                <li class="text-green-400"><strong>Worked:</strong> {{ a.assessment.improvement_recommendations.what_worked }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.improvement_recommendations.what_failed %}
+                                                <li class="text-red-400"><strong>Failed:</strong> {{ a.assessment.improvement_recommendations.what_failed }}</li>
+                                                {% endif %}
+                                                {% if a.assessment.improvement_recommendations.actionable_recommendation %}
+                                                <li class="text-punty-cyan"><strong>Recommendation:</strong> {{ a.assessment.improvement_recommendations.actionable_recommendation }}</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </details>
                             </div>
+
+                            <!-- Delete Button -->
+                            <button onclick="deleteAssessment({{ a.id }}, '{{ a.race_id }}')"
+                                    class="ml-4 text-gray-500 hover:text-red-500 p-2"
+                                    title="Remove this learning">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                     {% endif %}
@@ -111,169 +223,17 @@
             {% endfor %}
         </div>
     </div>
-    {% endif %}
-
-    <!-- Full Assessments (Detailed View) -->
-    <div class="bg-white rounded-lg shadow">
-        <div class="px-6 py-4 border-b border-punty-border">
-            <h2 class="text-lg font-semibold text-gray-900">Detailed Assessments</h2>
-            <p class="text-sm text-gray-500">Expand for full analysis breakdown</p>
-        </div>
-        <div id="assessments-list" class="divide-y divide-punty-border">
-            {% for a in recent_assessments %}
-            <div class="assessment-item px-6 py-4" data-meeting-id="{{ a.meeting_id }}">
-                <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <span class="text-lg font-semibold text-punty-cyan">{{ a.track }}</span>
-                            <span class="bg-punty-card2 text-punty-orange px-2 py-0.5 rounded text-sm font-mono">
-                                R{{ a.race_number }}
-                            </span>
-                            <span class="text-sm text-gray-400">{{ a.distance }}m {{ a.race_class }}</span>
-                            <span class="text-sm text-gray-500">{{ a.going }}</span>
-                            <!-- Result indicator -->
-                            {% if a.top_pick_hit %}
-                            <span class="bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs uppercase">Top Pick Won</span>
-                            {% elif a.any_pick_hit %}
-                            <span class="bg-punty-cyan/20 text-punty-cyan px-2 py-0.5 rounded text-xs uppercase">Pick Hit</span>
-                            {% else %}
-                            <span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-xs uppercase">No Hit</span>
-                            {% endif %}
-                            <span class="font-mono text-sm {% if a.total_pnl >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
-                                {% if a.total_pnl >= 0 %}+{% endif %}${{ "%.2f"|format(a.total_pnl or 0) }}
-                            </span>
-                        </div>
-
-                        <!-- Key Learnings -->
-                        <div class="text-sm text-gray-300 mb-3 bg-punty-card2 p-3 rounded-lg border-l-4 border-punty-magenta">
-                            <strong class="text-punty-mbright">Key Learning:</strong> {{ a.key_learnings }}
-                        </div>
-
-                        <!-- Expandable Details -->
-                        <details class="text-sm">
-                            <summary class="cursor-pointer text-punty-cyan hover:text-punty-mbright">
-                                View Full Assessment
-                            </summary>
-                            <div class="mt-3 space-y-3 pl-4 border-l border-punty-border">
-                                {% if a.assessment %}
-                                <!-- Prediction Accuracy -->
-                                {% if a.assessment.prediction_accuracy %}
-                                <div>
-                                    <h4 class="font-semibold text-punty-orange mb-1">Prediction Accuracy</h4>
-                                    <ul class="space-y-1 text-gray-400">
-                                        {% if a.assessment.prediction_accuracy.top_pick_result %}
-                                        <li><strong>Top Pick:</strong> {{ a.assessment.prediction_accuracy.top_pick_result }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.prediction_accuracy.value_assessment %}
-                                        <li><strong>Value:</strong> {{ a.assessment.prediction_accuracy.value_assessment }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.prediction_accuracy.pace_prediction_accuracy %}
-                                        <li><strong>Pace:</strong> {{ a.assessment.prediction_accuracy.pace_prediction_accuracy }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.prediction_accuracy.key_misses %}
-                                        <li><strong>Key Misses:</strong> {{ a.assessment.prediction_accuracy.key_misses }}</li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
-                                {% endif %}
-
-                                <!-- Decisive Factors -->
-                                {% if a.assessment.decisive_factors %}
-                                <div>
-                                    <h4 class="font-semibold text-punty-orange mb-1">Decisive Factors</h4>
-                                    <ul class="space-y-1 text-gray-400">
-                                        {% if a.assessment.decisive_factors.what_won_the_race %}
-                                        <li><strong>What Won:</strong> {{ a.assessment.decisive_factors.what_won_the_race }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.decisive_factors.undervalued_factors %}
-                                        <li><strong>Undervalued:</strong> {{ a.assessment.decisive_factors.undervalued_factors | join(', ') }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.decisive_factors.overvalued_factors %}
-                                        <li><strong>Overvalued:</strong> {{ a.assessment.decisive_factors.overvalued_factors | join(', ') }}</li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
-                                {% endif %}
-
-                                <!-- Track Learnings -->
-                                {% if a.assessment.track_learnings %}
-                                <div>
-                                    <h4 class="font-semibold text-punty-orange mb-1">Track Learnings</h4>
-                                    <ul class="space-y-1 text-gray-400">
-                                        {% if a.assessment.track_learnings.observed_bias %}
-                                        <li><strong>Bias:</strong> {{ a.assessment.track_learnings.observed_bias }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.track_learnings.pace_dynamics %}
-                                        <li><strong>Pace Dynamics:</strong> {{ a.assessment.track_learnings.pace_dynamics }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.track_learnings.barrier_impact %}
-                                        <li><strong>Barrier Impact:</strong> {{ a.assessment.track_learnings.barrier_impact }}</li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
-                                {% endif %}
-
-                                <!-- Market Analysis -->
-                                {% if a.assessment.market_analysis %}
-                                <div>
-                                    <h4 class="font-semibold text-punty-orange mb-1">Market Analysis</h4>
-                                    <ul class="space-y-1 text-gray-400">
-                                        {% if a.assessment.market_analysis.market_accuracy %}
-                                        <li><strong>Market Accuracy:</strong> {{ a.assessment.market_analysis.market_accuracy }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.market_analysis.overlays_identified %}
-                                        <li><strong>Overlays:</strong> {{ a.assessment.market_analysis.overlays_identified }}</li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
-                                {% endif %}
-
-                                <!-- Improvement Recommendations -->
-                                {% if a.assessment.improvement_recommendations %}
-                                <div>
-                                    <h4 class="font-semibold text-punty-orange mb-1">Improvements</h4>
-                                    <ul class="space-y-1 text-gray-400">
-                                        {% if a.assessment.improvement_recommendations.what_worked %}
-                                        <li class="text-green-400"><strong>Worked:</strong> {{ a.assessment.improvement_recommendations.what_worked }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.improvement_recommendations.what_failed %}
-                                        <li class="text-red-400"><strong>Failed:</strong> {{ a.assessment.improvement_recommendations.what_failed }}</li>
-                                        {% endif %}
-                                        {% if a.assessment.improvement_recommendations.actionable_recommendation %}
-                                        <li class="text-punty-cyan"><strong>Recommendation:</strong> {{ a.assessment.improvement_recommendations.actionable_recommendation }}</li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
-                                {% endif %}
-                                {% endif %}
-                            </div>
-                        </details>
-                    </div>
-
-                    <!-- Delete Button -->
-                    <button onclick="deleteAssessment({{ a.id }}, '{{ a.race_id }}')"
-                            class="ml-4 text-gray-500 hover:text-red-500 p-2"
-                            title="Remove this learning if it's incorrect">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            {% else %}
-            <div class="px-6 py-8 text-center text-gray-500">
-                <p>No learnings yet. Assessments are generated automatically after races settle.</p>
-                <p class="text-sm mt-2">As more races are analyzed, learnings will appear here and be used to improve future predictions.</p>
-            </div>
-            {% endfor %}
-        </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow px-6 py-8 text-center text-gray-500">
+        <p>No learnings yet. Assessments are generated automatically after races settle.</p>
+        <p class="text-sm mt-2">As more races are analyzed, learnings will appear here and be used to improve future predictions.</p>
     </div>
+    {% endif %}
 </div>
 
 <script>
 async function deleteAssessment(id, raceId) {
-    if (!confirm(`Remove learning for ${raceId}?\n\nThis will stop this assessment from being used in future predictions.`)) {
+    if (!confirm(`Remove learning for ${raceId}?`)) {
         return;
     }
 
@@ -284,13 +244,8 @@ async function deleteAssessment(id, raceId) {
 
         if (response.ok) {
             // Remove the item from the DOM
-            const items = document.querySelectorAll('.assessment-item');
-            items.forEach(item => {
-                if (item.querySelector(`[onclick*="deleteAssessment(${id},"]`)) {
-                    item.remove();
-                }
-            });
-
+            const item = document.querySelector(`[data-assessment-id="${id}"]`);
+            if (item) item.remove();
             // Reload to update stats
             window.location.reload();
         } else {
