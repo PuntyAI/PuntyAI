@@ -267,7 +267,8 @@
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}">
                                     {% if pick.tip_rank == 1 %}&#9733; {% endif %}{{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
-                                    {% if pick.odds_at_tip %}${{ "%.2f"|format(pick.odds_at_tip) }}{% endif %}
+                                    {% set display_odds = pick.place_odds_at_tip if pick.bet_type == 'place' else pick.odds_at_tip %}
+                                    {% if display_odds %}${{ "%.2f"|format(display_odds) }}{% endif %}
                                     {% if pick.bet_stake %}<span style="opacity:0.8;">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                     {% if pick.settled %}
                                         {% if pick.hit %}<span style="color:#4ade80;">&#10003;</span>{% else %}<span style="color:#f87171;">&#10007;</span>{% endif %}
