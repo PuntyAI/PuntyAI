@@ -260,7 +260,7 @@ class SchedulerManager:
     async def setup_meeting_automation(self, meeting_id: str) -> dict:
         """Schedule automation jobs for a meeting based on race times.
 
-        - Pre-race job: 1.5 hours (90 min) before first race
+        - Pre-race job: 2 hours (120 min) before first race
         - Post-race job: 30 min after last race
 
         Returns: dict with scheduled job times
@@ -299,8 +299,8 @@ class SchedulerManager:
             # Calculate job times
             from datetime import timedelta
 
-            # Pre-race: 90 minutes before first race
-            pre_race_time = first_race_time - timedelta(minutes=90)
+            # Pre-race: 120 minutes before first race
+            pre_race_time = first_race_time - timedelta(minutes=120)
 
             # Post-race: 30 minutes after last race
             post_race_time = last_race_time + timedelta(minutes=30)
