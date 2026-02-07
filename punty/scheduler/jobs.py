@@ -1,5 +1,6 @@
 """Job definitions for scheduled tasks."""
 
+import asyncio
 import logging
 import random
 from datetime import date, datetime, timedelta
@@ -9,6 +10,9 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+# Rate limit handling for batch jobs
+RATE_LIMIT_QUEUE_PAUSE = 60  # seconds to pause queue when rate limited
 
 
 class JobType(str, Enum):
@@ -208,8 +212,14 @@ async def daily_morning_prep() -> dict:
                         results["early_mail_generated"].append(meeting.venue)
                         logger.info(f"Early mail generated for {meeting.venue}")
                     except Exception as e:
+                        error_str = str(e).lower()
                         logger.error(f"Early mail failed for {meeting.venue}: {e}")
                         results["errors"].append(f"Early mail {meeting.venue}: {str(e)}")
+
+                        # If rate limited, pause before next meeting
+                        if "rate limit" in error_str or "429" in error_str:
+                            logger.warning(f"Rate limit detected — pausing queue for {RATE_LIMIT_QUEUE_PAUSE}s")
+                            await asyncio.sleep(RATE_LIMIT_QUEUE_PAUSE)
             except Exception as e:
                 logger.error(f"Early mail step failed: {e}")
                 results["errors"].append(f"Early mail: {str(e)}")

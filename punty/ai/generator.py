@@ -1,13 +1,15 @@
 """Content generation orchestrator."""
 
+import asyncio
 import json
 import logging
 import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncGenerator, Optional
 
+from openai import RateLimitError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -17,6 +19,10 @@ from punty.context.versioning import create_context_snapshot
 from punty.models.content import Content, ContentStatus, ContentType
 
 logger = logging.getLogger(__name__)
+
+# Rate limit retry settings
+RATE_LIMIT_PAUSE = 60  # seconds to pause when rate limited
+MAX_RATE_LIMIT_RETRIES = 2  # retries at the stream level (on top of client retries)
 
 # Load prompts from files
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
@@ -161,12 +167,30 @@ class ContentGenerator:
 ## WhatsApp Invite Link
 {whatsapp_link}
 """
-            raw_content = await self.ai_client.generate_with_context(
-                system_prompt=system_prompt,
-                context=context_str,
-                instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
-                temperature=0.8,
-            )
+            # Generate with rate limit retry and status feedback
+            raw_content = None
+            for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+                try:
+                    raw_content = await self.ai_client.generate_with_context(
+                        system_prompt=system_prompt,
+                        context=context_str,
+                        instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
+                        temperature=0.8,
+                    )
+                    break  # Success
+                except RateLimitError as e:
+                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                        logger.warning(f"Rate limit hit for {venue}, pausing {RATE_LIMIT_PAUSE}s (attempt {attempt + 1}/{MAX_RATE_LIMIT_RETRIES + 1})")
+                        yield evt(f"Rate limit reached — pausing for {RATE_LIMIT_PAUSE}s before retry...", "warning")
+                        await asyncio.sleep(RATE_LIMIT_PAUSE)
+                        yield evt(f"Retrying AI generation (attempt {attempt + 2})...")
+                    else:
+                        logger.error(f"Rate limit: All retries exhausted for {venue}")
+                        raise  # Re-raise to be caught by outer exception handler
+
+            if raw_content is None:
+                raise Exception("AI generation failed - no content returned")
+
             yield evt("AI content generated", "done")
 
             favorites_detected = []
@@ -728,12 +752,30 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
 ## WhatsApp Invite Link
 {whatsapp_link}
 """
-            raw_content = await self.ai_client.generate_with_context(
-                system_prompt=system_prompt,
-                context=context_str,
-                instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {venue} on {context['meeting']['date']}",
-                temperature=0.8,
-            )
+            # Generate with rate limit retry and status feedback
+            raw_content = None
+            for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+                try:
+                    raw_content = await self.ai_client.generate_with_context(
+                        system_prompt=system_prompt,
+                        context=context_str,
+                        instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {venue} on {context['meeting']['date']}",
+                        temperature=0.8,
+                    )
+                    break  # Success
+                except RateLimitError as e:
+                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                        logger.warning(f"Rate limit hit for wrapup {venue}, pausing {RATE_LIMIT_PAUSE}s (attempt {attempt + 1}/{MAX_RATE_LIMIT_RETRIES + 1})")
+                        yield evt(f"Rate limit reached — pausing for {RATE_LIMIT_PAUSE}s before retry...", "warning")
+                        await asyncio.sleep(RATE_LIMIT_PAUSE)
+                        yield evt(f"Retrying AI generation (attempt {attempt + 2})...")
+                    else:
+                        logger.error(f"Rate limit: All retries exhausted for wrapup {venue}")
+                        raise
+
+            if raw_content is None:
+                raise Exception("AI generation failed - no content returned")
+
             yield evt("AI content generated", "done")
 
             result = {
