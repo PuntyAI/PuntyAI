@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-from typing import Optional, Literal
+from typing import Optional
 
 from openai import AsyncOpenAI, RateLimitError
 
@@ -15,9 +15,6 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
 
-# Reasoning effort levels for GPT-5.2
-ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
-
 
 class AIClient:
     """Wrapper for OpenAI API client."""
@@ -26,12 +23,10 @@ class AIClient:
         self,
         model: str = "gpt-5.2",
         api_key: Optional[str] = None,
-        reasoning_effort: ReasoningEffort = "medium",
     ):
         self.model = model
         self._api_key = api_key
         self._client: Optional[AsyncOpenAI] = None
-        self.reasoning_effort = reasoning_effort
 
     @property
     def client(self) -> AsyncOpenAI:
@@ -87,10 +82,10 @@ class AIClient:
                     "max_tokens": max_tokens,
                 }
 
-                # Add reasoning for GPT-5+ models
+                # Note: reasoning parameter requires Responses API, not Chat Completions
+                # GPT-5.2 still works well with Chat Completions, just without configurable reasoning effort
                 if self.model.startswith("gpt-5"):
-                    params["reasoning"] = {"effort": self.reasoning_effort}
-                    logger.info(f"Using {self.model} with reasoning_effort={self.reasoning_effort}")
+                    logger.info(f"Using {self.model}")
 
                 response = await self.client.chat.completions.create(**params)
 
