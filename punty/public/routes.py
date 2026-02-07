@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, and_, or_
 
@@ -19,6 +19,9 @@ router = APIRouter()
 # Templates directory
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=templates_dir)
+
+# Static files directory
+static_dir = Path(__file__).parent / "static"
 
 
 async def get_next_race() -> dict:
@@ -282,6 +285,18 @@ async def terms(request: Request):
 async def privacy(request: Request):
     """Privacy policy page."""
     return templates.TemplateResponse("privacy.html", {"request": request})
+
+
+@router.get("/sitemap.xml")
+async def sitemap():
+    """Serve sitemap.xml for search engines."""
+    return FileResponse(static_dir / "sitemap.xml", media_type="application/xml")
+
+
+@router.get("/robots.txt")
+async def robots():
+    """Serve robots.txt for search engines."""
+    return FileResponse(static_dir / "robots.txt", media_type="text/plain")
 
 
 async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
