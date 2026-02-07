@@ -317,11 +317,38 @@ async def _settle_picks_for_race_impl(
                 if hit:
                     dividend = _find_dividend(exotic_divs, "first4")
 
+            # Calculate combos for flexi betting
+            # For boxed/flexi bets, return = dividend × (stake / combos)
+            n = len(set(exotic_runners_int))  # unique runners
+            combos = 1
+
+            if "trifecta" in exotic_type:
+                if n == 3:
+                    combos = 1  # straight
+                elif n > 3:
+                    combos = n * (n - 1) * (n - 2)  # box
+            elif "exacta" in exotic_type:
+                if n == 2:
+                    combos = 1  # straight
+                elif n > 2:
+                    combos = n * (n - 1)  # box
+            elif "quinella" in exotic_type:
+                if n >= 2:
+                    combos = n * (n - 1) // 2
+            elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
+                if n == 4:
+                    combos = 1  # straight
+                elif n > 4:
+                    combos = n * (n - 1) * (n - 2) * (n - 3)  # box
+
             # Stake is the total outlay for this exotic bet
             cost = stake
 
             if hit and dividend > 0:
-                pick.pnl = round(dividend * stake - stake, 2)
+                # Flexi formula: return = dividend × (stake / combos)
+                flexi_pct = stake / combos if combos > 0 else stake
+                return_amount = dividend * flexi_pct
+                pick.pnl = round(return_amount - stake, 2)
             else:
                 pick.pnl = round(-cost, 2)
             pick.hit = hit
