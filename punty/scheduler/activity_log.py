@@ -147,11 +147,11 @@ def log_generate_complete(venue: str, content_type: str = "Early Mail") -> None:
     )
 
 
-def log_generate_error(venue: str, error: str) -> None:
+def log_generate_error(venue: str, error: str, content_type: str = "Early Mail") -> None:
     """Log content generation error."""
     activity_log.log(
         ActivityType.GENERATE_ERROR,
-        f"Generation failed: {venue}",
+        f"{content_type} generation failed: {venue}",
         venue=venue,
         details=error,
         status="error",

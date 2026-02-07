@@ -721,6 +721,9 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 step += 1
             return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
 
+        from punty.scheduler.activity_log import log_generate_start, log_generate_complete, log_generate_error
+        venue_name = "Unknown"
+
         try:
             await self._ensure_openai_key()
             yield evt("Building meeting wrap-up context...")
@@ -730,6 +733,8 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
             if not context.get("race_summaries"):
                 raise ValueError("No completed races yet — check results first")
             venue = context["meeting"]["venue"]
+            venue_name = venue
+            log_generate_start(venue, content_type="Wrap-up")
             yield evt(f"Context built — {venue} ({len(context['race_summaries'])} races)", "done")
 
             yield evt("Loading prompts & weights...")
@@ -794,10 +799,12 @@ Please provide a COMPLETE revised Early Mail with wider selections. Output the f
                 step += 1
                 yield evt("Save skipped", "done")
 
+            log_generate_complete(venue, content_type="Wrap-up")
             yield {"step": total_steps, "total": total_steps, "label": f"Punt Review generated for {venue}", "status": "generation_done", "result": result}
 
         except Exception as e:
             logger.error(f"Meeting wrapup generation failed: {e}")
+            log_generate_error(venue_name, str(e), content_type="Wrap-up")
             yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
     async def generate_meeting_wrapup(
