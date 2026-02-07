@@ -77,5 +77,8 @@ debug_*.py
 # Windows artifacts
 nul
 
+# Node
+node_modules/
+
 # Claude Code session data
 .claude/

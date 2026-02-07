@@ -1,0 +1,29 @@
+{
+  "name": "puntyai",
+  "version": "1.0.0",
+  "description": "AI-powered horse racing content generator - meet Punty, the cheeky Aussie tipster!",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build:css": "tailwindcss -i ./tailwind-input.css -o ./punty/web/static/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./tailwind-input.css -o ./punty/web/static/tailwind.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PuntyAI/PuntyAI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/PuntyAI/PuntyAI/issues"
+  },
+  "homepage": "https://github.com/PuntyAI/PuntyAI#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

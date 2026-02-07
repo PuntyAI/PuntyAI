@@ -30,8 +30,8 @@
     <meta name="twitter:description" content="{% block twitter_description %}Free daily horse racing tips powered by AI. No bullshit, just picks.{% endblock %}">
     <meta name="twitter:image" content="{% block twitter_image %}https://punty.ai/static/og-image.png{% endblock %}">
 
-    <!-- Tailwind CSS via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (precompiled) -->
+    <link rel="stylesheet" href="/static/tailwind.css">
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <!-- Fonts -->
@@ -39,34 +39,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        punty: {
-                            dark: '#0a0a0f',
-                            card: '#12121a',
-                            card2: '#1a1a25',
-                            border: 'rgba(255,255,255,0.08)',
-                            magenta: '#e91e8c',
-                            mbright: '#ff2d9e',
-                            cyan: '#00d4ff',
-                            orange: '#ff6b35',
-                            yellow: '#ffc107',
-                            purple: '#9d4edd',
-                            muted: '#606070',
-                        }
-                    },
-                    fontFamily: {
-                        display: ['"Orbitron"', 'sans-serif'],
-                        heading: ['"Rajdhani"', 'sans-serif'],
-                        body: ['"Source Sans Pro"', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         :root {
             --bg-dark: #0a0a0f;
