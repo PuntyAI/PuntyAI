@@ -86,7 +86,6 @@ class AIClient:
                             {"role": "user", "content": user_prompt},
                         ],
                         reasoning={"effort": self.reasoning_effort},
-                        temperature=temperature,
                         max_output_tokens=max_tokens,
                     )
                     content = response.output_text
