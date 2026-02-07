@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 
 from punty.config import melb_today, melb_now, MELB_TZ
 from punty.models.database import async_session
@@ -44,12 +44,16 @@ async def get_next_race() -> dict:
             return {"has_next": False}
 
         # Get all races for today's meetings that haven't finished yet
+        # Note: notin_ doesn't handle NULL correctly, so we need explicit OR for NULL values
         races_result = await db.execute(
             select(Race).where(
                 and_(
                     Race.meeting_id.in_(list(meetings.keys())),
                     Race.start_time.isnot(None),
-                    Race.results_status.notin_(["Paying", "Closed", "Final"]),
+                    or_(
+                        Race.results_status.is_(None),
+                        Race.results_status.notin_(["Paying", "Closed", "Final"]),
+                    ),
                 )
             ).order_by(Race.start_time)
         )
