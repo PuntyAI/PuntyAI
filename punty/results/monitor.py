@@ -438,6 +438,7 @@ class ResultsMonitor:
         """Check for big wins (>= 5x outlay) and post celebration tweet replies."""
         from punty.models.pick import Pick
         from punty.models.content import Content
+        from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
         from punty.results.celebrations import compose_celebration_tweet
 
@@ -476,18 +477,36 @@ class ResultsMonitor:
                 collect=collect,
             )
 
+            reply_tweet_id = None
             twitter = TwitterDelivery(db)
             if await twitter.is_configured():
                 try:
-                    await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_tweet_id = reply_result.get("tweet_id")
                     logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
                 except Exception as e:
                     logger.warning(f"Failed to post celebration reply: {e}")
+
+            # Save to DB regardless of Twitter success
+            update = LiveUpdate(
+                meeting_id=meeting_id,
+                race_number=race_number,
+                update_type="celebration",
+                content=tweet_text,
+                tweet_id=reply_tweet_id,
+                parent_tweet_id=early_mail.twitter_id,
+                horse_name=pick.horse_name,
+                odds=pick.odds_at_tip,
+                pnl=pick.pnl,
+            )
+            db.add(update)
+            await db.flush()
 
     async def _check_pace_bias(self, db: AsyncSession, meeting, statuses: dict, just_completed: int):
         """Analyze pace bias and post tweet reply if significant pattern detected."""
         from punty.results.pace_analysis import analyze_pace_bias, compose_pace_tweet
         from punty.models.content import Content
+        from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
 
         meeting_id = meeting.id
@@ -529,14 +548,29 @@ class ResultsMonitor:
         if not tweet_text:
             return
 
+        reply_tweet_id = None
         twitter = TwitterDelivery(db)
         if await twitter.is_configured():
             try:
-                await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                reply_tweet_id = reply_result.get("tweet_id")
                 self.pace_updates_posted[meeting_id] = posted_count + 1
                 logger.info(f"Posted pace analysis for {meeting.venue} (update {posted_count + 1}, bias: {bias_result.bias_type})")
             except Exception as e:
                 logger.warning(f"Failed to post pace analysis reply: {e}")
+
+        # Save to DB regardless of Twitter success
+        update = LiveUpdate(
+            meeting_id=meeting_id,
+            race_number=just_completed,
+            update_type="pace_analysis",
+            content=tweet_text,
+            tweet_id=reply_tweet_id,
+            parent_tweet_id=early_mail.twitter_id,
+        )
+        db.add(update)
+        await db.flush()
+        self.pace_updates_posted[meeting_id] = posted_count + 1
 
     async def _scrape_sectional_times(self, db: AsyncSession, meeting, race_num: int):
         """Scrape and store post-race sectional times for a race.

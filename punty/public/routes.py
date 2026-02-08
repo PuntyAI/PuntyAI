@@ -13,6 +13,7 @@ from punty.models.database import async_session
 from punty.models.pick import Pick
 from punty.models.content import Content
 from punty.models.meeting import Meeting, Race
+from punty.models.live_update import LiveUpdate
 
 router = APIRouter()
 
@@ -460,6 +461,26 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             if pick.race_number and pick.saddlecloth:
                 winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
 
+        # Get live updates (celebrations + pace analysis)
+        updates_result = await db.execute(
+            select(LiveUpdate).where(
+                LiveUpdate.meeting_id == meeting_id,
+            ).order_by(LiveUpdate.created_at.asc())
+        )
+        live_updates = [
+            {
+                "type": u.update_type,
+                "content": u.content,
+                "horse_name": u.horse_name,
+                "odds": u.odds,
+                "pnl": u.pnl,
+                "race_number": u.race_number,
+                "tweet_id": u.tweet_id,
+                "created_at": u.created_at.strftime("%I:%M %p").lstrip("0") if u.created_at else None,
+            }
+            for u in updates_result.scalars().all()
+        ]
+
         # Generate seed from meeting date for consistent rotation
         seed = hash(meeting.id) if meeting.id else 0
 
@@ -484,6 +505,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "created_at": wrapup.created_at.isoformat() if wrapup.created_at else None,
             } if wrapup else None,
             "winners": winners_map,
+            "live_updates": live_updates,
         }
 
 
@@ -522,5 +544,6 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "early_mail": data["early_mail"],
             "wrapup": data["wrapup"],
             "winners": data.get("winners", {}),
+            "live_updates": data.get("live_updates", []),
         }
     )

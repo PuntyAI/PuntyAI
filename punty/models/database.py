@@ -34,7 +34,7 @@ async_session = async_sessionmaker(
 async def init_db() -> None:
     """Initialize the database, creating all tables."""
     # Import models to ensure they're registered with Base
-    from punty.models import meeting, content, settings, pick  # noqa: F401
+    from punty.models import meeting, content, settings, pick, live_update  # noqa: F401
     from punty.memory import models as memory_models  # noqa: F401  # registers memory models
 
     async with engine.begin() as conn:
@@ -77,6 +77,19 @@ async def init_db() -> None:
                 conditions_json TEXT DEFAULT '{}',
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS live_updates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                meeting_id VARCHAR(64) NOT NULL REFERENCES meetings(id),
+                race_number INTEGER,
+                update_type VARCHAR(20) NOT NULL,
+                content TEXT NOT NULL,
+                tweet_id VARCHAR(64),
+                parent_tweet_id VARCHAR(64),
+                horse_name VARCHAR(100),
+                odds FLOAT,
+                pnl FLOAT,
+                created_at DATETIME NOT NULL
             )""",
             """CREATE TABLE IF NOT EXISTS race_assessments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +189,8 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_age ON race_assessments(age_restriction)",
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_sex ON race_assessments(sex_restriction)",
             "CREATE INDEX IF NOT EXISTS ix_race_assessments_state ON race_assessments(state)",
+            # Live updates indexes
+            "CREATE INDEX IF NOT EXISTS ix_live_updates_meeting_id ON live_updates(meeting_id)",
             # Settlement query indexes
             "CREATE INDEX IF NOT EXISTS ix_races_meeting_status ON races(meeting_id, results_status)",
             "CREATE INDEX IF NOT EXISTS ix_picks_type_settled ON picks(meeting_id, pick_type, settled)",
