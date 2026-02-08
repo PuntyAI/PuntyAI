@@ -853,12 +853,12 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
     return results
 
 
-async def meeting_post_race_job(meeting_id: str, retry_count: int = 0) -> dict:
+async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_started_at: str | None = None) -> dict:
     """Run 30 minutes after last race for a meeting.
 
     Steps:
     1. Check all picks are settled
-    2. If not settled, reschedule retry (max 3 retries)
+    2. If not settled, reschedule retry (max 3 retries, max 2h total)
     3. Generate wrap-up
     4. Auto-approve if valid
     5. Post to Twitter
@@ -876,8 +876,16 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0) -> dict:
 
     MAX_RETRIES = 3
     RETRY_DELAY_MINUTES = 10
+    MAX_ELAPSED_HOURS = 2
 
-    logger.info(f"Starting post-race job for {meeting_id} (retry: {retry_count})")
+    # Track job start time across retries
+    from datetime import datetime as _dt
+    if job_started_at is None:
+        job_started_at = melb_now().isoformat()
+    first_start = _dt.fromisoformat(job_started_at)
+    elapsed_hours = (melb_now() - first_start).total_seconds() / 3600
+
+    logger.info(f"Starting post-race job for {meeting_id} (retry: {retry_count}, elapsed: {elapsed_hours:.1f}h)")
     log_scheduler_job(f"Post-race job started: {meeting_id}", status="info")
 
     results = {
@@ -907,25 +915,30 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0) -> dict:
             "total": total_count,
         }
 
-        if not all_settled and retry_count < MAX_RETRIES:
+        if not all_settled and retry_count < MAX_RETRIES and elapsed_hours < MAX_ELAPSED_HOURS:
             logger.info(f"Not all picks settled ({settled_count}/{total_count}), scheduling retry...")
             results["steps"].append(f"settlement_check: incomplete ({settled_count}/{total_count})")
             results["retry_scheduled"] = True
 
-            # Schedule retry
+            # Schedule retry, passing job_started_at to track total elapsed time
             from punty.scheduler.manager import scheduler_manager
             from datetime import timedelta
 
+            _started = job_started_at
             retry_time = melb_now() + timedelta(minutes=RETRY_DELAY_MINUTES)
             scheduler_manager.add_job(
                 f"{meeting_id}-post-race-retry-{retry_count + 1}",
-                lambda: meeting_post_race_job(meeting_id, retry_count + 1),
+                lambda: meeting_post_race_job(meeting_id, retry_count + 1, job_started_at=_started),
                 trigger_type="date",
                 run_date=retry_time,
             )
 
             log_system(f"Settlement incomplete, retry scheduled: {venue}", status="info")
             return results
+
+        if not all_settled:
+            logger.warning(f"Settlement timeout ({elapsed_hours:.1f}h elapsed or max retries). Proceeding with wrap-up anyway.")
+            results["steps"].append(f"settlement_timeout: proceeding ({settled_count}/{total_count} settled)")
 
         if not all_settled:
             logger.warning(f"Max retries reached, proceeding with unsettled picks: {meeting_id}")
