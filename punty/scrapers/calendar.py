@@ -69,7 +69,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
             # Each container has a day element with the date number
             day_elem = c.locator(".calendar__grid-item-day").first
             try:
-                day_text = (await day_elem.text_content() or "").strip()
+                day_text = (await day_elem.text_content(timeout=2000) or "").strip()
                 # Day text is usually just the number (e.g., "3" for Feb 3)
                 # Sometimes it might have additional text
                 day_num = None

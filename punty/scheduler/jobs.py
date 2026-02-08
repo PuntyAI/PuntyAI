@@ -14,6 +14,42 @@ logger = logging.getLogger(__name__)
 # Rate limit handling for batch jobs
 RATE_LIMIT_QUEUE_PAUSE = 60  # seconds to pause queue when rate limited
 
+# Calendar retry: max retries until noon Melbourne time
+CALENDAR_RETRY_MAX_HOUR = 12  # stop retrying after noon
+
+
+def _schedule_calendar_retry(scheduler_manager, race_date: date) -> None:
+    """Schedule an hourly retry of the calendar scrape if no meetings were found.
+
+    Racing.com often doesn't publish next-day meetings until the morning,
+    so the midnight scrape may find 0 meetings. This schedules retries
+    every hour until meetings are found or noon is reached.
+    """
+    from punty.config import melb_now, MELB_TZ
+
+    now = melb_now()
+    next_hour = (now + timedelta(hours=1)).replace(minute=5, second=0, microsecond=0)
+
+    # Don't retry past noon — if still no meetings, it's genuinely empty
+    if next_hour.hour >= CALENDAR_RETRY_MAX_HOUR:
+        logger.info(f"Calendar retry skipped — past {CALENDAR_RETRY_MAX_HOUR}:00, no more retries")
+        return
+
+    job_id = f"calendar-retry-{next_hour.strftime('%H%M')}"
+
+    # Check if a retry is already scheduled
+    if scheduler_manager.get_job(job_id):
+        logger.info(f"Calendar retry already scheduled: {job_id}")
+        return
+
+    scheduler_manager.add_job(
+        job_id,
+        daily_calendar_scrape,
+        trigger_type="date",
+        run_date=next_hour.replace(tzinfo=None),
+    )
+    logger.info(f"Scheduled calendar retry at {next_hour.strftime('%H:%M')} Melbourne time")
+
 
 class JobType(str, Enum):
     """Types of scheduled jobs."""
@@ -35,9 +71,13 @@ async def daily_calendar_scrape() -> dict:
 
     This job:
     1. Scrapes the racing calendar to get today's meetings
-    2. Auto-selects all meetings
+    2. Auto-selects all meetings (skipping abandoned)
     3. Scrapes full race data for each meeting (runners, form, odds, track conditions)
-    4. Schedules meeting-specific automation jobs (pre-race, post-race)
+    4. Deselects meetings with no races (abandoned/cancelled)
+    5. Schedules meeting-specific automation jobs (pre-race, post-race)
+
+    If 0 meetings are found, schedules hourly retries until meetings appear
+    (racing.com often doesn't publish next-day meetings until morning).
 
     Note: Early mail generation is handled by meeting_pre_race_job
     which runs 2 hours before each meeting's first race.
@@ -72,6 +112,11 @@ async def daily_calendar_scrape() -> dict:
             results["meetings_found"] = len(meetings_data) if meetings_data else 0
             logger.info(f"Found {results['meetings_found']} meetings")
 
+            # If 0 meetings found, schedule hourly retry (calendar may not be populated yet)
+            if not meetings_data:
+                _schedule_calendar_retry(scheduler_manager, today)
+                results["retry_scheduled"] = True
+
             # Create Meeting records for any new meetings found
             for m in meetings_data:
                 meeting_id = f"{m['venue'].lower().replace(' ', '-')}-{today.isoformat()}"
@@ -89,6 +134,9 @@ async def daily_calendar_scrape() -> dict:
         except Exception as e:
             logger.error(f"Calendar scrape failed: {e}")
             results["errors"].append(f"Calendar: {str(e)}")
+            # Also retry on error
+            _schedule_calendar_retry(scheduler_manager, today)
+            results["retry_scheduled"] = True
 
         # Step 2: Auto-select ALL meetings
         try:
@@ -144,6 +192,35 @@ async def daily_calendar_scrape() -> dict:
         except Exception as e:
             logger.error(f"Full data scrape failed: {e}")
             results["errors"].append(f"Full scrape: {str(e)}")
+
+        # Step 3b: Deselect abandoned meetings (no races after scrape)
+        try:
+            logger.info("Step 3b: Checking for abandoned/empty meetings...")
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                )
+            )
+            selected_meetings = result.scalars().all()
+            abandoned = []
+
+            for meeting in selected_meetings:
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting.id).limit(1)
+                )
+                if not race_result.scalar_one_or_none():
+                    meeting.selected = False
+                    abandoned.append(meeting.venue)
+                    logger.info(f"Deselected {meeting.venue} — no races found (abandoned/cancelled)")
+
+            if abandoned:
+                await db.commit()
+                results["abandoned"] = abandoned
+                logger.info(f"Deselected {len(abandoned)} abandoned meetings: {abandoned}")
+        except Exception as e:
+            logger.error(f"Abandoned check failed: {e}")
+            results["errors"].append(f"Abandoned check: {str(e)}")
 
     # Step 4: Schedule meeting automation
     try:
