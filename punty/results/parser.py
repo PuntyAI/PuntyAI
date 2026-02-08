@@ -66,7 +66,7 @@ _EXOTIC_RETURN = re.compile(
 
 # --- Sequences ---
 _SEQ_HEADER = re.compile(
-    r"(EARLY\s+QUADDIE|MAIN\s+QUADDIE|QUADDIE|BIG\s*6)\s*\(R(\d+)[–\-—]R(\d+)\)",
+    r"(EARLY\s+QUADDIE|MAIN\s+QUADDIE|QUADDIE|BIG\s*6)\s*\((?:Races?\s*)?R?(\d+)[–\-—](?:R)?(\d+)\)",
     re.IGNORECASE,
 )
 _SEQ_VARIANT = re.compile(
@@ -337,7 +337,7 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
     if not seq_section_m:
         # Try without the heading wrapper
         seq_section_m = re.search(
-            r"((?:EARLY\s+QUADDIE|MAIN\s+QUADDIE|QUADDIE|BIG\s*6)\s*\(R\d+.*?)(?=\n###|\n\*NUGGETS|\Z)",
+            r"((?:EARLY\s+QUADDIE|MAIN\s+QUADDIE|QUADDIE|BIG\s*6)\s*\((?:Races?\s*)?R?\d+.*?)(?=\n###|\n\*NUGGETS|\Z)",
             raw_content, re.DOTALL | re.IGNORECASE,
         )
     if not seq_section_m:
