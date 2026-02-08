@@ -211,6 +211,25 @@ async def public_next_race():
     return await get_next_race()
 
 
+@app.get("/api/public/venues")
+async def public_venues():
+    """Get distinct venues that have sent tips, for search autocomplete."""
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting
+    from punty.models.content import Content
+    from sqlalchemy import select, distinct, and_
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(distinct(Meeting.venue))
+            .join(Content, Content.meeting_id == Meeting.id)
+            .where(and_(Content.content_type == "early_mail", Content.status == "sent"))
+            .order_by(Meeting.venue)
+        )
+        venues = [row[0] for row in result.all() if row[0]]
+    return {"venues": venues}
+
+
 if __name__ == "__main__":
     import uvicorn
 

@@ -165,7 +165,11 @@ async def login_google(request: Request):
     if not settings.google_client_id:
         return RedirectResponse(url="/login?error=Google+OAuth+not+configured")
     redirect_uri = request.url_for("auth_callback")
-    return await oauth.google.authorize_redirect(request, str(redirect_uri))
+    # Force HTTPS in production — Caddy terminates TLS so uvicorn sees http://
+    redirect_uri_str = str(redirect_uri)
+    if not settings.debug and redirect_uri_str.startswith("http://"):
+        redirect_uri_str = redirect_uri_str.replace("http://", "https://", 1)
+    return await oauth.google.authorize_redirect(request, redirect_uri_str)
 
 
 @router.get("/auth/callback")

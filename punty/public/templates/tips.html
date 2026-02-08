@@ -24,18 +24,20 @@
             <div class="flex flex-wrap gap-3 items-end">
                 <div class="flex-1 min-w-[150px]">
                     <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Venue</label>
-                    <input type="text" name="venue" value="{{ venue }}" placeholder="e.g. Flemington"
+                    <input type="text" name="venue" value="{{ venue }}" placeholder="Start typing..."
+                           list="venue-list" autocomplete="off"
                            class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    <datalist id="venue-list"></datalist>
                 </div>
                 <div class="min-w-[140px]">
                     <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">From</label>
                     <input type="date" name="date_from" value="{{ date_from }}"
-                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary); color-scheme: dark;">
                 </div>
                 <div class="min-w-[140px]">
                     <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">To</label>
                     <input type="date" name="date_to" value="{{ date_to }}"
-                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary); color-scheme: dark;">
                 </div>
                 <div class="flex gap-2">
                     <button type="submit" class="px-4 py-2 rounded-lg font-heading font-semibold text-sm" style="background: var(--magenta); color: white;">Search</button>
@@ -45,6 +47,12 @@
                 </div>
             </div>
         </form>
+        <script>
+        fetch('/api/public/venues').then(r=>r.json()).then(data=>{
+            const dl=document.getElementById('venue-list');
+            data.venues.forEach(v=>{const o=document.createElement('option');o.value=v;dl.appendChild(o);});
+        }).catch(()=>{});
+        </script>
 
         {% if calendar %}
         <!-- Calendar View -->
