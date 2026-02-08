@@ -117,10 +117,12 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Remove the title line if it starts with *PUNTY EARLY MAIL*
     content = re.sub(r'^\*PUNTY EARLY MAIL[^*]*\*\s*\n*', '', content, flags=re.IGNORECASE)
 
-    # Convert headers (### *TEXT* or ### TEXT)
+    # Convert headers (### *TEXT* or ### 1) TEXT)
     def convert_header(m):
         level = len(m.group(1))
         text = m.group(2).strip().strip('*')
+        # Strip leading section numbers like "1) ", "2) "
+        text = re.sub(r'^\d+\)\s*', '', text).strip().strip('*')
         tag = f"h{min(level + 1, 4)}"  # h2, h3, h4
         return f'<{tag} class="tips-heading">{text}</{tag}>'
 
