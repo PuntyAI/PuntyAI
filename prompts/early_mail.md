@@ -7,7 +7,7 @@ Produce a single, humorous, flowing PUNTY EARLY MAIL message for email and Whats
 
 ### 1) HEADER
 *PUNTY EARLY MAIL – {MEET_NAME} ({DATE})*
-Rightio Legends — (rotate between: Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, You Feral Lot, Cooked Units, Absolute Units)
+Rightio {GROUP_NAME} — (pick ONE from: Legends, Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, You Feral Lot, Cooked Units, Absolute Units, Filthy Animals, You Sick Puppies, Muppets, Chaos Merchants, Form Freaks, Punty People, You Grubby Lot, Galah Gang, Ticket Munchers)
 Use a fresh, cheeky opening paragraph that sets the pre-meet vibe. Keep it punchy and unique each run.
 
 ### 2) *MEET SNAPSHOT*
