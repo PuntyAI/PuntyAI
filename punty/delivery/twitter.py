@@ -92,7 +92,7 @@ class TwitterDelivery:
         if not content:
             raise ValueError(f"Content not found: {content_id}")
 
-        if content.status != ContentStatus.APPROVED.value:
+        if content.status not in (ContentStatus.APPROVED.value, ContentStatus.SENT.value):
             raise ValueError(f"Content not approved: {content.status}")
 
         # Get meeting for venue
@@ -160,7 +160,7 @@ class TwitterDelivery:
         if not content:
             raise ValueError(f"Content not found: {content_id}")
 
-        if content.status != ContentStatus.APPROVED.value:
+        if content.status not in (ContentStatus.APPROVED.value, ContentStatus.SENT.value):
             raise ValueError(f"Content not approved: {content.status}")
 
         # Get meeting for venue
@@ -252,7 +252,7 @@ class TwitterDelivery:
         if not content:
             raise ValueError(f"Content not found: {content_id}")
 
-        if content.status != ContentStatus.APPROVED.value:
+        if content.status not in (ContentStatus.APPROVED.value, ContentStatus.SENT.value):
             raise ValueError(f"Content not approved: {content.status}")
 
         # Get meeting for venue
