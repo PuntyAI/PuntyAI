@@ -315,6 +315,7 @@ async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
                     Content.content_type == "early_mail",
                     Content.status == "sent",
                     Meeting.date.isnot(None),
+                    Meeting.selected == True,
                 )
             )
         )
@@ -331,6 +332,7 @@ async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
                     Content.content_type == "early_mail",
                     Content.status == "sent",
                     Meeting.date.isnot(None),
+                    Meeting.selected == True,
                 )
             )
             .order_by(desc(Meeting.date))
@@ -359,6 +361,7 @@ async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
                     Content.content_type == "early_mail",
                     Content.status == "sent",
                     Meeting.date.in_(page_dates),
+                    Meeting.selected == True,
                 )
             )
             .order_by(desc(Meeting.date), Meeting.venue)

@@ -364,11 +364,11 @@ class ResultsMonitor:
                     self.processed_races[meeting_id].add(race_num)
                     logger.info(f"Processed result: {meeting.venue} R{race_num}")
 
-                    # Check for big wins and post celebration tweet replies
+                    # Check for wins and post celebration tweet replies
                     try:
-                        await self._check_big_wins(db, meeting_id, race_num)
+                        await self._check_wins(db, meeting_id, race_num)
                     except Exception as e:
-                        logger.debug(f"Big win check failed for {meeting.venue} R{race_num}: {e}")
+                        logger.debug(f"Win check failed for {meeting.venue} R{race_num}: {e}")
 
                     # Check for pace bias and post analysis tweet (after race 4+)
                     try:
@@ -407,6 +407,22 @@ class ResultsMonitor:
                     f"{results_count}/{total_races} have results scraped — holding wrap-up"
                 )
         if paying_count >= total_races and results_count >= total_races and meeting_id not in self.wrapups_generated:
+            # Wait 30 minutes after last race start time before generating wrap-up
+            # This ensures all results, dividends, and sectionals have time to flow through
+            last_race_start = max(
+                (r.start_time for r in races if r.start_time), default=None
+            )
+            if last_race_start:
+                now_naive = datetime.now(AEST).replace(tzinfo=None)
+                wrap_ready_at = last_race_start + timedelta(minutes=30)
+                if now_naive < wrap_ready_at:
+                    mins_left = (wrap_ready_at - now_naive).total_seconds() / 60
+                    logger.info(
+                        f"{meeting.venue}: All races done but waiting for wrap-up delay "
+                        f"({mins_left:.0f}min remaining, ready at {wrap_ready_at.strftime('%H:%M')})"
+                    )
+                    return
+
             # Check if a wrapup already exists in DB (prevents duplicates on restart)
             from punty.models.content import Content
             existing_wrapup = await db.execute(
@@ -452,59 +468,88 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
 
-    async def _check_big_wins(self, db: AsyncSession, meeting_id: str, race_number: int):
-        """Check for big wins (>= 5x outlay) and post celebration tweet replies."""
+    async def _check_wins(self, db: AsyncSession, meeting_id: str, race_number: int):
+        """Check for ALL wins and post celebration tweet replies."""
         from punty.models.pick import Pick
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
+        from punty.models.meeting import Meeting
         from punty.delivery.twitter import TwitterDelivery
-        from punty.results.celebrations import compose_celebration_tweet
+        from punty.results.celebrations import (
+            compose_celebration_tweet,
+            compose_exotic_celebration,
+            compose_sequence_celebration,
+        )
 
+        # Get venue name for exotic/sequence tweets
+        meeting_obj = await db.get(Meeting, meeting_id)
+        venue = meeting_obj.venue if meeting_obj else "Racing"
+
+        # Find the meeting's early mail tweet ID (shared across all wins)
+        em_result = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting_id,
+                Content.content_type == "early_mail",
+                Content.twitter_id.isnot(None),
+            ).order_by(Content.created_at.desc())
+        )
+        early_mail = em_result.scalars().first()
+        parent_tweet_id = early_mail.twitter_id if early_mail else None
+
+        # Get all winning picks for this race
         result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == meeting_id,
                 Pick.race_number == race_number,
-                Pick.pick_type == "selection",
                 Pick.settled == True,
                 Pick.hit == True,
                 Pick.pnl > 0,
             )
         )
+        twitter = None
         for pick in result.scalars().all():
-            stake = pick.bet_stake or 1.0
-            if pick.pnl < 4 * stake:
+            stake = pick.bet_stake or pick.exotic_stake or 1.0
+            collect = stake + pick.pnl
+
+            # Compose tweet based on pick type
+            if pick.pick_type in ("selection", "big3"):
+                tweet_text = compose_celebration_tweet(
+                    horse_name=pick.horse_name or "Winner",
+                    odds=pick.odds_at_tip or 0,
+                    stake=stake,
+                    collect=collect,
+                    bet_type=pick.bet_type or "Win",
+                )
+            elif pick.pick_type == "exotic":
+                tweet_text = compose_exotic_celebration(
+                    exotic_type=pick.exotic_type or "Exotic",
+                    race_number=race_number,
+                    venue=venue,
+                    stake=stake,
+                    collect=collect,
+                )
+            elif pick.pick_type in ("sequence", "big3_multi"):
+                tweet_text = compose_sequence_celebration(
+                    sequence_type=pick.sequence_type or pick.pick_type,
+                    variant=pick.sequence_variant,
+                    venue=venue,
+                    stake=stake,
+                    collect=collect,
+                )
+            else:
                 continue
 
-            # Find the meeting's early mail tweet ID
-            em_result = await db.execute(
-                select(Content).where(
-                    Content.meeting_id == meeting_id,
-                    Content.content_type == "early_mail",
-                    Content.twitter_id.isnot(None),
-                ).order_by(Content.created_at.desc())
-            )
-            early_mail = em_result.scalars().first()
-            if not early_mail or not early_mail.twitter_id:
-                return
-
-            collect = stake + pick.pnl
-            tweet_text = compose_celebration_tweet(
-                horse_name=pick.horse_name or "Winner",
-                odds=pick.odds_at_tip or 0,
-                stake=stake,
-                collect=collect,
-                bet_type=pick.bet_type or "Win",
-            )
-
             reply_tweet_id = None
-            twitter = TwitterDelivery(db)
-            if await twitter.is_configured():
-                try:
-                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
-                    reply_tweet_id = reply_result.get("tweet_id")
-                    logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
-                except Exception as e:
-                    logger.warning(f"Failed to post celebration reply: {e}")
+            if parent_tweet_id:
+                if twitter is None:
+                    twitter = TwitterDelivery(db)
+                if await twitter.is_configured():
+                    try:
+                        reply_result = await twitter.post_reply(parent_tweet_id, tweet_text)
+                        reply_tweet_id = reply_result.get("tweet_id")
+                        logger.info(f"Posted celebration for {pick.pick_type}: {pick.horse_name or pick.exotic_type or pick.sequence_type} ({pick.pnl:+.2f})")
+                    except Exception as e:
+                        logger.warning(f"Failed to post celebration reply: {e}")
 
             # Save to DB regardless of Twitter success
             update = LiveUpdate(
@@ -513,7 +558,7 @@ class ResultsMonitor:
                 update_type="celebration",
                 content=tweet_text,
                 tweet_id=reply_tweet_id,
-                parent_tweet_id=early_mail.twitter_id,
+                parent_tweet_id=parent_tweet_id,
                 horse_name=pick.horse_name,
                 odds=pick.odds_at_tip,
                 pnl=pick.pnl,
