@@ -109,6 +109,15 @@ async def init_db() -> None:
                 total_pnl FLOAT,
                 created_at DATETIME NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS settings_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key VARCHAR NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                changed_by VARCHAR(200),
+                action VARCHAR(20) NOT NULL,
+                changed_at DATETIME NOT NULL
+            )""",
         ]:
             try:
                 await conn.execute(_text(table_sql))
@@ -194,6 +203,9 @@ async def init_db() -> None:
             # Settlement query indexes
             "CREATE INDEX IF NOT EXISTS ix_races_meeting_status ON races(meeting_id, results_status)",
             "CREATE INDEX IF NOT EXISTS ix_picks_type_settled ON picks(meeting_id, pick_type, settled)",
+            # Settings audit indexes
+            "CREATE INDEX IF NOT EXISTS ix_settings_audit_key ON settings_audit(key)",
+            "CREATE INDEX IF NOT EXISTS ix_settings_audit_changed_at ON settings_audit(changed_at)",
         ]:
             try:
                 await conn.execute(_text(idx))

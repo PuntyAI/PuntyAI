@@ -116,6 +116,47 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Picks Table (shown for approved/sent content) -->
+            {% if content.status in ['approved', 'sent'] %}
+            <div class="bg-white rounded-lg shadow" id="picks-section">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-900">Picks</h2>
+                    <div class="flex gap-2">
+                        <button onclick="reparsePicks()"
+                                class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
+                                title="Re-extract picks from content text">
+                            Re-parse
+                        </button>
+                        <button onclick="savePicks()"
+                                id="save-picks-btn"
+                                class="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 hidden">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6 overflow-x-auto">
+                    <table class="w-full text-sm" id="picks-table">
+                        <thead>
+                            <tr class="text-left text-gray-500 border-b">
+                                <th class="pb-2 pr-2">R#</th>
+                                <th class="pb-2 pr-2">Type</th>
+                                <th class="pb-2 pr-2">Horse</th>
+                                <th class="pb-2 pr-2">No.</th>
+                                <th class="pb-2 pr-2">Odds</th>
+                                <th class="pb-2 pr-2">Bet</th>
+                                <th class="pb-2 pr-2">Stake</th>
+                                <th class="pb-2 pr-2">Result</th>
+                                <th class="pb-2">P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody id="picks-tbody">
+                            <tr><td colspan="9" class="py-4 text-center text-gray-400">Loading picks...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Sidebar -->
@@ -244,6 +285,124 @@
 </div>
 
 <script>
-// No preview switching needed - only Twitter preview now
+// --- Picks Table ---
+{% if content.status in ['approved', 'sent'] %}
+const CONTENT_ID = '{{ content.id }}';
+let picksData = [];
+let dirtyPicks = {};
+
+async function loadPicks() {
+    try {
+        const res = await fetch(`/api/content/${CONTENT_ID}/picks`);
+        picksData = await res.json();
+        renderPicks();
+    } catch(e) {
+        document.getElementById('picks-tbody').innerHTML =
+            '<tr><td colspan="9" class="py-4 text-center text-red-400">Failed to load picks</td></tr>';
+    }
+}
+
+function renderPicks() {
+    const tbody = document.getElementById('picks-tbody');
+    if (!picksData.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-gray-400">No picks found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = picksData.map(p => {
+        const isSelection = p.pick_type === 'selection' || p.pick_type === 'big3';
+        const settled = p.settled;
+        const hitClass = p.hit === true ? 'text-green-600 font-semibold' : p.hit === false ? 'text-red-500' : 'text-gray-400';
+        const pnlClass = (p.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-500';
+        return `<tr class="border-b border-gray-100" data-pick-id="${p.id}">
+            <td class="py-2 pr-2">${p.race_number || '-'}</td>
+            <td class="py-2 pr-2"><span class="px-1.5 py-0.5 rounded text-xs ${typeColor(p)}">${typeLabel(p)}</span></td>
+            <td class="py-2 pr-2">${isSelection ? `<input type="text" value="${esc(p.horse_name || '')}" data-field="horse_name" class="pick-edit w-28 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : (p.exotic_type || p.sequence_type || '-')}</td>
+            <td class="py-2 pr-2">${isSelection ? `<input type="number" value="${p.saddlecloth || ''}" data-field="saddlecloth" class="pick-edit w-12 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : '-'}</td>
+            <td class="py-2 pr-2">${isSelection ? `<input type="number" step="0.01" value="${p.odds_at_tip || ''}" data-field="odds_at_tip" class="pick-edit w-16 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : '-'}</td>
+            <td class="py-2 pr-2">${isSelection ? `<select data-field="bet_type" class="pick-edit px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>
+                <option value="win" ${p.bet_type === 'win' ? 'selected' : ''}>Win</option>
+                <option value="place" ${p.bet_type === 'place' ? 'selected' : ''}>Place</option>
+                <option value="each_way" ${p.bet_type === 'each_way' ? 'selected' : ''}>E/W</option>
+                <option value="saver_win" ${p.bet_type === 'saver_win' ? 'selected' : ''}>Saver</option>
+            </select>` : '-'}</td>
+            <td class="py-2 pr-2">${isSelection ? `<input type="number" step="0.5" value="${p.bet_stake || ''}" data-field="bet_stake" class="pick-edit w-14 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : (p.exotic_stake ? '$' + p.exotic_stake : '-')}</td>
+            <td class="py-2 pr-2 ${hitClass}">${p.hit === true ? 'HIT' : p.hit === false ? 'MISS' : '-'}</td>
+            <td class="py-2 ${pnlClass}">${p.pnl != null ? (p.pnl >= 0 ? '+' : '') + p.pnl.toFixed(2) : '-'}</td>
+        </tr>`;
+    }).join('');
+
+    // Add change listeners
+    tbody.querySelectorAll('.pick-edit').forEach(el => {
+        el.addEventListener('change', () => {
+            const row = el.closest('tr');
+            const pickId = row.dataset.pickId;
+            if (!dirtyPicks[pickId]) dirtyPicks[pickId] = {};
+            const field = el.dataset.field;
+            let val = el.value;
+            if (['saddlecloth', 'odds_at_tip', 'bet_stake'].includes(field)) val = parseFloat(val) || null;
+            if (field === 'saddlecloth') val = parseInt(el.value) || null;
+            dirtyPicks[pickId][field] = val;
+            document.getElementById('save-picks-btn').classList.remove('hidden');
+        });
+    });
+}
+
+function typeLabel(p) {
+    if (p.pick_type === 'selection') return p.tip_rank ? '#' + p.tip_rank : 'Sel';
+    if (p.pick_type === 'big3') return 'Big3';
+    if (p.pick_type === 'big3_multi') return 'Multi';
+    if (p.pick_type === 'exotic') return p.exotic_type || 'Exotic';
+    if (p.pick_type === 'sequence') return p.sequence_variant || p.sequence_type || 'Seq';
+    return p.pick_type;
+}
+
+function typeColor(p) {
+    if (p.tip_rank === 1) return 'bg-pink-100 text-pink-800';
+    if (p.tip_rank === 2) return 'bg-cyan-100 text-cyan-800';
+    if (p.tip_rank === 3) return 'bg-yellow-100 text-yellow-800';
+    if (p.tip_rank === 4) return 'bg-purple-100 text-purple-800';
+    return 'bg-gray-100 text-gray-700';
+}
+
+function esc(s) { return s.replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+async function savePicks() {
+    if (!Object.keys(dirtyPicks).length) return;
+    try {
+        const res = await fetch(`/api/content/${CONTENT_ID}/picks`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({picks: dirtyPicks}),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`Updated ${data.count} pick(s)`, 'success');
+            dirtyPicks = {};
+            document.getElementById('save-picks-btn').classList.add('hidden');
+            loadPicks();
+        } else {
+            showToast(data.detail || 'Failed to save', 'error');
+        }
+    } catch(e) { showToast('Save failed', 'error'); }
+}
+
+async function reparsePicks() {
+    if (!confirm('Re-parse picks from content? This will delete and re-extract all picks.')) return;
+    try {
+        const res = await fetch(`/api/content/${CONTENT_ID}/reparse-picks`, {method: 'POST'});
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`Re-parsed: ${data.pick_count} picks extracted`, 'success');
+            dirtyPicks = {};
+            document.getElementById('save-picks-btn').classList.add('hidden');
+            loadPicks();
+        } else {
+            showToast(data.detail || 'Re-parse failed', 'error');
+        }
+    } catch(e) { showToast('Re-parse failed', 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', loadPicks);
+{% endif %}
 </script>
 {% endblock %}
