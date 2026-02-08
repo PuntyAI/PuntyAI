@@ -444,22 +444,36 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not early_mail and not wrapup:
             return None
 
-        # Get ALL race winners for win tick display (not just Punty's picks)
-        from punty.models.meeting import Runner as RunnerModel
+        # Get Punty's winning picks for win tick display
+        from punty.models.pick import Pick
+        import json as _json
         winners_result = await db.execute(
-            select(RunnerModel).join(Race, RunnerModel.race_id == Race.id).where(
+            select(Pick).where(
                 and_(
-                    Race.meeting_id == meeting_id,
-                    RunnerModel.finish_position == 1,
-                    RunnerModel.scratched == False,
+                    Pick.meeting_id == meeting_id,
+                    Pick.settled == True,
+                    Pick.hit == True,
                 )
             )
         )
-        winners_map = {}
-        for runner in winners_result.scalars().all():
-            race_num = runner.race_id.split("-r")[-1]
-            if race_num.isdigit():
-                winners_map.setdefault(int(race_num), []).append(runner.saddlecloth)
+        winners_map = {}       # {race_number: [saddlecloth, ...]} for selections/big3
+        winning_exotics = {}   # {race_number: exotic_type} for hit exotics
+        winning_sequences = [] # [{type, variant, start_race}] for hit sequences
+        for pick in winners_result.scalars().all():
+            if pick.pick_type in ("selection", "big3") and pick.race_number and pick.saddlecloth:
+                winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
+            elif pick.pick_type == "exotic" and pick.race_number and pick.exotic_type:
+                winning_exotics[pick.race_number] = pick.exotic_type
+            elif pick.pick_type == "sequence" and pick.sequence_type:
+                winning_sequences.append({
+                    "type": pick.sequence_type,
+                    "variant": pick.sequence_variant,
+                })
+            elif pick.pick_type == "big3_multi":
+                winning_sequences.append({
+                    "type": "big3_multi",
+                    "variant": None,
+                })
 
         # Get live updates (celebrations + pace analysis)
         updates_result = await db.execute(
@@ -505,6 +519,8 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "created_at": wrapup.created_at.isoformat() if wrapup.created_at else None,
             } if wrapup else None,
             "winners": winners_map,
+            "winning_exotics": winning_exotics,
+            "winning_sequences": winning_sequences,
             "live_updates": live_updates,
         }
 
@@ -544,6 +560,8 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "early_mail": data["early_mail"],
             "wrapup": data["wrapup"],
             "winners": data.get("winners", {}),
+            "winning_exotics": data.get("winning_exotics", {}),
+            "winning_sequences": data.get("winning_sequences", []),
             "live_updates": data.get("live_updates", []),
         }
     )

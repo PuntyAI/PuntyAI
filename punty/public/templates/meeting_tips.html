@@ -340,21 +340,30 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var winners = {{ winners | tojson }};
-    if (!winners || !Object.keys(winners).length) return;
+    var winExotics = {{ winning_exotics | tojson }};
+    var winSequences = {{ winning_sequences | tojson }};
 
     var tipsContent = document.querySelector('.tips-content');
     if (!tipsContent) return;
 
+    function addBadge(el, label) {
+        if (el.querySelector('.win-tick')) return;
+        var tick = document.createElement('span');
+        tick.className = 'win-tick';
+        tick.innerHTML = '<span class="win-emoji">&#x1F3C6;</span> ' + label;
+        tick.title = label + '!';
+        el.appendChild(tick);
+    }
+
+    var hasSelections = winners && Object.keys(winners).length;
+    var hasExotics = winExotics && Object.keys(winExotics).length;
+    var hasSequences = winSequences && winSequences.length;
+
+    if (!hasSelections && !hasExotics && !hasSequences) return;
+
     var currentRace = null;
-    var elements = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
-
-    // First pass: detect all race context elements for debugging
-    // (actual race context tracking happens in second pass)
-
-    // Second pass: find elements with saddlecloth numbers and mark winners
-    currentRace = null;
-    var allP = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
-    allP.forEach(function(el) {
+    var allEls = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
+    allEls.forEach(function(el) {
         var text = el.textContent || '';
 
         // Detect race headers from headings or bold text containing "Race N"
@@ -364,24 +373,49 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (!currentRace || !winners[String(currentRace)]) return;
+        // --- Selections: match (No.X) saddlecloth numbers ---
+        if (hasSelections && currentRace && winners[String(currentRace)]) {
+            if (!(el.tagName === 'P' && el.querySelector('li'))) {
+                var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
+                if (scMatch) {
+                    var sc = parseInt(scMatch[1]);
+                    if (winners[String(currentRace)].indexOf(sc) !== -1) {
+                        addBadge(el, 'WINNER');
+                    }
+                }
+            }
+        }
 
-        // Skip container elements that would double-match (only mark the innermost)
-        if (el.tagName === 'P' && el.querySelector('li')) return;
+        // --- Exotics: match "Trifecta|Exacta|Quinella|First" lines ---
+        if (hasExotics && currentRace && winExotics[String(currentRace)]) {
+            var exoticMatch = text.match(/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i);
+            if (exoticMatch) {
+                addBadge(el, 'HIT');
+            }
+        }
 
-        // Check for saddlecloth number
-        var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
-        if (!scMatch) return;
-        var sc = parseInt(scMatch[1]);
+        // --- Sequences: match "Skinny|Balanced|Wide" variant lines ---
+        if (hasSequences) {
+            var variantMatch = text.match(/^(Skinny|Balanced|Wide)\s*\(/i);
+            if (variantMatch) {
+                var variant = variantMatch[1].toLowerCase();
+                for (var i = 0; i < winSequences.length; i++) {
+                    if (winSequences[i].variant === variant) {
+                        addBadge(el, 'HIT');
+                        break;
+                    }
+                }
+            }
+        }
 
-        if (winners[String(currentRace)].indexOf(sc) !== -1) {
-            // Don't add duplicate ticks
-            if (el.querySelector('.win-tick')) return;
-            var tick = document.createElement('span');
-            tick.className = 'win-tick';
-            tick.innerHTML = '<span class="win-emoji">&#x1F3C6;</span> WINNER';
-            tick.title = 'Winner!';
-            el.appendChild(tick);
+        // --- Big 3 Multi: match "Multi" line in Big 3 section ---
+        if (hasSequences && /^Multi\b/i.test(text)) {
+            for (var j = 0; j < winSequences.length; j++) {
+                if (winSequences[j].type === 'big3_multi') {
+                    addBadge(el, 'HIT');
+                    break;
+                }
+            }
         }
     });
 });
