@@ -187,6 +187,13 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     content = '\n'.join(formatted_paragraphs)
 
+    # Highlight "Punty's Pick:" lines with special styling
+    content = re.sub(
+        r'(<strong>Punty\'?s Pick:</strong>)',
+        r'<span class="puntys-pick">\1</span>',
+        content
+    )
+
     return content
 
 

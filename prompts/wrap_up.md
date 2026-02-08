@@ -145,6 +145,33 @@ Name the three legs with race numbers.
 If it hit: show the payout.
 If it missed: name the leg(s) that failed and how close they got.
 
+*Punty's Picks — How'd They Go?*
+Review each of Punty's recommended bets (the "Punty's Pick" lines from the Early Mail).
+For each race where Punty had a Pick, show the outcome:
+
+Format:
+- R<#>: *<Horse>* <bet_type> — <outcome>
+  (e.g. "R3: *Speed Demon* Win — BANG! Won at $4.50, +$27" or "R5: *Longshot Larry* Win — 4th, map didn't hold")
+
+After listing individual races, add a one-line summary:
+"Punty's Picks: X/Y hit for +/-$Z"
+
+If sequence picks were recommended, show those too:
+"Early Quad: Punty said Balanced — <hit/missed>, would've paid $X"
+
+*Track Read — How The Map Played Out*
+Analyse how the pace and speed map predictions played out across the day.
+Compare pre-race speed map positions vs actual racing patterns.
+
+Cover:
+- Did leaders dominate or did closers prevail?
+- Which part of the track was favoured (inside/outside)?
+- Any noticeable shift from early races to late races?
+- Were speed map predictions accurate or did the day play differently?
+- Key tactical rides that made the difference
+
+Keep this to 2-3 punchy paragraphs. This is actionable intelligence for next time this track runs.
+
 *Quick Hits (Race-by-Race)*
 One line per race. Every race. No skipping.
 Show ALL Punty wins for that race (win, place, each way, exotics).

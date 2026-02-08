@@ -94,16 +94,26 @@ def compose_celebration_tweet(
     odds: float,
     stake: float,
     collect: float,
+    bet_type: str = "Win",
 ) -> str:
     """Compose a short Punty-style celebration tweet for a big win."""
     pnl = collect - stake
     phrase = get_celebration(pnl)
 
+    # Calculate effective odds (what actually paid)
+    effective_odds = collect / stake if stake > 0 else odds
+    odds_str = f"${effective_odds:.2f}"
     collect_str = f"${collect:,.2f}"
     stake_str = f"${stake:.0f}"
-    odds_str = f"${odds:.2f}"
 
-    tweet = f"\U0001F3C7 {phrase} {horse_name} salutes at {odds_str}! {stake_str} Win \u2192 {collect_str} collect \U0001F4B0"
+    # Normalise bet type for display
+    bet_display = bet_type.replace("_", " ").title() if bet_type else "Win"
+    if bet_display == "Saver Win":
+        bet_display = "Win"
+    elif bet_display == "Each Way":
+        bet_display = "E/W"
+
+    tweet = f"\U0001F3C7 {phrase} {horse_name} salutes at {odds_str}! {stake_str} {bet_display} \u2192 {collect_str} collect \U0001F4B0"
 
     if len(tweet) > 270:
         tweet = tweet[:267] + "..."

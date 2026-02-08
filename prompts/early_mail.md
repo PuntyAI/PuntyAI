@@ -72,6 +72,9 @@ Repeat for each race in order:
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
 Why: {ONE_LINE_RISK_EXPLAINER}
 
+*Punty's Pick:* {HORSE_NAME} (No.{NO}) ${WIN_ODDS} Win + {SECOND_HORSE} (No.{NO}) ${PLACE_ODDS} Place
+{ONE_LINE_REASON — e.g. "The map screams front-runner and the value backs it up. Saver on the closers insurance."}
+
 *Degenerate Exotic of the Race*
 {R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $20
 Est. return: {X}% on $20
@@ -87,16 +90,19 @@ EARLY QUADDIE (R{EQ_START}–R{EQ_END})
 Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
 Balanced ($50): {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
 Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
+*Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
 
 MAIN QUADDIE (R{MQ_START}–R{MQ_END})
 Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
 Balanced ($50): {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
 Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
+*Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
 
 BIG 6 (R{B6_START}–R{B6_END})
 Skinny ($1): {L1_SKINNY} / {L2_SKINNY} / {L3_SKINNY} / {L4_SKINNY} / {L5_SKINNY} / {L6_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
 Balanced ($50): {L1_BAL} / {L2_BAL} / {L3_BAL} / {L4_BAL} / {L5_BAL} / {L6_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
 Wide ($100): {L1_WIDE} / {L2_WIDE} / {L3_WIDE} / {L4_WIDE} / {L5_WIDE} / {L6_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
+*Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
 
 ### 6) *NUGGETS FROM THE TRACK*
 *1 - {NUGGET_1_TITLE}*
@@ -219,3 +225,41 @@ When you see a horse firming or heavily backed, don't just note it — investiga
     Skinny and Balanced legs MUST primarily use your Top 3 + Roughie picks. Wide can extend beyond, but only to horses you've genuinely assessed as capable.
 
     When a race appears in MULTIPLE sequences (e.g., R5 in Early Quaddie AND Big 6), the saddlecloth numbers MUST be IDENTICAL. Work out each race's sequence runners ONCE, then copy them to all sequences that include that race.
+12) PUNTY'S PICK (per race):
+    After your Top 3 + Roughie + Exotic for each race, add ONE "Punty's Pick" recommendation.
+    This is Punty's actual recommended bet for the race — what HE would put his money on.
+
+    **HOW TO CHOOSE:**
+    a) From your Top 3 + Roughie, pick the horse MOST LIKELY TO WIN. This doesn't have to be #1 — if #2 or the Roughie has a stronger case (map advantage + value), pick them.
+    b) Recommend UP TO 2 bets maximum:
+       - **Win** on your best pick (the one most likely to win)
+       - **Place** OR **Saver Win** on a second horse as insurance
+    c) Decision logic:
+       - If your #1 pick is short-priced (<$3.00) and confident → Win on #1 + Place on #2
+       - If your #1 is mid-range ($3-$8) with a strong case → Win on #1 + Saver Win on #2
+       - If the Roughie has genuine pace/map advantage at big odds → Win on Roughie + Place on #1
+       - If it's wide open → Win on #1 only (no second bet — don't force it)
+    d) Stake from the $20 pool: Punty's Pick stakes should come from the race's $20 pool (they're the SAME as what you've already allocated above, just highlighted)
+    e) Keep the reasoning to ONE punchy line — why this horse, why this bet type
+
+    **FORMAT:**
+    *Punty's Pick:* {HORSE} (No.{X}) ${ODDS} Win + {HORSE2} (No.{Y}) ${ODDS} Place
+    {One-line reason}
+
+    OR (single bet):
+    *Punty's Pick:* {HORSE} (No.{X}) ${ODDS} Win
+    {One-line reason}
+
+13) PUNTY'S PICK (per sequence):
+    After each sequence block (Early Quaddie, Main Quaddie, Big 6), recommend ONE variant.
+
+    **HOW TO CHOOSE:**
+    a) **Skinny ($1)**: Recommend when you're confident about favourites/top picks in 3+ legs. This is the "trust the map" play. Say something like "The faves look rock-solid — $1 to dream."
+    b) **Balanced ($50)**: Default recommendation when it's a mix of open and closed races. The all-rounder. "Enough cover to survive a blowout without breaking the bank."
+    c) **Wide ($100)**: ONLY when there's genuine uncertainty across most legs — open races, weather impact, no standout favourites. "Too many question marks to go tight — cast the net."
+
+    **FORMAT (after each sequence block):**
+    *Punty's Pick:* {Skinny|Balanced|Wide} — {One-line reason}
+
+    **EXAMPLE:**
+    *Punty's Pick:* Balanced — Races 5 and 7 are wide open but the rest have clear top picks. Cover the chaos without going overboard.

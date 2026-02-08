@@ -63,25 +63,6 @@
             </div>
         </div>
 
-        <!-- Early Mail Section -->
-        {% if early_mail %}
-        <div class="mb-8">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(233, 30, 140, 0.15);">
-                    <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                    </svg>
-                </div>
-                <h2 class="text-2xl font-heading font-bold text-white">Early Mail</h2>
-            </div>
-            <div class="card p-6">
-                <div class="prose prose-invert max-w-none tips-content">
-                    {{ early_mail.content | safe }}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
         <!-- Live Updates Section -->
         {% if live_updates %}
         <div class="mb-8">
@@ -135,6 +116,25 @@
                     </div>
                 </div>
                 {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Early Mail Section -->
+        {% if early_mail %}
+        <div class="mb-8">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(233, 30, 140, 0.15);">
+                    <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-heading font-bold text-white">Early Mail</h2>
+            </div>
+            <div class="card p-6">
+                <div class="prose prose-invert max-w-none tips-content">
+                    {{ early_mail.content | safe }}
+                </div>
             </div>
         </div>
         {% endif %}
@@ -236,6 +236,19 @@
         font-weight: 700;
         font-size: 1.1em;
         margin-left: 4px;
+    }
+    .puntys-pick {
+        display: inline-block;
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(233, 30, 140, 0.15));
+        border: 1px solid rgba(255, 107, 53, 0.25);
+        border-radius: 6px;
+        padding: 2px 8px;
+        margin-right: 4px;
+    }
+    .puntys-pick strong {
+        background: var(--gradient-sunset);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
 
     /* Live Updates */

@@ -475,6 +475,7 @@ class ResultsMonitor:
                 odds=pick.odds_at_tip or 0,
                 stake=stake,
                 collect=collect,
+                bet_type=pick.bet_type or "Win",
             )
 
             reply_tweet_id = None
