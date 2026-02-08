@@ -126,6 +126,9 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         tag = f"h{min(level + 1, 4)}"  # h2, h3, h4
         return f'<{tag} class="tips-heading">{text}</{tag}>'
 
+    # Remove literal "### 1) HEADER" lines (AI template artifact)
+    content = re.sub(r'^#{1,3}\s+\d+\)\s*HEADER\s*$', '', content, flags=re.MULTILINE)
+
     content = re.sub(r'^(#{1,3})\s+(.+)$', convert_header, content, flags=re.MULTILINE)
 
     # Convert markdown links [text](url) to <a> tags

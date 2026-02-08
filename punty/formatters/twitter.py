@@ -92,7 +92,9 @@ class TwitterFormatter:
     @classmethod
     def _clean_markdown(cls, content: str) -> str:
         """Remove markdown formatting and sanitise for X."""
-        # Remove headers and any leading section numbers like "### 1) HEADER"
+        # Remove literal "### 1) HEADER" lines (AI template artifact)
+        content = re.sub(r'^#{1,3}\s+\d+\)\s*HEADER\s*$', '', content, flags=re.MULTILINE)
+        # Remove headers and any leading section numbers like "### 2) MEET SNAPSHOT"
         content = re.sub(r'^#{1,3}\s+\d+\)\s*', '', content, flags=re.MULTILINE)
         content = re.sub(r'^#{1,3}\s+', '', content, flags=re.MULTILINE)
         # Remove bold
