@@ -50,17 +50,23 @@
 <section class="py-16 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
         <div class="grid md:grid-cols-4 gap-6 text-center">
-            <!-- Today's Winners -->
+            <!-- Meetings Today -->
             <div class="card p-6">
-                <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
-                    {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
-                </div>
+                <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
                 <!-- Next Race Countdown -->
                 <div id="next-race-container" class="mt-3 pt-3" style="border-top: 1px solid var(--border-subtle); display: none;">
                     <div class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
                     <div id="next-race-venue" class="text-sm font-semibold" style="color: var(--cyan);"></div>
                     <div id="next-race-countdown" class="text-lg font-display font-bold" style="color: var(--magenta);"></div>
+                </div>
+            </div>
+
+            <!-- Today's Winners -->
+            <div class="card p-6">
+                <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
+                    {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
                 </div>
             </div>
 
@@ -76,12 +82,6 @@
                     ${{ "%.0f"|format(stats.alltime_winnings) }}
                 </div>
                 <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Collected</div>
-            </div>
-
-            <!-- Meetings Today -->
-            <div class="card p-6">
-                <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
             </div>
         </div>
 
