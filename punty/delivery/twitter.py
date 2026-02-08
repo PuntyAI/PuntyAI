@@ -120,9 +120,11 @@ class TwitterDelivery:
             response = await asyncio.to_thread(client.create_tweet, text=formatted)
             tweet_id = response.data["id"]
 
-            # Update content status
+            # Update content status and store tweet ID
             content.sent_at = melb_now_naive()
             content.status = ContentStatus.SENT.value
+            content.twitter_id = tweet_id
+            content.sent_to_twitter = True
             await self.db.commit()
 
             logger.info(f"Posted tweet: {content_id} -> {tweet_id}")
@@ -183,9 +185,11 @@ class TwitterDelivery:
             logger.error(f"Twitter API error: {e}")
             raise ValueError(f"Twitter API error: {e}")
 
-        # Update content status
+        # Update content status and store tweet ID
         content.sent_at = melb_now_naive()
         content.status = ContentStatus.SENT.value
+        content.twitter_id = tweet_id
+        content.sent_to_twitter = True
         await self.db.commit()
 
         return {
@@ -230,6 +234,43 @@ class TwitterDelivery:
             logger.error(f"Twitter API error: {e}")
             raise ValueError(f"Twitter API error: {e}")
 
+    async def post_reply(self, parent_tweet_id: str, text: str) -> dict:
+        """Post a reply to an existing tweet.
+
+        Args:
+            parent_tweet_id: ID of the tweet to reply to
+            text: Reply text (max 280 chars)
+
+        Returns:
+            Dict with reply tweet ID and URL
+        """
+        if not await self.is_configured():
+            raise ValueError("Twitter API not configured")
+
+        if len(text) > 280:
+            raise ValueError(f"Reply too long: {len(text)} chars (max 280)")
+
+        try:
+            client = self._get_client()
+            response = await asyncio.to_thread(
+                client.create_tweet,
+                text=text,
+                in_reply_to_tweet_id=parent_tweet_id,
+            )
+            reply_id = response.data["id"]
+
+            logger.info(f"Posted reply {reply_id} to tweet {parent_tweet_id}")
+
+            return {
+                "status": "posted",
+                "tweet_id": reply_id,
+                "parent_tweet_id": parent_tweet_id,
+                "url": f"https://twitter.com/i/status/{reply_id}",
+            }
+        except Exception as e:
+            logger.error(f"Twitter reply error: {e}")
+            raise ValueError(f"Twitter API error: {e}")
+
     async def send_long_post(self, content_id: str) -> dict:
         """Post content as a single long-form post (for verified accounts).
 
@@ -271,9 +312,11 @@ class TwitterDelivery:
             response = await asyncio.to_thread(client.create_tweet, text=post_text)
             tweet_id = response.data["id"]
 
-            # Update content status
+            # Update content status and store tweet ID
             content.sent_at = melb_now_naive()
             content.status = ContentStatus.SENT.value
+            content.twitter_id = tweet_id
+            content.sent_to_twitter = True
             await self.db.commit()
 
             logger.info(f"Posted long-form post: {content_id} -> {tweet_id} ({len(post_text)} chars)")

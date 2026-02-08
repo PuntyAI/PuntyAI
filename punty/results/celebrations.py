@@ -89,6 +89,28 @@ def get_celebration(pnl: float, pick_type: Optional[str] = None) -> str:
     return phrase
 
 
+def compose_celebration_tweet(
+    horse_name: str,
+    odds: float,
+    stake: float,
+    collect: float,
+) -> str:
+    """Compose a short Punty-style celebration tweet for a big win."""
+    pnl = collect - stake
+    phrase = get_celebration(pnl)
+
+    collect_str = f"${collect:,.2f}"
+    stake_str = f"${stake:.0f}"
+    odds_str = f"${odds:.2f}"
+
+    tweet = f"\U0001F3C7 {phrase} {horse_name} salutes at {odds_str}! {stake_str} Win \u2192 {collect_str} collect \U0001F4B0"
+
+    if len(tweet) > 270:
+        tweet = tweet[:267] + "..."
+
+    return tweet
+
+
 def get_all_phrases() -> dict:
     """Return all celebration phrases grouped by tier for reference."""
     return {

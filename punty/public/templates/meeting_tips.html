@@ -173,5 +173,63 @@
         font-style: italic;
         color: var(--text-muted);
     }
+    .win-tick {
+        color: #4ade80;
+        font-weight: 700;
+        font-size: 1.1em;
+        margin-left: 4px;
+    }
 </style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var winners = {{ winners | tojson }};
+    if (!winners || !Object.keys(winners).length) return;
+
+    var tipsContent = document.querySelector('.tips-content');
+    if (!tipsContent) return;
+
+    var currentRace = null;
+    var elements = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
+
+    // Walk through all elements to detect race context and mark winners
+    var allNodes = tipsContent.querySelectorAll('*');
+    allNodes.forEach(function(el) {
+        var text = el.textContent || '';
+
+        // Detect race headers
+        var raceMatch = text.match(/Race\s+(\d+)/i);
+        if (raceMatch && /^(H[2-4]|STRONG)$/.test(el.tagName)) {
+            currentRace = parseInt(raceMatch[1]);
+        }
+    });
+
+    // Second pass: find paragraphs with saddlecloth numbers and mark winners
+    currentRace = null;
+    var allP = tipsContent.querySelectorAll('h2, h3, h4, p');
+    allP.forEach(function(el) {
+        var text = el.textContent || '';
+
+        var raceMatch = text.match(/Race\s+(\d+)/i);
+        if (raceMatch && /^H[2-4]$/.test(el.tagName)) {
+            currentRace = parseInt(raceMatch[1]);
+            return;
+        }
+
+        if (!currentRace || !winners[String(currentRace)]) return;
+
+        // Check for saddlecloth number
+        var scMatch = text.match(/\(No\.?\s*(\d+)\)/);
+        if (!scMatch) return;
+        var sc = parseInt(scMatch[1]);
+
+        if (winners[String(currentRace)].indexOf(sc) !== -1) {
+            var tick = document.createElement('span');
+            tick.className = 'win-tick';
+            tick.innerHTML = ' &#10003;';
+            tick.title = 'Winner!';
+            el.appendChild(tick);
+        }
+    });
+});
+</script>
 {% endblock %}

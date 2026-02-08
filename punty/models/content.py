@@ -112,6 +112,7 @@ class Content(Base):
     scheduled_send_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     sent_to_twitter: Mapped[bool] = mapped_column(Boolean, default=False)
+    twitter_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
@@ -141,6 +142,7 @@ class Content(Base):
             ),
             "sent_at": self.sent_at.isoformat() if self.sent_at else None,
             "sent_to_twitter": self.sent_to_twitter,
+            "twitter_id": self.twitter_id,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

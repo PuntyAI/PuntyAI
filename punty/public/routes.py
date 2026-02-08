@@ -443,6 +443,23 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not early_mail and not wrapup:
             return None
 
+        # Get settled winning picks for win tick display
+        from punty.models.pick import Pick
+        winners_result = await db.execute(
+            select(Pick).where(
+                and_(
+                    Pick.meeting_id == meeting_id,
+                    Pick.settled == True,
+                    Pick.hit == True,
+                    Pick.pick_type == "selection",
+                )
+            )
+        )
+        winners_map = {}
+        for pick in winners_result.scalars().all():
+            if pick.race_number and pick.saddlecloth:
+                winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
+
         # Generate seed from meeting date for consistent rotation
         seed = hash(meeting.id) if meeting.id else 0
 
@@ -466,6 +483,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "content": format_html(wrapup.raw_content, "meeting_wrapup", seed + 1),
                 "created_at": wrapup.created_at.isoformat() if wrapup.created_at else None,
             } if wrapup else None,
+            "winners": winners_map,
         }
 
 
@@ -503,5 +521,6 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "meeting": data["meeting"],
             "early_mail": data["early_mail"],
             "wrapup": data["wrapup"],
+            "winners": data.get("winners", {}),
         }
     )

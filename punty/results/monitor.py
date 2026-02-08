@@ -35,6 +35,7 @@ class ResultsMonitor:
         self.running = False
         self.processed_races: dict[str, set[int]] = {}  # {meeting_id: {race_nums}}
         self.wrapups_generated: set[str] = set()
+        self.pace_updates_posted: dict[str, int] = {}  # {meeting_id: count}
         self.task: Optional[asyncio.Task] = None
         self.last_check: Optional[datetime] = None
         self.poll_interval = POLL_MIN  # display value
@@ -175,6 +176,7 @@ class ResultsMonitor:
                 old_wrapups = len(self.wrapups_generated)
                 self.processed_races.clear()
                 self.wrapups_generated.clear()
+                self.pace_updates_posted.clear()
                 self._last_reset_date = today
                 logger.info(f"Daily reset: cleared {old_races} processed races, {old_wrapups} wrapups")
 
@@ -361,6 +363,18 @@ class ResultsMonitor:
 
                     self.processed_races[meeting_id].add(race_num)
                     logger.info(f"Processed result: {meeting.venue} R{race_num}")
+
+                    # Check for big wins and post celebration tweet replies
+                    try:
+                        await self._check_big_wins(db, meeting_id, race_num)
+                    except Exception as e:
+                        logger.debug(f"Big win check failed for {meeting.venue} R{race_num}: {e}")
+
+                    # Check for pace bias and post analysis tweet (after race 4+)
+                    try:
+                        await self._check_pace_bias(db, meeting, statuses, race_num)
+                    except Exception as e:
+                        logger.debug(f"Pace analysis skipped for {meeting.venue} R{race_num}: {e}")
                 except Exception as e:
                     import traceback
                     logger.error(f"Failed to process result {meeting.venue} R{race_num}: {e}\n{traceback.format_exc()}")
@@ -419,6 +433,110 @@ class ResultsMonitor:
                                 logger.warning(f"Wrap-up auto-approval failed for {meeting.venue}: {approval.get('issues')}")
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
+
+    async def _check_big_wins(self, db: AsyncSession, meeting_id: str, race_number: int):
+        """Check for big wins (>= 5x outlay) and post celebration tweet replies."""
+        from punty.models.pick import Pick
+        from punty.models.content import Content
+        from punty.delivery.twitter import TwitterDelivery
+        from punty.results.celebrations import compose_celebration_tweet
+
+        result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.pick_type == "selection",
+                Pick.settled == True,
+                Pick.hit == True,
+                Pick.pnl > 0,
+            )
+        )
+        for pick in result.scalars().all():
+            stake = pick.bet_stake or 1.0
+            if pick.pnl < 4 * stake:
+                continue
+
+            # Find the meeting's early mail tweet ID
+            em_result = await db.execute(
+                select(Content).where(
+                    Content.meeting_id == meeting_id,
+                    Content.content_type == "early_mail",
+                    Content.twitter_id.isnot(None),
+                ).order_by(Content.created_at.desc())
+            )
+            early_mail = em_result.scalars().first()
+            if not early_mail or not early_mail.twitter_id:
+                return
+
+            collect = stake + pick.pnl
+            tweet_text = compose_celebration_tweet(
+                horse_name=pick.horse_name or "Winner",
+                odds=pick.odds_at_tip or 0,
+                stake=stake,
+                collect=collect,
+            )
+
+            twitter = TwitterDelivery(db)
+            if await twitter.is_configured():
+                try:
+                    await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
+                except Exception as e:
+                    logger.warning(f"Failed to post celebration reply: {e}")
+
+    async def _check_pace_bias(self, db: AsyncSession, meeting, statuses: dict, just_completed: int):
+        """Analyze pace bias and post tweet reply if significant pattern detected."""
+        from punty.results.pace_analysis import analyze_pace_bias, compose_pace_tweet
+        from punty.models.content import Content
+        from punty.delivery.twitter import TwitterDelivery
+
+        meeting_id = meeting.id
+
+        # Limit to 3 pace updates per meeting
+        posted_count = self.pace_updates_posted.get(meeting_id, 0)
+        if posted_count >= 3:
+            return
+
+        # Only analyze after race 4
+        completed_races = sorted(self.processed_races.get(meeting_id, set()))
+        if len(completed_races) < 4:
+            return
+
+        # Don't post for the last race (no value for remaining races)
+        total_races = len(statuses)
+        if just_completed >= total_races:
+            return
+
+        races_remaining = total_races - just_completed
+
+        bias_result = await analyze_pace_bias(db, meeting_id, completed_races)
+        if not bias_result or not bias_result.bias_detected:
+            return
+
+        # Find the meeting's early mail tweet ID
+        em_result = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting_id,
+                Content.content_type == "early_mail",
+                Content.twitter_id.isnot(None),
+            ).order_by(Content.created_at.desc())
+        )
+        early_mail = em_result.scalars().first()
+        if not early_mail or not early_mail.twitter_id:
+            return
+
+        tweet_text = compose_pace_tweet(bias_result, meeting.venue, races_remaining)
+        if not tweet_text:
+            return
+
+        twitter = TwitterDelivery(db)
+        if await twitter.is_configured():
+            try:
+                await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                self.pace_updates_posted[meeting_id] = posted_count + 1
+                logger.info(f"Posted pace analysis for {meeting.venue} (update {posted_count + 1}, bias: {bias_result.bias_type})")
+            except Exception as e:
+                logger.warning(f"Failed to post pace analysis reply: {e}")
 
     async def _scrape_sectional_times(self, db: AsyncSession, meeting, race_num: int):
         """Scrape and store post-race sectional times for a race.
