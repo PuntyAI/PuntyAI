@@ -312,38 +312,35 @@ document.addEventListener('DOMContentLoaded', function() {
     var currentRace = null;
     var elements = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
 
-    // Walk through all elements to detect race context and mark winners
-    var allNodes = tipsContent.querySelectorAll('*');
-    allNodes.forEach(function(el) {
-        var text = el.textContent || '';
+    // First pass: detect all race context elements for debugging
+    // (actual race context tracking happens in second pass)
 
-        // Detect race headers
-        var raceMatch = text.match(/Race\s+(\d+)/i);
-        if (raceMatch && /^(H[2-4]|STRONG)$/.test(el.tagName)) {
-            currentRace = parseInt(raceMatch[1]);
-        }
-    });
-
-    // Second pass: find paragraphs with saddlecloth numbers and mark winners
+    // Second pass: find elements with saddlecloth numbers and mark winners
     currentRace = null;
-    var allP = tipsContent.querySelectorAll('h2, h3, h4, p');
+    var allP = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
     allP.forEach(function(el) {
         var text = el.textContent || '';
 
+        // Detect race headers from headings or bold text containing "Race N"
         var raceMatch = text.match(/Race\s+(\d+)/i);
-        if (raceMatch && /^H[2-4]$/.test(el.tagName)) {
+        if (raceMatch && (/^H[2-4]$/.test(el.tagName) || (el.tagName === 'STRONG' && text.match(/^Race\s+\d+/)))) {
             currentRace = parseInt(raceMatch[1]);
             return;
         }
 
         if (!currentRace || !winners[String(currentRace)]) return;
 
+        // Skip container elements that would double-match (only mark the innermost)
+        if (el.tagName === 'P' && el.querySelector('li')) return;
+
         // Check for saddlecloth number
-        var scMatch = text.match(/\(No\.?\s*(\d+)\)/);
+        var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
         if (!scMatch) return;
         var sc = parseInt(scMatch[1]);
 
         if (winners[String(currentRace)].indexOf(sc) !== -1) {
+            // Don't add duplicate ticks
+            if (el.querySelector('.win-tick')) return;
             var tick = document.createElement('span');
             tick.className = 'win-tick';
             tick.innerHTML = ' &#10003;';
