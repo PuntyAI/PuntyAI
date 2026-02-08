@@ -301,7 +301,7 @@ class TwitterDelivery:
         text = TwitterFormatter._clean_markdown(raw_content)
 
         # Add footer with hashtags
-        footer = f"\n\n#AusRacing #HorseRacing #{venue.replace(' ', '')}Racing\n\nGamble Responsibly. 1800 858 858"
+        footer = f"\n\n#AusRacing #HorseRacing #{venue.replace(' ', '')}Racing\n\nGamble Responsibly. gamblinghelponline.org.au | 1800 858 858"
 
         full_post = header + text + footer
 
