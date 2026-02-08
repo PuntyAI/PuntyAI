@@ -85,14 +85,18 @@
             </div>
         </div>
 
-        <!-- Track Record -->
-        {% if stats.total_settled > 0 %}
-        <div class="flex justify-center mt-6">
-            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle); min-width: 200px;">
-                <div class="text-2xl font-display font-bold" style="color: var(--cyan);">{{ stats.strike_rate }}%</div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Strike Rate</div>
-                <div class="text-xs mt-1" style="color: var(--text-muted);">{{ stats.total_hit }}/{{ stats.total_settled }} picks</div>
+        <!-- Strike Rates by Pick -->
+        {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6" id="strike-rates">
+            {% for pr in stats.pick_ranks %}
+            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                <div class="text-2xl font-display font-bold" style="color: {{ ['var(--magenta)', 'var(--cyan)', 'var(--yellow)', 'var(--purple)'][loop.index0] }};">
+                    <span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span>
+                </div>
+                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">{{ pr.label }}</div>
+                <div class="text-xs mt-1" style="color: var(--text-muted);"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
             </div>
+            {% endfor %}
         </div>
         {% endif %}
 
@@ -347,6 +351,15 @@
                 document.getElementById('alltime-winners').textContent = data.alltime_winners;
                 document.getElementById('alltime-winnings').textContent = '$' + Math.round(data.alltime_winnings);
                 document.getElementById('meetings-today').textContent = data.meetings_today;
+                // Update strike rates
+                if (data.pick_ranks) {
+                    data.pick_ranks.forEach(function(pr) {
+                        var rateEl = document.querySelector('.sr-rate[data-rank="' + pr.rank + '"]');
+                        var detailEl = document.querySelector('.sr-detail[data-rank="' + pr.rank + '"]');
+                        if (rateEl) rateEl.textContent = pr.rate + '%';
+                        if (detailEl) detailEl.textContent = pr.hits + '/' + pr.total;
+                    });
+                }
             })
             .catch(() => {});
     }, 60000);

@@ -235,23 +235,32 @@ async def get_winner_stats() -> dict:
                     "twitter_url": f"https://twitter.com/PuntyAI",  # Link to profile, or specific tweet if stored
                 })
 
-        # Strike rate: total settled picks and hit rate
+        # Strike rates per tip rank (selections only)
         from sqlalchemy import case
-        strike_result = await db.execute(
-            select(
-                func.count(Pick.id),
-                func.sum(case((Pick.hit == True, 1), else_=0)),
-                func.sum(Pick.pnl),
-                func.sum(case((Pick.bet_stake.isnot(None), Pick.bet_stake), else_=Pick.exotic_stake)),
-            ).where(Pick.settled == True)
-        )
-        sr = strike_result.one()
-        total_settled = sr[0] or 0
-        total_hit = int(sr[1] or 0)
-        total_pnl = sr[2] or 0
-        total_staked = sr[3] or 0
-        strike_rate = round(total_hit / total_settled * 100, 1) if total_settled > 0 else 0
-        roi = round(total_pnl / total_staked * 100, 1) if total_staked > 0 else 0
+        pick_ranks = []
+        labels = {1: "Top Pick", 2: "2nd Pick", 3: "3rd Pick", 4: "Roughie"}
+        for rank in [1, 2, 3, 4]:
+            sr_result = await db.execute(
+                select(
+                    func.count(Pick.id),
+                    func.sum(case((Pick.hit == True, 1), else_=0)),
+                ).where(and_(
+                    Pick.settled == True,
+                    Pick.pick_type == "selection",
+                    Pick.tip_rank == rank,
+                ))
+            )
+            row = sr_result.one()
+            total = row[0] or 0
+            hits = int(row[1] or 0)
+            rate = round(hits / total * 100, 1) if total > 0 else 0
+            pick_ranks.append({
+                "label": labels[rank],
+                "rank": rank,
+                "hits": hits,
+                "total": total,
+                "rate": rate,
+            })
 
         return {
             "today_winners": today_winners,
@@ -260,10 +269,7 @@ async def get_winner_stats() -> dict:
             "todays_tips": todays_tips,
             "meetings_today": len(today_meetings),
             "all_races_complete": all_races_complete,
-            "strike_rate": strike_rate,
-            "total_settled": total_settled,
-            "total_hit": total_hit,
-            "roi": roi,
+            "pick_ranks": pick_ranks,
         }
 
 
