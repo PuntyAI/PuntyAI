@@ -94,9 +94,31 @@ async def new_page(timeout: float = 30000):
         await context.close()
 
 
+async def retry_with_backoff(coro_fn, max_attempts: int = 3, base_delay: float = 5.0, multiplier: float = 3.0):
+    """Retry an async callable with exponential backoff.
+
+    Args:
+        coro_fn: Zero-argument async callable to retry.
+        max_attempts: Maximum retry attempts.
+        base_delay: Initial delay in seconds.
+        multiplier: Delay multiplier per attempt.
+    """
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await coro_fn()
+        except Exception as e:
+            last_err = e
+            if attempt < max_attempts:
+                delay = base_delay * (multiplier ** (attempt - 1))
+                logger.warning(f"Attempt {attempt}/{max_attempts} failed: {e}. Retrying in {delay:.0f}s...")
+                await asyncio.sleep(delay)
+    raise last_err
+
+
 async def wait_and_get_content(page: Page, url: str, wait_selector: Optional[str] = None) -> str:
     """Navigate to URL, optionally wait for a selector, dismiss popups, return page HTML."""
-    await page.goto(url, wait_until="domcontentloaded")
+    await retry_with_backoff(lambda: page.goto(url, wait_until="domcontentloaded"))
 
     # Dismiss common cookie/popup overlays
     for selector in [

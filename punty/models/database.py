@@ -17,10 +17,11 @@ class Base(DeclarativeBase):
     pass
 
 
-# Create async engine
+# Create async engine with SQLite timeout for concurrent access
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
+    connect_args={"timeout": 30},
 )
 
 # Session factory
@@ -38,8 +39,13 @@ async def init_db() -> None:
     from punty.memory import models as memory_models  # noqa: F401  # registers memory models
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
         _text = __import__("sqlalchemy").text
+
+        # Enable WAL mode and busy timeout for concurrent access
+        await conn.execute(_text("PRAGMA journal_mode=WAL"))
+        await conn.execute(_text("PRAGMA busy_timeout=30000"))
+
+        await conn.run_sync(Base.metadata.create_all)
 
         # Create memory tables if they don't exist (for existing databases)
         for table_sql in [

@@ -110,11 +110,11 @@ class ResultsMonitor:
                 # No races loaded yet - don't monitor until data exists
                 return False
 
-            # Don't start until first race time
-            first_dt = datetime.combine(today, first_race_time.time()) if isinstance(first_race_time, datetime) else datetime.combine(today, first_race_time)
-            now_naive = now_aest.replace(tzinfo=None)
+            # Don't start until first race time (DST-safe: use tz-aware comparisons)
+            first_time = first_race_time.time() if isinstance(first_race_time, datetime) else first_race_time
+            first_dt = datetime.combine(today, first_time, tzinfo=AEST)
 
-            if now_naive < first_dt:
+            if now_aest < first_dt:
                 return False
 
             # Check if any races are still incomplete
@@ -145,11 +145,12 @@ class ResultsMonitor:
                 # Still waiting for wrap-ups to generate
                 return True
 
-            # All races complete + all wrap-ups done — apply buffer
-            last_dt = datetime.combine(today, last_race_time.time()) if isinstance(last_race_time, datetime) else datetime.combine(today, last_race_time)
+            # All races complete + all wrap-ups done — apply buffer (DST-safe)
+            last_time = last_race_time.time() if isinstance(last_race_time, datetime) else last_race_time
+            last_dt = datetime.combine(today, last_time, tzinfo=AEST)
             cutoff = last_dt + POST_RACING_BUFFER
 
-            if now_naive <= cutoff:
+            if now_aest <= cutoff:
                 return True
 
             logger.info(f"All races complete, wrap-ups done, buffer passed (last race: {last_race_time}) — monitor going idle")
