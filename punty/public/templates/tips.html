@@ -10,7 +10,7 @@
 <section class="py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-8">
         <!-- Header -->
-        <div class="text-center mb-12">
+        <div class="text-center mb-8">
             <h1 class="text-4xl md:text-5xl font-heading font-bold mb-4">
                 <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Racing Tips</span>
             </h1>
@@ -18,6 +18,33 @@
                 Browse Punty's tips archive. Click on a meeting to read the full early mail and wrap-up.
             </p>
         </div>
+
+        <!-- Search Filters -->
+        <form method="GET" action="/tips" class="card p-4 mb-8">
+            <div class="flex flex-wrap gap-3 items-end">
+                <div class="flex-1 min-w-[150px]">
+                    <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Venue</label>
+                    <input type="text" name="venue" value="{{ venue }}" placeholder="e.g. Flemington"
+                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+                <div class="min-w-[140px]">
+                    <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">From</label>
+                    <input type="date" name="date_from" value="{{ date_from }}"
+                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+                <div class="min-w-[140px]">
+                    <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">To</label>
+                    <input type="date" name="date_to" value="{{ date_to }}"
+                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="px-4 py-2 rounded-lg font-heading font-semibold text-sm" style="background: var(--magenta); color: white;">Search</button>
+                    {% if venue or date_from or date_to %}
+                    <a href="/tips" class="px-4 py-2 rounded-lg font-heading font-semibold text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-secondary);">Clear</a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
 
         {% if calendar %}
         <!-- Calendar View -->
@@ -68,7 +95,7 @@
         {% if total_pages > 1 %}
         <div class="flex items-center justify-center gap-2 mt-12">
             {% if has_prev %}
-            <a href="/tips?page={{ page - 1 }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
+            <a href="/tips?page={{ page - 1 }}{{ filter_params }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
                 &larr; Newer
             </a>
             {% endif %}
@@ -78,7 +105,7 @@
             </span>
 
             {% if has_next %}
-            <a href="/tips?page={{ page + 1 }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
+            <a href="/tips?page={{ page + 1 }}{{ filter_params }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
                 Older &rarr;
             </a>
             {% endif %}
@@ -86,9 +113,16 @@
         {% endif %}
 
         {% else %}
-        <!-- No tips yet -->
+        <!-- No tips found -->
         <div class="card p-12 text-center">
             <div class="text-6xl mb-4">&#x1F3C7;</div>
+            {% if venue or date_from or date_to %}
+            <h2 class="text-2xl font-heading font-bold mb-2">No Matches</h2>
+            <p style="color: var(--text-secondary);">
+                No tips found for that search. Try broadening your filters.
+            </p>
+            <a href="/tips" class="btn-secondary inline-flex items-center gap-2 mt-6">Clear Filters</a>
+            {% else %}
             <h2 class="text-2xl font-heading font-bold mb-2">No Tips Yet</h2>
             <p style="color: var(--text-secondary);">
                 Check back soon! Punty's tips will appear here once they're published.
@@ -97,6 +131,7 @@
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                 Follow @PuntyAI for Updates
             </a>
+            {% endif %}
         </div>
         {% endif %}
     </div>
