@@ -191,7 +191,7 @@ class ContentGenerator:
                             instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
                             temperature=0.8,
                         ),
-                        timeout=180.0,  # 3 minute timeout
+                        timeout=300.0,  # 5 minute timeout (reasoning models need more time)
                     )
                     break  # Success
                 except asyncio.TimeoutError:
