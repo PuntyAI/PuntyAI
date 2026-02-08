@@ -96,7 +96,7 @@ def compose_celebration_tweet(
     collect: float,
     bet_type: str = "Win",
 ) -> str:
-    """Compose a short Punty-style celebration tweet for a big win."""
+    """Compose a short Punty-style celebration tweet for a selection win."""
     pnl = collect - stake
     phrase = get_celebration(pnl)
 
@@ -114,6 +114,54 @@ def compose_celebration_tweet(
         bet_display = "E/W"
 
     tweet = f"\U0001F3C7 {phrase} {horse_name} salutes at {odds_str}! {stake_str} {bet_display} \u2192 {collect_str} collect \U0001F4B0"
+
+    if len(tweet) > 270:
+        tweet = tweet[:267] + "..."
+
+    return tweet
+
+
+def compose_exotic_celebration(
+    exotic_type: str,
+    race_number: int,
+    venue: str,
+    stake: float,
+    collect: float,
+) -> str:
+    """Compose a celebration tweet for an exotic bet win."""
+    pnl = collect - stake
+    phrase = get_celebration(pnl, "exotic")
+    collect_str = f"${collect:,.2f}"
+    stake_str = f"${stake:.0f}"
+    display_type = exotic_type.title() if exotic_type else "Exotic"
+
+    tweet = f"\U0001F3AF {phrase} {display_type} lands at {venue} R{race_number}! {stake_str} \u2192 {collect_str} collect \U0001F4B0"
+
+    if len(tweet) > 270:
+        tweet = tweet[:267] + "..."
+
+    return tweet
+
+
+def compose_sequence_celebration(
+    sequence_type: str,
+    variant: Optional[str],
+    venue: str,
+    stake: float,
+    collect: float,
+) -> str:
+    """Compose a celebration tweet for a sequence/multi win."""
+    pnl = collect - stake
+    phrase = get_celebration(pnl, "sequence")
+    collect_str = f"${collect:,.2f}"
+    stake_str = f"${stake:.0f}"
+
+    display_type = (sequence_type or "Sequence").title()
+    if variant:
+        display_type = f"{display_type} ({variant.title()})"
+
+    emoji = "\U0001F680" if pnl >= 15 else "\U0001F525"
+    tweet = f"{emoji} {phrase} {display_type} nails it at {venue}! {stake_str} \u2192 {collect_str} collect \U0001F4B0"
 
     if len(tweet) > 270:
         tweet = tweet[:267] + "..."
