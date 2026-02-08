@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Racing Glossary - PuntyAI{% endblock %}
+
+{% block head %}
+<meta name="description" content="Horse racing glossary and betting terminology explained. Learn what all the racing lingo means with Punty's no-bullshit guide.">
+{% endblock %}
+
+{% block content %}
+<section class="py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-heading font-bold mb-4">
+                Racing <span style="color: var(--magenta);">Glossary</span>
+            </h1>
+            <p class="text-lg" style="color: var(--text-secondary);">
+                Don't know your quinella from your quaddie? Punty's got you covered.
+            </p>
+        </div>
+
+        <!-- Quick Nav -->
+        <div class="flex flex-wrap gap-2 justify-center mb-12">
+            <a href="#bet-types" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--magenta);">Bet Types</a>
+            <a href="#exotic-bets" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--cyan);">Exotic Bets</a>
+            <a href="#sequences" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--orange);">Sequences</a>
+            <a href="#race-terms" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--yellow);">Race Terms</a>
+            <a href="#running-positions" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--purple);">Running Positions</a>
+            <a href="#track-conditions" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--magenta);">Track &amp; Conditions</a>
+            <a href="#punty-speak" class="px-4 py-2 rounded-lg text-sm font-heading font-semibold transition-colors" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--cyan);">Punty-Speak</a>
+        </div>
+
+        <!-- Bet Types -->
+        <div id="bet-types" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--magenta);">Bet Types</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Win</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Your horse must finish first. Simple as. Pays out at the win dividend.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Place</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Your horse finishes in the top 3 (or top 2 in fields of 7 or fewer). Lower payout than a win bet, but better chances.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Each Way (E/W)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Two bets in one - half your stake on win, half on place. If it wins, both halves pay. If it places but doesn't win, you collect the place half and lose the win half.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Saver Win</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">A smaller win bet used when Punty likes the horse but the odds are short. Reduces risk on favourites while keeping skin in the game.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Multi (Accumulator)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Combining multiple selections into one bet. All legs must win for the multi to pay. Higher risk, bigger reward. Punty's Big 3 Multi links three horses across different races.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exotic Bets -->
+        <div id="exotic-bets" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--cyan);">Exotic Bets</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Quinella</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Pick the first two finishers in any order. Easier to hit than an exacta but generally pays less.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Exacta</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Pick the first two finishers in the correct order. Harder than a quinella but pays more when you nail it.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Trifecta</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Pick the first three finishers in the correct order. The classic exotic bet - tough to hit but the dividends can be massive.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">First Four (First 4)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Pick the first four finishers in exact order. The hardest exotic to land but can pay life-changing dividends.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sequences -->
+        <div id="sequences" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--orange);">Sequences</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Quaddie (Quadrella)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Pick the winner of 4 consecutive races (usually the last 4 on the card). Multiple runners per leg increases combos and cost but improves hit rate.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Big 6</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Pick the winner of 6 consecutive races. Harder than a quaddie, but the pool is bigger and dividends can be enormous.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Skinny / Balanced / Wide</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Punty's sequence variants. <strong>Skinny</strong> = fewer runners per leg (cheaper, harder to hit). <strong>Balanced</strong> = moderate coverage. <strong>Wide</strong> = more runners per leg (more expensive, better chance of collecting).</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Race Terms -->
+        <div id="race-terms" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--yellow);">Race Terms</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Barrier (Gate)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">The starting position. Lower barriers (1-4) are closer to the inside rail. Wide barriers can be a disadvantage, especially over short distances.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Saddlecloth Number</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">The number worn by the horse (e.g., "No.3"). Used to identify runners in bet placement. Not always the same as barrier number due to scratchings.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Form</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">A horse's recent race history, shown as finishing positions. "12x34" means: 1st, 2nd, spell (break), 3rd, 4th in recent runs.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Class</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">The grade of the race. Ranges from Maiden (never won) through Class 1-6, up to Group 1 (the pinnacle). Higher class = better horses.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Weight</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">The total weight the horse carries including jockey and gear. In handicap races, better horses carry more weight to level the field.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Scratching</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">When a horse is withdrawn from a race before it starts. Can happen for injury, unsuitable conditions, or tactical reasons.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Roughie</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">A horse at long odds that Punty reckons has a genuine chance. Not the favourite, but value if it salutes.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Odds</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">The price being offered. $3.50 means you get $3.50 back for every $1 bet (including your stake). Lower odds = more fancied. Punty shows decimal odds.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Running Positions -->
+        <div id="running-positions" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--purple);">Running Positions</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Leader</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Expected to race at the front of the field. Leaders set the pace and can dictate the race on their terms.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">On Pace (Stalker)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Sits just behind the leaders, 2nd-4th in running. In a great position to pounce in the straight.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Midfield</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Races in the middle of the pack. Needs clear running and a strong finish to hit the placings.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Backmarker (Back)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Settles at the rear of the field. Relies on a strong sprint finish and a genuinely run race to charge home late.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Speed Map</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">A prediction of where each horse will settle in running. Punty uses speed maps to assess race shape - whether leaders or backmarkers are favoured.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Track & Conditions -->
+        <div id="track-conditions" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--magenta);">Track &amp; Conditions</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Track Rating</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">How much moisture is in the track. Ranges from Firm 1 (driest) through Good, Soft, to Heavy 10 (wettest). Some horses love wet tracks, others hate them.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Rail Position</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Where the inside running rail is set. "True" means normal position. Rail out (e.g., +3m) means the inside is further out, giving more fresh ground to inside runners.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Penetrometer</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">A device that measures how soft the track surface is. Higher reading = softer ground. Gives a more precise picture than the track rating alone.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Sectional Times</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">How fast a horse ran each section of the race (usually 200m splits). Reveals which horses finished strongest, even if they didn't win.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Punty-Speak -->
+        <div id="punty-speak" class="mb-12">
+            <h2 class="text-2xl font-heading font-bold mb-6" style="color: var(--cyan);">Punty-Speak</h2>
+            <div class="space-y-4">
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Early Mail</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Punty's pre-race analysis and tips, published before the meeting starts. Includes selections, exotics, and sequences.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Big 3</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Punty's three best picks across the entire meeting. These form a multi as well as individual win bets.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Pace Analysis</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Punty's live read on how the track is racing - whether leaders, on-pacers, or backmarkers are being favoured. Updated throughout the meeting.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Wrap-up</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">Punty's post-meeting summary. Covers what went right, what went wrong, and the overall P&amp;L for the day.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">P&amp;L (Profit &amp; Loss)</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">The bottom line. Total winnings minus total stakes. Punty tracks this transparently for every meeting.</p>
+                </div>
+                <div class="card p-5">
+                    <h3 class="font-heading font-bold text-lg text-white">Salute</h3>
+                    <p class="text-sm mt-1" style="color: var(--text-secondary);">When a horse wins. "It salutes!" = it won. Punty loves a good salute.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="text-center">
+            <p class="text-lg mb-6" style="color: var(--text-secondary);">
+                Now you know the lingo, time to see Punty in action.
+            </p>
+            <div class="flex flex-wrap gap-4 justify-center">
+                <a href="/tips" class="btn-primary">Browse Tips</a>
+                <a href="/how-it-works" class="btn-secondary">How It Works</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

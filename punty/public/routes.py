@@ -276,6 +276,12 @@ async def contact(request: Request):
     return templates.TemplateResponse("contact.html", {"request": request})
 
 
+@router.get("/glossary", response_class=HTMLResponse)
+async def glossary(request: Request):
+    """Racing glossary page."""
+    return templates.TemplateResponse("glossary.html", {"request": request})
+
+
 @router.get("/terms", response_class=HTMLResponse)
 async def terms(request: Request):
     """Terms of service page."""
