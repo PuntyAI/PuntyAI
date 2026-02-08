@@ -13,7 +13,10 @@ _BIG3_SECTION = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 _BIG3_HORSE = re.compile(
-    r"(\d)\)\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(Race\s*(\d+),\s*No\.(\d+)\)\s*.*?\$(\d+\.?\d*)",
+    # Matches both formats:
+    #   Old: 1) *HORSE* (Race 2, No.8) — $2.80
+    #   New: *1 - HORSE* (Race 2, No.8) — $2.80
+    r"(?:(?P<rank_old>\d)\)\s*\*(?P<name_old>[A-Z][A-Z\s'\u2019\-]+?)\*|\*(?P<rank_new>\d)\s*[-–—]\s*(?P<name_new>[A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(Race\s*(?P<race>\d+),\s*No\.(?P<saddle>\d+)\)\s*.*?\$(?P<odds>\d+\.?\d*)",
     re.IGNORECASE,
 )
 _BIG3_MULTI = re.compile(
@@ -25,14 +28,18 @@ _BIG3_MULTI = re.compile(
 _RACE_HEADER = re.compile(
     r"\*Race\s+(\d+)\s*[–\-—]", re.IGNORECASE,
 )
-# New format: "1. *HORSE* (No.1) — $3.50 / $1.45" (win / place)
-# Also supports old format: "1. *HORSE* (No.1) — $3.50" (win only)
+# Matches both formats:
+#   Old: 1. *HORSE* (No.1) — $3.50 / $1.45
+#   New: *1. HORSE* (No.1) — $3.50 / $1.45
 _SELECTION = re.compile(
-    r"(\d)\.\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
+    r"(?:(\d)\.\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*(\d)\.\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
+# Matches both formats:
+#   Old: Roughie: *HORSE* (No.1) — $3.50 / $1.45
+#   New: *Roughie: HORSE* (No.1) — $3.50 / $1.45
 _ROUGHIE = re.compile(
-    r"Roughie:\s*\*([A-Z][A-Z\s'\-]+?)\*\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
+    r"(?:Roughie:\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*Roughie:\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 
@@ -126,15 +133,17 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
     section = section_m.group(1)
 
     for m in _BIG3_HORSE.finditer(section):
+        rank = m.group("rank_old") or m.group("rank_new")
+        name = m.group("name_old") or m.group("name_new")
         picks.append({
             "id": next_id(),
             "content_id": content_id,
             "meeting_id": meeting_id,
-            "race_number": int(m.group(3)),
-            "horse_name": m.group(2).strip(),
-            "saddlecloth": int(m.group(4)),
-            "tip_rank": int(m.group(1)),
-            "odds_at_tip": float(m.group(5)),
+            "race_number": int(m.group("race")),
+            "horse_name": name.strip(),
+            "saddlecloth": int(m.group("saddle")),
+            "tip_rank": int(rank),
+            "odds_at_tip": float(m.group("odds")),
             "place_odds_at_tip": None,
             "pick_type": "big3",
             "bet_type": None,
@@ -206,16 +215,20 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             else:
                 bet_stake = None
                 bet_type = None
-            win_odds = float(m.group(4))
-            place_odds = float(m.group(5)) if m.group(5) else None
+            # Handle both old (groups 1-5) and new (groups 3-7) format
+            rank = m.group(1) or m.group(3)
+            name = m.group(2) or m.group(4)
+            saddle = m.group(5)
+            win_odds = float(m.group(6))
+            place_odds = float(m.group(7)) if m.group(7) else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
                 "meeting_id": meeting_id,
                 "race_number": race_num,
-                "horse_name": m.group(2).strip(),
-                "saddlecloth": int(m.group(3)),
-                "tip_rank": int(m.group(1)),
+                "horse_name": name.strip(),
+                "saddlecloth": int(saddle),
+                "tip_rank": int(rank),
                 "odds_at_tip": win_odds,
                 "place_odds_at_tip": place_odds,
                 "pick_type": "selection",
@@ -246,15 +259,18 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             else:
                 bet_stake = None
                 bet_type = None
-            win_odds = float(roughie_m.group(3))
-            place_odds = float(roughie_m.group(4)) if roughie_m.group(4) else None
+            # Handle both old (groups 1,2,3,4,5) and new (groups 2,3,4,5) format
+            roughie_name = roughie_m.group(1) or roughie_m.group(2)
+            roughie_saddle = roughie_m.group(3)
+            win_odds = float(roughie_m.group(4))
+            place_odds = float(roughie_m.group(5)) if roughie_m.group(5) else None
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
                 "meeting_id": meeting_id,
                 "race_number": race_num,
-                "horse_name": roughie_m.group(1).strip(),
-                "saddlecloth": int(roughie_m.group(2)),
+                "horse_name": roughie_name.strip(),
+                "saddlecloth": int(roughie_saddle),
                 "tip_rank": 4,
                 "odds_at_tip": win_odds,
                 "place_odds_at_tip": place_odds,
