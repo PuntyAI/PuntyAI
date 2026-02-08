@@ -812,8 +812,11 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             async for event in generator.generate_early_mail_stream(meeting_id):
                 if event.get("status") == "error":
                     raise Exception(event.get("label", "Unknown error"))
+                # content_id is nested inside event["result"]
                 if event.get("content_id"):
                     content_id = event.get("content_id")
+                elif event.get("result", {}).get("content_id"):
+                    content_id = event["result"]["content_id"]
 
             results["steps"].append("generate_early_mail: success")
             results["content_id"] = content_id
