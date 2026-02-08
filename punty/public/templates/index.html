@@ -368,7 +368,7 @@
     (function() {
         async function loadWinsTicker() {
             try {
-                const resp = await fetch('/api/public/wins?limit=15');
+                const resp = await fetch('/api/public/wins?limit=10');
                 const data = await resp.json();
                 const ticker = document.getElementById('ticker-content');
 
@@ -398,7 +398,7 @@
 
                 // Adjust animation speed based on content width
                 const totalWidth = ticker.scrollWidth / 2;
-                const speed = Math.max(10, totalWidth / 120); // ~120px per second
+                const speed = Math.max(8, totalWidth / 240); // ~240px per second
                 ticker.style.animation = 'ticker-scroll ' + speed + 's linear infinite';
             } catch (e) {
                 console.error('Failed to load wins ticker:', e);
