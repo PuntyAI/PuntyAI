@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, DateTime, String, Text, select
+from sqlalchemy import Column, DateTime, Integer, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.config import melb_now_naive
@@ -223,6 +223,49 @@ class AppSettings(Base):
             "value": self.value,
             "description": self.description,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class SettingsAudit(Base):
+    """Audit trail for settings changes."""
+
+    __tablename__ = "settings_audit"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, nullable=False)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    changed_by = Column(String(200), nullable=True)
+    action = Column(String(20), nullable=False)  # created, updated, deleted
+    changed_at = Column(DateTime, default=melb_now_naive, nullable=False)
+
+    # Sensitive keys whose values should be masked in the audit log
+    SENSITIVE_KEYS = {
+        "openai_api_key", "twitter_api_key", "twitter_api_secret",
+        "twitter_access_token", "twitter_access_secret",
+        "resend_api_key", "smtp_password",
+    }
+
+    @staticmethod
+    def mask_value(key: str, value: str | None) -> str | None:
+        """Mask sensitive values, showing only first 4 and last 4 chars."""
+        if value is None or not value:
+            return value
+        if key not in SettingsAudit.SENSITIVE_KEYS:
+            return value
+        if len(value) <= 8:
+            return "****"
+        return f"{value[:4]}...{value[-4:]}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "key": self.key,
+            "old_value": self.mask_value(self.key, self.old_value),
+            "new_value": self.mask_value(self.key, self.new_value),
+            "changed_by": self.changed_by,
+            "action": self.action,
+            "changed_at": self.changed_at.isoformat() if self.changed_at else None,
         }
 
 

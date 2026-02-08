@@ -355,6 +355,89 @@ async def format_content(content_id: str, db: AsyncSession = Depends(get_db)):
     return content.to_dict()
 
 
+class PickUpdate(BaseModel):
+    """Update a single pick's fields."""
+    horse_name: Optional[str] = None
+    saddlecloth: Optional[int] = None
+    odds_at_tip: Optional[float] = None
+    bet_type: Optional[str] = None
+    bet_stake: Optional[float] = None
+
+
+class BulkPickUpdate(BaseModel):
+    """Bulk update picks for a content item."""
+    picks: dict[str, PickUpdate]  # pick_id -> fields to update
+
+
+@router.get("/{content_id}/picks")
+async def get_content_picks(content_id: str, db: AsyncSession = Depends(get_db)):
+    """Get all picks for a content item."""
+    from punty.models.pick import Pick
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Pick).where(Pick.content_id == content_id).order_by(Pick.race_number, Pick.tip_rank)
+    )
+    picks = result.scalars().all()
+    return [p.to_dict() for p in picks]
+
+
+@router.put("/{content_id}/picks")
+async def update_content_picks(content_id: str, update: BulkPickUpdate, db: AsyncSession = Depends(get_db)):
+    """Bulk update picks for a content item."""
+    from punty.models.pick import Pick
+    from sqlalchemy import select
+
+    # Verify content exists
+    from punty.models.content import Content
+    content_result = await db.execute(select(Content).where(Content.id == content_id))
+    if not content_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    updated = []
+    for pick_id, fields in update.picks.items():
+        result = await db.execute(
+            select(Pick).where(Pick.id == pick_id, Pick.content_id == content_id)
+        )
+        pick = result.scalar_one_or_none()
+        if not pick:
+            continue
+
+        if fields.horse_name is not None:
+            pick.horse_name = fields.horse_name
+        if fields.saddlecloth is not None:
+            pick.saddlecloth = fields.saddlecloth
+        if fields.odds_at_tip is not None:
+            pick.odds_at_tip = fields.odds_at_tip
+        if fields.bet_type is not None:
+            pick.bet_type = fields.bet_type
+        if fields.bet_stake is not None:
+            pick.bet_stake = fields.bet_stake
+        updated.append(pick_id)
+
+    await db.commit()
+    return {"updated": updated, "count": len(updated)}
+
+
+@router.post("/{content_id}/reparse-picks")
+async def reparse_content_picks(content_id: str, db: AsyncSession = Depends(get_db)):
+    """Re-parse picks from the content's raw text. Deletes existing picks and re-extracts."""
+    from punty.models.content import Content
+    from sqlalchemy import select
+
+    result = await db.execute(select(Content).where(Content.id == content_id))
+    content = result.scalar_one_or_none()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    if not content.raw_content:
+        raise HTTPException(status_code=400, detail="Content has no raw text to parse")
+
+    from punty.results.picks import store_picks_from_content
+    count = await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)
+    await db.commit()
+    return {"status": "reparsed", "pick_count": count}
+
+
 class WidenRequest(BaseModel):
     """Request to widen selections."""
 

@@ -1,14 +1,39 @@
 """API endpoints for settings management."""
 
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
+from punty.config import melb_now_naive
 from punty.models.database import get_db
 
 router = APIRouter()
+
+
+def _get_user_email(request: Request) -> str:
+    """Extract user email from session, or 'system' if unavailable."""
+    try:
+        user = request.session.get("user", {})
+        return user.get("email", "system")
+    except Exception:
+        return "system"
+
+
+async def _record_audit(db: AsyncSession, key: str, old_value: str | None, new_value: str | None, changed_by: str, action: str = "updated"):
+    """Record a settings change in the audit log."""
+    from punty.models.settings import SettingsAudit
+
+    entry = SettingsAudit(
+        key=key,
+        old_value=old_value,
+        new_value=new_value,
+        changed_by=changed_by,
+        action=action,
+        changed_at=melb_now_naive(),
+    )
+    db.add(entry)
 
 
 class WeightsUpdate(BaseModel):
@@ -48,12 +73,15 @@ async def get_analysis_weights(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/weights")
-async def update_analysis_weights(update: WeightsUpdate, db: AsyncSession = Depends(get_db)):
+async def update_analysis_weights(update: WeightsUpdate, request: Request, db: AsyncSession = Depends(get_db)):
     """Update analysis framework weights."""
     from punty.models.settings import AnalysisWeights
+    import json
 
     result = await db.execute(select(AnalysisWeights).where(AnalysisWeights.id == "default"))
     weights = result.scalar_one_or_none()
+
+    old_weights = json.dumps(weights.weights) if weights else None
 
     if not weights:
         weights = AnalysisWeights(id="default", name="Default Weights")
@@ -69,29 +97,33 @@ async def update_analysis_weights(update: WeightsUpdate, db: AsyncSession = Depe
             )
 
     weights.weights = update.weights
+    await _record_audit(db, "analysis_weights", old_weights, json.dumps(update.weights), _get_user_email(request))
     await db.commit()
 
     return weights.to_dict()
 
 
 @router.post("/weights/reset")
-async def reset_analysis_weights(db: AsyncSession = Depends(get_db)):
+async def reset_analysis_weights(request: Request, db: AsyncSession = Depends(get_db)):
     """Reset analysis weights to defaults."""
     from punty.models.settings import AnalysisWeights
+    import json
 
     result = await db.execute(select(AnalysisWeights).where(AnalysisWeights.id == "default"))
     weights = result.scalar_one_or_none()
 
+    old_weights = json.dumps(weights.weights) if weights else None
+
     if weights:
         weights.weights = AnalysisWeights.DEFAULT_WEIGHTS
-        await db.commit()
-        return weights.to_dict()
     else:
         weights = AnalysisWeights(id="default", name="Default Weights")
         weights.weights = AnalysisWeights.DEFAULT_WEIGHTS
         db.add(weights)
-        await db.commit()
-        return weights.to_dict()
+
+    await _record_audit(db, "analysis_weights", old_weights, "RESET TO DEFAULTS", _get_user_email(request))
+    await db.commit()
+    return weights.to_dict()
 
 
 @router.get("/")
@@ -144,7 +176,7 @@ async def get_personality(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/personality")
-async def save_personality(update: PersonalityUpdate, db: AsyncSession = Depends(get_db)):
+async def save_personality(update: PersonalityUpdate, request: Request, db: AsyncSession = Depends(get_db)):
     """Save the personality prompt to DB (survives deploys)."""
     from punty.models.settings import AppSettings
     from punty.ai.generator import _personality_cache
@@ -152,16 +184,55 @@ async def save_personality(update: PersonalityUpdate, db: AsyncSession = Depends
     # Save to DB
     result = await db.execute(select(AppSettings).where(AppSettings.key == "personality_prompt"))
     setting = result.scalar_one_or_none()
+    old_value = setting.value if setting else None
     if setting:
         setting.value = update.content
     else:
         db.add(AppSettings(key="personality_prompt", value=update.content))
+
+    action = "updated" if old_value else "created"
+    await _record_audit(db, "personality_prompt", f"({len(old_value)} chars)" if old_value else None, f"({len(update.content)} chars)", _get_user_email(request), action)
     await db.commit()
 
     # Update in-memory cache
     _personality_cache.set(update.content)
 
     return {"status": "saved", "length": len(update.content)}
+
+
+# --- Audit Log (must come BEFORE /{key} catch-all) ---
+
+@router.get("/audit-log")
+async def get_audit_log(
+    limit: int = 50,
+    offset: int = 0,
+    key: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get settings change audit log."""
+    from punty.models.settings import SettingsAudit
+    from sqlalchemy import func
+
+    query = select(SettingsAudit).order_by(desc(SettingsAudit.changed_at))
+    count_query = select(func.count(SettingsAudit.id))
+
+    if key:
+        query = query.where(SettingsAudit.key == key)
+        count_query = count_query.where(SettingsAudit.key == key)
+
+    query = query.limit(limit).offset(offset)
+    result = await db.execute(query)
+    entries = result.scalars().all()
+
+    count_result = await db.execute(count_query)
+    total = count_result.scalar_one()
+
+    return {
+        "entries": [e.to_dict() for e in entries],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 # --- Generic setting by key (catch-all, must come AFTER specific routes) ---
@@ -190,13 +261,14 @@ async def get_setting(key: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{key}")
-async def update_setting(key: str, update: SettingUpdate, db: AsyncSession = Depends(get_db)):
+async def update_setting(key: str, update: SettingUpdate, request: Request, db: AsyncSession = Depends(get_db)):
     """Update a specific setting."""
     from punty.models.settings import AppSettings
 
     result = await db.execute(select(AppSettings).where(AppSettings.key == key))
     setting = result.scalar_one_or_none()
 
+    old_value = setting.value if setting else None
     if setting:
         setting.value = update.value
     else:
@@ -205,6 +277,8 @@ async def update_setting(key: str, update: SettingUpdate, db: AsyncSession = Dep
         setting = AppSettings(key=key, value=update.value, description=description)
         db.add(setting)
 
+    action = "updated" if old_value is not None else "created"
+    await _record_audit(db, key, old_value, update.value, _get_user_email(request), action)
     await db.commit()
     return setting.to_dict()
 
@@ -218,7 +292,7 @@ PROVIDER_KEYS = {
 
 
 @router.put("/api-keys/{provider}")
-async def update_api_keys(provider: str, update: ApiKeysUpdate, db: AsyncSession = Depends(get_db)):
+async def update_api_keys(provider: str, update: ApiKeysUpdate, request: Request, db: AsyncSession = Depends(get_db)):
     """Update API keys for a provider (openai, twitter, smtp, resend)."""
     from punty.models.settings import AppSettings
 
@@ -226,18 +300,22 @@ async def update_api_keys(provider: str, update: ApiKeysUpdate, db: AsyncSession
     if not allowed:
         raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'")
 
+    user_email = _get_user_email(request)
     saved = {}
     for key, value in update.keys.items():
         if key not in allowed:
             continue
         result = await db.execute(select(AppSettings).where(AppSettings.key == key))
         setting = result.scalar_one_or_none()
+        old_value = setting.value if setting else None
         if setting:
             setting.value = value
         else:
-            desc = AppSettings.DEFAULTS.get(key, {}).get("description", "")
-            setting = AppSettings(key=key, value=value, description=desc)
+            description = AppSettings.DEFAULTS.get(key, {}).get("description", "")
+            setting = AppSettings(key=key, value=value, description=description)
             db.add(setting)
+        action = "updated" if old_value is not None else "created"
+        await _record_audit(db, key, old_value, value, user_email, action)
         saved[key] = True
 
     await db.commit()
