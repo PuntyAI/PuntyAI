@@ -444,22 +444,22 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not early_mail and not wrapup:
             return None
 
-        # Get settled winning picks for win tick display
-        from punty.models.pick import Pick
+        # Get ALL race winners for win tick display (not just Punty's picks)
+        from punty.models.meeting import Runner as RunnerModel
         winners_result = await db.execute(
-            select(Pick).where(
+            select(RunnerModel).join(Race, RunnerModel.race_id == Race.id).where(
                 and_(
-                    Pick.meeting_id == meeting_id,
-                    Pick.settled == True,
-                    Pick.hit == True,
-                    Pick.pick_type == "selection",
+                    Race.meeting_id == meeting_id,
+                    RunnerModel.finish_position == 1,
+                    RunnerModel.scratched == False,
                 )
             )
         )
         winners_map = {}
-        for pick in winners_result.scalars().all():
-            if pick.race_number and pick.saddlecloth:
-                winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
+        for runner in winners_result.scalars().all():
+            race_num = runner.race_id.split("-r")[-1]
+            if race_num.isdigit():
+                winners_map.setdefault(int(race_num), []).append(runner.saddlecloth)
 
         # Get live updates (celebrations + pace analysis)
         updates_result = await db.execute(
