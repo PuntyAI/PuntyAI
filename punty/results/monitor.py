@@ -497,13 +497,13 @@ class ResultsMonitor:
         if posted_count >= 3:
             return
 
-        # Only analyze after race 4
         completed_races = sorted(self.processed_races.get(meeting_id, set()))
-        if len(completed_races) < 4:
-            return
-
-        # Don't post for the last race (no value for remaining races)
         total_races = len(statuses)
+
+        # Start analysis after race 3 for 7-race meets, race 4 for 8+
+        min_races = 3 if total_races <= 7 else 4
+        if len(completed_races) < min_races:
+            return
         if just_completed >= total_races:
             return
 

@@ -12,7 +12,7 @@ from punty.models.meeting import Race, Runner
 logger = logging.getLogger(__name__)
 
 POSITION_CATEGORIES = ["leader", "on_pace", "midfield", "backmarker"]
-MIN_RACES_FOR_ANALYSIS = 4
+MIN_RACES_FOR_ANALYSIS = 3
 BIAS_THRESHOLD = 0.6  # 60%+ of winners from one category
 COMBINED_BIAS_THRESHOLD = 0.75  # 75%+ from front or back combined
 
