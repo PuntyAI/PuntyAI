@@ -100,23 +100,91 @@ async def analyze_pace_bias(
     return result
 
 
+async def find_bias_fits(
+    db: AsyncSession,
+    meeting_id: str,
+    completed_race_numbers: list[int],
+    total_races: int,
+    bias_type: Optional[str],
+) -> list[dict]:
+    """Find runners in remaining races that fit the detected bias pattern.
+
+    Returns a list of {horse_name, race_number, odds, position} dicts,
+    sorted by odds (shortest first), max 4 runners.
+    """
+    if not bias_type:
+        return []
+
+    # Determine which speed_map_positions to look for
+    if bias_type == "speed":
+        target_positions = ["leader", "on_pace"]
+    elif bias_type == "closer":
+        target_positions = ["midfield", "backmarker"]
+    elif bias_type == "on_pace":
+        target_positions = ["on_pace"]
+    else:
+        return []
+
+    remaining_nums = [n for n in range(1, total_races + 1) if n not in completed_race_numbers]
+    if not remaining_nums:
+        return []
+
+    fits = []
+    for race_num in remaining_nums:
+        race_id = f"{meeting_id}-r{race_num}"
+        result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.scratched == False,
+                Runner.speed_map_position.isnot(None),
+            )
+        )
+        for runner in result.scalars().all():
+            pos = runner.speed_map_position.lower().strip()
+            if pos in target_positions:
+                fits.append({
+                    "horse_name": runner.horse_name,
+                    "race_number": race_num,
+                    "odds": runner.current_odds or 999,
+                    "position": pos,
+                })
+
+    # Sort by odds (shortest first) and take top 4
+    fits.sort(key=lambda x: x["odds"])
+    return fits[:4]
+
+
+def _format_horse_suggestions(fits: list[dict]) -> str:
+    """Format horse suggestions into a compact string like 'Horse (R5 $3.50), Horse (R7 $6)'."""
+    if not fits:
+        return ""
+    parts = []
+    for f in fits:
+        odds_str = f"${f['odds']:.0f}" if f["odds"] >= 10 else f"${f['odds']:.2f}"
+        parts.append(f"{f['horse_name']} (R{f['race_number']} {odds_str})")
+    return ", ".join(parts)
+
+
 def compose_pace_tweet(
     bias_result: PaceBiasResult,
     venue: str,
     races_remaining: int,
+    horse_suggestions: Optional[list[dict]] = None,
 ) -> Optional[str]:
     """Compose a short Punty-style pace analysis tweet.
 
     Includes sequence adjustment suggestions when the track pattern
     is riding differently than the speed maps predicted.
     When no bias is detected, posts a reassuring "maps are tracking" update.
+    horse_suggestions is an optional list of {horse_name, race_number, odds, position} dicts.
     """
     total = bias_result.total_races_analyzed
     front = bias_result.winners_by_position.get("leader", 0) + bias_result.winners_by_position.get("on_pace", 0)
     back = bias_result.winners_by_position.get("midfield", 0) + bias_result.winners_by_position.get("backmarker", 0)
 
+    suggestions = _format_horse_suggestions(horse_suggestions or [])
+
     if not bias_result.bias_detected:
-        # No significant bias — maps are tracking as expected
         templates = [
             f"\U0001F3C1 {venue} map check after {total} races: No funny business \u2014 the track's playing honest and the maps are holding up. Trust your tips for the last {races_remaining}, punt away \U0001F91D",
             f"\U0001F3C1 {venue} pace read ({total} in): Had a look at the runs so far and we're tracking nicely. No bias, no dramas \u2014 the speed maps are doing their job. Fire away for the last {races_remaining} \U0001F525",
@@ -124,26 +192,48 @@ def compose_pace_tweet(
             f"\U0001F3C1 {venue} track check: Punty's reviewed {total} races and the map reads are bang on. No adjustments needed \u2014 back yourself for the last {races_remaining} \U0001F4AA",
         ]
     elif bias_result.bias_type == "speed":
-        templates = [
-            f"\U0001F3C1 {venue} update: Speed's king today \u2014 {front}/{total} winners from on-pace or leading. Stick with the map reads for the last {races_remaining}. If you're in the sequences, lean on the speed horses \U0001F5FA\uFE0F",
-            f"\U0001F3C1 {venue}: The front-runners are holding on \u2014 {front}/{total} sat handy and got the job done. Back the map, trust the speed in your quaddie legs \U0001F525",
-            f"\U0001F3C1 {venue} track read: {front}/{total} winners raced on pace. The rail's playing fair \u2014 don't overthink the sequences, leaders and on-pacers are the play \U0001F3AF",
-        ]
+        base = f"\U0001F3C1 {venue} track read: Speed's king \u2014 {front}/{total} winners on-pace or leading."
+        if suggestions:
+            templates = [
+                f"{base} Ones to watch up front: {suggestions} \U0001F525",
+                f"{base} The map horses to follow: {suggestions} \U0001F3AF",
+            ]
+        else:
+            templates = [
+                f"{base} Stick with the map reads, lean on the speed horses for the last {races_remaining} \U0001F525",
+            ]
     elif bias_result.bias_type == "closer":
-        templates = [
-            f"\U0001F3C1 {venue} update: Closers running over them \u2014 {back}/{total} from behind today. Adjust your reads for the last {races_remaining}: look for midfield/back runners in those sequence legs \U0001F30A",
-            f"\U0001F3C1 {venue}: Speed's cooked \u2014 {back}/{total} winners sat off the pace. Swap your quaddie legs toward the closers, the map horses are getting rolled \U0001F4E1",
-            f"\U0001F3C1 {venue} track read: {back}/{total} from midfield or back. If your sequences had leaders, think about adding closers in the remaining legs \U0001F914",
-        ]
+        base = f"\U0001F3C1 {venue} track read: Closers running riot \u2014 {back}/{total} from behind."
+        if suggestions:
+            templates = [
+                f"{base} Ones sitting off it to watch: {suggestions} \U0001F30A",
+                f"{base} Back-runners to follow: {suggestions} \U0001F4E1",
+            ]
+        else:
+            templates = [
+                f"{base} Think about adding closers in those sequence legs for the last {races_remaining} \U0001F30A",
+            ]
     elif bias_result.bias_type == "on_pace":
         on_pace = bias_result.winners_by_position.get("on_pace", 0)
-        templates = [
-            f"\U0001F3C1 {venue}: Stalkers dominating \u2014 {on_pace}/{total} winners sat just off the leader. The sit-and-kick pattern is the play for the last {races_remaining} \U0001F3AF",
-        ]
+        base = f"\U0001F3C1 {venue}: Stalkers dominating \u2014 {on_pace}/{total} sat just off the speed and kicked."
+        if suggestions:
+            templates = [
+                f"{base} Sit-and-kick types to watch: {suggestions} \U0001F3AF",
+            ]
+        else:
+            templates = [
+                f"{base} The sit-and-kick pattern is the play for the last {races_remaining} \U0001F3AF",
+            ]
     else:
         return None
 
     tweet = random.choice(templates)
+
+    # Trim suggestions if tweet too long
+    if len(tweet) > 280 and suggestions:
+        # Try with fewer horses
+        shorter = _format_horse_suggestions((horse_suggestions or [])[:2])
+        tweet = tweet.replace(suggestions, shorter)
 
     if len(tweet) > 280:
         tweet = tweet[:277] + "..."

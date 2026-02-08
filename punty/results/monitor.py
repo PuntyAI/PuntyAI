@@ -505,7 +505,7 @@ class ResultsMonitor:
 
     async def _check_pace_bias(self, db: AsyncSession, meeting, statuses: dict, just_completed: int):
         """Analyze pace bias and post tweet reply if significant pattern detected."""
-        from punty.results.pace_analysis import analyze_pace_bias, compose_pace_tweet
+        from punty.results.pace_analysis import analyze_pace_bias, compose_pace_tweet, find_bias_fits
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
@@ -549,7 +549,17 @@ class ResultsMonitor:
         if not early_mail or not early_mail.twitter_id:
             return
 
-        tweet_text = compose_pace_tweet(bias_result, meeting.venue, races_remaining)
+        # Find horses in remaining races that fit the bias pattern
+        horse_suggestions = []
+        if bias_result.bias_detected:
+            try:
+                horse_suggestions = await find_bias_fits(
+                    db, meeting_id, completed_races, len(statuses), bias_result.bias_type
+                )
+            except Exception as e:
+                logger.debug(f"Failed to find bias fits: {e}")
+
+        tweet_text = compose_pace_tweet(bias_result, meeting.venue, races_remaining, horse_suggestions)
         if not tweet_text:
             return
 
