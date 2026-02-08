@@ -294,10 +294,11 @@ class TwitterDelivery:
         """Format content for a single long-form X post."""
         from punty.formatters.twitter import TwitterFormatter
 
-        # Add header
-        header = f"🏇 PUNTY'S {venue.upper()} TIPS\n\n"
+        # Add header with Unicode bold
+        bold_title = TwitterFormatter._to_unicode_bold(f"PUNTY'S {venue.upper()} TIPS")
+        header = f"🏇 {bold_title}\n\n"
 
-        # Clean markdown - X doesn't render markdown, shows raw asterisks/hashes
+        # Convert markdown bold to Unicode bold for X
         text = TwitterFormatter._clean_markdown(raw_content)
 
         # Add footer with hashtags

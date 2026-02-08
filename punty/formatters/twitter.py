@@ -89,19 +89,37 @@ class TwitterFormatter:
         (re.compile(r'\bfuck(ing|ed|s)?\b', re.IGNORECASE), 'bloody'),
     ]
 
+    @staticmethod
+    def _to_unicode_bold(text: str) -> str:
+        """Convert ASCII text to Unicode Mathematical Bold Sans-Serif.
+
+        These render as bold on Twitter/X without any markdown support.
+        """
+        result = []
+        for char in text:
+            if 'A' <= char <= 'Z':
+                result.append(chr(0x1D5D4 + ord(char) - ord('A')))
+            elif 'a' <= char <= 'z':
+                result.append(chr(0x1D5EE + ord(char) - ord('a')))
+            elif '0' <= char <= '9':
+                result.append(chr(0x1D7EC + ord(char) - ord('0')))
+            else:
+                result.append(char)
+        return ''.join(result)
+
     @classmethod
     def _clean_markdown(cls, content: str) -> str:
-        """Remove markdown formatting and sanitise for X."""
+        """Convert markdown formatting to Unicode equivalents for X."""
         # Remove literal "### 1) HEADER" lines (AI template artifact)
         content = re.sub(r'^#{1,3}\s+\d+\)\s*HEADER\s*$', '', content, flags=re.MULTILINE)
         # Remove headers and any leading section numbers like "### 2) MEET SNAPSHOT"
         content = re.sub(r'^#{1,3}\s+\d+\)\s*', '', content, flags=re.MULTILINE)
         content = re.sub(r'^#{1,3}\s+', '', content, flags=re.MULTILINE)
-        # Remove bold
-        content = re.sub(r'\*\*(.+?)\*\*', r'\1', content)
-        content = re.sub(r'__(.+?)__', r'\1', content)
-        content = re.sub(r'\*(.+?)\*', r'\1', content)
-        # Remove italic
+        # Convert bold to Unicode bold
+        content = re.sub(r'\*\*(.+?)\*\*', lambda m: cls._to_unicode_bold(m.group(1)), content)
+        content = re.sub(r'__(.+?)__', lambda m: cls._to_unicode_bold(m.group(1)), content)
+        content = re.sub(r'\*(.+?)\*', lambda m: cls._to_unicode_bold(m.group(1)), content)
+        # Remove italic underscores (no Unicode italic equivalent that's reliable)
         content = re.sub(r'_(.+?)_', r'\1', content)
         # Clean up multiple newlines
         content = re.sub(r'\n{3,}', '\n\n', content)
