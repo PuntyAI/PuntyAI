@@ -530,7 +530,11 @@ class ResultsMonitor:
         races_remaining = total_races - just_completed
 
         bias_result = await analyze_pace_bias(db, meeting_id, completed_races)
-        if not bias_result or not bias_result.bias_detected:
+        if not bias_result:
+            return
+        # First check always posts (even "maps are tracking" when no bias)
+        # Subsequent checks only post if a bias has developed
+        if not bias_result.bias_detected and posted_count > 0:
             return
 
         # Find the meeting's early mail tweet ID

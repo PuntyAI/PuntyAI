@@ -109,15 +109,21 @@ def compose_pace_tweet(
 
     Includes sequence adjustment suggestions when the track pattern
     is riding differently than the speed maps predicted.
+    When no bias is detected, posts a reassuring "maps are tracking" update.
     """
-    if not bias_result.bias_detected:
-        return None
-
     total = bias_result.total_races_analyzed
     front = bias_result.winners_by_position.get("leader", 0) + bias_result.winners_by_position.get("on_pace", 0)
     back = bias_result.winners_by_position.get("midfield", 0) + bias_result.winners_by_position.get("backmarker", 0)
 
-    if bias_result.bias_type == "speed":
+    if not bias_result.bias_detected:
+        # No significant bias — maps are tracking as expected
+        templates = [
+            f"\U0001F3C1 {venue} map check after {total} races: No funny business \u2014 the track's playing honest and the maps are holding up. Trust your tips for the last {races_remaining}, punt away \U0001F91D",
+            f"\U0001F3C1 {venue} pace read ({total} in): Had a look at the runs so far and we're tracking nicely. No bias, no dramas \u2014 the speed maps are doing their job. Fire away for the last {races_remaining} \U0001F525",
+            f"\U0001F3C1 {venue} update: {total} races done, had a squiz at the patterns \u2014 all square. Leaders and closers both getting their chance. Maps are on the money, stick with the reads \U0001F3AF",
+            f"\U0001F3C1 {venue} track check: Punty's reviewed {total} races and the map reads are bang on. No adjustments needed \u2014 back yourself for the last {races_remaining} \U0001F4AA",
+        ]
+    elif bias_result.bias_type == "speed":
         templates = [
             f"\U0001F3C1 {venue} update: Speed's king today \u2014 {front}/{total} winners from on-pace or leading. Stick with the map reads for the last {races_remaining}. If you're in the sequences, lean on the speed horses \U0001F5FA\uFE0F",
             f"\U0001F3C1 {venue}: The front-runners are holding on \u2014 {front}/{total} sat handy and got the job done. Back the map, trust the speed in your quaddie legs \U0001F525",
