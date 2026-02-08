@@ -129,7 +129,12 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Remove literal "### 1) HEADER" lines (AI template artifact)
     content = re.sub(r'^#{1,3}\s+\d+\)\s*HEADER\s*$', '', content, flags=re.MULTILINE)
 
-    content = re.sub(r'^(#{1,3})\s+(.+)$', convert_header, content, flags=re.MULTILINE)
+    # Convert headers and ensure they're in their own paragraph block
+    def convert_header_with_breaks(m):
+        result = convert_header(m)
+        return f'\n\n{result}\n\n'
+
+    content = re.sub(r'^(#{1,3})\s+(.+)$', convert_header_with_breaks, content, flags=re.MULTILINE)
 
     # Convert markdown links [text](url) to <a> tags
     content = re.sub(

@@ -11,14 +11,23 @@ Use a fresh, cheeky opening paragraph that sets the pre-meet vibe. Keep it punch
 **DO NOT output "### 1) HEADER" — just start with the *PUNTY EARLY MAIL* title line directly.**
 
 ### 2) *MEET SNAPSHOT*
-Track: {TRACK_NAME}, {DISTANCE_RANGE}m card
-Rail: {RAIL_POSITION}
-Official going: {GOING_RATING} (expected to play {EXPECTED_PROFILE})
-Weather: {WEATHER_DETAIL} (watch for {WEATHER_FLAGS})
-Early lane guess: {LANE_GUESS}
-Tempo profile: {TEMPO_SUMMARY}
-Jockeys to follow: {JOCKEY_LIST_WITH_REASON}
-Stables to respect: {STABLE_LIST_WITH_REASON — use SPECIFIC trainer names from the data, e.g. "- S. Lenehan (5 runners) — volume says intent". NEVER use generic descriptions like "the jumpout brigade" or "the mobs with market support".}
+*Track:* {TRACK_NAME}, {DISTANCE_RANGE}m card
+*Rail:* {RAIL_POSITION}
+*Official going:* {GOING_RATING} (expected to play {EXPECTED_PROFILE})
+*Weather:* {WEATHER_DETAIL} (watch for {WEATHER_FLAGS})
+*Early lane guess:* {LANE_GUESS}
+*Tempo profile:* {TEMPO_SUMMARY}
+
+*Jockeys to follow:*
+{JOCKEY_1_NAME} — {REASON}
+{JOCKEY_2_NAME} — {REASON}
+{JOCKEY_3_NAME} — {REASON}
+
+*Stables to respect:*
+{TRAINER_1} ({N} runners) — {REASON}
+{TRAINER_2} ({N} runners) — {REASON}
+{TRAINER_3} ({N} runners) — {REASON}
+Use SPECIFIC trainer names from the data. NEVER use generic descriptions like "the jumpout brigade" or "the mobs with market support". Do NOT use bullet point "- " prefixes for jockey or stable items.
 
 *Punty's take:* {2–3 punchy paragraphs of system-led insight, jokes-with-purpose, and clear map/bias hypotheses without named sources}
 
@@ -41,8 +50,8 @@ Multi (all three to win): 10U × ~{MULTI_ODDS} = ~{MULTI_RETURN_U}U collect
 Repeat for each race in order:
 
 *Race {R_NUMBER} – {R_NICKNAME}*
-Race type: {R_CLASS}, {R_DISTANCE}m
-Map & tempo: {R_TEMPO_LINE}
+*Race type:* {R_CLASS}, {R_DISTANCE}m
+*Map & tempo:* {R_TEMPO_LINE}
 *Punty read:* {R_PUNTY_READ}
 
 *Top 3 + Roughie ($20 pool)*
