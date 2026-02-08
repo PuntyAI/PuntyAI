@@ -386,9 +386,27 @@ class ResultsMonitor:
         await self._backfill_sectionals(db, meeting, races)
 
         # Check if all races done for wrap-up
+        # CRITICAL: Verify actual results exist in DB, not just racing.com status
         total_races = len(races)
         paying_count = sum(1 for s in statuses.values() if s in ("Paying", "Closed"))
-        if paying_count >= total_races and meeting_id not in self.wrapups_generated:
+        results_count = 0
+        if paying_count >= total_races:
+            from punty.models.meeting import Runner as RunnerModel
+            for race in races:
+                has_result = await db.execute(
+                    select(RunnerModel).where(
+                        RunnerModel.race_id == race.id,
+                        RunnerModel.finish_position.isnot(None),
+                    ).limit(1)
+                )
+                if has_result.scalar_one_or_none():
+                    results_count += 1
+            if results_count < total_races:
+                logger.warning(
+                    f"{meeting.venue}: {paying_count}/{total_races} races paying but only "
+                    f"{results_count}/{total_races} have results scraped — holding wrap-up"
+                )
+        if paying_count >= total_races and results_count >= total_races and meeting_id not in self.wrapups_generated:
             # Check if a wrapup already exists in DB (prevents duplicates on restart)
             from punty.models.content import Content
             existing_wrapup = await db.execute(
