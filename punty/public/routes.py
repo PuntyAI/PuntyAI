@@ -235,6 +235,24 @@ async def get_winner_stats() -> dict:
                     "twitter_url": f"https://twitter.com/PuntyAI",  # Link to profile, or specific tweet if stored
                 })
 
+        # Strike rate: total settled picks and hit rate
+        from sqlalchemy import case
+        strike_result = await db.execute(
+            select(
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+                func.sum(case((Pick.bet_stake.isnot(None), Pick.bet_stake), else_=Pick.exotic_stake)),
+            ).where(Pick.settled == True)
+        )
+        sr = strike_result.one()
+        total_settled = sr[0] or 0
+        total_hit = int(sr[1] or 0)
+        total_pnl = sr[2] or 0
+        total_staked = sr[3] or 0
+        strike_rate = round(total_hit / total_settled * 100, 1) if total_settled > 0 else 0
+        roi = round(total_pnl / total_staked * 100, 1) if total_staked > 0 else 0
+
         return {
             "today_winners": today_winners,
             "alltime_winners": alltime_winners,
@@ -242,6 +260,10 @@ async def get_winner_stats() -> dict:
             "todays_tips": todays_tips,
             "meetings_today": len(today_meetings),
             "all_races_complete": all_races_complete,
+            "strike_rate": strike_rate,
+            "total_settled": total_settled,
+            "total_hit": total_hit,
+            "roi": roi,
         }
 
 
@@ -276,6 +298,12 @@ async def contact(request: Request):
     return templates.TemplateResponse("contact.html", {"request": request})
 
 
+@router.get("/calculator", response_class=HTMLResponse)
+async def calculator(request: Request):
+    """Betting calculator page."""
+    return templates.TemplateResponse("calculator.html", {"request": request})
+
+
 @router.get("/terms", response_class=HTMLResponse)
 async def terms(request: Request):
     """Terms of service page."""
@@ -300,23 +328,36 @@ async def robots():
     return FileResponse(static_dir / "robots.txt", media_type="text/plain")
 
 
-async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
+async def get_tips_calendar(
+    page: int = 1,
+    per_page: int = 30,
+    venue: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict:
     """Get meetings with sent content, grouped by date for calendar view."""
     from sqlalchemy import desc, distinct
     from collections import defaultdict
 
     async with async_session() as db:
+        # Build shared filter conditions
+        filters = [
+            Content.content_type == "early_mail",
+            Content.status == "sent",
+            Meeting.date.isnot(None),
+        ]
+        if venue:
+            filters.append(Meeting.venue.ilike(f"%{venue}%"))
+        if date_from:
+            filters.append(Meeting.date >= date_from)
+        if date_to:
+            filters.append(Meeting.date <= date_to)
+
         # Count total distinct dates with sent early mail content
         count_result = await db.execute(
             select(func.count(distinct(Meeting.date)))
             .join(Content, Content.meeting_id == Meeting.id)
-            .where(
-                and_(
-                    Content.content_type == "early_mail",
-                    Content.status == "sent",
-                    Meeting.date.isnot(None),
-                )
-            )
+            .where(and_(*filters))
         )
         total = count_result.scalar() or 0
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
@@ -326,13 +367,7 @@ async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
         dates_result = await db.execute(
             select(distinct(Meeting.date))
             .join(Content, Content.meeting_id == Meeting.id)
-            .where(
-                and_(
-                    Content.content_type == "early_mail",
-                    Content.status == "sent",
-                    Meeting.date.isnot(None),
-                )
-            )
+            .where(and_(*filters))
             .order_by(desc(Meeting.date))
             .offset(offset)
             .limit(per_page)
@@ -351,16 +386,18 @@ async def get_tips_calendar(page: int = 1, per_page: int = 30) -> dict:
             }
 
         # Fetch meetings for only the paginated dates
+        meeting_filters = [
+            Content.content_type == "early_mail",
+            Content.status == "sent",
+            Meeting.date.in_(page_dates),
+        ]
+        if venue:
+            meeting_filters.append(Meeting.venue.ilike(f"%{venue}%"))
+
         result = await db.execute(
             select(Meeting)
             .join(Content, Content.meeting_id == Meeting.id)
-            .where(
-                and_(
-                    Content.content_type == "early_mail",
-                    Content.status == "sent",
-                    Meeting.date.in_(page_dates),
-                )
-            )
+            .where(and_(*meeting_filters))
             .order_by(desc(Meeting.date), Meeting.venue)
         )
         meetings = result.scalars().all()
@@ -526,9 +563,44 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
 
 
 @router.get("/tips", response_class=HTMLResponse)
-async def tips_page(request: Request, page: int = 1):
+async def tips_page(
+    request: Request,
+    page: int = 1,
+    venue: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
     """Public tips calendar page showing meetings by date."""
-    calendar_data = await get_tips_calendar(page=page, per_page=30)
+    from datetime import date as date_type
+
+    # Parse date strings
+    parsed_from = None
+    parsed_to = None
+    if date_from:
+        try:
+            parsed_from = date_type.fromisoformat(date_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            parsed_to = date_type.fromisoformat(date_to)
+        except ValueError:
+            pass
+
+    calendar_data = await get_tips_calendar(
+        page=page, per_page=30, venue=venue,
+        date_from=parsed_from, date_to=parsed_to,
+    )
+
+    # Build filter query string for pagination links
+    filter_params = ""
+    if venue:
+        filter_params += f"&venue={venue}"
+    if date_from:
+        filter_params += f"&date_from={date_from}"
+    if date_to:
+        filter_params += f"&date_to={date_to}"
+
     return templates.TemplateResponse(
         "tips.html",
         {
@@ -539,6 +611,10 @@ async def tips_page(request: Request, page: int = 1):
             "total_dates": calendar_data["total_dates"],
             "has_next": calendar_data["has_next"],
             "has_prev": calendar_data["has_prev"],
+            "venue": venue or "",
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "filter_params": filter_params,
         }
     )
 

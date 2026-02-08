@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Betting Calculator - PuntyAI{% endblock %}
+
+{% block head %}
+<meta name="description" content="Free horse racing betting calculator. Calculate returns for Win, Place, Each Way, Exotic, and Multi bets.">
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<section class="py-16">
+    <div class="max-w-2xl mx-auto px-4 sm:px-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-heading font-bold mb-4">
+                Betting <span style="color: var(--magenta);">Calculator</span>
+            </h1>
+            <p class="text-lg" style="color: var(--text-secondary);">
+                Work out your returns before you have a crack.
+            </p>
+        </div>
+
+        <div x-data="calculator()" class="space-y-6">
+            <!-- Bet Type Selector -->
+            <div class="card p-6">
+                <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Bet Type</label>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    <template x-for="type in betTypes" :key="type.value">
+                        <button @click="betType = type.value"
+                                :class="betType === type.value ? 'ring-2' : ''"
+                                :style="betType === type.value ? 'background: rgba(233, 30, 140, 0.2); border-color: var(--magenta); ring-color: var(--magenta);' : 'background: var(--bg-dark); border: 1px solid var(--border-subtle);'"
+                                class="px-3 py-2 rounded-lg text-sm font-heading font-semibold text-center transition-all"
+                                style="color: var(--text-primary); border: 1px solid var(--border-subtle);"
+                                x-text="type.label">
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Inputs -->
+            <div class="card p-6 space-y-4">
+                <!-- Standard stake + odds -->
+                <div x-show="betType !== 'multi' && betType !== 'quaddie'">
+                    <div class="mb-4">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Stake ($)</label>
+                        <input type="number" x-model.number="stake" min="0" step="1" placeholder="20"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);" x-text="betType === 'exotic' ? 'Dividend ($)' : 'Win Odds ($)'"></label>
+                        <input type="number" x-model.number="winOdds" min="1" step="0.01" placeholder="3.50"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+
+                    <div x-show="betType === 'each_way' || betType === 'place'">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Place Odds ($)</label>
+                        <input type="number" x-model.number="placeOdds" min="1" step="0.01" placeholder="1.80"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+                </div>
+
+                <!-- Multi legs -->
+                <div x-show="betType === 'multi'">
+                    <div class="mb-4">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Stake ($)</label>
+                        <input type="number" x-model.number="stake" min="0" step="1" placeholder="10"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Legs</label>
+                        <div class="flex gap-2">
+                            <button @click="removeMultiLeg()" class="px-3 py-1 rounded text-sm font-bold" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-secondary);">-</button>
+                            <button @click="addMultiLeg()" class="px-3 py-1 rounded text-sm font-bold" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-secondary);">+</button>
+                        </div>
+                    </div>
+                    <template x-for="(leg, i) in multiLegs" :key="i">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-heading font-semibold w-14" style="color: var(--text-muted);" x-text="'Leg ' + (i+1)"></span>
+                            <input type="number" x-model.number="multiLegs[i]" min="1" step="0.01" placeholder="2.00"
+                                   class="flex-1 px-3 py-2 rounded-lg text-sm font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Quaddie / Sequence -->
+                <div x-show="betType === 'quaddie'">
+                    <div class="mb-4">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Unit Stake ($)</label>
+                        <input type="number" x-model.number="unitStake" min="0.01" step="0.01" placeholder="0.50"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Runners per leg (comma separated)</label>
+                        <input type="text" x-model="quaddieLegsInput" placeholder="2, 3, 2, 4"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Dividend ($) - if it hits</label>
+                        <input type="number" x-model.number="quaddieDividend" min="0" step="0.01" placeholder="500.00"
+                               class="w-full px-4 py-3 rounded-lg text-lg font-display" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    </div>
+                    <div class="text-sm px-3 py-2 rounded" style="background: rgba(0, 212, 255, 0.1); color: var(--cyan);">
+                        <span x-text="quaddieCombos()"></span> combos x $<span x-text="unitStake.toFixed(2)"></span> = <strong>$<span x-text="quaddieCost().toFixed(2)"></span> total cost</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="card p-6" x-show="(betType !== 'multi' && betType !== 'quaddie' && stake > 0 && winOdds > 0) || (betType === 'multi' && stake > 0) || (betType === 'quaddie' && unitStake > 0)">
+                <h2 class="font-heading font-bold text-lg mb-4" style="color: var(--cyan);">Returns</h2>
+
+                <!-- Win Bet -->
+                <div x-show="betType === 'win'" class="space-y-3">
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If it wins</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" style="color: #4ade80;" x-text="'$' + winReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: $' + winProfit().toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span style="color: var(--text-secondary);">If it loses</span>
+                        <div class="font-display font-bold text-lg" style="color: #f87171;" x-text="'-$' + stake.toFixed(2)"></div>
+                    </div>
+                </div>
+
+                <!-- Place Bet -->
+                <div x-show="betType === 'place'" class="space-y-3">
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If it places (top 3)</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" style="color: #4ade80;" x-text="'$' + placeReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: $' + placeProfit().toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span style="color: var(--text-secondary);">If it misses</span>
+                        <div class="font-display font-bold text-lg" style="color: #f87171;" x-text="'-$' + stake.toFixed(2)"></div>
+                    </div>
+                </div>
+
+                <!-- Each Way -->
+                <div x-show="betType === 'each_way'" class="space-y-3">
+                    <div class="text-xs mb-2 px-3 py-2 rounded" style="background: rgba(0, 212, 255, 0.1); color: var(--cyan);">
+                        Half on Win ($<span x-text="(stake/2).toFixed(2)"></span>), Half on Place ($<span x-text="(stake/2).toFixed(2)"></span>)
+                    </div>
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If it wins</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" style="color: #4ade80;" x-text="'$' + ewWinReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: $' + ewWinProfit().toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If it places (not wins)</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" :style="ewPlaceProfit() >= 0 ? 'color: #4ade80;' : 'color: #f87171;'" x-text="'$' + ewPlaceReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: ' + (ewPlaceProfit() >= 0 ? '$' : '-$') + Math.abs(ewPlaceProfit()).toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span style="color: var(--text-secondary);">If it misses</span>
+                        <div class="font-display font-bold text-lg" style="color: #f87171;" x-text="'-$' + stake.toFixed(2)"></div>
+                    </div>
+                </div>
+
+                <!-- Exotic -->
+                <div x-show="betType === 'exotic'" class="space-y-3">
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If it hits</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" style="color: #4ade80;" x-text="'$' + exoticReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: $' + exoticProfit().toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span style="color: var(--text-secondary);">If it misses</span>
+                        <div class="font-display font-bold text-lg" style="color: #f87171;" x-text="'-$' + stake.toFixed(2)"></div>
+                    </div>
+                </div>
+
+                <!-- Multi -->
+                <div x-show="betType === 'multi'" class="space-y-3">
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">Combined odds</span>
+                        <div class="font-display font-bold text-lg" style="color: var(--cyan);" x-text="'$' + multiCombinedOdds().toFixed(2)"></div>
+                    </div>
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If all legs win</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" style="color: #4ade80;" x-text="'$' + multiReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: $' + multiProfit().toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span style="color: var(--text-secondary);">If any leg loses</span>
+                        <div class="font-display font-bold text-lg" style="color: #f87171;" x-text="'-$' + stake.toFixed(2)"></div>
+                    </div>
+                </div>
+
+                <!-- Quaddie / Sequence -->
+                <div x-show="betType === 'quaddie'" class="space-y-3">
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">Total cost</span>
+                        <div class="font-display font-bold" style="color: var(--text-primary);" x-text="'$' + quaddieCost().toFixed(2)"></div>
+                    </div>
+                    <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <span style="color: var(--text-secondary);">If it hits</span>
+                        <div class="text-right">
+                            <div class="font-display font-bold text-lg" style="color: #4ade80;" x-text="'$' + quaddieReturn().toFixed(2)"></div>
+                            <div class="text-xs" style="color: var(--text-muted);" x-text="'Profit: $' + quaddieProfit().toFixed(2)"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span style="color: var(--text-secondary);">If it misses</span>
+                        <div class="font-display font-bold text-lg" style="color: #f87171;" x-text="'-$' + quaddieCost().toFixed(2)"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="mt-8 text-center">
+            <p class="text-sm" style="color: var(--text-muted);">
+                All odds are decimal (Australian format). $3.50 means you get $3.50 back for every $1 staked.
+            </p>
+        </div>
+    </div>
+</section>
+
+<script>
+function calculator() {
+    return {
+        betType: 'win',
+        stake: 20,
+        winOdds: 3.50,
+        placeOdds: 1.80,
+        multiLegs: [2.00, 3.00, 4.00],
+        unitStake: 0.50,
+        quaddieLegsInput: '2, 3, 2, 4',
+        quaddieDividend: 500,
+        betTypes: [
+            { value: 'win', label: 'Win' },
+            { value: 'place', label: 'Place' },
+            { value: 'each_way', label: 'E/W' },
+            { value: 'exotic', label: 'Exotic' },
+            { value: 'multi', label: 'Multi' },
+            { value: 'quaddie', label: 'Quaddie' },
+        ],
+        addMultiLeg() { if (this.multiLegs.length < 10) this.multiLegs.push(2.00); },
+        removeMultiLeg() { if (this.multiLegs.length > 2) this.multiLegs.pop(); },
+        winReturn() { return this.stake * this.winOdds; },
+        winProfit() { return this.winReturn() - this.stake; },
+        placeReturn() { return this.stake * (this.placeOdds || 0); },
+        placeProfit() { return this.placeReturn() - this.stake; },
+        ewWinReturn() {
+            var half = this.stake / 2;
+            return half * this.winOdds + half * (this.placeOdds || 0);
+        },
+        ewWinProfit() { return this.ewWinReturn() - this.stake; },
+        ewPlaceReturn() {
+            var half = this.stake / 2;
+            return half * (this.placeOdds || 0);
+        },
+        ewPlaceProfit() { return this.ewPlaceReturn() - this.stake; },
+        exoticReturn() { return this.stake * this.winOdds; },
+        exoticProfit() { return this.exoticReturn() - this.stake; },
+        multiCombinedOdds() {
+            return this.multiLegs.reduce(function(acc, odds) { return acc * (odds || 1); }, 1);
+        },
+        multiReturn() { return this.stake * this.multiCombinedOdds(); },
+        multiProfit() { return this.multiReturn() - this.stake; },
+        quaddieLegs() {
+            return this.quaddieLegsInput.split(',').map(function(s) { return parseInt(s.trim()) || 1; });
+        },
+        quaddieCombos() {
+            return this.quaddieLegs().reduce(function(acc, n) { return acc * n; }, 1);
+        },
+        quaddieCost() { return this.quaddieCombos() * this.unitStake; },
+        quaddieReturn() { return (this.quaddieDividend || 0) * this.unitStake; },
+        quaddieProfit() { return this.quaddieReturn() - this.quaddieCost(); },
+    };
+}
+</script>
+{% endblock %}
