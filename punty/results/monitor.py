@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 AEST = ZoneInfo("Australia/Melbourne")
 
-# Monitor starts at 11am AEST each day
-RACING_START = time(11, 0)
-# Monitor stops 20 minutes after last race completes
+# Monitor stops 20 minutes after last race completes (or wrap-up generated)
 POST_RACING_BUFFER = timedelta(minutes=20)
 
 # Poll interval range (seconds) — randomised each cycle
@@ -68,16 +66,12 @@ class ResultsMonitor:
         }
 
     async def _should_be_monitoring(self) -> bool:
-        """Check if monitor should be active based on race times."""
+        """Check if monitor should be active based on actual race times."""
         from punty.models.database import async_session
         from punty.models.meeting import Meeting, Race
         from punty.config import melb_today
 
         now_aest = datetime.now(AEST)
-
-        # Before 11am - don't monitor
-        if now_aest.time() < RACING_START:
-            return False
 
         async with async_session() as db:
             today = melb_today()
@@ -96,17 +90,31 @@ class ResultsMonitor:
 
             meeting_ids = [m.id for m in meetings]
 
-            # Get the last race start time across all selected meetings
-            race_result = await db.execute(
+            # Get first and last race start times across all selected meetings
+            first_result = await db.execute(
+                select(func.min(Race.start_time)).where(
+                    Race.meeting_id.in_(meeting_ids)
+                )
+            )
+            first_race_time = first_result.scalar_one_or_none()
+
+            last_result = await db.execute(
                 select(func.max(Race.start_time)).where(
                     Race.meeting_id.in_(meeting_ids)
                 )
             )
-            last_race_time = race_result.scalar_one_or_none()
+            last_race_time = last_result.scalar_one_or_none()
 
-            if not last_race_time:
-                # No races loaded yet - keep monitoring
-                return True
+            if not first_race_time:
+                # No races loaded yet - don't monitor until data exists
+                return False
+
+            # Don't start until first race time
+            first_dt = datetime.combine(today, first_race_time.time()) if isinstance(first_race_time, datetime) else datetime.combine(today, first_race_time)
+            now_naive = now_aest.replace(tzinfo=None)
+
+            if now_naive < first_dt:
+                return False
 
             # Check if any races are still incomplete
             incomplete_result = await db.execute(
@@ -118,19 +126,32 @@ class ResultsMonitor:
             has_incomplete = incomplete_result.scalar_one_or_none() is not None
 
             if has_incomplete:
-                # Still races to process
                 return True
 
-            # All races complete - check if we're within 20min buffer
-            # last_race_time is naive Melbourne time
-            last_race_dt = datetime.combine(today, last_race_time.time()) if isinstance(last_race_time, datetime) else datetime.combine(today, last_race_time)
-            cutoff = last_race_dt + POST_RACING_BUFFER
-            now_naive = now_aest.replace(tzinfo=None)
+            # All races complete — check if wrap-ups are done for all meetings
+            from punty.models.content import Content
+            wrapup_result = await db.execute(
+                select(func.count(Content.id)).where(
+                    Content.meeting_id.in_(meeting_ids),
+                    Content.content_type == "meeting_wrapup",
+                    Content.status.notin_(["rejected", "superseded"]),
+                )
+            )
+            wrapup_count = wrapup_result.scalar() or 0
+            all_wrapups_done = wrapup_count >= len(meeting_ids)
+
+            if not all_wrapups_done:
+                # Still waiting for wrap-ups to generate
+                return True
+
+            # All races complete + all wrap-ups done — apply buffer
+            last_dt = datetime.combine(today, last_race_time.time()) if isinstance(last_race_time, datetime) else datetime.combine(today, last_race_time)
+            cutoff = last_dt + POST_RACING_BUFFER
 
             if now_naive <= cutoff:
                 return True
 
-            logger.info(f"All races complete and 20min buffer passed (last race: {last_race_time}) — monitor going idle")
+            logger.info(f"All races complete, wrap-ups done, buffer passed (last race: {last_race_time}) — monitor going idle")
             return False
 
     async def _next_interval(self) -> float:
@@ -381,9 +402,21 @@ class ResultsMonitor:
                 logger.info(f"All races done for {meeting.venue} — generating wrap-up")
                 try:
                     generator = ContentGenerator(db)
-                    await generator.generate_meeting_wrapup(meeting_id, save=True)
+                    content = await generator.generate_meeting_wrapup(meeting_id, save=True)
                     self.wrapups_generated.add(meeting_id)
                     logger.info(f"Wrap-up generated for {meeting.venue}")
+
+                    # Auto-approve and post to Twitter
+                    if content:
+                        from punty.scheduler.automation import auto_approve_content, auto_post_to_twitter
+                        content_id = content.get('content_id') if isinstance(content, dict) else None
+                        if content_id:
+                            approval = await auto_approve_content(content_id, db)
+                            if approval.get("status") == "approved":
+                                logger.info(f"Wrap-up auto-approved for {meeting.venue}")
+                                await auto_post_to_twitter(content_id, db)
+                            else:
+                                logger.warning(f"Wrap-up auto-approval failed for {meeting.venue}: {approval.get('issues')}")
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
 
