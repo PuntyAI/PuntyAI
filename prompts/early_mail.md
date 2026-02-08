@@ -20,9 +20,9 @@ Tempo profile: {TEMPO_SUMMARY}
 Jockeys to follow: {JOCKEY_LIST_WITH_REASON}
 Stables to respect: {STABLE_LIST_WITH_REASON — use SPECIFIC trainer names from the data, e.g. "- S. Lenehan (5 runners) — volume says intent". NEVER use generic descriptions like "the jumpout brigade" or "the mobs with market support".}
 
-Punty's take: {2–3 punchy paragraphs of system-led insight, jokes-with-purpose, and clear map/bias hypotheses without named sources}
+*Punty's take:* {2–3 punchy paragraphs of system-led insight, jokes-with-purpose, and clear map/bias hypotheses without named sources}
 
-What it means for you: {2–3 punchy paragraphs turning the above into actionable punting posture: how to attack straights vs exotics, where chaos lives, when to lean on lanes, how rain/wind shift plans}
+*What it means for you:* {2–3 punchy paragraphs turning the above into actionable punting posture: how to attack straights vs exotics, where chaos lives, when to lean on lanes, how rain/wind shift plans}
 
 ### 3) *PUNTY'S BIG 3 + MULTI*
 These are the three bets the day leans on.
@@ -43,7 +43,7 @@ Repeat for each race in order:
 *Race {R_NUMBER} – {R_NICKNAME}*
 Race type: {R_CLASS}, {R_DISTANCE}m
 Map & tempo: {R_TEMPO_LINE}
-Punty read: {R_PUNTY_READ}
+*Punty read:* {R_PUNTY_READ}
 
 *Top 3 + Roughie ($20 pool)*
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
