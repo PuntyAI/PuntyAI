@@ -62,7 +62,7 @@ class AIClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.8,
-        max_tokens: int = 16000,
+        max_tokens: int = 32000,
     ) -> str:
         """Generate content using OpenAI Responses API with reasoning.
 
@@ -142,7 +142,7 @@ class AIClient:
         context: str,
         instruction: str,
         temperature: float = 0.8,
-        max_tokens: int = 16000,
+        max_tokens: int = 32000,
     ) -> str:
         """Generate content with separate context and instruction.
 
