@@ -250,10 +250,145 @@ async def public_next_race():
 
 
 @app.get("/api/public/bet-type-stats")
-async def public_bet_type_stats():
-    """Get performance stats for every bet type."""
+async def public_bet_type_stats(
+    venue: str | None = None,
+    state: str | None = None,
+    distance_min: int | None = None,
+    distance_max: int | None = None,
+    track_condition: str | None = None,
+    race_class: str | None = None,
+    jockey: str | None = None,
+    trainer: str | None = None,
+    horse_sex: str | None = None,
+    tip_rank: int | None = None,
+    odds_min: float | None = None,
+    odds_max: float | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    field_size_min: int | None = None,
+    field_size_max: int | None = None,
+    weather: str | None = None,
+    barrier_min: int | None = None,
+    barrier_max: int | None = None,
+    today: bool = False,
+):
+    """Get performance stats for every bet type with optional filters."""
+    from datetime import date as date_type
     from punty.public.routes import get_bet_type_stats
-    return await get_bet_type_stats()
+
+    parsed_from = None
+    parsed_to = None
+    if date_from:
+        try:
+            parsed_from = date_type.fromisoformat(date_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            parsed_to = date_type.fromisoformat(date_to)
+        except ValueError:
+            pass
+
+    return await get_bet_type_stats(
+        venue=venue, state=state,
+        distance_min=distance_min, distance_max=distance_max,
+        track_condition=track_condition, race_class=race_class,
+        jockey=jockey, trainer=trainer, horse_sex=horse_sex,
+        tip_rank=tip_rank, odds_min=odds_min, odds_max=odds_max,
+        date_from=parsed_from, date_to=parsed_to,
+        field_size_min=field_size_min, field_size_max=field_size_max,
+        weather=weather, barrier_min=barrier_min, barrier_max=barrier_max,
+        today=today,
+    )
+
+
+@app.get("/api/public/filter-options")
+async def public_filter_options():
+    """Get distinct filter values for stats page autocomplete."""
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting, Race, Runner
+    from punty.models.content import Content
+    from punty.models.pick import Pick
+    from sqlalchemy import select, distinct, and_
+
+    async with async_session() as db:
+        # Venues with settled picks
+        venue_result = await db.execute(
+            select(distinct(Meeting.venue))
+            .join(Pick, Pick.meeting_id == Meeting.id)
+            .where(Pick.settled == True)
+            .order_by(Meeting.venue)
+        )
+        venues = [r[0] for r in venue_result.all() if r[0]]
+
+        # Jockeys from runners that have settled picks
+        jockey_result = await db.execute(
+            select(distinct(Runner.jockey))
+            .join(Race, Runner.race_id == Race.id)
+            .join(Pick, and_(
+                Pick.meeting_id == Race.meeting_id,
+                Pick.race_number == Race.race_number,
+                Pick.saddlecloth == Runner.saddlecloth,
+                Pick.pick_type == "selection",
+            ))
+            .where(and_(Pick.settled == True, Runner.jockey.isnot(None)))
+            .order_by(Runner.jockey)
+        )
+        jockeys = [r[0] for r in jockey_result.all() if r[0]]
+
+        # Trainers
+        trainer_result = await db.execute(
+            select(distinct(Runner.trainer))
+            .join(Race, Runner.race_id == Race.id)
+            .join(Pick, and_(
+                Pick.meeting_id == Race.meeting_id,
+                Pick.race_number == Race.race_number,
+                Pick.saddlecloth == Runner.saddlecloth,
+                Pick.pick_type == "selection",
+            ))
+            .where(and_(Pick.settled == True, Runner.trainer.isnot(None)))
+            .order_by(Runner.trainer)
+        )
+        trainers = [r[0] for r in trainer_result.all() if r[0]]
+
+        # Race classes
+        class_result = await db.execute(
+            select(distinct(Race.class_))
+            .join(Pick, and_(
+                Pick.meeting_id == Race.meeting_id,
+                Pick.race_number == Race.race_number,
+            ))
+            .where(and_(Pick.settled == True, Race.class_.isnot(None)))
+            .order_by(Race.class_)
+        )
+        classes = [r[0] for r in class_result.all() if r[0]]
+
+        # Track conditions
+        tc_result = await db.execute(
+            select(distinct(Meeting.track_condition))
+            .join(Pick, Pick.meeting_id == Meeting.id)
+            .where(and_(Pick.settled == True, Meeting.track_condition.isnot(None)))
+            .order_by(Meeting.track_condition)
+        )
+        track_conditions = [r[0] for r in tc_result.all() if r[0]]
+
+        # Weather conditions
+        weather_result = await db.execute(
+            select(distinct(Meeting.weather_condition))
+            .join(Pick, Pick.meeting_id == Meeting.id)
+            .where(and_(Pick.settled == True, Meeting.weather_condition.isnot(None)))
+            .order_by(Meeting.weather_condition)
+        )
+        weather_conditions = [r[0] for r in weather_result.all() if r[0]]
+
+    return {
+        "venues": venues,
+        "jockeys": jockeys,
+        "trainers": trainers,
+        "classes": classes,
+        "track_conditions": track_conditions,
+        "weather": weather_conditions,
+    }
 
 
 @app.get("/api/public/venues")

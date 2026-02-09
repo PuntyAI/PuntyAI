@@ -670,14 +670,37 @@ async def tips_page(
     )
 
 
-async def get_bet_type_stats() -> list[dict]:
-    """Get strike rate, won/total, and P&L for every bet type."""
+async def get_bet_type_stats(
+    venue: str | None = None,
+    state: str | None = None,
+    distance_min: int | None = None,
+    distance_max: int | None = None,
+    track_condition: str | None = None,
+    race_class: str | None = None,
+    jockey: str | None = None,
+    trainer: str | None = None,
+    horse_sex: str | None = None,
+    tip_rank: int | None = None,
+    odds_min: float | None = None,
+    odds_max: float | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    field_size_min: int | None = None,
+    field_size_max: int | None = None,
+    weather: str | None = None,
+    barrier_min: int | None = None,
+    barrier_max: int | None = None,
+    today: bool = False,
+) -> list[dict]:
+    """Get strike rate, won/total, and P&L for every bet type with optional filters."""
+    from sqlalchemy import case
+    from punty.models.meeting import Runner
+
     # Desired display order
     _SEL_ORDER = ["Win", "Saver Win", "Place", "Each Way"]
     _EXOTIC_ORDER = ["Quinella", "Exacta", "Exacta Standout", "Trifecta", "Trifecta Box", "Trifecta Standout", "First Four"]
     _SEQ_ORDER = ["Early Quaddie", "Quaddie", "Big6"]
 
-    # Normalise messy exotic type names from the DB
     def _normalise_exotic(raw: str) -> str:
         low = raw.lower().strip()
         if low in ("box trifecta", "trifecta box", "trifecta (box)", "trifecta (boxed)", "trifecta boxed"):
@@ -690,22 +713,109 @@ async def get_bet_type_stats() -> list[dict]:
             return "First Four"
         return raw
 
-    async with async_session() as db:
-        from sqlalchemy import case
+    def _esc(s: str) -> str:
+        """Escape ILIKE wildcards in user input."""
+        return s.replace("%", "\\%").replace("_", "\\_")
 
-        # Selections by bet_type (exclude exotics_only)
+    # Build filter condition lists by table
+    meeting_conds = []
+    if venue:
+        meeting_conds.append(Meeting.venue.ilike(f"%{_esc(venue)}%"))
+    if state:
+        from punty.memory.assessment import TRACK_STATE_MAP
+        state_tracks = [t for t, s in TRACK_STATE_MAP.items() if s == state.upper()]
+        if state_tracks:
+            meeting_conds.append(or_(*[Meeting.venue.ilike(f"%{t}%") for t in state_tracks]))
+    if date_from:
+        meeting_conds.append(Meeting.date >= date_from)
+    if date_to:
+        meeting_conds.append(Meeting.date <= date_to)
+    if track_condition:
+        meeting_conds.append(Meeting.track_condition.ilike(f"%{_esc(track_condition)}%"))
+    if weather:
+        meeting_conds.append(Meeting.weather_condition.ilike(f"%{_esc(weather)}%"))
+    if today:
+        meeting_conds.append(Meeting.date == melb_today())
+
+    race_conds = []
+    if distance_min:
+        race_conds.append(Race.distance >= distance_min)
+    if distance_max:
+        race_conds.append(Race.distance <= distance_max)
+    if race_class:
+        race_conds.append(Race.class_.ilike(f"%{_esc(race_class)}%"))
+    if field_size_min:
+        race_conds.append(Race.field_size >= field_size_min)
+    if field_size_max:
+        race_conds.append(Race.field_size <= field_size_max)
+
+    runner_conds = []
+    if jockey:
+        runner_conds.append(Runner.jockey.ilike(f"%{_esc(jockey)}%"))
+    if trainer:
+        runner_conds.append(Runner.trainer.ilike(f"%{_esc(trainer)}%"))
+    if horse_sex:
+        runner_conds.append(Runner.horse_sex == horse_sex)
+    if barrier_min:
+        runner_conds.append(Runner.barrier >= barrier_min)
+    if barrier_max:
+        runner_conds.append(Runner.barrier <= barrier_max)
+
+    pick_conds = []
+    if tip_rank:
+        pick_conds.append(Pick.tip_rank == tip_rank)
+    if odds_min:
+        pick_conds.append(Pick.odds_at_tip >= odds_min)
+    if odds_max:
+        pick_conds.append(Pick.odds_at_tip <= odds_max)
+
+    needs_meeting = bool(meeting_conds)
+    needs_race = bool(race_conds) or bool(runner_conds)
+    needs_runner = bool(runner_conds)
+    has_runner_or_pick_filters = needs_runner or bool(pick_conds)
+
+    def _apply_joins(query, include_runner=False):
+        """Add JOINs to query based on active filters."""
+        if needs_meeting:
+            query = query.join(Meeting, Pick.meeting_id == Meeting.id)
+        if needs_race or (include_runner and needs_runner):
+            query = query.join(Race, and_(
+                Race.meeting_id == Pick.meeting_id,
+                Race.race_number == Pick.race_number,
+            ))
+        if include_runner and needs_runner:
+            query = query.join(Runner, and_(
+                Runner.race_id == Race.id,
+                Runner.saddlecloth == Pick.saddlecloth,
+            ))
+        return query
+
+    def _extra_conds(include_runner=False, include_pick=False):
+        """Collect filter conditions for the query."""
+        conds = list(meeting_conds) + list(race_conds)
+        if include_runner:
+            conds.extend(runner_conds)
+        if include_pick:
+            conds.extend(pick_conds)
+        return conds
+
+    async with async_session() as db:
+        # --- Selections by bet_type (exclude exotics_only) ---
+        sel_query = select(
+            Pick.bet_type,
+            func.count(Pick.id),
+            func.sum(case((Pick.hit == True, 1), else_=0)),
+            func.sum(Pick.pnl),
+        )
+        sel_query = _apply_joins(sel_query, include_runner=True)
+        sel_conds = [
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.bet_type.isnot(None),
+            Pick.bet_type != "exotics_only",
+        ] + _extra_conds(include_runner=True, include_pick=True)
         sel_result = await db.execute(
-            select(
-                Pick.bet_type,
-                func.count(Pick.id),
-                func.sum(case((Pick.hit == True, 1), else_=0)),
-                func.sum(Pick.pnl),
-            ).where(and_(
-                Pick.settled == True,
-                Pick.pick_type == "selection",
-                Pick.bet_type.isnot(None),
-                Pick.bet_type != "exotics_only",
-            )).group_by(Pick.bet_type)
+            sel_query.where(and_(*sel_conds)).group_by(Pick.bet_type)
         )
 
         sel_stats = {}
@@ -723,98 +833,109 @@ async def get_bet_type_stats() -> list[dict]:
                 "pnl": round(pnl, 2),
             }
 
-        # Exotics by exotic_type (normalised)
-        exotic_result = await db.execute(
-            select(
+        # --- Exotics (skip when runner/pick filters active) ---
+        exotic_stats: dict[str, dict] = {}
+        if not has_runner_or_pick_filters:
+            exotic_query = select(
                 Pick.exotic_type,
                 func.count(Pick.id),
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
-            ).where(and_(
+            )
+            exotic_query = _apply_joins(exotic_query, include_runner=False)
+            exotic_conds = [
                 Pick.settled == True,
                 Pick.pick_type == "exotic",
                 Pick.exotic_type.isnot(None),
-            )).group_by(Pick.exotic_type)
-        )
+            ] + _extra_conds()
+            exotic_result = await db.execute(
+                exotic_query.where(and_(*exotic_conds)).group_by(Pick.exotic_type)
+            )
 
-        exotic_stats: dict[str, dict] = {}
-        for exotic_type, total, hits, pnl in exotic_result.all():
-            label = _normalise_exotic(exotic_type)
-            hits = int(hits or 0)
-            pnl = float(pnl or 0)
-            if label in exotic_stats:
-                exotic_stats[label]["won"] += hits
-                exotic_stats[label]["total"] += total
-                exotic_stats[label]["pnl"] = round(exotic_stats[label]["pnl"] + pnl, 2)
-            else:
-                exotic_stats[label] = {
-                    "category": "Exotics",
-                    "type": label,
-                    "won": hits,
-                    "total": total,
-                    "rate": 0,
-                    "pnl": round(pnl, 2),
-                }
-        # Recalculate rates after merging
-        for s in exotic_stats.values():
-            s["rate"] = round(s["won"] / s["total"] * 100, 1) if s["total"] > 0 else 0
+            for exotic_type, total, hits, pnl in exotic_result.all():
+                label = _normalise_exotic(exotic_type)
+                hits = int(hits or 0)
+                pnl = float(pnl or 0)
+                if label in exotic_stats:
+                    exotic_stats[label]["won"] += hits
+                    exotic_stats[label]["total"] += total
+                    exotic_stats[label]["pnl"] = round(exotic_stats[label]["pnl"] + pnl, 2)
+                else:
+                    exotic_stats[label] = {
+                        "category": "Exotics",
+                        "type": label,
+                        "won": hits,
+                        "total": total,
+                        "rate": 0,
+                        "pnl": round(pnl, 2),
+                    }
+            for s in exotic_stats.values():
+                s["rate"] = round(s["won"] / s["total"] * 100, 1) if s["total"] > 0 else 0
 
-        # Sequences by sequence_type + sequence_variant
-        seq_result = await db.execute(
-            select(
+        # --- Sequences (skip when runner/pick filters active) ---
+        seq_stats = {}
+        if not has_runner_or_pick_filters:
+            seq_query = select(
                 Pick.sequence_type,
                 Pick.sequence_variant,
                 func.count(Pick.id),
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
-            ).where(and_(
+            )
+            seq_query = _apply_joins(seq_query, include_runner=False)
+            seq_conds = [
                 Pick.settled == True,
                 Pick.pick_type == "sequence",
-            )).group_by(Pick.sequence_type, Pick.sequence_variant)
-        )
+            ] + _extra_conds()
+            seq_result = await db.execute(
+                seq_query.where(and_(*seq_conds)).group_by(Pick.sequence_type, Pick.sequence_variant)
+            )
 
-        seq_stats = {}
-        for seq_type, seq_variant, total, hits, pnl in seq_result.all():
-            hits = int(hits or 0)
-            pnl = float(pnl or 0)
-            rate = round(hits / total * 100, 1) if total > 0 else 0
-            label = (seq_type or "Sequence").replace("_", " ").title()
-            if seq_variant:
-                label += f" ({seq_variant.title()})"
-            seq_stats[label] = {
-                "category": "Sequences",
-                "type": label,
-                "won": hits,
-                "total": total,
-                "rate": rate,
-                "pnl": round(pnl, 2),
-            }
+            for seq_type, seq_variant, total, hits, pnl in seq_result.all():
+                hits = int(hits or 0)
+                pnl = float(pnl or 0)
+                rate = round(hits / total * 100, 1) if total > 0 else 0
+                label = (seq_type or "Sequence").replace("_", " ").title()
+                if seq_variant:
+                    label += f" ({seq_variant.title()})"
+                seq_stats[label] = {
+                    "category": "Sequences",
+                    "type": label,
+                    "won": hits,
+                    "total": total,
+                    "rate": rate,
+                    "pnl": round(pnl, 2),
+                }
 
-        # Big 3 Multi
-        big3_result = await db.execute(
-            select(
+        # --- Big 3 Multi (skip when runner/pick filters active) ---
+        big3_stat = None
+        if not has_runner_or_pick_filters:
+            big3_query = select(
                 func.count(Pick.id),
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
-            ).where(and_(
+            )
+            big3_query = _apply_joins(big3_query, include_runner=False)
+            big3_conds = [
                 Pick.settled == True,
                 Pick.pick_type == "big3_multi",
-            ))
-        )
-        big3_stat = None
-        row = big3_result.one()
-        if row[0] and row[0] > 0:
-            hits = int(row[1] or 0)
-            pnl = float(row[2] or 0)
-            rate = round(hits / row[0] * 100, 1) if row[0] > 0 else 0
-            big3_stat = {
-                "category": "Multi",
-                "type": "Big 3 Multi",
-                "won": hits,
-                "total": row[0],
-                "rate": rate,
-                "pnl": round(pnl, 2),
-            }
+            ] + _extra_conds()
+            big3_result = await db.execute(
+                big3_query.where(and_(*big3_conds))
+            )
+            row = big3_result.one()
+            if row[0] and row[0] > 0:
+                hits = int(row[1] or 0)
+                pnl = float(row[2] or 0)
+                rate = round(hits / row[0] * 100, 1) if row[0] > 0 else 0
+                big3_stat = {
+                    "category": "Multi",
+                    "type": "Big 3 Multi",
+                    "won": hits,
+                    "total": row[0],
+                    "rate": rate,
+                    "pnl": round(pnl, 2),
+                }
 
         # Build ordered output
         stats = []
@@ -824,7 +945,6 @@ async def get_bet_type_stats() -> list[dict]:
         for key in _EXOTIC_ORDER:
             if key in exotic_stats:
                 stats.append(exotic_stats[key])
-        # Any exotics not in the predefined order
         for key, val in exotic_stats.items():
             if key not in _EXOTIC_ORDER:
                 stats.append(val)
@@ -836,6 +956,12 @@ async def get_bet_type_stats() -> list[dict]:
             stats.append(big3_stat)
 
         return stats
+
+
+@router.get("/stats", response_class=HTMLResponse)
+async def stats_page(request: Request):
+    """Public stats page with filterable performance data."""
+    return templates.TemplateResponse("stats.html", {"request": request})
 
 
 @router.get("/tips/{meeting_id}", response_class=HTMLResponse)

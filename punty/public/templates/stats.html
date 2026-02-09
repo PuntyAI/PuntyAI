@@ -1,0 +1,542 @@
+{% extends "base.html" %}
+
+{% block title %}Punty's Stats - PuntyAI{% endblock %}
+
+{% block head %}
+<meta name="description" content="See exactly how Punty performs. Filter by venue, distance, track condition, jockey, trainer and more. Full transparency, no hiding.">
+{% endblock %}
+
+{% block content %}
+<section class="py-12">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-heading font-bold mb-4">
+                <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Stats</span>
+            </h1>
+            <p class="text-lg max-w-2xl mx-auto" style="color: var(--text-secondary);">
+                No bullshit, no curated highlight reels. Every bet Punty makes is tracked and settled automatically.
+                Filter the numbers yourself and decide what's worth following.
+            </p>
+        </div>
+
+        <!-- Today / All Time Toggle -->
+        <div class="flex items-center justify-center gap-3 mb-6">
+            <button id="btn-today" onclick="setTimeRange('today')"
+                    class="px-5 py-2 rounded-lg font-heading font-semibold text-sm uppercase tracking-wider transition-all"
+                    style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-muted);">
+                Today
+            </button>
+            <button id="btn-alltime" onclick="setTimeRange('alltime')"
+                    class="px-5 py-2 rounded-lg font-heading font-semibold text-sm uppercase tracking-wider transition-all"
+                    style="background: var(--magenta); border: 1px solid var(--magenta); color: white;">
+                All Time
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="card p-5 mb-8" id="filters-card">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Filters</span>
+                <div class="flex items-center gap-3">
+                    <span id="filter-count" class="hidden text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: var(--magenta); color: white;"></span>
+                    <button id="btn-clear" onclick="clearFilters()" class="hidden text-xs font-heading font-semibold uppercase tracking-wider hover:text-white transition-colors" style="color: var(--text-muted);">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <!-- Venue -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Venue</label>
+                    <input type="text" id="f-venue" list="dl-venues" autocomplete="off" placeholder="Any"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    <datalist id="dl-venues"></datalist>
+                </div>
+
+                <!-- State -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">State</label>
+                    <select id="f-state" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        <option value="">Any</option>
+                        <option value="VIC">VIC</option>
+                        <option value="NSW">NSW</option>
+                        <option value="QLD">QLD</option>
+                        <option value="SA">SA</option>
+                        <option value="WA">WA</option>
+                        <option value="TAS">TAS</option>
+                        <option value="ACT">ACT</option>
+                        <option value="NT">NT</option>
+                    </select>
+                </div>
+
+                <!-- Track Condition -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Track</label>
+                    <select id="f-track" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        <option value="">Any</option>
+                    </select>
+                </div>
+
+                <!-- Weather -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Weather</label>
+                    <select id="f-weather" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        <option value="">Any</option>
+                    </select>
+                </div>
+
+                <!-- Distance Min -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Dist Min (m)</label>
+                    <input type="number" id="f-dist-min" placeholder="e.g. 1000" min="800" max="4000" step="100"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Distance Max -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Dist Max (m)</label>
+                    <input type="number" id="f-dist-max" placeholder="e.g. 2000" min="800" max="4000" step="100"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Class -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Class</label>
+                    <input type="text" id="f-class" list="dl-classes" autocomplete="off" placeholder="Any"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    <datalist id="dl-classes"></datalist>
+                </div>
+
+                <!-- Field Size Min -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Field Min</label>
+                    <input type="number" id="f-field-min" placeholder="e.g. 6" min="1" max="24"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Field Size Max -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Field Max</label>
+                    <input type="number" id="f-field-max" placeholder="e.g. 16" min="1" max="24"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Jockey -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Jockey</label>
+                    <input type="text" id="f-jockey" list="dl-jockeys" autocomplete="off" placeholder="Any"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    <datalist id="dl-jockeys"></datalist>
+                </div>
+
+                <!-- Trainer -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Trainer</label>
+                    <input type="text" id="f-trainer" list="dl-trainers" autocomplete="off" placeholder="Any"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                    <datalist id="dl-trainers"></datalist>
+                </div>
+
+                <!-- Horse Sex -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Sex</label>
+                    <select id="f-sex" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        <option value="">Any</option>
+                        <option value="M">Mare</option>
+                        <option value="G">Gelding</option>
+                        <option value="C">Colt</option>
+                        <option value="F">Filly</option>
+                        <option value="H">Horse</option>
+                        <option value="R">Rig</option>
+                    </select>
+                </div>
+
+                <!-- Barrier Min -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Barrier Min</label>
+                    <input type="number" id="f-barrier-min" placeholder="e.g. 1" min="1" max="24"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Tip Rank -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Tip Rank</label>
+                    <select id="f-rank" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        <option value="">Any</option>
+                        <option value="1">Top Pick</option>
+                        <option value="2">2nd Pick</option>
+                        <option value="3">3rd Pick</option>
+                        <option value="4">Roughie</option>
+                    </select>
+                </div>
+
+                <!-- Odds Min -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Odds Min</label>
+                    <input type="number" id="f-odds-min" placeholder="e.g. 2.00" min="1" step="0.5"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Odds Max -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Odds Max</label>
+                    <input type="number" id="f-odds-max" placeholder="e.g. 20.00" min="1" step="0.5"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                </div>
+
+                <!-- Date From -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">From</label>
+                    <input type="date" id="f-date-from"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary); color-scheme: dark;">
+                </div>
+
+                <!-- Date To -->
+                <div>
+                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">To</label>
+                    <input type="date" id="f-date-to"
+                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary); color-scheme: dark;">
+                </div>
+            </div>
+
+            <!-- Apply Button -->
+            <div class="flex justify-end mt-4">
+                <button onclick="applyFilters()" class="px-5 py-2 rounded-lg font-heading font-semibold text-sm uppercase tracking-wider" style="background: var(--magenta); color: white;">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Runner Filter Notice -->
+        <div id="runner-notice" class="hidden mb-6 px-4 py-2.5 rounded-lg text-sm" style="background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.2); color: var(--cyan);">
+            Showing selection stats only &mdash; jockey, trainer, sex, barrier, rank, and odds filters apply to individual picks, not multi-runner bets.
+        </div>
+
+        <!-- Loading -->
+        <div id="stats-loading" class="text-center py-12">
+            <div class="inline-block w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--magenta) transparent var(--magenta) transparent;"></div>
+            <p class="mt-3 text-sm" style="color: var(--text-muted);">Crunching the numbers...</p>
+        </div>
+
+        <!-- Stats Grid -->
+        <div id="stats-grid" class="hidden">
+            <!-- Summary bar -->
+            <div id="stats-summary" class="flex flex-wrap items-center justify-center gap-6 mb-6 px-4 py-3 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);"></div>
+
+            <!-- Category sections -->
+            <div id="stats-selections" class="mb-6">
+                <h3 class="font-heading font-bold text-sm uppercase tracking-wider mb-3" style="color: var(--magenta);">Selections</h3>
+                <div id="grid-selections" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+            </div>
+
+            <div id="stats-exotics" class="mb-6">
+                <h3 class="font-heading font-bold text-sm uppercase tracking-wider mb-3" style="color: var(--cyan);">Exotics</h3>
+                <div id="grid-exotics" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+            </div>
+
+            <div id="stats-sequences" class="mb-6">
+                <h3 class="font-heading font-bold text-sm uppercase tracking-wider mb-3" style="color: var(--yellow);">Sequences</h3>
+                <div id="grid-sequences" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
+            </div>
+
+            <div id="stats-multi" class="mb-6">
+                <h3 class="font-heading font-bold text-sm uppercase tracking-wider mb-3" style="color: var(--purple);">Multi</h3>
+                <div id="grid-multi" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="stats-empty" class="hidden card p-12 text-center">
+            <div class="text-5xl mb-4">&#x1F4CA;</div>
+            <h2 class="text-2xl font-heading font-bold mb-2">No Data</h2>
+            <p style="color: var(--text-secondary);">
+                No settled bets match those filters. Try broadening your search.
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var timeRange = 'alltime'; // 'today' or 'alltime'
+
+    // Filter field IDs and their API param names
+    var FILTERS = {
+        'f-venue': 'venue',
+        'f-state': 'state',
+        'f-track': 'track_condition',
+        'f-weather': 'weather',
+        'f-dist-min': 'distance_min',
+        'f-dist-max': 'distance_max',
+        'f-class': 'race_class',
+        'f-field-min': 'field_size_min',
+        'f-field-max': 'field_size_max',
+        'f-jockey': 'jockey',
+        'f-trainer': 'trainer',
+        'f-sex': 'horse_sex',
+        'f-barrier-min': 'barrier_min',
+        'f-rank': 'tip_rank',
+        'f-odds-min': 'odds_min',
+        'f-odds-max': 'odds_max',
+        'f-date-from': 'date_from',
+        'f-date-to': 'date_to'
+    };
+
+    // Runner-level filter IDs (these hide exotics/sequences)
+    var RUNNER_FILTERS = ['f-jockey', 'f-trainer', 'f-sex', 'f-barrier-min', 'f-rank', 'f-odds-min', 'f-odds-max'];
+
+    function getFilterParams() {
+        var params = new URLSearchParams();
+        var count = 0;
+        var hasRunnerFilter = false;
+
+        for (var id in FILTERS) {
+            var el = document.getElementById(id);
+            if (el && el.value) {
+                params.set(FILTERS[id], el.value);
+                count++;
+                if (RUNNER_FILTERS.indexOf(id) !== -1) hasRunnerFilter = true;
+            }
+        }
+
+        if (timeRange === 'today') {
+            params.set('today', 'true');
+        }
+
+        return { params: params, count: count, hasRunnerFilter: hasRunnerFilter };
+    }
+
+    function renderCard(s) {
+        var categoryColors = {
+            'Selections': 'var(--magenta)',
+            'Exotics': 'var(--cyan)',
+            'Sequences': 'var(--yellow)',
+            'Multi': 'var(--purple)'
+        };
+        var color = categoryColors[s.category] || 'var(--text-secondary)';
+        var pnlColor = s.pnl >= 0 ? '#4ade80' : '#f87171';
+        var pnlSign = s.pnl >= 0 ? '+' : '';
+
+        return '<div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">' +
+            '<div class="text-xs font-heading font-semibold uppercase tracking-wider mb-2" style="color: ' + color + ';">' + s.type + '</div>' +
+            '<div class="text-2xl font-display font-bold" style="color: ' + color + ';">' + s.rate + '%</div>' +
+            '<div class="text-xs mt-1" style="color: var(--text-muted);">' + s.won + '/' + s.total + ' winners</div>' +
+            '<div class="text-sm font-heading font-semibold mt-1" style="color: ' + pnlColor + ';">' + pnlSign + '$' + Math.abs(s.pnl).toFixed(0) + '</div>' +
+        '</div>';
+    }
+
+    function renderStats(stats, hasRunnerFilter) {
+        var loading = document.getElementById('stats-loading');
+        var grid = document.getElementById('stats-grid');
+        var empty = document.getElementById('stats-empty');
+        var notice = document.getElementById('runner-notice');
+
+        loading.classList.add('hidden');
+
+        if (!stats || stats.length === 0) {
+            grid.classList.add('hidden');
+            empty.classList.remove('hidden');
+            notice.classList.add('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+        grid.classList.remove('hidden');
+        notice.classList.toggle('hidden', !hasRunnerFilter);
+
+        // Group by category
+        var groups = { Selections: [], Exotics: [], Sequences: [], Multi: [] };
+        var totalBets = 0, totalWon = 0, totalPnl = 0;
+
+        stats.forEach(function(s) {
+            var cat = s.category;
+            if (groups[cat]) groups[cat].push(s);
+            totalBets += s.total;
+            totalWon += s.won;
+            totalPnl += s.pnl;
+        });
+
+        // Summary bar
+        var overallRate = totalBets > 0 ? (totalWon / totalBets * 100).toFixed(1) : '0';
+        var pnlColor = totalPnl >= 0 ? '#4ade80' : '#f87171';
+        var pnlSign = totalPnl >= 0 ? '+' : '';
+        document.getElementById('stats-summary').innerHTML =
+            '<span style="color:var(--text-muted)" class="text-xs font-heading font-semibold uppercase tracking-wider">' + (timeRange === 'today' ? 'Today' : 'All Time') + '</span>' +
+            '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--cyan)">' + overallRate + '%</span> <span class="text-xs" style="color:var(--text-muted)">strike rate</span></span>' +
+            '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--text-secondary)">' + totalWon + '/' + totalBets + '</span> <span class="text-xs" style="color:var(--text-muted)">winners</span></span>' +
+            '<span class="text-sm"><span class="font-heading font-bold" style="color:' + pnlColor + '">' + pnlSign + '$' + Math.abs(Math.round(totalPnl)) + '</span> <span class="text-xs" style="color:var(--text-muted)">P&L</span></span>';
+
+        // Render each category
+        ['Selections', 'Exotics', 'Sequences', 'Multi'].forEach(function(cat) {
+            var section = document.getElementById('stats-' + cat.toLowerCase());
+            var gridEl = document.getElementById('grid-' + cat.toLowerCase());
+            if (groups[cat].length > 0) {
+                section.classList.remove('hidden');
+                gridEl.innerHTML = groups[cat].map(renderCard).join('');
+            } else {
+                section.classList.add('hidden');
+            }
+        });
+    }
+
+    function fetchStats() {
+        var loading = document.getElementById('stats-loading');
+        var grid = document.getElementById('stats-grid');
+        var empty = document.getElementById('stats-empty');
+
+        loading.classList.remove('hidden');
+        grid.classList.add('hidden');
+        empty.classList.add('hidden');
+
+        var fp = getFilterParams();
+        var url = '/api/public/bet-type-stats';
+        if (fp.params.toString()) url += '?' + fp.params.toString();
+
+        // Update filter count badge
+        var countEl = document.getElementById('filter-count');
+        var clearEl = document.getElementById('btn-clear');
+        if (fp.count > 0) {
+            countEl.textContent = fp.count;
+            countEl.classList.remove('hidden');
+            clearEl.classList.remove('hidden');
+        } else {
+            countEl.classList.add('hidden');
+            clearEl.classList.add('hidden');
+        }
+
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderStats(data, fp.hasRunnerFilter); })
+            .catch(function() {
+                loading.classList.add('hidden');
+                empty.classList.remove('hidden');
+            });
+    }
+
+    // Expose functions to global scope for onclick handlers
+    window.applyFilters = function() {
+        // Update URL without reload
+        var fp = getFilterParams();
+        var newUrl = '/stats';
+        if (fp.params.toString()) newUrl += '?' + fp.params.toString();
+        history.replaceState(null, '', newUrl);
+        fetchStats();
+    };
+
+    window.clearFilters = function() {
+        for (var id in FILTERS) {
+            var el = document.getElementById(id);
+            if (el) el.value = '';
+        }
+        timeRange = 'alltime';
+        updateToggleUI();
+        history.replaceState(null, '', '/stats');
+        fetchStats();
+    };
+
+    window.setTimeRange = function(range) {
+        timeRange = range;
+        updateToggleUI();
+        // Clear date filters when switching to today
+        if (range === 'today') {
+            document.getElementById('f-date-from').value = '';
+            document.getElementById('f-date-to').value = '';
+        }
+        fetchStats();
+    };
+
+    function updateToggleUI() {
+        var btnToday = document.getElementById('btn-today');
+        var btnAll = document.getElementById('btn-alltime');
+        if (timeRange === 'today') {
+            btnToday.style.background = 'var(--magenta)';
+            btnToday.style.borderColor = 'var(--magenta)';
+            btnToday.style.color = 'white';
+            btnAll.style.background = 'var(--bg-card)';
+            btnAll.style.borderColor = 'var(--border-subtle)';
+            btnAll.style.color = 'var(--text-muted)';
+        } else {
+            btnAll.style.background = 'var(--magenta)';
+            btnAll.style.borderColor = 'var(--magenta)';
+            btnAll.style.color = 'white';
+            btnToday.style.background = 'var(--bg-card)';
+            btnToday.style.borderColor = 'var(--border-subtle)';
+            btnToday.style.color = 'var(--text-muted)';
+        }
+    }
+
+    // Load filter options for autocomplete
+    function loadFilterOptions() {
+        fetch('/api/public/filter-options')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                function fill(dlId, items) {
+                    var dl = document.getElementById(dlId);
+                    if (!dl) return;
+                    items.forEach(function(v) {
+                        var o = document.createElement('option');
+                        o.value = v;
+                        dl.appendChild(o);
+                    });
+                }
+                fill('dl-venues', data.venues || []);
+                fill('dl-jockeys', data.jockeys || []);
+                fill('dl-trainers', data.trainers || []);
+                fill('dl-classes', data.classes || []);
+
+                // Populate track condition select
+                var tcSelect = document.getElementById('f-track');
+                (data.track_conditions || []).forEach(function(v) {
+                    var o = document.createElement('option');
+                    o.value = v;
+                    o.textContent = v;
+                    tcSelect.appendChild(o);
+                });
+
+                // Populate weather select
+                var wSelect = document.getElementById('f-weather');
+                (data.weather || []).forEach(function(v) {
+                    var o = document.createElement('option');
+                    o.value = v;
+                    o.textContent = v;
+                    wSelect.appendChild(o);
+                });
+            })
+            .catch(function() {});
+    }
+
+    // Read initial filters from URL params
+    function initFromUrl() {
+        var params = new URLSearchParams(window.location.search);
+        for (var id in FILTERS) {
+            var val = params.get(FILTERS[id]);
+            if (val) {
+                var el = document.getElementById(id);
+                if (el) el.value = val;
+            }
+        }
+        if (params.get('today') === 'true') {
+            timeRange = 'today';
+            updateToggleUI();
+        }
+    }
+
+    // Allow Enter key to apply filters
+    document.getElementById('filters-card').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            window.applyFilters();
+        }
+    });
+
+    // Init
+    initFromUrl();
+    loadFilterOptions();
+    fetchStats();
+})();
+</script>
+{% endblock %}

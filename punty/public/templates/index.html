@@ -91,10 +91,12 @@
         </div>
         {% endif %}
 
-        <!-- Performance by Bet Type -->
-        <div id="bet-type-stats" class="mt-8" style="display: none;">
-            <h3 class="font-heading font-bold text-lg text-center mb-4" style="color: var(--text-secondary);">Performance by Bet Type</h3>
-            <div id="bet-type-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+        <!-- Stats CTA -->
+        <div class="text-center mt-8">
+            <a href="/stats" class="btn-secondary inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                View Punty's Full Stats
+            </a>
         </div>
 
         <!-- Wins Ticker -->
@@ -408,38 +410,6 @@
         loadWinsTicker();
         // Refresh ticker every 60 seconds
         setInterval(loadWinsTicker, 60000);
-    })();
-
-    // Bet Type Stats
-    (function() {
-        fetch('/api/public/bet-type-stats')
-            .then(r => r.json())
-            .then(function(stats) {
-                if (!stats || stats.length === 0) return;
-                var container = document.getElementById('bet-type-stats');
-                var grid = document.getElementById('bet-type-grid');
-                container.style.display = 'block';
-
-                var categoryColors = {
-                    'Selections': 'var(--magenta)',
-                    'Exotics': 'var(--cyan)',
-                    'Sequences': 'var(--yellow)',
-                    'Multi': 'var(--purple)'
-                };
-
-                grid.innerHTML = stats.map(function(s) {
-                    var color = categoryColors[s.category] || 'var(--text-secondary)';
-                    var pnlColor = s.pnl >= 0 ? '#4ade80' : '#f87171';
-                    var pnlSign = s.pnl >= 0 ? '+' : '';
-                    return '<div class="rounded-xl p-3 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">' +
-                        '<div class="text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: ' + color + ';">' + s.type + '</div>' +
-                        '<div class="text-xl font-display font-bold" style="color: ' + color + ';">' + s.rate + '%</div>' +
-                        '<div class="text-xs mt-1" style="color: var(--text-muted);">' + s.won + '/' + s.total + '</div>' +
-                        '<div class="text-xs font-semibold mt-1" style="color: ' + pnlColor + ';">' + pnlSign + s.pnl.toFixed(2) + 'U</div>' +
-                    '</div>';
-                }).join('');
-            })
-            .catch(function() {});
     })();
 
     // Next Race Countdown

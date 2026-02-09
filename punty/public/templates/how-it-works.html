@@ -208,9 +208,15 @@
                             a full breakdown of how the day went. No hiding from bad days, no
                             selective memory. Just honest reporting.
                         </p>
-                        <p style="color: var(--text-secondary);">
+                        <p class="mb-4" style="color: var(--text-secondary);">
                             Every winner is recorded. Every loss is owned. That's how you know
                             you're getting the real picture, not some curated highlight reel.
+                        </p>
+                        <p style="color: var(--text-secondary);">
+                            Want to see the numbers yourself?
+                            <a href="/stats" class="font-semibold hover:text-white transition-colors" style="color: var(--cyan);">Check Punty's Stats page</a>
+                            &mdash; filter by venue, distance, track condition, jockey, trainer, and more to see exactly
+                            how each bet type performs. Full transparency, no hiding.
                         </p>
                     </div>
                 </div>
@@ -282,7 +288,52 @@
                 </div>
             </div>
 
-            <div class="card p-6 mt-6 text-center" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(0, 212, 255, 0.06));">
+            <div class="card p-6 mt-6">
+                <h4 class="font-heading font-bold text-lg mb-3" style="color: var(--yellow);">Punty's Bet Types</h4>
+                <p class="text-sm mb-4" style="color: var(--text-secondary);">
+                    For each selection, Punty assigns a bet type based on how confident he is and what offers the best value.
+                    Here's what each one means:
+                </p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <div class="p-3 rounded-lg" style="background: rgba(233, 30, 140, 0.06); border: 1px solid rgba(233, 30, 140, 0.15);">
+                        <div class="font-heading font-bold text-sm mb-1" style="color: var(--magenta);">Win</div>
+                        <p class="text-xs" style="color: var(--text-secondary);">Straight win bet. Punty reckons this horse is winning. Pays only if it finishes first.</p>
+                    </div>
+                    <div class="p-3 rounded-lg" style="background: rgba(0, 212, 255, 0.06); border: 1px solid rgba(0, 212, 255, 0.15);">
+                        <div class="font-heading font-bold text-sm mb-1" style="color: var(--cyan);">Saver Win</div>
+                        <p class="text-xs" style="color: var(--text-secondary);">A smaller win bet to stay involved without going too deep. Used when Punty likes a horse but isn't fully convinced.</p>
+                    </div>
+                    <div class="p-3 rounded-lg" style="background: rgba(255, 193, 7, 0.06); border: 1px solid rgba(255, 193, 7, 0.15);">
+                        <div class="font-heading font-bold text-sm mb-1" style="color: var(--yellow);">Place</div>
+                        <p class="text-xs" style="color: var(--text-secondary);">Pays if the horse finishes in the top 3. Lower return than a win bet, but much better chance of collecting.</p>
+                    </div>
+                    <div class="p-3 rounded-lg" style="background: rgba(157, 78, 221, 0.06); border: 1px solid rgba(157, 78, 221, 0.15);">
+                        <div class="font-heading font-bold text-sm mb-1" style="color: var(--purple);">Each Way</div>
+                        <p class="text-xs" style="color: var(--text-secondary);">Half on win, half on place. If it wins, both halves pay. If it places, you lose the win half but collect on the place half.</p>
+                    </div>
+                </div>
+                <p class="text-xs mt-4" style="color: var(--text-muted);">
+                    Punty also picks exotics (Exacta, Trifecta, Quinella) where the race shape suggests value in combining runners.
+                    These are higher risk, higher reward.
+                </p>
+            </div>
+
+            <div class="card p-6 mt-6" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(0, 212, 255, 0.06));">
+                <h4 class="font-heading font-bold text-lg mb-3" style="color: var(--orange);">Check the Stats First</h4>
+                <p class="text-sm mb-4" style="color: var(--text-secondary);">
+                    Before you back a bet type, check how it's been performing.
+                    Punty's Place bets might be flying at Flemington but struggling at Randwick.
+                    The <a href="/stats" class="font-semibold hover:text-white transition-colors" style="color: var(--cyan);">Stats page</a>
+                    lets you filter by track, distance, conditions, jockey, trainer, and more &mdash;
+                    use it to make smarter decisions about which picks to follow.
+                </p>
+                <a href="/stats" class="btn-secondary inline-flex items-center gap-2 text-sm" style="padding: 0.5rem 1.25rem;">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    View Punty's Stats
+                </a>
+            </div>
+
+            <div class="card p-6 mt-6 text-center" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
                 <p class="text-sm" style="color: var(--text-secondary);">
                     <strong class="text-white">Bottom line:</strong> Use Punty as a starting point for your own punting decisions.
                     The analysis, speed maps, and form are all there - your job is to pick the bets that make sense to you.
