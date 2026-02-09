@@ -325,11 +325,18 @@ async def _settle_picks_for_race_impl(
             else:
                 # Flat format: [1, 5, 8, 9] - boxed bet
                 exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
-                is_boxed = "box" in exotic_type or "standout" in exotic_type
+                is_standout = "standout" in exotic_type
+                is_boxed = "box" in exotic_type
 
                 if "trifecta" in exotic_type:
                     if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:
-                        if is_boxed or len(exotic_runners_int) > 3:
+                        if is_standout:
+                            # Standout: first runner must win, others fill 2nd/3rd
+                            standout = exotic_runners_int[0]
+                            others = set(exotic_runners_int[1:])
+                            hit = (top_sc_int[0] == standout and
+                                   set(top_sc_int[1:3]).issubset(others))
+                        elif is_boxed or len(exotic_runners_int) > 3:
                             hit = set(top_sc_int[:3]).issubset(set(exotic_runners_int))
                         else:
                             hit = list(top_sc_int[:3]) == list(exotic_runners_int[:3])
@@ -337,7 +344,13 @@ async def _settle_picks_for_race_impl(
                         dividend = _find_dividend(exotic_divs, "trifecta")
                 elif "exacta" in exotic_type:
                     if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                        if is_boxed or len(exotic_runners_int) > 2:
+                        if is_standout:
+                            # Standout: first runner must win, any other must be 2nd
+                            standout = exotic_runners_int[0]
+                            others = set(exotic_runners_int[1:])
+                            hit = (top_sc_int[0] == standout and
+                                   top_sc_int[1] in others)
+                        elif is_boxed or len(exotic_runners_int) > 2:
                             hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
                         else:
                             hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
@@ -350,24 +363,40 @@ async def _settle_picks_for_race_impl(
                         dividend = _find_dividend(exotic_divs, "quinella")
                 elif "first" in exotic_type and ("four" in exotic_type or "4" in exotic_type):
                     if len(top_sc_int) >= 4 and len(exotic_runners_int) >= 4:
-                        if is_boxed or len(exotic_runners_int) > 4:
+                        if is_standout:
+                            standout = exotic_runners_int[0]
+                            others = set(exotic_runners_int[1:])
+                            hit = (top_sc_int[0] == standout and
+                                   set(top_sc_int[1:4]).issubset(others))
+                        elif is_boxed or len(exotic_runners_int) > 4:
                             hit = set(top_sc_int[:4]).issubset(set(exotic_runners_int))
                         else:
                             hit = list(top_sc_int[:4]) == list(exotic_runners_int[:4])
                     if hit:
                         dividend = _find_dividend(exotic_divs, "first4")
 
-                # Calculate combos for flexi betting (box formula)
+                # Calculate combos for flexi betting
                 n = len(set(exotic_runners_int))
                 combos = 1
-                if "trifecta" in exotic_type:
-                    combos = n * (n - 1) * (n - 2) if n >= 3 else 1
-                elif "exacta" in exotic_type:
-                    combos = n * (n - 1) if n >= 2 else 1
-                elif "quinella" in exotic_type:
-                    combos = n * (n - 1) // 2 if n >= 2 else 1
-                elif "first" in exotic_type:
-                    combos = n * (n - 1) * (n - 2) * (n - 3) if n >= 4 else 1
+                if is_standout:
+                    # Standout: 1 fixed runner × permutations of others
+                    others_n = n - 1
+                    if "trifecta" in exotic_type:
+                        combos = others_n * (others_n - 1) if others_n >= 2 else 1
+                    elif "exacta" in exotic_type:
+                        combos = others_n if others_n >= 1 else 1
+                    elif "first" in exotic_type:
+                        combos = others_n * (others_n - 1) * (others_n - 2) if others_n >= 3 else 1
+                else:
+                    # Box formula
+                    if "trifecta" in exotic_type:
+                        combos = n * (n - 1) * (n - 2) if n >= 3 else 1
+                    elif "exacta" in exotic_type:
+                        combos = n * (n - 1) if n >= 2 else 1
+                    elif "quinella" in exotic_type:
+                        combos = n * (n - 1) // 2 if n >= 2 else 1
+                    elif "first" in exotic_type:
+                        combos = n * (n - 1) * (n - 2) * (n - 3) if n >= 4 else 1
 
             # Stake is the total outlay for this exotic bet
             cost = stake
