@@ -550,7 +550,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if meeting.venue:
             venue_meetings = select(Meeting.id).where(
                 and_(Meeting.venue == meeting.venue, Meeting.id != meeting.id)
-            ).scalar_subquery()
+            )
             venue_sel = await db.execute(
                 select(
                     func.count(Pick.id),
