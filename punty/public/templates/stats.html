@@ -366,7 +366,7 @@
         };
         var color = categoryColors[s.category] || 'var(--text-secondary)';
         var pnlColor = s.pnl >= 0 ? '#4ade80' : '#f87171';
-        var pnlSign = s.pnl >= 0 ? '+' : '';
+        var pnlSign = s.pnl >= 0 ? '+' : '-';
 
         return '<div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">' +
             '<div class="text-xs font-heading font-semibold uppercase tracking-wider mb-2" style="color: ' + color + ';">' + s.type + '</div>' +
@@ -410,7 +410,7 @@
         // Summary bar
         var overallRate = totalBets > 0 ? (totalWon / totalBets * 100).toFixed(1) : '0';
         var pnlColor = totalPnl >= 0 ? '#4ade80' : '#f87171';
-        var pnlSign = totalPnl >= 0 ? '+' : '';
+        var pnlSign = totalPnl >= 0 ? '+' : '-';
         document.getElementById('stats-summary').innerHTML =
             '<span style="color:var(--text-muted)" class="text-xs font-heading font-semibold uppercase tracking-wider">' + (timeRange === 'today' ? 'Today' : 'All Time') + '</span>' +
             '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--cyan)">' + overallRate + '%</span> <span class="text-xs" style="color:var(--text-muted)">strike rate</span></span>' +
