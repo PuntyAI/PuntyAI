@@ -31,7 +31,8 @@ class SchedulerManager:
     """Manages background job scheduling."""
 
     def __init__(self):
-        self.scheduler = AsyncIOScheduler()
+        from punty.config import MELB_TZ
+        self.scheduler = AsyncIOScheduler(timezone=MELB_TZ)
         self._started = False
 
     async def start(self) -> None:

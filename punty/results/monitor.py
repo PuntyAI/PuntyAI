@@ -5,14 +5,14 @@ import logging
 import random
 from datetime import datetime, time, timedelta
 from typing import Optional
-from zoneinfo import ZoneInfo
-
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from punty.config import MELB_TZ, melb_now
+
 logger = logging.getLogger(__name__)
 
-AEST = ZoneInfo("Australia/Melbourne")
+AEST = MELB_TZ  # Alias for backwards compat
 
 # Monitor stops 20 minutes after last race completes (or wrap-up generated)
 POST_RACING_BUFFER = timedelta(minutes=20)
@@ -40,7 +40,7 @@ class ResultsMonitor:
         self.last_check: Optional[datetime] = None
         self.poll_interval = POLL_MIN  # display value
         self.consecutive_errors = 0
-        self._last_reset_date = datetime.now(AEST).date()
+        self._last_reset_date = melb_now().date()
 
     def start(self):
         if self.running:
@@ -72,7 +72,7 @@ class ResultsMonitor:
         from punty.models.meeting import Meeting, Race
         from punty.config import melb_today
 
-        now_aest = datetime.now(AEST)
+        now_aest = melb_now()
 
         async with async_session() as db:
             today = melb_today()
@@ -171,7 +171,7 @@ class ResultsMonitor:
         self.consecutive_errors = 0
         while self.running:
             # Reset tracking state at midnight to prevent unbounded growth
-            today = datetime.now(AEST).date()
+            today = melb_now().date()
             if today > self._last_reset_date:
                 old_races = sum(len(s) for s in self.processed_races.values())
                 old_wrapups = len(self.wrapups_generated)
@@ -184,11 +184,11 @@ class ResultsMonitor:
             try:
                 if await self._should_be_monitoring():
                     await self._check_all_meetings()
-                    self.last_check = datetime.now(AEST)
+                    self.last_check = melb_now()
                     self.consecutive_errors = 0
                 else:
                     logger.debug("Outside active monitoring window — skipping check")
-                    self.last_check = datetime.now(AEST)
+                    self.last_check = melb_now()
             except asyncio.CancelledError:
                 break
             except Exception as e:
