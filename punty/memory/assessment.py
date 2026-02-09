@@ -198,30 +198,53 @@ def _format_runners_table(runners: list[dict]) -> str:
 
 
 def _format_predictions(picks: list[Pick]) -> str:
-    """Format our predictions for the review."""
+    """Format our predictions for the review (all pick types)."""
     if not picks:
-        return "No selections were made for this race."
+        return "No picks were made for this race."
 
     lines = []
-    for p in sorted(picks, key=lambda x: x.tip_rank or 99):
+    # Selections first
+    selections = [p for p in picks if p.pick_type == "selection"]
+    for p in sorted(selections, key=lambda x: x.tip_rank or 99):
         rank_label = {1: "TOP PICK", 2: "2ND", 3: "3RD", 4: "ROUGHIE"}.get(p.tip_rank, f"#{p.tip_rank}")
         bet = p.bet_type or "win"
         odds = p.odds_at_tip or 0
         stake = p.bet_stake or 0
         lines.append(f"- {rank_label}: {p.horse_name} (No.{p.saddlecloth}) @ ${odds:.2f} - ${stake:.0f} {bet}")
+
+    # Exotics
+    exotics = [p for p in picks if p.pick_type == "exotic"]
+    for p in exotics:
+        stake = p.exotic_stake or 20
+        lines.append(f"- EXOTIC: {p.exotic_type} - runners: {p.exotic_runners} - ${stake:.0f}")
+
+    # Sequences
+    sequences = [p for p in picks if p.pick_type == "sequence"]
+    for p in sequences:
+        variant = f" ({p.sequence_variant})" if p.sequence_variant else ""
+        lines.append(f"- SEQUENCE: {p.sequence_type}{variant}")
+
+    # Big3 / Big3 Multi
+    for p in picks:
+        if p.pick_type == "big3":
+            lines.append(f"- BIG 3: {p.horse_name} (No.{p.saddlecloth})")
+        elif p.pick_type == "big3_multi":
+            lines.append(f"- BIG 3 MULTI")
+
     return "\n".join(lines)
 
 
 def _format_prediction_results(picks: list[Pick], runners: list[dict]) -> str:
-    """Format how our predictions actually performed."""
+    """Format how our predictions actually performed (all pick types)."""
     if not picks:
-        return "No selections to evaluate."
+        return "No picks to evaluate."
 
     lines = []
     total_pnl = 0.0
 
-    for p in sorted(picks, key=lambda x: x.tip_rank or 99):
-        # Find the runner's result
+    # Selections
+    selections = [p for p in picks if p.pick_type == "selection"]
+    for p in sorted(selections, key=lambda x: x.tip_rank or 99):
         runner = next((r for r in runners if r.get("saddlecloth") == p.saddlecloth), None)
         if not runner:
             lines.append(f"- {p.horse_name}: Could not find result")
@@ -236,6 +259,35 @@ def _format_prediction_results(picks: list[Pick], runners: list[dict]) -> str:
         hit_marker = "✓" if p.hit else "✗"
         pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
         lines.append(f"- {p.horse_name}: Finished {pos} {margin} (SP ${sp}) {hit_marker} P&L: {pnl_str}")
+
+    # Exotics
+    exotics = [p for p in picks if p.pick_type == "exotic"]
+    for p in exotics:
+        pnl = p.pnl or 0
+        total_pnl += pnl
+        hit_marker = "✓" if p.hit else "✗"
+        pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
+        lines.append(f"- {p.exotic_type}: {hit_marker} P&L: {pnl_str}")
+
+    # Sequences (not per-race, but include if attached)
+    sequences = [p for p in picks if p.pick_type == "sequence"]
+    for p in sequences:
+        pnl = p.pnl or 0
+        total_pnl += pnl
+        hit_marker = "✓" if p.hit else "✗"
+        pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
+        variant = f" ({p.sequence_variant})" if p.sequence_variant else ""
+        lines.append(f"- {p.sequence_type}{variant}: {hit_marker} P&L: {pnl_str}")
+
+    # Big3 / Big3 Multi
+    for p in picks:
+        if p.pick_type in ("big3", "big3_multi"):
+            pnl = p.pnl or 0
+            total_pnl += pnl
+            hit_marker = "✓" if p.hit else "✗"
+            pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
+            label = p.horse_name or "Big 3 Multi"
+            lines.append(f"- {label}: {hit_marker} P&L: {pnl_str}")
 
     lines.append(f"\nTotal Race P&L: ${total_pnl:.2f}")
     return "\n".join(lines)
@@ -533,13 +585,12 @@ async def generate_race_assessment(
         logger.warning(f"Meeting not found: {race.meeting_id}")
         return None
 
-    # Fetch our picks for this race
+    # Fetch our picks for this race (all bet types)
     picks_result = await db.execute(
         select(Pick).where(
             and_(
                 Pick.meeting_id == meeting.id,
                 Pick.race_number == race.race_number,
-                Pick.pick_type == "selection",
                 Pick.settled == True,
             )
         )

@@ -154,18 +154,6 @@ class AppSettings(Base):
             "value": "false",
             "description": "Use emojis in content (PUNTY_MASTER says no)",
         },
-        "favorites_threshold": {
-            "value": "2.50",
-            "description": "Odds threshold below which a selection is considered a favorite",
-        },
-        "auto_widen_favorites": {
-            "value": "false",
-            "description": "Automatically ask AI to reconsider when too many favorites selected",
-        },
-        "max_favorites_per_card": {
-            "value": "3",
-            "description": "Maximum favorites allowed before triggering widen request",
-        },
         "openai_api_key": {
             "value": "",
             "description": "OpenAI API key",

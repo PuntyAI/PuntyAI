@@ -63,6 +63,26 @@
             </div>
         </div>
 
+        <!-- Venue Stats (subtle) -->
+        {% if venue_stats %}
+        <div class="flex flex-wrap items-center gap-4 mb-8 px-4 py-3 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);">
+            <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Punty at {{ meeting.venue }}</span>
+            <div class="flex items-center gap-1.5">
+                <span class="text-sm font-heading font-bold" style="color: var(--cyan);">{{ venue_stats.rate }}%</span>
+                <span class="text-xs" style="color: var(--text-muted);">strike rate</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span class="text-sm font-heading font-bold" style="color: var(--text-secondary);">{{ venue_stats.hits }}/{{ venue_stats.total }}</span>
+                <span class="text-xs" style="color: var(--text-muted);">winners</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span class="text-sm font-heading font-bold {% if venue_stats.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">${{ "%.0f"|format(venue_stats.pnl) }}</span>
+                <span class="text-xs" style="color: var(--text-muted);">P&L</span>
+            </div>
+            <span class="text-xs" style="color: var(--text-muted);">across {{ venue_stats.meetings }} meeting{{ 's' if venue_stats.meetings != 1 }}</span>
+        </div>
+        {% endif %}
+
         <!-- Live Updates Section -->
         {% if live_updates %}
         <div class="mb-8">
@@ -171,11 +191,10 @@
 
         <!-- CTA -->
         <div class="card p-6 text-center mt-8" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.1), rgba(255, 107, 53, 0.1));">
-            <p class="font-heading font-semibold text-white mb-2">Want Punty's tips and live updates on race day?</p>
-            <p class="text-sm mb-4" style="color: var(--text-secondary);">Early mail before the races. Live pace analysis and win celebrations as they happen.</p>
-            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-primary inline-flex items-center gap-2">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                Follow @PuntyAI
+            <p class="font-heading font-semibold text-white mb-2">Want more tips?</p>
+            <p class="text-sm mb-4" style="color: var(--text-secondary);">Browse all of Punty's past and present tips right here.</p>
+            <a href="/tips" class="btn-primary inline-flex items-center gap-2">
+                Browse All Tips
             </a>
         </div>
     </div>
@@ -336,6 +355,68 @@
         align-items: center;
         justify-content: center;
     }
+
+    /* Accordion */
+    .race-accordion {
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+    }
+    .race-accordion-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        user-select: none;
+        background: rgba(255, 255, 255, 0.02);
+        transition: background 0.15s;
+    }
+    .race-accordion-header:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .race-accordion-header .accordion-chevron {
+        transition: transform 0.2s;
+        color: var(--text-muted);
+    }
+    .race-accordion.open .accordion-chevron {
+        transform: rotate(180deg);
+    }
+    .race-accordion-body {
+        display: none;
+        padding: 0 1rem 1rem;
+    }
+    .race-accordion.open .race-accordion-body {
+        display: block;
+    }
+    .race-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .race-nav-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.5rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.85rem;
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .race-nav-pill:hover, .race-nav-pill.active {
+        background: var(--gradient-sunset);
+        color: white;
+        border-color: transparent;
+    }
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -345,6 +426,86 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var tipsContent = document.querySelector('.tips-content');
     if (!tipsContent) return;
+
+    // --- Accordion: wrap race sections ---
+    (function() {
+        // Find all race headings (h2/h3 with "Race N" in text)
+        var headings = tipsContent.querySelectorAll('h2.tips-heading, h3.tips-heading');
+        var raceHeadings = [];
+        headings.forEach(function(h) {
+            if (/Race\s+\d+/i.test(h.textContent)) {
+                raceHeadings.push(h);
+            }
+        });
+
+        if (raceHeadings.length < 2) return; // Not enough races to bother
+
+        // Add quick-nav pills
+        var navContainer = document.createElement('div');
+        navContainer.className = 'race-nav';
+        raceHeadings.forEach(function(h, idx) {
+            var raceMatch = h.textContent.match(/Race\s+(\d+)/i);
+            if (!raceMatch) return;
+            var pill = document.createElement('button');
+            pill.className = 'race-nav-pill';
+            pill.textContent = 'R' + raceMatch[1];
+            pill.setAttribute('data-race-idx', idx);
+            pill.onclick = function() {
+                var accordion = document.getElementById('race-acc-' + idx);
+                if (accordion) {
+                    accordion.classList.add('open');
+                    accordion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            };
+            navContainer.appendChild(pill);
+        });
+
+        // Collect pre-race content (content before first race heading)
+        var preRaceNodes = [];
+        var node = tipsContent.firstChild;
+        while (node && node !== raceHeadings[0]) {
+            preRaceNodes.push(node);
+            node = node.nextSibling;
+        }
+
+        // For each race heading, collect all nodes until next race heading
+        var sections = [];
+        for (var i = 0; i < raceHeadings.length; i++) {
+            var sectionNodes = [];
+            var current = raceHeadings[i].nextSibling;
+            var nextHeading = raceHeadings[i + 1] || null;
+            while (current && current !== nextHeading) {
+                sectionNodes.push(current);
+                current = current.nextSibling;
+            }
+            sections.push({ heading: raceHeadings[i], nodes: sectionNodes });
+        }
+
+        // Rebuild content: pre-race nodes, nav, then accordions
+        tipsContent.innerHTML = '';
+        preRaceNodes.forEach(function(n) { tipsContent.appendChild(n); });
+        tipsContent.appendChild(navContainer);
+
+        sections.forEach(function(sec, idx) {
+            var accordion = document.createElement('div');
+            accordion.className = 'race-accordion';
+            accordion.id = 'race-acc-' + idx;
+
+            var header = document.createElement('div');
+            header.className = 'race-accordion-header';
+            header.innerHTML = '<span>' + sec.heading.outerHTML + '</span>' +
+                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+            header.onclick = function() { accordion.classList.toggle('open'); };
+
+            var body = document.createElement('div');
+            body.className = 'race-accordion-body';
+            sec.nodes.forEach(function(n) { body.appendChild(n); });
+
+            accordion.appendChild(header);
+            accordion.appendChild(body);
+            tipsContent.appendChild(accordion);
+        });
+    })();
 
     function addBadge(el, label) {
         if (el.querySelector('.win-tick')) return;

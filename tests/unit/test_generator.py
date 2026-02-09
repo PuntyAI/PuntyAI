@@ -160,34 +160,3 @@ class TestBuildLearningContext:
         assert isinstance(result, str)
 
 
-class TestDetectFavorites:
-    """Tests for _detect_favorites method."""
-
-    @pytest.mark.asyncio
-    async def test_detect_favorites_finds_short_odds(self, db_session, sample_meeting_data):
-        """Test that favorites with short odds are detected."""
-        generator = ContentGenerator(db_session)
-
-        # Mock get_setting to return threshold
-        with patch.object(generator, "get_setting", return_value="3.00"):
-            content = "*TEST HORSE 1* (No.1) — $2.50"
-
-            favorites = await generator._detect_favorites(content, sample_meeting_data)
-
-            # Horse 1 has odds 3.50 which is above 3.00 threshold
-            # So it should NOT be detected as a favorite
-            assert isinstance(favorites, list)
-
-    @pytest.mark.asyncio
-    async def test_detect_favorites_ignores_long_odds(self, db_session, sample_meeting_data):
-        """Test that horses with long odds are not flagged as favorites."""
-        generator = ContentGenerator(db_session)
-
-        with patch.object(generator, "get_setting", return_value="2.50"):
-            content = "*TEST HORSE 2* is the pick"
-
-            favorites = await generator._detect_favorites(content, sample_meeting_data)
-
-            # Horse 2 has odds 5.00 which is well above threshold
-            horse_names = [f["horse"] for f in favorites]
-            assert "TEST HORSE 2" not in horse_names

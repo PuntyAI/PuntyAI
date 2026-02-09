@@ -21,7 +21,7 @@
     </div>
 
     <!-- Hero Stats Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+    <div class="grid grid-cols-3 md:grid-cols-3 gap-3 sm:gap-4">
         <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
             <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 {{ all_time_stats.today_winners or 0 }}
@@ -33,12 +33,6 @@
                 {{ all_time_stats.total_winners or 0 }}
             </div>
             <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Total Winners</div>
-        </div>
-        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
-            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                ${{ all_time_stats.collected|int or 0 }}
-            </div>
-            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Collected</div>
         </div>
         <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
             <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">

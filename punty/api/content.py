@@ -438,32 +438,3 @@ async def reparse_content_picks(content_id: str, db: AsyncSession = Depends(get_
     return {"status": "reparsed", "pick_count": count}
 
 
-class WidenRequest(BaseModel):
-    """Request to widen selections."""
-
-    feedback: Optional[str] = None  # Optional user feedback
-
-
-@router.post("/{content_id}/widen")
-async def widen_selections(
-    content_id: str,
-    request: Optional[WidenRequest] = None,
-    db: AsyncSession = Depends(get_db),
-):
-    """Request AI to widen selections when too many favorites detected.
-
-    This tells the AI that it has selected too many market favorites
-    and asks it to reconsider with more value-oriented picks.
-    """
-    from punty.ai.generator import ContentGenerator
-
-    generator = ContentGenerator(db)
-
-    try:
-        feedback = request.feedback if request else None
-        result = await generator.request_widen_selections(content_id, feedback)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

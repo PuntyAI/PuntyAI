@@ -213,26 +213,26 @@ async def get_winner_stats() -> dict:
         row = alltime_winnings_result.one()
         alltime_winnings = (row[0] or 0) + (row[1] or 0)
 
-        # Get early mail content for today (sent to Twitter)
+        # Get early mail content for today (approved or sent)
         early_mail_result = await db.execute(
             select(Content).where(
                 and_(
                     Content.content_type == "early_mail",
-                    Content.sent_to_twitter == True,
+                    Content.status.in_(["approved", "sent"]),
                     Content.meeting_id.in_(meeting_ids) if meeting_ids else False,
                 )
             )
         )
         early_mail_content = early_mail_result.scalars().all()
 
-        # Build list of today's tips with Twitter links
+        # Build list of today's tips with internal links
         todays_tips = []
         for content in early_mail_content:
             meeting = next((m for m in today_meetings if m.id == content.meeting_id), None)
             if meeting:
                 todays_tips.append({
                     "venue": meeting.venue,
-                    "twitter_url": f"https://twitter.com/PuntyAI",  # Link to profile, or specific tweet if stored
+                    "meeting_id": meeting.id,
                 })
 
         # Strike rates per tip rank (selections only)
@@ -355,7 +355,7 @@ async def get_tips_calendar(
         # Build shared filter conditions
         filters = [
             Content.content_type == "early_mail",
-            Content.status == "sent",
+            Content.status.in_(["approved", "sent"]),
             Meeting.date.isnot(None),
         ]
         if venue:
@@ -400,7 +400,7 @@ async def get_tips_calendar(
         # Fetch meetings for only the paginated dates
         meeting_filters = [
             Content.content_type == "early_mail",
-            Content.status == "sent",
+            Content.status.in_(["approved", "sent"]),
             Meeting.date.in_(page_dates),
         ]
         if venue:
@@ -465,25 +465,25 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not meeting:
             return None
 
-        # Get early mail (sent)
+        # Get early mail (approved or sent)
         early_mail_result = await db.execute(
             select(Content).where(
                 and_(
                     Content.meeting_id == meeting_id,
                     Content.content_type == "early_mail",
-                    Content.status == "sent",
+                    Content.status.in_(["approved", "sent"]),
                 )
             ).order_by(Content.created_at.desc())
         )
         early_mail = early_mail_result.scalars().first()
 
-        # Get wrap-up (sent) — use .first() since meetings can have multiple wrapups
+        # Get wrap-up (approved or sent) — use .first() since meetings can have multiple wrapups
         wrapup_result = await db.execute(
             select(Content).where(
                 and_(
                     Content.meeting_id == meeting_id,
                     Content.content_type == "meeting_wrapup",
-                    Content.status == "sent",
+                    Content.status.in_(["approved", "sent"]),
                 )
             ).order_by(Content.created_at.desc())
         )
@@ -544,6 +544,44 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             for u in updates_result.scalars().all()
         ]
 
+        # Venue historical stats (Punty's track record here)
+        from sqlalchemy import case
+        venue_stats = None
+        if meeting.venue:
+            venue_meetings = select(Meeting.id).where(
+                and_(Meeting.venue == meeting.venue, Meeting.id != meeting.id)
+            ).scalar_subquery()
+            venue_sel = await db.execute(
+                select(
+                    func.count(Pick.id),
+                    func.sum(case((Pick.hit == True, 1), else_=0)),
+                    func.sum(Pick.pnl),
+                ).where(and_(
+                    Pick.settled == True,
+                    Pick.pick_type == "selection",
+                    Pick.meeting_id.in_(venue_meetings),
+                ))
+            )
+            row = venue_sel.one()
+            total, hits, pnl = int(row[0] or 0), int(row[1] or 0), float(row[2] or 0)
+            if total >= 4:
+                venue_stats = {
+                    "total": total,
+                    "hits": hits,
+                    "rate": round(hits / total * 100, 1) if total > 0 else 0,
+                    "pnl": round(pnl, 2),
+                    "meetings": 0,
+                }
+                # Count distinct meetings
+                mc = await db.execute(
+                    select(func.count(func.distinct(Pick.meeting_id))).where(and_(
+                        Pick.settled == True,
+                        Pick.pick_type == "selection",
+                        Pick.meeting_id.in_(venue_meetings),
+                    ))
+                )
+                venue_stats["meetings"] = mc.scalar() or 0
+
         # Generate seed from meeting date for consistent rotation
         seed = hash(meeting.id) if meeting.id else 0
 
@@ -571,6 +609,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             "winning_exotics": winning_exotics,
             "winning_sequences": winning_sequences,
             "live_updates": live_updates,
+            "venue_stats": venue_stats,
         }
 
 
@@ -631,6 +670,125 @@ async def tips_page(
     )
 
 
+async def get_bet_type_stats() -> list[dict]:
+    """Get strike rate, won/total, and P&L for every bet type."""
+    async with async_session() as db:
+        from sqlalchemy import case
+
+        # Selections by bet_type
+        sel_result = await db.execute(
+            select(
+                Pick.bet_type,
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+            ).where(and_(
+                Pick.settled == True,
+                Pick.pick_type == "selection",
+                Pick.bet_type.isnot(None),
+            )).group_by(Pick.bet_type)
+        )
+
+        stats = []
+        for bet_type, total, hits, pnl in sel_result.all():
+            hits = int(hits or 0)
+            pnl = float(pnl or 0)
+            rate = round(hits / total * 100, 1) if total > 0 else 0
+            label = (bet_type or "unknown").replace("_", " ").title()
+            stats.append({
+                "category": "Selections",
+                "type": label,
+                "won": hits,
+                "total": total,
+                "rate": rate,
+                "pnl": round(pnl, 2),
+            })
+
+        # Exotics by exotic_type
+        exotic_result = await db.execute(
+            select(
+                Pick.exotic_type,
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+            ).where(and_(
+                Pick.settled == True,
+                Pick.pick_type == "exotic",
+                Pick.exotic_type.isnot(None),
+            )).group_by(Pick.exotic_type)
+        )
+
+        for exotic_type, total, hits, pnl in exotic_result.all():
+            hits = int(hits or 0)
+            pnl = float(pnl or 0)
+            rate = round(hits / total * 100, 1) if total > 0 else 0
+            stats.append({
+                "category": "Exotics",
+                "type": exotic_type,
+                "won": hits,
+                "total": total,
+                "rate": rate,
+                "pnl": round(pnl, 2),
+            })
+
+        # Sequences by sequence_type + sequence_variant
+        seq_result = await db.execute(
+            select(
+                Pick.sequence_type,
+                Pick.sequence_variant,
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+            ).where(and_(
+                Pick.settled == True,
+                Pick.pick_type == "sequence",
+            )).group_by(Pick.sequence_type, Pick.sequence_variant)
+        )
+
+        for seq_type, seq_variant, total, hits, pnl in seq_result.all():
+            hits = int(hits or 0)
+            pnl = float(pnl or 0)
+            rate = round(hits / total * 100, 1) if total > 0 else 0
+            label = (seq_type or "Sequence").title()
+            if seq_variant:
+                label += f" ({seq_variant.title()})"
+            stats.append({
+                "category": "Sequences",
+                "type": label,
+                "won": hits,
+                "total": total,
+                "rate": rate,
+                "pnl": round(pnl, 2),
+            })
+
+        # Big 3 Multi
+        big3_result = await db.execute(
+            select(
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+            ).where(and_(
+                Pick.settled == True,
+                Pick.pick_type == "big3_multi",
+            ))
+        )
+        row = big3_result.one()
+        if row[0] and row[0] > 0:
+            hits = int(row[1] or 0)
+            pnl = float(row[2] or 0)
+            rate = round(hits / row[0] * 100, 1) if row[0] > 0 else 0
+            stats.append({
+                "category": "Multi",
+                "type": "Big 3 Multi",
+                "won": hits,
+                "total": row[0],
+                "rate": rate,
+                "pnl": round(pnl, 2),
+            })
+
+        return stats
+
+
 @router.get("/tips/{meeting_id}", response_class=HTMLResponse)
 async def meeting_tips_page(request: Request, meeting_id: str):
     """Public meeting detail page with early mail and wrap-up."""
@@ -651,5 +809,6 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "winning_exotics": data.get("winning_exotics", {}),
             "winning_sequences": data.get("winning_sequences", []),
             "live_updates": data.get("live_updates", []),
+            "venue_stats": data.get("venue_stats"),
         }
     )

@@ -3,11 +3,10 @@
 import asyncio
 import json
 import logging
-import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator
 
 from openai import RateLimitError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,11 +113,10 @@ class ContentGenerator:
         self,
         meeting_id: str,
         save: bool = True,
-        widen_if_favorites: bool = True,
     ) -> dict[str, Any]:
         """Generate Early Mail content for a meeting."""
         result = {}
-        async for event in self.generate_early_mail_stream(meeting_id, save, widen_if_favorites):
+        async for event in self.generate_early_mail_stream(meeting_id, save):
             if event.get("status") == "complete":
                 result = event.get("result", {})
             elif event.get("status") == "error":
@@ -129,12 +127,11 @@ class ContentGenerator:
         self,
         meeting_id: str,
         save: bool = True,
-        widen_if_favorites: bool = True,
     ):
         """Generate Early Mail with SSE progress events."""
         from punty.scheduler.activity_log import log_generate_start, log_generate_complete, log_generate_error
 
-        total_steps = 7
+        total_steps = 6
         step = 0
         venue_name = meeting_id  # Will be updated once we have context
 
@@ -215,36 +212,11 @@ class ContentGenerator:
 
             yield evt("AI content generated", "done")
 
-            favorites_detected = []
-            yield evt("Checking for market favorites...")
-            if widen_if_favorites:
-                auto_widen = await self.get_setting("auto_widen_favorites", "false")
-                if auto_widen.lower() == "true":
-                    favorites_detected = await self._detect_favorites(raw_content, context)
-                    max_favorites = int(await self.get_setting("max_favorites_per_card", "3"))
-
-                    if len(favorites_detected) > max_favorites:
-                        yield evt(f"Detected {len(favorites_detected)} favorites — widening selections...", "done")
-                        step += 1
-                        total_steps += 1
-                        yield evt("Requesting wider selections from AI...")
-                        raw_content = await self._request_wider_selections(
-                            raw_content, favorites_detected, context, system_prompt
-                        )
-                        yield evt("Selections widened", "done")
-                    else:
-                        yield evt(f"Favorites check passed ({len(favorites_detected)} found)", "done")
-                else:
-                    yield evt("Auto-widen disabled, skipping", "done")
-            else:
-                yield evt("Favorites check skipped", "done")
-
             result = {
                 "raw_content": raw_content,
                 "meeting_id": meeting_id,
                 "content_type": ContentType.EARLY_MAIL.value,
                 "context_snapshot_id": snapshot["id"] if snapshot else None,
-                "favorites_detected": favorites_detected,
             }
 
             if save:
@@ -311,85 +283,6 @@ class ContentGenerator:
             result["status"] = content.status
 
         return result
-
-    async def request_widen_selections(
-        self,
-        content_id: str,
-        feedback: Optional[str] = None,
-    ) -> dict[str, Any]:
-        """Request wider selections for existing content with too many favorites."""
-        logger.info(f"Requesting wider selections for content {content_id}")
-
-        # Get existing content
-        result = await self.db.execute(
-            select(Content).where(Content.id == content_id)
-        )
-        content = result.scalar_one_or_none()
-        if not content:
-            raise ValueError(f"Content not found: {content_id}")
-
-        # Build context
-        context = await self.context_builder.build_meeting_context(content.meeting_id)
-
-        # Detect favorites in current content
-        favorites_detected = await self._detect_favorites(content.raw_content, context)
-
-        # Load prompts
-        personality = load_prompt("personality")
-        widen_prompt = load_prompt("widen_selections")
-
-        # Get analysis weights
-        analysis_weights = await self.get_analysis_weights()
-
-        # Format widen prompt with detected favorites
-        favorites_threshold = float(await self.get_setting("favorites_threshold", "2.50"))
-        replace_count = max(1, len(favorites_detected) - 2)  # Keep at most 2 favorites
-
-        widen_prompt = widen_prompt.replace("{FAVORITE_COUNT}", str(len(favorites_detected)))
-        widen_prompt = widen_prompt.replace("{FAVORITES_THRESHOLD}", f"{favorites_threshold:.2f}")
-        widen_prompt = widen_prompt.replace("{REPLACE_COUNT}", str(replace_count))
-
-        if feedback:
-            widen_prompt += f"\n\nAdditional feedback from user:\n{feedback}"
-
-        # Format context
-        context_str = self._format_context_for_prompt(context)
-
-        system_prompt = f"""{personality}
-
-## Analysis Framework Weights
-{analysis_weights}
-
-## Current Content Being Revised
-{content.raw_content}
-
-## Favorites Detected
-{json.dumps(favorites_detected, indent=2)}
-"""
-
-        # Generate revised content
-        raw_content = await self.ai_client.generate_with_context(
-            system_prompt=system_prompt,
-            context=context_str,
-            instruction=widen_prompt,
-            temperature=0.8,
-        )
-
-        # Save as new version
-        from punty.formatters.twitter import format_twitter
-
-        content.raw_content = raw_content
-        content.twitter_formatted = format_twitter(raw_content, content.content_type)
-        content.review_notes = f"Widened selections (was {len(favorites_detected)} favorites)"
-
-        await self.db.commit()
-
-        return {
-            "content_id": content.id,
-            "raw_content": raw_content,
-            "favorites_before": len(favorites_detected),
-            "status": "widened",
-        }
 
     async def _build_learning_context(self, context: dict) -> str:
         """Build learning context from past predictions for inclusion in prompt.
@@ -511,84 +404,6 @@ class ContentGenerator:
         except Exception as e:
             logger.warning(f"Failed to build learning context: {e}")
             return ""
-
-    async def _detect_favorites(
-        self,
-        content: str,
-        context: dict,
-    ) -> list[dict]:
-        """Detect selections that are market favorites based on odds threshold."""
-        favorites_threshold = float(await self.get_setting("favorites_threshold", "2.50"))
-        favorites = []
-
-        # Build a map of horse names to their odds from context
-        horse_odds = {}
-        for race in context.get("races", []):
-            for runner in race.get("runners", []):
-                horse_name = runner.get("horse_name", "").upper()
-                odds = runner.get("current_odds")
-                if odds and horse_name:
-                    horse_odds[horse_name] = float(odds)
-
-        # Look for horse names mentioned in content and check their odds
-        # This is a simple heuristic - look for capitalized horse names
-        for horse_name, odds in horse_odds.items():
-            if odds <= favorites_threshold:
-                # Check if this horse appears to be a selection (near key phrases)
-                patterns = [
-                    rf'\*{re.escape(horse_name)}\*',
-                    rf'(?:BEST BET|NEXT BEST|TOP|Big 3).*{re.escape(horse_name)}',
-                    rf'{re.escape(horse_name)}.*\$\d+\.\d+',
-                ]
-                for pattern in patterns:
-                    if re.search(pattern, content, re.IGNORECASE):
-                        favorites.append({
-                            "horse": horse_name,
-                            "odds": odds,
-                            "threshold": favorites_threshold,
-                        })
-                        break
-
-        return favorites
-
-    async def _request_wider_selections(
-        self,
-        current_content: str,
-        favorites_detected: list[dict],
-        context: dict,
-        system_prompt: str,
-    ) -> str:
-        """Ask AI to reconsider and provide wider selections."""
-        widen_prompt = load_prompt("widen_selections")
-
-        favorites_threshold = float(await self.get_setting("favorites_threshold", "2.50"))
-        replace_count = max(1, len(favorites_detected) - 2)
-
-        widen_prompt = widen_prompt.replace("{FAVORITE_COUNT}", str(len(favorites_detected)))
-        widen_prompt = widen_prompt.replace("{FAVORITES_THRESHOLD}", f"{favorites_threshold:.2f}")
-        widen_prompt = widen_prompt.replace("{REPLACE_COUNT}", str(replace_count))
-
-        context_str = self._format_context_for_prompt(context)
-
-        followup_prompt = f"""## Your Previous Output
-{current_content}
-
-## Favorites Detected
-{json.dumps(favorites_detected, indent=2)}
-
-{widen_prompt}
-
-Please provide a COMPLETE revised Early Mail with wider selections. Output the full content, not just the changes.
-"""
-
-        revised_content = await self.ai_client.generate_with_context(
-            system_prompt=system_prompt,
-            context=context_str,
-            instruction=followup_prompt,
-            temperature=0.85,
-        )
-
-        return revised_content
 
     async def generate_race_preview(
         self,

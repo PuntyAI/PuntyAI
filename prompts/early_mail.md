@@ -57,19 +57,23 @@ Repeat for each race in order:
 *Top 3 + Roughie ($20 pool)*
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
+   Win %: {PUNTY_WIN_PROBABILITY}
    Confidence: {R_TAG_1}
    Why: {ONE_OR_TWO_LINES_REASON_1}
 *2. {R_TOP2}* (No.{R_TOP2_NO}) — ${R_TOP2_WIN_ODDS} / ${R_TOP2_PLACE_ODDS}
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
+   Win %: {PUNTY_WIN_PROBABILITY}
    Confidence: {R_TAG_2}
    Why: {ONE_OR_TWO_LINES_REASON_2}
 *3. {R_TOP3}* (No.{R_TOP3_NO}) — ${R_TOP3_WIN_ODDS} / ${R_TOP3_PLACE_ODDS}
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
+   Win %: {PUNTY_WIN_PROBABILITY}
    Confidence: {R_TAG_3}
    Why: {ONE_OR_TWO_LINES_REASON_3}
 
 *Roughie: {R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_WIN_ODDS} / ${R_ROUGHIE_PLACE_ODDS}
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
+Win %: {PUNTY_WIN_PROBABILITY}
 Why: {ONE_LINE_RISK_EXPLAINER}
 
 *Punty's Pick:* {HORSE_NAME} (No.{NO}) ${WIN_ODDS} Win + {SECOND_HORSE} (No.{NO}) ${PLACE_ODDS} Place
@@ -263,3 +267,11 @@ When you see a horse firming or heavily backed, don't just note it — investiga
 
     **EXAMPLE:**
     *Punty's Pick:* Balanced — Races 5 and 7 are wide open but the rest have clear top picks. Cover the chaos without going overboard.
+
+14) WIN % (per selection):
+    Each selection (Top 3 + Roughie) gets a "Win %:" line — Punty's honest assessment of the horse's actual chance of winning.
+    - Be blunt and realistic. If the favourite is $2.50 but you think they're more like a 30% chance, say 30%.
+    - If the odds imply 20% but you think they're closer to 35%, say 35%.
+    - The Win % should reflect YOUR analysis of the race, not just invert the odds.
+    - This gives punters something to compare against their own assessment — "Punty reckons 25%, I reckon 35%, that's value."
+    - Keep it simple: just the number with a % sign (e.g. "Win %: 32%").

@@ -214,6 +214,60 @@ async def get_race_sectionals(
         return {"error": "Failed to parse stored sectional data"}
 
 
+@router.post("/settle-past")
+async def settle_past_races(db: AsyncSession = Depends(get_db)):
+    """Settle all past races that have results but unsettled picks.
+
+    This catches any picks that were missed by the results monitor,
+    e.g. due to server restarts or network issues.
+    """
+    from sqlalchemy import select, and_, or_
+    from punty.models.meeting import Meeting, Race
+    from punty.models.pick import Pick
+    from punty.results.picks import settle_picks_for_race
+    from punty.config import melb_today
+
+    today = melb_today()
+    settled_total = 0
+    errors = []
+
+    # Find races with results (Paying/Closed) that have unsettled picks
+    result = await db.execute(
+        select(Race.meeting_id, Race.race_number, Race.id)
+        .join(Pick, and_(
+            Pick.meeting_id == Race.meeting_id,
+            Pick.race_number == Race.race_number,
+        ))
+        .join(Meeting, Meeting.id == Race.meeting_id)
+        .where(
+            and_(
+                Race.results_status.in_(["Paying", "Closed"]),
+                Pick.settled == False,
+                Meeting.date <= today,
+            )
+        )
+        .distinct()
+    )
+    races_to_settle = result.all()
+
+    for meeting_id, race_number, race_id in races_to_settle:
+        try:
+            count = await settle_picks_for_race(db, meeting_id, race_number)
+            settled_total += count
+            if count > 0:
+                logger.info(f"Settled {count} picks for {meeting_id} R{race_number}")
+        except Exception as e:
+            errors.append(f"{meeting_id} R{race_number}: {e}")
+            logger.error(f"Failed to settle {meeting_id} R{race_number}: {e}")
+
+    return {
+        "status": "done",
+        "races_checked": len(races_to_settle),
+        "picks_settled": settled_total,
+        "errors": errors,
+    }
+
+
 @router.get("/wins/recent")
 async def get_recent_wins_api(
     limit: int = 20,

@@ -149,53 +149,6 @@
             </form>
         </div>
 
-        <!-- Favorites Detection Settings -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-punty-border">
-                <h2 class="text-lg font-semibold text-gray-900">Value vs Favorites</h2>
-                <p class="text-sm text-gray-500">Configure how Punty handles market favorites</p>
-            </div>
-            <div class="p-6 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Favorites Odds Threshold</label>
-                    <input type="number" step="0.10" min="1.00" max="5.00"
-                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
-                           value="{{ settings.get('favorites_threshold', {}).get('value', '2.50') }}"
-                           hx-put="/api/settings/favorites_threshold"
-                           hx-trigger="change"
-                           hx-swap="none"
-                           name="value">
-                    <p class="text-xs text-gray-500 mt-1">Horses at or below this price are considered "favorites"</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Favorites Per Card</label>
-                    <input type="number" min="1" max="10"
-                           class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
-                           value="{{ settings.get('max_favorites_per_card', {}).get('value', '3') }}"
-                           hx-put="/api/settings/max_favorites_per_card"
-                           hx-trigger="change"
-                           hx-swap="none"
-                           name="value">
-                    <p class="text-xs text-gray-500 mt-1">Trigger widen request if more favorites selected</p>
-                </div>
-
-                <label class="flex items-center space-x-3 mt-4">
-                    <input type="checkbox"
-                           class="rounded text-punty-coral focus:ring-punty-coral"
-                           {% if settings.get('auto_widen_favorites', {}).get('value', 'false') == 'true' %}checked{% endif %}
-                           hx-put="/api/settings/auto_widen_favorites"
-                           hx-trigger="change"
-                           hx-swap="none"
-                           hx-vals='{"value": "{{ 'false' if settings.get('auto_widen_favorites', {}).get('value', 'false') == 'true' else 'true' }}"}'>
-                    <div>
-                        <span class="text-sm font-medium text-gray-700">Auto-widen selections</span>
-                        <p class="text-xs text-gray-500">Automatically ask AI to reconsider when too many favorites</p>
-                    </div>
-                </label>
-            </div>
-        </div>
-
         <!-- Punty Persona Settings -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-punty-border">

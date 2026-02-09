@@ -115,6 +115,44 @@ async def lifespan(app: FastAPI):
     scheduled_meetings = automation_result.get("meetings_scheduled", [])
     logger.info(f"Scheduler started - calendar scrape at 00:05, {len(scheduled_meetings)} meetings scheduled for today")
 
+    # Settle any past races with unsettled picks (catches restarts/missed settlements)
+    try:
+        from punty.results.picks import settle_picks_for_race
+        from punty.models.pick import Pick
+        from punty.models.meeting import Meeting, Race
+        from sqlalchemy import and_
+        from punty.config import melb_today
+        async with async_session() as settle_db:
+            today = melb_today()
+            unsettled_result = await settle_db.execute(
+                sa_select(Race.meeting_id, Race.race_number)
+                .join(Pick, and_(
+                    Pick.meeting_id == Race.meeting_id,
+                    Pick.race_number == Race.race_number,
+                ))
+                .join(Meeting, Meeting.id == Race.meeting_id)
+                .where(
+                    and_(
+                        Race.results_status.in_(["Paying", "Closed"]),
+                        Pick.settled == False,
+                        Meeting.date <= today,
+                    )
+                )
+                .distinct()
+            )
+            races_to_settle = unsettled_result.all()
+            if races_to_settle:
+                settled_total = 0
+                for meeting_id, race_number in races_to_settle:
+                    try:
+                        count = await settle_picks_for_race(settle_db, meeting_id, race_number)
+                        settled_total += count
+                    except Exception as e:
+                        logger.warning(f"Startup settlement failed for {meeting_id} R{race_number}: {e}")
+                logger.info(f"Startup settlement: settled {settled_total} picks across {len(races_to_settle)} races")
+    except Exception as e:
+        logger.warning(f"Startup settlement check failed: {e}")
+
     # Initialize results monitor
     monitor = ResultsMonitor(app)
     app.state.results_monitor = monitor
@@ -209,6 +247,13 @@ async def public_next_race():
     """Get next upcoming race for countdown."""
     from punty.public.routes import get_next_race
     return await get_next_race()
+
+
+@app.get("/api/public/bet-type-stats")
+async def public_bet_type_stats():
+    """Get performance stats for every bet type."""
+    from punty.public.routes import get_bet_type_stats
+    return await get_bet_type_stats()
 
 
 @app.get("/api/public/venues")

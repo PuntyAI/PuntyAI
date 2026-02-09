@@ -27,9 +27,8 @@
                 </div>
 
                 <div class="flex flex-wrap gap-4">
-                    <a href="https://x.com/PuntyAI/" target="_blank" class="btn-primary inline-flex items-center gap-2">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                        Follow @PuntyAI
+                    <a href="/tips" class="btn-primary inline-flex items-center gap-2">
+                        See Today's Tips
                     </a>
                     <a href="/how-it-works" class="btn-secondary">
                         How It Works
@@ -49,7 +48,7 @@
 <!-- Stats Section -->
 <section class="py-16 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <div class="grid md:grid-cols-4 gap-6 text-center">
+        <div class="grid md:grid-cols-3 gap-6 text-center">
             <!-- Meetings Today -->
             <div class="card p-6">
                 <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
@@ -75,14 +74,6 @@
                 <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
                 <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Total Winners</div>
             </div>
-
-            <!-- All-Time Winnings -->
-            <div class="card p-6">
-                <div class="stat-number" id="alltime-winnings" style="color: var(--cyan);">
-                    ${{ "%.0f"|format(stats.alltime_winnings) }}
-                </div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Collected</div>
-            </div>
         </div>
 
         <!-- Strike Rates by Pick -->
@@ -99,6 +90,12 @@
             {% endfor %}
         </div>
         {% endif %}
+
+        <!-- Performance by Bet Type -->
+        <div id="bet-type-stats" class="mt-8" style="display: none;">
+            <h3 class="font-heading font-bold text-lg text-center mb-4" style="color: var(--text-secondary);">Performance by Bet Type</h3>
+            <div id="bet-type-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+        </div>
 
         <!-- Wins Ticker -->
         <div id="wins-ticker" class="mt-8 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
@@ -167,7 +164,7 @@
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for tip in stats.todays_tips %}
-            <a href="{{ tip.twitter_url }}" target="_blank"
+            <a href="/tips/{{ tip.meeting_id }}"
                class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background: var(--gradient-sunset);">
@@ -177,7 +174,7 @@
                     </div>
                     <div>
                         <div class="font-heading font-bold text-lg">{{ tip.venue }}</div>
-                        <div class="text-sm" style="color: var(--cyan);">View on X →</div>
+                        <div class="text-sm" style="color: var(--cyan);">View Tips →</div>
                     </div>
                 </div>
             </a>
@@ -185,9 +182,8 @@
         </div>
 
         <div class="text-center mt-8">
-            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-secondary inline-flex items-center gap-2">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                See All Tips on X
+            <a href="/tips" class="btn-secondary inline-flex items-center gap-2">
+                See All Tips
             </a>
         </div>
     </div>
@@ -327,14 +323,19 @@
             Ready to Stop Losing Your Arse?
         </h2>
         <p class="text-lg mb-8" style="color: var(--text-secondary);">
-            Follow Punty on X for free daily tips and live race-day updates.
-            No signup bullshit, no paywalls (yet). Just solid picks delivered straight to your feed.
+            Free daily tips and live race-day updates.
+            No signup bullshit, no paywalls (yet). Just solid picks.
         </p>
 
-        <a href="https://x.com/PuntyAI/" target="_blank" class="btn-primary inline-flex items-center gap-2 text-lg">
-            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-            Follow @PuntyAI
-        </a>
+        <div class="flex flex-wrap gap-4 justify-center">
+            <a href="/tips" class="btn-primary inline-flex items-center gap-2 text-lg">
+                Browse Tips
+            </a>
+            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-secondary inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                Follow @PuntyAI
+            </a>
+        </div>
     </div>
 </section>
 {% endblock %}
@@ -349,7 +350,6 @@
                 document.getElementById('today-winners').textContent = data.today_winners;
                 document.getElementById('today-winners-label').textContent = data.all_races_complete ? "Today's Winners" : 'Today So Far';
                 document.getElementById('alltime-winners').textContent = data.alltime_winners;
-                document.getElementById('alltime-winnings').textContent = '$' + Math.round(data.alltime_winnings);
                 document.getElementById('meetings-today').textContent = data.meetings_today;
                 // Update strike rates
                 if (data.pick_ranks) {
@@ -373,7 +373,7 @@
                 const ticker = document.getElementById('ticker-content');
 
                 if (!data.wins || data.wins.length === 0) {
-                    ticker.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;">No wins yet today - let\'s change that! Follow @PuntyAI for tips</span>';
+                    ticker.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;">No wins yet today - let\'s change that!</span>';
                     ticker.style.animation = 'none';
                     return;
                 }
@@ -408,6 +408,38 @@
         loadWinsTicker();
         // Refresh ticker every 60 seconds
         setInterval(loadWinsTicker, 60000);
+    })();
+
+    // Bet Type Stats
+    (function() {
+        fetch('/api/public/bet-type-stats')
+            .then(r => r.json())
+            .then(function(stats) {
+                if (!stats || stats.length === 0) return;
+                var container = document.getElementById('bet-type-stats');
+                var grid = document.getElementById('bet-type-grid');
+                container.style.display = 'block';
+
+                var categoryColors = {
+                    'Selections': 'var(--magenta)',
+                    'Exotics': 'var(--cyan)',
+                    'Sequences': 'var(--yellow)',
+                    'Multi': 'var(--purple)'
+                };
+
+                grid.innerHTML = stats.map(function(s) {
+                    var color = categoryColors[s.category] || 'var(--text-secondary)';
+                    var pnlColor = s.pnl >= 0 ? '#4ade80' : '#f87171';
+                    var pnlSign = s.pnl >= 0 ? '+' : '';
+                    return '<div class="rounded-xl p-3 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">' +
+                        '<div class="text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: ' + color + ';">' + s.type + '</div>' +
+                        '<div class="text-xl font-display font-bold" style="color: ' + color + ';">' + s.rate + '%</div>' +
+                        '<div class="text-xs mt-1" style="color: var(--text-muted);">' + s.won + '/' + s.total + '</div>' +
+                        '<div class="text-xs font-semibold mt-1" style="color: ' + pnlColor + ';">' + pnlSign + s.pnl.toFixed(2) + 'U</div>' +
+                    '</div>';
+                }).join('');
+            })
+            .catch(function() {});
     })();
 
     // Next Race Countdown
