@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 
 # State codes to URL parameter for racingaustralia.horse
 STATE_CODES = {
-    "VIC": "V",
-    "NSW": "N",
-    "QLD": "Q",
-    "SA": "S",
-    "WA": "W",
-    "TAS": "T",
-    "ACT": "A",
-    "NT": "D",
+    "VIC": "VIC",
+    "NSW": "NSW",
+    "QLD": "QLD",
+    "SA": "SA",
+    "WA": "WA",
+    "TAS": "TAS",
+    "ACT": "ACT",
+    "NT": "NT",
 }
 
 # Venue to state mapping for sportsbetform fallback
