@@ -672,10 +672,28 @@ async def tips_page(
 
 async def get_bet_type_stats() -> list[dict]:
     """Get strike rate, won/total, and P&L for every bet type."""
+    # Desired display order
+    _SEL_ORDER = ["Win", "Saver Win", "Place", "Each Way"]
+    _EXOTIC_ORDER = ["Quinella", "Exacta", "Exacta Standout", "Trifecta", "Trifecta Box", "Trifecta Standout", "First Four"]
+    _SEQ_ORDER = ["Early Quaddie", "Quaddie", "Big6"]
+
+    # Normalise messy exotic type names from the DB
+    def _normalise_exotic(raw: str) -> str:
+        low = raw.lower().strip()
+        if low in ("box trifecta", "trifecta box", "trifecta (box)", "trifecta (boxed)", "trifecta boxed"):
+            return "Trifecta Box"
+        if low in ("exacta standout", "exacta (standout)"):
+            return "Exacta Standout"
+        if low in ("trifecta standout", "trifecta (standout)"):
+            return "Trifecta Standout"
+        if low in ("first four", "first 4", "first four (boxed)", "first four box"):
+            return "First Four"
+        return raw
+
     async with async_session() as db:
         from sqlalchemy import case
 
-        # Selections by bet_type
+        # Selections by bet_type (exclude exotics_only)
         sel_result = await db.execute(
             select(
                 Pick.bet_type,
@@ -686,25 +704,26 @@ async def get_bet_type_stats() -> list[dict]:
                 Pick.settled == True,
                 Pick.pick_type == "selection",
                 Pick.bet_type.isnot(None),
+                Pick.bet_type != "exotics_only",
             )).group_by(Pick.bet_type)
         )
 
-        stats = []
+        sel_stats = {}
         for bet_type, total, hits, pnl in sel_result.all():
             hits = int(hits or 0)
             pnl = float(pnl or 0)
             rate = round(hits / total * 100, 1) if total > 0 else 0
             label = (bet_type or "unknown").replace("_", " ").title()
-            stats.append({
+            sel_stats[label] = {
                 "category": "Selections",
                 "type": label,
                 "won": hits,
                 "total": total,
                 "rate": rate,
                 "pnl": round(pnl, 2),
-            })
+            }
 
-        # Exotics by exotic_type
+        # Exotics by exotic_type (normalised)
         exotic_result = await db.execute(
             select(
                 Pick.exotic_type,
@@ -718,18 +737,27 @@ async def get_bet_type_stats() -> list[dict]:
             )).group_by(Pick.exotic_type)
         )
 
+        exotic_stats: dict[str, dict] = {}
         for exotic_type, total, hits, pnl in exotic_result.all():
+            label = _normalise_exotic(exotic_type)
             hits = int(hits or 0)
             pnl = float(pnl or 0)
-            rate = round(hits / total * 100, 1) if total > 0 else 0
-            stats.append({
-                "category": "Exotics",
-                "type": exotic_type,
-                "won": hits,
-                "total": total,
-                "rate": rate,
-                "pnl": round(pnl, 2),
-            })
+            if label in exotic_stats:
+                exotic_stats[label]["won"] += hits
+                exotic_stats[label]["total"] += total
+                exotic_stats[label]["pnl"] = round(exotic_stats[label]["pnl"] + pnl, 2)
+            else:
+                exotic_stats[label] = {
+                    "category": "Exotics",
+                    "type": label,
+                    "won": hits,
+                    "total": total,
+                    "rate": 0,
+                    "pnl": round(pnl, 2),
+                }
+        # Recalculate rates after merging
+        for s in exotic_stats.values():
+            s["rate"] = round(s["won"] / s["total"] * 100, 1) if s["total"] > 0 else 0
 
         # Sequences by sequence_type + sequence_variant
         seq_result = await db.execute(
@@ -745,21 +773,22 @@ async def get_bet_type_stats() -> list[dict]:
             )).group_by(Pick.sequence_type, Pick.sequence_variant)
         )
 
+        seq_stats = {}
         for seq_type, seq_variant, total, hits, pnl in seq_result.all():
             hits = int(hits or 0)
             pnl = float(pnl or 0)
             rate = round(hits / total * 100, 1) if total > 0 else 0
-            label = (seq_type or "Sequence").title()
+            label = (seq_type or "Sequence").replace("_", " ").title()
             if seq_variant:
                 label += f" ({seq_variant.title()})"
-            stats.append({
+            seq_stats[label] = {
                 "category": "Sequences",
                 "type": label,
                 "won": hits,
                 "total": total,
                 "rate": rate,
                 "pnl": round(pnl, 2),
-            })
+            }
 
         # Big 3 Multi
         big3_result = await db.execute(
@@ -772,19 +801,39 @@ async def get_bet_type_stats() -> list[dict]:
                 Pick.pick_type == "big3_multi",
             ))
         )
+        big3_stat = None
         row = big3_result.one()
         if row[0] and row[0] > 0:
             hits = int(row[1] or 0)
             pnl = float(row[2] or 0)
             rate = round(hits / row[0] * 100, 1) if row[0] > 0 else 0
-            stats.append({
+            big3_stat = {
                 "category": "Multi",
                 "type": "Big 3 Multi",
                 "won": hits,
                 "total": row[0],
                 "rate": rate,
                 "pnl": round(pnl, 2),
-            })
+            }
+
+        # Build ordered output
+        stats = []
+        for key in _SEL_ORDER:
+            if key in sel_stats:
+                stats.append(sel_stats[key])
+        for key in _EXOTIC_ORDER:
+            if key in exotic_stats:
+                stats.append(exotic_stats[key])
+        # Any exotics not in the predefined order
+        for key, val in exotic_stats.items():
+            if key not in _EXOTIC_ORDER:
+                stats.append(val)
+        for prefix in _SEQ_ORDER:
+            for key in sorted(seq_stats.keys()):
+                if key.startswith(prefix):
+                    stats.append(seq_stats[key])
+        if big3_stat:
+            stats.append(big3_stat)
 
         return stats
 
