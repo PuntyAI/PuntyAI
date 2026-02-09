@@ -259,12 +259,27 @@
                         <dt class="text-gray-500 mb-2">Changes</dt>
                         <dd class="space-y-1 max-h-48 overflow-y-auto">
                             {% for change in content.context_snapshot.changes_list %}
+                            {% if change.type == 'odds_movement' %}
                             <div class="text-xs px-2 py-1 rounded {% if change.direction == 'firmed' %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
                                 <span class="font-medium">R{{ change.race }}</span>
                                 {{ change.horse }}:
                                 ${{ "%.2f"|format(change.old_odds) }} → ${{ "%.2f"|format(change.new_odds) }}
                                 <span class="opacity-70">({{ change.direction }} {{ "%.0f"|format(change.pct_change) }}%)</span>
                             </div>
+                            {% elif change.type == 'scratching' %}
+                            <div class="text-xs px-2 py-1 rounded bg-red-100 text-red-800">
+                                <span class="font-medium">R{{ change.race }}</span>
+                                {{ change.horse }} scratched{% if change.is_favorite %} <span class="font-bold">(FAV)</span>{% endif %}
+                            </div>
+                            {% elif change.type == 'track_condition' %}
+                            <div class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                                Track: {{ change.old or '?' }} → {{ change.new }}
+                            </div>
+                            {% else %}
+                            <div class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-800">
+                                {{ change.description }}
+                            </div>
+                            {% endif %}
                             {% endfor %}
                         </dd>
                     </div>
