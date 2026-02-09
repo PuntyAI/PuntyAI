@@ -85,7 +85,7 @@
                 <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-4"></div>
             </div>
         </div>
-        <p class="text-center text-[11px] -mt-5 mb-6 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Place Strike Rate &mdash; All Time</p>
+        <p class="text-center text-[11px] -mt-5 mb-6 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &mdash; All Time</p>
 
         <!-- Today / All Time Toggle -->
         <div class="flex items-center justify-center gap-3 mb-6">
@@ -112,18 +112,18 @@
                     <span class="text-sm font-heading font-semibold uppercase tracking-wider" style="color: var(--text-secondary);">Filters</span>
                     <span id="filter-count" class="hidden text-[10px] font-heading font-bold px-2 py-0.5 rounded-full" style="background: var(--magenta); color: white;"></span>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 flex-shrink-0">
                     <button id="btn-clear" onclick="event.stopPropagation(); clearFilters()" class="hidden text-xs font-heading font-semibold uppercase tracking-wider px-3 py-1 rounded-md transition-colors hover:bg-white/5" style="color: var(--text-muted);">
                         Clear
                     </button>
-                    <svg id="filters-chevron" class="w-5 h-5 transition-transform duration-200" style="color: var(--text-muted); transform: rotate(0deg);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <svg id="filters-chevron" class="w-5 h-5 flex-shrink-0 transition-transform duration-200" style="color: var(--text-muted); transform: rotate(0deg);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                 </div>
             </button>
 
             <!-- Active Filter Chips (shown when collapsed) -->
-            <div id="filter-chips" class="hidden px-5 pb-3 flex flex-wrap gap-1.5"></div>
+            <div id="filter-chips" class="hidden px-5 pb-3 flex-wrap gap-1.5" style="display: none;"></div>
 
             <!-- Filter Body -->
             <div id="filters-body" class="hidden" style="border-top: 1px solid var(--border-subtle);">
@@ -624,7 +624,7 @@
 
     function updateChips() {
         var chipsEl = document.getElementById('filter-chips');
-        if (filtersOpen) { chipsEl.classList.add('hidden'); return; }
+        if (filtersOpen) { chipsEl.style.display = 'none'; return; }
 
         var chips = [];
         for (var id in FILTERS) {
@@ -636,9 +636,9 @@
         }
         if (chips.length > 0) {
             chipsEl.innerHTML = chips.join('');
-            chipsEl.classList.remove('hidden');
+            chipsEl.style.display = 'flex';
         } else {
-            chipsEl.classList.add('hidden');
+            chipsEl.style.display = 'none';
         }
     }
 
