@@ -4,6 +4,48 @@
 
 {% block head %}
 <meta name="description" content="See exactly how Punty performs. Filter by venue, distance, track condition, jockey, trainer and more. Full transparency, no hiding.">
+<style>
+    .sf-label {
+        display: block;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 0.3rem;
+    }
+    .sf-input {
+        width: 100%;
+        padding: 0.45rem 0.65rem;
+        font-size: 0.8rem;
+        border-radius: 8px;
+        background: var(--bg-dark);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        outline: none;
+    }
+    .sf-input:focus {
+        border-color: var(--magenta);
+        box-shadow: 0 0 0 2px rgba(233, 30, 140, 0.15);
+    }
+    .sf-input::placeholder { color: var(--text-muted); opacity: 0.5; }
+    .sf-input option { background: var(--bg-card); }
+    .sf-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: rgba(233, 30, 140, 0.12);
+        color: var(--magenta);
+        border: 1px solid rgba(233, 30, 140, 0.2);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -35,177 +77,182 @@
         </div>
 
         <!-- Filters -->
-        <div class="card p-5 mb-8" id="filters-card">
-            <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Filters</span>
+        <div class="card mb-8 overflow-hidden" id="filters-card">
+            <!-- Filter Header — click to expand/collapse -->
+            <button id="filters-toggle" onclick="toggleFilters()" class="w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors hover:bg-white/[0.02]">
                 <div class="flex items-center gap-3">
-                    <span id="filter-count" class="hidden text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: var(--magenta); color: white;"></span>
-                    <button id="btn-clear" onclick="clearFilters()" class="hidden text-xs font-heading font-semibold uppercase tracking-wider hover:text-white transition-colors" style="color: var(--text-muted);">
-                        Clear All
+                    <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    <span class="text-sm font-heading font-semibold uppercase tracking-wider" style="color: var(--text-secondary);">Filters</span>
+                    <span id="filter-count" class="hidden text-[10px] font-heading font-bold px-2 py-0.5 rounded-full" style="background: var(--magenta); color: white;"></span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="btn-clear" onclick="event.stopPropagation(); clearFilters()" class="hidden text-xs font-heading font-semibold uppercase tracking-wider px-3 py-1 rounded-md transition-colors hover:bg-white/5" style="color: var(--text-muted);">
+                        Clear
+                    </button>
+                    <svg id="filters-chevron" class="w-5 h-5 transition-transform duration-200" style="color: var(--text-muted); transform: rotate(0deg);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+            </button>
+
+            <!-- Active Filter Chips (shown when collapsed) -->
+            <div id="filter-chips" class="hidden px-5 pb-3 flex flex-wrap gap-1.5"></div>
+
+            <!-- Filter Body -->
+            <div id="filters-body" class="hidden" style="border-top: 1px solid var(--border-subtle);">
+                <div class="p-5 space-y-5">
+
+                    <!-- Row 1: Meeting -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-1 h-4 rounded-full" style="background: var(--magenta);"></div>
+                            <span class="text-[11px] font-heading font-bold uppercase tracking-widest" style="color: var(--magenta);">Meeting</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="sf-label">Venue</label>
+                                <input type="text" id="f-venue" list="dl-venues" autocomplete="off" placeholder="Any venue" class="sf-input">
+                                <datalist id="dl-venues"></datalist>
+                            </div>
+                            <div>
+                                <label class="sf-label">State</label>
+                                <select id="f-state" class="sf-input">
+                                    <option value="">Any</option>
+                                    <option value="VIC">VIC</option>
+                                    <option value="NSW">NSW</option>
+                                    <option value="QLD">QLD</option>
+                                    <option value="SA">SA</option>
+                                    <option value="WA">WA</option>
+                                    <option value="TAS">TAS</option>
+                                    <option value="ACT">ACT</option>
+                                    <option value="NT">NT</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="sf-label">Track Condition</label>
+                                <select id="f-track" class="sf-input">
+                                    <option value="">Any</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="sf-label">Weather</label>
+                                <select id="f-weather" class="sf-input">
+                                    <option value="">Any</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Race -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-1 h-4 rounded-full" style="background: var(--cyan);"></div>
+                            <span class="text-[11px] font-heading font-bold uppercase tracking-widest" style="color: var(--cyan);">Race</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="sf-label">Distance</label>
+                                <div class="flex gap-1.5">
+                                    <input type="number" id="f-dist-min" placeholder="Min" min="800" max="4000" step="100" class="sf-input">
+                                    <input type="number" id="f-dist-max" placeholder="Max" min="800" max="4000" step="100" class="sf-input">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="sf-label">Class</label>
+                                <input type="text" id="f-class" list="dl-classes" autocomplete="off" placeholder="Any class" class="sf-input">
+                                <datalist id="dl-classes"></datalist>
+                            </div>
+                            <div>
+                                <label class="sf-label">Field Size</label>
+                                <div class="flex gap-1.5">
+                                    <input type="number" id="f-field-min" placeholder="Min" min="1" max="24" class="sf-input">
+                                    <input type="number" id="f-field-max" placeholder="Max" min="1" max="24" class="sf-input">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="sf-label">Date Range</label>
+                                <div class="flex gap-1.5">
+                                    <input type="date" id="f-date-from" class="sf-input" style="color-scheme: dark;">
+                                    <input type="date" id="f-date-to" class="sf-input" style="color-scheme: dark;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Runner (selections only) -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-1 h-4 rounded-full" style="background: var(--yellow);"></div>
+                            <span class="text-[11px] font-heading font-bold uppercase tracking-widest" style="color: var(--yellow);">Runner</span>
+                            <span class="text-[10px] font-heading" style="color: var(--text-muted);">(selections only)</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="sf-label">Jockey</label>
+                                <input type="text" id="f-jockey" list="dl-jockeys" autocomplete="off" placeholder="Any jockey" class="sf-input">
+                                <datalist id="dl-jockeys"></datalist>
+                            </div>
+                            <div>
+                                <label class="sf-label">Trainer</label>
+                                <input type="text" id="f-trainer" list="dl-trainers" autocomplete="off" placeholder="Any trainer" class="sf-input">
+                                <datalist id="dl-trainers"></datalist>
+                            </div>
+                            <div>
+                                <label class="sf-label">Sex</label>
+                                <select id="f-sex" class="sf-input">
+                                    <option value="">Any</option>
+                                    <option value="M">Mare</option>
+                                    <option value="G">Gelding</option>
+                                    <option value="C">Colt</option>
+                                    <option value="F">Filly</option>
+                                    <option value="H">Horse</option>
+                                    <option value="R">Rig</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="sf-label">Barrier</label>
+                                <input type="number" id="f-barrier-min" placeholder="Min" min="1" max="24" class="sf-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 4: Bet -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-1 h-4 rounded-full" style="background: var(--purple);"></div>
+                            <span class="text-[11px] font-heading font-bold uppercase tracking-widest" style="color: var(--purple);">Bet</span>
+                            <span class="text-[10px] font-heading" style="color: var(--text-muted);">(selections only)</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="sf-label">Tip Rank</label>
+                                <select id="f-rank" class="sf-input">
+                                    <option value="">Any</option>
+                                    <option value="1">Top Pick</option>
+                                    <option value="2">2nd Pick</option>
+                                    <option value="3">3rd Pick</option>
+                                    <option value="4">Roughie</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="sf-label">Odds Range</label>
+                                <div class="flex gap-1.5">
+                                    <input type="number" id="f-odds-min" placeholder="Min" min="1" step="0.5" class="sf-input">
+                                    <input type="number" id="f-odds-max" placeholder="Max" min="1" step="0.5" class="sf-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Apply Bar -->
+                <div class="flex items-center justify-end gap-3 px-5 py-3" style="background: rgba(255,255,255,0.02); border-top: 1px solid var(--border-subtle);">
+                    <button onclick="applyFilters()" class="px-6 py-2 rounded-lg font-heading font-semibold text-sm uppercase tracking-wider transition-all hover:shadow-lg" style="background: var(--magenta); color: white; box-shadow: 0 0 20px rgba(233, 30, 140, 0.2);">
+                        Apply
                     </button>
                 </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                <!-- Venue -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Venue</label>
-                    <input type="text" id="f-venue" list="dl-venues" autocomplete="off" placeholder="Any"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                    <datalist id="dl-venues"></datalist>
-                </div>
-
-                <!-- State -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">State</label>
-                    <select id="f-state" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                        <option value="">Any</option>
-                        <option value="VIC">VIC</option>
-                        <option value="NSW">NSW</option>
-                        <option value="QLD">QLD</option>
-                        <option value="SA">SA</option>
-                        <option value="WA">WA</option>
-                        <option value="TAS">TAS</option>
-                        <option value="ACT">ACT</option>
-                        <option value="NT">NT</option>
-                    </select>
-                </div>
-
-                <!-- Track Condition -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Track</label>
-                    <select id="f-track" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                        <option value="">Any</option>
-                    </select>
-                </div>
-
-                <!-- Weather -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Weather</label>
-                    <select id="f-weather" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                        <option value="">Any</option>
-                    </select>
-                </div>
-
-                <!-- Distance Min -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Dist Min (m)</label>
-                    <input type="number" id="f-dist-min" placeholder="e.g. 1000" min="800" max="4000" step="100"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Distance Max -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Dist Max (m)</label>
-                    <input type="number" id="f-dist-max" placeholder="e.g. 2000" min="800" max="4000" step="100"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Class -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Class</label>
-                    <input type="text" id="f-class" list="dl-classes" autocomplete="off" placeholder="Any"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                    <datalist id="dl-classes"></datalist>
-                </div>
-
-                <!-- Field Size Min -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Field Min</label>
-                    <input type="number" id="f-field-min" placeholder="e.g. 6" min="1" max="24"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Field Size Max -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Field Max</label>
-                    <input type="number" id="f-field-max" placeholder="e.g. 16" min="1" max="24"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Jockey -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Jockey</label>
-                    <input type="text" id="f-jockey" list="dl-jockeys" autocomplete="off" placeholder="Any"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                    <datalist id="dl-jockeys"></datalist>
-                </div>
-
-                <!-- Trainer -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Trainer</label>
-                    <input type="text" id="f-trainer" list="dl-trainers" autocomplete="off" placeholder="Any"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                    <datalist id="dl-trainers"></datalist>
-                </div>
-
-                <!-- Horse Sex -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Sex</label>
-                    <select id="f-sex" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                        <option value="">Any</option>
-                        <option value="M">Mare</option>
-                        <option value="G">Gelding</option>
-                        <option value="C">Colt</option>
-                        <option value="F">Filly</option>
-                        <option value="H">Horse</option>
-                        <option value="R">Rig</option>
-                    </select>
-                </div>
-
-                <!-- Barrier Min -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Barrier Min</label>
-                    <input type="number" id="f-barrier-min" placeholder="e.g. 1" min="1" max="24"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Tip Rank -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Tip Rank</label>
-                    <select id="f-rank" class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                        <option value="">Any</option>
-                        <option value="1">Top Pick</option>
-                        <option value="2">2nd Pick</option>
-                        <option value="3">3rd Pick</option>
-                        <option value="4">Roughie</option>
-                    </select>
-                </div>
-
-                <!-- Odds Min -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Odds Min</label>
-                    <input type="number" id="f-odds-min" placeholder="e.g. 2.00" min="1" step="0.5"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Odds Max -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Odds Max</label>
-                    <input type="number" id="f-odds-max" placeholder="e.g. 20.00" min="1" step="0.5"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                </div>
-
-                <!-- Date From -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">From</label>
-                    <input type="date" id="f-date-from"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary); color-scheme: dark;">
-                </div>
-
-                <!-- Date To -->
-                <div>
-                    <label class="block text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">To</label>
-                    <input type="date" id="f-date-to"
-                           class="w-full px-2.5 py-1.5 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary); color-scheme: dark;">
-                </div>
-            </div>
-
-            <!-- Apply Button -->
-            <div class="flex justify-end mt-4">
-                <button onclick="applyFilters()" class="px-5 py-2 rounded-lg font-heading font-semibold text-sm uppercase tracking-wider" style="background: var(--magenta); color: white;">
-                    Apply Filters
-                </button>
             </div>
         </div>
 
@@ -408,6 +455,8 @@
             clearEl.classList.add('hidden');
         }
 
+        updateChips();
+
         fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) { renderStats(data, fp.hasRunnerFilter); })
@@ -424,6 +473,8 @@
         var newUrl = '/stats';
         if (fp.params.toString()) newUrl += '?' + fp.params.toString();
         history.replaceState(null, '', newUrl);
+        // Collapse filters after applying
+        if (filtersOpen) { window.toggleFilters(); }
         fetchStats();
     };
 
@@ -434,6 +485,7 @@
         }
         timeRange = 'alltime';
         updateToggleUI();
+        updateChips();
         history.replaceState(null, '', '/stats');
         fetchStats();
     };
@@ -525,6 +577,46 @@
         }
     }
 
+    // Filter panel toggle
+    var filtersOpen = false;
+    window.toggleFilters = function() {
+        filtersOpen = !filtersOpen;
+        document.getElementById('filters-body').classList.toggle('hidden', !filtersOpen);
+        document.getElementById('filters-chevron').style.transform = filtersOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+        // Hide chips when open, show when closed + has filters
+        updateChips();
+    };
+
+    // Filter chips (shown when filters panel is collapsed)
+    var FILTER_LABELS = {
+        'f-venue': 'Venue', 'f-state': 'State', 'f-track': 'Track',
+        'f-weather': 'Weather', 'f-dist-min': 'Dist Min', 'f-dist-max': 'Dist Max',
+        'f-class': 'Class', 'f-field-min': 'Field Min', 'f-field-max': 'Field Max',
+        'f-jockey': 'Jockey', 'f-trainer': 'Trainer', 'f-sex': 'Sex',
+        'f-barrier-min': 'Barrier', 'f-rank': 'Rank', 'f-odds-min': 'Odds Min',
+        'f-odds-max': 'Odds Max', 'f-date-from': 'From', 'f-date-to': 'To'
+    };
+
+    function updateChips() {
+        var chipsEl = document.getElementById('filter-chips');
+        if (filtersOpen) { chipsEl.classList.add('hidden'); return; }
+
+        var chips = [];
+        for (var id in FILTERS) {
+            var el = document.getElementById(id);
+            if (el && el.value) {
+                var displayVal = el.tagName === 'SELECT' ? el.options[el.selectedIndex].text : el.value;
+                chips.push('<span class="sf-chip">' + (FILTER_LABELS[id] || id) + ': ' + displayVal + '</span>');
+            }
+        }
+        if (chips.length > 0) {
+            chipsEl.innerHTML = chips.join('');
+            chipsEl.classList.remove('hidden');
+        } else {
+            chipsEl.classList.add('hidden');
+        }
+    }
+
     // Allow Enter key to apply filters
     document.getElementById('filters-card').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
@@ -537,6 +629,14 @@
     initFromUrl();
     loadFilterOptions();
     fetchStats();
+
+    // If URL has filters, open the panel
+    var initParams = new URLSearchParams(window.location.search);
+    var hasInitFilters = false;
+    for (var _id in FILTERS) {
+        if (initParams.get(FILTERS[_id])) { hasInitFilters = true; break; }
+    }
+    if (hasInitFilters) { window.toggleFilters(); }
 })();
 </script>
 {% endblock %}
