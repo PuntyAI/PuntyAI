@@ -369,77 +369,7 @@
         background: var(--gradient-sunset); color: white; flex-shrink: 0;
     }
 
-    /* Form Guide */
-    .form-guide {
-        border: 1px solid var(--border-subtle); border-radius: 10px;
-        overflow: hidden; margin-bottom: 1rem;
-    }
-    .form-guide-header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0.5rem 0.75rem;
-        background: rgba(255, 255, 255, 0.03);
-        border-bottom: 1px solid var(--border-subtle);
-    }
-    .form-guide-row {
-        display: flex; align-items: center; gap: 0.5rem;
-        padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        transition: background 0.1s;
-    }
-    .form-guide-row:last-child { border-bottom: none; }
-    .form-guide-row:hover { background: rgba(255, 255, 255, 0.03); }
-    .form-guide-row.scratched { opacity: 0.4; }
-    .form-guide-row.scratched .fg-name { text-decoration: line-through; }
-    .form-guide-row.fg-pick { border-left: 3px solid transparent; }
-    .fg-rank-1 { background: rgba(233, 30, 140, 0.05); border-left-color: var(--magenta) !important; }
-    .fg-rank-2 { background: rgba(0, 212, 255, 0.05); border-left-color: var(--cyan) !important; }
-    .fg-rank-3 { background: rgba(251, 191, 36, 0.05); border-left-color: var(--yellow) !important; }
-    .fg-rank-4 { background: rgba(157, 78, 221, 0.05); border-left-color: var(--purple) !important; }
-    .fg-sc {
-        width: 1.75rem; height: 1.75rem; border-radius: 6px;
-        display: flex; align-items: center; justify-content: center;
-        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.8rem;
-        background: rgba(255, 255, 255, 0.06); color: var(--text-secondary);
-        flex-shrink: 0; border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    .fg-details { flex: 1; min-width: 0; }
-    .fg-name-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .fg-horse {
-        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.85rem;
-        color: white; white-space: nowrap;
-    }
-    .fg-rank-badge {
-        font-family: 'Orbitron', sans-serif; font-size: 0.55rem; font-weight: 700;
-        letter-spacing: 0.08em; text-transform: uppercase;
-    }
-    .fg-smp {
-        font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600;
-        text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .fg-info {
-        display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem;
-        font-size: 0.7rem; color: var(--text-muted); margin-top: 1px;
-    }
-    .fg-right { text-align: right; flex-shrink: 0; min-width: 3.5rem; }
-    .fg-odds {
-        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.9rem;
-        color: var(--cyan);
-    }
-    .fg-placed {
-        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.7rem;
-    }
-    .fg-1st { color: #4ade80; }
-    .fg-2nd { color: var(--cyan); }
-    .fg-3rd { color: var(--yellow); }
-    .fg-other { color: var(--text-muted); }
-    .fg-scr {
-        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.7rem;
-        color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;
-    }
-    .fg-winner-badge {
-        font-family: 'Orbitron', sans-serif; font-size: 0.55rem; font-weight: 800;
-        color: #4ade80; letter-spacing: 0.1em; margin-top: 2px;
-    }
+    /* Results badge on race header */
     .fg-results-badge {
         font-size: 0.6rem; font-family: 'Rajdhani', sans-serif; font-weight: 700;
         padding: 1px 6px; border-radius: 4px;
@@ -493,79 +423,12 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = html;
     })();
 
-    // --- Form Guide Builder ---
+    // --- Race data lookup ---
     function findRaceData(raceNum) {
         for (var i = 0; i < racesData.length; i++) {
             if (racesData[i].num === raceNum) return racesData[i];
         }
         return null;
-    }
-
-    var rankColors = {1: 'var(--magenta)', 2: 'var(--cyan)', 3: 'var(--yellow)', 4: 'var(--purple)'};
-    var rankLabels = {1: 'TOP', 2: '2ND', 3: '3RD', 4: 'ROUGH'};
-    var smpLabels = {leader: 'LEAD', on_pace: 'PACE', midfield: 'MID', backmarker: 'BACK'};
-    var smpColors = {leader: 'var(--orange)', on_pace: 'var(--cyan)', midfield: 'var(--text-muted)', backmarker: 'var(--purple)'};
-
-    function buildFormGuide(race) {
-        if (!race || !race.runners || race.runners.length === 0) return '';
-        var hasResults = race.status && ['Paying', 'Closed', 'Final'].indexOf(race.status) !== -1;
-
-        var html = '<div class="form-guide">';
-        html += '<div class="form-guide-header">';
-        html += '<span class="text-xs font-display uppercase tracking-wider" style="color: var(--cyan);">Form Guide</span>';
-        if (hasResults) html += '<span class="fg-results-badge">Results</span>';
-        html += '</div>';
-
-        race.runners.forEach(function(r) {
-            if (r.x) {
-                html += '<div class="form-guide-row scratched">';
-                html += '<div class="fg-sc">' + (r.sc || '') + '</div>';
-                html += '<div class="fg-details"><div class="fg-name-row"><span class="fg-horse">' + (r.name || '').toUpperCase() + '</span></div></div>';
-                html += '<div class="fg-right"><span class="fg-scr">SCR</span></div>';
-                html += '</div>';
-                return;
-            }
-
-            var pickClass = '';
-            if (r.pick) pickClass = ' fg-pick fg-rank-' + r.pick.tip_rank;
-
-            html += '<div class="form-guide-row' + pickClass + '">';
-
-            // Saddlecloth
-            var scStyle = r.pick ? 'background: ' + rankColors[r.pick.tip_rank] + '22; border-color: ' + rankColors[r.pick.tip_rank] + '44; color: ' + rankColors[r.pick.tip_rank] : '';
-            html += '<div class="fg-sc" style="' + scStyle + '">' + (r.sc || '') + '</div>';
-
-            // Details
-            html += '<div class="fg-details"><div class="fg-name-row">';
-            html += '<span class="fg-horse">' + (r.name || '').toUpperCase() + '</span>';
-            if (r.pick) html += '<span class="fg-rank-badge" style="color: ' + rankColors[r.pick.tip_rank] + ';">' + rankLabels[r.pick.tip_rank] + '</span>';
-            if (r.smp && smpLabels[r.smp]) html += '<span class="fg-smp" style="color: ' + smpColors[r.smp] + ';">' + smpLabels[r.smp] + '</span>';
-            html += '</div><div class="fg-info">';
-            if (r.b) html += '<span>B' + r.b + '</span>';
-            if (r.j) html += '<span>' + r.j + '</span>';
-            if (r.w) html += '<span>' + r.w.toFixed(1) + 'kg</span>';
-            if (r.form) html += '<span>' + r.form + '</span>';
-            html += '</div></div>';
-
-            // Right: Odds + Result
-            html += '<div class="fg-right">';
-            if (r.odds) html += '<div class="fg-odds">$' + r.odds.toFixed(2) + '</div>';
-            if (hasResults && r.fp) {
-                var fpLabel = r.fp === 1 ? '1st' : r.fp === 2 ? '2nd' : r.fp === 3 ? '3rd' : r.fp + 'th';
-                var fpCls = r.fp === 1 ? 'fg-1st' : r.fp === 2 ? 'fg-2nd' : r.fp === 3 ? 'fg-3rd' : 'fg-other';
-                var div = '';
-                if (r.fp === 1 && r.wd) div = ' $' + r.wd.toFixed(2);
-                else if (r.fp <= 3 && r.pd) div = ' $' + r.pd.toFixed(2);
-                html += '<div class="fg-placed ' + fpCls + '">' + fpLabel + div + '</div>';
-            }
-            if (r.pick && r.pick.hit) html += '<div class="fg-winner-badge">WIN</div>';
-            html += '</div>';
-
-            html += '</div>';
-        });
-
-        html += '</div>';
-        return html;
     }
 
     // --- Build Race Accordion Header ---
@@ -707,16 +570,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var body = document.createElement('div');
         body.className = 'race-accordion-body';
-
-        // Inject form guide card for race sections
-        if (sec.isRace && raceData) {
-            var fgHtml = buildFormGuide(raceData);
-            if (fgHtml) {
-                var fgDiv = document.createElement('div');
-                fgDiv.innerHTML = fgHtml;
-                body.appendChild(fgDiv);
-            }
-        }
 
         // Add the original content nodes
         sec.nodes.forEach(function(n) { body.appendChild(n); });

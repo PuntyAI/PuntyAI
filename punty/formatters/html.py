@@ -117,6 +117,28 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Remove the title line if it starts with *PUNTY EARLY MAIL*
     content = re.sub(r'^\*PUNTY EARLY MAIL[^*]*\*\s*\n*', '', content, flags=re.IGNORECASE)
 
+    # Pre-process: convert bold/italic heading patterns to markdown # headers
+    # before the generic bold/italic conversion runs.
+
+    # RACE-BY-RACE divider → ## header
+    content = re.sub(
+        r'^\*{0,2}RACE[-\s]BY[-\s]RACE\*{0,2}\s*$',
+        r'## RACE-BY-RACE', content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+
+    # *Race 1 – The Big Title* → ## Race 1 – The Big Title (becomes <h3>)
+    content = re.sub(
+        r'^\*+(Race\s+\d+\s*[-–—].+?)\*+\s*$',
+        r'## \1', content, flags=re.MULTILINE,
+    )
+
+    # Sequence headings: EARLY QUADDIE (...), MAIN QUADDIE (...), BIG 6 (...)
+    content = re.sub(
+        r'^((?:EARLY\s+|MAIN\s+)?QUADDIE|BIG\s*6)\s*(\(.*?\))?\s*$',
+        lambda m: f'## {m.group(1)}{" " + m.group(2) if m.group(2) else ""}',
+        content, flags=re.MULTILINE,
+    )
+
     # Convert headers (### *TEXT* or ### 1) TEXT)
     def convert_header(m):
         level = len(m.group(1))
