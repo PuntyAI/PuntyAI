@@ -119,8 +119,54 @@ class FacebookDelivery:
             logger.error(f"Facebook HTTP error: {e}")
             raise ValueError(f"Facebook API error: {e}")
 
+    async def post_update(self, message: str) -> dict:
+        """Post a standalone live update to the Facebook Page.
+
+        Used for celebrations and pace analysis since commenting requires
+        pages_manage_engagement (App Review). Posts as a new page post instead.
+
+        Args:
+            message: Update text
+
+        Returns:
+            Dict with post_id
+        """
+        if not await self.is_configured():
+            raise ValueError("Facebook not configured")
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"{GRAPH_API_BASE}/{self._page_id}/feed",
+                    data={
+                        "message": message,
+                        "access_token": self._access_token,
+                    },
+                )
+
+            if resp.status_code != 200:
+                error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                error_msg = error_data.get("error", {}).get("message", resp.text)
+                raise ValueError(f"Facebook post error ({resp.status_code}): {error_msg}")
+
+            post_data = resp.json()
+            post_id = post_data.get("id", "")
+
+            logger.info(f"Posted Facebook update: {post_id}")
+            return {
+                "status": "posted",
+                "post_id": post_id,
+            }
+
+        except httpx.HTTPError as e:
+            logger.error(f"Facebook update HTTP error: {e}")
+            raise ValueError(f"Facebook API error: {e}")
+
     async def post_comment(self, parent_post_id: str, message: str) -> dict:
         """Post a comment on an existing Facebook post.
+
+        NOTE: Requires pages_manage_engagement permission (App Review needed).
+        Use post_update() as a workaround until App Review is approved.
 
         Args:
             parent_post_id: The Facebook post ID to comment on

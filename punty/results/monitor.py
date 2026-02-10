@@ -510,17 +510,16 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.warning(f"Failed to post celebration reply: {e}")
 
-            # Post to Facebook as comment on early mail post
-            fb_comment_id = None
-            if early_mail.facebook_id:
-                fb = FacebookDelivery(db)
-                if await fb.is_configured():
-                    try:
-                        fb_result = await fb.post_comment(early_mail.facebook_id, tweet_text)
-                        fb_comment_id = fb_result.get("comment_id")
-                        logger.info(f"Posted Facebook celebration for {pick.horse_name}")
-                    except Exception as e:
-                        logger.warning(f"Failed to post Facebook celebration: {e}")
+            # Post to Facebook as standalone update
+            fb_post_id = None
+            fb = FacebookDelivery(db)
+            if await fb.is_configured():
+                try:
+                    fb_result = await fb.post_update(tweet_text)
+                    fb_post_id = fb_result.get("post_id")
+                    logger.info(f"Posted Facebook celebration for {pick.horse_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to post Facebook celebration: {e}")
 
             # Save to DB regardless of post success
             update = LiveUpdate(
@@ -530,7 +529,7 @@ class ResultsMonitor:
                 content=tweet_text,
                 tweet_id=reply_tweet_id,
                 parent_tweet_id=early_mail.twitter_id,
-                facebook_comment_id=fb_comment_id,
+                facebook_comment_id=fb_post_id,
                 parent_facebook_id=early_mail.facebook_id,
                 horse_name=pick.horse_name,
                 odds=pick.odds_at_tip,
@@ -614,19 +613,18 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"Failed to post pace analysis reply: {e}")
 
-        # Post to Facebook as comment
-        fb_comment_id = None
-        if early_mail.facebook_id:
-            fb = FacebookDelivery(db)
-            if await fb.is_configured():
-                try:
-                    fb_result = await fb.post_comment(early_mail.facebook_id, tweet_text)
-                    fb_comment_id = fb_result.get("comment_id")
-                    if not reply_tweet_id:
-                        self.pace_updates_posted[meeting_id] = posted_count + 1
-                    logger.info(f"Posted Facebook pace analysis for {meeting.venue}")
-                except Exception as e:
-                    logger.warning(f"Failed to post Facebook pace analysis: {e}")
+        # Post to Facebook as standalone update
+        fb_post_id = None
+        fb = FacebookDelivery(db)
+        if await fb.is_configured():
+            try:
+                fb_result = await fb.post_update(tweet_text)
+                fb_post_id = fb_result.get("post_id")
+                if not reply_tweet_id:
+                    self.pace_updates_posted[meeting_id] = posted_count + 1
+                logger.info(f"Posted Facebook pace analysis for {meeting.venue}")
+            except Exception as e:
+                logger.warning(f"Failed to post Facebook pace analysis: {e}")
 
         # Save to DB regardless of post success
         update = LiveUpdate(
@@ -636,7 +634,7 @@ class ResultsMonitor:
             content=tweet_text,
             tweet_id=reply_tweet_id,
             parent_tweet_id=early_mail.twitter_id,
-            facebook_comment_id=fb_comment_id,
+            facebook_comment_id=fb_post_id,
             parent_facebook_id=early_mail.facebook_id,
         )
         db.add(update)
