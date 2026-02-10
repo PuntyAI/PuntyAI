@@ -28,12 +28,14 @@
             const total = sel.reduce((a,s) => a + s.total, 0);
             const won = sel.reduce((a,s) => a + s.won, 0);
             const pnl = sel.reduce((a,s) => a + s.pnl, 0);
+            const staked = sel.reduce((a,s) => a + (s.staked || 0), 0);
             const rate = total > 0 ? (won/total*100).toFixed(1) : '0';
+            const roi = staked > 0 ? (pnl / staked * 100) : 0;
             const el = document.getElementById('tips-stats');
             el.innerHTML = '<span style="color:var(--text-muted)" class="text-xs font-heading font-semibold uppercase tracking-wider">All-time</span>' +
                 '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--cyan)">' + rate + '%</span> <span class="text-xs" style="color:var(--text-muted)">strike rate</span></span>' +
                 '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--text-secondary)">' + won + '/' + total + '</span> <span class="text-xs" style="color:var(--text-muted)">winners</span></span>' +
-                '<span class="text-sm"><span class="font-heading font-bold ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400') + '">' + (pnl >= 0 ? '+' : '') + Math.round(pnl) + 'U</span> <span class="text-xs" style="color:var(--text-muted)">P&L</span></span>';
+                '<span class="text-sm"><span class="font-heading font-bold ' + (roi >= 0 ? 'text-green-400' : 'text-red-400') + '">' + (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%</span> <span class="text-xs" style="color:var(--text-muted)">ROI</span></span>';
             el.classList.remove('hidden');
         }).catch(()=>{});
         </script>

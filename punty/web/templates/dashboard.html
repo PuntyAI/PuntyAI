@@ -266,16 +266,16 @@
             </div>
             <div>
                 <p class="text-xs text-gray-500 uppercase">Staked</p>
-                <p class="text-lg font-bold text-gray-900">{{ '%+.1f'|format(performance.total_staked) }}U</p>
+                <p class="text-lg font-bold text-gray-900">{{ '%.0f'|format(performance.total_staked) }}U</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 uppercase">Returned</p>
-                <p class="text-lg font-bold text-gray-900">{{ '%+.1f'|format(performance.total_returned) }}U</p>
+                <p class="text-lg font-bold text-gray-900">{{ '%.0f'|format(performance.total_returned) }}U</p>
             </div>
             <div>
-                <p class="text-xs text-gray-500 uppercase">Net P&L</p>
+                <p class="text-xs text-gray-500 uppercase">ROI</p>
                 <p class="text-lg font-bold {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
-                    {{ '%+.1f'|format(performance.total_pnl) }}U
+                    {{ '%+.1f'|format(performance.total_pnl / performance.total_staked * 100 if performance.total_staked else 0) }}%
                 </p>
             </div>
         </div>
@@ -294,7 +294,7 @@
                 </div>
                 <div class="w-14 sm:w-20 text-right text-gray-500 shrink-0">{{ data.winners }}/{{ data.bets }}</div>
                 <div class="w-16 sm:w-20 text-right font-medium shrink-0 {{ 'text-green-600' if data.pnl >= 0 else 'text-red-600' }}">
-                    {{ '%+.1f'|format(data.pnl) }}U
+                    {{ '%+.1f'|format(data.pnl / data.staked * 100 if data.staked else 0) }}%
                 </div>
             </div>
             {% endif %}
@@ -314,11 +314,11 @@
             {% set latest = cumulative_pnl[-1] %}
             <div class="text-right">
                 <div class="text-2xl sm:text-3xl font-bold {{ 'text-green-600' if latest.cumulative_pnl >= 0 else 'text-red-600' }}" style="font-family: Orbitron, sans-serif;">
-                    {{ '%+.2f'|format(latest.cumulative_pnl) }}U
+                    {{ '%+.1f'|format(latest.cumulative_pnl / latest.cumulative_staked * 100 if latest.cumulative_staked else 0) }}%
                 </div>
                 <div class="text-xs text-gray-500">
-                    Staked: {{ '%+.0f'|format(latest.cumulative_staked) }}U &bull;
-                    Returned: {{ '%+.0f'|format(latest.cumulative_returned) }}U
+                    {{ '%.0f'|format(latest.cumulative_staked) }}U staked &bull;
+                    {{ '%.0f'|format(latest.cumulative_returned) }}U returned
                 </div>
             </div>
             {% endif %}
@@ -339,8 +339,8 @@
                         <th class="text-right py-2 px-3">Winners</th>
                         <th class="text-right py-2 px-3">Staked</th>
                         <th class="text-right py-2 px-3">Returned</th>
-                        <th class="text-right py-2 px-3">P&L</th>
-                        <th class="text-right py-2 px-3">Cumulative</th>
+                        <th class="text-right py-2 px-3">ROI</th>
+                        <th class="text-right py-2 px-3">Cum. ROI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -354,13 +354,13 @@
                         </td>
                         <td class="py-2 px-3 text-right">{{ day.bets }}</td>
                         <td class="py-2 px-3 text-right">{{ day.winners }}</td>
-                        <td class="py-2 px-3 text-right">{{ '%+.2f'|format(day.staked) }}U</td>
-                        <td class="py-2 px-3 text-right">{{ '%+.2f'|format(day.returned) }}U</td>
+                        <td class="py-2 px-3 text-right">{{ '%.0f'|format(day.staked) }}U</td>
+                        <td class="py-2 px-3 text-right">{{ '%.0f'|format(day.returned) }}U</td>
                         <td class="py-2 px-3 text-right font-medium {{ 'text-green-600' if day.pnl >= 0 else 'text-red-600' }}">
-                            {{ '%+.2f'|format(day.pnl) }}U
+                            {{ '%+.1f'|format(day.pnl / day.staked * 100 if day.staked else 0) }}%
                         </td>
                         <td class="py-2 px-3 text-right font-bold {{ 'text-green-600' if day.cumulative_pnl >= 0 else 'text-red-600' }}">
-                            {{ '%+.2f'|format(day.cumulative_pnl) }}U
+                            {{ '%+.1f'|format(day.cumulative_pnl / day.cumulative_staked * 100 if day.cumulative_staked else 0) }}%
                         </td>
                     </tr>
                     {% endif %}
@@ -712,12 +712,13 @@ function updateMonitorUI() {
         return d.label || d.date;
     });
 
-    // Extract cumulative values for each line
-    var totalValues = rawData.map(function(d) { return d.cumulative_pnl; });
-    var selectionValues = rawData.map(function(d) { return d.cumulative_selection || 0; });
-    var exoticValues = rawData.map(function(d) { return d.cumulative_exotic || 0; });
-    var sequenceValues = rawData.map(function(d) { return d.cumulative_sequence || 0; });
-    var big3Values = rawData.map(function(d) { return d.cumulative_big3_multi || 0; });
+    // Extract cumulative ROI % for each line
+    function pct(pnl, staked) { return staked ? (pnl / staked * 100) : 0; }
+    var totalValues = rawData.map(function(d) { return pct(d.cumulative_pnl, d.cumulative_staked); });
+    var selectionValues = rawData.map(function(d) { return pct(d.cumulative_selection || 0, d.cumulative_staked); });
+    var exoticValues = rawData.map(function(d) { return pct(d.cumulative_exotic || 0, d.cumulative_staked); });
+    var sequenceValues = rawData.map(function(d) { return pct(d.cumulative_sequence || 0, d.cumulative_staked); });
+    var big3Values = rawData.map(function(d) { return pct(d.cumulative_big3_multi || 0, d.cumulative_staked); });
 
     // Determine total line colour based on final value
     var finalVal = totalValues[totalValues.length - 1];
@@ -832,7 +833,7 @@ function updateMonitorUI() {
                         },
                         label: function(ctx) {
                             var val = ctx.parsed.y;
-                            return ctx.dataset.label + ': ' + (val >= 0 ? '+' : '') + val.toFixed(2) + 'U';
+                            return ctx.dataset.label + ': ' + (val >= 0 ? '+' : '') + val.toFixed(1) + '%';
                         }
                     }
                 }
@@ -847,7 +848,7 @@ function updateMonitorUI() {
                     ticks: {
                         color: '#606070',
                         font: { family: 'Rajdhani', size: 12 },
-                        callback: function(v) { return (v >= 0 ? '+' : '') + v.toFixed(0) + 'U'; }
+                        callback: function(v) { return (v >= 0 ? '+' : '') + v.toFixed(1) + '%'; }
                     },
                 }
             }

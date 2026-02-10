@@ -76,7 +76,7 @@
                 <span class="text-xs" style="color: var(--text-muted);">winners</span>
             </div>
             <div class="flex items-center gap-1.5">
-                <span class="text-sm font-heading font-bold {% if venue_stats.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">{{ '%+.0f'|format(venue_stats.pnl) }}U</span>
+                {% set roi = (venue_stats.pnl / venue_stats.staked * 100) if venue_stats.staked else 0 %}<span class="text-sm font-heading font-bold {% if roi >= 0 %}text-green-400{% else %}text-red-400{% endif %}">{{ '%+.1f'|format(roi) }}%</span>
                 <span class="text-xs" style="color: var(--text-muted);">P&L</span>
             </div>
             <span class="text-xs" style="color: var(--text-muted);">across {{ venue_stats.meetings }} meeting{{ 's' if venue_stats.meetings != 1 }}</span>

@@ -556,6 +556,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                     func.count(Pick.id),
                     func.sum(case((Pick.hit == True, 1), else_=0)),
                     func.sum(Pick.pnl),
+                    func.sum(Pick.bet_stake),
                 ).where(and_(
                     Pick.settled == True,
                     Pick.pick_type == "selection",
@@ -563,13 +564,14 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 ))
             )
             row = venue_sel.one()
-            total, hits, pnl = int(row[0] or 0), int(row[1] or 0), float(row[2] or 0)
+            total, hits, pnl, staked = int(row[0] or 0), int(row[1] or 0), float(row[2] or 0), float(row[3] or 0)
             if total >= 4:
                 venue_stats = {
                     "total": total,
                     "hits": hits,
                     "rate": round(hits / total * 100, 1) if total > 0 else 0,
                     "pnl": round(pnl, 2),
+                    "staked": round(staked, 2),
                     "meetings": 0,
                 }
                 # Count distinct meetings
@@ -806,6 +808,7 @@ async def get_bet_type_stats(
             func.count(Pick.id),
             func.sum(case((Pick.hit == True, 1), else_=0)),
             func.sum(Pick.pnl),
+            func.sum(Pick.bet_stake),
         )
         sel_query = _apply_joins(sel_query, include_runner=True)
         sel_conds = [
@@ -819,9 +822,10 @@ async def get_bet_type_stats(
         )
 
         sel_stats = {}
-        for bet_type, total, hits, pnl in sel_result.all():
+        for bet_type, total, hits, pnl, staked in sel_result.all():
             hits = int(hits or 0)
             pnl = float(pnl or 0)
+            staked = float(staked or 0)
             rate = round(hits / total * 100, 1) if total > 0 else 0
             label = (bet_type or "unknown").replace("_", " ").title()
             sel_stats[label] = {
@@ -831,6 +835,7 @@ async def get_bet_type_stats(
                 "total": total,
                 "rate": rate,
                 "pnl": round(pnl, 2),
+                "staked": round(staked, 2),
             }
 
         # --- Exotics (skip when runner/pick filters active) ---
@@ -841,6 +846,7 @@ async def get_bet_type_stats(
                 func.count(Pick.id),
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
+                func.sum(Pick.exotic_stake),
             )
             exotic_query = _apply_joins(exotic_query, include_runner=False)
             exotic_conds = [
@@ -852,14 +858,16 @@ async def get_bet_type_stats(
                 exotic_query.where(and_(*exotic_conds)).group_by(Pick.exotic_type)
             )
 
-            for exotic_type, total, hits, pnl in exotic_result.all():
+            for exotic_type, total, hits, pnl, staked in exotic_result.all():
                 label = _normalise_exotic(exotic_type)
                 hits = int(hits or 0)
                 pnl = float(pnl or 0)
+                staked = float(staked or 0)
                 if label in exotic_stats:
                     exotic_stats[label]["won"] += hits
                     exotic_stats[label]["total"] += total
                     exotic_stats[label]["pnl"] = round(exotic_stats[label]["pnl"] + pnl, 2)
+                    exotic_stats[label]["staked"] = round(exotic_stats[label]["staked"] + staked, 2)
                 else:
                     exotic_stats[label] = {
                         "category": "Exotics",
@@ -868,6 +876,7 @@ async def get_bet_type_stats(
                         "total": total,
                         "rate": 0,
                         "pnl": round(pnl, 2),
+                        "staked": round(staked, 2),
                     }
             for s in exotic_stats.values():
                 s["rate"] = round(s["won"] / s["total"] * 100, 1) if s["total"] > 0 else 0
@@ -881,6 +890,7 @@ async def get_bet_type_stats(
                 func.count(Pick.id),
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
+                func.sum(Pick.exotic_stake),
             )
             seq_query = _apply_joins(seq_query, include_runner=False)
             seq_conds = [
@@ -891,9 +901,10 @@ async def get_bet_type_stats(
                 seq_query.where(and_(*seq_conds)).group_by(Pick.sequence_type, Pick.sequence_variant)
             )
 
-            for seq_type, seq_variant, total, hits, pnl in seq_result.all():
+            for seq_type, seq_variant, total, hits, pnl, staked in seq_result.all():
                 hits = int(hits or 0)
                 pnl = float(pnl or 0)
+                staked = float(staked or 0)
                 rate = round(hits / total * 100, 1) if total > 0 else 0
                 label = (seq_type or "Sequence").replace("_", " ").title()
                 if seq_variant:
@@ -905,6 +916,7 @@ async def get_bet_type_stats(
                     "total": total,
                     "rate": rate,
                     "pnl": round(pnl, 2),
+                    "staked": round(staked, 2),
                 }
 
         # --- Big 3 Multi (skip when runner/pick filters active) ---
@@ -914,6 +926,7 @@ async def get_bet_type_stats(
                 func.count(Pick.id),
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
+                func.sum(Pick.exotic_stake),
             )
             big3_query = _apply_joins(big3_query, include_runner=False)
             big3_conds = [
@@ -927,6 +940,7 @@ async def get_bet_type_stats(
             if row[0] and row[0] > 0:
                 hits = int(row[1] or 0)
                 pnl = float(row[2] or 0)
+                staked = float(row[3] or 0)
                 rate = round(hits / row[0] * 100, 1) if row[0] > 0 else 0
                 big3_stat = {
                     "category": "Multi",
@@ -935,6 +949,7 @@ async def get_bet_type_stats(
                     "total": row[0],
                     "rate": rate,
                     "pnl": round(pnl, 2),
+                    "staked": round(staked, 2),
                 }
 
         # Build ordered output

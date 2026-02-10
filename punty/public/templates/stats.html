@@ -393,15 +393,15 @@
             'Multi': 'var(--purple)'
         };
         var color = categoryColors[s.category] || 'var(--text-secondary)';
-        var pnlColor = s.pnl >= 0 ? '#4ade80' : '#f87171';
-        var pnlSign = s.pnl >= 0 ? '+' : '-';
+        var roi = s.staked ? (s.pnl / s.staked * 100) : 0;
+        var pnlColor = roi >= 0 ? '#4ade80' : '#f87171';
 
         return '<div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">' +
             '<div class="text-xs font-heading font-semibold uppercase tracking-wider mb-2" style="color: ' + color + ';">' + s.type + '</div>' +
             '<div class="text-2xl font-display font-bold" style="color: ' + color + ';">' + s.rate + '%</div>' +
             '<div class="text-[10px] font-heading uppercase tracking-wider mt-0.5 mb-1" style="color: var(--text-muted);">strike rate</div>' +
             '<div class="text-xs" style="color: var(--text-muted);">' + s.won + '/' + s.total + ' winners</div>' +
-            '<div class="text-sm font-heading font-semibold mt-1" style="color: ' + pnlColor + ';">' + pnlSign + '$' + Math.abs(s.pnl).toFixed(0) + '</div>' +
+            '<div class="text-sm font-heading font-semibold mt-1" style="color: ' + pnlColor + ';">' + (roi >= 0 ? '+' : '') + roi.toFixed(1) + '% ROI</div>' +
         '</div>';
     }
 
