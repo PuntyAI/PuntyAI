@@ -155,6 +155,12 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         '', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
+    # Remove exotic section header (content shown inline on website)
+    content = re.sub(
+        r'^\*{1,2}Degenerate\s+Exotic\s+(?:of\s+the\s+Race)?\*{1,2}\s*$',
+        '', content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+
     # Convert headers (### *TEXT* or ### 1) TEXT)
     def convert_header(m):
         level = len(m.group(1))
@@ -181,15 +187,11 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         content
     )
 
+    # Convert **bold** to <strong> (handle double asterisks first)
+    content = re.sub(r'\*\*([^*\n]+)\*\*', r'<strong>\1</strong>', content)
+
     # Convert *bold* to <strong>
     content = re.sub(r'\*([^*\n]+)\*', r'<strong>\1</strong>', content)
-
-    # Style exotic section headers
-    content = re.sub(
-        r'<strong>Degenerate Exotic of the Race</strong>',
-        '<span class="exotic-header">Degenerate Exotic</span>',
-        content, flags=re.IGNORECASE
-    )
 
     # Convert _italic_ to <em>
     content = re.sub(r'_([^_\n]+)_', r'<em>\1</em>', content)

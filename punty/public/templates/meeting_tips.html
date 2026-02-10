@@ -403,13 +403,22 @@
     .sel-why { color: var(--text-secondary); font-style: italic; }
     .sel-why .sel-label { color: var(--orange); background: rgba(255, 107, 53, 0.1); font-style: normal; }
 
-    /* Exotic section header */
-    .exotic-header {
-        display: inline-block; font-family: 'Rajdhani', sans-serif; font-weight: 700;
-        font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
-        padding: 3px 10px; border-radius: 6px;
-        background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(157, 78, 221, 0.12));
-        color: var(--cyan); border: 1px solid rgba(0, 212, 255, 0.15);
+    /* Overview section (intro before Big 3) */
+    .overview-section {
+        margin-bottom: 1rem; padding: 1.25rem; border-radius: 12px;
+        border: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.02);
+    }
+    .overview-section > p:first-child { font-size: 1.05rem; line-height: 1.75; }
+    .overview-section h4.tips-heading {
+        font-size: 0.8rem; letter-spacing: 0.1em;
+        margin-top: 1.25rem; margin-bottom: 0.5rem; padding-bottom: 0.35rem;
+        border-bottom: 1px solid rgba(233, 30, 140, 0.12);
+    }
+    .overview-section h4.tips-heading:first-child { margin-top: 0; }
+    .overview-label strong {
+        font-family: 'Rajdhani', sans-serif; font-size: 0.8rem;
+        letter-spacing: 0.06em; text-transform: uppercase;
+        color: var(--cyan) !important; -webkit-text-fill-color: var(--cyan) !important;
     }
 
     /* Race countdown timer */
@@ -574,26 +583,62 @@ document.addEventListener('DOMContentLoaded', function() {
     // Rebuild content
     tipsContent.innerHTML = '';
 
-    // Intro as expandable section
+    // Split intro: overview (visible) + Big 3 (expandable accordion)
     var hasIntro = false;
     for (var pi = 0; pi < preRaceNodes.length; pi++) {
         if (preRaceNodes[pi].textContent && preRaceNodes[pi].textContent.trim()) { hasIntro = true; break; }
     }
     if (hasIntro) {
-        var introAcc = document.createElement('div');
-        introAcc.className = 'race-accordion open';
-        introAcc.id = 'intro-acc';
-        var introHeader = document.createElement('div');
-        introHeader.className = 'race-accordion-header';
-        introHeader.innerHTML = '<div class="flex items-center gap-3"><span class="race-pill" style="background: linear-gradient(135deg, var(--purple), var(--magenta));">&#9733;</span><div><div class="font-heading font-bold text-white text-sm">Big 3 & Overview</div></div></div>' +
-            '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
-        introHeader.onclick = function() { introAcc.classList.toggle('open'); };
-        var introBody = document.createElement('div');
-        introBody.className = 'race-accordion-body';
-        preRaceNodes.forEach(function(n) { introBody.appendChild(n); });
-        introAcc.appendChild(introHeader);
-        introAcc.appendChild(introBody);
-        tipsContent.appendChild(introAcc);
+        // Find the Big 3 heading to split overview from Big 3
+        var big3Idx = -1;
+        for (var pi = 0; pi < preRaceNodes.length; pi++) {
+            var n = preRaceNodes[pi];
+            if (n.nodeType === 1 && /^H[2-4]$/.test(n.tagName) && /BIG\s*3|BIG\s*THREE|PUNTY.S\s+BIG/i.test(n.textContent)) {
+                big3Idx = pi;
+                break;
+            }
+        }
+
+        if (big3Idx > 0) {
+            // Overview section (shown directly, no accordion)
+            var overviewDiv = document.createElement('div');
+            overviewDiv.className = 'overview-section';
+            for (var oi = 0; oi < big3Idx; oi++) {
+                overviewDiv.appendChild(preRaceNodes[oi]);
+            }
+            // Style paragraphs that start with a bold label (e.g., "Punty's take:")
+            overviewDiv.querySelectorAll('p').forEach(function(p) {
+                var first = p.querySelector('strong:first-child');
+                if (first && /:/.test(first.textContent)) {
+                    p.classList.add('overview-label');
+                }
+            });
+            tipsContent.appendChild(overviewDiv);
+
+            // Big 3 + Multi accordion (collapsed by default)
+            var big3Acc = document.createElement('div');
+            big3Acc.className = 'race-accordion';
+            big3Acc.id = 'big3-acc';
+            var big3Header = document.createElement('div');
+            big3Header.className = 'race-accordion-header';
+            big3Header.innerHTML = '<div class="flex items-center gap-3"><span class="race-pill" style="background: linear-gradient(135deg, var(--purple), var(--magenta));">&#9733;</span><div><div class="font-heading font-bold text-white text-sm">Big 3 & Multi</div></div></div>' +
+                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+            big3Header.onclick = function() { big3Acc.classList.toggle('open'); };
+            var big3Body = document.createElement('div');
+            big3Body.className = 'race-accordion-body';
+            for (var bi = big3Idx; bi < preRaceNodes.length; bi++) {
+                big3Body.appendChild(preRaceNodes[bi]);
+            }
+            big3Acc.appendChild(big3Header);
+            big3Acc.appendChild(big3Body);
+            tipsContent.appendChild(big3Acc);
+        } else {
+            // No Big 3 found — show everything directly
+            var overviewDiv = document.createElement('div');
+            overviewDiv.className = 'overview-section';
+            preRaceNodes.forEach(function(n) { overviewDiv.appendChild(n); });
+            tipsContent.appendChild(overviewDiv);
+        }
     }
 
     // Nav pills
@@ -640,18 +685,42 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add the original content nodes
         sec.nodes.forEach(function(n) { body.appendChild(n); });
 
-        // Move Punty's Pick to bottom of race section + highlight
+        // Reorder: move exotic after roughie, then move Punty's Pick to bottom
         if (sec.isRace) {
+            // Find exotic and roughie paragraphs
+            var allParas = body.querySelectorAll('p');
+            var exoticP = null;
+            var roughieP = null;
+            for (var k = 0; k < allParas.length; k++) {
+                var ptxt = allParas[k].textContent.trim();
+                if (!exoticP && /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*:/i.test(ptxt)) {
+                    exoticP = allParas[k];
+                }
+                if (!roughieP && /Roughie\s*:/i.test(ptxt)) {
+                    roughieP = allParas[k];
+                }
+            }
+            // Move exotic after roughie if both exist and exotic is before roughie
+            if (exoticP && roughieP && roughieP.compareDocumentPosition(exoticP) & Node.DOCUMENT_POSITION_PRECEDING) {
+                if (roughieP.nextSibling) {
+                    body.insertBefore(exoticP, roughieP.nextSibling);
+                } else {
+                    body.appendChild(exoticP);
+                }
+            }
+
+            // Move Punty's Pick to bottom + highlight
             var pickEl = body.querySelector('.puntys-pick');
             if (pickEl) {
                 var pickP = pickEl.closest('p') || pickEl.parentElement;
                 var pickNodes = [pickP];
-                // Grab the explanation paragraph after Punty's Pick
+                // Grab explanation paragraph but exclude exotic lines
                 var nextSib = pickP.nextElementSibling;
-                if (nextSib && nextSib.tagName === 'P' && !nextSib.querySelector('strong:first-child')) {
+                if (nextSib && nextSib.tagName === 'P' &&
+                    !nextSib.querySelector('strong:first-child') &&
+                    !/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*:/i.test(nextSib.textContent.trim())) {
                     pickNodes.push(nextSib);
                 }
-                // Create highlight wrapper and move to bottom
                 var pickWrap = document.createElement('div');
                 pickWrap.className = 'puntys-pick-block';
                 pickNodes.forEach(function(n) { pickWrap.appendChild(n); });
