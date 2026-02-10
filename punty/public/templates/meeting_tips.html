@@ -376,6 +376,52 @@
         background: rgba(74, 222, 128, 0.15); color: #4ade80;
         text-transform: uppercase; letter-spacing: 0.05em;
     }
+
+    /* Punty's Pick Block (highlighted at bottom of race) */
+    .puntys-pick-block {
+        margin-top: 1rem; padding: 0.875rem 1rem; border-radius: 10px;
+        border-left: 3px solid var(--magenta);
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(255, 107, 53, 0.06));
+    }
+    .puntys-pick-block p { margin-bottom: 0.25rem; }
+
+    /* Selection metadata labels */
+    .sel-label {
+        display: inline-block; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em;
+        padding: 1px 5px; border-radius: 3px; margin-right: 3px;
+        background: rgba(255, 255, 255, 0.06); color: var(--text-muted); vertical-align: baseline;
+    }
+    .sel-bet { color: var(--cyan); }
+    .sel-bet .sel-label { color: var(--cyan); background: rgba(0, 212, 255, 0.1); }
+    .sel-winpct { color: var(--text-secondary); }
+    .sel-winpct .sel-label { background: rgba(157, 78, 221, 0.1); color: var(--purple); }
+    .sel-conf .sel-label { background: rgba(255, 255, 255, 0.06); }
+    .sel-conf-hig { color: #4ade80; font-weight: 700; }
+    .sel-conf-med { color: var(--yellow); font-weight: 700; }
+    .sel-conf-low { color: var(--text-muted); font-weight: 700; }
+    .sel-why { color: var(--text-secondary); font-style: italic; }
+    .sel-why .sel-label { color: var(--orange); background: rgba(255, 107, 53, 0.1); font-style: normal; }
+
+    /* Exotic section header */
+    .exotic-header {
+        display: inline-block; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
+        padding: 3px 10px; border-radius: 6px;
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(157, 78, 221, 0.12));
+        color: var(--cyan); border: 1px solid rgba(0, 212, 255, 0.15);
+    }
+
+    /* Race countdown timer */
+    .race-countdown {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.65rem;
+        padding: 2px 8px; border-radius: 4px; white-space: nowrap; margin-right: 0.5rem;
+        background: rgba(255, 107, 53, 0.15); color: var(--orange); letter-spacing: 0.03em;
+    }
+    .race-countdown-now {
+        background: rgba(74, 222, 128, 0.15); color: #4ade80;
+        animation: pulse-glow 1.5s ease-in-out infinite;
+    }
 </style>
 
 <script>
@@ -385,6 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
+    var meetingDate = '{{ meeting.date }}';
 
     // --- Section toggle ---
     window.toggleSection = function(id) {
@@ -450,9 +497,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         headerHtml += '</div>';
 
-        // Status badge
-        if (raceData && raceData.status && ['Paying', 'Closed', 'Final'].indexOf(raceData.status) !== -1) {
-            headerHtml += '<span class="fg-results-badge mr-2">Final</span>';
+        // Status badge or countdown
+        if (raceData) {
+            if (raceData.status && ['Paying', 'Closed', 'Final'].indexOf(raceData.status) !== -1) {
+                headerHtml += '<span class="fg-results-badge mr-2">Final</span>';
+            } else if (raceData.time && meetingDate) {
+                // Countdown for upcoming races (AEDT = +11:00)
+                var raceMs = Date.parse(meetingDate + 'T' + raceData.time + ':00+11:00');
+                if (!isNaN(raceMs)) {
+                    var diff = raceMs - Date.now();
+                    if (diff > 0 && diff < 24 * 60 * 60 * 1000) {
+                        var mins = Math.floor(diff / 60000);
+                        var hrs = Math.floor(mins / 60);
+                        mins = mins % 60;
+                        var label = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
+                        headerHtml += '<span class="race-countdown" data-race-time="' + raceMs + '">' + label + '</span>';
+                    }
+                }
+            }
         }
 
         return headerHtml;
@@ -468,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
     headings.forEach(function(h) {
         if (/Race\s+\d+/i.test(h.textContent)) {
             raceHeadings.push(h);
-        } else if (/Quaddie|Big\s*6|Early\s+Quaddie/i.test(h.textContent)) {
+        } else if (/Quaddie|Big\s*6|Early\s+Quaddie|NUGGETS|FINAL\s+WORD/i.test(h.textContent)) {
             seqHeadings.push(h);
         }
     });
@@ -555,9 +617,13 @@ document.addEventListener('DOMContentLoaded', function() {
     tipsContent.appendChild(navContainer);
 
     // Race and sequence sections
+    var firstRaceOpened = false;
     sections.forEach(function(sec, idx) {
         var accordion = document.createElement('div');
-        accordion.className = 'race-accordion';
+        // Open first race by default
+        var openByDefault = sec.isRace && !firstRaceOpened;
+        if (openByDefault) firstRaceOpened = true;
+        accordion.className = 'race-accordion' + (openByDefault ? ' open' : '');
         accordion.id = 'sec-acc-' + idx;
 
         var header = document.createElement('div');
@@ -573,6 +639,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Add the original content nodes
         sec.nodes.forEach(function(n) { body.appendChild(n); });
+
+        // Move Punty's Pick to bottom of race section + highlight
+        if (sec.isRace) {
+            var pickEl = body.querySelector('.puntys-pick');
+            if (pickEl) {
+                var pickP = pickEl.closest('p') || pickEl.parentElement;
+                var pickNodes = [pickP];
+                // Grab the explanation paragraph after Punty's Pick
+                var nextSib = pickP.nextElementSibling;
+                if (nextSib && nextSib.tagName === 'P' && !nextSib.querySelector('strong:first-child')) {
+                    pickNodes.push(nextSib);
+                }
+                // Create highlight wrapper and move to bottom
+                var pickWrap = document.createElement('div');
+                pickWrap.className = 'puntys-pick-block';
+                pickNodes.forEach(function(n) { pickWrap.appendChild(n); });
+                body.appendChild(pickWrap);
+            }
+        }
 
         // Non-race sections get a different pill style
         if (!sec.isRace) {
@@ -647,6 +732,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // Live countdown updater (every 30s)
+    setInterval(function() {
+        document.querySelectorAll('.race-countdown').forEach(function(el) {
+            var raceMs = parseInt(el.dataset.raceTime);
+            if (isNaN(raceMs)) return;
+            var diff = raceMs - Date.now();
+            if (diff <= 0) {
+                el.textContent = 'JUMP';
+                el.classList.add('race-countdown-now');
+            } else {
+                var mins = Math.floor(diff / 60000);
+                var hrs = Math.floor(mins / 60);
+                mins = mins % 60;
+                el.textContent = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
+            }
+        });
+    }, 30000);
 });
 </script>
 {% endblock %}

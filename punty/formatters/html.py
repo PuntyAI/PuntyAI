@@ -120,10 +120,10 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Pre-process: convert bold/italic heading patterns to markdown # headers
     # before the generic bold/italic conversion runs.
 
-    # RACE-BY-RACE divider → ## header
+    # Remove RACE-BY-RACE divider (redundant with accordion structure on website)
     content = re.sub(
-        r'^\*{0,2}RACE[-\s]BY[-\s]RACE\*{0,2}\s*$',
-        r'## RACE-BY-RACE', content, flags=re.MULTILINE | re.IGNORECASE,
+        r'^(?:#{1,3}\s+(?:\d+\)\s*)?)?\*{0,2}RACE[-\s]BY[-\s]RACE\*{0,2}\s*$',
+        '', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # *Race 1 – The Big Title* → ## Race 1 – The Big Title (becomes <h3>)
@@ -137,6 +137,22 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'^((?:EARLY\s+|MAIN\s+)?QUADDIE|BIG\s*6)\s*(\(.*?\))?\s*$',
         lambda m: f'## {m.group(1)}{" " + m.group(2) if m.group(2) else ""}',
         content, flags=re.MULTILINE,
+    )
+
+    # Trailing section headings: NUGGETS FROM THE TRACK, FINAL WORD FROM ...
+    content = re.sub(
+        r'^\*{1,2}(NUGGETS\s+FROM\s+THE\s+TRACK)\*{1,2}\s*$',
+        r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+    content = re.sub(
+        r'^\*{1,2}(FINAL\s+WORD\s+FROM\s+.+?)\*{1,2}\s*$',
+        r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+
+    # Remove FIND OUT MORE section (shown on other delivery platforms, not website)
+    content = re.sub(
+        r'^(?:#{1,3}\s+(?:\d+\)\s*)?)?\*{1,2}FIND\s+OUT\s+MORE\*{1,2}[^\n]*\n(?:[^\n]+\n)*',
+        '', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # Convert headers (### *TEXT* or ### 1) TEXT)
@@ -168,6 +184,13 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Convert *bold* to <strong>
     content = re.sub(r'\*([^*\n]+)\*', r'<strong>\1</strong>', content)
 
+    # Style exotic section headers
+    content = re.sub(
+        r'<strong>Degenerate Exotic of the Race</strong>',
+        '<span class="exotic-header">Degenerate Exotic</span>',
+        content, flags=re.IGNORECASE
+    )
+
     # Convert _italic_ to <em>
     content = re.sub(r'_([^_\n]+)_', r'<em>\1</em>', content)
 
@@ -190,6 +213,33 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         return f'<ol class="tips-list">{list_items}</ol>'
 
     content = re.sub(r'(?:^[0-9]+[.)]\s+.+$\n?)+', convert_numbered, content, flags=re.MULTILINE)
+
+    # Style selection metadata lines (before paragraph wrapping)
+    content = re.sub(
+        r'^\s*Bet:\s*(.+)$',
+        r'<span class="sel-bet"><span class="sel-label">Bet</span> \1</span>',
+        content, flags=re.MULTILINE
+    )
+    content = re.sub(
+        r'^\s*Win\s*%:\s*(\d+(?:\.\d+)?%)',
+        r'<span class="sel-winpct"><span class="sel-label">Win%</span> \1</span>',
+        content, flags=re.MULTILINE
+    )
+    content = re.sub(
+        r'^\s*Confidence:\s*(high|med|medium|low)',
+        lambda m: '<span class="sel-conf"><span class="sel-label">Conf</span> <span class="sel-conf-' + m.group(1)[:3].lower() + '">' + m.group(1).title() + '</span></span>',
+        content, flags=re.MULTILINE | re.IGNORECASE
+    )
+    content = re.sub(
+        r'^\s*Why:\s*(.+)$',
+        r'<span class="sel-why"><span class="sel-label">Why</span> \1</span>',
+        content, flags=re.MULTILINE
+    )
+    content = re.sub(
+        r'^\s*Est\.\s*return:\s*(.+)$',
+        r'<span class="sel-bet"><span class="sel-label">Return</span> \1</span>',
+        content, flags=re.MULTILINE | re.IGNORECASE
+    )
 
     # Convert paragraphs (double newlines)
     paragraphs = re.split(r'\n\n+', content)
