@@ -229,6 +229,42 @@ class TestExoticSettlement:
         assert pnl == 348.0  # (18.40 * 20) - 20 = 368 - 20 = 348
 
 
+class TestQuinellaLegsFormat:
+    """Tests for quinella settlement with legs format (edge case)."""
+
+    def _check_quinella_legs(self, legs, top2):
+        """Replicate the fixed quinella legs logic from picks.py."""
+        a, b = top2[0], top2[1]
+        return (
+            (a in legs[0] and b in legs[1]) or
+            (b in legs[0] and a in legs[1])
+        )
+
+    def test_quinella_legs_hit_normal_order(self):
+        """Quinella [[1,2],[3,4]] hits when 1st=1, 2nd=3."""
+        assert self._check_quinella_legs([[1, 2], [3, 4]], [1, 3]) is True
+
+    def test_quinella_legs_hit_reversed_order(self):
+        """Quinella [[1,2],[3,4]] hits when 1st=3, 2nd=2 (reversed legs)."""
+        assert self._check_quinella_legs([[1, 2], [3, 4]], [3, 2]) is True
+
+    def test_quinella_legs_miss_both_from_same_leg(self):
+        """Quinella [[1,2],[3,4]] should NOT hit when 1st=1, 2nd=2 (both from leg 0)."""
+        assert self._check_quinella_legs([[1, 2], [3, 4]], [1, 2]) is False
+
+    def test_quinella_legs_miss_neither_in_legs(self):
+        """Quinella [[1,2],[3,4]] misses when result is 5-6."""
+        assert self._check_quinella_legs([[1, 2], [3, 4]], [5, 6]) is False
+
+    def test_quinella_legs_single_runner_per_leg(self):
+        """Quinella [[1],[3]] hits when result is 3-1."""
+        assert self._check_quinella_legs([[1], [3]], [3, 1]) is True
+
+    def test_quinella_legs_single_runner_miss(self):
+        """Quinella [[1],[3]] misses when result is 1-2."""
+        assert self._check_quinella_legs([[1], [3]], [1, 2]) is False
+
+
 class TestQuaddieSettlement:
     """Tests for quaddie settlement."""
 

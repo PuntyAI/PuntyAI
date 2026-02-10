@@ -304,11 +304,13 @@ async def _settle_picks_for_race_impl(
 
                 if len(legs) >= req_pos and len(top_sc_int) >= req_pos:
                     if "quinella" in exotic_type:
-                        # Quinella: any order, check both in combined legs
-                        all_runners = set()
-                        for leg in legs:
-                            all_runners.update(leg)
-                        hit = set(top_sc_int[:2]).issubset(all_runners)
+                        # Quinella: any order — check both orderings across legs
+                        # e.g. legs=[[1,2],[3,4]]: 1st in leg0 AND 2nd in leg1, OR vice versa
+                        a, b = top_sc_int[0], top_sc_int[1]
+                        hit = (
+                            (a in legs[0] and b in legs[1]) or
+                            (b in legs[0] and a in legs[1])
+                        )
                     else:
                         # Positional: check each position winner is in corresponding leg
                         hit = all(top_sc_int[i] in legs[i] for i in range(req_pos))
