@@ -405,8 +405,8 @@ def format_trainer_stats(trainer_data: dict) -> str:
 
     # Check if it's TRC data (has global_rank) or Racing Australia data (has wins)
     if trainer_data.get("source") == "TRC" or "global_rank" in trainer_data:
-        # TRC format: global ranking, strike rate, rating, group wins
-        parts = [f"Global #{trainer_data.get('global_rank', '?')}"]
+        # TRC format: ranking, strike rate, rating, group wins
+        parts = [f"Ranked #{trainer_data.get('global_rank', '?')} (AUS)"]
         if trainer_data.get("strike_rate"):
             parts.append(f"{trainer_data['strike_rate']}% SR")
         if trainer_data.get("rating"):
