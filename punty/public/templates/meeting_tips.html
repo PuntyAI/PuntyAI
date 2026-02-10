@@ -77,7 +77,7 @@
             </div>
             <div class="flex items-center gap-1.5">
                 {% set roi = (venue_stats.pnl / venue_stats.staked * 100) if venue_stats.staked else 0 %}<span class="text-sm font-heading font-bold {% if roi >= 0 %}text-green-400{% else %}text-red-400{% endif %}">{{ '%+.1f'|format(roi) }}%</span>
-                <span class="text-xs" style="color: var(--text-muted);">P&L</span>
+                <span class="text-xs" style="color: var(--text-muted);">ROI</span>
             </div>
             <span class="text-xs" style="color: var(--text-muted);">across {{ venue_stats.meetings }} meeting{{ 's' if venue_stats.meetings != 1 }}</span>
         </div>
@@ -92,8 +92,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                 </div>
-                <h2 class="text-2xl font-heading font-bold">
-                    <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Live Updates</span>
+                <h2 class="text-2xl font-display font-bold">
+                    <span style="background: linear-gradient(135deg, var(--orange), var(--yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Live Updates</span>
                 </h2>
                 <span class="live-badge">LIVE</span>
             </div>
@@ -102,7 +102,6 @@
                 {% for update in live_updates %}
                 <div class="live-update-card {% if update.type == 'celebration' %}live-celebration{% else %}live-pace{% endif %}">
                     <div class="flex items-start gap-3">
-                        <!-- Icon -->
                         <div class="live-icon flex-shrink-0">
                             {% if update.type == 'celebration' %}
                             <span class="text-2xl">&#x1F3C7;</span>
@@ -110,8 +109,6 @@
                             <span class="text-2xl">&#x1F3C1;</span>
                             {% endif %}
                         </div>
-
-                        <!-- Content -->
                         <div class="flex-1 min-w-0">
                             {% if update.type == 'celebration' %}
                             <div class="flex items-center gap-2 mb-1">
@@ -126,9 +123,7 @@
                                 <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">After R{{ update.race_number }}</span>
                             </div>
                             {% endif %}
-
                             <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">{{ update.content }}</p>
-
                             {% if update.created_at %}
                             <div class="mt-2 text-xs" style="color: var(--text-muted);">{{ update.created_at }}</div>
                             {% endif %}
@@ -140,21 +135,46 @@
         </div>
         {% endif %}
 
+        <!-- Meeting Stats (expandable) -->
+        {% if meeting_stats %}
+        <div class="mb-8" id="meeting-stats-section">
+            <div class="section-toggle" onclick="toggleSection('meeting-stats')">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(157, 78, 221, 0.15);">
+                        <svg class="w-5 h-5" style="color: var(--purple);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-display font-bold">
+                        <span style="background: linear-gradient(135deg, var(--purple), var(--magenta)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Meeting Stats</span>
+                    </h2>
+                </div>
+                <svg class="section-chevron" id="meeting-stats-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <div class="section-body" id="meeting-stats-body">
+                <div id="ms-grid" class="pt-4"></div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Early Mail Section -->
         {% if early_mail %}
         <div class="mb-8">
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(233, 30, 140, 0.15);">
                     <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                     </svg>
                 </div>
-                <h2 class="text-2xl font-heading font-bold text-white">Early Mail</h2>
+                <h2 class="text-2xl font-display font-bold">
+                    <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Early Mail</span>
+                </h2>
             </div>
-            <div class="card p-6">
-                <div class="prose prose-invert max-w-none tips-content">
-                    {{ early_mail.content | safe }}
-                </div>
+            <div class="tips-content" id="early-mail-content">
+                {{ early_mail.content | safe }}
             </div>
         </div>
         {% endif %}
@@ -165,10 +185,12 @@
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(0, 212, 255, 0.15);">
                     <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
                     </svg>
                 </div>
-                <h2 class="text-2xl font-heading font-bold text-white">Wrap-up</h2>
+                <h2 class="text-2xl font-display font-bold">
+                    <span style="background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Wrap-Up</span>
+                </h2>
             </div>
             <div class="card p-6">
                 <div class="prose prose-invert max-w-none tips-content">
@@ -201,18 +223,14 @@
 </section>
 
 <style>
+    /* Tips Content */
     .tips-content {
         font-family: 'Source Sans Pro', sans-serif;
         line-height: 1.8;
         color: #d0d0dc;
     }
-    .tips-content p {
-        margin-bottom: 1rem;
-    }
-    .tips-content strong, .tips-content b {
-        color: white;
-        font-weight: 600;
-    }
+    .tips-content p { margin-bottom: 1rem; }
+    .tips-content strong, .tips-content b { color: white; font-weight: 600; }
     .tips-content .tips-heading {
         color: white;
         font-family: 'Rajdhani', sans-serif;
@@ -226,55 +244,26 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    .tips-content h3.tips-heading {
-        font-size: 1.25rem;
-        color: var(--cyan);
-    }
-    .tips-content h4.tips-heading {
-        font-size: 1.1rem;
-        color: var(--magenta);
-    }
-    .tips-content .tips-list {
-        margin: 1rem 0;
-        padding-left: 1.5rem;
-    }
-    .tips-content .tips-list li {
-        margin-bottom: 0.5rem;
-    }
-    .tips-content .tips-divider {
-        border: none;
-        border-top: 1px solid var(--border-subtle);
-        margin: 1.5rem 0;
-    }
-    .tips-content em {
-        font-style: italic;
-        color: var(--text-muted);
-    }
+    .tips-content h3.tips-heading { font-size: 1.25rem; color: var(--cyan); }
+    .tips-content h4.tips-heading { font-size: 1.1rem; color: var(--magenta); }
+    .tips-content .tips-list { margin: 1rem 0; padding-left: 1.5rem; }
+    .tips-content .tips-list li { margin-bottom: 0.5rem; }
+    .tips-content .tips-divider { border: none; border-top: 1px solid var(--border-subtle); margin: 1.5rem 0; }
+    .tips-content em { font-style: italic; color: var(--text-muted); }
+
+    /* Win Badge */
     .win-tick {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 900;
-        font-size: 0.75em;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-        margin-left: 10px;
-        padding: 4px 12px 4px 10px;
-        border-radius: 6px;
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        color: #fff;
+        display: inline-flex; align-items: center; gap: 5px;
+        font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 0.75em;
+        letter-spacing: 0.15em; text-transform: uppercase;
+        margin-left: 10px; padding: 4px 12px 4px 10px; border-radius: 6px;
+        background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
         box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.2);
         animation: win-glow 1.8s ease-in-out infinite;
-        vertical-align: middle;
-        line-height: 1.2;
+        vertical-align: middle; line-height: 1.2;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
-    .win-tick .win-emoji {
-        font-size: 1.3em;
-        line-height: 1;
-        filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.6));
-    }
+    .win-tick .win-emoji { font-size: 1.3em; line-height: 1; filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.6)); }
     @keyframes win-glow {
         0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.2); }
         50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.7), 0 0 40px rgba(34, 197, 94, 0.35); }
@@ -283,9 +272,7 @@
         display: inline-block;
         background: linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(233, 30, 140, 0.15));
         border: 1px solid rgba(255, 107, 53, 0.25);
-        border-radius: 6px;
-        padding: 2px 8px;
-        margin-right: 4px;
+        border-radius: 6px; padding: 2px 8px; margin-right: 4px;
     }
     .puntys-pick strong {
         background: var(--gradient-sunset);
@@ -295,218 +282,459 @@
 
     /* Live Updates */
     .live-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-family: 'Rajdhani', sans-serif;
-        font-weight: 700;
-        font-size: 0.7rem;
-        letter-spacing: 0.1em;
-        padding: 2px 10px;
-        border-radius: 9999px;
-        background: rgba(255, 107, 53, 0.2);
-        color: var(--orange);
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.7rem;
+        letter-spacing: 0.1em; padding: 2px 10px; border-radius: 9999px;
+        background: rgba(255, 107, 53, 0.2); color: var(--orange);
         border: 1px solid rgba(255, 107, 53, 0.3);
     }
     .live-badge::before {
-        content: '';
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--orange);
-        animation: live-dot 1.5s ease-in-out infinite;
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: var(--orange); animation: live-dot 1.5s ease-in-out infinite;
     }
-    @keyframes live-dot {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-    }
-    .live-pulse {
-        animation: pulse-glow 2s ease-in-out infinite;
-    }
+    @keyframes live-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .live-pulse { animation: pulse-glow 2s ease-in-out infinite; }
     @keyframes pulse-glow {
         0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.2); }
         50% { box-shadow: 0 0 12px 4px rgba(255, 107, 53, 0.15); }
     }
     .live-update-card {
-        padding: 1rem 1.25rem;
-        border-radius: 12px;
-        border-left: 3px solid transparent;
-        transition: transform 0.15s, box-shadow 0.15s;
+        padding: 1rem 1.25rem; border-radius: 12px;
+        border-left: 3px solid transparent; transition: transform 0.15s, box-shadow 0.15s;
     }
-    .live-update-card:hover {
-        transform: translateX(4px);
-    }
+    .live-update-card:hover { transform: translateX(4px); }
     .live-celebration {
         background: linear-gradient(135deg, rgba(74, 222, 128, 0.06), rgba(255, 107, 53, 0.06));
-        border-left-color: #4ade80;
-        border: 1px solid rgba(74, 222, 128, 0.12);
-        border-left: 3px solid #4ade80;
+        border: 1px solid rgba(74, 222, 128, 0.12); border-left: 3px solid #4ade80;
     }
     .live-pace {
         background: linear-gradient(135deg, rgba(0, 212, 255, 0.06), rgba(157, 78, 221, 0.06));
-        border-left-color: var(--cyan);
-        border: 1px solid rgba(0, 212, 255, 0.12);
-        border-left: 3px solid var(--cyan);
+        border: 1px solid rgba(0, 212, 255, 0.12); border-left: 3px solid var(--cyan);
     }
-    .live-icon {
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+    .live-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
 
-    /* Accordion */
+    /* Section Toggle (expandable sections) */
+    .section-toggle {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 1rem 1.25rem; cursor: pointer; user-select: none;
+        border-radius: 12px; border: 1px solid var(--border-subtle);
+        background: rgba(255, 255, 255, 0.02); transition: background 0.15s;
+    }
+    .section-toggle:hover { background: rgba(255, 255, 255, 0.05); }
+    .section-chevron {
+        width: 1.25rem; height: 1.25rem; color: var(--text-muted);
+        transition: transform 0.2s;
+    }
+    .section-body { display: none; }
+    .section-open .section-toggle { border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--border-subtle); }
+    .section-open .section-body {
+        display: block; padding: 0 1.25rem 1.25rem;
+        border: 1px solid var(--border-subtle); border-top: none; border-radius: 0 0 12px 12px;
+        background: rgba(255, 255, 255, 0.01);
+    }
+    .section-open .section-chevron { transform: rotate(180deg); }
+
+    /* Race Accordion */
     .race-accordion {
         border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        margin-bottom: 0.75rem;
-        overflow: hidden;
+        border-radius: 12px; margin-bottom: 0.75rem; overflow: hidden;
     }
     .race-accordion-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.75rem 1rem;
-        cursor: pointer;
-        user-select: none;
-        background: rgba(255, 255, 255, 0.02);
-        transition: background 0.15s;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.875rem 1.25rem; cursor: pointer; user-select: none;
+        background: rgba(255, 255, 255, 0.02); transition: background 0.15s;
     }
-    .race-accordion-header:hover {
-        background: rgba(255, 255, 255, 0.05);
-    }
+    .race-accordion-header:hover { background: rgba(255, 255, 255, 0.05); }
     .race-accordion-header .accordion-chevron {
-        transition: transform 0.2s;
-        color: var(--text-muted);
+        transition: transform 0.2s; color: var(--text-muted);
     }
-    .race-accordion.open .accordion-chevron {
-        transform: rotate(180deg);
-    }
-    .race-accordion-body {
-        display: none;
-        padding: 0 1rem 1rem;
-    }
-    .race-accordion.open .race-accordion-body {
-        display: block;
-    }
-    .race-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-    }
+    .race-accordion.open .accordion-chevron { transform: rotate(180deg); }
+    .race-accordion-body { display: none; padding: 0 1.25rem 1.25rem; }
+    .race-accordion.open .race-accordion-body { display: block; }
+    .race-nav { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
     .race-nav-pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 2.5rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-family: 'Rajdhani', sans-serif;
-        font-weight: 700;
-        font-size: 0.85rem;
-        background: var(--bg-card-alt);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: all 0.15s;
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 2.5rem; padding: 0.25rem 0.75rem; border-radius: 9999px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.85rem;
+        background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
+        color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
     }
     .race-nav-pill:hover, .race-nav-pill.active {
-        background: var(--gradient-sunset);
-        color: white;
-        border-color: transparent;
+        background: var(--gradient-sunset); color: white; border-color: transparent;
+    }
+    .race-pill {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 2.25rem; height: 2.25rem; border-radius: 8px;
+        font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 0.75rem;
+        background: var(--gradient-sunset); color: white; flex-shrink: 0;
+    }
+
+    /* Form Guide */
+    .form-guide {
+        border: 1px solid var(--border-subtle); border-radius: 10px;
+        overflow: hidden; margin-bottom: 1rem;
+    }
+    .form-guide-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.5rem 0.75rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .form-guide-row {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        transition: background 0.1s;
+    }
+    .form-guide-row:last-child { border-bottom: none; }
+    .form-guide-row:hover { background: rgba(255, 255, 255, 0.03); }
+    .form-guide-row.scratched { opacity: 0.4; }
+    .form-guide-row.scratched .fg-name { text-decoration: line-through; }
+    .form-guide-row.fg-pick { border-left: 3px solid transparent; }
+    .fg-rank-1 { background: rgba(233, 30, 140, 0.05); border-left-color: var(--magenta) !important; }
+    .fg-rank-2 { background: rgba(0, 212, 255, 0.05); border-left-color: var(--cyan) !important; }
+    .fg-rank-3 { background: rgba(251, 191, 36, 0.05); border-left-color: var(--yellow) !important; }
+    .fg-rank-4 { background: rgba(157, 78, 221, 0.05); border-left-color: var(--purple) !important; }
+    .fg-sc {
+        width: 1.75rem; height: 1.75rem; border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.8rem;
+        background: rgba(255, 255, 255, 0.06); color: var(--text-secondary);
+        flex-shrink: 0; border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .fg-details { flex: 1; min-width: 0; }
+    .fg-name-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .fg-horse {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.85rem;
+        color: white; white-space: nowrap;
+    }
+    .fg-rank-badge {
+        font-family: 'Orbitron', sans-serif; font-size: 0.55rem; font-weight: 700;
+        letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .fg-smp {
+        font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .fg-info {
+        display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem;
+        font-size: 0.7rem; color: var(--text-muted); margin-top: 1px;
+    }
+    .fg-right { text-align: right; flex-shrink: 0; min-width: 3.5rem; }
+    .fg-odds {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.9rem;
+        color: var(--cyan);
+    }
+    .fg-placed {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.7rem;
+    }
+    .fg-1st { color: #4ade80; }
+    .fg-2nd { color: var(--cyan); }
+    .fg-3rd { color: var(--yellow); }
+    .fg-other { color: var(--text-muted); }
+    .fg-scr {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.7rem;
+        color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .fg-winner-badge {
+        font-family: 'Orbitron', sans-serif; font-size: 0.55rem; font-weight: 800;
+        color: #4ade80; letter-spacing: 0.1em; margin-top: 2px;
+    }
+    .fg-results-badge {
+        font-size: 0.6rem; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        padding: 1px 6px; border-radius: 4px;
+        background: rgba(74, 222, 128, 0.15); color: #4ade80;
+        text-transform: uppercase; letter-spacing: 0.05em;
     }
 </style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var racesData = {{ races | tojson }};
+    var meetingStats = {{ meeting_stats | tojson }};
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
 
-    var tipsContent = document.querySelector('.tips-content');
-    if (!tipsContent) return;
+    // --- Section toggle ---
+    window.toggleSection = function(id) {
+        var section = document.getElementById(id + '-section');
+        if (section) section.classList.toggle('section-open');
+    };
 
-    // --- Accordion: wrap race sections ---
+    // --- Meeting Stats ---
     (function() {
-        // Find all race headings (h2/h3 with "Race N" in text)
-        var headings = tipsContent.querySelectorAll('h2.tips-heading, h3.tips-heading');
-        var raceHeadings = [];
-        headings.forEach(function(h) {
-            if (/Race\s+\d+/i.test(h.textContent)) {
-                raceHeadings.push(h);
-            }
+        var container = document.getElementById('ms-grid');
+        if (!container || !meetingStats || meetingStats.length === 0) return;
+
+        var catColors = { Selections: 'var(--magenta)', Exotics: 'var(--cyan)', Sequences: 'var(--yellow)', Multi: 'var(--purple)' };
+        var groups = { Selections: [], Exotics: [], Sequences: [], Multi: [] };
+        meetingStats.forEach(function(s) { if (groups[s.category]) groups[s.category].push(s); });
+
+        var html = '';
+        ['Selections', 'Exotics', 'Sequences', 'Multi'].forEach(function(cat) {
+            if (groups[cat].length === 0) return;
+            var color = catColors[cat];
+            html += '<div class="mb-4"><h3 class="font-heading font-bold text-xs uppercase tracking-wider mb-2" style="color: ' + color + ';">' + cat + '</h3>';
+            html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-2">';
+            groups[cat].forEach(function(s) {
+                var roi = s.staked ? (s.pnl / s.staked * 100) : 0;
+                var pnlColor = roi >= 0 ? '#4ade80' : '#f87171';
+                html += '<div class="rounded-lg p-3 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">';
+                html += '<div class="text-[10px] font-heading font-semibold uppercase tracking-wider mb-1" style="color: ' + color + ';">' + s.type + '</div>';
+                html += '<div class="text-xl font-display font-bold" style="color: ' + color + ';">' + s.rate + '%</div>';
+                html += '<div class="text-[9px] font-heading uppercase tracking-wider mt-0.5 mb-0.5" style="color: var(--text-muted);">strike rate</div>';
+                html += '<div class="text-[10px]" style="color: var(--text-muted);">' + s.won + '/' + s.total + ' winners</div>';
+                html += '<div class="text-xs font-heading font-semibold mt-0.5" style="color: ' + pnlColor + ';">' + (roi >= 0 ? '+' : '') + roi.toFixed(1) + '% ROI</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
         });
-
-        if (raceHeadings.length < 2) return; // Not enough races to bother
-
-        // Add quick-nav pills
-        var navContainer = document.createElement('div');
-        navContainer.className = 'race-nav';
-        raceHeadings.forEach(function(h, idx) {
-            var raceMatch = h.textContent.match(/Race\s+(\d+)/i);
-            if (!raceMatch) return;
-            var pill = document.createElement('button');
-            pill.className = 'race-nav-pill';
-            pill.textContent = 'R' + raceMatch[1];
-            pill.setAttribute('data-race-idx', idx);
-            pill.onclick = function() {
-                var accordion = document.getElementById('race-acc-' + idx);
-                if (accordion) {
-                    accordion.classList.add('open');
-                    accordion.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            };
-            navContainer.appendChild(pill);
-        });
-
-        // Collect pre-race content (content before first race heading)
-        var preRaceNodes = [];
-        var node = tipsContent.firstChild;
-        while (node && node !== raceHeadings[0]) {
-            preRaceNodes.push(node);
-            node = node.nextSibling;
-        }
-
-        // For each race heading, collect all nodes until next race heading
-        var sections = [];
-        for (var i = 0; i < raceHeadings.length; i++) {
-            var sectionNodes = [];
-            var current = raceHeadings[i].nextSibling;
-            var nextHeading = raceHeadings[i + 1] || null;
-            while (current && current !== nextHeading) {
-                sectionNodes.push(current);
-                current = current.nextSibling;
-            }
-            sections.push({ heading: raceHeadings[i], nodes: sectionNodes });
-        }
-
-        // Rebuild content: pre-race nodes, nav, then accordions
-        tipsContent.innerHTML = '';
-        preRaceNodes.forEach(function(n) { tipsContent.appendChild(n); });
-        tipsContent.appendChild(navContainer);
-
-        sections.forEach(function(sec, idx) {
-            var accordion = document.createElement('div');
-            accordion.className = 'race-accordion';
-            accordion.id = 'race-acc-' + idx;
-
-            var header = document.createElement('div');
-            header.className = 'race-accordion-header';
-            header.innerHTML = '<span>' + sec.heading.outerHTML + '</span>' +
-                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
-            header.onclick = function() { accordion.classList.toggle('open'); };
-
-            var body = document.createElement('div');
-            body.className = 'race-accordion-body';
-            sec.nodes.forEach(function(n) { body.appendChild(n); });
-
-            accordion.appendChild(header);
-            accordion.appendChild(body);
-            tipsContent.appendChild(accordion);
-        });
+        container.innerHTML = html;
     })();
 
+    // --- Form Guide Builder ---
+    function findRaceData(raceNum) {
+        for (var i = 0; i < racesData.length; i++) {
+            if (racesData[i].num === raceNum) return racesData[i];
+        }
+        return null;
+    }
+
+    var rankColors = {1: 'var(--magenta)', 2: 'var(--cyan)', 3: 'var(--yellow)', 4: 'var(--purple)'};
+    var rankLabels = {1: 'TOP', 2: '2ND', 3: '3RD', 4: 'ROUGH'};
+    var smpLabels = {leader: 'LEAD', on_pace: 'PACE', midfield: 'MID', backmarker: 'BACK'};
+    var smpColors = {leader: 'var(--orange)', on_pace: 'var(--cyan)', midfield: 'var(--text-muted)', backmarker: 'var(--purple)'};
+
+    function buildFormGuide(race) {
+        if (!race || !race.runners || race.runners.length === 0) return '';
+        var hasResults = race.status && ['Paying', 'Closed', 'Final'].indexOf(race.status) !== -1;
+
+        var html = '<div class="form-guide">';
+        html += '<div class="form-guide-header">';
+        html += '<span class="text-xs font-display uppercase tracking-wider" style="color: var(--cyan);">Form Guide</span>';
+        if (hasResults) html += '<span class="fg-results-badge">Results</span>';
+        html += '</div>';
+
+        race.runners.forEach(function(r) {
+            if (r.x) {
+                html += '<div class="form-guide-row scratched">';
+                html += '<div class="fg-sc">' + (r.sc || '') + '</div>';
+                html += '<div class="fg-details"><div class="fg-name-row"><span class="fg-horse">' + (r.name || '').toUpperCase() + '</span></div></div>';
+                html += '<div class="fg-right"><span class="fg-scr">SCR</span></div>';
+                html += '</div>';
+                return;
+            }
+
+            var pickClass = '';
+            if (r.pick) pickClass = ' fg-pick fg-rank-' + r.pick.tip_rank;
+
+            html += '<div class="form-guide-row' + pickClass + '">';
+
+            // Saddlecloth
+            var scStyle = r.pick ? 'background: ' + rankColors[r.pick.tip_rank] + '22; border-color: ' + rankColors[r.pick.tip_rank] + '44; color: ' + rankColors[r.pick.tip_rank] : '';
+            html += '<div class="fg-sc" style="' + scStyle + '">' + (r.sc || '') + '</div>';
+
+            // Details
+            html += '<div class="fg-details"><div class="fg-name-row">';
+            html += '<span class="fg-horse">' + (r.name || '').toUpperCase() + '</span>';
+            if (r.pick) html += '<span class="fg-rank-badge" style="color: ' + rankColors[r.pick.tip_rank] + ';">' + rankLabels[r.pick.tip_rank] + '</span>';
+            if (r.smp && smpLabels[r.smp]) html += '<span class="fg-smp" style="color: ' + smpColors[r.smp] + ';">' + smpLabels[r.smp] + '</span>';
+            html += '</div><div class="fg-info">';
+            if (r.b) html += '<span>B' + r.b + '</span>';
+            if (r.j) html += '<span>' + r.j + '</span>';
+            if (r.w) html += '<span>' + r.w.toFixed(1) + 'kg</span>';
+            if (r.form) html += '<span>' + r.form + '</span>';
+            html += '</div></div>';
+
+            // Right: Odds + Result
+            html += '<div class="fg-right">';
+            if (r.odds) html += '<div class="fg-odds">$' + r.odds.toFixed(2) + '</div>';
+            if (hasResults && r.fp) {
+                var fpLabel = r.fp === 1 ? '1st' : r.fp === 2 ? '2nd' : r.fp === 3 ? '3rd' : r.fp + 'th';
+                var fpCls = r.fp === 1 ? 'fg-1st' : r.fp === 2 ? 'fg-2nd' : r.fp === 3 ? 'fg-3rd' : 'fg-other';
+                var div = '';
+                if (r.fp === 1 && r.wd) div = ' $' + r.wd.toFixed(2);
+                else if (r.fp <= 3 && r.pd) div = ' $' + r.pd.toFixed(2);
+                html += '<div class="fg-placed ' + fpCls + '">' + fpLabel + div + '</div>';
+            }
+            if (r.pick && r.pick.hit) html += '<div class="fg-winner-badge">WIN</div>';
+            html += '</div>';
+
+            html += '</div>';
+        });
+
+        html += '</div>';
+        return html;
+    }
+
+    // --- Build Race Accordion Header ---
+    function buildRaceHeader(heading, raceData) {
+        var headerHtml = '<div class="flex items-center gap-3 flex-1 min-w-0">';
+        if (raceData) {
+            headerHtml += '<span class="race-pill">R' + raceData.num + '</span>';
+            headerHtml += '<div class="min-w-0">';
+            headerHtml += '<div class="font-heading font-bold text-white text-sm truncate">' + (raceData.name || 'Race ' + raceData.num) + '</div>';
+            var meta = [];
+            if (raceData.dist) meta.push(raceData.dist + 'm');
+            if (raceData.cls) meta.push(raceData.cls);
+            if (raceData.prize) meta.push('$' + (raceData.prize >= 1000 ? Math.round(raceData.prize / 1000) + 'K' : raceData.prize));
+            if (raceData.time) meta.push(raceData.time);
+            if (meta.length) headerHtml += '<div class="text-xs" style="color: var(--text-muted);">' + meta.join(' · ') + '</div>';
+            headerHtml += '</div>';
+        } else {
+            headerHtml += '<span>' + heading.outerHTML + '</span>';
+        }
+        headerHtml += '</div>';
+
+        // Status badge
+        if (raceData && raceData.status && ['Paying', 'Closed', 'Final'].indexOf(raceData.status) !== -1) {
+            headerHtml += '<span class="fg-results-badge mr-2">Final</span>';
+        }
+
+        return headerHtml;
+    }
+
+    // --- Process Early Mail Content ---
+    var tipsContent = document.getElementById('early-mail-content');
+    if (!tipsContent) return;
+
+    var headings = tipsContent.querySelectorAll('h2.tips-heading, h3.tips-heading');
+    var raceHeadings = [];
+    var seqHeadings = [];
+    headings.forEach(function(h) {
+        if (/Race\s+\d+/i.test(h.textContent)) {
+            raceHeadings.push(h);
+        } else if (/Quaddie|Big\s*6|Early\s+Quaddie/i.test(h.textContent)) {
+            seqHeadings.push(h);
+        }
+    });
+
+    if (raceHeadings.length < 2) return;
+
+    // Collect all section headings in DOM order
+    var allHeadings = raceHeadings.concat(seqHeadings);
+    allHeadings.sort(function(a, b) {
+        if (a === b) return 0;
+        return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
+
+    // Collect pre-race content (intro/Big 3)
+    var preRaceNodes = [];
+    var node = tipsContent.firstChild;
+    while (node && node !== allHeadings[0]) {
+        preRaceNodes.push(node);
+        node = node.nextSibling;
+    }
+
+    // Collect sections (race + sequence)
+    var sections = [];
+    for (var i = 0; i < allHeadings.length; i++) {
+        var sectionNodes = [];
+        var current = allHeadings[i].nextSibling;
+        var nextHeading = allHeadings[i + 1] || null;
+        while (current && current !== nextHeading) {
+            sectionNodes.push(current);
+            current = current.nextSibling;
+        }
+        var isRace = /Race\s+\d+/i.test(allHeadings[i].textContent);
+        var raceNum = null;
+        if (isRace) {
+            var rm = allHeadings[i].textContent.match(/Race\s+(\d+)/i);
+            raceNum = rm ? parseInt(rm[1]) : null;
+        }
+        sections.push({ heading: allHeadings[i], nodes: sectionNodes, isRace: isRace, raceNum: raceNum });
+    }
+
+    // Rebuild content
+    tipsContent.innerHTML = '';
+
+    // Intro as expandable section
+    var hasIntro = false;
+    for (var pi = 0; pi < preRaceNodes.length; pi++) {
+        if (preRaceNodes[pi].textContent && preRaceNodes[pi].textContent.trim()) { hasIntro = true; break; }
+    }
+    if (hasIntro) {
+        var introAcc = document.createElement('div');
+        introAcc.className = 'race-accordion open';
+        introAcc.id = 'intro-acc';
+        var introHeader = document.createElement('div');
+        introHeader.className = 'race-accordion-header';
+        introHeader.innerHTML = '<div class="flex items-center gap-3"><span class="race-pill" style="background: linear-gradient(135deg, var(--purple), var(--magenta));">&#9733;</span><div><div class="font-heading font-bold text-white text-sm">Big 3 & Overview</div></div></div>' +
+            '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        introHeader.onclick = function() { introAcc.classList.toggle('open'); };
+        var introBody = document.createElement('div');
+        introBody.className = 'race-accordion-body';
+        preRaceNodes.forEach(function(n) { introBody.appendChild(n); });
+        introAcc.appendChild(introHeader);
+        introAcc.appendChild(introBody);
+        tipsContent.appendChild(introAcc);
+    }
+
+    // Nav pills
+    var navContainer = document.createElement('div');
+    navContainer.className = 'race-nav';
+    sections.forEach(function(sec, idx) {
+        if (!sec.isRace) return;
+        var pill = document.createElement('button');
+        pill.className = 'race-nav-pill';
+        pill.textContent = 'R' + sec.raceNum;
+        pill.setAttribute('data-idx', idx);
+        pill.onclick = function() {
+            var acc = document.getElementById('sec-acc-' + idx);
+            if (acc) {
+                acc.classList.add('open');
+                acc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+        navContainer.appendChild(pill);
+    });
+    tipsContent.appendChild(navContainer);
+
+    // Race and sequence sections
+    sections.forEach(function(sec, idx) {
+        var accordion = document.createElement('div');
+        accordion.className = 'race-accordion';
+        accordion.id = 'sec-acc-' + idx;
+
+        var header = document.createElement('div');
+        header.className = 'race-accordion-header';
+
+        var raceData = sec.isRace ? findRaceData(sec.raceNum) : null;
+        header.innerHTML = buildRaceHeader(sec.heading, raceData) +
+            '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        header.onclick = function() { accordion.classList.toggle('open'); };
+
+        var body = document.createElement('div');
+        body.className = 'race-accordion-body';
+
+        // Inject form guide card for race sections
+        if (sec.isRace && raceData) {
+            var fgHtml = buildFormGuide(raceData);
+            if (fgHtml) {
+                var fgDiv = document.createElement('div');
+                fgDiv.innerHTML = fgHtml;
+                body.appendChild(fgDiv);
+            }
+        }
+
+        // Add the original content nodes
+        sec.nodes.forEach(function(n) { body.appendChild(n); });
+
+        // Non-race sections get a different pill style
+        if (!sec.isRace) {
+            var seqPill = '<span class="race-pill" style="background: linear-gradient(135deg, var(--yellow), var(--orange));">&#9830;</span>';
+            header.innerHTML = '<div class="flex items-center gap-3">' + seqPill +
+                '<div class="font-heading font-bold text-white text-sm">' + sec.heading.textContent + '</div></div>' +
+                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        }
+
+        accordion.appendChild(header);
+        accordion.appendChild(body);
+        tipsContent.appendChild(accordion);
+    });
+
+    // --- Winner Badges ---
     function addBadge(el, label) {
         if (el.querySelector('.win-tick')) return;
         var tick = document.createElement('span');
@@ -527,14 +755,12 @@ document.addEventListener('DOMContentLoaded', function() {
     allEls.forEach(function(el) {
         var text = el.textContent || '';
 
-        // Detect race headers from headings or bold text containing "Race N"
         var raceMatch = text.match(/Race\s+(\d+)/i);
         if (raceMatch && (/^H[2-4]$/.test(el.tagName) || (el.tagName === 'STRONG' && text.match(/^Race\s+\d+/)))) {
             currentRace = parseInt(raceMatch[1]);
             return;
         }
 
-        // --- Selections: match (No.X) saddlecloth numbers ---
         if (hasSelections && currentRace && winners[String(currentRace)]) {
             if (!(el.tagName === 'P' && el.querySelector('li'))) {
                 var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
@@ -547,35 +773,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // --- Exotics: match "Trifecta|Exacta|Quinella|First" lines ---
         if (hasExotics && currentRace && winExotics[String(currentRace)]) {
             var exoticMatch = text.match(/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i);
-            if (exoticMatch) {
-                addBadge(el, 'HIT');
-            }
+            if (exoticMatch) addBadge(el, 'HIT');
         }
 
-        // --- Sequences: match "Skinny|Balanced|Wide" variant lines ---
         if (hasSequences) {
             var variantMatch = text.match(/^(Skinny|Balanced|Wide)\s*\(/i);
             if (variantMatch) {
                 var variant = variantMatch[1].toLowerCase();
-                for (var i = 0; i < winSequences.length; i++) {
-                    if (winSequences[i].variant === variant) {
-                        addBadge(el, 'HIT');
-                        break;
-                    }
+                for (var si = 0; si < winSequences.length; si++) {
+                    if (winSequences[si].variant === variant) { addBadge(el, 'HIT'); break; }
                 }
             }
         }
 
-        // --- Big 3 Multi: match "Multi" line in Big 3 section ---
         if (hasSequences && /^Multi\b/i.test(text)) {
             for (var j = 0; j < winSequences.length; j++) {
-                if (winSequences[j].type === 'big3_multi') {
-                    addBadge(el, 'HIT');
-                    break;
-                }
+                if (winSequences[j].type === 'big3_multi') { addBadge(el, 'HIT'); break; }
             }
         }
     });
