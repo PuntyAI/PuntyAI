@@ -88,15 +88,20 @@ async def aggregate_bet_type_performance(
         )
         .group_by(Pick.exotic_type)
     )
+    # Merge rows that normalise to the same exotic name
+    exotic_merged: dict[str, list] = {}
     for row in (await db.execute(ex_q)).all():
         etype, bets, winners, staked, pnl, best = row
-        staked = float(staked or 0)
-        pnl = float(pnl or 0)
-        winners = int(winners or 0)
-        results.append(_make_stat(
-            "exotic", _normalise_exotic(etype or "Exotic"),
-            bets, winners, staked, pnl, 0, float(best or 0),
-        ))
+        name = _normalise_exotic(etype or "Exotic")
+        if name in exotic_merged:
+            m = exotic_merged[name]
+            m[0] += bets; m[1] += int(winners or 0)
+            m[2] += float(staked or 0); m[3] += float(pnl or 0)
+            m[4] = max(m[4], float(best or 0))
+        else:
+            exotic_merged[name] = [bets, int(winners or 0), float(staked or 0), float(pnl or 0), float(best or 0)]
+    for name, (bets, winners, staked, pnl, best) in exotic_merged.items():
+        results.append(_make_stat("exotic", name, bets, winners, staked, pnl, 0, best))
 
     # --- SEQUENCES by type + variant ---
     seq_q = (
@@ -121,7 +126,7 @@ async def aggregate_bet_type_performance(
         staked = float(staked or 0)
         pnl = float(pnl or 0)
         winners = int(winners or 0)
-        label = f"{(stype or 'Sequence').title()} ({(svar or 'all').title()})"
+        label = f"{(stype or 'Sequence').replace('_', ' ').title()} ({(svar or 'all').title()})"
         results.append(_make_stat(
             "sequence", label,
             bets, winners, staked, pnl, 0, float(best or 0),
