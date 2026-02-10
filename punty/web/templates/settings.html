@@ -248,6 +248,33 @@
                     </div>
                 </div>
 
+                <!-- Facebook -->
+                <div id="facebook-section">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Facebook Page</label>
+                    <div id="facebook-display" class="flex items-center space-x-2">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
+                            {{ api_key_status.facebook if api_key_status.facebook else 'Not configured' }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.facebook else 'bg-red-100 text-red-700' }}">
+                            {{ 'Active' if api_key_status.facebook else 'Missing' }}
+                        </span>
+                        <button onclick="document.getElementById('facebook-edit').classList.remove('hidden'); this.parentElement.classList.add('hidden')"
+                                class="text-punty-coral hover:underline text-sm">Configure</button>
+                    </div>
+                    <div id="facebook-edit" class="hidden space-y-2 mt-2">
+                        <input type="text" id="fb_page_id" placeholder="Page ID (e.g. 123456789)"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="fb_access_token" placeholder="Page Access Token"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        <div class="flex space-x-2">
+                            <button onclick="saveApiKeys('facebook', {facebook_page_id: document.getElementById('fb_page_id').value, facebook_page_access_token: document.getElementById('fb_access_token').value})"
+                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
+                            <button onclick="document.getElementById('facebook-edit').classList.add('hidden'); document.getElementById('facebook-display').classList.remove('hidden')"
+                                    class="text-gray-500 hover:underline text-sm">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 

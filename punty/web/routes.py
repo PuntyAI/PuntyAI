@@ -447,10 +447,12 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     from punty.config import settings as app_settings
     openai_key = await get_api_key(db, "openai_api_key", app_settings.openai_api_key)
     twitter_key = await get_api_key(db, "twitter_api_key", app_settings.twitter_api_key)
+    facebook_token = await get_api_key(db, "facebook_page_access_token")
     # Only pass masked values to template — never expose full keys in HTML
     api_key_status = {
         "openai": ("..." + openai_key[-4:]) if openai_key else "",
         "twitter": ("..." + twitter_key[-4:]) if twitter_key else "",
+        "facebook": ("..." + facebook_token[-4:]) if facebook_token else "",
     }
 
     # Load personality prompt (DB first, then file fallback)

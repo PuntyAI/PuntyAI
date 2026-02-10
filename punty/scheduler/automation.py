@@ -219,8 +219,30 @@ async def auto_post_to_twitter(content_id: str, db: AsyncSession) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+async def auto_post_to_facebook(content_id: str, db: AsyncSession) -> dict:
+    """Post approved content to Facebook Page.
+
+    Returns: dict with post status
+    """
+    from punty.delivery.facebook import FacebookDelivery
+
+    fb = FacebookDelivery(db)
+
+    if not await fb.is_configured():
+        logger.warning("Facebook not configured, skipping auto-post")
+        return {"status": "skipped", "reason": "Facebook not configured"}
+
+    try:
+        result = await fb.send(content_id)
+        logger.info(f"Auto-posted to Facebook: {content_id} -> {result.get('post_id')}")
+        return result
+    except Exception as e:
+        logger.error(f"Facebook auto-post failed for {content_id}: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
-    """Full automation: validate, approve, and post to Twitter.
+    """Full automation: validate, approve, and post to Twitter and Facebook.
 
     Returns: combined result dict
     """
@@ -236,6 +258,9 @@ async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
     # Step 2: Post to Twitter
     twitter_result = await auto_post_to_twitter(content_id, db)
 
+    # Step 3: Post to Facebook
+    facebook_result = await auto_post_to_facebook(content_id, db)
+
     log_system(f"Auto-approved and posted: {content_id}", status="success")
 
     return {
@@ -243,6 +268,7 @@ async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
         "content_id": content_id,
         "approval": approve_result,
         "twitter": twitter_result,
+        "facebook": facebook_result,
     }
 
 

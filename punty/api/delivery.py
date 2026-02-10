@@ -122,6 +122,53 @@ async def delete_tweet(tweet_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/facebook/status")
+async def facebook_status(db: AsyncSession = Depends(get_db)):
+    """Check Facebook Page configuration status."""
+    from punty.delivery.facebook import FacebookDelivery
+
+    fb = FacebookDelivery(db)
+
+    if not await fb.is_configured():
+        return {
+            "configured": False,
+            "message": "Facebook not configured. Set Page ID and Access Token in Settings.",
+        }
+
+    page_info = await fb.get_page_info()
+    return {"configured": True, "page": page_info}
+
+
+@router.post("/facebook/post/{content_id}")
+async def send_facebook_post(content_id: str, db: AsyncSession = Depends(get_db)):
+    """Post content to Facebook Page."""
+    from punty.delivery.facebook import FacebookDelivery
+
+    fb = FacebookDelivery(db)
+
+    try:
+        result = await fb.send(content_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/facebook/post/{post_id}")
+async def delete_facebook_post(post_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete a Facebook post."""
+    from punty.delivery.facebook import FacebookDelivery
+
+    fb = FacebookDelivery(db)
+
+    try:
+        result = await fb.delete_post(post_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/send")
 async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db)):
     """Send content to a platform."""
@@ -152,6 +199,16 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
         try:
             # Use thread for Early Mail (too long for single tweet)
             result = await twitter.send_thread(request.content_id)
+            return result
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    elif request.platform == "facebook":
+        from punty.delivery.facebook import FacebookDelivery
+
+        fb = FacebookDelivery(db)
+        try:
+            result = await fb.send(request.content_id)
             return result
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
