@@ -266,11 +266,11 @@
             </div>
             <div>
                 <p class="text-xs text-gray-500 uppercase">Staked</p>
-                <p class="text-lg font-bold text-gray-900">{{ '%.1f'|format(performance.total_staked) }}U</p>
+                <p class="text-lg font-bold text-gray-900">{{ '%+.1f'|format(performance.total_staked) }}U</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 uppercase">Returned</p>
-                <p class="text-lg font-bold text-gray-900">{{ '%.1f'|format(performance.total_returned) }}U</p>
+                <p class="text-lg font-bold text-gray-900">{{ '%+.1f'|format(performance.total_returned) }}U</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 uppercase">Net P&L</p>
@@ -317,8 +317,8 @@
                     {{ '%+.2f'|format(latest.cumulative_pnl) }}U
                 </div>
                 <div class="text-xs text-gray-500">
-                    Staked: {{ '%.0f'|format(latest.cumulative_staked) }}U &bull;
-                    Returned: {{ '%.0f'|format(latest.cumulative_returned) }}U
+                    Staked: {{ '%+.0f'|format(latest.cumulative_staked) }}U &bull;
+                    Returned: {{ '%+.0f'|format(latest.cumulative_returned) }}U
                 </div>
             </div>
             {% endif %}
@@ -354,8 +354,8 @@
                         </td>
                         <td class="py-2 px-3 text-right">{{ day.bets }}</td>
                         <td class="py-2 px-3 text-right">{{ day.winners }}</td>
-                        <td class="py-2 px-3 text-right">{{ '%.2f'|format(day.staked) }}U</td>
-                        <td class="py-2 px-3 text-right">{{ '%.2f'|format(day.returned) }}U</td>
+                        <td class="py-2 px-3 text-right">{{ '%+.2f'|format(day.staked) }}U</td>
+                        <td class="py-2 px-3 text-right">{{ '%+.2f'|format(day.returned) }}U</td>
                         <td class="py-2 px-3 text-right font-medium {{ 'text-green-600' if day.pnl >= 0 else 'text-red-600' }}">
                             {{ '%+.2f'|format(day.pnl) }}U
                         </td>

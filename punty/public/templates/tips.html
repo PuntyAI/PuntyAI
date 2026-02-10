@@ -33,7 +33,7 @@
             el.innerHTML = '<span style="color:var(--text-muted)" class="text-xs font-heading font-semibold uppercase tracking-wider">All-time</span>' +
                 '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--cyan)">' + rate + '%</span> <span class="text-xs" style="color:var(--text-muted)">strike rate</span></span>' +
                 '<span class="text-sm"><span class="font-heading font-bold" style="color:var(--text-secondary)">' + won + '/' + total + '</span> <span class="text-xs" style="color:var(--text-muted)">winners</span></span>' +
-                '<span class="text-sm"><span class="font-heading font-bold ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400') + '">$' + Math.round(pnl) + '</span> <span class="text-xs" style="color:var(--text-muted)">P&L</span></span>';
+                '<span class="text-sm"><span class="font-heading font-bold ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400') + '">' + (pnl >= 0 ? '+' : '') + Math.round(pnl) + 'U</span> <span class="text-xs" style="color:var(--text-muted)">P&L</span></span>';
             el.classList.remove('hidden');
         }).catch(()=>{});
         </script>

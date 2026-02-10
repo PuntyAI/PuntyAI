@@ -599,10 +599,9 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     )
     rows = result.all()
 
-    # For sequences, we need to calculate actual stake (combos × unit_price)
-    # Query all sequence picks to get their legs for proper stake calculation
+    # For sequences, exotic_stake already stores total outlay (parser.py:423)
     seq_result = await db.execute(
-        select(Pick)
+        select(func.sum(Pick.exotic_stake))
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date == target_date,
@@ -610,18 +609,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             Pick.pick_type == "sequence",
         )
     )
-    sequence_picks = seq_result.scalars().all()
-    sequence_total_stake = 0.0
-    for seq_pick in sequence_picks:
-        if seq_pick.sequence_legs and seq_pick.exotic_stake:
-            try:
-                legs = json.loads(seq_pick.sequence_legs)
-                combos = 1
-                for leg in legs:
-                    combos *= len(leg)
-                sequence_total_stake += combos * seq_pick.exotic_stake
-            except (json.JSONDecodeError, TypeError):
-                sequence_total_stake += seq_pick.exotic_stake or 0
+    sequence_total_stake = float(seq_result.scalar() or 0)
 
     by_product = {}
     total_bets = 0
@@ -643,7 +631,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         elif pick_type == "big3_multi":
             staked = float(row.total_staked_exotic or 10.0)
         elif pick_type == "sequence":
-            # Use properly calculated stake (combos × unit_price)
+            # exotic_stake already stores total outlay
             staked = sequence_total_stake
         else:
             staked = float(row.total_staked_exotic or count)
@@ -810,18 +798,11 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             sort_datetime = datetime.combine(meeting_date, datetime.min.time().replace(hour=min(estimated_hour, 18)))
 
         # Calculate actual staked amount
-        # For sequences, exotic_stake is unit price - need to multiply by combos
-        if pick.pick_type == "sequence" and pick.sequence_legs and pick.exotic_stake:
-            try:
-                legs = _json.loads(pick.sequence_legs)
-                combos = 1
-                for leg in legs:
-                    combos *= len(leg)
-                staked = combos * pick.exotic_stake
-            except (json.JSONDecodeError, TypeError):
-                staked = float(pick.exotic_stake or 0)
+        # exotic_stake already stores total outlay for sequences/exotics (parser.py:423)
+        if pick.pick_type in ("sequence", "exotic", "big3_multi"):
+            staked = float(pick.exotic_stake or 0)
         else:
-            staked = float(pick.bet_stake or 0) + float(pick.exotic_stake or 0)
+            staked = float(pick.bet_stake or 0)
 
         pick_events.append({
             "sort_datetime": sort_datetime,
