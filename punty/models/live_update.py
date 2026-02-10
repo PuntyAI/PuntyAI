@@ -25,6 +25,8 @@ class LiveUpdate(Base):
     content: Mapped[str] = mapped_column(Text)
     tweet_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     parent_tweet_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    facebook_comment_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    parent_facebook_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     horse_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     odds: Mapped[Optional[float]] = mapped_column(nullable=True)
     pnl: Mapped[Optional[float]] = mapped_column(nullable=True)
@@ -38,6 +40,7 @@ class LiveUpdate(Base):
             "update_type": self.update_type,
             "content": self.content,
             "tweet_id": self.tweet_id,
+            "facebook_comment_id": self.facebook_comment_id,
             "horse_name": self.horse_name,
             "odds": self.odds,
             "pnl": self.pnl,

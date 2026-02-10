@@ -266,6 +266,79 @@ class TestFacebookDeliveryDelete:
         assert result["post_id"] == "123456_789"
 
 
+class TestFacebookDeliveryComment:
+    """Test FacebookDelivery.post_comment()."""
+
+    @pytest.mark.asyncio
+    async def test_post_comment_on_post(self):
+        from punty.delivery.facebook import FacebookDelivery
+
+        db = AsyncMock()
+        fb = FacebookDelivery(db)
+        fb._page_id = "123456"
+        fb._access_token = "EAAtoken123"
+        fb._keys_loaded = True
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": "123456_789_comment1"}
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = await fb.post_comment("123456_789", "Great win!")
+
+        assert result["status"] == "commented"
+        assert result["comment_id"] == "123456_789_comment1"
+        assert result["parent_post_id"] == "123456_789"
+        # Verify URL includes /comments
+        call_args = mock_client.post.call_args
+        assert "123456_789/comments" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_post_comment_raises_if_not_configured(self):
+        from punty.delivery.facebook import FacebookDelivery
+
+        db = AsyncMock()
+        fb = FacebookDelivery(db)
+        fb._page_id = None
+        fb._access_token = None
+        fb._keys_loaded = True
+
+        with pytest.raises(ValueError, match="Facebook not configured"):
+            await fb.post_comment("123456_789", "Hello")
+
+    @pytest.mark.asyncio
+    async def test_post_comment_raises_on_api_error(self):
+        from punty.delivery.facebook import FacebookDelivery
+
+        db = AsyncMock()
+        fb = FacebookDelivery(db)
+        fb._page_id = "123456"
+        fb._access_token = "EAAtoken123"
+        fb._keys_loaded = True
+
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {"error": {"message": "Invalid post ID"}}
+        mock_response.text = "Invalid post ID"
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(ValueError, match="Facebook comment error"):
+                await fb.post_comment("bad_id", "Hello")
+
+
 class TestAutoPostToFacebook:
     """Test automation.auto_post_to_facebook()."""
 

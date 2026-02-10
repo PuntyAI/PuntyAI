@@ -439,26 +439,28 @@ class ResultsMonitor:
                     self.wrapups_generated.add(meeting_id)
                     logger.info(f"Wrap-up generated for {meeting.venue}")
 
-                    # Auto-approve and post to Twitter
+                    # Auto-approve and post to Twitter + Facebook
                     if content:
-                        from punty.scheduler.automation import auto_approve_content, auto_post_to_twitter
+                        from punty.scheduler.automation import auto_approve_content, auto_post_to_twitter, auto_post_to_facebook
                         content_id = content.get('content_id') if isinstance(content, dict) else None
                         if content_id:
                             approval = await auto_approve_content(content_id, db)
                             if approval.get("status") == "approved":
                                 logger.info(f"Wrap-up auto-approved for {meeting.venue}")
                                 await auto_post_to_twitter(content_id, db)
+                                await auto_post_to_facebook(content_id, db)
                             else:
                                 logger.warning(f"Wrap-up auto-approval failed for {meeting.venue}: {approval.get('issues')}")
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
 
     async def _check_big_wins(self, db: AsyncSession, meeting_id: str, race_number: int):
-        """Check for big wins (>= 5x outlay) and post celebration tweet replies."""
+        """Check for big wins (>= 5x outlay) and post celebration replies."""
         from punty.models.pick import Pick
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
+        from punty.delivery.facebook import FacebookDelivery
         from punty.results.celebrations import compose_celebration_tweet
 
         result = await db.execute(
@@ -476,16 +478,15 @@ class ResultsMonitor:
             if pick.pnl < 4 * stake:
                 continue
 
-            # Find the meeting's early mail tweet ID
+            # Find the meeting's early mail
             em_result = await db.execute(
                 select(Content).where(
                     Content.meeting_id == meeting_id,
                     Content.content_type == "early_mail",
-                    Content.twitter_id.isnot(None),
                 ).order_by(Content.created_at.desc())
             )
             early_mail = em_result.scalars().first()
-            if not early_mail or not early_mail.twitter_id:
+            if not early_mail:
                 return
 
             collect = stake + pick.pnl
@@ -497,17 +498,31 @@ class ResultsMonitor:
                 bet_type=pick.bet_type or "Win",
             )
 
+            # Post to Twitter
             reply_tweet_id = None
-            twitter = TwitterDelivery(db)
-            if await twitter.is_configured():
-                try:
-                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
-                    reply_tweet_id = reply_result.get("tweet_id")
-                    logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
-                except Exception as e:
-                    logger.warning(f"Failed to post celebration reply: {e}")
+            if early_mail.twitter_id:
+                twitter = TwitterDelivery(db)
+                if await twitter.is_configured():
+                    try:
+                        reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                        reply_tweet_id = reply_result.get("tweet_id")
+                        logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
+                    except Exception as e:
+                        logger.warning(f"Failed to post celebration reply: {e}")
 
-            # Save to DB regardless of Twitter success
+            # Post to Facebook as comment on early mail post
+            fb_comment_id = None
+            if early_mail.facebook_id:
+                fb = FacebookDelivery(db)
+                if await fb.is_configured():
+                    try:
+                        fb_result = await fb.post_comment(early_mail.facebook_id, tweet_text)
+                        fb_comment_id = fb_result.get("comment_id")
+                        logger.info(f"Posted Facebook celebration for {pick.horse_name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to post Facebook celebration: {e}")
+
+            # Save to DB regardless of post success
             update = LiveUpdate(
                 meeting_id=meeting_id,
                 race_number=race_number,
@@ -515,6 +530,8 @@ class ResultsMonitor:
                 content=tweet_text,
                 tweet_id=reply_tweet_id,
                 parent_tweet_id=early_mail.twitter_id,
+                facebook_comment_id=fb_comment_id,
+                parent_facebook_id=early_mail.facebook_id,
                 horse_name=pick.horse_name,
                 odds=pick.odds_at_tip,
                 pnl=pick.pnl,
@@ -523,11 +540,12 @@ class ResultsMonitor:
             await db.flush()
 
     async def _check_pace_bias(self, db: AsyncSession, meeting, statuses: dict, just_completed: int):
-        """Analyze pace bias and post tweet reply if significant pattern detected."""
+        """Analyze pace bias and post reply if significant pattern detected."""
         from punty.results.pace_analysis import analyze_pace_bias, compose_pace_tweet, find_bias_fits
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
+        from punty.delivery.facebook import FacebookDelivery
 
         meeting_id = meeting.id
 
@@ -556,16 +574,17 @@ class ResultsMonitor:
         if not bias_result.bias_detected and posted_count > 0:
             return
 
-        # Find the meeting's early mail tweet ID
+        # Find the meeting's early mail
         em_result = await db.execute(
             select(Content).where(
                 Content.meeting_id == meeting_id,
                 Content.content_type == "early_mail",
-                Content.twitter_id.isnot(None),
             ).order_by(Content.created_at.desc())
         )
         early_mail = em_result.scalars().first()
-        if not early_mail or not early_mail.twitter_id:
+        if not early_mail:
+            return
+        if not early_mail.twitter_id and not early_mail.facebook_id:
             return
 
         # Find horses in remaining races that fit the bias pattern
@@ -582,18 +601,34 @@ class ResultsMonitor:
         if not tweet_text:
             return
 
+        # Post to Twitter
         reply_tweet_id = None
-        twitter = TwitterDelivery(db)
-        if await twitter.is_configured():
-            try:
-                reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
-                reply_tweet_id = reply_result.get("tweet_id")
-                self.pace_updates_posted[meeting_id] = posted_count + 1
-                logger.info(f"Posted pace analysis for {meeting.venue} (update {posted_count + 1}, bias: {bias_result.bias_type})")
-            except Exception as e:
-                logger.warning(f"Failed to post pace analysis reply: {e}")
+        if early_mail.twitter_id:
+            twitter = TwitterDelivery(db)
+            if await twitter.is_configured():
+                try:
+                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_tweet_id = reply_result.get("tweet_id")
+                    self.pace_updates_posted[meeting_id] = posted_count + 1
+                    logger.info(f"Posted pace analysis for {meeting.venue} (update {posted_count + 1}, bias: {bias_result.bias_type})")
+                except Exception as e:
+                    logger.warning(f"Failed to post pace analysis reply: {e}")
 
-        # Save to DB regardless of Twitter success
+        # Post to Facebook as comment
+        fb_comment_id = None
+        if early_mail.facebook_id:
+            fb = FacebookDelivery(db)
+            if await fb.is_configured():
+                try:
+                    fb_result = await fb.post_comment(early_mail.facebook_id, tweet_text)
+                    fb_comment_id = fb_result.get("comment_id")
+                    if not reply_tweet_id:
+                        self.pace_updates_posted[meeting_id] = posted_count + 1
+                    logger.info(f"Posted Facebook pace analysis for {meeting.venue}")
+                except Exception as e:
+                    logger.warning(f"Failed to post Facebook pace analysis: {e}")
+
+        # Save to DB regardless of post success
         update = LiveUpdate(
             meeting_id=meeting_id,
             race_number=just_completed,
@@ -601,6 +636,8 @@ class ResultsMonitor:
             content=tweet_text,
             tweet_id=reply_tweet_id,
             parent_tweet_id=early_mail.twitter_id,
+            facebook_comment_id=fb_comment_id,
+            parent_facebook_id=early_mail.facebook_id,
         )
         db.add(update)
         await db.flush()

@@ -119,6 +119,48 @@ class FacebookDelivery:
             logger.error(f"Facebook HTTP error: {e}")
             raise ValueError(f"Facebook API error: {e}")
 
+    async def post_comment(self, parent_post_id: str, message: str) -> dict:
+        """Post a comment on an existing Facebook post.
+
+        Args:
+            parent_post_id: The Facebook post ID to comment on
+            message: Comment text
+
+        Returns:
+            Dict with comment_id and parent_post_id
+        """
+        if not await self.is_configured():
+            raise ValueError("Facebook not configured")
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"{GRAPH_API_BASE}/{parent_post_id}/comments",
+                    data={
+                        "message": message,
+                        "access_token": self._access_token,
+                    },
+                )
+
+            if resp.status_code != 200:
+                error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                error_msg = error_data.get("error", {}).get("message", resp.text)
+                raise ValueError(f"Facebook comment error ({resp.status_code}): {error_msg}")
+
+            comment_data = resp.json()
+            comment_id = comment_data.get("id", "")
+
+            logger.info(f"Posted Facebook comment on {parent_post_id}: {comment_id}")
+            return {
+                "status": "commented",
+                "comment_id": comment_id,
+                "parent_post_id": parent_post_id,
+            }
+
+        except httpx.HTTPError as e:
+            logger.error(f"Facebook comment HTTP error: {e}")
+            raise ValueError(f"Facebook API error: {e}")
+
     async def delete_post(self, post_id: str) -> dict:
         """Delete a Facebook post."""
         if not await self.is_configured():
