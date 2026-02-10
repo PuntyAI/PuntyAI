@@ -405,16 +405,17 @@
 
     /* Overview section (intro before Big 3) */
     .overview-section {
-        margin-bottom: 1rem; padding: 1.25rem; border-radius: 12px;
-        border: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.02);
+        margin-bottom: 1.25rem; padding: 1.5rem; border-radius: 12px;
+        border: 1px solid rgba(233, 30, 140, 0.15);
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.04), rgba(0, 212, 255, 0.03));
     }
     .overview-section > p:first-child { font-size: 1.05rem; line-height: 1.75; }
+    .overview-section h3.tips-heading,
     .overview-section h4.tips-heading {
-        font-size: 0.8rem; letter-spacing: 0.1em;
+        font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase;
         margin-top: 1.25rem; margin-bottom: 0.5rem; padding-bottom: 0.35rem;
-        border-bottom: 1px solid rgba(233, 30, 140, 0.12);
+        border-bottom: 1px solid rgba(233, 30, 140, 0.15);
     }
-    .overview-section h4.tips-heading:first-child { margin-top: 0; }
     .overview-label strong {
         font-family: 'Rajdhani', sans-serif; font-size: 0.8rem;
         letter-spacing: 0.06em; text-transform: uppercase;
@@ -591,11 +592,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (hasIntro) {
         // Find the Big 3 heading to split overview from Big 3
         var big3Idx = -1;
+        var big3Re = /BIG\s*3|BIG\s*THREE|PUNTY.S\s+BIG/i;
         for (var pi = 0; pi < preRaceNodes.length; pi++) {
             var n = preRaceNodes[pi];
-            if (n.nodeType === 1 && /^H[2-4]$/.test(n.tagName) && /BIG\s*3|BIG\s*THREE|PUNTY.S\s+BIG/i.test(n.textContent)) {
-                big3Idx = pi;
-                break;
+            if (n.nodeType !== 1) continue;
+            // Check h2-h4 headings
+            if (/^H[2-4]$/.test(n.tagName) && big3Re.test(n.textContent)) {
+                big3Idx = pi; break;
+            }
+            // Fallback: bold text in paragraph (AI may omit ### prefix)
+            if (n.tagName === 'P') {
+                var sEl = n.querySelector('strong');
+                if (sEl && big3Re.test(sEl.textContent)) { big3Idx = pi; break; }
             }
         }
 
