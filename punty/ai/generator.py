@@ -304,6 +304,16 @@ class ContentGenerator:
             track = meeting.get("venue", "")
             going = meeting.get("track_condition", "Unknown")
 
+            # Strategy track record (actual $ performance per bet type)
+            try:
+                from punty.memory.strategy import build_strategy_context
+                strategy_ctx = await build_strategy_context(self.db, track=track, going=going)
+                if strategy_ctx:
+                    learning_parts.append(strategy_ctx)
+                    learning_parts.append("")
+            except Exception as e:
+                logger.warning(f"Failed to build strategy context: {e}")
+
             # Get API key for embedding-based retrieval
             api_key = await get_api_key(self.db, "openai_api_key")
 

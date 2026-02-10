@@ -559,6 +559,13 @@ async def _settle_picks_for_race_impl(
         except Exception as e:
             logger.warning(f"Failed to generate race assessment: {e}")
 
+        # Refresh strategy pattern insights (aggregated bet-type performance)
+        try:
+            from punty.memory.strategy import populate_pattern_insights
+            await populate_pattern_insights(db)
+        except Exception as e:
+            logger.warning(f"Failed to refresh strategy insights: {e}")
+
     return settled_count
 
 
