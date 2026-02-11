@@ -215,9 +215,10 @@ class ClaudeAgent:
         self.client = AsyncAnthropic(api_key=api_key)
         self.conversations: dict[int, list] = {}
 
-    async def chat(self, chat_id: int, user_message: str) -> str:
+    async def chat(self, chat_id: int, user_message) -> str:
         """Process a user message through the agentic tool-use loop.
 
+        user_message can be a string or a list of content blocks (for images).
         Returns the final text response from Claude.
         """
         if chat_id not in self.conversations:

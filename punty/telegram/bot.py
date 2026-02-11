@@ -1,6 +1,7 @@
 """Telegram bot for PuntyAI server management."""
 
 import asyncio
+import base64
 import logging
 from typing import Optional
 
@@ -76,6 +77,9 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("clear", self._handle_clear))
             self.application.add_handler(
                 MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message)
+            )
+            self.application.add_handler(
+                MessageHandler(filters.PHOTO, self._handle_photo)
             )
 
             # Create the Claude agent
@@ -158,6 +162,45 @@ class TelegramBot:
         if not user_text or not user_text.strip():
             return
 
+        await self._process_message(update, context, chat_id, user_text)
+
+    async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle incoming photo messages."""
+        if not self._check_authorized(update):
+            await update.message.reply_text("Unauthorized.")
+            return
+
+        chat_id = update.effective_chat.id
+        caption = update.message.caption or "What's in this image?"
+
+        # Get the largest photo size
+        photo = update.message.photo[-1]
+
+        try:
+            file = await context.bot.get_file(photo.file_id)
+            image_bytes = await file.download_as_bytearray()
+            image_b64 = base64.b64encode(bytes(image_bytes)).decode("utf-8")
+
+            # Build multimodal content for Claude
+            content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": image_b64,
+                    },
+                },
+                {"type": "text", "text": caption},
+            ]
+
+            await self._process_message(update, context, chat_id, content)
+        except Exception as e:
+            logger.error(f"Photo handling error: {e}")
+            await update.message.reply_text(f"Failed to process image: {e}")
+
+    async def _process_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_content):
+        """Process a message (text string or content blocks) through the agent."""
         # Get or create lock for this chat
         if chat_id not in self._chat_locks:
             self._chat_locks[chat_id] = asyncio.Lock()
@@ -172,7 +215,7 @@ class TelegramBot:
             await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
             try:
-                response = await self.agent.chat(chat_id, user_text)
+                response = await self.agent.chat(chat_id, user_content)
             except Exception as e:
                 logger.error(f"Agent error: {e}")
                 response = f"Error: {e}"
