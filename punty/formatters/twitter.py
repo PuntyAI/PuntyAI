@@ -110,6 +110,8 @@ class TwitterFormatter:
     @classmethod
     def _clean_markdown(cls, content: str) -> str:
         """Convert markdown formatting to Unicode equivalents for X."""
+        # Remove the PUNTY EARLY MAIL title line (content has its own heading)
+        content = re.sub(r'^\*PUNTY EARLY MAIL[^*]*\*\s*\n*', '', content, flags=re.IGNORECASE)
         # Remove literal "### 1) HEADER" lines (AI template artifact)
         content = re.sub(r'^#{1,3}\s+\d+\)\s*HEADER\s*$', '', content, flags=re.MULTILINE)
         # Remove headers and any leading section numbers like "### 2) MEET SNAPSHOT"
@@ -198,14 +200,11 @@ class TwitterFormatter:
         e = cls.EMOJIS
         tweets = []
 
-        # First tweet is the hook
-        if content_type == "early_mail":
-            venue_text = f"{venue} " if venue else ""
-            first_tweet = f"{e['racing']} PUNTY'S {venue_text}TIPS\n\n"
-        elif content_type == "results":
+        # First tweet starts with emoji prefix (content already has its own title)
+        if content_type == "results":
             first_tweet = f"{e['trophy']} RESULTS\n\n"
         else:
-            first_tweet = f"{e['horse']} "
+            first_tweet = f"{e['racing']} "
 
         # Split content into paragraphs/sections
         sections = content.split("\n\n")
