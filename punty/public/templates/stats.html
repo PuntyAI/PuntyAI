@@ -244,7 +244,7 @@
                                 </div>
                                 <span class="sf-group-title" style="color: var(--cyan);">Race</span>
                             </div>
-                            <div class="grid grid-cols-3 gap-x-3 gap-y-2.5">
+                            <div class="grid grid-cols-2 gap-x-3 gap-y-2.5">
                                 <div>
                                     <label class="sf-label">Distance</label>
                                     <div class="flex gap-1.5">
@@ -259,17 +259,18 @@
                                         <input type="number" id="f-field-max" placeholder="Max" min="1" max="24" class="sf-input">
                                     </div>
                                 </div>
-                                <div>
+                                <div class="col-span-2">
                                     <label class="sf-label">Class</label>
                                     <input type="text" id="f-class" list="dl-classes" autocomplete="off" placeholder="Any class" class="sf-input">
                                     <datalist id="dl-classes"></datalist>
                                 </div>
-                                <div class="col-span-3">
-                                    <label class="sf-label">Date Range</label>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <input type="date" id="f-date-from" class="sf-input" style="color-scheme: dark;" title="From date">
-                                        <input type="date" id="f-date-to" class="sf-input" style="color-scheme: dark;" title="To date">
-                                    </div>
+                                <div>
+                                    <label class="sf-label">From</label>
+                                    <input type="date" id="f-date-from" class="sf-input" style="color-scheme: dark;" title="From date">
+                                </div>
+                                <div>
+                                    <label class="sf-label">To</label>
+                                    <input type="date" id="f-date-to" class="sf-input" style="color-scheme: dark;" title="To date">
                                 </div>
                             </div>
                         </div>
