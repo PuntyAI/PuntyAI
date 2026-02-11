@@ -173,6 +173,13 @@ class ResultsMonitor:
 
     async def _poll_loop(self):
         self.consecutive_errors = 0
+
+        # One-time retrospective check for missed celebrations/alerts after restart
+        try:
+            await self._check_retrospective_updates()
+        except Exception as e:
+            logger.warning(f"Retrospective check failed: {e}", exc_info=True)
+
         while self.running:
             # Reset tracking state at midnight to prevent unbounded growth
             today = melb_now().date()
@@ -207,6 +214,186 @@ class ResultsMonitor:
             interval = await self._next_interval()
             logger.debug(f"Next poll in {interval:.0f}s")
             await asyncio.sleep(interval)
+
+    async def _check_retrospective_updates(self):
+        """Check for missed celebrations and change alerts after restart.
+
+        Runs once on monitor startup. Finds settled races from today that
+        are missing LiveUpdate records for celebrations/clean sweeps, and
+        picks affected by scratchings with no alert posted.
+        """
+        from punty.models.database import async_session
+        from punty.models.meeting import Meeting, Race
+        from punty.models.pick import Pick
+        from punty.models.live_update import LiveUpdate
+        from punty.config import melb_today
+        from sqlalchemy import and_
+
+        async with async_session() as db:
+            today = melb_today()
+
+            # Find today's selected meetings
+            meetings_result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                )
+            )
+            meetings = meetings_result.scalars().all()
+            if not meetings:
+                return
+
+            meeting_map = {m.id: m for m in meetings}
+            meeting_ids = list(meeting_map.keys())
+
+            # Find races with settled picks today
+            settled_result = await db.execute(
+                select(Pick.meeting_id, Pick.race_number)
+                .where(
+                    Pick.meeting_id.in_(meeting_ids),
+                    Pick.pick_type == "selection",
+                    Pick.settled == True,
+                )
+                .distinct()
+            )
+            settled_races = settled_result.all()
+
+            if not settled_races:
+                return
+
+            # Find existing LiveUpdates for today (to avoid duplicates)
+            existing_result = await db.execute(
+                select(LiveUpdate.meeting_id, LiveUpdate.race_number, LiveUpdate.update_type)
+                .where(LiveUpdate.meeting_id.in_(meeting_ids))
+            )
+            existing_updates = set()
+            for row in existing_result.all():
+                existing_updates.add((row[0], row[1], row[2]))
+
+            posted = 0
+            for meeting_id, race_number in settled_races:
+                meeting = meeting_map.get(meeting_id)
+                if not meeting:
+                    continue
+
+                # Check for missed clean sweep
+                if (meeting_id, race_number, "clean_sweep") not in existing_updates:
+                    try:
+                        await self._check_clean_sweep(db, meeting, race_number)
+                        # Check if one was actually posted
+                        check = await db.execute(
+                            select(LiveUpdate).where(
+                                LiveUpdate.meeting_id == meeting_id,
+                                LiveUpdate.race_number == race_number,
+                                LiveUpdate.update_type == "clean_sweep",
+                            ).limit(1)
+                        )
+                        if check.scalar_one_or_none():
+                            posted += 1
+                    except Exception as e:
+                        logger.debug(f"Retrospective clean sweep check failed for {meeting_id} R{race_number}: {e}")
+
+                # Check for missed big win celebrations
+                if (meeting_id, race_number, "celebration") not in existing_updates:
+                    try:
+                        await self._check_big_wins(db, meeting_id, race_number)
+                    except Exception as e:
+                        logger.debug(f"Retrospective big win check failed for {meeting_id} R{race_number}: {e}")
+
+            # Check for missed scratching alerts on unsettled picks
+            for meeting_id in meeting_ids:
+                meeting = meeting_map[meeting_id]
+                # Find our unsettled picks
+                unsettled_result = await db.execute(
+                    select(Pick).where(
+                        Pick.meeting_id == meeting_id,
+                        Pick.pick_type == "selection",
+                        Pick.settled == False,
+                    )
+                )
+                unsettled_picks = unsettled_result.scalars().all()
+                if not unsettled_picks:
+                    continue
+
+                # Check if any picked runners are scratched
+                from punty.models.meeting import Runner
+                for pick in unsettled_picks:
+                    if not pick.race_number or not pick.horse_name:
+                        continue
+                    race_id = f"{meeting_id}-r{pick.race_number}"
+                    runner_result = await db.execute(
+                        select(Runner).where(
+                            Runner.race_id == race_id,
+                            Runner.horse_name == pick.horse_name,
+                            Runner.scratched == True,
+                        ).limit(1)
+                    )
+                    scratched_runner = runner_result.scalar_one_or_none()
+                    if not scratched_runner:
+                        continue
+
+                    # Check if alert already exists
+                    dedup_key = f"scratching:R{pick.race_number}:{pick.horse_name}"
+                    if meeting_id not in self.alerted_changes:
+                        self.alerted_changes[meeting_id] = set()
+                    if dedup_key in self.alerted_changes[meeting_id]:
+                        continue
+
+                    existing_alert = await db.execute(
+                        select(LiveUpdate).where(
+                            LiveUpdate.meeting_id == meeting_id,
+                            LiveUpdate.race_number == pick.race_number,
+                            LiveUpdate.update_type == "scratching_alert",
+                            LiveUpdate.horse_name == pick.horse_name,
+                        ).limit(1)
+                    )
+                    if existing_alert.scalar_one_or_none():
+                        self.alerted_changes[meeting_id].add(dedup_key)
+                        continue
+
+                    # Compose and post scratching alert
+                    from punty.results.change_detection import (
+                        find_impacted_picks, find_alternative, compose_scratching_alert
+                    )
+                    impacts = await find_impacted_picks(
+                        db, meeting_id, pick.race_number,
+                        pick.horse_name, scratched_runner.saddlecloth,
+                    )
+                    alternative = await find_alternative(
+                        db, meeting_id, pick.race_number,
+                        scratched_runner.saddlecloth,
+                    )
+                    from punty.results.change_detection import ChangeAlert
+                    alert = ChangeAlert(
+                        change_type="scratching",
+                        meeting_id=meeting_id,
+                        race_number=pick.race_number,
+                        horse_name=pick.horse_name,
+                        saddlecloth=scratched_runner.saddlecloth,
+                        message=compose_scratching_alert(
+                            pick.horse_name, pick.race_number,
+                            impacts, alternative,
+                        ),
+                        impacts=impacts,
+                        alternative=alternative,
+                    )
+                    self.alerted_changes[meeting_id].add(dedup_key)
+                    try:
+                        await self._post_change_alert(db, meeting, alert)
+                        posted += 1
+                        logger.info(
+                            f"Retrospective scratching alert: {pick.horse_name} "
+                            f"(R{pick.race_number}, {meeting.venue})"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to post retrospective scratching alert: {e}")
+
+            await db.commit()
+
+            if posted:
+                logger.info(f"Retrospective check: posted {posted} missed updates")
+            else:
+                logger.info("Retrospective check: no missed updates")
 
     async def _check_all_meetings(self):
         from punty.models.database import async_session
