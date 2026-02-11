@@ -498,6 +498,10 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         try:
             data = await scraper.scrape_meeting(meeting.venue, meeting.date)
             await _merge_odds(db, meeting_id, data.get("runners_odds", []))
+            # Update track condition if TAB provides it
+            tab_condition = data.get("meeting", {}).get("track_condition")
+            if tab_condition and tab_condition != meeting.track_condition:
+                meeting.track_condition = tab_condition
         finally:
             await scraper.close()
         await db.commit()

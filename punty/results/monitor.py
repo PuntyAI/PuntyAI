@@ -1147,15 +1147,11 @@ class ResultsMonitor:
 
         self.last_change_check[meeting_id] = now
 
-        # Detect scratching changes
+        # Detect scratching changes (TAB refresh already applied scratchings)
         alerts = await detect_scratching_changes(db, meeting_id, upcoming, snapshot)
 
-        # Detect track condition change
-        track_alert = await detect_track_condition_change(db, meeting_id, snapshot)
-        if track_alert:
-            alerts.append(track_alert)
-
         # Jockey/gear check (less frequent — every 10 min, Playwright)
+        # Also updates track condition from racing.com
         jockey_last = self.last_jockey_check.get(meeting_id)
         if not jockey_last or (now - jockey_last).total_seconds() >= 600:
             try:
@@ -1168,7 +1164,7 @@ class ResultsMonitor:
                         field_data = await field_scraper.check_race_fields(
                             meeting.venue, meeting.date, upcoming
                         )
-                        # Apply jockey/gear updates to DB
+                        # Apply jockey/gear/track updates to DB
                         await self._apply_field_changes(db, meeting_id, field_data)
                         # Detect jockey/gear changes
                         jg_alerts = await detect_jockey_gear_changes(
@@ -1180,6 +1176,11 @@ class ResultsMonitor:
                     self.last_jockey_check[meeting_id] = now
             except Exception as e:
                 logger.warning(f"Jockey/gear check failed for {meeting.venue}: {e}", exc_info=True)
+
+        # Detect track condition change (AFTER both TAB + racing.com updates)
+        track_alert = await detect_track_condition_change(db, meeting_id, snapshot)
+        if track_alert:
+            alerts.append(track_alert)
 
         if alerts:
             logger.info(f"Change detection for {meeting.venue}: {len(alerts)} alerts — {[a.change_type for a in alerts]}")
