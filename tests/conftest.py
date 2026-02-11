@@ -211,7 +211,7 @@ Est. return: 100% on $20
 Why: Clear top two
 
 MAIN QUADDIE (R1–R4)
-Skinny ($1): 1 / 3 / 5, 6 / 2 (4 combos × $0.25 = $1) — est. return: 25%
+Skinny ($10): 1 / 3 / 5, 6 / 2 (4 combos × $2.50 = $10) — est. return: 250%
 Balanced ($50): 1, 2 / 3, 4 / 5, 6 / 2, 7 (16 combos × $3.13 = $50.08) — est. return: 313%
 """
 

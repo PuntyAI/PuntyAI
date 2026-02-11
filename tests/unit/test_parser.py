@@ -214,7 +214,7 @@ class TestParseSequences:
     def test_parse_main_quaddie(self):
         content = """
 MAIN QUADDIE (R5–R8)
-Skinny ($1): 1 / 3 / 5 / 2 (1 combos × $1.00 = $1) — est. return: 100%
+Skinny ($10): 1 / 3 / 5 / 2 (1 combos × $10.00 = $10) — est. return: 1000%
 Balanced ($50): 1, 2 / 3, 4 / 5, 6 / 2, 7 (16 combos × $3.13 = $50.08) — est. return: 313%
 Wide ($100): 1, 2, 3 / 3, 4, 5 / 5, 6, 7 / 2, 7, 8 (81 combos × $1.23 = $99.63) — est. return: 123%
 """
@@ -240,7 +240,7 @@ Wide ($100): 1, 2, 3 / 3, 4, 5 / 5, 6, 7 / 2, 7, 8 (81 combos × $1.23 = $99.63)
     def test_parse_big6(self):
         content = """
 BIG 6 (R3–R8)
-Skinny ($1): 1 / 2 / 3 / 4 / 5 / 6 (1 combos × $1.00 = $1) — est. return: 100%
+Skinny ($10): 1 / 2 / 3 / 4 / 5 / 6 (1 combos × $10.00 = $10) — est. return: 1000%
 """
         counter = [0]
 

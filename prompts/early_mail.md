@@ -127,23 +127,23 @@ Print as: "Probability: {X}% | Est. return: ${Y} on $20"
 ### 5) *SEQUENCE LANES*
 Print lanes in exact format. Use only saddlecloth numbers, separated by commas within legs, and use " / " to separate legs.
 CRITICAL MATHS:
-- combos = product of selections per leg (e.g. 1×2×1×2 = 4). UNIT = TOTAL_OUTLAY / combos. So Skinny with 4 combos: 4 combos × $0.25 = $1. NEVER write combos × $1 = $1 when combos > 1.
+- combos = product of selections per leg (e.g. 1×2×1×2 = 4). UNIT = TOTAL_OUTLAY / combos. So Skinny with 4 combos: 4 combos × $2.50 = $10. NEVER write combos × $10 = $10 when combos > 1.
 - est. return % = the flexi percentage = (UNIT / $1) × 100. Examples: UNIT $1.00 → 100%. UNIT $3.13 → 313%. UNIT $1.23 → 123%. UNIT $0.25 → 25%. This is just the unit price expressed as a percentage. Do NOT multiply odds or make up numbers.
 
 EARLY QUADDIE (R{EQ_START}–R{EQ_END})
-Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
+Skinny ($10): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $10) — est. return: {X}%
 Balanced ($50): {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
 Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
 *Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
 
 MAIN QUADDIE (R{MQ_START}–R{MQ_END})
-Skinny ($1): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
+Skinny ($10): {LEG1_SKINNY} / {LEG2_SKINNY} / {LEG3_SKINNY} / {LEG4_SKINNY} ({COMBOS} combos × ${UNIT} = $10) — est. return: {X}%
 Balanced ($50): {LEG1_BAL} / {LEG2_BAL} / {LEG3_BAL} / {LEG4_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
 Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
 *Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
 
 BIG 6 (R{B6_START}–R{B6_END})
-Skinny ($1): {L1_SKINNY} / {L2_SKINNY} / {L3_SKINNY} / {L4_SKINNY} / {L5_SKINNY} / {L6_SKINNY} ({COMBOS} combos × ${UNIT} = $1) — est. return: {X}%
+Skinny ($10): {L1_SKINNY} / {L2_SKINNY} / {L3_SKINNY} / {L4_SKINNY} / {L5_SKINNY} / {L6_SKINNY} ({COMBOS} combos × ${UNIT} = $10) — est. return: {X}%
 Balanced ($50): {L1_BAL} / {L2_BAL} / {L3_BAL} / {L4_BAL} / {L5_BAL} / {L6_BAL} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
 Wide ($100): {L1_WIDE} / {L2_WIDE} / {L3_WIDE} / {L4_WIDE} / {L5_WIDE} / {L6_WIDE} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
 *Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
@@ -263,7 +263,7 @@ If no track record data is provided (new system or insufficient data), generate 
      - Horse places → Win part: –$10 + Place part: $10 × (10 ÷ 5) = $20 profit = $10 net return
    - *Exotics only*: No straight bet on this runner — just include in exotics. Write "Bet: Exotics only".
    You MUST show the return on each bet line: "Bet: $8 Win, return $25.60"
-   Degenerate exotics: $20 fixed. Sequences: Skinny $1, Balanced $50, Wide $100 total outlay.
+   Degenerate exotics: $20 fixed. Sequences: Skinny $10, Balanced $50, Wide $100 total outlay.
 2) Odds: print as "${WIN_ODDS} / ${PLACE_ODDS}" (e.g. "$3.50 / $1.45"). Use fixed odds from the data provided. Place odds are typically provided; if not, estimate as (win_odds - 1) / 3 + 1.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
 4) Exactly ONE "Degenerate Exotic of the Race" per race.
@@ -318,7 +318,7 @@ If no track record data is provided (new system or insufficient data), generate 
     After each sequence block (Early Quaddie, Main Quaddie, Big 6), recommend ONE variant.
 
     **HOW TO CHOOSE:**
-    a) **Skinny ($1)**: Recommend when you're confident about favourites/top picks in 3+ legs. This is the "trust the map" play. Say something like "The faves look rock-solid — $1 to dream."
+    a) **Skinny ($10)**: Recommend when you're confident about favourites/top picks in 3+ legs. This is the "trust the map" play. Say something like "The faves look rock-solid — $10 to dream."
     b) **Balanced ($50)**: Default recommendation when it's a mix of open and closed races. The all-rounder. "Enough cover to survive a blowout without breaking the bank."
     c) **Wide ($100)**: ONLY when there's genuine uncertainty across most legs — open races, weather impact, no standout favourites. "Too many question marks to go tight — cast the net."
 
