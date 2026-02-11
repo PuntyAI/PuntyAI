@@ -288,7 +288,7 @@ PROVIDER_KEYS = {
     "twitter": ["twitter_api_key", "twitter_api_secret", "twitter_access_token", "twitter_access_secret"],
     "smtp": ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from"],
     "resend": ["resend_api_key", "email_from", "notification_email"],
-    "facebook": ["facebook_page_id", "facebook_page_access_token"],
+    "facebook": ["facebook_page_id", "facebook_page_access_token", "facebook_app_id", "facebook_app_secret"],
     "telegram": ["telegram_bot_token", "telegram_owner_id"],
     "anthropic": ["anthropic_api_key"],
 }

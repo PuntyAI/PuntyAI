@@ -262,16 +262,31 @@
                                 class="text-punty-coral hover:underline text-sm">Configure</button>
                     </div>
                     <div id="facebook-edit" class="hidden space-y-2 mt-2">
-                        <input type="text" id="fb_page_id" placeholder="Page ID (e.g. 123456789)"
+                        <input type="text" id="fb_page_id" placeholder="Page ID (e.g. 1005965872594022)"
                                class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
-                        <input type="text" id="fb_access_token" placeholder="Page Access Token"
+                        <p class="text-xs text-gray-500 mt-2 mb-1">Generate permanent token (recommended):</p>
+                        <input type="text" id="fb_app_id" placeholder="App ID (e.g. 1876769602981209)"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="fb_app_secret" placeholder="App Secret"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="fb_short_token" placeholder="Short-lived User Token (from Graph API Explorer)"
                                class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
-                            <button onclick="saveApiKeys('facebook', {facebook_page_id: document.getElementById('fb_page_id').value, facebook_page_access_token: document.getElementById('fb_access_token').value})"
-                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
+                            <button onclick="exchangeFacebookToken()"
+                                    class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">Generate Permanent Token</button>
                             <button onclick="document.getElementById('facebook-edit').classList.add('hidden'); document.getElementById('facebook-display').classList.remove('hidden')"
                                     class="text-gray-500 hover:underline text-sm">Cancel</button>
                         </div>
+                        <div id="fb-exchange-result" class="hidden text-xs mt-1 p-2 rounded"></div>
+                        <details class="mt-2">
+                            <summary class="text-xs text-gray-500 cursor-pointer">Or paste token directly</summary>
+                            <div class="space-y-2 mt-2">
+                                <input type="text" id="fb_access_token" placeholder="Page Access Token (manual)"
+                                       class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                                <button onclick="saveApiKeys('facebook', {facebook_page_id: document.getElementById('fb_page_id').value, facebook_page_access_token: document.getElementById('fb_access_token').value})"
+                                        class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save Token</button>
+                            </div>
+                        </details>
                     </div>
                 </div>
 
@@ -501,6 +516,53 @@
 </div>
 
 <script>
+async function exchangeFacebookToken() {
+    const pageId = document.getElementById('fb_page_id').value;
+    const appId = document.getElementById('fb_app_id').value;
+    const appSecret = document.getElementById('fb_app_secret').value;
+    const shortToken = document.getElementById('fb_short_token').value;
+    const resultDiv = document.getElementById('fb-exchange-result');
+
+    if (!pageId || !appId || !appSecret || !shortToken) {
+        resultDiv.className = 'text-xs mt-1 p-2 rounded bg-red-100 text-red-700';
+        resultDiv.textContent = 'All fields required: Page ID, App ID, App Secret, and Short-lived Token';
+        resultDiv.classList.remove('hidden');
+        return;
+    }
+
+    // Save the page ID first
+    await saveApiKeys('facebook', {facebook_page_id: pageId});
+
+    resultDiv.className = 'text-xs mt-1 p-2 rounded bg-blue-100 text-blue-700';
+    resultDiv.textContent = 'Exchanging token...';
+    resultDiv.classList.remove('hidden');
+
+    try {
+        const resp = await fetch('/api/delivery/facebook/exchange-token', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                short_lived_token: shortToken,
+                app_id: appId,
+                app_secret: appSecret
+            })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            resultDiv.className = 'text-xs mt-1 p-2 rounded bg-green-100 text-green-700';
+            resultDiv.textContent = data.message + (data.is_permanent ? ' (never expires)' : '');
+            showToast('Permanent Facebook token saved!', 'success');
+            setTimeout(() => window.location.reload(), 2000);
+        } else {
+            resultDiv.className = 'text-xs mt-1 p-2 rounded bg-red-100 text-red-700';
+            resultDiv.textContent = data.detail || 'Exchange failed';
+        }
+    } catch(e) {
+        resultDiv.className = 'text-xs mt-1 p-2 rounded bg-red-100 text-red-700';
+        resultDiv.textContent = 'Network error: ' + e.message;
+    }
+}
+
 async function saveApiKeys(provider, keys) {
     try {
         const resp = await fetch(`/api/settings/api-keys/${provider}`, {

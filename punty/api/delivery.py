@@ -169,6 +169,124 @@ async def delete_facebook_post(post_id: str, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class FacebookTokenExchange(BaseModel):
+    """Request to exchange a short-lived token for a permanent page token."""
+
+    short_lived_token: str
+    app_id: str
+    app_secret: str
+
+
+@router.post("/facebook/exchange-token")
+async def exchange_facebook_token(
+    request: FacebookTokenExchange, db: AsyncSession = Depends(get_db)
+):
+    """Exchange a short-lived user token for a permanent Page Access Token.
+
+    Flow:
+    1. Exchange short-lived user token for long-lived user token
+    2. Use long-lived user token to get permanent page access token
+    3. Store the permanent page token in settings
+    """
+    import httpx
+    from punty.models.settings import AppSettings
+    from sqlalchemy import select
+
+    base = "https://graph.facebook.com/v21.0"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Step 1: Exchange short-lived for long-lived user token
+        resp = await client.get(
+            f"{base}/oauth/access_token",
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": request.app_id,
+                "client_secret": request.app_secret,
+                "fb_exchange_token": request.short_lived_token,
+            },
+        )
+
+        if resp.status_code != 200:
+            error = resp.json().get("error", {}).get("message", resp.text)
+            raise HTTPException(status_code=400, detail=f"Token exchange failed: {error}")
+
+        long_lived_token = resp.json().get("access_token")
+        if not long_lived_token:
+            raise HTTPException(status_code=400, detail="No access_token in exchange response")
+
+        # Step 2: Get page access token using long-lived user token
+        # First get the page ID from settings
+        result = await db.execute(
+            select(AppSettings).where(AppSettings.key == "facebook_page_id")
+        )
+        page_id_setting = result.scalar_one_or_none()
+        if not page_id_setting or not page_id_setting.value:
+            raise HTTPException(status_code=400, detail="Set facebook_page_id in Settings first")
+
+        page_id = page_id_setting.value
+
+        resp2 = await client.get(
+            f"{base}/{page_id}",
+            params={
+                "fields": "name,access_token",
+                "access_token": long_lived_token,
+            },
+        )
+
+        if resp2.status_code != 200:
+            error = resp2.json().get("error", {}).get("message", resp2.text)
+            raise HTTPException(status_code=400, detail=f"Page token fetch failed: {error}")
+
+        page_data = resp2.json()
+        page_token = page_data.get("access_token")
+        page_name = page_data.get("name", "Unknown")
+
+        if not page_token:
+            raise HTTPException(status_code=400, detail="No page access_token returned")
+
+        # Step 3: Verify the token is permanent by debugging it
+        resp3 = await client.get(
+            f"{base}/debug_token",
+            params={
+                "input_token": page_token,
+                "access_token": f"{request.app_id}|{request.app_secret}",
+            },
+        )
+        debug_data = resp3.json().get("data", {})
+        expires_at = debug_data.get("expires_at", -1)
+        is_permanent = expires_at == 0
+
+        # Step 4: Store the permanent page token
+        result = await db.execute(
+            select(AppSettings).where(AppSettings.key == "facebook_page_access_token")
+        )
+        token_setting = result.scalar_one_or_none()
+        if token_setting:
+            token_setting.value = page_token
+        else:
+            db.add(AppSettings(key="facebook_page_access_token", value=page_token))
+
+        # Also store app credentials for future token debugging
+        for key, value in [("facebook_app_id", request.app_id), ("facebook_app_secret", request.app_secret)]:
+            result = await db.execute(select(AppSettings).where(AppSettings.key == key))
+            setting = result.scalar_one_or_none()
+            if setting:
+                setting.value = value
+            else:
+                db.add(AppSettings(key=key, value=value))
+
+        await db.commit()
+
+        return {
+            "status": "ok",
+            "page_name": page_name,
+            "page_id": page_id,
+            "is_permanent": is_permanent,
+            "expires_at": expires_at,
+            "message": f"Permanent page token stored for {page_name}" if is_permanent else f"Token stored but expires_at={expires_at} (may not be permanent)",
+        }
+
+
 @router.post("/send")
 async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db)):
     """Send content to a platform."""
