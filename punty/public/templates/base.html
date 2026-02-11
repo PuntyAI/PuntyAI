@@ -432,6 +432,28 @@
         </div>
     </footer>
 
+    <!-- Back to Top Button -->
+    <button id="back-to-top" aria-label="Back to top" style="
+        display: none; position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 45;
+        width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border-subtle);
+        background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+        align-items: center; justify-content: center;
+    " onclick="window.scrollTo({top:0,behavior:'smooth'})">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+    </button>
+    <script>
+    (function(){
+        var btn=document.getElementById('back-to-top');
+        if(!btn)return;
+        window.addEventListener('scroll',function(){
+            btn.style.display=window.scrollY>600?'flex':'none';
+        },{passive:true});
+        btn.addEventListener('mouseenter',function(){btn.style.color='var(--magenta)';btn.style.borderColor='var(--magenta)';});
+        btn.addEventListener('mouseleave',function(){btn.style.color='var(--text-muted)';btn.style.borderColor='var(--border-subtle)';});
+    })();
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
