@@ -17,14 +17,15 @@
     }
     .sf-input {
         width: 100%;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.85rem;
+        padding: 0.45rem 0.6rem;
+        font-size: 0.8rem;
         border-radius: 8px;
         background: var(--bg-dark);
         border: 1px solid var(--border-subtle);
         color: var(--text-primary);
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
         outline: none;
+        min-width: 0;
     }
     .sf-input:focus {
         border-color: var(--magenta);
@@ -32,6 +33,17 @@
     }
     .sf-input::placeholder { color: var(--text-muted); opacity: 0.5; }
     .sf-input option { background: var(--bg-card); }
+    .sf-input[type="date"] {
+        padding: 0.45rem 0.4rem;
+        font-size: 0.75rem;
+        min-width: 0;
+    }
+    .sf-input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(0.7);
+        cursor: pointer;
+        padding: 0;
+        margin: 0;
+    }
     .sf-chip {
         display: inline-flex;
         align-items: center;
@@ -46,14 +58,14 @@
         border: 1px solid rgba(233, 30, 140, 0.2);
     }
     .sf-group {
-        padding: 1rem 1.25rem;
+        padding: 0.75rem 1rem;
         border-radius: 10px;
         border: 1px solid var(--border-subtle);
         background: rgba(255, 255, 255, 0.015);
     }
     .sf-group-header {
         display: flex; align-items: center; gap: 0.5rem;
-        margin-bottom: 0.875rem; padding-bottom: 0.625rem;
+        margin-bottom: 0.625rem; padding-bottom: 0.5rem;
         border-bottom: 1px solid var(--border-subtle);
     }
     .sf-group-icon {
@@ -177,7 +189,7 @@
 
             <!-- Filter Body -->
             <div id="filters-body" class="hidden" style="border-top: 1px solid var(--border-subtle);">
-                <div class="p-5 space-y-4">
+                <div class="p-4 space-y-3">
 
                     <!-- Meeting + Race row (side by side on desktop) -->
                     <div class="grid md:grid-cols-2 gap-4">
@@ -189,7 +201,7 @@
                                 </div>
                                 <span class="sf-group-title" style="color: var(--magenta);">Meeting</span>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-2 gap-x-3 gap-y-2.5">
                                 <div>
                                     <label class="sf-label">Venue</label>
                                     <input type="text" id="f-venue" list="dl-venues" autocomplete="off" placeholder="Any venue" class="sf-input">
@@ -232,18 +244,13 @@
                                 </div>
                                 <span class="sf-group-title" style="color: var(--cyan);">Race</span>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-3 gap-x-3 gap-y-2.5">
                                 <div>
                                     <label class="sf-label">Distance</label>
                                     <div class="flex gap-1.5">
                                         <input type="number" id="f-dist-min" placeholder="Min" min="800" max="4000" step="100" class="sf-input">
                                         <input type="number" id="f-dist-max" placeholder="Max" min="800" max="4000" step="100" class="sf-input">
                                     </div>
-                                </div>
-                                <div>
-                                    <label class="sf-label">Class</label>
-                                    <input type="text" id="f-class" list="dl-classes" autocomplete="off" placeholder="Any class" class="sf-input">
-                                    <datalist id="dl-classes"></datalist>
                                 </div>
                                 <div>
                                     <label class="sf-label">Field Size</label>
@@ -253,10 +260,15 @@
                                     </div>
                                 </div>
                                 <div>
+                                    <label class="sf-label">Class</label>
+                                    <input type="text" id="f-class" list="dl-classes" autocomplete="off" placeholder="Any class" class="sf-input">
+                                    <datalist id="dl-classes"></datalist>
+                                </div>
+                                <div class="col-span-3">
                                     <label class="sf-label">Date Range</label>
-                                    <div class="flex gap-1.5">
-                                        <input type="date" id="f-date-from" class="sf-input" style="color-scheme: dark;">
-                                        <input type="date" id="f-date-to" class="sf-input" style="color-scheme: dark;">
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="date" id="f-date-from" class="sf-input" style="color-scheme: dark;" title="From date">
+                                        <input type="date" id="f-date-to" class="sf-input" style="color-scheme: dark;" title="To date">
                                     </div>
                                 </div>
                             </div>
@@ -274,7 +286,7 @@
                                 <span class="sf-group-title" style="color: var(--yellow);">Runner</span>
                                 <span class="sf-group-note">selections only</span>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-2 gap-x-3 gap-y-2.5">
                                 <div>
                                     <label class="sf-label">Jockey</label>
                                     <input type="text" id="f-jockey" list="dl-jockeys" autocomplete="off" placeholder="Any jockey" class="sf-input">
@@ -313,7 +325,7 @@
                                 <span class="sf-group-title" style="color: var(--purple);">Bet</span>
                                 <span class="sf-group-note">selections only</span>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-2 gap-x-3 gap-y-2.5">
                                 <div>
                                     <label class="sf-label">Tip Rank</label>
                                     <select id="f-rank" class="sf-input">
@@ -337,13 +349,13 @@
                 </div>
 
                 <!-- Apply Bar -->
-                <div class="flex items-center justify-between gap-3 px-5 py-3" style="background: rgba(255,255,255,0.02); border-top: 1px solid var(--border-subtle);">
+                <div class="flex items-center justify-between gap-3 px-4 py-2.5" style="background: rgba(255,255,255,0.02); border-top: 1px solid var(--border-subtle);">
                     <span onclick="event.stopPropagation(); clearFilters()" role="button"
                           class="text-xs font-heading font-semibold uppercase tracking-wider px-3 py-1.5 rounded-md hover:bg-white/5"
                           style="color: var(--text-muted); cursor: pointer;">
                         Reset All
                     </span>
-                    <button onclick="applyFilters()" class="px-8 py-2.5 rounded-lg font-heading font-bold text-sm uppercase tracking-wider transition-all hover:shadow-lg" style="background: var(--gradient-sunset); color: white; box-shadow: 0 0 20px rgba(233, 30, 140, 0.2);">
+                    <button onclick="applyFilters()" class="px-6 py-2 rounded-lg font-heading font-bold text-sm uppercase tracking-wider transition-all hover:shadow-lg" style="background: var(--gradient-sunset); color: white; box-shadow: 0 0 20px rgba(233, 30, 140, 0.2);">
                         Apply Filters
                     </button>
                 </div>
