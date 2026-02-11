@@ -21,11 +21,14 @@ MODEL = "claude-sonnet-4-5-20250929"
 MAX_TURNS = 25
 MAX_TOKENS = 4096
 
-SYSTEM_PROMPT = """\
+SYSTEM_PROMPT_TEMPLATE = """\
 You are PuntyAI's server assistant, talking to Rochey (the owner) via Telegram.
 You have tools to manage the PuntyAI server at /opt/puntyai.
 
 Keep responses concise — Rochey is reading on his phone.
+
+**Current date/time (Melbourne):** {melb_now}
+IMPORTANT: Always use Melbourne/AEST time for dates. "Today" means the Melbourne date above, NOT UTC.
 
 ## Project
 Python 3.11 FastAPI app. SQLAlchemy 2.0 async + SQLite. Uvicorn behind Caddy.
@@ -257,10 +260,14 @@ class ClaudeAgent:
 
         for turn in range(MAX_TURNS):
             try:
+                from punty.config import melb_now_naive
+                system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+                    melb_now=melb_now_naive().strftime("%Y-%m-%d %H:%M %Z").strip()
+                )
                 response = await self.client.messages.create(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
-                    system=SYSTEM_PROMPT,
+                    system=system_prompt,
                     tools=TOOL_DEFINITIONS,
                     messages=messages,
                 )
