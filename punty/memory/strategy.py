@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from punty.config import melb_today, melb_now_naive
 from punty.memory.models import PatternInsight
 from punty.models.pick import Pick
-from punty.models.meeting import Meeting, Race
+from punty.models.meeting import Meeting, Race, Runner
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +257,81 @@ async def aggregate_puntys_pick_performance(
     }
 
 
+async def get_recent_results_with_context(
+    db: AsyncSession, limit: int = 15,
+) -> list[str]:
+    """Get recent settled picks across ALL types with win/loss context.
+
+    Returns formatted strings showing what won, what lost, and key details.
+    """
+    from sqlalchemy.orm import selectinload
+
+    q = (
+        select(Pick)
+        .where(Pick.settled == True)
+        .order_by(Pick.settled_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(q)
+    picks = result.scalars().all()
+    if not picks:
+        return []
+
+    lines = []
+    for p in picks:
+        hit = "WIN" if p.hit else "LOSS"
+        pnl = p.pnl or 0
+        pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
+
+        if p.pick_type == "selection":
+            rank_label = {1: "Top", 2: "2nd", 3: "3rd", 4: "Roughie"}.get(p.tip_rank, "?")
+            bet = (p.bet_type or "win").replace("_", " ").title()
+            odds = p.odds_at_tip or 0
+            pp = " [PP]" if p.is_puntys_pick else ""
+            # Get runner finish position
+            runner_result = await db.execute(
+                select(Runner.finish_position, Runner.result_margin)
+                .where(
+                    Runner.race_id == f"{p.meeting_id}-r{p.race_number}",
+                    Runner.saddlecloth == p.saddlecloth,
+                )
+            )
+            rr = runner_result.one_or_none()
+            pos = f"Finished {rr[0]}" if rr and rr[0] else "?"
+            margin = f" ({rr[1]})" if rr and rr[1] else ""
+            lines.append(
+                f"- [{hit}] {rank_label}{pp}: {p.horse_name} @ ${odds:.2f} {bet} "
+                f"→ {pos}{margin} | {pnl_str}"
+            )
+
+        elif p.pick_type == "exotic":
+            etype = p.exotic_type or "Exotic"
+            stake = p.exotic_stake or 20
+            lines.append(
+                f"- [{hit}] {etype}: runners {p.exotic_runners} — ${stake:.0f} stake | {pnl_str}"
+            )
+
+        elif p.pick_type == "sequence":
+            stype = (p.sequence_type or "sequence").replace("_", " ").title()
+            svar = (p.sequence_variant or "").title()
+            stake = p.exotic_stake or 0
+            lines.append(
+                f"- [{hit}] {stype} ({svar}): ${stake:.0f} stake | {pnl_str}"
+            )
+
+        elif p.pick_type == "big3":
+            lines.append(
+                f"- [{hit}] Big 3: {p.horse_name} @ ${p.odds_at_tip or 0:.2f} | {pnl_str}"
+            )
+
+        elif p.pick_type == "big3_multi":
+            lines.append(
+                f"- [{hit}] Big 3 Multi: ${p.exotic_stake or 0:.0f} stake | {pnl_str}"
+            )
+
+    return lines
+
+
 # ──────────────────────────────────────────────
 # PatternInsight population
 # ──────────────────────────────────────────────
@@ -451,6 +526,16 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
     parts.append("- Sequences: Fewer, higher-confidence combos")
     parts.append("- Big 3 Multi: Target 10%+ strike rate")
     parts.append("")
+
+    # Recent results with context (all pick types)
+    recent_results = await get_recent_results_with_context(db, limit=15)
+    if recent_results:
+        parts.append("### RECENT RESULTS (Last 15 Settled Bets — All Types)")
+        parts.append("Learn from these. What patterns do you see in winners vs losers?")
+        parts.append("")
+        for r in recent_results:
+            parts.append(r)
+        parts.append("")
 
     return "\n".join(parts)
 

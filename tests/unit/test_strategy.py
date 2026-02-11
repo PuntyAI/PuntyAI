@@ -233,10 +233,17 @@ class TestBuildStrategyContext:
         async def mock_pp_agg(db, window_days=None):
             return mock_pp
 
+        mock_recent_results = [
+            "- [WIN] Top [PP]: FAST HORSE @ $3.50 Win → Finished 1 | +$25.00",
+            "- [LOSS] 2nd: SLOW HORSE @ $5.00 Place → Finished 6 | -$6.00",
+            "- [WIN] Exacta: runners [1, 3] — $20 stake | +$85.00",
+        ]
+
         db = AsyncMock()
         with patch("punty.memory.strategy.aggregate_bet_type_performance", side_effect=mock_agg), \
              patch("punty.memory.strategy.aggregate_tip_rank_performance", return_value=mock_ranks), \
-             patch("punty.memory.strategy.aggregate_puntys_pick_performance", side_effect=mock_pp_agg):
+             patch("punty.memory.strategy.aggregate_puntys_pick_performance", side_effect=mock_pp_agg), \
+             patch("punty.memory.strategy.get_recent_results_with_context", return_value=mock_recent_results):
             result = await build_strategy_context(db)
 
         assert "## YOUR BETTING TRACK RECORD" in result
@@ -247,6 +254,8 @@ class TestBuildStrategyContext:
         assert "PUNTY'S PICK Performance" in result
         assert "STRATEGY DIRECTIVES" in result
         assert "ROI TARGETS" in result
+        assert "RECENT RESULTS" in result
+        assert "FAST HORSE" in result
         assert "PROFITABLE" in result
         assert "LOSING" in result
         assert "Top Pick" in result
