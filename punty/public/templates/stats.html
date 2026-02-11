@@ -62,30 +62,40 @@
             </p>
         </div>
 
-        <!-- Tip Rank Place Strike Rates (permanent, all time) -->
-        <div id="tip-rank-stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <!-- Tip Rank Strike Rates (permanent, all time) -->
+        <div id="tip-rank-stats" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
             <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
                 <div class="text-3xl font-display font-bold" style="color: var(--magenta);" id="tr-rate-1">—</div>
                 <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Top Pick</div>
                 <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-1"></div>
+                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-1"></div>
             </div>
             <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
                 <div class="text-3xl font-display font-bold" style="color: var(--cyan);" id="tr-rate-2">—</div>
                 <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">2nd Pick</div>
                 <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-2"></div>
+                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-2"></div>
             </div>
             <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
                 <div class="text-3xl font-display font-bold" style="color: var(--yellow);" id="tr-rate-3">—</div>
                 <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">3rd Pick</div>
                 <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-3"></div>
+                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-3"></div>
             </div>
             <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
                 <div class="text-3xl font-display font-bold" style="color: var(--purple);" id="tr-rate-4">—</div>
                 <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Roughie</div>
                 <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-4"></div>
+                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-4"></div>
+            </div>
+            <div class="rounded-xl p-4 text-center col-span-2 md:col-span-1" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.08), rgba(255, 107, 53, 0.08)); border: 1px solid rgba(233, 30, 140, 0.2);">
+                <div class="text-3xl font-display font-bold" id="tr-rate-0" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">—</div>
+                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Punty's Picks</div>
+                <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-0"></div>
+                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-0"></div>
             </div>
         </div>
-        <p class="text-center text-[11px] -mt-5 mb-6 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &mdash; All Time</p>
+        <p class="text-center text-[11px] -mt-5 mb-6 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &amp; ROI &mdash; All Time</p>
 
         <!-- Today / All Time Toggle -->
         <div class="flex items-center justify-center gap-3 mb-6">
@@ -661,8 +671,15 @@
                 (data.pick_ranks || []).forEach(function(pr) {
                     var rateEl = document.getElementById('tr-rate-' + pr.rank);
                     var countEl = document.getElementById('tr-count-' + pr.rank);
+                    var roiEl = document.getElementById('tr-roi-' + pr.rank);
                     if (rateEl) rateEl.textContent = pr.rate + '%';
                     if (countEl) countEl.textContent = pr.hits + '/' + pr.total;
+                    if (roiEl && pr.roi !== undefined) {
+                        var roiVal = pr.roi;
+                        var roiColor = roiVal >= 0 ? '#4ade80' : '#f87171';
+                        roiEl.style.color = roiColor;
+                        roiEl.textContent = (roiVal >= 0 ? '+' : '') + roiVal.toFixed(1) + '% ROI';
+                    }
                 });
             })
             .catch(function() {});
