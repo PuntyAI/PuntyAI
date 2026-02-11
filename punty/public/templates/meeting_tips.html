@@ -83,9 +83,37 @@
         </div>
         {% endif %}
 
+        <!-- Section Nav -->
+        <nav class="section-nav" id="section-nav">
+            <div class="section-nav-inner">
+                {% if live_updates %}
+                <a href="#section-live" class="section-nav-item" data-section="section-live">
+                    <span class="section-nav-dot" style="background: var(--orange);"></span>
+                    Live
+                </a>
+                {% endif %}
+                {% if early_mail %}
+                <a href="#section-early-mail" class="section-nav-item" data-section="section-early-mail">
+                    <span class="section-nav-dot" style="background: var(--magenta);"></span>
+                    Early Mail
+                </a>
+                <a href="#section-tips" class="section-nav-item" data-section="section-tips">
+                    <span class="section-nav-dot" style="background: var(--cyan);"></span>
+                    Tips
+                </a>
+                {% endif %}
+                {% if wrapup %}
+                <a href="#section-wrapup" class="section-nav-item" data-section="section-wrapup">
+                    <span class="section-nav-dot" style="background: var(--purple);"></span>
+                    Wrap-Up
+                </a>
+                {% endif %}
+            </div>
+        </nav>
+
         <!-- Live Updates Section -->
         {% if live_updates %}
-        <div class="mb-8">
+        <div class="mb-8" id="section-live">
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center live-pulse" style="background: rgba(255, 107, 53, 0.15);">
                     <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -161,7 +189,7 @@
 
         <!-- Early Mail Section -->
         {% if early_mail %}
-        <div class="mb-8">
+        <div class="mb-8" id="section-early-mail">
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(233, 30, 140, 0.15);">
                     <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -181,7 +209,7 @@
 
         <!-- Wrap-up Section -->
         {% if wrapup %}
-        <div class="mb-8">
+        <div class="mb-8" id="section-wrapup">
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(0, 212, 255, 0.15);">
                     <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -223,6 +251,48 @@
 </section>
 
 <style>
+    /* Section Nav */
+    .section-nav {
+        position: sticky; top: 0; z-index: 40;
+        margin: 0 -1rem 1.5rem; padding: 0 1rem;
+        background: rgba(10, 10, 15, 0.85);
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .section-nav-inner {
+        display: flex; gap: 0.25rem;
+        overflow-x: auto; scrollbar-width: none;
+        -ms-overflow-style: none;
+        padding: 0.5rem 0;
+    }
+    .section-nav-inner::-webkit-scrollbar { display: none; }
+    .section-nav-item {
+        display: inline-flex; align-items: center; gap: 0.375rem;
+        padding: 0.375rem 0.875rem; border-radius: 9999px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.8rem;
+        letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--text-muted); white-space: nowrap;
+        border: 1px solid transparent;
+        transition: all 0.15s; text-decoration: none; cursor: pointer;
+    }
+    .section-nav-item:hover {
+        color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .section-nav-item.active {
+        color: white;
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+    .section-nav-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        opacity: 0.5; transition: opacity 0.15s;
+    }
+    .section-nav-item.active .section-nav-dot { opacity: 1; }
+    @media (min-width: 640px) {
+        .section-nav { margin: 0 -2rem 1.5rem; padding: 0 2rem; }
+    }
+
     /* Tips Content */
     .tips-content {
         font-family: 'Source Sans Pro', sans-serif;
@@ -753,6 +823,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Nav pills
     var navContainer = document.createElement('div');
     navContainer.className = 'race-nav';
+    navContainer.id = 'section-tips';
     sections.forEach(function(sec, idx) {
         if (!sec.isRace) return;
         var pill = document.createElement('button');
@@ -971,6 +1042,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // --- Section Nav: smooth scroll + scroll spy ---
+    (function() {
+        var navItems = document.querySelectorAll('.section-nav-item');
+        if (!navItems.length) return;
+
+        // Smooth scroll on click
+        navItems.forEach(function(item) {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                var target = document.getElementById(item.dataset.section);
+                if (target) {
+                    var navH = document.getElementById('section-nav').offsetHeight || 48;
+                    var y = target.getBoundingClientRect().top + window.pageYOffset - navH - 8;
+                    window.scrollTo({ top: y, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Scroll spy: highlight active section
+        var sectionIds = [];
+        navItems.forEach(function(item) { sectionIds.push(item.dataset.section); });
+
+        function updateActive() {
+            var navH = document.getElementById('section-nav').offsetHeight || 48;
+            var current = null;
+            for (var i = sectionIds.length - 1; i >= 0; i--) {
+                var el = document.getElementById(sectionIds[i]);
+                if (el && el.getBoundingClientRect().top <= navH + 20) {
+                    current = sectionIds[i]; break;
+                }
+            }
+            navItems.forEach(function(item) {
+                item.classList.toggle('active', item.dataset.section === current);
+            });
+        }
+        window.addEventListener('scroll', updateActive, { passive: true });
+        updateActive();
+    })();
 
     // Live countdown updater (every 30s)
     setInterval(function() {
