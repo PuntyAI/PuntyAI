@@ -966,6 +966,7 @@ async def get_bet_type_stats(
     _SEL_ORDER = ["Win", "Saver Win", "Place", "Each Way"]
     _EXOTIC_ORDER = ["Quinella", "Exacta", "Exacta Standout", "Trifecta", "Trifecta Box", "Trifecta Standout", "First Four"]
     _SEQ_ORDER = ["Early Quaddie", "Quaddie", "Big6"]
+    _VARIANT_ORDER = ["Skinny", "Balanced", "Wide"]
 
     def _normalise_exotic(raw: str) -> str:
         low = raw.lower().strip()
@@ -1228,8 +1229,13 @@ async def get_bet_type_stats(
             if key not in _EXOTIC_ORDER:
                 stats.append(val)
         for prefix in _SEQ_ORDER:
+            for variant in _VARIANT_ORDER:
+                key = f"{prefix} ({variant})"
+                if key in seq_stats:
+                    stats.append(seq_stats[key])
+            # Catch any variants not in _VARIANT_ORDER
             for key in sorted(seq_stats.keys()):
-                if key.startswith(prefix):
+                if key.startswith(prefix) and key not in [f"{prefix} ({v})" for v in _VARIANT_ORDER]:
                     stats.append(seq_stats[key])
         if big3_stat:
             stats.append(big3_stat)
