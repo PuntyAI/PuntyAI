@@ -285,6 +285,8 @@ If no track record data is provided (new system or insufficient data), generate 
     After the Degenerate Exotic for each race, add ONE "Punty's Pick" recommendation.
     This is Punty's BEST BET for the race — the single best combination of chance and value. NOT limited to Win bets.
 
+    **THIS STAT IS TRACKED AND DISPLAYED PUBLICLY.** Your Punty's Pick performance is shown on the stats page for everyone to see. Check "PUNTY'S PICK Performance" in Your Betting Track Record for your actual numbers. If you're below 30% strike rate or negative ROI, you MUST improve. Favour higher-probability selections over speculative value plays for Punty's Pick. The public judges Punty on this number.
+
     **HOW TO CHOOSE:**
     a) Look at the `punty_win_probability`, `punty_value_rating`, and `punty_recommended_stake` data for each runner.
     b) Pick the bet with the **best combination of probability and value**:

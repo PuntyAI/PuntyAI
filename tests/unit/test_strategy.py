@@ -228,9 +228,15 @@ class TestBuildStrategyContext:
         async def mock_agg(db, window_days=None):
             return mock_recent if window_days == 30 else mock_overall
 
+        mock_pp = {"bets": 30, "winners": 9, "strike_rate": 30.0, "staked": 240.0, "pnl": -18.0, "roi": -7.5, "avg_odds": 4.20}
+
+        async def mock_pp_agg(db, window_days=None):
+            return mock_pp
+
         db = AsyncMock()
         with patch("punty.memory.strategy.aggregate_bet_type_performance", side_effect=mock_agg), \
-             patch("punty.memory.strategy.aggregate_tip_rank_performance", return_value=mock_ranks):
+             patch("punty.memory.strategy.aggregate_tip_rank_performance", return_value=mock_ranks), \
+             patch("punty.memory.strategy.aggregate_puntys_pick_performance", side_effect=mock_pp_agg):
             result = await build_strategy_context(db)
 
         assert "## YOUR BETTING TRACK RECORD" in result
@@ -238,6 +244,7 @@ class TestBuildStrategyContext:
         assert "Bet Type Scorecard" in result
         assert "Last 30 Days" in result
         assert "Pick Rank Performance" in result
+        assert "PUNTY'S PICK Performance" in result
         assert "STRATEGY DIRECTIVES" in result
         assert "ROI TARGETS" in result
         assert "PROFITABLE" in result

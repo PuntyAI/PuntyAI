@@ -211,6 +211,52 @@ async def aggregate_tip_rank_performance(
     return results
 
 
+async def aggregate_puntys_pick_performance(
+    db: AsyncSession,
+    window_days: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
+    """Aggregate performance of Punty's Pick selections (is_puntys_pick=True)."""
+    date_filter = []
+    if window_days:
+        cutoff = melb_today() - timedelta(days=window_days)
+        date_filter.append(Pick.settled_at >= cutoff)
+
+    q = (
+        select(
+            func.count(Pick.id),
+            func.sum(case((Pick.hit == True, 1), else_=0)),
+            func.sum(Pick.bet_stake),
+            func.sum(Pick.pnl),
+            func.avg(Pick.odds_at_tip),
+        )
+        .where(
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.is_puntys_pick == True,
+            Pick.bet_type != "exotics_only",
+            *date_filter,
+        )
+    )
+    result = await db.execute(q)
+    row = result.one()
+    bets = row[0] or 0
+    if bets == 0:
+        return None
+    winners = int(row[1] or 0)
+    staked = float(row[2] or 0)
+    pnl = float(row[3] or 0)
+    avg_odds = float(row[4] or 0)
+    return {
+        "bets": bets,
+        "winners": winners,
+        "strike_rate": round(winners / bets * 100, 1) if bets else 0,
+        "staked": round(staked, 2),
+        "pnl": round(pnl, 2),
+        "roi": round(pnl / staked * 100, 1) if staked else 0,
+        "avg_odds": round(avg_odds, 2),
+    }
+
+
 # ──────────────────────────────────────────────
 # PatternInsight population
 # ──────────────────────────────────────────────
@@ -254,6 +300,23 @@ async def populate_pattern_insights(db: AsyncSession) -> int:
             avg_odds=r["avg_odds"],
             insight_text=f"{r['label']}: {r['strike_rate']}% SR at avg ${r['avg_odds']:.2f}, {r['roi']:+.1f}% ROI",
             conditions_json=json.dumps(r),
+            created_at=now,
+            updated_at=now,
+        ))
+        count += 1
+
+    # Punty's Pick insight
+    pp = await aggregate_puntys_pick_performance(db)
+    if pp:
+        db.add(PatternInsight(
+            pattern_type="puntys_pick",
+            pattern_key="puntys_pick_overall",
+            sample_count=pp["bets"],
+            hit_rate=pp["strike_rate"],
+            avg_pnl=pp["pnl"] / pp["bets"] if pp["bets"] else 0,
+            avg_odds=pp["avg_odds"],
+            insight_text=f"Punty's Pick: {pp['strike_rate']}% SR, {pp['roi']:+.1f}% ROI over {pp['bets']} bets",
+            conditions_json=json.dumps(pp),
             created_at=now,
             updated_at=now,
         ))
@@ -344,6 +407,33 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
             parts.append(
                 f"- {r['label']}: {r['strike_rate']}% SR at avg ${r['avg_odds']:.2f}, "
                 f"{r['roi']:+.1f}% ROI ({r['bets']} bets)"
+            )
+        parts.append("")
+
+    # Punty's Pick performance (the highlighted best-bet per race)
+    pp_stats = await aggregate_puntys_pick_performance(db)
+    if pp_stats:
+        pp = pp_stats
+        parts.append("### PUNTY'S PICK Performance (Your Best-Bet Recommendation)")
+        parts.append(
+            f"- **All-Time**: {pp['bets']} picks, {pp['winners']} winners "
+            f"({pp['strike_rate']}% SR), {_pnl_str(pp['pnl'])} P&L ({pp['roi']:+.1f}% ROI)"
+        )
+        if pp["strike_rate"] < 30:
+            parts.append(
+                f"- **WARNING**: Your best-bet picks are only hitting {pp['strike_rate']}%. "
+                "The public sees this stat. You need to do BETTER."
+            )
+        if pp["roi"] < 0:
+            parts.append(
+                f"- **LOSING MONEY**: Punty's Pick ROI is {pp['roi']:+.1f}%. "
+                "Pick higher-probability plays, not long shots."
+            )
+        pp_30 = await aggregate_puntys_pick_performance(db, window_days=30)
+        if pp_30 and pp_30["bets"] >= 3:
+            parts.append(
+                f"- **Last 30 Days**: {pp_30['bets']} picks, {pp_30['winners']} winners "
+                f"({pp_30['strike_rate']}% SR), {pp_30['roi']:+.1f}% ROI"
             )
         parts.append("")
 
@@ -491,6 +581,10 @@ def _generate_directives(
             directives.append("MOMENTUM POSITIVE — recent form improving, keep it up")
         elif r_pnl < 0 and o_pnl > 0:
             directives.append("RECENT SLUMP — tighten selections and reduce exotic exposure")
+
+    # Punty's Pick challenge
+    # (pp_stats passed from caller via keyword arg not available here,
+    # so we rely on the context block above to set the tone)
 
     if not directives:
         directives.append("Keep building the sample — need more data for clear patterns")
