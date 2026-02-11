@@ -164,7 +164,7 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Convert known intro section headings (AI may use ** instead of ###)
     content = re.sub(
         r'^\*{1,2}(MEET(?:ING)?\s+SNAPSHOT)\*{1,2}\s*$',
-        r'### \1', content, flags=re.MULTILINE | re.IGNORECASE,
+        r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
     )
     content = re.sub(
         r'^\*{1,2}((?:PUNTY.S\s+)?BIG\s*(?:3|THREE)[^*\n]*)\*{1,2}\s*$',
