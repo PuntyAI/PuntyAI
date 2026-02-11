@@ -188,9 +188,9 @@ async def tool_update_track_condition(venue: str, date: str, condition: str) -> 
 
             meeting_id, actual_venue, old_condition = row
 
-            # Update meeting
+            # Update meeting and lock it from auto-updates
             await db.execute(
-                "UPDATE meetings SET track_condition = ? WHERE id = ?",
+                "UPDATE meetings SET track_condition = ?, track_condition_locked = 1 WHERE id = ?",
                 (condition.strip(), meeting_id),
             )
 

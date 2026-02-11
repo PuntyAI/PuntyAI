@@ -27,6 +27,7 @@ class Meeting(Base):
     meeting_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # race, trial, jumpout
     speed_map_complete: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # None=not checked, True=complete, False=incomplete
     meet_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # racing.com internal meeting ID for CSV downloads
+    track_condition_locked: Mapped[bool] = mapped_column(Boolean, default=False)  # Manual override — scrapers won't change condition
 
     # New GraphQL fields
     penetrometer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

@@ -176,6 +176,8 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN value_rating FLOAT",
             "ALTER TABLE picks ADD COLUMN confidence VARCHAR(10)",
             "ALTER TABLE picks ADD COLUMN recommended_stake FLOAT",
+            # Manual track condition override lock
+            "ALTER TABLE meetings ADD COLUMN track_condition_locked BOOLEAN DEFAULT 0",
         ]:
             try:
                 await conn.execute(_text(col))

@@ -149,11 +149,11 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
             logger.error(f"racing.com scrape failed: {e}")
             errors.append(f"racing.com: {e}")
 
-        # Track conditions (supplementary)
+        # Track conditions (supplementary) — skip if manually locked
         try:
             from punty.scrapers.track_conditions import scrape_track_conditions
             state = _guess_state(venue)
-            if state:
+            if state and not meeting.track_condition_locked:
                 conditions = await scrape_track_conditions(state)
                 for cond in conditions:
                     if cond["venue"] and cond["venue"].lower() in venue.lower():
@@ -255,15 +255,19 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             errors.append(f"racing.com: {e}")
             yield {"step": 1, "total": total_steps, "label": f"racing.com failed: {e}", "status": "error"}
 
-        # Step 2: Track conditions (supplementary)
+        # Step 2: Track conditions (supplementary) — skip if manually locked
         yield {"step": 1, "total": total_steps, "label": "Scraping track conditions...", "status": "running"}
         try:
-            from punty.scrapers.track_conditions import scrape_track_conditions, scrape_sportsbetform_conditions
-            state = _guess_state(venue)
-            found = False
+            if meeting.track_condition_locked:
+                logger.info(f"Track condition locked for {venue}: {meeting.track_condition!r} (manual override)")
+                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (locked)", "status": "done"}
+            else:
+              from punty.scrapers.track_conditions import scrape_track_conditions, scrape_sportsbetform_conditions
+              state = _guess_state(venue)
+              found = False
 
-            # Try primary source (racingaustralia.horse)
-            if state:
+              # Try primary source (racingaustralia.horse)
+              if state:
                 conditions = await scrape_track_conditions(state)
                 for cond in conditions:
                     if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
@@ -276,8 +280,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                         found = True
                         break
 
-            # Try fallback source (sportsbetform.com.au) if not found
-            if not found and not meeting.track_condition:
+              # Try fallback source (sportsbetform.com.au) if not found
+              if not found and not meeting.track_condition:
                 logger.info(f"Primary track conditions not found for {venue}, trying sportsbetform...")
                 try:
                     fallback = await scrape_sportsbetform_conditions()
@@ -294,12 +298,12 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 except Exception as e:
                     logger.warning(f"Sportsbetform fallback failed: {e}")
 
-            if found:
+              if found:
                 yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
-            elif meeting.track_condition:
+              elif meeting.track_condition:
                 # GraphQL data available
                 yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
-            else:
+              else:
                 yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
         except Exception as e:
             logger.error(f"track conditions scrape failed: {e}")
@@ -532,8 +536,11 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             await _merge_odds(db, meeting_id, data.get("runners_odds", []))
             # Update track condition if TAB provides a genuinely different AND
             # more specific value (prevents overwriting "Good 4" with bare "Good")
+            # Skip entirely if condition is manually locked
             tab_condition = data.get("meeting", {}).get("track_condition")
-            if tab_condition and _normalise_track(tab_condition) != _normalise_track(meeting.track_condition):
+            if meeting.track_condition_locked:
+                logger.debug(f"Track condition locked for {meeting.venue}, ignoring TAB condition {tab_condition!r}")
+            elif tab_condition and _normalise_track(tab_condition) != _normalise_track(meeting.track_condition):
                 if _is_more_specific(tab_condition, meeting.track_condition):
                     logger.info(f"TAB track condition update: {meeting.track_condition!r} → {tab_condition!r}")
                     meeting.track_condition = tab_condition
