@@ -6,7 +6,7 @@ Produce a single, humorous, flowing PUNTY EARLY MAIL message for email and Whats
 ## OUTPUT ORDER (exact, with these headings)
 
 *PUNTY EARLY MAIL – {MEET_NAME} ({DATE})*
-Rightio {GROUP_NAME} — (pick ONE from: Legends, Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, You Feral Lot, Cooked Units, Absolute Units, Filthy Animals, You Sick Puppies, Muppets, Chaos Merchants, Form Freaks, Punty People, You Grubby Lot, Galah Gang, Ticket Munchers)
+Rightio {GROUP_NAME}, (pick ONE group name from: Legends, Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, You Feral Lot, Cooked Units, Absolute Units, Filthy Animals, You Sick Puppies, Muppets, Chaos Merchants, Form Freaks, Punty People, You Grubby Lot, Galah Gang, Ticket Munchers — JUST the group name, nothing else before it. Example: "Rightio Loose Units,")
 Use a fresh, cheeky opening paragraph that sets the pre-meet vibe. Keep it punchy and unique each run.
 **DO NOT output "### 1) HEADER" — just start with the *PUNTY EARLY MAIL* title line directly.**
 
