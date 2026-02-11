@@ -277,6 +277,7 @@ class ContextBuilder:
                     runner_data["punty_win_probability"] = f"{rp.win_probability * 100:.1f}%"
                     runner_data["punty_place_probability"] = f"{rp.place_probability * 100:.1f}%"
                     runner_data["punty_value_rating"] = round(rp.value_rating, 2)
+                    runner_data["punty_place_value_rating"] = round(rp.place_value_rating, 2)
                     runner_data["punty_recommended_stake"] = rp.recommended_stake
                     runner_data["punty_market_implied"] = f"{rp.market_implied * 100:.1f}%"
 
@@ -284,6 +285,7 @@ class ContextBuilder:
                         "win_prob": rp.win_probability,
                         "place_prob": rp.place_probability,
                         "value_rating": rp.value_rating,
+                        "place_value_rating": rp.place_value_rating,
                         "edge": rp.edge,
                         "recommended_stake": rp.recommended_stake,
                     }

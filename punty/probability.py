@@ -45,6 +45,7 @@ class RunnerProbability:
     place_probability: float = 0.0     # 0.0 - 1.0
     market_implied: float = 0.0        # raw market probability (before our adjustments)
     value_rating: float = 1.0          # our_prob / market_prob (>1.0 = value)
+    place_value_rating: float = 1.0    # place_prob / market_implied_place (>1.0 = value)
     edge: float = 0.0                  # our_prob - market_prob
     recommended_stake: float = 0.0     # quarter-Kelly from $20 pool
     factors: dict = field(default_factory=dict)  # breakdown per factor
@@ -161,10 +162,20 @@ def calculate_race_probabilities(
         # Place probability
         place_prob = _place_probability(win_prob, field_size)
 
-        # Value detection
+        # Value detection (win)
         mkt_prob = market_implied.get(rid, baseline)
         value = win_prob / mkt_prob if mkt_prob > 0 else 1.0
         edge = win_prob - mkt_prob
+
+        # Place value detection — use place odds if available
+        place_odds = _get(runner, "place_odds", None)
+        if place_odds and place_odds > 1.0:
+            market_implied_place = 1.0 / place_odds
+            place_value = place_prob / market_implied_place if market_implied_place > 0 else 1.0
+        else:
+            # Approximate: place market implied ≈ place_probability from market consensus
+            mkt_place = _place_probability(mkt_prob, field_size)
+            place_value = place_prob / mkt_place if mkt_place > 0 else 1.0
 
         # Recommended stake (quarter-Kelly)
         odds = runner_odds.get(rid, 0.0)
@@ -175,6 +186,7 @@ def calculate_race_probabilities(
             place_probability=round(place_prob, 4),
             market_implied=round(mkt_prob, 4),
             value_rating=round(value, 3),
+            place_value_rating=round(place_value, 3),
             edge=round(edge, 4),
             recommended_stake=round(stake, 2),
             factors=factor_details.get(rid, {}),

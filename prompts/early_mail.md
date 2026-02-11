@@ -56,31 +56,70 @@ Repeat for each race in order:
 
 *Top 3 + Roughie ($20 pool)*
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
-   Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
+   Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
    Confidence: {R_TAG_1}
    Why: {ONE_OR_TWO_LINES_REASON_1}
 *2. {R_TOP2}* (No.{R_TOP2_NO}) — ${R_TOP2_WIN_ODDS} / ${R_TOP2_PLACE_ODDS}
-   Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
+   Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
    Confidence: {R_TAG_2}
    Why: {ONE_OR_TWO_LINES_REASON_2}
 *3. {R_TOP3}* (No.{R_TOP3_NO}) — ${R_TOP3_WIN_ODDS} / ${R_TOP3_PLACE_ODDS}
-   Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
+   Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
    Confidence: {R_TAG_3}
    Why: {ONE_OR_TWO_LINES_REASON_3}
 
 *Roughie: {R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_WIN_ODDS} / ${R_ROUGHIE_PLACE_ODDS}
-Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
+Probability: {PROB}% | Value: {VALUE}x
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
 Confidence: {R_TAG}
 Why: {ONE_LINE_RISK_EXPLAINER}
 
+**CRITICAL — Probability must match the bet type:**
+- If BET_TYPE is Win or Saver Win → use `punty_win_probability` and `punty_value_rating`
+- If BET_TYPE is Place → use `punty_place_probability` and `punty_place_value_rating`
+- If BET_TYPE is Each Way → show both: "Win: {win_prob}% | Place: {place_prob}% | Value: {win_value}x"
+
 *Degenerate Exotic of the Race*
 {R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $20
-Est. return: {X}% on $20
+Probability: {EXOTIC_PROB}% | Est. return: ${EST_RETURN} on $20
 Why: {R_EXOTIC_REASON}
+
+**Exotic probability formulas (use the runners YOU pick for the exotic, using their `punty_win_probability` as decimal):**
+
+**Quinella** (pick 2, any order):
+  prob = 2 × P(A) × P(B)
+  Example: A=25%, B=15% → 2 × 0.25 × 0.15 = 7.5%
+
+**Exacta** (pick 2, exact order):
+  prob = P(1st) × P(2nd) — but P(2nd) is conditional = P(B) / (1 - P(A))
+  Simplified: prob = P(A) × P(B) / (1 - P(A))
+  Example: A=25% wins, B=15% second → 0.25 × 0.15 / 0.75 = 5.0%
+
+**Exacta (boxed, N runners):**
+  prob = sum of all 2-permutations = N × (N-1) pairs, each = P(i) × P(j) / (1-P(i))
+  Simpler: for a 3-runner box, prob ≈ 2 × (P(A)×P(B) + P(A)×P(C) + P(B)×P(C))
+
+**Trifecta** (pick 3, exact order):
+  prob = P(1st) × [P(2nd)/(1-P(1st))] × [P(3rd)/(1-P(1st)-P(2nd))]
+  Simpler approximation: P(A) × P(B) × P(C) × 6 (accounts for conditional and field shrinkage)
+  Example: A=25%, B=15%, C=10% → 0.25 × 0.15 × 0.10 × 6 = 2.25%
+
+**Trifecta (boxed, N runners):**
+  Multiply by N × (N-1) × (N-2) permutations, then divide by 6 (since base uses ×6).
+  For 4-runner box: base × 4 (= 24 permutations / 6)
+
+**First4** (pick 4, exact order):
+  prob ≈ P(A) × P(B) × P(C) × P(D) × 24
+  For a boxed First4 with N runners: multiply by N!/(4!) combinations
+
+**Then calculate:**
+  Est. return = $20 / probability (as decimal)
+  Example: trifecta prob 2.25% → $20 / 0.0225 = $889
+
+Print as: "Probability: {X}% | Est. return: ${Y} on $20"
 
 *Punty's Pick:* {HORSE_NAME} (No.{NO}) ${ODDS} {BET_TYPE} {+ HORSE2 (No.{NO}) ${ODDS} {BET_TYPE} if applicable}
 {ONE_LINE_REASON — e.g. "32% chance at $5.00 is value gold — the map screams front-runner and the model loves it."}
@@ -289,19 +328,24 @@ If no track record data is provided (new system or insufficient data), generate 
 
 14) PROBABILITY DATA (per runner):
     Each runner in the context includes pre-calculated probability data from Punty's model:
-    - **punty_win_probability**: Calculated win chance (e.g. "32.5%") — based on multi-bookmaker consensus, form analysis, pace advantage, market movement, and class/fitness
-    - **punty_place_probability**: Calculated place chance (top 3)
-    - **punty_value_rating**: Our probability vs market probability. >1.0 = value (we think the horse has a better chance than the market says). >1.2 = strong value.
-    - **punty_recommended_stake**: Model-recommended stake from the $20 pool based on Kelly criterion
-    - **punty_market_implied**: What the market thinks (raw odds-implied probability)
+    - **punty_win_probability**: Calculated win chance (e.g. "32.5%")
+    - **punty_place_probability**: Calculated place chance (top 3) (e.g. "65.0%")
+    - **punty_value_rating**: Win probability vs market. >1.0 = value.
+    - **punty_place_value_rating**: Place probability vs market place odds. >1.0 = value on place.
+    - **punty_recommended_stake**: Model-recommended stake from $20 pool (Kelly criterion)
+    - **punty_market_implied**: Market's raw probability
 
     **HOW TO USE THIS DATA:**
-    a) Print the probability and value rating on EVERY selection line: "Probability: 32% | Value: 1.4x"
-    b) Use `punty_value_rating` to identify value bets — if value > 1.05, mention it as value
-    c) Reference probability in your "Why" explanations (e.g. "32% chance at $5.00 is value — model says 1.4x edge")
-    d) Use `punty_recommended_stake` as a guide for stake sizing, but you can override if you have a strong view
+    a) Print probability and value on EVERY selection line — but **match the bet type**:
+       - Win/Saver Win bets → "Probability: {punty_win_probability} | Value: {punty_value_rating}x"
+       - Place bets → "Probability: {punty_place_probability} | Value: {punty_place_value_rating}x"
+       - Each Way → "Win: {win_prob}% | Place: {place_prob}% | Value: {win_value}x"
+    b) Use `punty_value_rating` for win bets, `punty_place_value_rating` for place bets
+    c) Reference probability in "Why" explanations
+    d) Use `punty_recommended_stake` as a guide for stake sizing
     e) For Punty's Pick, prioritise the bet with the best probability + value combination
     f) If no probability data is provided (context missing), skip probability lines
+    g) For exotics, calculate the combined probability (multiply individual runner win probs)
 
     The `probabilities` section in race analysis also includes:
     - **probability_ranked**: All runners sorted by win probability (highest first)
