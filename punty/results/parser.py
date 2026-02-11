@@ -94,6 +94,16 @@ _SEQ_VARIANT = re.compile(
     r"(Skinny|Balanced|Wide)\s*(?:\(\$[\d.]+\))?:\s*(.+)",
     re.IGNORECASE,
 )
+# --- Punty's Pick (highlighted best-bet per race) ---
+_PUNTYS_PICK = re.compile(
+    r"\*?Punty'?s\s+Pick:?\*?\s*(.+)",
+    re.IGNORECASE,
+)
+_PUNTYS_PICK_HORSE = re.compile(
+    r"(?:^|[+])\s*(?:\*?([A-Z][A-Z\s'\u2019\-]+?)\*?\s*)?\(No\.(\d+)\)",
+    re.IGNORECASE,
+)
+
 _SEQ_COSTING = re.compile(
     # Handles two formats:
     # "(729 combos × $0.14 = $100) — est. return: 14%"
@@ -315,6 +325,20 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "win_probability": probability,
                 "value_rating": value_rating,
             })
+
+        # Punty's Pick — mark the highlighted best-bet selection(s)
+        puntys_pick_m = _PUNTYS_PICK.search(section)
+        if puntys_pick_m:
+            pick_line = puntys_pick_m.group(1)
+            puntys_saddlecloths = set()
+            for hm in _PUNTYS_PICK_HORSE.finditer(pick_line):
+                puntys_saddlecloths.add(int(hm.group(2)))
+            # Mark matching selections in this race
+            for p in picks:
+                if (p.get("race_number") == race_num
+                        and p.get("pick_type") == "selection"
+                        and p.get("saddlecloth") in puntys_saddlecloths):
+                    p["is_puntys_pick"] = True
 
         # Exotic
         exotic_m = _EXOTIC.search(section)

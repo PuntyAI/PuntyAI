@@ -239,10 +239,6 @@ async def get_winner_stats() -> dict:
         from sqlalchemy import case
         pick_ranks = []
         labels = {1: "Top Pick", 2: "2nd Pick", 3: "3rd Pick", 4: "Roughie"}
-        all_hits = 0
-        all_total = 0
-        all_pnl = 0.0
-        all_staked = 0.0
         for rank in [1, 2, 3, 4]:
             sr_result = await db.execute(
                 select(
@@ -274,23 +270,37 @@ async def get_winner_stats() -> dict:
                 "staked": round(staked, 2),
                 "roi": roi,
             })
-            all_hits += hits
-            all_total += total
-            all_pnl += pnl
-            all_staked += staked
 
-        # Combined "Punty's Picks" (all selections)
-        all_rate = round(all_hits / all_total * 100, 1) if all_total > 0 else 0
-        all_roi = round(all_pnl / all_staked * 100, 1) if all_staked > 0 else 0
+        # Punty's Picks — only selections flagged as is_puntys_pick
+        pp_result = await db.execute(
+            select(
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+                func.sum(Pick.bet_stake),
+            ).where(and_(
+                Pick.settled == True,
+                Pick.pick_type == "selection",
+                Pick.is_puntys_pick == True,
+                Pick.bet_type != "exotics_only",
+            ))
+        )
+        pp_row = pp_result.one()
+        pp_total = pp_row[0] or 0
+        pp_hits = int(pp_row[1] or 0)
+        pp_pnl = float(pp_row[2] or 0)
+        pp_staked = float(pp_row[3] or 0)
+        pp_rate = round(pp_hits / pp_total * 100, 1) if pp_total > 0 else 0
+        pp_roi = round(pp_pnl / pp_staked * 100, 1) if pp_staked > 0 else 0
         pick_ranks.append({
             "label": "Punty's Picks",
             "rank": 0,
-            "hits": all_hits,
-            "total": all_total,
-            "rate": all_rate,
-            "pnl": round(all_pnl, 2),
-            "staked": round(all_staked, 2),
-            "roi": all_roi,
+            "hits": pp_hits,
+            "total": pp_total,
+            "rate": pp_rate,
+            "pnl": round(pp_pnl, 2),
+            "staked": round(pp_staked, 2),
+            "roi": pp_roi,
         })
 
         return {

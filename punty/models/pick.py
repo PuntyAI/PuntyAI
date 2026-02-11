@@ -61,6 +61,9 @@ class Pick(Base):
     confidence: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # HIGH/MED/LOW
     recommended_stake: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Punty's Pick flag (the highlighted "best bet" recommendation per race)
+    is_puntys_pick: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
+
     # Settlement
     hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -101,6 +104,7 @@ class Pick(Base):
             "value_rating": self.value_rating,
             "confidence": self.confidence,
             "recommended_stake": self.recommended_stake,
+            "is_puntys_pick": self.is_puntys_pick,
             "hit": self.hit,
             "pnl": self.pnl,
             "settled": self.settled,

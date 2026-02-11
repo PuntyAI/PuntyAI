@@ -255,6 +255,105 @@ Skinny ($1): 1 / 2 / 3 / 4 / 5 / 6 (1 combos × $1.00 = $1) — est. return: 100
         assert picks[0]["sequence_start_race"] == 3
 
 
+class TestPuntysPick:
+    """Tests for Punty's Pick detection."""
+
+    def test_puntys_pick_single_horse(self):
+        content = """
+*Race 1 – Test Race*
+Race type: Maiden, 1200m
+
+*Top 3 + Roughie ($20 pool)*
+1. *FAST HORSE* (No.1) — $3.50 / $1.45
+   Bet: $10 Win
+   Confidence: high
+2. *QUICK RUNNER* (No.2) — $5.00 / $1.80
+   Bet: $6 Place
+   Confidence: med
+3. *STEADY EDDIE* (No.3) — $8.00 / $2.50
+   Bet: $4 Each Way
+   Confidence: low
+Roughie: *LONGSHOT* (No.8) — $21.00 / $5.00
+Bet: Exotics only
+
+*Punty's Pick:* QUICK RUNNER (No.2) $5.00 Place
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        assert len(selections) == 4
+
+        # Only saddlecloth 2 (QUICK RUNNER) should be Punty's Pick
+        puntys = [p for p in selections if p.get("is_puntys_pick")]
+        assert len(puntys) == 1
+        assert puntys[0]["horse_name"] == "QUICK RUNNER"
+        assert puntys[0]["saddlecloth"] == 2
+
+        # Others should NOT have is_puntys_pick set
+        non_puntys = [p for p in selections if not p.get("is_puntys_pick")]
+        assert len(non_puntys) == 3
+
+    def test_puntys_pick_two_horses(self):
+        content = """
+*Race 3 – Big Race*
+
+1. *HORSE A* (No.4) — $2.80 / $1.30
+   Bet: $8 Win
+2. *HORSE B* (No.7) — $6.00 / $2.10
+   Bet: $7 Place
+3. *HORSE C* (No.1) — $9.00 / $3.00
+   Bet: $5 Each Way
+Roughie: *HORSE D* (No.12) — $31.00 / $6.00
+Bet: Exotics only
+
+*Punty's Pick:* HORSE A (No.4) $2.80 Win + HORSE B (No.7) $6.00 Place
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        puntys = [p for p in selections if p.get("is_puntys_pick")]
+        assert len(puntys) == 2
+        puntys_saddles = {p["saddlecloth"] for p in puntys}
+        assert puntys_saddles == {4, 7}
+
+    def test_no_puntys_pick_line(self):
+        content = """
+*Race 2 – Normal Race*
+
+1. *SOME HORSE* (No.5) — $4.00 / $1.60
+   Bet: $10 Win
+2. *OTHER HORSE* (No.9) — $7.00 / $2.30
+   Bet: $6 Place
+3. *THIRD HORSE* (No.3) — $12.00 / $3.50
+   Bet: $4 Each Way
+Roughie: *OUTSIDER* (No.11) — $25.00 / $5.50
+Bet: Exotics only
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        puntys = [p for p in selections if p.get("is_puntys_pick")]
+        assert len(puntys) == 0
+
+
 class TestParseEarlyMailIntegration:
     """Integration tests for full early mail parsing."""
 

@@ -178,6 +178,8 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN recommended_stake FLOAT",
             # Manual track condition override lock
             "ALTER TABLE meetings ADD COLUMN track_condition_locked BOOLEAN DEFAULT 0",
+            # Punty's Pick flag (best-bet recommendation per race)
+            "ALTER TABLE picks ADD COLUMN is_puntys_pick BOOLEAN DEFAULT 0",
         ]:
             try:
                 await conn.execute(_text(col))
