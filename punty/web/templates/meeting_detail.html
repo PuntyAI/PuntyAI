@@ -661,6 +661,8 @@
                                     'quinella': {'label': 'Quinella', 'result': p1 ~ '-' ~ p2},
                                     'exacta': {'label': 'Exacta', 'result': p1 ~ '-' ~ p2},
                                     'trifecta': {'label': 'Trifecta', 'result': p1 ~ '-' ~ p2 ~ '-' ~ p3},
+                                    'trifecta 1': {'label': 'Trifecta (1)', 'result': p1 ~ '-' ~ p2 ~ '-' ~ p3},
+                                    'trifecta 2': {'label': 'Trifecta (2)', 'result': p1 ~ '-' ~ p2 ~ '-' ~ p3},
                                     'first4': {'label': 'First 4', 'result': p1 ~ '-' ~ p2 ~ '-' ~ p3 ~ '-' ~ p4},
                                     'first_4': {'label': 'First 4', 'result': p1 ~ '-' ~ p2 ~ '-' ~ p3 ~ '-' ~ p4}
                                 } %}
@@ -670,11 +672,12 @@
                                         <span class="w-20 text-right">Results</span>
                                         <span class="w-20 text-right">Dividend</span>
                                     </div>
-                                    {% for etype in ['quinella', 'exacta', 'trifecta', 'first4', 'first_4'] %}
+                                    {% for etype in ['quinella', 'exacta', 'trifecta', 'trifecta 1', 'trifecta 2', 'first4', 'first_4'] %}
                                     {% if exr.get(etype) %}
+                                    {% set elabel = exotic_info.get(etype, {'label': etype|title, 'result': ''}) %}
                                     <div class="px-4 py-1 flex text-sm">
-                                        <span class="flex-1 text-gray-600">{{ exotic_info[etype].label }}</span>
-                                        <span class="w-20 text-right text-gray-500">{{ exotic_info[etype].result }}</span>
+                                        <span class="flex-1 text-gray-600">{{ elabel.label }}</span>
+                                        <span class="w-20 text-right text-gray-500">{{ elabel.result }}</span>
                                         <span class="w-20 text-right font-medium">${{ "%.2f"|format(exr[etype]|float) }}</span>
                                     </div>
                                     {% endif %}
@@ -685,6 +688,23 @@
                                         <span class="flex-1 text-gray-600">Duet</span>
                                         <span class="w-20 text-right text-gray-500"></span>
                                         <span class="w-20 text-right font-medium">${{ "%.2f"|format(exr[dkey]|float) }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                    {% set seq_keys = [
+                                        ('daily double', 'Daily Double'),
+                                        ('treble', 'Treble'),
+                                        ('early quaddie', 'Early Quaddie'),
+                                        ('quaddie', 'Quaddie'),
+                                        ('big6', 'Big 6'),
+                                        ('big 6', 'Big 6'),
+                                    ] %}
+                                    {% for skey, slabel in seq_keys %}
+                                    {% if exr.get(skey) %}
+                                    <div class="px-4 py-1 flex text-sm">
+                                        <span class="flex-1 text-amber-600 font-medium">{{ slabel }}</span>
+                                        <span class="w-20 text-right text-gray-500"></span>
+                                        <span class="w-20 text-right font-medium text-amber-600">${{ "%.2f"|format(exr[skey]|float) }}</span>
                                     </div>
                                     {% endif %}
                                     {% endfor %}
