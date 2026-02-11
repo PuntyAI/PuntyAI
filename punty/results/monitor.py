@@ -447,8 +447,17 @@ class ResultsMonitor:
                             approval = await auto_approve_content(content_id, db)
                             if approval.get("status") == "approved":
                                 logger.info(f"Wrap-up auto-approved for {meeting.venue}")
-                                await auto_post_to_twitter(content_id, db)
-                                await auto_post_to_facebook(content_id, db)
+                                twitter_result = await auto_post_to_twitter(content_id, db)
+                                facebook_result = await auto_post_to_facebook(content_id, db)
+                                # Alert on delivery failures
+                                failures = []
+                                if twitter_result.get("status") == "error":
+                                    failures.append(f"Twitter: {twitter_result.get('message', 'unknown')}")
+                                if facebook_result.get("status") == "error":
+                                    failures.append(f"Facebook: {facebook_result.get('message', 'unknown')}")
+                                if failures:
+                                    from punty.scheduler.automation import _send_delivery_failure_alert
+                                    await _send_delivery_failure_alert(db, content_id, failures)
                             else:
                                 logger.warning(f"Wrap-up auto-approval failed for {meeting.venue}: {approval.get('issues')}")
                 except Exception as e:

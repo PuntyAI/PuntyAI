@@ -120,6 +120,17 @@ class TelegramBot:
     def is_running(self) -> bool:
         return self._running
 
+    async def send_alert(self, message: str):
+        """Send an alert message to the owner. Used for delivery failures etc."""
+        if not self._running or not self._owner_id or not self.application:
+            return
+        try:
+            await self.application.bot.send_message(
+                chat_id=self._owner_id, text=message
+            )
+        except Exception as e:
+            logger.error(f"Failed to send Telegram alert: {e}")
+
     def _check_authorized(self, update: Update) -> bool:
         """Check if the message is from the authorized owner."""
         if not update.effective_user:

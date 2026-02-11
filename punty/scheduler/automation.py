@@ -261,7 +261,19 @@ async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
     # Step 3: Post to Facebook
     facebook_result = await auto_post_to_facebook(content_id, db)
 
-    log_system(f"Auto-approved and posted: {content_id}", status="success")
+    # Check for delivery failures and alert
+    failures = []
+    if twitter_result.get("status") == "error":
+        failures.append(f"Twitter: {twitter_result.get('message', 'unknown error')}")
+    if facebook_result.get("status") == "error":
+        failures.append(f"Facebook: {facebook_result.get('message', 'unknown error')}")
+
+    if failures:
+        failure_msg = "; ".join(failures)
+        log_system(f"Auto-approved {content_id} but delivery failed — {failure_msg}", status="warning")
+        await _send_delivery_failure_alert(db, content_id, failures)
+    else:
+        log_system(f"Auto-approved and posted: {content_id}", status="success")
 
     return {
         "status": "complete",
@@ -270,6 +282,19 @@ async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
         "twitter": twitter_result,
         "facebook": facebook_result,
     }
+
+
+async def _send_delivery_failure_alert(db: AsyncSession, content_id: str, failures: list[str]):
+    """Send a Telegram alert when auto-delivery fails."""
+    try:
+        from punty.telegram.bot import telegram_bot
+        if telegram_bot and telegram_bot._running:
+            msg = f"⚠️ Delivery failed for {content_id[:8]}...\n"
+            for f in failures:
+                msg += f"• {f}\n"
+            await telegram_bot.send_alert(msg)
+    except Exception as e:
+        logger.error(f"Failed to send delivery alert: {e}")
 
 
 async def check_all_settled(meeting_id: str, db: AsyncSession) -> tuple[bool, int, int]:
