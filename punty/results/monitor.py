@@ -271,7 +271,7 @@ class ResultsMonitor:
         try:
             await self._check_pre_race_changes(db, meeting, races, statuses)
         except Exception as e:
-            logger.debug(f"Pre-race change check failed for {meeting.venue}: {e}")
+            logger.warning(f"Pre-race change check failed for {meeting.venue}: {e}", exc_info=True)
 
         for race_num, status in statuses.items():
             if status in ("Paying", "Closed") and race_num not in self.processed_races[meeting_id]:
@@ -839,7 +839,10 @@ class ResultsMonitor:
             upcoming.append(race.race_number)
 
         if not upcoming:
+            logger.debug(f"No upcoming races for {meeting.venue} change detection")
             return
+
+        logger.info(f"Checking pre-race changes for {meeting.venue}: races {upcoming}")
 
         # Snapshot current DB state before refresh
         snapshot = await take_snapshot(db, meeting_id, upcoming)
@@ -849,7 +852,7 @@ class ResultsMonitor:
             from punty.scrapers.orchestrator import refresh_odds
             await refresh_odds(meeting_id, db)
         except Exception as e:
-            logger.debug(f"Odds refresh failed for {meeting.venue}: {e}")
+            logger.warning(f"Odds refresh failed for {meeting.venue}: {e}")
 
         self.last_change_check[meeting_id] = now
 
@@ -885,7 +888,12 @@ class ResultsMonitor:
                         await field_scraper.close()
                     self.last_jockey_check[meeting_id] = now
             except Exception as e:
-                logger.debug(f"Jockey/gear check failed for {meeting.venue}: {e}")
+                logger.warning(f"Jockey/gear check failed for {meeting.venue}: {e}", exc_info=True)
+
+        if alerts:
+            logger.info(f"Change detection for {meeting.venue}: {len(alerts)} alerts — {[a.change_type for a in alerts]}")
+        else:
+            logger.info(f"Change detection for {meeting.venue}: no changes detected")
 
         # Dedup and post
         if meeting_id not in self.alerted_changes:
