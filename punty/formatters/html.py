@@ -252,6 +252,11 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'<span class="sel-bet"><span class="sel-label">Return</span> \1</span>',
         content, flags=re.MULTILINE | re.IGNORECASE
     )
+    content = re.sub(
+        r'^\s*Probability:\s*(.+)$',
+        r'<span class="sel-prob"><span class="sel-label">Prob</span> \1</span>',
+        content, flags=re.MULTILINE | re.IGNORECASE
+    )
 
     # Convert paragraphs (double newlines)
     paragraphs = re.split(r'\n\n+', content)
