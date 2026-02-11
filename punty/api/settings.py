@@ -289,6 +289,8 @@ PROVIDER_KEYS = {
     "smtp": ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from"],
     "resend": ["resend_api_key", "email_from", "notification_email"],
     "facebook": ["facebook_page_id", "facebook_page_access_token"],
+    "telegram": ["telegram_bot_token", "telegram_owner_id"],
+    "anthropic": ["anthropic_api_key"],
 }
 
 

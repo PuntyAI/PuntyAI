@@ -153,6 +153,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup settlement check failed: {e}")
 
+    # Start Telegram bot
+    from punty.telegram.bot import TelegramBot
+    telegram_bot = TelegramBot(app)
+    if await telegram_bot.start():
+        app.state.telegram_bot = telegram_bot
+    else:
+        app.state.telegram_bot = None
+
     # Initialize results monitor
     monitor = ResultsMonitor(app)
     app.state.results_monitor = monitor
@@ -168,6 +176,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down PuntyAI...")
+    if app.state.telegram_bot:
+        await app.state.telegram_bot.stop()
     monitor.stop()
     await scheduler_manager.stop()
 

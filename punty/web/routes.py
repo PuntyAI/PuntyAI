@@ -448,11 +448,15 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     openai_key = await get_api_key(db, "openai_api_key", app_settings.openai_api_key)
     twitter_key = await get_api_key(db, "twitter_api_key", app_settings.twitter_api_key)
     facebook_token = await get_api_key(db, "facebook_page_access_token")
+    telegram_token = await get_api_key(db, "telegram_bot_token")
+    anthropic_key = await get_api_key(db, "anthropic_api_key")
     # Only pass masked values to template — never expose full keys in HTML
     api_key_status = {
         "openai": ("..." + openai_key[-4:]) if openai_key else "",
         "twitter": ("..." + twitter_key[-4:]) if twitter_key else "",
         "facebook": ("..." + facebook_token[-4:]) if facebook_token else "",
+        "telegram": ("..." + telegram_token[-4:]) if telegram_token else "",
+        "anthropic": ("..." + anthropic_key[-4:]) if anthropic_key else "",
     }
 
     # Load personality prompt (DB first, then file fallback)

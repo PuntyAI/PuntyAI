@@ -202,6 +202,18 @@ class AppSettings(Base):
             "value": "true",
             "description": "Enable per-race results commentary generation",
         },
+        "telegram_bot_token": {
+            "value": "",
+            "description": "Telegram Bot API token (from @BotFather)",
+        },
+        "telegram_owner_id": {
+            "value": "",
+            "description": "Telegram user ID authorized to use the bot",
+        },
+        "anthropic_api_key": {
+            "value": "",
+            "description": "Anthropic API key for Claude",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:
@@ -232,6 +244,7 @@ class SettingsAudit(Base):
         "openai_api_key", "twitter_api_key", "twitter_api_secret",
         "twitter_access_token", "twitter_access_secret",
         "resend_api_key", "smtp_password",
+        "telegram_bot_token", "anthropic_api_key",
     }
 
     @staticmethod
