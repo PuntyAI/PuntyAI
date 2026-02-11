@@ -47,7 +47,7 @@ def extract_puntys_picks(raw_content: str) -> dict[int, set[int]]:
 
 
 def main():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
