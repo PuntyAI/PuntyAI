@@ -23,6 +23,7 @@
         background: var(--bg-dark);
         border: 1px solid var(--border-subtle);
         color: var(--text-primary);
+        color-scheme: dark;
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
         outline: none;
         min-width: 0;
@@ -32,7 +33,7 @@
         box-shadow: 0 0 0 2px rgba(233, 30, 140, 0.15);
     }
     .sf-input::placeholder { color: var(--text-muted); opacity: 0.5; }
-    .sf-input option { background: var(--bg-card); }
+    .sf-input option { background: var(--bg-card); color: var(--text-primary); }
     .sf-input[type="date"] {
         padding: 0.45rem 0.4rem;
         font-size: 0.75rem;
@@ -266,11 +267,11 @@
                                 </div>
                                 <div>
                                     <label class="sf-label">From</label>
-                                    <input type="date" id="f-date-from" class="sf-input" style="color-scheme: dark;" title="From date">
+                                    <input type="date" id="f-date-from" class="sf-input" title="From date">
                                 </div>
                                 <div>
                                     <label class="sf-label">To</label>
-                                    <input type="date" id="f-date-to" class="sf-input" style="color-scheme: dark;" title="To date">
+                                    <input type="date" id="f-date-to" class="sf-input" title="To date">
                                 </div>
                             </div>
                         </div>
