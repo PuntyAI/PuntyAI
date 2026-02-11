@@ -171,6 +171,13 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
+    # Convert standalone bold lines to section headings (wrap-ups, reviews)
+    # Matches lines that are entirely *Bold Text* with 2+ words starting uppercase
+    content = re.sub(
+        r'^\*{1,2}([A-Z][^*\n]*\s[^*\n]{2,})\*{1,2}\s*$',
+        r'## \1', content, flags=re.MULTILINE,
+    )
+
     # Convert headers (### *TEXT* or ### 1) TEXT)
     def convert_header(m):
         level = len(m.group(1))
