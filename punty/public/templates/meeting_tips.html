@@ -453,6 +453,36 @@
         white-space: nowrap;
     }
 
+    /* Open sections (Nuggets, Final Word) */
+    .open-section {
+        margin: 1.5rem 0;
+    }
+    .open-section-title {
+        display: flex; align-items: center; gap: 1rem;
+        margin-bottom: 1rem; padding: 0 0.25rem;
+    }
+    .open-section-line {
+        flex: 1; height: 1px; opacity: 0.3;
+    }
+    .open-section-label {
+        font-family: 'Orbitron', sans-serif; font-size: 0.65rem; font-weight: 700;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        white-space: nowrap; padding: 0.3rem 0.75rem; border-radius: 4px;
+    }
+    .nuggets-label {
+        background: rgba(0, 212, 255, 0.12); color: var(--cyan);
+    }
+    .final-word-label {
+        background: rgba(157, 78, 221, 0.12); color: var(--purple);
+    }
+    .open-section-body {
+        padding: 0 0.5rem;
+        font-family: 'Source Sans Pro', sans-serif;
+        line-height: 1.8; color: #d0d0dc;
+    }
+    .open-section-body p { margin-bottom: 0.75rem; }
+    .open-section-body strong, .open-section-body b { color: white; font-weight: 600; }
+
     /* Sequence results card */
     .seq-results-card {
         margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem;
@@ -753,6 +783,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<span class="sequence-divider-label">Sequence Lanes</span>' +
                 '<div class="sequence-divider-line"></div>';
             tipsContent.appendChild(divider);
+            return;
+        }
+
+        // NUGGETS and FINAL WORD render as open sections, not accordions
+        if (!sec.isRace && /NUGGETS|FINAL\s+WORD/i.test(sec.heading.textContent)) {
+            var isNuggets = /NUGGETS/i.test(sec.heading.textContent);
+            var lineColor = isNuggets ? 'var(--cyan)' : 'var(--purple)';
+            var lineGrad = 'linear-gradient(90deg, transparent, ' + lineColor + ', transparent)';
+            var sectionDiv = document.createElement('div');
+            sectionDiv.className = 'open-section';
+            var titleDiv = document.createElement('div');
+            titleDiv.className = 'open-section-title';
+            titleDiv.innerHTML = '<div class="open-section-line" style="background:' + lineGrad + '"></div>' +
+                '<span class="open-section-label ' + (isNuggets ? 'nuggets-label' : 'final-word-label') + '">' +
+                sec.heading.textContent + '</span>' +
+                '<div class="open-section-line" style="background:' + lineGrad + '"></div>';
+            sectionDiv.appendChild(titleDiv);
+            var contentDiv = document.createElement('div');
+            contentDiv.className = 'open-section-body';
+            sec.nodes.forEach(function(n) { contentDiv.appendChild(n); });
+            sectionDiv.appendChild(contentDiv);
+            tipsContent.appendChild(sectionDiv);
             return;
         }
 
