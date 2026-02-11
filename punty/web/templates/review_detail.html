@@ -205,11 +205,11 @@
                     <hr class="my-4">
                     <button hx-post="/api/delivery/send"
                             hx-ext="json-enc"
-                            hx-vals='{"content_id": "{{ content.id }}", "platform": "twitter"}'
+                            hx-vals='{"content_id": "{{ content.id }}", "platform": "socials"}'
                             hx-swap="none"
-                            hx-on::after-request="if(event.detail.successful) showToast('Posted to Twitter!', 'success'); else showToast('Failed to post', 'error');"
+                            hx-on::after-request="if(event.detail.successful) showToast('Posted to socials!', 'success'); else showToast('Failed to post', 'error');"
                             class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900">
-                        Post to Twitter
+                        Post to Socials
                     </button>
                     {% endif %}
                 </div>

@@ -192,13 +192,40 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
         return {"status": "scheduled", "send_at": request.schedule_at}
 
     # Send immediately based on platform
-    if request.platform == "twitter":
+    if request.platform == "socials":
+        # Post to both Twitter and Facebook
+        results = {}
+        from punty.delivery.twitter import TwitterDelivery
+        from punty.delivery.facebook import FacebookDelivery
+
+        twitter = TwitterDelivery(db)
+        try:
+            results["twitter"] = await twitter.send_long_post(request.content_id)
+        except Exception as e:
+            results["twitter"] = {"status": "error", "message": str(e)}
+
+        fb = FacebookDelivery(db)
+        try:
+            results["facebook"] = await fb.send(request.content_id)
+        except Exception as e:
+            results["facebook"] = {"status": "error", "message": str(e)}
+
+        # Check if either succeeded
+        tw_ok = results["twitter"].get("status") != "error"
+        fb_ok = results["facebook"].get("status") != "error"
+        if not tw_ok and not fb_ok:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Both failed — Twitter: {results['twitter'].get('message')}, Facebook: {results['facebook'].get('message')}",
+            )
+        return {"status": "posted", "results": results}
+
+    elif request.platform == "twitter":
         from punty.delivery.twitter import TwitterDelivery
 
         twitter = TwitterDelivery(db)
         try:
-            # Use thread for Early Mail (too long for single tweet)
-            result = await twitter.send_thread(request.content_id)
+            result = await twitter.send_long_post(request.content_id)
             return result
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
