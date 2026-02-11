@@ -394,6 +394,20 @@
                     </div>
                 </label>
 
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           class="rounded text-punty-coral focus:ring-punty-coral"
+                           {% if settings.get('enable_live_alerts', {}).get('value', 'true') == 'true' %}checked{% endif %}
+                           hx-put="/api/settings/enable_live_alerts"
+                           hx-trigger="change"
+                           hx-swap="none"
+                           hx-vals='{"value": "{{ 'false' if settings.get('enable_live_alerts', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">Live Alerts</span>
+                        <p class="text-xs text-gray-500">Post scratching, track change, jockey/gear alerts during racing</p>
+                    </div>
+                </label>
+
                 <p class="text-xs text-gray-500 pt-2 border-t border-punty-border mt-4">
                     Results monitor starts at 11am AEST and automatically stops 20 minutes after the last race completes.
                 </p>

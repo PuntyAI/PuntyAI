@@ -36,6 +36,9 @@ class ResultsMonitor:
         self.processed_races: dict[str, set[int]] = {}  # {meeting_id: {race_nums}}
         self.wrapups_generated: set[str] = set()
         self.pace_updates_posted: dict[str, int] = {}  # {meeting_id: count}
+        self.alerted_changes: dict[str, set[str]] = {}  # {meeting_id: set of dedup keys}
+        self.last_change_check: dict[str, datetime] = {}  # rate limit per meeting
+        self.last_jockey_check: dict[str, datetime] = {}  # Playwright rate limit
         self.task: Optional[asyncio.Task] = None
         self.last_check: Optional[datetime] = None
         self.poll_interval = POLL_MIN  # display value
@@ -64,6 +67,7 @@ class ResultsMonitor:
             "wrapups_generated": list(self.wrapups_generated),
             "poll_interval": self.poll_interval,
             "consecutive_errors": self.consecutive_errors,
+            "alerted_changes": {k: len(v) for k, v in self.alerted_changes.items()},
         }
 
     async def _should_be_monitoring(self) -> bool:
@@ -178,6 +182,9 @@ class ResultsMonitor:
                 self.processed_races.clear()
                 self.wrapups_generated.clear()
                 self.pace_updates_posted.clear()
+                self.alerted_changes.clear()
+                self.last_change_check.clear()
+                self.last_jockey_check.clear()
                 self._last_reset_date = today
                 logger.info(f"Daily reset: cleared {old_races} processed races, {old_wrapups} wrapups")
 
@@ -259,6 +266,12 @@ class ResultsMonitor:
             return
         finally:
             await scraper.close()
+
+        # Pre-race change detection (scratchings, track condition, jockey/gear)
+        try:
+            await self._check_pre_race_changes(db, meeting, races, statuses)
+        except Exception as e:
+            logger.debug(f"Pre-race change check failed for {meeting.venue}: {e}")
 
         for race_num, status in statuses.items():
             if status in ("Paying", "Closed") and race_num not in self.processed_races[meeting_id]:
@@ -784,6 +797,216 @@ class ResultsMonitor:
 
         except Exception as e:
             logger.debug(f"TabTouch exotic backfill failed for {meeting.venue}: {e}")
+
+    # ── Pre-race change detection ──────────────────────────────────────────
+
+    async def _check_pre_race_changes(self, db: AsyncSession, meeting, races, statuses: dict):
+        """Check for scratchings, track condition changes, and jockey/gear swaps on upcoming races."""
+        from punty.results.change_detection import (
+            take_snapshot, detect_scratching_changes,
+            detect_track_condition_change, detect_jockey_gear_changes,
+        )
+
+        meeting_id = meeting.id
+
+        # Check if live alerts are enabled
+        from punty.models.settings import AppSettings
+        setting_result = await db.execute(
+            select(AppSettings).where(AppSettings.key == "enable_live_alerts")
+        )
+        setting = setting_result.scalar_one_or_none()
+        if setting and setting.value != "true":
+            return
+
+        # Rate limit: max 1 check per 3 min per meeting
+        now = melb_now()
+        last = self.last_change_check.get(meeting_id)
+        if last and (now - last).total_seconds() < 180:
+            return
+
+        # Find upcoming race numbers (status=Open, start_time > now + 5min)
+        upcoming = []
+        for race in races:
+            status = statuses.get(race.race_number, "Open")
+            if status != "Open":
+                continue
+            if race.start_time:
+                from datetime import time as _time
+                st = race.start_time if isinstance(race.start_time, _time) else race.start_time.time()
+                race_start = datetime.combine(meeting.date, st, tzinfo=MELB_TZ)
+                if race_start < now + timedelta(minutes=5):
+                    continue
+            upcoming.append(race.race_number)
+
+        if not upcoming:
+            return
+
+        # Snapshot current DB state before refresh
+        snapshot = await take_snapshot(db, meeting_id, upcoming)
+
+        # Refresh odds + scratchings via TAB (httpx, lightweight)
+        try:
+            from punty.scrapers.orchestrator import refresh_odds
+            await refresh_odds(meeting_id, db)
+        except Exception as e:
+            logger.debug(f"Odds refresh failed for {meeting.venue}: {e}")
+
+        self.last_change_check[meeting_id] = now
+
+        # Detect scratching changes
+        alerts = await detect_scratching_changes(db, meeting_id, upcoming, snapshot)
+
+        # Detect track condition change
+        track_alert = await detect_track_condition_change(db, meeting_id, snapshot)
+        if track_alert:
+            alerts.append(track_alert)
+
+        # Jockey/gear check (less frequent — every 10 min, Playwright)
+        jockey_last = self.last_jockey_check.get(meeting_id)
+        if not jockey_last or (now - jockey_last).total_seconds() >= 600:
+            try:
+                from punty.scrapers.playwright_base import is_scrape_in_progress
+                in_progress, _ = is_scrape_in_progress()
+                if not in_progress:
+                    from punty.scrapers.racing_com import RacingComScraper
+                    field_scraper = RacingComScraper()
+                    try:
+                        field_data = await field_scraper.check_race_fields(
+                            meeting.venue, meeting.date, upcoming
+                        )
+                        # Apply jockey/gear updates to DB
+                        await self._apply_field_changes(db, meeting_id, field_data)
+                        # Detect jockey/gear changes
+                        jg_alerts = await detect_jockey_gear_changes(
+                            db, meeting_id, upcoming, snapshot
+                        )
+                        alerts.extend(jg_alerts)
+                    finally:
+                        await field_scraper.close()
+                    self.last_jockey_check[meeting_id] = now
+            except Exception as e:
+                logger.debug(f"Jockey/gear check failed for {meeting.venue}: {e}")
+
+        # Dedup and post
+        if meeting_id not in self.alerted_changes:
+            self.alerted_changes[meeting_id] = set()
+
+        for alert in alerts:
+            key = alert.dedup_key
+            if key in self.alerted_changes[meeting_id]:
+                continue
+            self.alerted_changes[meeting_id].add(key)
+
+            try:
+                await self._post_change_alert(db, meeting, alert)
+            except Exception as e:
+                logger.warning(f"Failed to post {alert.change_type} alert: {e}")
+
+    async def _post_change_alert(self, db: AsyncSession, meeting, alert):
+        """Post a change detection alert to Twitter and Facebook."""
+        from punty.models.content import Content
+        from punty.models.live_update import LiveUpdate
+        from punty.delivery.twitter import TwitterDelivery
+        from punty.delivery.facebook import FacebookDelivery
+
+        # Find the meeting's early mail for reply threading
+        em_result = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting.id,
+                Content.content_type == "early_mail",
+            ).order_by(Content.created_at.desc())
+        )
+        early_mail = em_result.scalars().first()
+        if not early_mail:
+            logger.info(f"No early mail for {meeting.venue} — skipping change alert")
+            return
+        if not early_mail.twitter_id and not early_mail.facebook_id:
+            logger.info(f"Early mail not posted for {meeting.venue} — skipping change alert")
+            return
+
+        tweet_text = alert.message
+        logger.info(f"Posting {alert.change_type} alert for {meeting.venue}: {tweet_text[:80]}...")
+
+        # Post to Twitter as reply
+        reply_tweet_id = None
+        if early_mail.twitter_id:
+            twitter = TwitterDelivery(db)
+            if await twitter.is_configured():
+                try:
+                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_tweet_id = reply_result.get("tweet_id")
+                except Exception as e:
+                    logger.warning(f"Failed to post {alert.change_type} Twitter reply: {e}")
+
+        # Post to Facebook as standalone update
+        fb_post_id = None
+        fb = FacebookDelivery(db)
+        if await fb.is_configured():
+            try:
+                fb_result = await fb.post_update(tweet_text)
+                fb_post_id = fb_result.get("post_id")
+            except Exception as e:
+                logger.warning(f"Failed to post Facebook {alert.change_type}: {e}")
+
+        # Save to LiveUpdate
+        update_type_map = {
+            "scratching": "scratching_alert",
+            "track_condition": "track_alert",
+            "jockey_change": "jockey_alert",
+            "gear_change": "gear_alert",
+        }
+        update = LiveUpdate(
+            meeting_id=meeting.id,
+            race_number=alert.race_number,
+            update_type=update_type_map.get(alert.change_type, "change_alert"),
+            content=tweet_text,
+            tweet_id=reply_tweet_id,
+            parent_tweet_id=early_mail.twitter_id,
+            facebook_comment_id=fb_post_id,
+            parent_facebook_id=early_mail.facebook_id,
+            horse_name=alert.horse_name,
+        )
+        db.add(update)
+        await db.flush()
+
+    async def _apply_field_changes(self, db: AsyncSession, meeting_id: str, field_data: dict):
+        """Persist jockey/gear updates from racing.com field check."""
+        from punty.models.meeting import Runner
+
+        for race_num, runners in field_data.get("races", {}).items():
+            race_id = f"{meeting_id}-r{race_num}"
+            for r in runners:
+                horse_name = r.get("horse_name")
+                if not horse_name:
+                    continue
+                result = await db.execute(
+                    select(Runner).where(
+                        Runner.race_id == race_id,
+                        Runner.horse_name == horse_name,
+                    ).limit(1)
+                )
+                runner = result.scalar_one_or_none()
+                if not runner:
+                    continue
+
+                if r.get("scratched") and not runner.scratched:
+                    runner.scratched = True
+                if r.get("jockey") and r["jockey"] != runner.jockey:
+                    runner.jockey = r["jockey"]
+                if r.get("gear") and r["gear"] != runner.gear:
+                    runner.gear = r["gear"]
+                if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
+                    runner.gear_changes = r["gear_changes"]
+
+        # Track condition from racing.com
+        tc = field_data.get("meeting", {}).get("track_condition")
+        if tc:
+            from punty.models.meeting import Meeting
+            meeting = await db.get(Meeting, meeting_id)
+            if meeting and meeting.track_condition != tc:
+                meeting.track_condition = tc
+
+        await db.flush()
 
     async def check_single_meeting(self, meeting_id: str):
         """Manual one-shot check for a specific meeting."""

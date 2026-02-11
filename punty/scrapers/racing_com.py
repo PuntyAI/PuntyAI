@@ -880,6 +880,102 @@ class RacingComScraper(BaseScraper):
         logger.info(f"Race statuses for {venue}: {statuses}")
         return statuses
 
+    async def check_race_fields(
+        self, venue: str, race_date: date, race_numbers: list[int]
+    ) -> dict:
+        """Lightweight poll — load race field pages to capture jockey/gear/scratching changes.
+
+        Returns:
+            {
+                "meeting": {"track_condition": str | None},
+                "races": {
+                    race_num: [
+                        {
+                            "horse_name": str,
+                            "saddlecloth": int,
+                            "scratched": bool,
+                            "jockey": str | None,
+                            "gear": str | None,
+                            "gear_changes": str | None,
+                        }
+                    ]
+                }
+            }
+        """
+        result: dict = {"meeting": {}, "races": {}}
+        if not race_numbers:
+            return result
+
+        async with new_page() as page:
+            meeting_tc = None
+
+            for race_num in race_numbers:
+                captured_entries: list[dict] = []
+                captured_meeting: dict = {}
+
+                async def capture_graphql(response):
+                    if "graphql.rmdprod.racing.com" not in response.url:
+                        return
+                    try:
+                        body = await response.text()
+                        data = _json.loads(body)
+                    except Exception:
+                        return
+
+                    url = response.url
+
+                    # Capture meeting data (track condition) from first page load
+                    if "getMeeting_CD" in url:
+                        gm = data.get("data", {}).get("getMeeting", {})
+                        if gm:
+                            captured_meeting.update(gm)
+
+                    # Capture race entries
+                    if "getRaceEntriesForField" in url or "getRaceEntries" in url:
+                        form = data.get("data", {}).get("getRaceForm", {})
+                        entries = form.get("formRaceEntries", []) if isinstance(form, dict) else []
+                        if entries:
+                            captured_entries.extend(entries)
+
+                page.on("response", capture_graphql)
+
+                try:
+                    race_url = self._build_race_url(venue, race_date, race_num)
+                    await page.goto(race_url, wait_until="load")
+                    await page.wait_for_timeout(3000)
+                except Exception as e:
+                    logger.debug(f"Failed to load R{race_num} fields: {e}")
+                finally:
+                    page.remove_listener("response", capture_graphql)
+
+                # Parse meeting track condition from first load
+                if captured_meeting and not meeting_tc:
+                    tc = captured_meeting.get("trackCondition")
+                    rail_tc = captured_meeting.get("railAndTrackCondition")
+                    meeting_tc = tc or rail_tc
+
+                # Parse runner entries
+                runners = []
+                for entry in captured_entries:
+                    horse_name = (entry.get("horseName") or "").strip()
+                    if not horse_name:
+                        continue
+                    runners.append({
+                        "horse_name": horse_name,
+                        "saddlecloth": entry.get("raceEntryNumber"),
+                        "scratched": bool(entry.get("scratched")),
+                        "jockey": entry.get("jockeyName"),
+                        "gear": entry.get("lastGear"),
+                        "gear_changes": entry.get("gearChanges"),
+                    })
+
+                result["races"][race_num] = runners
+                logger.debug(f"Field check {venue} R{race_num}: {len(runners)} runners")
+
+            result["meeting"]["track_condition"] = meeting_tc
+
+        return result
+
     async def scrape_race_result(self, venue: str, race_date: date, race_number: int) -> dict:
         """Scrape results for a single completed race.
 
