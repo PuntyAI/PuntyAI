@@ -56,33 +56,34 @@ Repeat for each race in order:
 
 *Top 3 + Roughie ($20 pool)*
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
+   Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
-   Win %: {PUNTY_WIN_PROBABILITY}
    Confidence: {R_TAG_1}
    Why: {ONE_OR_TWO_LINES_REASON_1}
 *2. {R_TOP2}* (No.{R_TOP2_NO}) — ${R_TOP2_WIN_ODDS} / ${R_TOP2_PLACE_ODDS}
+   Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
-   Win %: {PUNTY_WIN_PROBABILITY}
    Confidence: {R_TAG_2}
    Why: {ONE_OR_TWO_LINES_REASON_2}
 *3. {R_TOP3}* (No.{R_TOP3_NO}) — ${R_TOP3_WIN_ODDS} / ${R_TOP3_PLACE_ODDS}
+   Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
-   Win %: {PUNTY_WIN_PROBABILITY}
    Confidence: {R_TAG_3}
    Why: {ONE_OR_TWO_LINES_REASON_3}
 
 *Roughie: {R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_WIN_ODDS} / ${R_ROUGHIE_PLACE_ODDS}
+Probability: {PUNTY_WIN_PROBABILITY} | Value: {VALUE_RATING}x
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
-Win %: {PUNTY_WIN_PROBABILITY}
+Confidence: {R_TAG}
 Why: {ONE_LINE_RISK_EXPLAINER}
-
-*Punty's Pick:* {HORSE_NAME} (No.{NO}) ${WIN_ODDS} Win + {SECOND_HORSE} (No.{NO}) ${PLACE_ODDS} Place
-{ONE_LINE_REASON — e.g. "The map screams front-runner and the value backs it up. Saver on the closers insurance."}
 
 *Degenerate Exotic of the Race*
 {R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $20
 Est. return: {X}% on $20
 Why: {R_EXOTIC_REASON}
+
+*Punty's Pick:* {HORSE_NAME} (No.{NO}) ${ODDS} {BET_TYPE} {+ HORSE2 (No.{NO}) ${ODDS} {BET_TYPE} if applicable}
+{ONE_LINE_REASON — e.g. "32% chance at $5.00 is value gold — the map screams front-runner and the model loves it."}
 
 ### 5) *SEQUENCE LANES*
 Print lanes in exact format. Use only saddlecloth numbers, separated by commas within legs, and use " / " to separate legs.
@@ -242,28 +243,34 @@ If no track record data is provided (new system or insufficient data), generate 
 
     When a race appears in MULTIPLE sequences (e.g., R5 in Early Quaddie AND Big 6), the saddlecloth numbers MUST be IDENTICAL. Work out each race's sequence runners ONCE, then copy them to all sequences that include that race.
 12) PUNTY'S PICK (per race):
-    After your Top 3 + Roughie + Exotic for each race, add ONE "Punty's Pick" recommendation.
-    This is Punty's actual recommended bet for the race — what HE would put his money on.
+    After the Degenerate Exotic for each race, add ONE "Punty's Pick" recommendation.
+    This is Punty's BEST BET for the race — the single best combination of chance and value. NOT limited to Win bets.
 
     **HOW TO CHOOSE:**
-    a) From your Top 3 + Roughie, pick the horse MOST LIKELY TO WIN. This doesn't have to be #1 — if #2 or the Roughie has a stronger case (map advantage + value), pick them.
-    b) Recommend UP TO 2 bets maximum:
-       - **Win** on your best pick (the one most likely to win)
-       - **Place** OR **Saver Win** on a second horse as insurance
-    c) Decision logic:
-       - If your #1 pick is short-priced (<$3.00) and confident → Win on #1 + Place on #2
-       - If your #1 is mid-range ($3-$8) with a strong case → Win on #1 + Saver Win on #2
-       - If the Roughie has genuine pace/map advantage at big odds → Win on Roughie + Place on #1
-       - If it's wide open → Win on #1 only (no second bet — don't force it)
-    d) Stake from the $20 pool: Punty's Pick stakes should come from the race's $20 pool (they're the SAME as what you've already allocated above, just highlighted)
-    e) Keep the reasoning to ONE punchy line — why this horse, why this bet type
+    a) Look at the `punty_win_probability`, `punty_value_rating`, and `punty_recommended_stake` data for each runner.
+    b) Pick the bet with the **best combination of probability and value**:
+       - High probability + value > 1.0 = strong pick (any bet type)
+       - Medium probability + high value (>1.2x) = value play
+       - If a Place bet has higher expected value than a Win bet on the same horse, recommend Place
+       - If Each Way offers the best risk/reward, recommend Each Way
+    c) Recommend UP TO 2 bets maximum:
+       - Your **primary bet** (best value play — could be Win, Place, Each Way, or Saver Win)
+       - Optional **secondary bet** on a different horse as insurance
+    d) Decision logic using probability data:
+       - If probability > 30% and value > 1.1x → Win on this horse
+       - If probability 15-30% and place_probability > 50% → Place bet (safer)
+       - If probability 20-35% at odds $5-$15 with value > 1.15x → Each Way
+       - If the Roughie has value > 1.3x → small stake Win or Place on the Roughie
+       - If it's wide open (no runner above 20%) → Place on highest probability only
+    e) Stake from the $20 pool (same allocation as above, just highlighted)
+    f) Keep reasoning to ONE punchy line referencing the probability/value
 
     **FORMAT:**
-    *Punty's Pick:* {HORSE} (No.{X}) ${ODDS} Win + {HORSE2} (No.{Y}) ${ODDS} Place
-    {One-line reason}
+    *Punty's Pick:* {HORSE} (No.{X}) ${ODDS} {BET_TYPE} + {HORSE2} (No.{Y}) ${ODDS} {BET_TYPE}
+    {One-line reason referencing probability and value}
 
     OR (single bet):
-    *Punty's Pick:* {HORSE} (No.{X}) ${ODDS} Win
+    *Punty's Pick:* {HORSE} (No.{X}) ${ODDS} {BET_TYPE}
     {One-line reason}
 
 13) PUNTY'S PICK (per sequence):
@@ -280,10 +287,22 @@ If no track record data is provided (new system or insufficient data), generate 
     **EXAMPLE:**
     *Punty's Pick:* Balanced — Races 5 and 7 are wide open but the rest have clear top picks. Cover the chaos without going overboard.
 
-14) WIN % (per selection):
-    Each selection (Top 3 + Roughie) gets a "Win %:" line — Punty's honest assessment of the horse's actual chance of winning.
-    - Be blunt and realistic. If the favourite is $2.50 but you think they're more like a 30% chance, say 30%.
-    - If the odds imply 20% but you think they're closer to 35%, say 35%.
-    - The Win % should reflect YOUR analysis of the race, not just invert the odds.
-    - This gives punters something to compare against their own assessment — "Punty reckons 25%, I reckon 35%, that's value."
-    - Keep it simple: just the number with a % sign (e.g. "Win %: 32%").
+14) PROBABILITY DATA (per runner):
+    Each runner in the context includes pre-calculated probability data from Punty's model:
+    - **punty_win_probability**: Calculated win chance (e.g. "32.5%") — based on multi-bookmaker consensus, form analysis, pace advantage, market movement, and class/fitness
+    - **punty_place_probability**: Calculated place chance (top 3)
+    - **punty_value_rating**: Our probability vs market probability. >1.0 = value (we think the horse has a better chance than the market says). >1.2 = strong value.
+    - **punty_recommended_stake**: Model-recommended stake from the $20 pool based on Kelly criterion
+    - **punty_market_implied**: What the market thinks (raw odds-implied probability)
+
+    **HOW TO USE THIS DATA:**
+    a) Print the probability and value rating on EVERY selection line: "Probability: 32% | Value: 1.4x"
+    b) Use `punty_value_rating` to identify value bets — if value > 1.05, mention it as value
+    c) Reference probability in your "Why" explanations (e.g. "32% chance at $5.00 is value — model says 1.4x edge")
+    d) Use `punty_recommended_stake` as a guide for stake sizing, but you can override if you have a strong view
+    e) For Punty's Pick, prioritise the bet with the best probability + value combination
+    f) If no probability data is provided (context missing), skip probability lines
+
+    The `probabilities` section in race analysis also includes:
+    - **probability_ranked**: All runners sorted by win probability (highest first)
+    - **value_plays**: Runners where our model sees value (value_rating > 1.05)

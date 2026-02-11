@@ -237,7 +237,77 @@ class ContextBuilder:
 
         race_context["analysis"] = self._analyze_race(active_runners)
 
+        # Calculate probabilities for all active runners
+        race_context["probabilities"] = self._calculate_probabilities(
+            active_runners, race, race_context,
+        )
+
         return race_context
+
+    def _calculate_probabilities(
+        self, active_runners: list, race, race_context: dict,
+    ) -> dict[str, Any]:
+        """Calculate and inject probabilities for all active runners."""
+        from punty.probability import calculate_race_probabilities
+
+        try:
+            meeting_ctx = {"track_condition": race.track_condition}
+            if hasattr(race, "meeting") and race.meeting:
+                meeting_ctx["track_condition"] = (
+                    race.meeting.track_condition or race.track_condition
+                )
+
+            probs = calculate_race_probabilities(
+                active_runners, race, meeting_ctx,
+            )
+
+            # Inject probability data into each runner's context dict
+            prob_summary = {}
+            for runner_data in race_context["runners"]:
+                if runner_data.get("scratched"):
+                    continue
+                # Match by runner id
+                rid = None
+                for r in active_runners:
+                    if r.horse_name == runner_data.get("horse_name"):
+                        rid = r.id
+                        break
+                if rid and rid in probs:
+                    rp = probs[rid]
+                    runner_data["punty_win_probability"] = f"{rp.win_probability * 100:.1f}%"
+                    runner_data["punty_place_probability"] = f"{rp.place_probability * 100:.1f}%"
+                    runner_data["punty_value_rating"] = round(rp.value_rating, 2)
+                    runner_data["punty_recommended_stake"] = rp.recommended_stake
+                    runner_data["punty_market_implied"] = f"{rp.market_implied * 100:.1f}%"
+
+                    prob_summary[runner_data["horse_name"]] = {
+                        "win_prob": rp.win_probability,
+                        "place_prob": rp.place_probability,
+                        "value_rating": rp.value_rating,
+                        "edge": rp.edge,
+                        "recommended_stake": rp.recommended_stake,
+                    }
+
+            # Build sorted probability ranking and value plays for AI
+            ranked = sorted(
+                prob_summary.items(), key=lambda x: x[1]["win_prob"], reverse=True,
+            )
+            value_plays = [
+                {"horse": name, "value": data["value_rating"], "edge": round(data["edge"] * 100, 1)}
+                for name, data in ranked
+                if data["value_rating"] > 1.05
+            ]
+
+            return {
+                "probability_ranked": [
+                    {"horse": name, "win_prob": f"{data['win_prob'] * 100:.1f}%"}
+                    for name, data in ranked
+                ],
+                "value_plays": value_plays,
+            }
+        except Exception as e:
+            logger.warning(f"Probability calculation failed: {e}")
+            return {}
 
     def _calculate_odds_movement(self, opening: float, current: float) -> str:
         """Calculate odds movement description."""

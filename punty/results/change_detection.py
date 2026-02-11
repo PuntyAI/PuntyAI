@@ -185,8 +185,15 @@ async def detect_track_condition_change(
 
 
 def _normalise_condition(cond: str) -> str:
-    """Normalise track condition string for comparison."""
-    return cond.strip().lower().replace("(", "").replace(")", "")
+    """Normalise track condition string for comparison.
+
+    Handles format variations between sources:
+    - "Good 4", "Good (4)", "good 4", "GOOD 4", "Good  4" all normalise to "good 4"
+    """
+    if not cond:
+        return ""
+    import re
+    return re.sub(r"\s+", " ", cond.strip().lower().replace("(", "").replace(")", ""))
 
 
 # ── Jockey / gear detection ───────────────────────────────────────────────

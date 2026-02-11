@@ -170,6 +170,12 @@ async def init_db() -> None:
             "ALTER TABLE race_assessments ADD COLUMN temperature INTEGER",
             # Twitter tweet ID for reply threading
             "ALTER TABLE content ADD COLUMN twitter_id VARCHAR(64)",
+            # Probability model fields on picks
+            "ALTER TABLE picks ADD COLUMN win_probability FLOAT",
+            "ALTER TABLE picks ADD COLUMN place_probability FLOAT",
+            "ALTER TABLE picks ADD COLUMN value_rating FLOAT",
+            "ALTER TABLE picks ADD COLUMN confidence VARCHAR(10)",
+            "ALTER TABLE picks ADD COLUMN recommended_stake FLOAT",
         ]:
             try:
                 await conn.execute(_text(col))

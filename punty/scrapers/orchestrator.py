@@ -12,6 +12,33 @@ from punty.models.meeting import Meeting, Race, Runner
 
 logger = logging.getLogger(__name__)
 
+
+def _normalise_track(cond: str | None) -> str:
+    """Normalise track condition for comparison (prevents false change alerts)."""
+    if not cond:
+        return ""
+    import re
+    return re.sub(r"\s+", " ", cond.strip().lower().replace("(", "").replace(")", ""))
+
+
+def _is_more_specific(new_cond: str | None, old_cond: str | None) -> bool:
+    """Return True if new condition is more specific (has rating number) than old."""
+    import re
+    if not new_cond:
+        return False
+    if not old_cond:
+        return True
+    # A condition with a rating number (e.g. "Good 4") is more specific than without (e.g. "Good")
+    new_has_rating = bool(re.search(r"\d", new_cond))
+    old_has_rating = bool(re.search(r"\d", old_cond))
+    if new_has_rating and not old_has_rating:
+        return True
+    if not new_has_rating and old_has_rating:
+        return False
+    # Both have or lack ratings — newer data is preferred
+    return True
+
+
 # All Runner fields that come from the scraper
 RUNNER_FIELDS = [
     "saddlecloth", "weight", "jockey", "trainer", "form", "current_odds", "opening_odds", "place_odds",
@@ -240,7 +267,10 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 conditions = await scrape_track_conditions(state)
                 for cond in conditions:
                     if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
-                        meeting.track_condition = cond.get("condition") or meeting.track_condition
+                        new_cond = cond.get("condition")
+                        if new_cond and _is_more_specific(new_cond, meeting.track_condition):
+                            logger.info(f"Track condition for {venue}: {meeting.track_condition!r} → {new_cond!r} (from racingaustralia)")
+                            meeting.track_condition = new_cond
                         meeting.rail_position = cond.get("rail") or meeting.rail_position
                         meeting.weather = cond.get("weather") or meeting.weather
                         found = True
@@ -253,11 +283,13 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                     fallback = await scrape_sportsbetform_conditions()
                     for cond in fallback:
                         if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
-                            meeting.track_condition = cond.get("condition") or meeting.track_condition
+                            new_cond = cond.get("condition")
+                            if new_cond:
+                                logger.info(f"Track condition for {venue}: {meeting.track_condition!r} → {new_cond!r} (from sportsbetform)")
+                                meeting.track_condition = new_cond
                             meeting.rail_position = cond.get("rail") or meeting.rail_position
                             meeting.weather = cond.get("weather") or meeting.weather
                             found = True
-                            logger.info(f"Found {venue} in sportsbetform: {meeting.track_condition}")
                             break
                 except Exception as e:
                     logger.warning(f"Sportsbetform fallback failed: {e}")
@@ -498,10 +530,15 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         try:
             data = await scraper.scrape_meeting(meeting.venue, meeting.date)
             await _merge_odds(db, meeting_id, data.get("runners_odds", []))
-            # Update track condition if TAB provides it
+            # Update track condition if TAB provides a genuinely different AND
+            # more specific value (prevents overwriting "Good 4" with bare "Good")
             tab_condition = data.get("meeting", {}).get("track_condition")
-            if tab_condition and tab_condition != meeting.track_condition:
-                meeting.track_condition = tab_condition
+            if tab_condition and _normalise_track(tab_condition) != _normalise_track(meeting.track_condition):
+                if _is_more_specific(tab_condition, meeting.track_condition):
+                    logger.info(f"TAB track condition update: {meeting.track_condition!r} → {tab_condition!r}")
+                    meeting.track_condition = tab_condition
+                else:
+                    logger.debug(f"TAB condition {tab_condition!r} less specific than {meeting.track_condition!r}, skipping")
         finally:
             await scraper.close()
         await db.commit()

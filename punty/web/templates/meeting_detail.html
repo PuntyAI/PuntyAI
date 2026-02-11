@@ -269,6 +269,13 @@
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
                                     {% set display_odds = pick.place_odds_at_tip if pick.bet_type == 'place' else pick.odds_at_tip %}
                                     {% if display_odds %}${{ "%.2f"|format(display_odds) }}{% endif %}
+                                    {% if pick.win_probability %}
+                                        {% set prob_pct = (pick.win_probability * 100)|round(0)|int %}
+                                        <span style="background:{% if prob_pct >= 30 %}#166534{% elif prob_pct >= 15 %}#0e7490{% elif prob_pct >= 8 %}#a16207{% else %}#6b7280{% endif %};color:#fff;padding:0 4px;border-radius:3px;font-size:0.65rem;">{{ prob_pct }}%</span>
+                                    {% endif %}
+                                    {% if pick.value_rating and pick.value_rating > 1.05 %}
+                                        <span style="color:#4ade80;font-size:0.65rem;" title="Value: {{ '%.2f'|format(pick.value_rating) }}x">VALUE</span>
+                                    {% endif %}
                                     {% if pick.bet_stake %}<span style="opacity:0.8;">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                     {% if pick.settled %}
                                         {% if pick.hit %}<span style="color:#4ade80;">&#10003;</span>{% else %}<span style="color:#f87171;">&#10007;</span>{% endif %}
@@ -705,6 +712,10 @@
                                         <span class="text-gray-600">
                                             {% if pick.pick_type == 'selection' %}
                                             {{ rank_labels.get(pick.tip_rank, 'Pick') }}: #{{ pick.saddlecloth }} {{ pick.horse_name }}
+                                            {% if pick.win_probability %}
+                                                {% set prob_pct = (pick.win_probability * 100)|round(0)|int %}
+                                                <span style="background:{% if prob_pct >= 30 %}#166534{% elif prob_pct >= 15 %}#0e7490{% elif prob_pct >= 8 %}#a16207{% else %}#6b7280{% endif %};color:#fff;padding:0 3px;border-radius:3px;font-size:0.7rem;">{{ prob_pct }}%</span>
+                                            {% endif %}
                                             {% if pick.bet_stake %}<span class="text-gray-400">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                             {% elif pick.pick_type == 'exotic' %}
                                             {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}

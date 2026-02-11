@@ -446,6 +446,47 @@ async def speed_maps_stream_endpoint(meeting_id: str):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("/{meeting_id}/races/{race_number}/probabilities")
+async def get_race_probabilities(
+    meeting_id: str, race_number: int, db: AsyncSession = Depends(get_db)
+):
+    """Get calculated probabilities for all runners in a race."""
+    from punty.probability import calculate_race_probabilities
+
+    result = await db.execute(
+        select(Meeting)
+        .where(Meeting.id == meeting_id)
+        .options(selectinload(Meeting.races).selectinload(Race.runners))
+    )
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    race = next((r for r in meeting.races if r.race_number == race_number), None)
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+
+    active_runners = [r for r in race.runners if not r.scratched]
+    probs = calculate_race_probabilities(active_runners, race, meeting)
+
+    return {
+        "meeting_id": meeting_id,
+        "race_number": race_number,
+        "runners": {
+            name: {
+                "win_probability": round(p.win_probability, 4),
+                "place_probability": round(p.place_probability, 4),
+                "market_implied": round(p.market_implied, 4),
+                "value_rating": round(p.value_rating, 4),
+                "edge": round(p.edge, 4),
+                "recommended_stake": round(p.recommended_stake, 2),
+                "factors": {k: round(v, 4) for k, v in p.factors.items()},
+            }
+            for name, p in probs.items()
+        },
+    }
+
+
 @router.post("/scrape")
 async def scrape_meeting(venue: str, date: str, db: AsyncSession = Depends(get_db)):
     """Trigger scraping for a race meeting (legacy endpoint)."""

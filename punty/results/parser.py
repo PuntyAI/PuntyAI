@@ -51,6 +51,20 @@ _BET_LINE = re.compile(
 # "Bet: Exotics only" — no stake
 _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
 
+# --- Confidence & Probability ---
+_CONFIDENCE = re.compile(
+    r"Confidence:\s*(HIGH|MED|MEDIUM|LOW)",
+    re.IGNORECASE,
+)
+_PROBABILITY = re.compile(
+    r"Probability:\s*(\d+\.?\d*)%",
+    re.IGNORECASE,
+)
+_VALUE_RATING = re.compile(
+    r"Value:\s*(\d+\.?\d*)x",
+    re.IGNORECASE,
+)
+
 # --- Exotics ---
 # Matches formats like:
 #   Exacta: 1, 2, 4 — $20
@@ -203,8 +217,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
 
         # Selections (rank 1-3)
         for m in _SELECTION.finditer(section):
-            # Look for bet line in the text after this match
-            after_text = section[m.end():m.end() + 200]
+            # Look for bet line and metadata in the text after this match
+            after_text = section[m.end():m.end() + 300]
             bet_m = _BET_LINE.search(after_text)
             if bet_m:
                 bet_stake = float(bet_m.group(1))
@@ -215,6 +229,10 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             else:
                 bet_stake = None
                 bet_type = None
+            # Extract confidence and probability
+            confidence = _extract_confidence(after_text)
+            probability = _extract_probability(after_text)
+            value_rating = _extract_value_rating(after_text)
             # Handle both old (groups 1-5) and new (groups 3-7) format
             rank = m.group(1) or m.group(3)
             name = m.group(2) or m.group(4)
@@ -243,12 +261,15 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "sequence_start_race": None,
                 "multi_odds": None,
                 "estimated_return_pct": None,
+                "confidence": confidence,
+                "win_probability": probability,
+                "value_rating": value_rating,
             })
 
         # Roughie (rank 4)
         roughie_m = _ROUGHIE.search(section)
         if roughie_m:
-            after_text = section[roughie_m.end():roughie_m.end() + 200]
+            after_text = section[roughie_m.end():roughie_m.end() + 300]
             bet_m = _BET_LINE.search(after_text)
             if bet_m:
                 bet_stake = float(bet_m.group(1))
@@ -259,6 +280,10 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             else:
                 bet_stake = None
                 bet_type = None
+            # Extract confidence and probability
+            confidence = _extract_confidence(after_text)
+            probability = _extract_probability(after_text)
+            value_rating = _extract_value_rating(after_text)
             # Handle both old (groups 1,2,3,4,5) and new (groups 2,3,4,5) format
             roughie_name = roughie_m.group(1) or roughie_m.group(2)
             roughie_saddle = roughie_m.group(3)
@@ -286,6 +311,9 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "sequence_start_race": None,
                 "multi_odds": None,
                 "estimated_return_pct": None,
+                "confidence": confidence,
+                "win_probability": probability,
+                "value_rating": value_rating,
             })
 
         # Exotic
@@ -430,3 +458,32 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
             })
 
     return picks
+
+
+# ──────────────────────────────────────────────
+# Confidence / Probability extraction helpers
+# ──────────────────────────────────────────────
+
+def _extract_confidence(text: str) -> Optional[str]:
+    """Extract confidence tag (HIGH/MED/LOW) from text after a selection."""
+    m = _CONFIDENCE.search(text)
+    if m:
+        tag = m.group(1).upper()
+        return "MED" if tag == "MEDIUM" else tag
+    return None
+
+
+def _extract_probability(text: str) -> Optional[float]:
+    """Extract probability percentage from text (e.g. 'Probability: 32%' → 0.32)."""
+    m = _PROBABILITY.search(text)
+    if m:
+        return float(m.group(1)) / 100.0
+    return None
+
+
+def _extract_value_rating(text: str) -> Optional[float]:
+    """Extract value rating from text (e.g. 'Value: 1.4x' → 1.4)."""
+    m = _VALUE_RATING.search(text)
+    if m:
+        return float(m.group(1))
+    return None

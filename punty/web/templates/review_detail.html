@@ -146,12 +146,15 @@
                                 <th class="pb-2 pr-2">Odds</th>
                                 <th class="pb-2 pr-2">Bet</th>
                                 <th class="pb-2 pr-2">Stake</th>
+                                <th class="pb-2 pr-2">Prob</th>
+                                <th class="pb-2 pr-2">Value</th>
+                                <th class="pb-2 pr-2">Conf</th>
                                 <th class="pb-2 pr-2">Result</th>
                                 <th class="pb-2">P&L</th>
                             </tr>
                         </thead>
                         <tbody id="picks-tbody">
-                            <tr><td colspan="9" class="py-4 text-center text-gray-400">Loading picks...</td></tr>
+                            <tr><td colspan="12" class="py-4 text-center text-gray-400">Loading picks...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -313,14 +316,14 @@ async function loadPicks() {
         renderPicks();
     } catch(e) {
         document.getElementById('picks-tbody').innerHTML =
-            '<tr><td colspan="9" class="py-4 text-center text-red-400">Failed to load picks</td></tr>';
+            '<tr><td colspan="12" class="py-4 text-center text-red-400">Failed to load picks</td></tr>';
     }
 }
 
 function renderPicks() {
     const tbody = document.getElementById('picks-tbody');
     if (!picksData.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-gray-400">No picks found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="py-4 text-center text-gray-400">No picks found</td></tr>';
         return;
     }
     tbody.innerHTML = picksData.map(p => {
@@ -341,6 +344,14 @@ function renderPicks() {
                 <option value="saver_win" ${p.bet_type === 'saver_win' ? 'selected' : ''}>Saver</option>
             </select>` : '-'}</td>
             <td class="py-2 pr-2">${isSelection ? `<input type="number" step="0.5" value="${p.bet_stake || ''}" data-field="bet_stake" class="pick-edit w-14 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : (p.exotic_stake ? '$' + p.exotic_stake : '-')}</td>
+            <td class="py-2 pr-2">${p.win_probability != null ? `<span style="background:${probColor(p.win_probability)};color:#fff;padding:1px 5px;border-radius:4px;font-size:0.75rem;">${(p.win_probability * 100).toFixed(0)}%</span>` : '-'}</td>
+            <td class="py-2 pr-2">${p.value_rating != null ? `<span style="color:${p.value_rating > 1.05 ? '#4ade80' : '#9ca3af'};font-weight:${p.value_rating > 1.05 ? '600' : '400'};">${p.value_rating.toFixed(2)}x</span>` : '-'}</td>
+            <td class="py-2 pr-2">${isSelection ? `<select data-field="confidence" class="pick-edit px-1 py-0.5 border rounded text-xs" ${settled ? 'disabled' : ''}>
+                <option value="" ${!p.confidence ? 'selected' : ''}>-</option>
+                <option value="HIGH" ${p.confidence === 'HIGH' ? 'selected' : ''}>HIGH</option>
+                <option value="MED" ${p.confidence === 'MED' ? 'selected' : ''}>MED</option>
+                <option value="LOW" ${p.confidence === 'LOW' ? 'selected' : ''}>LOW</option>
+            </select>` : '-'}</td>
             <td class="py-2 pr-2 ${hitClass}">${p.hit === true ? 'HIT' : p.hit === false ? 'MISS' : '-'}</td>
             <td class="py-2 ${pnlClass}">${p.pnl != null ? (p.pnl >= 0 ? '+' : '') + p.pnl.toFixed(2) : '-'}</td>
         </tr>`;
@@ -356,6 +367,7 @@ function renderPicks() {
             let val = el.value;
             if (['saddlecloth', 'odds_at_tip', 'bet_stake'].includes(field)) val = parseFloat(val) || null;
             if (field === 'saddlecloth') val = parseInt(el.value) || null;
+            if (field === 'confidence') val = val || null;
             dirtyPicks[pickId][field] = val;
             document.getElementById('save-picks-btn').classList.remove('hidden');
         });
@@ -380,6 +392,14 @@ function typeColor(p) {
 }
 
 function esc(s) { return s.replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+function probColor(prob) {
+    const pct = prob * 100;
+    if (pct >= 30) return '#166534';
+    if (pct >= 15) return '#0e7490';
+    if (pct >= 8) return '#a16207';
+    return '#6b7280';
+}
 
 async function savePicks() {
     if (!Object.keys(dirtyPicks).length) return;

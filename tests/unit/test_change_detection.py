@@ -461,6 +461,32 @@ class TestDetectTrackConditionChange:
         alert = await detect_track_condition_change(db, "meet", snapshot)
         assert alert is None
 
+    @pytest.mark.asyncio
+    async def test_no_change_format_difference(self):
+        """Format differences like 'Good (4)' vs 'Good 4' should NOT trigger alerts."""
+        meeting = MagicMock()
+        meeting.track_condition = "Good (4)"
+
+        db = AsyncMock()
+        db.get = AsyncMock(return_value=meeting)
+
+        snapshot = _snapshot(track_condition="Good 4")
+        alert = await detect_track_condition_change(db, "meet", snapshot)
+        assert alert is None
+
+    @pytest.mark.asyncio
+    async def test_no_change_case_difference(self):
+        """Case differences like 'GOOD 4' vs 'Good 4' should NOT trigger alerts."""
+        meeting = MagicMock()
+        meeting.track_condition = "GOOD 4"
+
+        db = AsyncMock()
+        db.get = AsyncMock(return_value=meeting)
+
+        snapshot = _snapshot(track_condition="Good 4")
+        alert = await detect_track_condition_change(db, "meet", snapshot)
+        assert alert is None
+
 
 class TestDetectJockeyGearChanges:
     @pytest.mark.asyncio

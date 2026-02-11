@@ -7,6 +7,7 @@ from typing import Optional
 
 from sqlalchemy import select, delete, func, case, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from punty.config import melb_now_naive
 from punty.models.pick import Pick
@@ -21,6 +22,9 @@ async def store_picks_from_content(
     db: AsyncSession, content_id: str, meeting_id: str, raw_content: str
 ) -> int:
     """Parse early mail and store Pick rows. Idempotent — deletes existing picks first."""
+    from punty.probability import calculate_race_probabilities
+    from punty.models.meeting import Meeting, Race, Runner
+
     # Delete existing picks for this content
     await db.execute(delete(Pick).where(Pick.content_id == content_id))
 
@@ -29,7 +33,43 @@ async def store_picks_from_content(
         logger.warning(f"No picks parsed from content {content_id}")
         return 0
 
+    # Calculate probabilities for each race to attach to picks
+    race_probs = {}
+    try:
+        result = await db.execute(
+            select(Meeting).where(Meeting.id == meeting_id)
+            .options(
+                selectinload(Meeting.races).selectinload(Race.runners)
+            )
+        )
+        meeting = result.scalar_one_or_none()
+        if meeting:
+            for race in meeting.races:
+                active = [r for r in race.runners if not r.scratched]
+                if active:
+                    probs = calculate_race_probabilities(active, race, meeting)
+                    # Map by saddlecloth for easy lookup
+                    for runner in active:
+                        if runner.id in probs:
+                            rp = probs[runner.id]
+                            race_probs[(race.race_number, runner.saddlecloth)] = rp
+    except Exception as e:
+        logger.warning(f"Could not calculate probabilities for picks: {e}")
+
     for pd in pick_dicts:
+        # Attach calculated probability if not already parsed from text
+        if pd.get("pick_type") == "selection" and pd.get("saddlecloth"):
+            key = (pd.get("race_number"), pd.get("saddlecloth"))
+            rp = race_probs.get(key)
+            if rp:
+                if not pd.get("win_probability"):
+                    pd["win_probability"] = rp.win_probability
+                if not pd.get("value_rating"):
+                    pd["value_rating"] = rp.value_rating
+                if not pd.get("recommended_stake"):
+                    pd["recommended_stake"] = rp.recommended_stake
+                pd.setdefault("place_probability", rp.place_probability)
+
         pick = Pick(**pd)
         db.add(pick)
 

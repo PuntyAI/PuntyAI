@@ -54,6 +54,13 @@ class Pick(Base):
     # Estimated return percentage from AI
     estimated_return_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Probability model outputs
+    win_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # 0.0-1.0
+    place_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # 0.0-1.0
+    value_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # >1.0 = value
+    confidence: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # HIGH/MED/LOW
+    recommended_stake: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Settlement
     hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -89,6 +96,11 @@ class Pick(Base):
             "bet_type": self.bet_type,
             "bet_stake": self.bet_stake,
             "estimated_return_pct": self.estimated_return_pct,
+            "win_probability": self.win_probability,
+            "place_probability": self.place_probability,
+            "value_rating": self.value_rating,
+            "confidence": self.confidence,
+            "recommended_stake": self.recommended_stake,
             "hit": self.hit,
             "pnl": self.pnl,
             "settled": self.settled,
