@@ -328,6 +328,12 @@ async def privacy(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 
+@router.get("/data-deletion", response_class=HTMLResponse)
+async def data_deletion(request: Request):
+    """Data deletion instructions page."""
+    return templates.TemplateResponse("data-deletion.html", {"request": request})
+
+
 @router.get("/sitemap.xml")
 async def sitemap():
     """Serve sitemap.xml for search engines."""
