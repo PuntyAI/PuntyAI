@@ -435,6 +435,24 @@
         .race-accordion-body p { overflow-wrap: break-word; word-break: break-word; }
     }
 
+    /* Sequence Lanes section divider */
+    .sequence-divider {
+        display: flex; align-items: center; gap: 1rem;
+        margin: 1.5rem 0 0.75rem 0; padding: 0 0.25rem;
+    }
+    .sequence-divider-line {
+        flex: 1; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+        opacity: 0.4;
+    }
+    .sequence-divider-label {
+        font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700;
+        letter-spacing: 0.15em; text-transform: uppercase;
+        background: linear-gradient(135deg, var(--yellow), var(--orange));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        white-space: nowrap;
+    }
+
     /* Race countdown timer */
     .race-countdown {
         font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.65rem;
@@ -553,7 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
     headings.forEach(function(h) {
         if (/Race\s+\d+/i.test(h.textContent)) {
             raceHeadings.push(h);
-        } else if (/Quaddie|Big\s*6|Early\s+Quaddie|NUGGETS|FINAL\s+WORD/i.test(h.textContent)) {
+        } else if (/Quaddie|Big\s*6|Early\s+Quaddie|NUGGETS|FINAL\s+WORD|SEQUENCE\s+LANES/i.test(h.textContent)) {
             seqHeadings.push(h);
         }
     });
@@ -685,6 +703,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Race and sequence sections
     var firstRaceOpened = false;
     sections.forEach(function(sec, idx) {
+        // "SEQUENCE LANES" becomes a styled section divider, not an accordion
+        if (!sec.isRace && /SEQUENCE\s+LANES/i.test(sec.heading.textContent)) {
+            var divider = document.createElement('div');
+            divider.className = 'sequence-divider';
+            divider.innerHTML = '<div class="sequence-divider-line"></div>' +
+                '<span class="sequence-divider-label">Sequence Lanes</span>' +
+                '<div class="sequence-divider-line"></div>';
+            tipsContent.appendChild(divider);
+            return;
+        }
+
         var accordion = document.createElement('div');
         // Open first race by default
         var openByDefault = sec.isRace && !firstRaceOpened;
