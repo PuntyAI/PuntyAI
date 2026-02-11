@@ -115,6 +115,16 @@ async def _settle_picks_for_race_impl(
     race_result = await db.execute(select(Race).where(Race.id == race_id))
     race = race_result.scalar_one_or_none()
 
+    # Check if results are actually populated (not just status flipped)
+    race_final = race and race.results_status in ("Paying", "Closed")
+    results_populated = any(r.finish_position is not None for r in runners)
+    if race_final and not results_populated:
+        logger.warning(
+            f"Race {race_id} status is {race.results_status} but no runners "
+            f"have finish positions yet — skipping settlement"
+        )
+        return 0
+
     # --- Selections ---
     result = await db.execute(
         select(Pick).where(
@@ -131,9 +141,8 @@ async def _settle_picks_for_race_impl(
         elif pick.horse_name:
             runner = runners_by_name.get(pick.horse_name.upper())
 
-        # Settle if runner has finish position, OR if race is paying/closed (unplaced = loss)
-        race_final = race and race.results_status in ("Paying", "Closed")
-        has_result = runner and (runner.finish_position is not None or race_final)
+        # Settle if runner has finish position, OR if race is final with results populated
+        has_result = runner and (runner.finish_position is not None or (race_final and results_populated))
 
         if has_result:
             bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
