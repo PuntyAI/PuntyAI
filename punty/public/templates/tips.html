@@ -43,12 +43,27 @@
         <!-- Search Filters -->
         <form method="GET" action="/tips" class="card p-4 mb-8">
             <div class="flex flex-wrap gap-3 items-end">
-                <div class="flex-1 min-w-[150px]">
+                <div class="flex-1 min-w-[150px]" x-data="venueSearch()" x-init="init()">
                     <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Venue</label>
-                    <input type="text" name="venue" value="{{ venue }}" placeholder="Start typing..."
-                           list="venue-list" autocomplete="off"
-                           class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
-                    <datalist id="venue-list"></datalist>
+                    <div class="relative">
+                        <input type="text" name="venue" x-model="query" x-ref="input"
+                               @input="filter()" @focus="open = query.length > 0 && filtered.length > 0"
+                               @click.away="open = false" @keydown.escape="open = false"
+                               @keydown.arrow-down.prevent="moveDown()" @keydown.arrow-up.prevent="moveUp()"
+                               @keydown.enter="selectActive($event)"
+                               placeholder="Start typing..." autocomplete="off"
+                               class="w-full px-3 py-2 rounded-lg text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                        <div x-show="open" x-cloak
+                             class="absolute z-50 left-0 right-0 mt-1 rounded-lg overflow-hidden shadow-xl"
+                             style="background: var(--bg-card); border: 1px solid var(--border-subtle); max-height: 240px; overflow-y: auto;">
+                            <template x-for="(v, i) in filtered" :key="v">
+                                <div @click="select(v)" @mouseenter="active = i"
+                                     :class="{'venue-item-active': active === i}"
+                                     class="venue-item px-3 py-2 text-sm cursor-pointer"
+                                     x-text="v"></div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
                 <div class="min-w-[140px]">
                     <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">From</label>
@@ -68,11 +83,71 @@
                 </div>
             </div>
         </form>
+        <style>
+        .venue-item {
+            color: var(--text-secondary);
+            transition: background 0.1s, color 0.1s;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 500;
+        }
+        .venue-item:hover, .venue-item-active {
+            background: rgba(233, 30, 140, 0.15);
+            color: var(--text-primary);
+        }
+        .venue-item-active {
+            background: rgba(233, 30, 140, 0.2);
+        }
+        [x-cloak] { display: none !important; }
+        </style>
         <script>
-        fetch('/api/public/venues').then(r=>r.json()).then(data=>{
-            const dl=document.getElementById('venue-list');
-            data.venues.forEach(v=>{const o=document.createElement('option');o.value=v;dl.appendChild(o);});
-        }).catch(()=>{});
+        function venueSearch() {
+            return {
+                query: '{{ venue }}',
+                venues: [],
+                filtered: [],
+                open: false,
+                active: -1,
+                init() {
+                    fetch('/api/public/venues').then(r => r.json()).then(data => {
+                        this.venues = data.venues || [];
+                    }).catch(() => {});
+                },
+                filter() {
+                    const q = this.query.toLowerCase().trim();
+                    if (q.length === 0) { this.filtered = []; this.open = false; return; }
+                    this.filtered = this.venues.filter(v => v.toLowerCase().includes(q)).slice(0, 15);
+                    this.open = this.filtered.length > 0;
+                    this.active = -1;
+                },
+                select(v) {
+                    this.query = v;
+                    this.open = false;
+                    this.$refs.input.focus();
+                },
+                moveDown() {
+                    if (!this.open) return;
+                    this.active = Math.min(this.active + 1, this.filtered.length - 1);
+                    this.scrollToActive();
+                },
+                moveUp() {
+                    if (!this.open) return;
+                    this.active = Math.max(this.active - 1, 0);
+                    this.scrollToActive();
+                },
+                selectActive(e) {
+                    if (this.open && this.active >= 0) {
+                        e.preventDefault();
+                        this.select(this.filtered[this.active]);
+                    }
+                },
+                scrollToActive() {
+                    this.$nextTick(() => {
+                        const items = this.$refs.input.parentElement.querySelectorAll('.venue-item');
+                        if (items[this.active]) items[this.active].scrollIntoView({ block: 'nearest' });
+                    });
+                }
+            };
+        }
         </script>
 
         {% if calendar %}
