@@ -77,6 +77,37 @@ class FacebookFormatter:
         # Remove __ italic/bold markers
         content = re.sub(r"__(.+?)__", r"\1", content)
         content = re.sub(r"_(.+?)_", r"\1", content)
+        # Bold race structural lines (after markdown markers are stripped)
+        content = re.sub(
+            r"^(Race \d+\s*[–—-].+)$",
+            lambda m: cls.to_bold(m.group(1)),
+            content,
+            flags=re.MULTILINE,
+        )
+        content = re.sub(
+            r"^(Top \d+.+\(\$\d+ pool\).*)$",
+            lambda m: cls.to_bold(m.group(1)),
+            content,
+            flags=re.MULTILINE,
+        )
+        content = re.sub(
+            r"^(Punty.s Pick:)",
+            lambda m: cls.to_bold(m.group(1)),
+            content,
+            flags=re.MULTILINE,
+        )
+        content = re.sub(
+            r"^(Roughie:)",
+            lambda m: cls.to_bold(m.group(1)),
+            content,
+            flags=re.MULTILINE,
+        )
+        content = re.sub(
+            r"^(Degenerate Exotic.+)$",
+            lambda m: cls.to_bold(m.group(1)),
+            content,
+            flags=re.MULTILINE,
+        )
         # Clean up triple+ newlines
         content = re.sub(r"\n{3,}", "\n\n", content)
         # Break Facebook auto-emoticon sequences (e.g. 8) → 😎, :) → 😊)

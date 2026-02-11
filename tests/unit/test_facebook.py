@@ -107,6 +107,42 @@ class TestFacebookFormatter:
         result = FacebookFormatter.format(text)
         assert ":\u200b)" in result
 
+    def test_bolds_race_title(self):
+        text = "*Race 1 – Baby Dash Chaos*\nRace type: Maiden, 1000m"
+        result = FacebookFormatter.format(text)
+        assert FacebookFormatter.to_bold("Race 1") in result
+        assert FacebookFormatter.to_bold("Baby Dash Chaos") in result
+
+    def test_bolds_race_title_em_dash(self):
+        text = "*Race 3 — The Long Shot*\nContent"
+        result = FacebookFormatter.format(text)
+        assert FacebookFormatter.to_bold("Race 3") in result
+
+    def test_bolds_top3_section(self):
+        text = "*Top 3 + Roughie ($20 pool)*\n1. Horse Name"
+        result = FacebookFormatter.format(text)
+        assert FacebookFormatter.to_bold("Top 3") in result
+
+    def test_bolds_puntys_pick_label(self):
+        text = "*Punty's Pick:* Scintillation (No.9) $2.60 Win"
+        result = FacebookFormatter.format(text)
+        assert FacebookFormatter.to_bold("Punty") in result
+        assert FacebookFormatter.to_bold("Pick") in result
+        # The horse detail after the label should NOT be bolded
+        assert "Scintillation" in result
+
+    def test_bolds_roughie_label(self):
+        text = "*Roughie: Ivory Frost* (No.5) — $27.00"
+        result = FacebookFormatter.format(text)
+        assert FacebookFormatter.to_bold("Roughie") in result
+        # Horse name after label stays plain
+        assert "Ivory Frost" in result
+
+    def test_bolds_degenerate_exotic(self):
+        text = "Degenerate Exotic of the Race\nTrifecta Box: 9,7,6,3"
+        result = FacebookFormatter.format(text)
+        assert FacebookFormatter.to_bold("Degenerate Exotic of the Race") in result
+
 
 # ── Delivery Tests ───────────────────────────────────────────────────────────
 
