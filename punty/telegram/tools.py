@@ -157,6 +157,61 @@ async def tool_list_files(path: str = PROJECT_ROOT, pattern: str = "*") -> str:
         return f"Error listing files: {e}"
 
 
+async def tool_update_track_condition(venue: str, date: str, condition: str) -> str:
+    """Update track condition for a meeting and all its races."""
+    try:
+        import aiosqlite
+
+        # Validate condition format (e.g. "Good 4", "Soft 5", "Heavy 8")
+        valid_labels = ["firm", "good", "soft", "heavy", "synthetic"]
+        cond_lower = condition.lower().strip()
+        if not any(cond_lower.startswith(label) for label in valid_labels):
+            return f"Invalid condition '{condition}'. Must start with Firm/Good/Soft/Heavy/Synthetic."
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Find the meeting
+            cursor = await db.execute(
+                "SELECT id, venue, track_condition FROM meetings WHERE LOWER(venue) = LOWER(?) AND date = ?",
+                (venue.strip(), date.strip()),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                # Try partial match
+                cursor = await db.execute(
+                    "SELECT id, venue, track_condition FROM meetings WHERE LOWER(venue) LIKE LOWER(?) AND date = ?",
+                    (f"%{venue.strip()}%", date.strip()),
+                )
+                row = await cursor.fetchone()
+
+            if not row:
+                return f"No meeting found for {venue} on {date}"
+
+            meeting_id, actual_venue, old_condition = row
+
+            # Update meeting
+            await db.execute(
+                "UPDATE meetings SET track_condition = ? WHERE id = ?",
+                (condition.strip(), meeting_id),
+            )
+
+            # Update all races
+            cursor = await db.execute(
+                "UPDATE races SET track_condition = ? WHERE meeting_id = ?",
+                (condition.strip(), meeting_id),
+            )
+            race_count = cursor.rowcount
+
+            await db.commit()
+
+            return (
+                f"Updated {actual_venue} ({date}):\n"
+                f"  Meeting: {old_condition} → {condition}\n"
+                f"  Races updated: {race_count}"
+            )
+    except Exception as e:
+        return f"Error updating track condition: {e}"
+
+
 async def tool_query_db(sql: str) -> str:
     """Run a read-only SQL query against the PuntyAI database."""
     try:

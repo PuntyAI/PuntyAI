@@ -11,6 +11,7 @@ from punty.telegram.tools import (
     tool_list_files,
     tool_query_db,
     tool_read_file,
+    tool_update_track_condition,
     tool_write_file,
 )
 
@@ -177,6 +178,32 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "update_track_condition",
+        "description": (
+            "Update the track condition for a meeting and all its races. "
+            "Use when Rochey says the track condition is wrong and needs correcting. "
+            "Example conditions: 'Good 4', 'Soft 5', 'Heavy 8', 'Firm 1'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "venue": {
+                    "type": "string",
+                    "description": "Track/venue name, e.g. 'Sale', 'Flemington'",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Meeting date in YYYY-MM-DD format",
+                },
+                "condition": {
+                    "type": "string",
+                    "description": "New track condition, e.g. 'Good 4', 'Soft 5'",
+                },
+            },
+            "required": ["venue", "date", "condition"],
+        },
+    },
+    {
         "name": "query_db",
         "description": (
             "Run a read-only SQL query against the PuntyAI SQLite database. "
@@ -204,6 +231,7 @@ TOOL_HANDLERS = {
     "write_file": lambda inp: tool_write_file(inp["path"], inp["content"]),
     "edit_file": lambda inp: tool_edit_file(inp["path"], inp["old_text"], inp["new_text"]),
     "list_files": lambda inp: tool_list_files(inp.get("path", "/opt/puntyai"), inp.get("pattern", "*")),
+    "update_track_condition": lambda inp: tool_update_track_condition(inp["venue"], inp["date"], inp["condition"]),
     "query_db": lambda inp: tool_query_db(inp["sql"]),
 }
 
