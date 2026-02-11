@@ -280,6 +280,119 @@ async def daily_calendar_scrape() -> dict:
     return results
 
 
+async def daily_morning_scrape() -> dict:
+    """
+    Daily morning scrape job — runs at 5:00 AM Melbourne time.
+
+    This is the heavy initial data load for the day:
+    1. Full re-scrape for all selected meetings (runners, form, odds, track conditions)
+    2. Speed maps for all selected meetings
+
+    By 5:00 AM, racing.com should have complete field data even if the
+    midnight calendar scrape found incomplete data.
+
+    The later pre-race job (2h before first race) only applies lightweight
+    updates (odds refresh, scratchings) rather than repeating this heavy scrape.
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting, Race
+    from punty.config import melb_today, melb_now
+    from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
+    from punty.scheduler.activity_log import log_scheduler_job, log_system
+    from sqlalchemy import select, or_
+
+    logger.info("Starting daily morning scrape job (5:00 AM)")
+    log_scheduler_job("Morning Scrape Started", status="info")
+    results = {
+        "started_at": melb_now().isoformat(),
+        "meetings_scraped": [],
+        "speed_maps_done": [],
+        "errors": [],
+    }
+
+    today = melb_today()
+
+    async with async_session() as db:
+        # Get all selected meetings for today
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                or_(Meeting.meeting_type == None, Meeting.meeting_type == "race"),
+            ).order_by(Meeting.venue)
+        )
+        meetings = result.scalars().all()
+
+        if not meetings:
+            logger.info("No selected meetings for today — morning scrape skipped")
+            results["skipped"] = True
+            log_system("Morning scrape: no meetings to scrape", status="info")
+            return results
+
+        logger.info(f"Morning scrape: {len(meetings)} meetings to process")
+
+        # Step 1: Full data scrape for each meeting
+        for meeting in meetings:
+            try:
+                logger.info(f"Scraping full data for {meeting.venue}...")
+                await scrape_meeting_full(meeting.id, db)
+                results["meetings_scraped"].append(meeting.venue)
+                logger.info(f"Full scrape complete for {meeting.venue}")
+            except Exception as e:
+                logger.error(f"Full scrape failed for {meeting.venue}: {e}")
+                results["errors"].append(f"scrape {meeting.venue}: {str(e)}")
+
+        # Step 1b: Deselect meetings with no races (abandoned/cancelled after scrape)
+        try:
+            for meeting in meetings:
+                if meeting.venue not in results["meetings_scraped"]:
+                    continue
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting.id).limit(1)
+                )
+                if not race_result.scalar_one_or_none():
+                    meeting.selected = False
+                    logger.info(f"Deselected {meeting.venue} — no races found after morning scrape")
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Abandoned check failed: {e}")
+
+        # Step 2: Speed maps for each meeting (still selected)
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                or_(Meeting.meeting_type == None, Meeting.meeting_type == "race"),
+            ).order_by(Meeting.venue)
+        )
+        still_selected = result.scalars().all()
+
+        for meeting in still_selected:
+            try:
+                logger.info(f"Scraping speed maps for {meeting.venue}...")
+                async for _ in scrape_speed_maps_stream(meeting.id, db):
+                    pass
+                results["speed_maps_done"].append(meeting.venue)
+                logger.info(f"Speed maps complete for {meeting.venue}")
+            except Exception as e:
+                logger.error(f"Speed maps failed for {meeting.venue}: {e}")
+                results["errors"].append(f"speed_maps {meeting.venue}: {str(e)}")
+
+    results["completed_at"] = melb_now().isoformat()
+
+    # Log completion
+    scraped = len(results["meetings_scraped"])
+    speed_maps = len(results["speed_maps_done"])
+    errors = len(results["errors"])
+    if errors:
+        log_system(f"Morning scrape complete: {scraped} scraped, {speed_maps} speed maps, {errors} errors", status="warning")
+    else:
+        log_system(f"Morning scrape complete: {scraped} scraped, {speed_maps} speed maps", status="success")
+
+    logger.info(f"Daily morning scrape complete: {results}")
+    return results
+
+
 async def daily_morning_prep() -> dict:
     """
     Legacy daily morning preparation job - now redirects to calendar scrape.
@@ -821,20 +934,25 @@ async def check_context_changes(
 async def meeting_pre_race_job(meeting_id: str) -> dict:
     """Run 2 hours before first race for a meeting.
 
+    This is a lightweight update pass — the heavy scrape was done at 5:00 AM
+    by daily_morning_scrape. This job just applies final updates before
+    generating the early mail.
+
     Steps:
-    1. Full re-scrape (scratchings, jockey/gear changes, track/weather, odds)
-    2. Scrape speed maps
-    3. Generate early mail
-    4. Auto-approve if valid
-    5. Post to Twitter
+    1. Refresh odds + scratchings (TAB)
+    2. Check jockey/gear changes (racing.com field check)
+    3. Refresh speed maps
+    4. Generate early mail
+    5. Auto-approve if valid
+    6. Post to Twitter + Facebook
 
     Returns: job result dict
     """
     from punty.models.database import async_session
-    from punty.models.meeting import Meeting
+    from punty.models.meeting import Meeting, Race
     from punty.models.content import Content, ContentStatus
     from punty.config import melb_now
-    from punty.scrapers.orchestrator import scrape_meeting_full, scrape_speed_maps_stream
+    from punty.scrapers.orchestrator import refresh_odds, scrape_speed_maps_stream
     from punty.ai.generator import ContentGenerator
     from punty.scheduler.activity_log import log_scheduler_job, log_system
     from punty.scheduler.automation import auto_approve_and_post
@@ -861,29 +979,92 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
 
         venue = meeting.venue
 
-        # Step 1: Full re-scrape for latest scratchings, jockey/gear changes, track/weather, odds
+        # Step 1: Refresh odds + scratchings via TAB (lightweight)
         try:
-            logger.info(f"Step 1: Re-scraping data for {venue}...")
-            await scrape_meeting_full(meeting_id, db)
-            results["steps"].append("scrape_data: success")
+            logger.info(f"Step 1: Refreshing odds/scratchings for {venue}...")
+            await refresh_odds(meeting_id, db)
+            results["steps"].append("refresh_odds: success")
         except Exception as e:
-            logger.error(f"Scrape failed for {venue}: {e}")
-            results["errors"].append(f"scrape_data: {str(e)}")
+            logger.error(f"Odds refresh failed for {venue}: {e}")
+            results["errors"].append(f"refresh_odds: {str(e)}")
 
-        # Step 2: Scrape speed maps
+        # Step 2: Check jockey/gear changes via racing.com (Playwright)
         try:
-            logger.info(f"Step 2: Scraping speed maps for {venue}...")
+            logger.info(f"Step 2: Checking jockey/gear changes for {venue}...")
+            from punty.scrapers.racing_com import RacingComScraper
+            from punty.models.meeting import Runner
+
+            # Get all race numbers
+            race_result = await db.execute(
+                select(Race.race_number).where(Race.meeting_id == meeting_id)
+            )
+            race_numbers = [r[0] for r in race_result.all()]
+
+            if race_numbers:
+                field_scraper = RacingComScraper()
+                try:
+                    field_data = await field_scraper.check_race_fields(
+                        venue, meeting.date, race_numbers
+                    )
+                    # Apply jockey/gear/scratching updates
+                    for race_num, runners in field_data.get("races", {}).items():
+                        race_id = f"{meeting_id}-r{race_num}"
+                        for r in runners:
+                            horse_name = r.get("horse_name")
+                            if not horse_name:
+                                continue
+                            runner_result = await db.execute(
+                                select(Runner).where(
+                                    Runner.race_id == race_id,
+                                    Runner.horse_name == horse_name,
+                                ).limit(1)
+                            )
+                            runner = runner_result.scalar_one_or_none()
+                            if not runner:
+                                continue
+                            if r.get("scratched") and not runner.scratched:
+                                runner.scratched = True
+                                logger.info(f"Late scratching: {horse_name} (R{race_num})")
+                            if r.get("jockey") and r["jockey"] != runner.jockey:
+                                logger.info(f"Jockey change: {horse_name} (R{race_num}) {runner.jockey} → {r['jockey']}")
+                                runner.jockey = r["jockey"]
+                            if r.get("gear") and r["gear"] != runner.gear:
+                                runner.gear = r["gear"]
+                            if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
+                                logger.info(f"Gear change: {horse_name} (R{race_num}) {r['gear_changes']}")
+                                runner.gear_changes = r["gear_changes"]
+
+                    # Update track condition if changed
+                    tc = field_data.get("meeting", {}).get("track_condition")
+                    if tc and not meeting.track_condition_locked:
+                        from punty.scrapers.orchestrator import _is_more_specific, _normalise_track
+                        if _normalise_track(tc) != _normalise_track(meeting.track_condition or ""):
+                            if _is_more_specific(tc, meeting.track_condition):
+                                logger.info(f"Track condition update: {meeting.track_condition!r} → {tc!r}")
+                                meeting.track_condition = tc
+
+                    await db.commit()
+                finally:
+                    await field_scraper.close()
+            results["steps"].append("jockey_gear_check: success")
+        except Exception as e:
+            logger.error(f"Jockey/gear check failed for {venue}: {e}")
+            results["errors"].append(f"jockey_gear_check: {str(e)}")
+
+        # Step 3: Refresh speed maps
+        try:
+            logger.info(f"Step 3: Refreshing speed maps for {venue}...")
             async for _ in scrape_speed_maps_stream(meeting_id, db):
                 pass
-            results["steps"].append("scrape_speed_maps: success")
+            results["steps"].append("refresh_speed_maps: success")
         except Exception as e:
             logger.error(f"Speed maps failed for {venue}: {e}")
-            results["errors"].append(f"scrape_speed_maps: {str(e)}")
+            results["errors"].append(f"refresh_speed_maps: {str(e)}")
 
-        # Step 3: Generate early mail
+        # Step 4: Generate early mail
         content_id = None
         try:
-            logger.info(f"Step 3: Generating early mail for {venue}...")
+            logger.info(f"Step 4: Generating early mail for {venue}...")
             generator = ContentGenerator(db)
 
             async for event in generator.generate_early_mail_stream(meeting_id):
@@ -907,10 +1088,10 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                 logger.warning(f"Rate limit detected for {venue}")
                 results["rate_limited"] = True
 
-        # Step 4 & 5: Auto-approve and post to Twitter
+        # Step 5 & 6: Auto-approve and post to Twitter + Facebook
         if content_id:
             try:
-                logger.info(f"Step 4-5: Auto-approving and posting for {venue}...")
+                logger.info(f"Step 5-6: Auto-approving and posting for {venue}...")
                 post_result = await auto_approve_and_post(content_id, db)
                 results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
                 results["post_result"] = post_result

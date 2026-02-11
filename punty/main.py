@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI):
     # Set up per-meeting automation jobs for today's meetings
     automation_result = await scheduler_manager.setup_daily_automation()
     scheduled_meetings = automation_result.get("meetings_scheduled", [])
-    logger.info(f"Scheduler started - calendar scrape at 00:05, {len(scheduled_meetings)} meetings scheduled for today")
+    logger.info(f"Scheduler started - calendar scrape at 00:05, morning scrape at 05:00, {len(scheduled_meetings)} meetings scheduled for today")
 
     # Settle any past races with unsettled picks (catches restarts/missed settlements)
     try:

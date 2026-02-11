@@ -217,17 +217,15 @@ class SchedulerManager:
             self.remove_job(job_id)
 
     async def setup_daily_morning_job(self) -> None:
-        """Set up the daily calendar scrape job.
+        """Set up the daily scheduled jobs.
 
-        Runs at 12:05 AM Melbourne time every day to:
-        1. Scrape the racing calendar
-        2. Auto-select meetings
-        3. Schedule per-meeting automation jobs
+        - 00:05 AM: Calendar scrape (find meetings, auto-select, initial data load)
+        - 05:00 AM: Morning scrape (full re-scrape + speed maps for all meetings)
 
-        Early mail generation is now handled by meeting_pre_race_job
-        which runs 1.5 hours before each meeting's first race.
+        Early mail generation is handled by meeting_pre_race_job
+        which runs 2 hours before each meeting's first race.
         """
-        from punty.scheduler.jobs import daily_calendar_scrape
+        from punty.scheduler.jobs import daily_calendar_scrape, daily_morning_scrape
         from punty.config import MELB_TZ
 
         logger.info("Scheduling daily calendar scrape job for 00:05 Melbourne time")
@@ -242,7 +240,18 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
+        # Morning scrape runs at 5:00 AM — heavy initial data load
+        self.add_job(
+            "daily-morning-scrape",
+            daily_morning_scrape,
+            trigger_type="cron",
+            hour=5,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
         logger.info("Daily calendar scrape job configured")
+        logger.info("Daily morning scrape job configured (05:00)")
 
     async def setup_legacy_morning_job(self) -> None:
         """Legacy method - kept for backwards compatibility.
