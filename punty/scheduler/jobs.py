@@ -940,11 +940,12 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
 
     Steps:
     1. Refresh odds + scratchings (TAB)
-    2. Check jockey/gear changes (racing.com field check)
-    3. Refresh speed maps
-    4. Generate early mail
-    5. Auto-approve if valid
-    6. Post to Twitter + Facebook
+    2. Refresh track conditions + weather (racingaustralia.horse)
+    3. Check jockey/gear changes (racing.com field check)
+    4. Refresh speed maps
+    5. Generate early mail
+    6. Auto-approve if valid
+    7. Post to Twitter + Facebook
 
     Returns: job result dict
     """
@@ -988,9 +989,40 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Odds refresh failed for {venue}: {e}")
             results["errors"].append(f"refresh_odds: {str(e)}")
 
-        # Step 2: Check jockey/gear changes via racing.com (Playwright)
+        # Step 2: Refresh track conditions + weather (racingaustralia.horse)
         try:
-            logger.info(f"Step 2: Checking jockey/gear changes for {venue}...")
+            logger.info(f"Step 2: Refreshing track conditions/weather for {venue}...")
+            from punty.scrapers.orchestrator import _is_more_specific
+            from punty.scrapers.track_conditions import scrape_track_conditions
+            from punty.scrapers.orchestrator import _guess_state
+
+            if not meeting.track_condition_locked:
+                state = _guess_state(venue)
+                if state:
+                    conditions = await scrape_track_conditions(state)
+                    for cond in conditions:
+                        if cond.get("venue") and (
+                            cond["venue"].lower() in venue.lower()
+                            or venue.lower() in cond["venue"].lower()
+                        ):
+                            new_cond = cond.get("condition")
+                            if new_cond and _is_more_specific(new_cond, meeting.track_condition):
+                                logger.info(f"Track condition update: {meeting.track_condition!r} → {new_cond!r}")
+                                meeting.track_condition = new_cond
+                            if cond.get("rail"):
+                                meeting.rail_position = cond["rail"]
+                            if cond.get("weather"):
+                                meeting.weather = cond["weather"]
+                            break
+                    await db.commit()
+            results["steps"].append("track_weather_refresh: success")
+        except Exception as e:
+            logger.error(f"Track/weather refresh failed for {venue}: {e}")
+            results["errors"].append(f"track_weather_refresh: {str(e)}")
+
+        # Step 3: Check jockey/gear changes via racing.com (Playwright)
+        try:
+            logger.info(f"Step 3: Checking jockey/gear changes for {venue}...")
             from punty.scrapers.racing_com import RacingComScraper
             from punty.models.meeting import Runner
 
@@ -1051,9 +1083,9 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Jockey/gear check failed for {venue}: {e}")
             results["errors"].append(f"jockey_gear_check: {str(e)}")
 
-        # Step 3: Refresh speed maps
+        # Step 4: Refresh speed maps
         try:
-            logger.info(f"Step 3: Refreshing speed maps for {venue}...")
+            logger.info(f"Step 4: Refreshing speed maps for {venue}...")
             async for _ in scrape_speed_maps_stream(meeting_id, db):
                 pass
             results["steps"].append("refresh_speed_maps: success")
@@ -1061,10 +1093,10 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Speed maps failed for {venue}: {e}")
             results["errors"].append(f"refresh_speed_maps: {str(e)}")
 
-        # Step 4: Generate early mail
+        # Step 5: Generate early mail
         content_id = None
         try:
-            logger.info(f"Step 4: Generating early mail for {venue}...")
+            logger.info(f"Step 5: Generating early mail for {venue}...")
             generator = ContentGenerator(db)
 
             async for event in generator.generate_early_mail_stream(meeting_id):
@@ -1088,10 +1120,10 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                 logger.warning(f"Rate limit detected for {venue}")
                 results["rate_limited"] = True
 
-        # Step 5 & 6: Auto-approve and post to Twitter + Facebook
+        # Step 6 & 7: Auto-approve and post to Twitter + Facebook
         if content_id:
             try:
-                logger.info(f"Step 5-6: Auto-approving and posting for {venue}...")
+                logger.info(f"Step 6-7: Auto-approving and posting for {venue}...")
                 post_result = await auto_approve_and_post(content_id, db)
                 results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
                 results["post_result"] = post_result
