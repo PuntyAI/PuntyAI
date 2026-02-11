@@ -384,6 +384,12 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.debug(f"Big win check failed for {meeting.venue} R{race_num}: {e}")
 
+                    # Check for clean sweep (all selections won)
+                    try:
+                        await self._check_clean_sweep(db, meeting, race_num)
+                    except Exception as e:
+                        logger.debug(f"Clean sweep check failed for {meeting.venue} R{race_num}: {e}")
+
                     # Check for pace bias and post analysis tweet (after race 4+)
                     try:
                         await self._check_pace_bias(db, meeting, statuses, race_num)
@@ -559,6 +565,104 @@ class ResultsMonitor:
             )
             db.add(update)
             await db.flush()
+
+    async def _check_clean_sweep(self, db: AsyncSession, meeting, race_number: int):
+        """Check if ALL selections in a race won — post a big celebration."""
+        from punty.models.pick import Pick
+        from punty.models.content import Content
+        from punty.models.live_update import LiveUpdate
+        from punty.delivery.twitter import TwitterDelivery
+        from punty.delivery.facebook import FacebookDelivery
+        from punty.results.celebrations import compose_clean_sweep_tweet
+
+        # Get all selections for this race
+        result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting.id,
+                Pick.race_number == race_number,
+                Pick.pick_type == "selection",
+                Pick.settled == True,
+            )
+        )
+        selections = result.scalars().all()
+
+        if len(selections) < 2:
+            return
+
+        # Check ALL selections hit (placed or won)
+        if not all(s.hit for s in selections):
+            return
+
+        # Build winners info + totals
+        winners = []
+        total_pnl = 0.0
+        total_collect = 0.0
+        for s in selections:
+            winners.append({
+                "horse_name": s.horse_name or "Winner",
+                "odds": s.odds_at_tip or 0,
+            })
+            total_pnl += s.pnl or 0
+            stake = s.bet_stake or 1.0
+            total_collect += stake + (s.pnl or 0)
+
+        tweet_text = compose_clean_sweep_tweet(
+            venue=meeting.venue,
+            race_number=race_number,
+            winners=winners,
+            total_pnl=total_pnl,
+            total_collect=total_collect,
+        )
+
+        logger.info(f"CLEAN SWEEP! {meeting.venue} R{race_number} — all {len(selections)} selections hit!")
+
+        # Find early mail for threading
+        em_result = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting.id,
+                Content.content_type == "early_mail",
+            ).order_by(Content.created_at.desc())
+        )
+        early_mail = em_result.scalars().first()
+        if not early_mail:
+            return
+
+        # Post to Twitter
+        reply_tweet_id = None
+        if early_mail.twitter_id:
+            twitter = TwitterDelivery(db)
+            if await twitter.is_configured():
+                try:
+                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_tweet_id = reply_result.get("tweet_id")
+                    logger.info(f"Posted clean sweep celebration to Twitter")
+                except Exception as e:
+                    logger.warning(f"Failed to post clean sweep to Twitter: {e}")
+
+        # Post to Facebook
+        fb_post_id = None
+        fb = FacebookDelivery(db)
+        if await fb.is_configured():
+            try:
+                fb_result = await fb.post_update(tweet_text)
+                fb_post_id = fb_result.get("post_id")
+                logger.info(f"Posted clean sweep celebration to Facebook")
+            except Exception as e:
+                logger.warning(f"Failed to post clean sweep to Facebook: {e}")
+
+        update = LiveUpdate(
+            meeting_id=meeting.id,
+            race_number=race_number,
+            update_type="clean_sweep",
+            content=tweet_text,
+            tweet_id=reply_tweet_id,
+            parent_tweet_id=early_mail.twitter_id if early_mail else None,
+            facebook_comment_id=fb_post_id,
+            parent_facebook_id=early_mail.facebook_id if early_mail else None,
+            pnl=total_pnl,
+        )
+        db.add(update)
+        await db.flush()
 
     async def _check_pace_bias(self, db: AsyncSession, meeting, statuses: dict, just_completed: int):
         """Analyze pace bias and post reply if significant pattern detected."""

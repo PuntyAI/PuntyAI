@@ -121,6 +121,54 @@ def compose_celebration_tweet(
     return tweet
 
 
+CLEAN_SWEEP_PHRASES = [
+    "CLEAN SWEEP!",
+    "WE RAN THE TABLE!",
+    "ALL FOUR SALUTE!",
+    "FOUR FROM FOUR!",
+    "THE PUNTY SPECIAL!",
+    "PERFECTION!",
+    "THEY ALL GOT UP!",
+]
+
+
+def compose_clean_sweep_tweet(
+    venue: str,
+    race_number: int,
+    winners: list[dict],
+    total_pnl: float,
+    total_collect: float,
+) -> str:
+    """Compose a celebration tweet when all selections in a race win.
+
+    Args:
+        venue: Meeting venue name
+        race_number: Race number
+        winners: List of dicts with horse_name, odds keys
+        total_pnl: Combined P&L for all selections in the race
+        total_collect: Combined collect for all selections
+    """
+    phrase = random.choice(CLEAN_SWEEP_PHRASES)
+    pnl_str = f"${total_pnl:+,.2f}"
+    collect_str = f"${total_collect:,.2f}"
+
+    horses = " / ".join(w["horse_name"] for w in winners)
+
+    tweet = (
+        f"\U0001F525\U0001F525\U0001F525 {phrase} {venue} R{race_number} — "
+        f"all tips placed! {horses}. "
+        f"Collect: {collect_str} ({pnl_str}) \U0001F525\U0001F525\U0001F525"
+    )
+
+    if len(tweet) > 270:
+        tweet = (
+            f"\U0001F525\U0001F525\U0001F525 {phrase} {venue} R{race_number} — "
+            f"all tips placed! Collect: {collect_str} ({pnl_str}) \U0001F525\U0001F525\U0001F525"
+        )
+
+    return tweet[:280]
+
+
 def get_all_phrases() -> dict:
     """Return all celebration phrases grouped by tier for reference."""
     return {
