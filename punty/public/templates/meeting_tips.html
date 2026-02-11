@@ -145,7 +145,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-display font-bold">
+                    <h2 class="text-2xl font-display font-bold">
                         <span style="background: linear-gradient(135deg, var(--purple), var(--magenta)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Meeting Stats</span>
                     </h2>
                 </div>
@@ -773,7 +773,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tipsContent.appendChild(navContainer);
 
     // Race and sequence sections
-    var firstRaceOpened = false;
     sections.forEach(function(sec, idx) {
         // "SEQUENCE LANES" becomes a styled section divider, not an accordion
         if (!sec.isRace && /SEQUENCE\s+LANES/i.test(sec.heading.textContent)) {
@@ -809,10 +808,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         var accordion = document.createElement('div');
-        // Open first race by default
-        var openByDefault = sec.isRace && !firstRaceOpened;
-        if (openByDefault) firstRaceOpened = true;
-        accordion.className = 'race-accordion' + (openByDefault ? ' open' : '');
+        accordion.className = 'race-accordion';
         accordion.id = 'sec-acc-' + idx;
 
         var header = document.createElement('div');
