@@ -696,6 +696,31 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                     "variant": None,
                 })
 
+        # Get ALL settled sequence/multi picks for results display
+        seq_result = await db.execute(
+            select(Pick).where(
+                and_(
+                    Pick.meeting_id == meeting_id,
+                    Pick.settled == True,
+                    Pick.pick_type.in_(["sequence", "big3_multi"]),
+                )
+            )
+        )
+        sequence_results = []
+        for pick in seq_result.scalars().all():
+            seq_type = pick.sequence_type or pick.pick_type
+            label = (pick.sequence_type or "multi").replace("_", " ").title()
+            if pick.sequence_variant:
+                label += f" ({pick.sequence_variant.title()})"
+            sequence_results.append({
+                "type": seq_type,
+                "variant": pick.sequence_variant,
+                "label": label,
+                "hit": bool(pick.hit),
+                "pnl": float(pick.pnl) if pick.pnl is not None else 0.0,
+                "stake": float(pick.exotic_stake or pick.bet_stake or 0),
+            })
+
         # Get live updates (celebrations + pace analysis)
         updates_result = await db.execute(
             select(LiveUpdate).where(
@@ -846,6 +871,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             "winners": winners_map,
             "winning_exotics": winning_exotics,
             "winning_sequences": winning_sequences,
+            "sequence_results": sequence_results,
             "live_updates": live_updates,
             "venue_stats": venue_stats,
             "races": races_data,
@@ -1236,6 +1262,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "winners": data.get("winners", {}),
             "winning_exotics": data.get("winning_exotics", {}),
             "winning_sequences": data.get("winning_sequences", []),
+            "sequence_results": data.get("sequence_results", []),
             "live_updates": data.get("live_updates", []),
             "venue_stats": data.get("venue_stats"),
             "races": data.get("races", []),

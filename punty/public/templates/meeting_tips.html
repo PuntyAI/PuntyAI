@@ -453,6 +453,47 @@
         white-space: nowrap;
     }
 
+    /* Sequence results card */
+    .seq-results-card {
+        margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-subtle);
+    }
+    .seq-results-title {
+        font-family: 'Orbitron', sans-serif; font-size: 0.6rem; font-weight: 700;
+        letter-spacing: 0.15em; text-transform: uppercase;
+        color: var(--text-muted); margin-bottom: 0.5rem;
+    }
+    .seq-result-row {
+        display: flex; align-items: center; gap: 0.75rem;
+        padding: 0.4rem 0; font-family: 'Rajdhani', sans-serif; font-size: 0.85rem;
+    }
+    .seq-result-row + .seq-result-row {
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .seq-result-label {
+        flex: 1; color: var(--text-secondary); font-weight: 500;
+    }
+    .seq-result-status {
+        font-weight: 700; font-size: 0.7rem; letter-spacing: 0.08em;
+        padding: 2px 8px; border-radius: 4px;
+    }
+    .seq-result-win .seq-result-status {
+        background: rgba(74, 222, 128, 0.15); color: #4ade80;
+    }
+    .seq-result-loss .seq-result-status {
+        background: rgba(248, 113, 113, 0.15); color: #f87171;
+    }
+    .seq-result-push .seq-result-status {
+        background: rgba(250, 204, 21, 0.15); color: #facc15;
+    }
+    .seq-result-pnl {
+        font-weight: 700; min-width: 70px; text-align: right;
+    }
+    .seq-result-win .seq-result-pnl { color: #4ade80; }
+    .seq-result-loss .seq-result-pnl { color: #f87171; }
+    .seq-result-push .seq-result-pnl { color: #facc15; }
+
     /* Race countdown timer */
     .race-countdown {
         font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.65rem;
@@ -472,6 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
+    var seqResults = {{ sequence_results | tojson }};
     var meetingDate = '{{ meeting.date }}';
 
     // --- Section toggle ---
@@ -778,12 +820,44 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Non-race sections get a different pill style
+        // Non-race sections get a different pill style + sequence results
         if (!sec.isRace) {
             var seqPill = '<span class="race-pill" style="background: linear-gradient(135deg, var(--yellow), var(--orange));">&#9830;</span>';
             header.innerHTML = '<div class="flex items-center gap-3">' + seqPill +
                 '<div class="font-heading font-bold text-white text-sm">' + sec.heading.textContent + '</div></div>' +
                 '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+
+            // Add sequence results card if we have settled data
+            if (seqResults && seqResults.length > 0) {
+                var headingText = (sec.heading.textContent || '').toLowerCase();
+                // Find matching results for this section
+                var matchedResults = seqResults.filter(function(sr) {
+                    var sType = (sr.type || '').toLowerCase();
+                    if (/early\s*quaddie/i.test(headingText)) return sType === 'early_quaddie';
+                    if (/quaddie/i.test(headingText) && !/early/i.test(headingText)) return sType === 'quaddie';
+                    if (/big\s*6/i.test(headingText)) return sType === 'big6';
+                    if (/multi/i.test(headingText) || /big\s*3/i.test(headingText)) return sType === 'big3_multi';
+                    return false;
+                });
+
+                if (matchedResults.length > 0) {
+                    var resultsHtml = '<div class="seq-results-card">';
+                    resultsHtml += '<div class="seq-results-title">Results</div>';
+                    matchedResults.forEach(function(sr) {
+                        var isWin = sr.hit && sr.pnl > 0;
+                        var pnlStr = sr.pnl >= 0 ? '+$' + sr.pnl.toFixed(2) : '-$' + Math.abs(sr.pnl).toFixed(2);
+                        var statusClass = isWin ? 'seq-result-win' : (sr.hit ? 'seq-result-push' : 'seq-result-loss');
+                        var statusLabel = isWin ? 'HIT' : 'MISS';
+                        resultsHtml += '<div class="seq-result-row ' + statusClass + '">' +
+                            '<span class="seq-result-label">' + sr.label + '</span>' +
+                            '<span class="seq-result-status">' + statusLabel + '</span>' +
+                            '<span class="seq-result-pnl">' + pnlStr + '</span>' +
+                            '</div>';
+                    });
+                    resultsHtml += '</div>';
+                    body.insertAdjacentHTML('beforeend', resultsHtml);
+                }
+            }
         }
 
         accordion.appendChild(header);
