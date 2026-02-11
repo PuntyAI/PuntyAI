@@ -15,21 +15,22 @@ class TestFacebookFormatter:
         text = "### MEET SNAPSHOT\nSome content"
         result = FacebookFormatter.format(text)
         assert "###" not in result
-        assert "MEET SNAPSHOT" in result
+        # Header should be Unicode bold
+        assert FacebookFormatter.to_bold("MEET SNAPSHOT") in result
 
     def test_strips_numbered_section_headers(self):
         text = "### 2) MEET SNAPSHOT\nContent here"
         result = FacebookFormatter.format(text)
         assert "###" not in result
         assert "2)" not in result
-        assert "MEET SNAPSHOT" in result
+        assert FacebookFormatter.to_bold("MEET SNAPSHOT") in result
 
-    def test_strips_bold_markers(self):
+    def test_bold_markers_become_unicode_bold(self):
         text = "**Bold text** and *italic text*"
         result = FacebookFormatter.format(text)
         assert "**" not in result
         assert "*" not in result
-        assert "Bold text" in result
+        assert FacebookFormatter.to_bold("Bold text") in result
         assert "italic text" in result
 
     def test_strips_underscore_markers(self):
@@ -61,15 +62,50 @@ class TestFacebookFormatter:
         assert len(result) <= FacebookFormatter.MAX_LENGTH
         assert "Full tips at punty.ai" in result
 
-    def test_headers_uppercased(self):
+    def test_headers_unicode_bold(self):
         text = "## Race by Race Tips"
         result = FacebookFormatter.format(text)
-        assert "RACE BY RACE TIPS" in result
+        assert FacebookFormatter.to_bold("RACE BY RACE TIPS") in result
 
     def test_convenience_function(self):
         result = format_facebook("### Hello World")
         assert "###" not in result
-        assert "HELLO WORLD" in result
+        assert FacebookFormatter.to_bold("HELLO WORLD") in result
+
+    def test_cleans_markdown_links(self):
+        text = "Check out [punty.ai](https://punty.ai) for more"
+        result = FacebookFormatter.format(text)
+        assert "[" not in result
+        assert "](" not in result
+        assert "punty.ai — https://punty.ai" in result
+
+    def test_cleans_markdown_link_same_text_url(self):
+        text = "Visit [https://punty.ai](https://punty.ai)"
+        result = FacebookFormatter.format(text)
+        assert "[" not in result
+        assert "https://punty.ai" in result
+        # Should not duplicate the URL
+        assert result.count("https://punty.ai") == 1
+
+    def test_to_bold_mapping(self):
+        assert FacebookFormatter.to_bold("ABC") == "𝗔𝗕𝗖"
+        assert FacebookFormatter.to_bold("abc") == "𝗮𝗯𝗰"
+        assert FacebookFormatter.to_bold("123") == "𝟭𝟮𝟯"
+        # Punctuation passes through unchanged
+        assert FacebookFormatter.to_bold("Hi!") == "𝗛𝗶!"
+
+    def test_breaks_emoticon_sequences(self):
+        # 8) should NOT become 😎 on Facebook
+        text = "Sunset Beauty (No.8)"
+        result = FacebookFormatter.format(text)
+        # Zero-width space inserted between 8 and )
+        assert "8\u200b)" in result
+        assert "😎" not in result
+
+    def test_breaks_smiley_sequences(self):
+        text = "Great result :) well done"
+        result = FacebookFormatter.format(text)
+        assert ":\u200b)" in result
 
 
 # ── Delivery Tests ───────────────────────────────────────────────────────────

@@ -115,6 +115,13 @@ class TwitterFormatter:
         # Remove headers and any leading section numbers like "### 2) MEET SNAPSHOT"
         content = re.sub(r'^#{1,3}\s+\d+\)\s*', '', content, flags=re.MULTILINE)
         content = re.sub(r'^#{1,3}\s+', '', content, flags=re.MULTILINE)
+        # Convert markdown links [text](url) -> text url (Twitter auto-linkifies)
+        def _clean_link(m):
+            text, url = m.group(1), m.group(2)
+            if text.strip().rstrip("/") == url.strip().rstrip("/") or text.startswith("http"):
+                return url
+            return f"{text} {url}"
+        content = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _clean_link, content)
         # Convert bold to Unicode bold
         content = re.sub(r'\*\*(.+?)\*\*', lambda m: cls._to_unicode_bold(m.group(1)), content)
         content = re.sub(r'__(.+?)__', lambda m: cls._to_unicode_bold(m.group(1)), content)
