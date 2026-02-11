@@ -62,48 +62,49 @@
             </p>
         </div>
 
-        <!-- Punty's Picks Hero Card -->
-        <div class="flex justify-center mb-6">
-            <div class="rounded-2xl px-8 py-6 flex items-center gap-6 max-w-lg w-full" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.10), rgba(255, 107, 53, 0.08), rgba(0, 212, 255, 0.06)); border: 1px solid rgba(233, 30, 140, 0.3); box-shadow: 0 0 40px rgba(233, 30, 140, 0.1), 0 0 80px rgba(255, 107, 53, 0.05);">
-                <img src="/static/punty-character.jpg" alt="Punty" class="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover flex-shrink-0" style="border: 3px solid rgba(233, 30, 140, 0.5); box-shadow: 0 0 20px rgba(233, 30, 140, 0.2);">
-                <div class="text-center flex-1">
-                    <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-1" style="color: var(--orange);">Best Bet Per Race</div>
-                    <div class="text-5xl md:text-6xl font-display font-bold leading-none" id="tr-rate-0" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">—</div>
-                    <div class="text-sm font-heading font-bold uppercase tracking-wider mt-1" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Picks</div>
-                    <div class="text-sm mt-1" style="color: var(--text-secondary);" id="tr-count-0"></div>
-                    <div class="text-sm font-heading font-bold mt-1" id="tr-roi-0"></div>
+        <!-- Punty's Picks + Tip Rank Stats -->
+        <div class="max-w-3xl mx-auto mb-8">
+            <!-- Top row: 5 equal columns -->
+            <div class="grid grid-cols-5 gap-3">
+                <!-- Punty's Picks -->
+                <div class="rounded-xl p-4 text-center relative overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid rgba(233, 30, 140, 0.3);">
+                    <img src="/static/punty-character.jpg" alt="Punty" class="w-10 h-10 rounded-full object-cover mx-auto mb-2" style="border: 2px solid rgba(233, 30, 140, 0.4);">
+                    <div class="text-3xl font-display font-bold leading-none" id="tr-rate-0" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">—</div>
+                    <div class="text-[10px] font-heading font-bold uppercase tracking-wider mt-1" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Pick</div>
+                    <div class="text-[10px] mt-0.5" style="color: var(--text-muted);" id="tr-count-0"></div>
+                    <div class="text-[10px] font-heading font-semibold mt-0.5" id="tr-roi-0"></div>
+                </div>
+                <!-- Top Pick -->
+                <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                    <div class="text-3xl font-display font-bold mt-12" style="color: var(--magenta);" id="tr-rate-1">—</div>
+                    <div class="text-[10px] font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Top Pick</div>
+                    <div class="text-[10px] mt-0.5" style="color: var(--text-muted);" id="tr-count-1"></div>
+                    <div class="text-[10px] font-heading font-semibold mt-0.5" id="tr-roi-1"></div>
+                </div>
+                <!-- 2nd Pick -->
+                <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                    <div class="text-3xl font-display font-bold mt-12" style="color: var(--cyan);" id="tr-rate-2">—</div>
+                    <div class="text-[10px] font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">2nd Pick</div>
+                    <div class="text-[10px] mt-0.5" style="color: var(--text-muted);" id="tr-count-2"></div>
+                    <div class="text-[10px] font-heading font-semibold mt-0.5" id="tr-roi-2"></div>
+                </div>
+                <!-- 3rd Pick -->
+                <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                    <div class="text-3xl font-display font-bold mt-12" style="color: var(--yellow);" id="tr-rate-3">—</div>
+                    <div class="text-[10px] font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">3rd Pick</div>
+                    <div class="text-[10px] mt-0.5" style="color: var(--text-muted);" id="tr-count-3"></div>
+                    <div class="text-[10px] font-heading font-semibold mt-0.5" id="tr-roi-3"></div>
+                </div>
+                <!-- Roughie -->
+                <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                    <div class="text-3xl font-display font-bold mt-12" style="color: var(--purple);" id="tr-rate-4">—</div>
+                    <div class="text-[10px] font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Roughie</div>
+                    <div class="text-[10px] mt-0.5" style="color: var(--text-muted);" id="tr-count-4"></div>
+                    <div class="text-[10px] font-heading font-semibold mt-0.5" id="tr-roi-4"></div>
                 </div>
             </div>
+            <p class="text-center text-[10px] mt-2 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &amp; ROI &mdash; All Time</p>
         </div>
-
-        <!-- Tip Rank Strike Rates -->
-        <div id="tip-rank-stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 max-w-3xl mx-auto">
-            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-3xl font-display font-bold" style="color: var(--magenta);" id="tr-rate-1">—</div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Top Pick</div>
-                <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-1"></div>
-                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-1"></div>
-            </div>
-            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-3xl font-display font-bold" style="color: var(--cyan);" id="tr-rate-2">—</div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">2nd Pick</div>
-                <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-2"></div>
-                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-2"></div>
-            </div>
-            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-3xl font-display font-bold" style="color: var(--yellow);" id="tr-rate-3">—</div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">3rd Pick</div>
-                <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-3"></div>
-                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-3"></div>
-            </div>
-            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-3xl font-display font-bold" style="color: var(--purple);" id="tr-rate-4">—</div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Roughie</div>
-                <div class="text-xs mt-0.5" style="color: var(--text-muted);" id="tr-count-4"></div>
-                <div class="text-xs font-heading font-semibold mt-0.5" id="tr-roi-4"></div>
-            </div>
-        </div>
-        <p class="text-center text-[11px] -mt-5 mb-6 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &amp; ROI &mdash; All Time</p>
 
         <!-- Today / All Time Toggle -->
         <div class="flex items-center justify-center gap-3 mb-6">
