@@ -31,8 +31,14 @@ GROUP_PATTERNS = [
 GROUP_PRIZE_THRESHOLD = 150_000
 
 
-def _detect_group_level(race_name: str, prize_money: int = 0) -> Optional[str]:
-    """Detect Group level from race name or prize money."""
+def _detect_group_level(
+    race_name: str, prize_money: int = 0, group_field: str = "",
+) -> Optional[str]:
+    """Detect Group level from API group field, race name, or prize money."""
+    # PF API provides a 'group' field: "Group 1", "Group 2", "Group 3", "Listed"
+    if group_field:
+        return group_field
+
     name_lower = (race_name or "").lower()
     for pattern, level in GROUP_PATTERNS:
         if re.search(pattern, name_lower):
@@ -108,10 +114,13 @@ async def _process_future_meeting(
     race_date: date,
 ) -> tuple[int, int]:
     """Process a single future meeting — find Group races and store nominations."""
-    venue = meeting_data.get("venue") or meeting_data.get("meetingName", "")
+    # PF API: venue is in track.name, state in track.state
+    track = meeting_data.get("track") or {}
+    venue = track.get("name") or meeting_data.get("venue") or meeting_data.get("meetingName", "")
+    state = track.get("state") or meeting_data.get("state") or meeting_data.get("jurisdiction", "")
     pf_meeting_id = meeting_data.get("meetingId") or meeting_data.get("id")
 
-    if not pf_meeting_id:
+    if not pf_meeting_id or not venue:
         return 0, 0
 
     races_found = 0
@@ -124,12 +133,13 @@ async def _process_future_meeting(
 
         races = fields.get("races") or fields.get("Races") or []
         for race_data in races:
-            race_name = race_data.get("raceName") or race_data.get("name") or ""
-            race_num = race_data.get("raceNumber") or race_data.get("number")
+            race_name = race_data.get("name") or race_data.get("raceName") or ""
+            race_num = race_data.get("number") or race_data.get("raceNumber")
             distance = race_data.get("distance")
             prize = race_data.get("prizeMoney") or race_data.get("prize") or 0
+            group_field = race_data.get("group") or ""
 
-            group_level = _detect_group_level(race_name, prize)
+            group_level = _detect_group_level(race_name, prize, group_field)
             if not group_level:
                 continue
 
@@ -152,7 +162,6 @@ async def _process_future_meeting(
                     )
                 )
             else:
-                state = meeting_data.get("state") or meeting_data.get("jurisdiction", "")
                 db.add(FutureRace(
                     id=race_id,
                     venue=venue,
@@ -165,19 +174,25 @@ async def _process_future_meeting(
                     state=state,
                 ))
 
-            # Store nominations
+            # Store nominations — PF runner structure
             runners = race_data.get("runners") or race_data.get("items") or []
             for runner in runners:
-                horse = runner.get("horseName") or runner.get("name") or ""
+                horse = runner.get("name") or runner.get("horseName") or ""
                 if not horse:
                     continue
+                # Trainer/jockey can be dicts or strings
+                trainer_val = runner.get("trainer")
+                trainer = trainer_val.get("fullName") if isinstance(trainer_val, dict) else trainer_val
+                jockey_val = runner.get("jockey")
+                jockey = jockey_val.get("fullName") if isinstance(jockey_val, dict) else jockey_val
+
                 db.add(FutureNomination(
                     future_race_id=race_id,
                     horse_name=horse,
-                    trainer=runner.get("trainerName") or runner.get("trainer"),
-                    jockey=runner.get("jockeyName") or runner.get("jockey"),
-                    barrier=runner.get("barrierNumber") or runner.get("barrier"),
-                    weight=runner.get("weight"),
+                    trainer=trainer,
+                    jockey=jockey,
+                    barrier=runner.get("barrier") or runner.get("barrierNumber"),
+                    weight=runner.get("weight") or runner.get("weightTotal"),
                     last_start=runner.get("lastStart"),
                     career_record=runner.get("careerRecord"),
                 ))
