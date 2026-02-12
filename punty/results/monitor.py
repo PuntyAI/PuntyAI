@@ -725,16 +725,8 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.warning(f"Failed to post celebration reply: {e}")
 
-            # Post to Facebook as standalone update
+            # Facebook live updates disabled until commenting permission is resolved
             fb_post_id = None
-            fb = FacebookDelivery(db)
-            if await fb.is_configured():
-                try:
-                    fb_result = await fb.post_update(tweet_text)
-                    fb_post_id = fb_result.get("post_id")
-                    logger.info(f"Posted Facebook celebration for {pick.horse_name}")
-                except Exception as e:
-                    logger.warning(f"Failed to post Facebook celebration: {e}")
 
             # Save to DB regardless of post success
             update = LiveUpdate(
@@ -827,15 +819,8 @@ class ResultsMonitor:
                     logger.warning(f"Failed to post clean sweep to Twitter: {e}")
 
         # Post to Facebook
+        # Facebook live updates disabled until commenting permission is resolved
         fb_post_id = None
-        fb = FacebookDelivery(db)
-        if await fb.is_configured():
-            try:
-                fb_result = await fb.post_update(tweet_text)
-                fb_post_id = fb_result.get("post_id")
-                logger.info(f"Posted clean sweep celebration to Facebook")
-            except Exception as e:
-                logger.warning(f"Failed to post clean sweep to Facebook: {e}")
 
         update = LiveUpdate(
             meeting_id=meeting.id,
@@ -926,18 +911,8 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"Failed to post pace analysis reply: {e}")
 
-        # Post to Facebook as standalone update
+        # Facebook live updates disabled until commenting permission is resolved
         fb_post_id = None
-        fb = FacebookDelivery(db)
-        if await fb.is_configured():
-            try:
-                fb_result = await fb.post_update(tweet_text)
-                fb_post_id = fb_result.get("post_id")
-                if not reply_tweet_id:
-                    self.pace_updates_posted[meeting_id] = posted_count + 1
-                logger.info(f"Posted Facebook pace analysis for {meeting.venue}")
-            except Exception as e:
-                logger.warning(f"Failed to post Facebook pace analysis: {e}")
 
         # Save to DB regardless of post success
         update = LiveUpdate(
@@ -1240,13 +1215,7 @@ class ResultsMonitor:
 
         # Post to Facebook as standalone update
         fb_post_id = None
-        fb = FacebookDelivery(db)
-        if await fb.is_configured():
-            try:
-                fb_result = await fb.post_update(tweet_text)
-                fb_post_id = fb_result.get("post_id")
-            except Exception as e:
-                logger.warning(f"Failed to post Facebook {alert.change_type}: {e}")
+        # Facebook live updates disabled until commenting permission is resolved
 
         # Save to LiveUpdate
         update_type_map = {

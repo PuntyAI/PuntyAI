@@ -155,10 +155,11 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         '', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
-    # Remove exotic section header (content shown inline on website)
+    # Style exotic section header as inline heading
     content = re.sub(
-        r'^\*{1,2}Degenerate\s+Exotic\s+(?:of\s+the\s+Race)?\*{1,2}\s*$',
-        '', content, flags=re.MULTILINE | re.IGNORECASE,
+        r'^\*{1,2}(Degenerate\s+Exotic\s+(?:of\s+the\s+Race)?)\*{1,2}\s*$',
+        r'<span class="exotic-title">\1</span>',
+        content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # Convert known intro section headings (AI may use ** instead of ###)
@@ -244,10 +245,10 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'<span class="sel-winpct"><span class="sel-label">Win%</span> \1</span>',
         content, flags=re.MULTILINE
     )
+    # Strip Confidence lines (replaced by Probability)
     content = re.sub(
-        r'^\s*Confidence:\s*(high|med|medium|low)',
-        lambda m: '<span class="sel-conf"><span class="sel-label">Conf</span> <span class="sel-conf-' + m.group(1)[:3].lower() + '">' + m.group(1).title() + '</span></span>',
-        content, flags=re.MULTILINE | re.IGNORECASE
+        r'^\s*Confidence:\s*(high|med|medium|low)\s*$',
+        '', content, flags=re.MULTILINE | re.IGNORECASE
     )
     content = re.sub(
         r'^\s*Why:\s*(.+)$',

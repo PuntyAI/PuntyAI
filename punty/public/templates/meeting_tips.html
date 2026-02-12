@@ -592,6 +592,95 @@
     .seq-result-loss .seq-result-pnl { color: #f87171; }
     .seq-result-push .seq-result-pnl { color: #facc15; }
 
+    /* Exotic title */
+    .exotic-title {
+        display: block;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700; font-size: 0.85rem;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--yellow);
+        margin-top: 0.75rem; margin-bottom: 0.25rem;
+    }
+
+    /* Sequence variant cards */
+    .seq-variant-card {
+        margin-bottom: 0.75rem;
+        padding: 0.875rem 1rem;
+        border-radius: 10px;
+        border: 1px solid var(--border-subtle);
+        background: rgba(255, 255, 255, 0.02);
+    }
+    .seq-variant-skinny {
+        border-color: rgba(0, 212, 255, 0.25);
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.06), rgba(0, 212, 255, 0.02));
+    }
+    .seq-variant-balanced {
+        border-color: rgba(233, 30, 140, 0.25);
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(233, 30, 140, 0.02));
+    }
+    .seq-variant-wide {
+        border-color: rgba(255, 107, 53, 0.25);
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.06), rgba(255, 107, 53, 0.02));
+    }
+    .seq-variant-badge {
+        display: inline-flex; align-items: center;
+        font-family: 'Orbitron', sans-serif; font-weight: 800;
+        font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase;
+        padding: 3px 10px; border-radius: 6px; margin-right: 0.5rem;
+    }
+    .seq-variant-skinny .seq-variant-badge {
+        background: rgba(0, 212, 255, 0.15); color: var(--cyan);
+    }
+    .seq-variant-balanced .seq-variant-badge {
+        background: rgba(233, 30, 140, 0.15); color: var(--magenta);
+    }
+    .seq-variant-wide .seq-variant-badge {
+        background: rgba(255, 107, 53, 0.15); color: var(--orange);
+    }
+    .seq-variant-cost {
+        font-family: 'Orbitron', sans-serif; font-weight: 700;
+        font-size: 0.8rem; color: white;
+    }
+    .seq-legs {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    .seq-leg {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+    }
+    .seq-leg-pill {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 1.5rem; height: 1.5rem; padding: 0 0.35rem;
+        border-radius: 4px; font-family: 'Rajdhani', sans-serif;
+        font-weight: 700; font-size: 0.8rem;
+        background: rgba(255, 255, 255, 0.08); color: var(--text-secondary);
+    }
+    .seq-leg-sep {
+        color: var(--text-muted); font-weight: 700; font-size: 0.9rem;
+        margin: 0 0.125rem;
+    }
+    .seq-return {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        font-size: 0.75rem; letter-spacing: 0.05em;
+        padding: 2px 8px; border-radius: 4px;
+        background: rgba(74, 222, 128, 0.1); color: #4ade80;
+    }
+    .seq-combos {
+        font-family: 'Rajdhani', sans-serif; font-weight: 500;
+        font-size: 0.75rem; color: var(--text-muted);
+    }
+    .seq-puntys-pick {
+        margin-top: 0.75rem; padding: 0.625rem 0.875rem;
+        border-radius: 8px; border-left: 3px solid var(--magenta);
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(255, 107, 53, 0.06));
+    }
+    .seq-puntys-pick p { margin-bottom: 0; }
+    @media (max-width: 640px) {
+        .seq-variant-card { padding: 0.625rem 0.75rem; }
+        .seq-legs { gap: 0.125rem; }
+        .seq-leg-pill { min-width: 1.25rem; height: 1.25rem; font-size: 0.7rem; }
+    }
+
     /* Race countdown timer */
     .race-countdown {
         font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.65rem;
@@ -937,8 +1026,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Non-race sections get a different pill style + sequence results
+        // For race sections, move exotic title with exotic paragraph
+        if (sec.isRace) {
+            // Find and move exotic title (.exotic-title) together with exotic paragraph
+            var allEls = body.querySelectorAll('p, span.exotic-title');
+            var exoticTitle = null;
+            var exoticLine = null;
+            for (var et = 0; et < allEls.length; et++) {
+                var el = allEls[et];
+                if (el.classList && el.classList.contains('exotic-title')) {
+                    exoticTitle = el.closest('p') || el;
+                }
+                if (el.tagName === 'P' && /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*:/i.test(el.textContent.trim())) {
+                    exoticLine = el;
+                }
+            }
+            if (exoticTitle && exoticLine && exoticTitle !== exoticLine) {
+                // Move title immediately before exotic line
+                exoticLine.parentNode.insertBefore(exoticTitle, exoticLine);
+            }
+        }
+
+        // Non-race sections: style variant cards + different pill style + sequence results
         if (!sec.isRace) {
+            // Style Skinny/Balanced/Wide as colored cards
+            styleSequenceVariants(body);
             var seqPill = '<span class="race-pill" style="background: linear-gradient(135deg, var(--yellow), var(--orange));">&#9830;</span>';
             header.innerHTML = '<div class="flex items-center gap-3">' + seqPill +
                 '<div class="font-heading font-bold text-white text-sm">' + sec.heading.textContent + '</div></div>' +
@@ -981,6 +1093,77 @@ document.addEventListener('DOMContentLoaded', function() {
         accordion.appendChild(body);
         tipsContent.appendChild(accordion);
     });
+
+    // --- Style Sequence Variant Cards ---
+    function styleSequenceVariants(body) {
+        var allParas = body.querySelectorAll('p');
+        var variantRe = /^(Skinny|Balanced|Wide)\s*\(\$([\d.]+)\):\s*/i;
+        var costingRe = /\((\d+)\s*combos?\s*[×x]\s*\$([\d.]+)\s*=\s*\$([\d.]+)\)/;
+        var returnRe = /est\.\s*return:\s*(\d+(?:\.\d+)?)%/i;
+
+        allParas.forEach(function(p) {
+            var text = p.textContent.trim();
+            var vm = text.match(variantRe);
+            if (!vm) return;
+
+            var variant = vm[1].toLowerCase();
+            var totalCost = vm[2];
+            var cm = text.match(costingRe);
+            var combos = cm ? cm[1] : '';
+            var unitPrice = cm ? cm[2] : '';
+            var costDisplay = cm ? cm[3] : totalCost;
+            var rm = text.match(returnRe);
+            var returnPct = rm ? rm[1] : null;
+
+            // Extract legs: between variant header and costing parens
+            var afterColon = text.replace(variantRe, '');
+            var legsStr = cm ? afterColon.substring(0, afterColon.indexOf('(' + cm[1])).trim() : afterColon.trim();
+
+            var card = document.createElement('div');
+            card.className = 'seq-variant-card seq-variant-' + variant;
+
+            var headerHtml = '<div class="flex items-center justify-between flex-wrap gap-2">';
+            headerHtml += '<div class="flex items-center">';
+            headerHtml += '<span class="seq-variant-badge">' + variant.charAt(0).toUpperCase() + variant.slice(1) + '</span>';
+            headerHtml += '<span class="seq-variant-cost">$' + costDisplay + '</span>';
+            headerHtml += '</div>';
+            headerHtml += '<div class="flex items-center gap-2">';
+            if (combos) headerHtml += '<span class="seq-combos">' + combos + ' combos @ $' + unitPrice + '</span>';
+            if (returnPct) headerHtml += '<span class="seq-return">' + returnPct + '%</span>';
+            headerHtml += '</div>';
+            headerHtml += '</div>';
+
+            var legsHtml = '<div class="seq-legs">';
+            var legs = legsStr.split('/');
+            legs.forEach(function(leg, idx) {
+                if (idx > 0) legsHtml += '<span class="seq-leg-sep">/</span>';
+                legsHtml += '<span class="seq-leg">';
+                var runners = leg.trim().split(/,\s*/);
+                runners.forEach(function(r) {
+                    r = r.trim();
+                    if (r && /^\d+$/.test(r)) {
+                        legsHtml += '<span class="seq-leg-pill">' + r + '</span>';
+                    }
+                });
+                legsHtml += '</span>';
+            });
+            legsHtml += '</div>';
+
+            card.innerHTML = headerHtml + legsHtml;
+            p.parentNode.replaceChild(card, p);
+        });
+
+        // Style Punty's Pick line
+        var remaining = body.querySelectorAll('p');
+        remaining.forEach(function(p) {
+            if (p.querySelector('.puntys-pick') || /Punty.s\s+Pick/i.test(p.textContent)) {
+                var wrap = document.createElement('div');
+                wrap.className = 'seq-puntys-pick';
+                wrap.innerHTML = p.innerHTML;
+                p.parentNode.replaceChild(wrap, p);
+            }
+        });
+    }
 
     // --- Winner Badges ---
     function addBadge(el, label) {

@@ -122,32 +122,103 @@
                     <div class="w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                         2
                     </div>
-                    <div>
-                        <h3 class="text-2xl font-heading font-bold mb-4">AI Analysis</h3>
-                        <p class="mb-4" style="color: var(--text-secondary);">
-                            Punty's AI engine processes all this data using a weighted analysis framework.
-                            Different factors carry different importance depending on the race conditions:
+                    <div class="w-full">
+                        <h3 class="text-2xl font-heading font-bold mb-2">Probability Engine</h3>
+                        <p class="mb-6" style="color: var(--text-secondary);">
+                            Every runner gets a calculated win and place probability using a
+                            multi-factor model. Not guesswork. Not vibes.
+                            Actual maths combining five weighted signals:
                         </p>
-                        <div class="grid md:grid-cols-2 gap-4">
-                            <div class="p-4 rounded-lg" style="background: rgba(233, 30, 140, 0.1);">
-                                <div class="font-heading font-bold mb-2" style="color: var(--magenta);">High Priority</div>
-                                <ul class="text-sm space-y-1" style="color: var(--text-secondary);">
-                                    <li>• Recent Form</li>
-                                    <li>• Class Assessment</li>
-                                    <li>• Track/Distance Fit</li>
-                                    <li>• Speed Map Position</li>
-                                </ul>
+
+                        <!-- 5-Factor Weights -->
+                        <div class="space-y-3 mb-6">
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="font-heading font-bold text-sm" style="color: var(--magenta);">Market Consensus</span>
+                                    <span class="font-display font-bold text-sm" style="color: var(--magenta);">50%</span>
+                                </div>
+                                <div class="w-full h-2 rounded-full" style="background: rgba(233, 30, 140, 0.15);">
+                                    <div class="h-full rounded-full" style="width: 50%; background: var(--magenta);"></div>
+                                </div>
+                                <p class="text-xs mt-1" style="color: var(--text-muted);">
+                                    Multi-bookmaker median odds stripped of overround — what the market really thinks
+                                </p>
                             </div>
-                            <div class="p-4 rounded-lg" style="background: rgba(0, 212, 255, 0.1);">
-                                <div class="font-heading font-bold mb-2" style="color: var(--cyan);">Contextual Factors</div>
-                                <ul class="text-sm space-y-1" style="color: var(--text-secondary);">
-                                    <li>• Barrier Draw + Bias</li>
-                                    <li>• Jockey/Trainer Stats</li>
-                                    <li>• First/Second Up</li>
-                                    <li>• Gear Changes</li>
-                                </ul>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="font-heading font-bold text-sm" style="color: var(--cyan);">Form Rating</span>
+                                    <span class="font-display font-bold text-sm" style="color: var(--cyan);">20%</span>
+                                </div>
+                                <div class="w-full h-2 rounded-full" style="background: rgba(0, 212, 255, 0.15);">
+                                    <div class="h-full rounded-full" style="width: 20%; background: var(--cyan);"></div>
+                                </div>
+                                <p class="text-xs mt-1" style="color: var(--text-muted);">
+                                    Recent results, track/distance/condition win rates, and career form
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="font-heading font-bold text-sm" style="color: var(--orange);">Pace Factor</span>
+                                    <span class="font-display font-bold text-sm" style="color: var(--orange);">15%</span>
+                                </div>
+                                <div class="w-full h-2 rounded-full" style="background: rgba(255, 107, 53, 0.15);">
+                                    <div class="h-full rounded-full" style="width: 15%; background: var(--orange);"></div>
+                                </div>
+                                <p class="text-xs mt-1" style="color: var(--text-muted);">
+                                    Speed map position, pace advantage/disadvantage, and settling position
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="font-heading font-bold text-sm" style="color: var(--yellow);">Market Movement</span>
+                                    <span class="font-display font-bold text-sm" style="color: var(--yellow);">10%</span>
+                                </div>
+                                <div class="w-full h-2 rounded-full" style="background: rgba(255, 193, 7, 0.15);">
+                                    <div class="h-full rounded-full" style="width: 10%; background: var(--yellow);"></div>
+                                </div>
+                                <p class="text-xs mt-1" style="color: var(--text-muted);">
+                                    How odds are shifting — heavy support signals smart money, drifters flag concern
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="font-heading font-bold text-sm" style="color: var(--purple);">Class & Fitness</span>
+                                    <span class="font-display font-bold text-sm" style="color: var(--purple);">5%</span>
+                                </div>
+                                <div class="w-full h-2 rounded-full" style="background: rgba(157, 78, 221, 0.15);">
+                                    <div class="h-full rounded-full" style="width: 5%; background: var(--purple);"></div>
+                                </div>
+                                <p class="text-xs mt-1" style="color: var(--text-muted);">
+                                    Class level suitability and days since last run
+                                </p>
                             </div>
                         </div>
+
+                        <!-- Value Detection + Kelly Staking -->
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="p-4 rounded-lg" style="background: rgba(74, 222, 128, 0.08); border: 1px solid rgba(74, 222, 128, 0.2);">
+                                <div class="font-heading font-bold mb-2" style="color: #4ade80;">Value Detection</div>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Each runner's calculated probability is compared to the market odds.
+                                    When our model rates a horse higher than the market —
+                                    that's a value bet. A value rating above
+                                    <strong class="text-white">1.05x</strong> means we see at least a 5% edge.
+                                </p>
+                            </div>
+                            <div class="p-4 rounded-lg" style="background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.2);">
+                                <div class="font-heading font-bold mb-2" style="color: var(--cyan);">Smart Stake Sizing</div>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Stakes are sized using a quarter-Kelly criterion from a $20 pool per race.
+                                    Bigger edge = bigger bet. No edge = smaller bet or skip entirely.
+                                    Bankroll management built into every pick.
+                                </p>
+                            </div>
+                        </div>
+
+                        <p class="text-sm mt-4" style="color: var(--text-muted);">
+                            Every probability and value rating is shown transparently on every pick —
+                            you can see exactly why Punty likes a horse and how much edge the model thinks it has.
+                        </p>
                     </div>
                 </div>
             </div>
