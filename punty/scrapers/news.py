@@ -1,20 +1,24 @@
 """Lightweight racing news scraper — headlines + snippets for blog context.
 
-Uses Google News RSS for broad Australian racing coverage plus 3 direct sites.
+Uses Google News RSS as primary source plus 7NEWS HTML as secondary.
 """
 
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from xml.etree import ElementTree
 
 import httpx
-
-from punty.config import melb_today
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+# Browser-like User-Agent to avoid bot blocking
+_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 SOURCES = [
     {
@@ -27,16 +31,6 @@ SOURCES = [
         "url": "https://7news.com.au/sport/horse-racing?page=1",
         "type": "html",
     },
-    {
-        "name": "Racing.com",
-        "url": "https://www.racing.com/news",
-        "type": "html",
-    },
-    {
-        "name": "Just Horse Racing",
-        "url": "https://www.justhorseracing.com.au/category/news/australian-racing",
-        "type": "html",
-    },
 ]
 
 
@@ -47,7 +41,7 @@ class NewsScraper:
         self.client = httpx.AsyncClient(
             timeout=15.0,
             follow_redirects=True,
-            headers={"User-Agent": "PuntyAI/1.0 NewsBot"},
+            headers={"User-Agent": _UA},
         )
 
     async def scrape_headlines(self, max_days: int = 7) -> list[dict]:
@@ -65,7 +59,7 @@ class NewsScraper:
             except Exception as e:
                 logger.warning(f"News: {source['name']} failed: {e}")
 
-        # Deduplicate by title similarity
+        # Deduplicate by normalised title
         seen_titles: set[str] = set()
         unique: list[dict] = []
         for h in all_headlines:
@@ -94,7 +88,7 @@ class NewsScraper:
             pubdate_el = item.find("pubDate")
             desc_el = item.find("description")
 
-            if not title_el or not title_el.text:
+            if title_el is None or not title_el.text:
                 continue
 
             date_str = ""
@@ -117,68 +111,55 @@ class NewsScraper:
         return headlines
 
     async def _parse_html(self, url: str, source_name: str) -> list[dict]:
-        """Parse HTML news page for headlines using regex patterns."""
+        """Parse HTML news page for headlines using BeautifulSoup."""
         resp = await self.client.get(url)
         resp.raise_for_status()
-        html = resp.text
-        headlines = []
 
         if "7news.com.au" in url:
-            headlines = self._parse_7news(html, source_name)
-        elif "racing.com" in url:
-            headlines = self._parse_racing_com(html, source_name)
-        elif "justhorseracing" in url:
-            headlines = self._parse_jhr(html, source_name)
+            return self._parse_7news(resp.text, source_name)
 
-        return headlines
+        return []
 
     def _parse_7news(self, html: str, source: str) -> list[dict]:
-        """Extract headlines from 7NEWS racing page."""
+        """Extract headlines from 7NEWS racing page using BeautifulSoup."""
+        soup = BeautifulSoup(html, "lxml")
         results = []
-        # Look for article links with headlines
-        pattern = r'<a[^>]*href="(https://7news\.com\.au/sport/horse-racing/[^"]+)"[^>]*>\s*<[^>]*>([^<]+)</'
-        for match in re.finditer(pattern, html):
-            url, title = match.group(1), match.group(2).strip()
-            if title and len(title) > 15:
-                results.append({"title": title, "url": url, "snippet": "", "source": source, "date": ""})
-        # Fallback: look for heading tags with text
-        if not results:
-            for match in re.finditer(r'<h[23][^>]*>.*?<a[^>]*href="([^"]*)"[^>]*>([^<]+)</a>', html, re.DOTALL):
-                url, title = match.group(1), match.group(2).strip()
-                if title and len(title) > 15:
-                    full_url = url if url.startswith("http") else f"https://7news.com.au{url}"
-                    results.append({"title": title, "url": full_url, "snippet": "", "source": source, "date": ""})
-        return results[:15]
+        seen_hrefs: set[str] = set()
 
-    def _parse_racing_com(self, html: str, source: str) -> list[dict]:
-        """Extract headlines from racing.com news page."""
-        results = []
-        # Look for article cards with titles
-        for match in re.finditer(
-            r'<a[^>]*href="(/news/[^"]+)"[^>]*>.*?<h[234][^>]*>([^<]+)</h',
-            html, re.DOTALL,
-        ):
-            url, title = match.group(1), match.group(2).strip()
-            if title and len(title) > 10:
-                results.append({
-                    "title": title,
-                    "url": f"https://www.racing.com{url}",
-                    "snippet": "",
-                    "source": source,
-                    "date": "",
-                })
-        return results[:15]
+        # Find all links to individual horse racing articles
+        links = soup.find_all(
+            "a",
+            href=lambda h: (
+                h
+                and "/sport/horse-racing/" in h
+                and h not in ("/sport/horse-racing", "/sport/horse-racing/")
+            ),
+        )
 
-    def _parse_jhr(self, html: str, source: str) -> list[dict]:
-        """Extract headlines from Just Horse Racing."""
-        results = []
-        for match in re.finditer(
-            r'<h[23][^>]*>\s*<a[^>]*href="(https://www\.justhorseracing\.com\.au/[^"]+)"[^>]*>([^<]+)</a>',
-            html,
-        ):
-            url, title = match.group(1), match.group(2).strip()
-            if title and len(title) > 10:
-                results.append({"title": title, "url": url, "snippet": "", "source": source, "date": ""})
+        for a in links:
+            href = a.get("href", "")
+            if href in seen_hrefs:
+                continue
+
+            # Get the visible text — could be the headline
+            text = a.get_text(strip=True)
+
+            # Skip navigation/category links (too short to be headlines)
+            if not text or len(text) < 20:
+                continue
+
+            # Build full URL if relative
+            full_url = href if href.startswith("http") else f"https://7news.com.au{href}"
+            seen_hrefs.add(href)
+
+            results.append({
+                "title": text[:200],
+                "url": full_url,
+                "snippet": "",
+                "source": source,
+                "date": "",
+            })
+
         return results[:15]
 
     async def close(self):
