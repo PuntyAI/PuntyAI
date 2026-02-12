@@ -312,10 +312,19 @@ If no track record data is provided (new system or insufficient data), generate 
 13) PUNTY'S PICK (per sequence):
     After each sequence block (Early Quaddie, Main Quaddie, Big 6), recommend ONE variant.
 
-    **HOW TO CHOOSE:**
-    a) **Skinny ($10)**: Recommend when you're confident about favourites/top picks in 3+ legs. This is the "trust the map" play. Say something like "The faves look rock-solid — $10 to dream."
-    b) **Balanced ($50)**: Default recommendation when it's a mix of open and closed races. The all-rounder. "Enough cover to survive a blowout without breaking the bank."
-    c) **Wide ($100)**: ONLY when there's genuine uncertainty across most legs — open races, weather impact, no standout favourites. "Too many question marks to go tight — cast the net."
+    **HOW TO CHOOSE — USE PROBABILITY AND VALUE, NOT JUST PAST RESULTS:**
+    Do NOT default to Skinny just because it has won before. Assess EACH sequence independently using the probability data, field strength, and value analysis for the races in that sequence.
+
+    a) **Skinny ($10)**: Recommend ONLY when you're genuinely confident about clear favourites/top picks in 3+ legs AND the probabilities support it (top pick >30% in most legs). This is the "trust the map" play.
+    b) **Balanced ($50)**: Recommend when there's a mix of open and closed races, or when 2+ legs have genuine uncertainty. The all-rounder that covers reasonable chaos.
+    c) **Wide ($100)**: Recommend when there's genuine uncertainty across most legs — open races, weather impact, no standout favourites, or when value lies in longer-priced runners.
+
+    **DECISION FRAMEWORK:**
+    - Count how many legs have a clear top pick (probability >30%, value >1.0x)
+    - 3-4 clear legs → Skinny is justified
+    - 1-2 clear legs → Balanced is safer
+    - 0-1 clear legs → Wide gives best coverage
+    - If your track record shows Skinny winning, that's nice — but it doesn't mean Skinny is right for THIS sequence
 
     **FORMAT (after each sequence block):**
     *Punty's Pick:* {Skinny|Balanced|Wide} — {One-line reason}
