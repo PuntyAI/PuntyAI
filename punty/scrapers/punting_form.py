@@ -109,16 +109,30 @@ def _a2e_to_json(career: dict | None, last100: dict | None,
 
 
 def _parse_pf_start_time(time_str: str | None) -> datetime | None:
-    """Parse startTimeUTC like '2/12/2026 7:45:00 AM' to datetime."""
+    """Parse startTimeUTC like '2/12/2026 7:45:00 AM' to naive Melbourne local datetime.
+
+    The API returns times in UTC. We convert to Melbourne local time
+    (AEDT/AEST) and store as naive datetime for consistency with the
+    rest of the codebase.
+    """
     if not time_str:
         return None
+    from zoneinfo import ZoneInfo
+    _UTC = ZoneInfo("UTC")
+    _MELB = ZoneInfo("Australia/Melbourne")
     try:
-        # US-style: M/D/YYYY H:MM:SS AM/PM
-        return datetime.strptime(time_str.strip(), "%m/%d/%Y %I:%M:%S %p")
+        # US-style: M/D/YYYY H:MM:SS AM/PM — these are UTC
+        utc_naive = datetime.strptime(time_str.strip(), "%m/%d/%Y %I:%M:%S %p")
+        utc_aware = utc_naive.replace(tzinfo=_UTC)
+        return utc_aware.astimezone(_MELB).replace(tzinfo=None)
     except (ValueError, TypeError):
         try:
-            # Try ISO format as fallback
-            return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            # ISO format fallback (may include timezone info)
+            dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                return dt.astimezone(_MELB).replace(tzinfo=None)
+            # Assume UTC if no timezone
+            return dt.replace(tzinfo=_UTC).astimezone(_MELB).replace(tzinfo=None)
         except (ValueError, TypeError):
             return None
 

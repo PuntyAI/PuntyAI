@@ -424,18 +424,28 @@ class TestA2eToJson:
 # ---- Test _parse_pf_start_time ----
 
 class TestParsePfStartTime:
-    def test_us_format(self):
+    def test_us_format_converts_utc_to_melbourne(self):
+        # 7:45 AM UTC → 18:45 AEDT (UTC+11) in February
         result = _parse_pf_start_time("2/12/2026 7:45:00 AM")
         assert isinstance(result, datetime)
         assert result.month == 2
         assert result.day == 12
-        assert result.hour == 7
+        assert result.hour == 18
         assert result.minute == 45
+        assert result.tzinfo is None  # stored as naive
 
-    def test_pm_time(self):
+    def test_pm_time_converts_utc_to_melbourne(self):
+        # 2:30 PM UTC = 14:30 UTC → 01:30 next day AEDT
         result = _parse_pf_start_time("2/12/2026 2:30:00 PM")
-        assert result.hour == 14
+        assert result.day == 13  # rolls to next day
+        assert result.hour == 1
         assert result.minute == 30
+
+    def test_typical_race_time(self):
+        # Typical AU race: 2:50 AM UTC → 13:50 AEDT (1:50 PM Melbourne)
+        result = _parse_pf_start_time("2/12/2026 2:50:00 AM")
+        assert result.hour == 13
+        assert result.minute == 50
 
     def test_none_input(self):
         assert _parse_pf_start_time(None) is None
@@ -446,10 +456,11 @@ class TestParsePfStartTime:
     def test_invalid_format(self):
         assert _parse_pf_start_time("not-a-date") is None
 
-    def test_iso_fallback(self):
+    def test_iso_fallback_converts_utc_to_melbourne(self):
+        # ISO without timezone assumed UTC: 7:45 UTC → 18:45 AEDT
         result = _parse_pf_start_time("2026-02-12T07:45:00")
         assert result is not None
-        assert result.hour == 7
+        assert result.hour == 18
 
 
 # ---- Test _parse_last10 ----
