@@ -1190,12 +1190,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Winner Badges ---
     function addBadge(el, label) {
+        // Skip if this element or any ancestor already has a winner badge
         if (el.querySelector('.win-tick')) return;
+        if (el.closest && el.closest('.win-tick, [data-badged]')) return;
+        // Skip children of already-badged containers (e.g. <p> inside .puntys-pick-block)
+        var parent = el.parentElement;
+        if (parent && parent.querySelector(':scope > .win-tick')) return;
         var tick = document.createElement('span');
         tick.className = 'win-tick';
         tick.innerHTML = '<span class="win-emoji">&#x1F3C6;</span> ' + label;
         tick.title = label + '!';
         el.appendChild(tick);
+        el.setAttribute('data-badged', '1');
     }
 
     var hasSelections = winners && Object.keys(winners).length;
