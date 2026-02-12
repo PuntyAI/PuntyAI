@@ -29,15 +29,28 @@ class PuntingFormScraper(BaseScraper):
 
     BASE_URL = "https://www.puntingform.com.au"
 
+    # Sponsor prefixes to strip from venue names
+    SPONSOR_PREFIXES = [
+        "sportsbet ", "ladbrokes ", "bet365 ", "aquis ", "pointsbet ",
+        "picklebet park ", "southside ", "tab ",
+    ]
+
     # Venue name mapping: racing.com name -> Punting Form slug
     VENUE_MAP = {
-        "sportsbet sandown lakeside": "sandown_hillside",
-        "sandown lakeside": "sandown_hillside",
-        "sandown": "sandown_hillside",
-        "thomas farms rc murray bridge": "murray-bridge-gh",
-        "murray bridge": "murray-bridge-gh",
-        "ladbrokes geelong": "geelong",
-        "bet365 geelong": "geelong",
+        "sandown lakeside": "sandown-hillside",
+        "sandown hillside": "sandown-hillside",
+        "sandown": "sandown-hillside",
+        "thomas farms rc murray bridge": "murray-bridge",
+        "murray bridge": "murray-bridge",
+        "moonee valley": "moonee-valley",
+        "royal randwick": "randwick",
+        "rosehill gardens": "rosehill",
+        "morphettville parks": "morphettville",
+        "sunshine coast": "sunshine-coast",
+        "gold coast": "gold-coast",
+        "sapphire coast": "sapphire-coast",
+        "eagle farm": "eagle-farm",
+        "warwick farm": "warwick-farm",
     }
 
     # Position column mapping to standard values
@@ -177,9 +190,18 @@ class PuntingFormScraper(BaseScraper):
         # Need to login
         return await self._login(page)
 
+    def _normalize_venue(self, venue: str) -> str:
+        """Strip sponsor prefixes and normalize venue name."""
+        v = venue.lower()
+        for prefix in self.SPONSOR_PREFIXES:
+            if v.startswith(prefix):
+                v = v[len(prefix):]
+                break
+        return v.strip()
+
     def _build_race_url(self, venue: str, race_date: date, race_num: int) -> str:
         """Build URL for a specific race."""
-        venue_lower = venue.lower()
+        venue_lower = self._normalize_venue(venue)
         # Check venue mapping first
         venue_slug = self.VENUE_MAP.get(venue_lower)
         if not venue_slug:
@@ -193,11 +215,31 @@ class PuntingFormScraper(BaseScraper):
         col_lower = col.lower().replace(" ", "").replace("/", "-")
         return self.POSITION_MAP.get(col_lower)
 
-    def _parse_speed_map(self, soup: BeautifulSoup) -> list[dict]:
+    def _parse_speed_map(self, soup: BeautifulSoup, race_url: str = "") -> list[dict]:
         """Parse speed map data from page."""
         positions = []
 
         runners = soup.select(".speed-map-grid .runner")
+        if not runners:
+            # Diagnostic: log what we actually got
+            title = soup.title.string if soup.title else "no title"
+            body = soup.select_one("body")
+            body_text = body.get_text()[:300].strip() if body else "no body"
+            logger.warning(
+                f"PF speed map: no '.speed-map-grid .runner' found. "
+                f"Title: {title!r}, URL: {race_url}, Body preview: {body_text!r}"
+            )
+            # Save HTML for inspection
+            try:
+                import re as _re
+                race_num = _re.search(r"-(\d+)-form", race_url)
+                num = race_num.group(1) if race_num else "unknown"
+                debug_path = Path(f"/tmp/pf_debug_r{num}.html")
+                debug_path.write_text(str(soup), encoding="utf-8")
+                logger.info(f"PF debug HTML saved to {debug_path}")
+            except Exception:
+                pass
+
         for runner in runners:
             try:
                 name_elem = runner.select_one(".runner-name .name")
@@ -274,10 +316,21 @@ class PuntingFormScraper(BaseScraper):
                 }
 
                 race_url = self._build_race_url(venue, race_date, race_num)
+                logger.info(f"PF scraping: {race_url}")
 
                 try:
                     await page.goto(race_url, wait_until="domcontentloaded")
                     await page.wait_for_timeout(2000)
+
+                    # Check for login redirect (session expired)
+                    current_url = page.url
+                    if "member/login" in current_url:
+                        logger.warning("PF session expired mid-scrape, re-authenticating...")
+                        if not await self._login(page):
+                            logger.error("PF re-authentication failed")
+                            break
+                        await page.goto(race_url, wait_until="domcontentloaded")
+                        await page.wait_for_timeout(2000)
 
                     # Check for 404
                     if "404" in await page.title():
@@ -294,7 +347,7 @@ class PuntingFormScraper(BaseScraper):
                     html = await page.content()
                     soup = BeautifulSoup(html, "lxml")
 
-                    positions = self._parse_speed_map(soup)
+                    positions = self._parse_speed_map(soup, race_url)
 
                     if positions:
                         yield {

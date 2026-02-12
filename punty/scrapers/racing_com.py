@@ -591,6 +591,11 @@ class RacingComScraper(BaseScraper):
                 field = PROVIDER_MAP.get(code)
                 if field and field not in odds_dict:
                     odds_dict[field] = self.parse_odds(bp.get("oddsWin"))
+                # Extract place odds from TAB provider
+                if code == "Q" and "place_odds" not in odds_dict:
+                    place_val = self.parse_odds(bp.get("oddsPlace"))
+                    if place_val:
+                        odds_dict["place_odds"] = place_val
                 # Capture flucs from first provider that has them
                 if bp.get("flucsWin") and "odds_flucs" not in odds_dict:
                     flucs = [{"time": f.get("updateTime"), "odds": f.get("amount")}
@@ -659,6 +664,7 @@ class RacingComScraper(BaseScraper):
             "odds_ladbrokes": odds_dict.get("odds_ladbrokes"),
             "odds_betfair": odds_dict.get("odds_betfair"),
             "odds_flucs": odds_dict.get("odds_flucs"),
+            "place_odds": odds_dict.get("place_odds"),
             "trainer_location": None,  # Not in this query
         }
 
@@ -672,6 +678,11 @@ class RacingComScraper(BaseScraper):
                 val = self.parse_odds(o.get("oddsWin"))
                 if val:
                     result[field] = val
+                # Extract place odds from TAB provider
+                if code == "Q" and "place_odds" not in result:
+                    place_val = self.parse_odds(o.get("oddsPlace"))
+                    if place_val:
+                        result["place_odds"] = place_val
             # Capture flucs from any provider that has them
             flucs = o.get("flucsWin")
             if flucs and "odds_flucs" not in result:

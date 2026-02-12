@@ -453,7 +453,7 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
     # FALLBACK: Use racing.com if Punting Form failed or found nothing
     if pf_failed or total_positions_found == 0:
         if not pf_failed:
-            logger.info(f"No Punting Form data for {meeting.venue}, trying racing.com fallback...")
+            logger.info(f"No Punting Form data for {meeting.venue} (0/{race_count} races had positions), trying racing.com fallback...")
             yield {"step": 0, "total": race_count + 1, "label": "Trying racing.com fallback...", "status": "running"}
 
         try:
