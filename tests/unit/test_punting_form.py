@@ -733,6 +733,25 @@ class TestConditionsParsing:
         result = self.scraper._parse_condition(cond)
         assert result["going_stick"] == 11.8
 
+    def test_condition_number_preferred_over_bare_label(self):
+        """When API returns bare 'Good' but trackConditionNumber=4, use 'Good 4'."""
+        cond = {
+            "track": "Test",
+            "trackCondition": "Good",
+            "trackConditionNumber": 4,
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["condition"] == "Good 4"
+
+    def test_condition_number_preferred_soft(self):
+        cond = {
+            "track": "Test",
+            "trackCondition": "Soft",
+            "trackConditionNumber": 6,
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["condition"] == "Soft 6"
+
     def test_condition_label_fallback(self):
         cond = {
             "track": "Test",

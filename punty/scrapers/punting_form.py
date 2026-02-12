@@ -473,8 +473,9 @@ class PuntingFormScraper(BaseScraper):
         """Parse a conditions entry into our format."""
         tc_num = cond.get("trackConditionNumber", 0)
         tc_label = cond.get("trackCondition", "")
-        # Build condition string like "Good 4" from number if label is missing
-        condition = tc_label or _CONDITION_LABELS.get(tc_num) or None
+        # Prefer _CONDITION_LABELS (includes rating number, e.g. "Good 4")
+        # over tc_label (often just "Good" without rating)
+        condition = _CONDITION_LABELS.get(tc_num) or tc_label or None
 
         # Parse going stick from comment field (e.g. "Going Stick: 11.8")
         going_stick = None
