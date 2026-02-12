@@ -669,6 +669,24 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
 
+    async def _get_thread_parent(self, db: AsyncSession, meeting_id: str, early_mail_tweet_id: str) -> str:
+        """Get the last tweet ID in the thread chain for this meeting.
+
+        Twitter threads require each reply to chain off the previous one
+        (not all reply to the root). This finds the most recent LiveUpdate
+        tweet for the meeting and returns its ID, falling back to the
+        early mail tweet if no updates have been posted yet.
+        """
+        from punty.models.live_update import LiveUpdate
+        result = await db.execute(
+            select(LiveUpdate.tweet_id).where(
+                LiveUpdate.meeting_id == meeting_id,
+                LiveUpdate.tweet_id.isnot(None),
+            ).order_by(LiveUpdate.created_at.desc()).limit(1)
+        )
+        last_tweet_id = result.scalar_one_or_none()
+        return last_tweet_id or early_mail_tweet_id
+
     async def _check_big_wins(self, db: AsyncSession, meeting_id: str, race_number: int):
         """Check for big wins (>= 5x outlay) and post celebration replies."""
         from punty.models.pick import Pick
@@ -713,13 +731,15 @@ class ResultsMonitor:
                 bet_type=pick.bet_type or "Win",
             )
 
-            # Post to Twitter
+            # Post to Twitter (chain off last tweet in thread)
             reply_tweet_id = None
+            thread_parent = None
             if early_mail.twitter_id:
+                thread_parent = await self._get_thread_parent(db, meeting_id, early_mail.twitter_id)
                 twitter = TwitterDelivery(db)
                 if await twitter.is_configured():
                     try:
-                        reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                        reply_result = await twitter.post_reply(thread_parent, tweet_text)
                         reply_tweet_id = reply_result.get("tweet_id")
                         logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
                     except Exception as e:
@@ -735,7 +755,7 @@ class ResultsMonitor:
                 update_type="celebration",
                 content=tweet_text,
                 tweet_id=reply_tweet_id,
-                parent_tweet_id=early_mail.twitter_id,
+                parent_tweet_id=thread_parent or early_mail.twitter_id,
                 facebook_comment_id=fb_post_id,
                 parent_facebook_id=early_mail.facebook_id,
                 horse_name=pick.horse_name,
@@ -806,13 +826,15 @@ class ResultsMonitor:
         if not early_mail:
             return
 
-        # Post to Twitter
+        # Post to Twitter (chain off last tweet in thread)
         reply_tweet_id = None
+        thread_parent = None
         if early_mail.twitter_id:
+            thread_parent = await self._get_thread_parent(db, meeting.id, early_mail.twitter_id)
             twitter = TwitterDelivery(db)
             if await twitter.is_configured():
                 try:
-                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_result = await twitter.post_reply(thread_parent, tweet_text)
                     reply_tweet_id = reply_result.get("tweet_id")
                     logger.info(f"Posted clean sweep celebration to Twitter")
                 except Exception as e:
@@ -828,7 +850,7 @@ class ResultsMonitor:
             update_type="clean_sweep",
             content=tweet_text,
             tweet_id=reply_tweet_id,
-            parent_tweet_id=early_mail.twitter_id if early_mail else None,
+            parent_tweet_id=thread_parent or (early_mail.twitter_id if early_mail else None),
             facebook_comment_id=fb_post_id,
             parent_facebook_id=early_mail.facebook_id if early_mail else None,
             pnl=total_pnl,
@@ -898,13 +920,15 @@ class ResultsMonitor:
         if not tweet_text:
             return
 
-        # Post to Twitter
+        # Post to Twitter (chain off last tweet in thread)
         reply_tweet_id = None
+        thread_parent = None
         if early_mail.twitter_id:
+            thread_parent = await self._get_thread_parent(db, meeting_id, early_mail.twitter_id)
             twitter = TwitterDelivery(db)
             if await twitter.is_configured():
                 try:
-                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_result = await twitter.post_reply(thread_parent, tweet_text)
                     reply_tweet_id = reply_result.get("tweet_id")
                     self.pace_updates_posted[meeting_id] = posted_count + 1
                     logger.info(f"Posted pace analysis for {meeting.venue} (update {posted_count + 1}, bias: {bias_result.bias_type})")
@@ -921,7 +945,7 @@ class ResultsMonitor:
             update_type="pace_analysis",
             content=tweet_text,
             tweet_id=reply_tweet_id,
-            parent_tweet_id=early_mail.twitter_id,
+            parent_tweet_id=thread_parent or early_mail.twitter_id,
             facebook_comment_id=fb_post_id,
             parent_facebook_id=early_mail.facebook_id,
         )
@@ -1202,13 +1226,15 @@ class ResultsMonitor:
         tweet_text = alert.message
         logger.info(f"Posting {alert.change_type} alert for {meeting.venue}: {tweet_text[:80]}...")
 
-        # Post to Twitter as reply
+        # Post to Twitter as reply (chain off last tweet in thread)
         reply_tweet_id = None
+        thread_parent = None
         if early_mail.twitter_id:
+            thread_parent = await self._get_thread_parent(db, meeting.id, early_mail.twitter_id)
             twitter = TwitterDelivery(db)
             if await twitter.is_configured():
                 try:
-                    reply_result = await twitter.post_reply(early_mail.twitter_id, tweet_text)
+                    reply_result = await twitter.post_reply(thread_parent, tweet_text)
                     reply_tweet_id = reply_result.get("tweet_id")
                 except Exception as e:
                     logger.warning(f"Failed to post {alert.change_type} Twitter reply: {e}")
@@ -1230,7 +1256,7 @@ class ResultsMonitor:
             update_type=update_type_map.get(alert.change_type, "change_alert"),
             content=tweet_text,
             tweet_id=reply_tweet_id,
-            parent_tweet_id=early_mail.twitter_id,
+            parent_tweet_id=thread_parent or early_mail.twitter_id,
             facebook_comment_id=fb_post_id,
             parent_facebook_id=early_mail.facebook_id,
             horse_name=alert.horse_name,

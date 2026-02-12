@@ -469,6 +469,52 @@ class PuntingFormScraper(BaseScraper):
                 return self._parse_condition(cond)
         return None
 
+    @staticmethod
+    def _infer_rating_from_penetrometer(label: str, cond: dict) -> str | None:
+        """Infer numeric track rating from penetrometer when API omits it.
+
+        WA and some regional tracks often return bare labels like 'Good'
+        without a trackConditionNumber. The penetrometer reading lets us
+        infer the numeric rating using standard Australian ranges.
+        """
+        raw = cond.get("penetrometer")
+        if raw is None:
+            return None
+        try:
+            pen = float(raw)
+        except (ValueError, TypeError):
+            return None
+
+        base = label.strip().split()[0].capitalize()  # "Good" / "Soft" etc.
+
+        # Penetrometer → rating mapping (Australian standard ranges)
+        if pen < 3.5:
+            rating = "Firm 1" if pen < 2.5 else "Firm 2"
+        elif pen < 4.2:
+            rating = "Good 3"
+        elif pen < 5.0:
+            rating = "Good 4"
+        elif pen < 5.8:
+            rating = "Soft 5"
+        elif pen < 6.5:
+            rating = "Soft 6"
+        elif pen < 7.5:
+            rating = "Soft 7"
+        elif pen < 8.5:
+            rating = "Heavy 8"
+        elif pen < 9.5:
+            rating = "Heavy 9"
+        else:
+            rating = "Heavy 10"
+
+        # Only return if the inferred base matches the official label
+        # e.g. don't override "Soft" with "Good 4" if penetrometer disagrees
+        if rating.split()[0].lower() == base.lower():
+            return rating
+        # Label and penetrometer disagree — trust the official label,
+        # but still attach the penetrometer-inferred number
+        return f"{base} {rating.split()[1]}"
+
     def _parse_condition(self, cond: dict) -> dict:
         """Parse a conditions entry into our format."""
         tc_num_raw = cond.get("trackConditionNumber", 0)
@@ -480,6 +526,11 @@ class PuntingFormScraper(BaseScraper):
         # Prefer _CONDITION_LABELS (includes rating number, e.g. "Good 4")
         # over tc_label (often just "Good" without rating)
         condition = _CONDITION_LABELS.get(tc_num) or tc_label or None
+
+        # If condition has no numeric rating (e.g. "Good" not "Good 4"),
+        # try to infer from penetrometer reading (common for WA tracks)
+        if condition and not any(c.isdigit() for c in (condition or "")):
+            condition = self._infer_rating_from_penetrometer(condition, cond) or condition
 
         # Parse going stick from comment field (e.g. "Going Stick: 11.8")
         going_stick = None
