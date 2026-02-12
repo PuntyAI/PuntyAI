@@ -227,9 +227,20 @@ async def init_db() -> None:
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='content'"
             ))
             create_sql = row.scalar()
-            if create_sql and '"meeting_id" VARCHAR(64) NOT NULL' in create_sql:
+            # Match both quoted and unquoted column names
+            needs_migrate = (
+                create_sql
+                and 'meeting_id' in create_sql
+                and 'NOT NULL' in create_sql
+                and ('meeting_id VARCHAR(64) NOT NULL' in create_sql
+                     or '"meeting_id" VARCHAR(64) NOT NULL' in create_sql)
+            )
+            if needs_migrate:
                 logger.info("Migrating content table: making meeting_id nullable")
                 new_sql = create_sql.replace(
+                    'meeting_id VARCHAR(64) NOT NULL',
+                    'meeting_id VARCHAR(64)',
+                ).replace(
                     '"meeting_id" VARCHAR(64) NOT NULL',
                     '"meeting_id" VARCHAR(64)',
                 )
