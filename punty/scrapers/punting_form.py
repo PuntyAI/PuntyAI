@@ -147,9 +147,9 @@ def _pf_runner_to_dict(pf_runner: dict, race_id: str, meeting_id: str) -> dict:
     barrier = pf_runner.get("barrier") or 0
     tab_no = pf_runner.get("tabNo")
 
-    # Generate runner ID matching BaseScraper pattern
+    # Use saddlecloth (tabNo) in ID — stable across re-scrapes unlike barrier
     horse_slug = horse_name.lower().replace(" ", "-").replace("'", "")[:20]
-    runner_id = f"{race_id}-{barrier}-{horse_slug}"
+    runner_id = f"{race_id}-{tab_no or barrier}-{horse_slug}"
 
     # Form
     form_full, last_five = _parse_last10(pf_runner.get("last10"))

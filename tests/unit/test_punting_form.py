@@ -574,7 +574,7 @@ class TestPfRunnerToDict:
 
     def test_id_generation(self):
         result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "pak-2026-02-12-r1", "pak-2026-02-12")
-        assert result["id"] == "pak-2026-02-12-r1-5-good-feel"
+        assert result["id"] == "pak-2026-02-12-r1-2-good-feel"
 
     def test_gear_changes(self):
         result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")

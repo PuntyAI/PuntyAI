@@ -696,8 +696,23 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
             db.add(Race(**race_kwargs))
 
     for runner in data.get("runners", []):
-        existing_runner = await db.get(Runner, runner["id"])
+        # Match by race_id + saddlecloth first (stable key), then fall back to ID
+        existing_runner = None
+        if runner.get("saddlecloth") and runner.get("race_id"):
+            result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == runner["race_id"],
+                    Runner.saddlecloth == runner["saddlecloth"],
+                ).limit(1)
+            )
+            existing_runner = result.scalar_one_or_none()
+        if not existing_runner:
+            existing_runner = await db.get(Runner, runner["id"])
+
         if existing_runner:
+            # Update ID if it changed (barrier-based → saddlecloth-based)
+            if existing_runner.id != runner["id"]:
+                existing_runner.id = runner["id"]
             for field in RUNNER_FIELDS:
                 val = runner.get(field)
                 if val is not None:
@@ -767,7 +782,7 @@ async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: 
             select(Runner).where(
                 Runner.race_id == race_id,
                 Runner.horse_name == horse_name,
-            )
+            ).limit(1)
         )
         runner = result.scalar_one_or_none()
         if not runner:
@@ -798,7 +813,7 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
             select(Runner).where(
                 Runner.race_id == race_id,
                 Runner.horse_name == horse_name,
-            )
+            ).limit(1)
         )
         runner = result.scalar_one_or_none()
         if runner:
