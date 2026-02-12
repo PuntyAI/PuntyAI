@@ -4,7 +4,7 @@ Calculates win/place probability, value detection, and recommended stakes
 for each runner in a race using multi-factor analysis:
   - Market consensus (50%): Multi-bookmaker median odds → implied probability
   - Form rating (20%): Recent results + track/distance/condition stats
-  - Pace factor (15%): Speed map position + Punting Form map factor
+  - Pace factor (15%): Speed map position + map factor analysis
   - Market movement (10%): Odds fluctuation direction/magnitude
   - Class/fitness (5%): Class stats + days since last run
 """

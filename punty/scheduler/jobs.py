@@ -164,11 +164,15 @@ async def daily_calendar_scrape() -> dict:
             logger.error(f"Auto-select failed: {e}")
             results["errors"].append(f"Auto-select: {str(e)}")
 
-        # Step 3: Scrape full race data for each selected meeting
+        # Step 3: Lightweight fields-only scrape (no form history, no racing.com)
         try:
-            from punty.scrapers.orchestrator import scrape_meeting_full
+            from punty.scrapers.orchestrator import scrape_meeting_fields_only
+            from punty.scrapers.punting_form import PuntingFormScraper, clear_meetings_cache
 
-            logger.info("Step 3: Scraping full race data for all meetings...")
+            # Clear stale meeting cache from previous day
+            clear_meetings_cache()
+
+            logger.info("Step 3: Scraping fields data for all meetings...")
             result = await db.execute(
                 select(Meeting).where(
                     Meeting.date == today,
@@ -178,20 +182,25 @@ async def daily_calendar_scrape() -> dict:
             selected_meetings = result.scalars().all()
             scrape_count = 0
 
-            for meeting in selected_meetings:
-                try:
-                    logger.info(f"Scraping data for {meeting.venue}...")
-                    await scrape_meeting_full(meeting.id, db)
-                    scrape_count += 1
-                except Exception as e:
-                    logger.error(f"Scrape failed for {meeting.venue}: {e}")
-                    results["errors"].append(f"Scrape {meeting.venue}: {str(e)}")
+            # Shared PF scraper for the entire batch
+            pf_scraper = await PuntingFormScraper.from_settings(db)
+            try:
+                for meeting in selected_meetings:
+                    try:
+                        logger.info(f"Scraping fields for {meeting.venue}...")
+                        await scrape_meeting_fields_only(meeting.id, db, pf_scraper=pf_scraper)
+                        scrape_count += 1
+                    except Exception as e:
+                        logger.error(f"Scrape failed for {meeting.venue}: {e}")
+                        results["errors"].append(f"Scrape {meeting.venue}: {str(e)}")
+            finally:
+                await pf_scraper.close()
 
             results["meetings_scraped"] = scrape_count
-            logger.info(f"Scraped full data for {scrape_count}/{len(selected_meetings)} meetings")
+            logger.info(f"Scraped fields for {scrape_count}/{len(selected_meetings)} meetings")
         except Exception as e:
-            logger.error(f"Full data scrape failed: {e}")
-            results["errors"].append(f"Full scrape: {str(e)}")
+            logger.error(f"Fields scrape failed: {e}")
+            results["errors"].append(f"Fields scrape: {str(e)}")
 
         # Step 3b: Deselect abandoned meetings (no races after scrape)
         try:
@@ -331,16 +340,21 @@ async def daily_morning_scrape() -> dict:
 
         logger.info(f"Morning scrape: {len(meetings)} meetings to process")
 
-        # Step 1: Full data scrape for each meeting
-        for meeting in meetings:
-            try:
-                logger.info(f"Scraping full data for {meeting.venue}...")
-                await scrape_meeting_full(meeting.id, db)
-                results["meetings_scraped"].append(meeting.venue)
-                logger.info(f"Full scrape complete for {meeting.venue}")
-            except Exception as e:
-                logger.error(f"Full scrape failed for {meeting.venue}: {e}")
-                results["errors"].append(f"scrape {meeting.venue}: {str(e)}")
+        # Step 1: Full data scrape for each meeting (shared PF scraper)
+        from punty.scrapers.punting_form import PuntingFormScraper
+        pf_scraper = await PuntingFormScraper.from_settings(db)
+        try:
+            for meeting in meetings:
+                try:
+                    logger.info(f"Scraping full data for {meeting.venue}...")
+                    await scrape_meeting_full(meeting.id, db, pf_scraper=pf_scraper)
+                    results["meetings_scraped"].append(meeting.venue)
+                    logger.info(f"Full scrape complete for {meeting.venue}")
+                except Exception as e:
+                    logger.error(f"Full scrape failed for {meeting.venue}: {e}")
+                    results["errors"].append(f"scrape {meeting.venue}: {str(e)}")
+        finally:
+            await pf_scraper.close()
 
         # Step 1b: Deselect meetings with no races (abandoned/cancelled after scrape)
         try:
@@ -989,26 +1003,54 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Odds refresh failed for {venue}: {e}")
             results["errors"].append(f"refresh_odds: {str(e)}")
 
-        # Step 2: Refresh track conditions + weather via PF API
+        # Step 2: Refresh track conditions + weather + scratchings via API
         try:
-            logger.info(f"Step 2: Refreshing conditions/weather for {venue} via PF...")
+            logger.info(f"Step 2: Refreshing conditions/weather for {venue}...")
             from punty.scrapers.punting_form import PuntingFormScraper
             from punty.scrapers.orchestrator import _apply_pf_conditions
+            from punty.models.meeting import Runner
 
-            if not meeting.track_condition_locked:
-                pf = await PuntingFormScraper.from_settings(db)
-                try:
+            pf = await PuntingFormScraper.from_settings(db)
+            try:
+                # 2a: Conditions/weather
+                if not meeting.track_condition_locked:
                     cond = await pf.get_conditions_for_venue(venue)
                     if cond:
                         _apply_pf_conditions(meeting, cond)
                         await db.commit()
-                        logger.info(f"PF conditions for {venue}: {meeting.track_condition} | rain={cond.get('rainfall')}mm")
-                finally:
-                    await pf.close()
-            results["steps"].append("pf_conditions_refresh: success")
+                        logger.info(f"Conditions for {venue}: {meeting.track_condition} | rain={cond.get('rainfall')}mm")
+
+                # 2b: Scratchings (catches scratchings TAB may have missed)
+                pf_meeting_id = await pf.resolve_meeting_id(venue, meeting.date)
+                if pf_meeting_id:
+                    scratchings = await pf.get_scratchings_for_meeting(pf_meeting_id)
+                    scratch_count = 0
+                    for s in scratchings:
+                        race_num = s.get("race_number")
+                        tab_no = s.get("tab_no")
+                        if race_num and tab_no:
+                            race_id = f"{meeting_id}-r{race_num}"
+                            runner_result = await db.execute(
+                                select(Runner).where(
+                                    Runner.race_id == race_id,
+                                    Runner.saddlecloth == tab_no,
+                                    Runner.scratched == False,
+                                ).limit(1)
+                            )
+                            runner = runner_result.scalar_one_or_none()
+                            if runner:
+                                runner.scratched = True
+                                scratch_count += 1
+                                logger.info(f"Pre-race scratching: {runner.horse_name} (R{race_num} No.{tab_no})")
+                    if scratch_count:
+                        await db.commit()
+                        logger.info(f"Applied {scratch_count} scratchings for {venue}")
+            finally:
+                await pf.close()
+            results["steps"].append("conditions_refresh: success")
         except Exception as e:
-            logger.error(f"PF conditions refresh failed for {venue}: {e}")
-            results["errors"].append(f"pf_conditions_refresh: {str(e)}")
+            logger.error(f"Conditions refresh failed for {venue}: {e}")
+            results["errors"].append(f"conditions_refresh: {str(e)}")
 
         # Step 3: Check jockey/gear changes via racing.com (Playwright)
         try:

@@ -50,7 +50,7 @@ class AnalysisWeights(Base):
         "pedigree": "low-med",
         "money": "low-med",
         "tipsters_analysis": "high",
-        # Punting Form insights (pace/speed metrics)
+        # Pace analysis insights
         "pf_map_factor": "med",  # Pace advantage/disadvantage factor
         "pf_speed_rank": "med",  # Early speed rating (1=fastest)
         "pf_settle_position": "med",  # Historical settling position
@@ -82,11 +82,11 @@ class AnalysisWeights(Base):
         "pedigree": "Pedigree / Breeding",
         "money": "Money / Stable Support",
         "tipsters_analysis": "Tipsters & Analysis",
-        # Punting Form insights
-        "pf_map_factor": "PF Pace Advantage (Map Factor)",
-        "pf_speed_rank": "PF Early Speed Rank",
-        "pf_settle_position": "PF Settle Position",
-        "pf_jockey_factor": "PF Jockey Factor",
+        # Pace analysis insights
+        "pf_map_factor": "Pace Advantage (Map Factor)",
+        "pf_speed_rank": "Early Speed Rank",
+        "pf_settle_position": "Settle Position",
+        "pf_jockey_factor": "Jockey Factor",
         # Additional factors
         "horse_profile": "Horse Profile (Age/Sex)",
         "odds_fluctuations": "Odds Fluctuations",

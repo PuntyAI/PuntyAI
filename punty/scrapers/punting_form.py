@@ -1,10 +1,9 @@
-"""Punting Form API scraper for speed maps, ratings, form data, conditions.
+"""Primary form data API scraper for speed maps, ratings, form data, conditions.
 
 Primary data source for PuntyAI. Provides runner fields, form history,
 speed maps, ratings, track conditions, weather, and scratchings.
 
 Requires API key stored in app_settings as 'punting_form_api_key'.
-API docs: https://docs.puntingform.com.au/
 """
 
 import json as _json
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.puntingform.com.au/v2"
 
-# Map PF runStyle abbreviations to our speed_map_position values
+# Map runStyle abbreviations to our speed_map_position values
 RUN_STYLE_MAP = {
     "l": "leader",
     "op": "on_pace",
@@ -30,7 +29,7 @@ RUN_STYLE_MAP = {
     "bm": "backmarker",
 }
 
-# PF track condition number to label
+# Track condition number to label
 _CONDITION_LABELS = {
     1: "Firm 1", 2: "Firm 2",
     3: "Good 3", 4: "Good 4",
@@ -38,9 +37,18 @@ _CONDITION_LABELS = {
     8: "Heavy 8", 9: "Heavy 9", 10: "Heavy 10",
 }
 
+# Module-level cache: meetings list keyed by date string.
+# Survives across scraper instances within the same process.
+_meetings_cache: dict[str, list[dict]] = {}
+
+
+def clear_meetings_cache():
+    """Clear stale meeting cache. Called at midnight by scheduler."""
+    _meetings_cache.clear()
+
 
 def _settle_to_position(settle: int, field_size: int) -> Optional[str]:
-    """Convert PF predicted settle position to speed_map_position.
+    """Convert predicted settle position to speed_map_position.
 
     Settle is the predicted position in the field (1 = leads).
     We scale relative to field size to handle small vs large fields.
@@ -65,7 +73,7 @@ def _settle_to_position(settle: int, field_size: int) -> Optional[str]:
 
 
 def _record_to_json(record: dict | None) -> str | None:
-    """Convert PF record dict {starts, firsts, seconds, thirds} to JSON string."""
+    """Convert record dict {starts, firsts, seconds, thirds} to JSON string."""
     if not record or record.get("starts", 0) == 0:
         return None
     return _json.dumps({
@@ -79,7 +87,7 @@ def _record_to_json(record: dict | None) -> str | None:
 def _a2e_to_json(career: dict | None, last100: dict | None,
                  combo_career: dict | None = None,
                  combo_last100: dict | None = None) -> str | None:
-    """Convert PF A2E stat dicts to JSON string for jockey_stats/trainer_stats."""
+    """Convert A2E stat dicts to JSON string for jockey_stats/trainer_stats."""
     data = {}
 
     def _extract(src: dict | None, key: str):
@@ -101,11 +109,11 @@ def _a2e_to_json(career: dict | None, last100: dict | None,
 
 
 def _parse_pf_start_time(time_str: str | None) -> datetime | None:
-    """Parse PF startTimeUTC like '2/12/2026 7:45:00 AM' to datetime."""
+    """Parse startTimeUTC like '2/12/2026 7:45:00 AM' to datetime."""
     if not time_str:
         return None
     try:
-        # PF uses US-style: M/D/YYYY H:MM:SS AM/PM
+        # US-style: M/D/YYYY H:MM:SS AM/PM
         return datetime.strptime(time_str.strip(), "%m/%d/%Y %I:%M:%S %p")
     except (ValueError, TypeError):
         try:
@@ -116,7 +124,7 @@ def _parse_pf_start_time(time_str: str | None) -> datetime | None:
 
 
 def _parse_last10(last10: str | None) -> tuple[str, str]:
-    """Parse PF last10 like '40x42' → (form='4042', last_five='4042').
+    """Parse last10 like '40x42' → (form='4042', last_five='4042').
 
     'x' marks spell breaks, spaces are padding. Strip both.
     Returns (form_string, last_five_string).
@@ -125,13 +133,13 @@ def _parse_last10(last10: str | None) -> tuple[str, str]:
         return ("", "")
     # Strip spaces and 'x' separators
     cleaned = last10.strip().replace("x", "").replace(" ", "")
-    # PF uses '0' for unplaced (10th+), keep as-is
+    # '0' = unplaced (10th+), keep as-is
     last_five = cleaned[:5]
     return (cleaned, last_five)
 
 
 def _pf_runner_to_dict(pf_runner: dict, race_id: str, meeting_id: str) -> dict:
-    """Convert PF /form/fields runner to our Runner dict format."""
+    """Convert /form/fields runner to our Runner dict format."""
     jockey = pf_runner.get("jockey") or {}
     trainer = pf_runner.get("trainer") or {}
 
@@ -201,7 +209,7 @@ def _pf_runner_to_dict(pf_runner: dict, race_id: str, meeting_id: str) -> dict:
         "heavy_track_stats": _record_to_json(pf_runner.get("heavyRecord")),
         "jockey_stats": jockey_stats,
         "trainer_stats": trainer_stats,
-        # Fields PF doesn't provide (will be filled by racing.com supplement)
+        # Fields not in primary API (filled by racing.com supplement)
         "current_odds": None,
         "opening_odds": None,
         "place_odds": None,
@@ -209,7 +217,7 @@ def _pf_runner_to_dict(pf_runner: dict, race_id: str, meeting_id: str) -> dict:
 
 
 def _pf_form_entry_to_history(entry: dict) -> dict:
-    """Convert a single PF form entry to our form_history JSON format."""
+    """Convert a single form entry to our form_history JSON format."""
     track = entry.get("track") or {}
     jockey = entry.get("jockey") or {}
 
@@ -279,7 +287,7 @@ def _pf_form_entry_to_history(entry: dict) -> dict:
 
 
 class PuntingFormScraper(BaseScraper):
-    """Scraper for Punting Form API — primary data source for PuntyAI."""
+    """Primary form data API scraper."""
 
     def __init__(self, api_key: str):
         super().__init__()
@@ -297,8 +305,8 @@ class PuntingFormScraper(BaseScraper):
         api_key = await get_api_key(db, "punting_form_api_key")
         if not api_key:
             raise ScraperError(
-                "Punting Form API key not configured. "
-                "Set punting_form_api_key in Settings → Punting Form."
+                "Form data API key not configured. "
+                "Set punting_form_api_key in Settings → Form Data."
             )
         return cls(api_key=api_key)
 
@@ -316,7 +324,7 @@ class PuntingFormScraper(BaseScraper):
             self._client = None
 
     async def _api_get(self, path: str, params: dict) -> dict:
-        """Make authenticated GET request to PF API."""
+        """Make authenticated GET request."""
         params["apiKey"] = self.api_key
         client = await self._get_client()
         url = f"{BASE_URL}{path}"
@@ -326,19 +334,23 @@ class PuntingFormScraper(BaseScraper):
 
         if data.get("statusCode") != 200:
             error = data.get("error") or data.get("errors") or "Unknown API error"
-            raise ScraperError(f"PF API error: {error}")
+            raise ScraperError(f"API error: {error}")
 
         return data.get("payLoad", [])
 
     # ---- Meeting resolution ----
 
     async def get_meetings(self, race_date: date) -> list[dict]:
-        """Get list of meetings for a date. Returns PF meeting objects."""
+        """Get list of meetings for a date. Uses module-level cache."""
         date_str = race_date.strftime("%Y-%m-%d")
-        return await self._api_get("/form/meetingslist", {"meetingDate": date_str})
+        if date_str in _meetings_cache:
+            return _meetings_cache[date_str]
+        result = await self._api_get("/form/meetingslist", {"meetingDate": date_str})
+        _meetings_cache[date_str] = result
+        return result
 
     async def resolve_meeting_id(self, venue: str, race_date: date) -> Optional[int]:
-        """Resolve our venue name to a PF integer meetingId."""
+        """Resolve our venue name to an API integer meetingId."""
         meetings = await self.get_meetings(race_date)
         venue_lower = venue.lower().strip()
 
@@ -361,9 +373,9 @@ class PuntingFormScraper(BaseScraper):
             if track_name in clean_venue or clean_venue in track_name:
                 return int(m["meetingId"])
 
-        logger.warning(f"PF: Could not resolve meetingId for venue={venue!r} on {race_date}")
+        logger.warning(f"Could not resolve meetingId for venue={venue!r} on {race_date}")
         available = [m.get("track", {}).get("name", "?") for m in meetings]
-        logger.info(f"PF: Available meetings: {available}")
+        logger.info(f"Available meetings: {available}")
         return None
 
     # ---- Speed Maps ----
@@ -378,7 +390,7 @@ class PuntingFormScraper(BaseScraper):
     # ---- Ratings ----
 
     async def get_ratings(self, meeting_id: int) -> list[dict]:
-        """Fetch PF ratings for a meeting."""
+        """Fetch ratings for a meeting."""
         return await self._api_get("/Ratings/MeetingRatings", {
             "meetingId": meeting_id,
         })
@@ -444,7 +456,7 @@ class PuntingFormScraper(BaseScraper):
         return None
 
     def _parse_condition(self, cond: dict) -> dict:
-        """Parse a PF conditions entry into our format."""
+        """Parse a conditions entry into our format."""
         tc_num = cond.get("trackConditionNumber", 0)
         tc_label = cond.get("trackCondition", "")
         # Build condition string like "Good 4" from number if label is missing
@@ -462,7 +474,7 @@ class PuntingFormScraper(BaseScraper):
                 except (ValueError, TypeError):
                     pass
 
-        # Parse numeric fields (PF returns strings like "6.40", "Nil", etc.)
+        # Parse numeric fields (API returns strings like "6.40", "Nil", etc.)
         def _to_float(val) -> float | None:
             if val is None:
                 return None
@@ -479,11 +491,11 @@ class PuntingFormScraper(BaseScraper):
             except (ValueError, TypeError):
                 return None
 
-        # Rainfall: PF returns "Nil" or "2.5" or descriptive strings
+        # Rainfall: API returns "Nil" or "2.5" or descriptive strings
         raw_rainfall = cond.get("rainfall")
         rainfall = _to_float(raw_rainfall)
 
-        # Irrigation: PF returns descriptive strings like "6mm last 24hrs..."
+        # Irrigation: API returns descriptive strings like "6mm last 24hrs..."
         # Truthy if any irrigation string is present and not empty/Nil
         raw_irrigation = cond.get("irrigation")
         irrigation = bool(raw_irrigation and str(raw_irrigation).strip().lower() not in ("", "nil", "none", "no", "0"))
@@ -499,7 +511,7 @@ class PuntingFormScraper(BaseScraper):
             "rainfall": rainfall,
             "irrigation": irrigation,
             "going_stick": going_stick,
-            "abandoned": cond.get("abandonded", False),  # PF typo in API
+            "abandoned": cond.get("abandonded", False),  # API has a typo: "abandonded"
         }
 
     # ---- Scratchings (cached) ----
@@ -513,7 +525,7 @@ class PuntingFormScraper(BaseScraper):
         return self._scratchings_cache
 
     async def get_scratchings_for_meeting(self, pf_meeting_id: int) -> list[dict]:
-        """Get scratchings for a specific PF meeting ID."""
+        """Get scratchings for a specific meeting ID."""
         all_scratchings = await self.get_scratchings()
         return [
             {
@@ -531,7 +543,7 @@ class PuntingFormScraper(BaseScraper):
     async def scrape_meeting_data(
         self, venue: str, race_date: date
     ) -> dict[str, Any]:
-        """Scrape full meeting data from PF API.
+        """Scrape full meeting data from API.
 
         Returns dict in same format as RacingComScraper.scrape_meeting():
         {"meeting": {...}, "races": [...], "runners": [...]}
@@ -541,7 +553,7 @@ class PuntingFormScraper(BaseScraper):
         # Resolve PF meeting ID
         pf_meeting_id = await self.resolve_meeting_id(venue, race_date)
         if not pf_meeting_id:
-            logger.warning(f"PF: Meeting not found for {venue} on {race_date}")
+            logger.warning(f"Meeting not found for {venue} on {race_date}")
             return {"meeting": {"id": meeting_id_str, "venue": venue, "date": race_date},
                     "races": [], "runners": []}
 
@@ -607,7 +619,7 @@ class PuntingFormScraper(BaseScraper):
             races.append(race_data)
             runners.extend(race_runners)
 
-        logger.info(f"PF: Scraped {len(races)} races, {len(runners)} runners for {venue}")
+        logger.info(f"Primary: scraped {len(races)} races, {len(runners)} runners for {venue}")
 
         # Fetch form history and attach to runners
         try:
@@ -640,7 +652,7 @@ class PuntingFormScraper(BaseScraper):
                                 r["form_history"] = _json.dumps(history)
                                 break
         except Exception as e:
-            logger.warning(f"PF form history failed (non-fatal): {e}")
+            logger.warning(f"Form history failed (non-fatal): {e}")
 
         # Apply scratchings
         try:
@@ -655,7 +667,84 @@ class PuntingFormScraper(BaseScraper):
                             r["scratched"] = True
                             break
         except Exception as e:
-            logger.warning(f"PF scratchings failed (non-fatal): {e}")
+            logger.warning(f"Scratchings failed (non-fatal): {e}")
+
+        return {"meeting": meeting_dict, "races": races, "runners": runners}
+
+    async def scrape_meeting_fields_only(
+        self, venue: str, race_date: date
+    ) -> dict[str, Any]:
+        """Lightweight scrape — fields only, no form history or scratchings.
+
+        Used by the midnight calendar scrape where we only need race times
+        and basic runner data for scheduling automation. Form history and
+        scratchings are fetched later in the 5am morning scrape.
+
+        Returns dict in same format as scrape_meeting_data().
+        """
+        meeting_id_str = self.generate_meeting_id(venue, race_date)
+
+        pf_meeting_id = await self.resolve_meeting_id(venue, race_date)
+        if not pf_meeting_id:
+            logger.warning(f"Meeting not found for {venue} on {race_date}")
+            return {"meeting": {"id": meeting_id_str, "venue": venue, "date": race_date},
+                    "races": [], "runners": []}
+
+        fields_data = await self.get_fields(pf_meeting_id)
+        track_info = fields_data.get("track") or {}
+
+        meeting_dict = {
+            "id": meeting_id_str,
+            "venue": track_info.get("name") or venue,
+            "date": race_date,
+            "rail_position": fields_data.get("railPosition"),
+            "meet_code": track_info.get("abbrev"),
+        }
+
+        races = []
+        runners = []
+
+        for pf_race in fields_data.get("races", []):
+            race_num = pf_race.get("number", 0)
+            race_id = f"{meeting_id_str}-r{race_num}"
+
+            start_time = _parse_pf_start_time(pf_race.get("startTimeUTC"))
+
+            prize = pf_race.get("prizeMoney")
+            try:
+                prize = int(str(prize).replace(",", "")) if prize else None
+            except (ValueError, TypeError):
+                prize = None
+
+            race_data = {
+                "id": race_id,
+                "meeting_id": meeting_id_str,
+                "race_number": race_num,
+                "name": pf_race.get("name", f"Race {race_num}"),
+                "distance": pf_race.get("distance"),
+                "class_": pf_race.get("raceClass"),
+                "prize_money": prize,
+                "start_time": start_time,
+                "status": "scheduled",
+                "race_type": "Thoroughbred",
+                "age_restriction": pf_race.get("ageRestrictions"),
+                "weight_type": pf_race.get("weightType"),
+                "field_size": None,
+            }
+
+            race_runners = []
+            for pf_runner in pf_race.get("runners", []):
+                runner_dict = _pf_runner_to_dict(pf_runner, race_id, meeting_id_str)
+                race_runners.append(runner_dict)
+
+            race_data["field_size"] = sum(
+                1 for r in race_runners if not r.get("scratched")
+            )
+
+            races.append(race_data)
+            runners.extend(race_runners)
+
+        logger.info(f"Fields-only: {len(races)} races, {len(runners)} runners for {venue}")
 
         return {"meeting": meeting_dict, "races": races, "runners": runners}
 
@@ -688,12 +777,12 @@ class PuntingFormScraper(BaseScraper):
                 "horse_name": runner_name,
                 "saddlecloth": tab_no,
                 "position": position,
-                # PF insight fields (map to existing Runner columns)
+                # Pace insight fields (map to existing Runner columns)
                 "pf_speed_rank": speed if speed > 0 and speed < 25 else None,
                 "pf_settle": float(settle) if settle > 0 and settle < 25 else None,
                 "pf_map_factor": float(map_a2e) if map_a2e else None,
                 "pf_jockey_factor": float(jockey_a2e) if jockey_a2e else None,
-                # Extra PF data (stored as JSON or used in context)
+                # Extra data (stored as JSON or used in context)
                 "pf_ai_score": item.get("pfaiScore"),
                 "pf_ai_price": item.get("pfaiPrice"),
                 "pf_ai_rank": item.get("pfaiRank"),
@@ -714,22 +803,22 @@ class PuntingFormScraper(BaseScraper):
         """
         total = race_count + 1  # +1 for completion
 
-        # Step 1: Resolve PF meetingId from venue name
+        # Step 1: Resolve meetingId from venue name
         yield {
             "step": 0,
             "total": total,
-            "label": "[PF] Resolving meeting ID...",
+            "label": "Resolving meeting...",
             "status": "running",
         }
 
         try:
             meeting_id = await self.resolve_meeting_id(venue, race_date)
         except Exception as e:
-            logger.error(f"PF API error resolving meeting: {e}")
+            logger.error(f"API error resolving meeting: {e}")
             yield {
                 "step": 0,
                 "total": total,
-                "label": f"[PF] API error: {e}",
+                "label": f"API error: {e}",
                 "status": "error",
             }
             return
@@ -738,22 +827,22 @@ class PuntingFormScraper(BaseScraper):
             yield {
                 "step": 0,
                 "total": total,
-                "label": f"[PF] Meeting not found for {venue}",
+                "label": f"Meeting not found for {venue}",
                 "status": "error",
             }
             return
 
-        logger.info(f"PF: Resolved {venue} → meetingId={meeting_id}")
+        logger.info(f"Resolved {venue} → meetingId={meeting_id}")
 
         # Step 2: Fetch speed maps + ratings in parallel
         try:
             speed_map_data = await self.get_speed_maps(meeting_id, race_no=0)
         except Exception as e:
-            logger.error(f"PF speed maps API failed: {e}")
+            logger.error(f"Speed maps API failed: {e}")
             yield {
                 "step": 0,
                 "total": total,
-                "label": f"[PF] Speed maps API failed: {e}",
+                "label": f"Speed maps API failed: {e}",
                 "status": "error",
             }
             return
@@ -769,7 +858,7 @@ class PuntingFormScraper(BaseScraper):
                     ratings_by_race[race_no] = {}
                 ratings_by_race[race_no][tab_no] = r
         except Exception as e:
-            logger.warning(f"PF ratings API failed (non-fatal): {e}")
+            logger.warning(f"Ratings API failed (non-fatal): {e}")
 
         # Step 3: Process each race
         for race_entry in speed_map_data:
@@ -784,7 +873,7 @@ class PuntingFormScraper(BaseScraper):
                 yield {
                     "step": race_no,
                     "total": total,
-                    "label": f"[PF] Race {race_no}: {len(positions)} positions found",
+                    "label": f"Race {race_no}: {len(positions)} positions found",
                     "status": "done",
                     "race_number": race_no,
                     "positions": positions,
@@ -793,20 +882,20 @@ class PuntingFormScraper(BaseScraper):
                 yield {
                     "step": race_no,
                     "total": total,
-                    "label": f"[PF] Race {race_no}: no speed map data",
+                    "label": f"Race {race_no}: no speed map data",
                     "status": "done",
                     "race_number": race_no,
                     "positions": [],
                 }
 
-        # Fill in any missing races (PF might not have data for every race)
+        # Fill in any missing races (API might not have data for every race)
         returned_races = {r.get("raceNo") for r in speed_map_data}
         for race_num in range(1, race_count + 1):
             if race_num not in returned_races:
                 yield {
                     "step": race_num,
                     "total": total,
-                    "label": f"[PF] Race {race_num}: not in API response",
+                    "label": f"Race {race_num}: not in API response",
                     "status": "done",
                     "race_number": race_num,
                     "positions": [],
@@ -817,14 +906,14 @@ class PuntingFormScraper(BaseScraper):
         yield {
             "step": total,
             "total": total,
-            "label": "[PF] Speed maps complete",
+            "label": "Speed maps complete",
             "status": "complete",
         }
 
     # ---- Legacy interface (kept for compatibility) ----
 
     async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
-        """Full meeting scrape via PF API (replaces old empty stub)."""
+        """Full meeting scrape via primary API."""
         return await self.scrape_meeting_data(venue, race_date)
 
     async def scrape_race_insights(
@@ -857,5 +946,5 @@ class PuntingFormScraper(BaseScraper):
         }
 
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
-        """Not implemented for PF (dividends come from TAB)."""
+        """Not implemented (dividends come from TAB)."""
         return []

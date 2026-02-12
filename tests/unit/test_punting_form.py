@@ -326,7 +326,7 @@ class TestScrapeSpeedMaps:
                             events.append(event)
 
         # Should have: resolving, race 1 result, complete
-        assert any("[PF] Resolving" in e.get("label", "") for e in events)
+        assert any("Resolving" in e.get("label", "") for e in events)
         assert any("Race 1" in e.get("label", "") for e in events)
         assert any(e.get("status") == "complete" for e in events)
 

@@ -771,7 +771,7 @@ class ContentGenerator:
             if analysis.get("likely_leaders"):
                 parts.append(f"Leaders: {', '.join(analysis['likely_leaders'])}")
 
-            # Show pace-advantaged/disadvantaged runners from PF data
+            # Show pace-advantaged/disadvantaged runners
             if analysis.get("pace_advantaged"):
                 adv_list = [f"{p['horse']} ({p['map_factor']:.2f})" for p in analysis["pace_advantaged"]]
                 parts.append(f"Pace Advantaged: {', '.join(adv_list)}")
@@ -780,14 +780,14 @@ class ContentGenerator:
                 parts.append(f"Pace Disadvantaged: {', '.join(dis_list)}")
 
             parts.append("")
-            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | Market Move | PF Speed | PF Map |")
-            parts.append("|-----|-------|---------|--------|------|------|-----------|-------------|----------|--------|")
+            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | Market Move | Speed Rank | Map Factor |")
+            parts.append("|-----|-------|---------|--------|------|------|-----------|-------------|------------|------------|")
 
             for runner in race.get("runners", []):
                 if runner.get("scratched"):
                     continue
                 saddlecloth = runner.get("saddlecloth", runner.get('barrier', '-'))
-                # Format PF fields
+                # Format pace fields
                 pf_speed = runner.get("pf_speed_rank") or "-"
                 pf_map = f"{runner['pf_map_factor']:.2f}" if runner.get("pf_map_factor") else "-"
                 # Format market movement

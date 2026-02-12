@@ -342,9 +342,9 @@
                     </div>
                 </div>
 
-                <!-- Punting Form API -->
+                <!-- Form Data API -->
                 <div id="pf-section">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Punting Form</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Form Data</label>
                     <div id="pf-display" class="flex items-center space-x-2">
                         <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
                             {{ api_key_status.punting_form if api_key_status.punting_form else 'Not configured' }}
@@ -356,7 +356,7 @@
                                 class="text-punty-coral hover:underline text-sm">Configure</button>
                     </div>
                     <div id="pf-edit" class="hidden space-y-2 mt-2">
-                        <input type="text" id="pf_api_key" placeholder="Punting Form API Key"
+                        <input type="text" id="pf_api_key" placeholder="Form Data API Key"
                                class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
                             <button onclick="saveApiKeys('punting_form', {punting_form_api_key: document.getElementById('pf_api_key').value})"

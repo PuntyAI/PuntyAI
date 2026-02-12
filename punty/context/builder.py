@@ -227,7 +227,7 @@ class ContextBuilder:
                 if include_speed_maps:
                     runner_data["speed_map_position"] = runner.speed_map_position
                     runner_data["speed_value"] = runner.speed_value
-                    # Punting Form insights
+                    # Pace analysis insights
                     runner_data["pf_speed_rank"] = runner.pf_speed_rank  # 1-25, lower = faster early speed
                     runner_data["pf_settle"] = runner.pf_settle  # Historical avg settling position
                     runner_data["pf_map_factor"] = runner.pf_map_factor  # >1.0 = pace advantage
@@ -429,7 +429,7 @@ class ContextBuilder:
         analysis["likely_leaders"] = [r.horse_name for r in leaders]
         analysis["backmarkers"] = [r.horse_name for r in backmarkers]
 
-        # Punting Form map factor analysis
+        # Map factor analysis
         for runner in runners:
             if runner.pf_map_factor:
                 if runner.pf_map_factor >= 1.1:
@@ -443,7 +443,7 @@ class ContextBuilder:
                         "map_factor": runner.pf_map_factor,
                     })
 
-        # Top early speed runners by PF speed rank
+        # Top early speed runners by speed rank
         runners_with_speed = [r for r in runners if r.pf_speed_rank]
         if runners_with_speed:
             sorted_by_speed = sorted(runners_with_speed, key=lambda r: r.pf_speed_rank)[:5]

@@ -139,7 +139,7 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN bet_stake FLOAT",
             "ALTER TABLE meetings ADD COLUMN meeting_type VARCHAR(20)",
             "ALTER TABLE runners ADD COLUMN form_history TEXT",
-            # Punting Form insights
+            # Pace analysis insights
             "ALTER TABLE runners ADD COLUMN pf_speed_rank INTEGER",
             "ALTER TABLE runners ADD COLUMN pf_settle FLOAT",
             "ALTER TABLE runners ADD COLUMN pf_map_factor FLOAT",
@@ -180,7 +180,7 @@ async def init_db() -> None:
             "ALTER TABLE meetings ADD COLUMN track_condition_locked BOOLEAN DEFAULT 0",
             # Punty's Pick flag (best-bet recommendation per race)
             "ALTER TABLE picks ADD COLUMN is_puntys_pick BOOLEAN DEFAULT 0",
-            # PF conditions data
+            # Conditions data
             "ALTER TABLE meetings ADD COLUMN rainfall REAL",
             "ALTER TABLE meetings ADD COLUMN irrigation BOOLEAN",
             "ALTER TABLE meetings ADD COLUMN going_stick REAL",

@@ -37,7 +37,7 @@ class Meeting(Base):
     weather_wind_dir: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     rail_bias_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # PF conditions data
+    # Conditions data
     rainfall: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     irrigation: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     going_stick: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -175,7 +175,7 @@ class Runner(Base):
     career_record: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     speed_map_position: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
-    # Punting Form insights
+    # Pace analysis insights
     pf_speed_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1-25, lower = faster early speed
     pf_settle: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Historical avg settling position
     pf_map_factor: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # >1.0 = pace advantage, <1.0 = disadvantage

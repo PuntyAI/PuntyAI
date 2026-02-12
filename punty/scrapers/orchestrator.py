@@ -51,7 +51,7 @@ RUNNER_FIELDS = [
     "gear", "gear_changes", "stewards_comment", "comment_long", "comment_short",
     "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes",
     "odds_betfair", "odds_flucs", "trainer_location", "form_history",
-    # Punting Form insights
+    # Pace analysis insights
     "pf_speed_rank", "pf_settle", "pf_map_factor", "pf_jockey_factor",
 ]
 
@@ -120,10 +120,93 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
     return results
 
 
-async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
+async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scraper=None) -> dict:
+    """Lightweight scrape: fields + conditions only. No form history, scratchings, or racing.com.
+
+    Used by midnight calendar scrape where we only need race times and basic
+    runner data for scheduling automation. The 5am morning scrape does the full dump.
+
+    Args:
+        pf_scraper: Optional shared PuntingFormScraper instance (avoids re-creating per meeting).
+    """
+    from punty.scheduler.activity_log import log_scrape_start, log_scrape_complete, log_scrape_error
+
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        raise ValueError(f"Meeting not found: {meeting_id}")
+
+    venue = meeting.venue
+    race_date = meeting.date
+    errors = []
+    owns_pf = pf_scraper is None
+
+    log_scrape_start(venue)
+
+    try:
+        if pf_scraper is None:
+            from punty.scrapers.punting_form import PuntingFormScraper
+            pf_scraper = await PuntingFormScraper.from_settings(db)
+
+        data = await pf_scraper.scrape_meeting_fields_only(venue, race_date)
+        await _upsert_meeting_data(db, meeting, data)
+    except Exception as e:
+        logger.error(f"Fields-only scrape failed for {venue}: {e}")
+        errors.append(f"fields_only: {e}")
+        # Fallback to full racing.com scrape
+        try:
+            from punty.scrapers.racing_com import RacingComScraper
+            scraper = RacingComScraper()
+            try:
+                data = await scraper.scrape_meeting(venue, race_date)
+                await _upsert_meeting_data(db, meeting, data)
+            finally:
+                await scraper.close()
+        except Exception as e2:
+            logger.error(f"racing.com fallback also failed: {e2}")
+            errors.append(f"racing.com_fallback: {e2}")
+
+    # Conditions (uses session-level cache — one API call for all meetings)
+    if not meeting.track_condition_locked:
+        try:
+            cond = await pf_scraper.get_conditions_for_venue(venue)
+            if cond:
+                _apply_pf_conditions(meeting, cond)
+        except Exception as e:
+            logger.error(f"Conditions failed for {venue}: {e}")
+            errors.append(f"conditions: {e}")
+
+    if owns_pf and pf_scraper:
+        await pf_scraper.close()
+
+    # Classify empty meetings as trials
+    pf_failed = any("fields_only" in e for e in errors)
+    if not pf_failed and (not meeting.meeting_type or meeting.meeting_type == "race"):
+        race_count = await db.execute(
+            select(Race).where(Race.meeting_id == meeting_id).limit(1)
+        )
+        if not race_count.scalar_one_or_none():
+            meeting.meeting_type = _classify_meeting_type(venue)
+            if meeting.meeting_type == "race":
+                meeting.meeting_type = "trial"
+                logger.info(f"No races found for {venue} — classified as trial")
+
+    await db.commit()
+
+    if errors:
+        log_scrape_error(venue, "; ".join(errors))
+    else:
+        log_scrape_complete(venue)
+
+    return {"meeting_id": meeting_id, "errors": errors}
+
+
+async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None) -> dict:
     """Run all scrapers for a selected meeting and merge data into DB.
 
-    Pipeline: PF fields → PF conditions → racing.com (odds+comments supplement) → TAB odds
+    Pipeline: fields → conditions → racing.com (odds+comments supplement) → TAB odds
+
+    Args:
+        pf_scraper: Optional shared PuntingFormScraper instance (avoids re-creating per meeting).
     """
     from punty.scrapers.playwright_base import scrape_lock
     from punty.scheduler.activity_log import log_scrape_start, log_scrape_complete, log_scrape_error
@@ -135,22 +218,23 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
     venue = meeting.venue
     race_date = meeting.date
     errors = []
+    owns_pf = pf_scraper is None
 
     log_scrape_start(venue)
 
     # Acquire scrape lock to prevent concurrent Playwright operations
     async with scrape_lock(venue):
-        # Step 1: PF API — primary runner/race data
-        pf_scraper = None
+        # Step 1: Primary API — runner/race data
         try:
-            from punty.scrapers.punting_form import PuntingFormScraper
-            pf_scraper = await PuntingFormScraper.from_settings(db)
+            if pf_scraper is None:
+                from punty.scrapers.punting_form import PuntingFormScraper
+                pf_scraper = await PuntingFormScraper.from_settings(db)
             data = await pf_scraper.scrape_meeting_data(venue, race_date)
             await _upsert_meeting_data(db, meeting, data)
         except Exception as e:
-            logger.error(f"PF primary scrape failed: {e}")
-            errors.append(f"punting_form: {e}")
-            # Fallback to racing.com if PF fails entirely
+            logger.error(f"Primary scrape failed: {e}")
+            errors.append(f"primary: {e}")
+            # Fallback to racing.com if primary fails entirely
             try:
                 from punty.scrapers.racing_com import RacingComScraper
                 scraper = RacingComScraper()
@@ -163,7 +247,7 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
                 logger.error(f"racing.com fallback also failed: {e2}")
                 errors.append(f"racing.com_fallback: {e2}")
 
-        # Step 2: PF conditions — replaces track_conditions.py
+        # Step 2: Conditions — track/weather data
         if not meeting.track_condition_locked:
             try:
                 if pf_scraper is None:
@@ -173,8 +257,8 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
                 if cond:
                     _apply_pf_conditions(meeting, cond)
             except Exception as e:
-                logger.error(f"PF conditions failed: {e}")
-                errors.append(f"pf_conditions: {e}")
+                logger.error(f"Conditions failed: {e}")
+                errors.append(f"conditions: {e}")
 
         # Step 3: racing.com — supplementary odds + comments only
         try:
@@ -189,12 +273,12 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
             logger.error(f"racing.com supplement failed: {e}")
             errors.append(f"racing.com_supplement: {e}")
 
-        # Close PF scraper
-        if pf_scraper:
+        # Close PF scraper only if we own it
+        if owns_pf and pf_scraper:
             await pf_scraper.close()
 
         # If no races were found, classify as trial/jumpout
-        pf_failed = any("punting_form" in e for e in errors)
+        pf_failed = any("primary" in e for e in errors)
         if not pf_failed and (not meeting.meeting_type or meeting.meeting_type == "race"):
             race_count = await db.execute(
                 select(Race).where(Race.meeting_id == meeting_id).limit(1)
@@ -263,8 +347,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     try:
         pf_scraper = None
 
-        # Step 1: PF API — primary runner/race data
-        yield {"step": 0, "total": total_steps, "label": "Scraping PF API fields data...", "status": "running"}
+        # Step 1: Primary API — runner/race data
+        yield {"step": 0, "total": total_steps, "label": "Scraping race fields data...", "status": "running"}
         try:
             from punty.scrapers.punting_form import PuntingFormScraper
             pf_scraper = await PuntingFormScraper.from_settings(db)
@@ -273,11 +357,11 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             runner_count = len(data.get("runners", []))
             await _upsert_meeting_data(db, meeting, data)
             yield {"step": 1, "total": total_steps,
-                   "label": f"PF complete — {race_count} races, {runner_count} runners", "status": "done"}
+                   "label": f"Fields complete — {race_count} races, {runner_count} runners", "status": "done"}
         except Exception as e:
-            logger.error(f"PF primary scrape failed: {e}")
-            errors.append(f"punting_form: {e}")
-            yield {"step": 1, "total": total_steps, "label": f"PF failed: {e}, trying racing.com fallback...", "status": "error"}
+            logger.error(f"Primary scrape failed: {e}")
+            errors.append(f"primary: {e}")
+            yield {"step": 1, "total": total_steps, "label": f"Fields failed: {e}, trying fallback...", "status": "error"}
             # Fallback to racing.com for primary data
             try:
                 from punty.scrapers.racing_com import RacingComScraper
@@ -295,8 +379,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 logger.error(f"racing.com fallback also failed: {e2}")
                 errors.append(f"racing.com_fallback: {e2}")
 
-        # Step 2: PF conditions + weather — replaces track_conditions.py
-        yield {"step": 1, "total": total_steps, "label": "Fetching PF conditions/weather...", "status": "running"}
+        # Step 2: Conditions + weather
+        yield {"step": 1, "total": total_steps, "label": "Fetching conditions/weather...", "status": "running"}
         try:
             if meeting.track_condition_locked:
                 logger.info(f"Track condition locked for {venue}: {meeting.track_condition!r} (manual override)")
@@ -312,12 +396,12 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                            "label": f"Conditions: {meeting.track_condition or 'N/A'} | Rain: {cond.get('rainfall', 'N/A')}mm",
                            "status": "done"}
                 elif meeting.track_condition:
-                    yield {"step": 2, "total": total_steps, "label": f"Conditions: {meeting.track_condition} (from PF fields)", "status": "done"}
+                    yield {"step": 2, "total": total_steps, "label": f"Conditions: {meeting.track_condition} (from fields)", "status": "done"}
                 else:
                     yield {"step": 2, "total": total_steps, "label": "Conditions: not available", "status": "done"}
         except Exception as e:
-            logger.error(f"PF conditions failed: {e}")
-            errors.append(f"pf_conditions: {e}")
+            logger.error(f"Conditions failed: {e}")
+            errors.append(f"conditions: {e}")
             yield {"step": 2, "total": total_steps, "label": f"Conditions failed: {e}", "status": "error"}
 
         # Step 3: racing.com — supplementary odds + comments
@@ -352,7 +436,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             errors.append(f"tab: {e}")
             yield {"step": 4, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
 
-        # Close PF scraper
+        # Close scraper
         if pf_scraper:
             await pf_scraper.close()
 
@@ -373,8 +457,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
 async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGenerator[dict, None]:
     """Scrape speed maps for all races in a meeting, yielding progress events.
 
-    Uses Punting Form as PRIMARY source (has speed rank, settle, map factor, jockey factor).
-    Falls back to racing.com if Punting Form fails or has no data.
+    Uses primary API as source (has speed rank, settle, map factor, jockey factor).
+    Falls back to racing.com if primary source fails or has no data.
     """
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
@@ -404,9 +488,9 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
     # Track how many positions we found
     total_positions_found = 0
 
-    # Helper to update runners with positions and PF insights
+    # Helper to update runners with positions and pace insights
     async def update_runner_positions(event: dict, include_pf_insights: bool = False) -> int:
-        """Update runners with speed map positions and optionally PF insights. Returns count of positions set."""
+        """Update runners with speed map positions and optionally pace insights. Returns count of positions set."""
         count = 0
         if event.get("positions"):
             race_num = event["race_number"]
@@ -428,7 +512,7 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
                     runner.speed_map_position = norm_pos
                     count += 1
 
-                    # Store Punting Form insights if available
+                    # Store pace analysis insights if available
                     if include_pf_insights:
                         if pos.get("pf_speed_rank"):
                             try:
@@ -452,7 +536,7 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
                                 pass
         return count
 
-    # PRIMARY: Try Punting Form first (has richer data)
+    # PRIMARY: Try primary API first (has richer data)
     pf_failed = False
     try:
         from punty.scrapers.punting_form import PuntingFormScraper
@@ -464,14 +548,14 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
             yield {k: v for k, v in event.items() if k != "positions"}
 
     except Exception as e:
-        logger.warning(f"Punting Form speed map scrape failed: {e}")
+        logger.warning(f"Speed map scrape failed: {e}")
         pf_failed = True
-        yield {"step": 0, "total": race_count + 1, "label": f"Punting Form unavailable: {e}", "status": "running"}
+        yield {"step": 0, "total": race_count + 1, "label": f"Speed map source unavailable: {e}", "status": "running"}
 
-    # FALLBACK: Use racing.com if Punting Form failed or found nothing
+    # FALLBACK: Use racing.com if primary source failed or found nothing
     if pf_failed or total_positions_found == 0:
         if not pf_failed:
-            logger.info(f"No Punting Form data for {meeting.venue} (0/{race_count} races had positions), trying racing.com fallback...")
+            logger.info(f"No speed map data for {meeting.venue} (0/{race_count} races had positions), trying racing.com fallback...")
             yield {"step": 0, "total": race_count + 1, "label": "Trying racing.com fallback...", "status": "running"}
 
         try:
@@ -639,10 +723,10 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
 
 
 def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
-    """Apply PF conditions data to a Meeting object."""
+    """Apply conditions data to a Meeting object."""
     new_cond = cond.get("condition")
     if new_cond and _is_more_specific(new_cond, meeting.track_condition):
-        logger.info(f"PF condition for {meeting.venue}: {meeting.track_condition!r} → {new_cond!r}")
+        logger.info(f"Condition for {meeting.venue}: {meeting.track_condition!r} → {new_cond!r}")
         meeting.track_condition = new_cond
     meeting.rail_position = cond.get("rail") or meeting.rail_position
     meeting.weather = cond.get("weather") or meeting.weather
@@ -660,7 +744,7 @@ def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
         meeting.going_stick = cond["going_stick"]
 
 
-# Fields from racing.com that supplement PF data (odds, comments only)
+# Fields from racing.com that supplement primary data (odds, comments only)
 _SUPPLEMENT_FIELDS = [
     "current_odds", "opening_odds", "place_odds",
     "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair",
@@ -669,9 +753,9 @@ _SUPPLEMENT_FIELDS = [
 
 
 async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: dict) -> None:
-    """Merge racing.com odds and comments into existing runners (PF-sourced).
+    """Merge racing.com odds and comments into existing runners.
 
-    Only updates odds and comment fields — does NOT overwrite PF's primary runner data.
+    Only updates odds and comment fields — does NOT overwrite primary runner data.
     """
     for runner_data in data.get("runners", []):
         horse_name = runner_data.get("horse_name", "")
