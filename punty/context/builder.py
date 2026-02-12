@@ -58,6 +58,9 @@ class ContextBuilder:
         if not meeting:
             return {}
 
+        # Fetch live WillyWeather data for hourly forecasts and observations
+        ww_data = await self._fetch_willyweather(meeting)
+
         context = {
             "meeting": {
                 "id": meeting.id,
@@ -71,10 +74,15 @@ class ContextBuilder:
                 "weather_temp": meeting.weather_temp,
                 "weather_wind_speed": meeting.weather_wind_speed,
                 "weather_wind_dir": meeting.weather_wind_dir,
+                "weather_humidity": meeting.weather_humidity,
+                "wind_impact": self._get_wind_impact(meeting),
                 "rail_bias_comment": meeting.rail_bias_comment,
                 "rainfall": meeting.rainfall,
                 "irrigation": meeting.irrigation,
                 "going_stick": meeting.going_stick,
+                "hourly_wind": ww_data.get("hourly_wind") if ww_data else None,
+                "hourly_rain_prob": ww_data.get("hourly_rain_prob") if ww_data else None,
+                "observation": ww_data.get("observation") if ww_data else None,
             },
             "races": [],
             "summary": {
@@ -122,6 +130,39 @@ class ContextBuilder:
                             break
 
         return context
+
+    @staticmethod
+    def _get_wind_impact(meeting) -> str | None:
+        """Get wind impact analysis for the meeting venue."""
+        if not meeting.weather_wind_speed or not meeting.weather_wind_dir:
+            return None
+        try:
+            from punty.scrapers.willyweather import analyse_wind_impact
+            result = analyse_wind_impact(
+                meeting.venue, meeting.weather_wind_speed, meeting.weather_wind_dir
+            )
+            return result["description"] if result else None
+        except Exception:
+            return None
+
+    async def _fetch_willyweather(self, meeting) -> dict | None:
+        """Fetch live WillyWeather data for hourly forecasts.
+
+        Returns the full weather dict with hourly_wind, hourly_rain_prob,
+        and observation data — or None if unavailable. Uses cached data
+        if the scraper has already fetched for this venue today.
+        """
+        try:
+            from punty.scrapers.willyweather import WillyWeatherScraper
+            ww = await WillyWeatherScraper.from_settings(self.db)
+            if not ww:
+                return None
+            try:
+                return await ww.get_weather(meeting.venue, meeting.date)
+            finally:
+                await ww.close()
+        except Exception:
+            return None
 
     def _build_race_context(
         self,
@@ -544,6 +585,7 @@ class ContextBuilder:
             "penetrometer": race.meeting.penetrometer,
             "weather_condition": race.meeting.weather_condition,
             "weather_temp": race.meeting.weather_temp,
+            "weather_humidity": race.meeting.weather_humidity,
             "rail_bias_comment": race.meeting.rail_bias_comment,
             "rainfall": race.meeting.rainfall,
             "irrigation": race.meeting.irrigation,

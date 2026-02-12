@@ -1038,13 +1038,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // For race sections, move exotic title with exotic paragraph
         if (sec.isRace) {
             // Find and move exotic title (.exotic-title) together with exotic paragraph
-            var allEls = body.querySelectorAll('p, span.exotic-title');
+            var allEls = body.querySelectorAll('p, .exotic-title');
             var exoticTitle = null;
             var exoticLine = null;
             for (var et = 0; et < allEls.length; et++) {
                 var el = allEls[et];
                 if (el.classList && el.classList.contains('exotic-title')) {
-                    exoticTitle = el.closest('p') || el;
+                    exoticTitle = el;
                 }
                 if (el.tagName === 'P' && /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*:/i.test(el.textContent.trim())) {
                     exoticLine = el;
@@ -1204,35 +1204,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (!hasSelections && !hasExotics && !hasSequences) return;
 
-    var currentRace = null;
-    var allEls = tipsContent.querySelectorAll('h2, h3, h4, p, li, strong');
-    allEls.forEach(function(el) {
-        var text = el.textContent || '';
+    // After accordion restructuring, headings are inside .race-accordion-header (not h2/h3).
+    // Iterate per-accordion so we know which race each element belongs to.
+    var accordions = tipsContent.querySelectorAll('.race-accordion');
+    accordions.forEach(function(acc) {
+        // Extract race number from the accordion header (R1, R2, etc.)
+        var pill = acc.querySelector('.race-pill');
+        if (!pill) return;
+        var raceNum = parseInt((pill.textContent || '').replace(/\D/g, ''));
+        if (!raceNum) return;
 
-        var raceMatch = text.match(/Race\s+(\d+)/i);
-        if (raceMatch && (/^H[2-4]$/.test(el.tagName) || (el.tagName === 'STRONG' && text.match(/^Race\s+\d+/)))) {
-            currentRace = parseInt(raceMatch[1]);
-            return;
-        }
+        var bodyEls = acc.querySelectorAll('p, li, strong, .puntys-pick-block, .seq-variant-card, .exotic-title');
+        bodyEls.forEach(function(el) {
+            var text = el.textContent || '';
 
-        if (hasSelections && currentRace && winners[String(currentRace)]) {
-            if (!(el.tagName === 'P' && el.querySelector('li'))) {
-                var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
-                if (scMatch) {
-                    var sc = parseInt(scMatch[1]);
-                    if (winners[String(currentRace)].indexOf(sc) !== -1) {
-                        addBadge(el, 'WINNER');
+            // Selection winners
+            if (hasSelections && winners[String(raceNum)]) {
+                if (!(el.tagName === 'P' && el.querySelector('li'))) {
+                    var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
+                    if (scMatch) {
+                        var sc = parseInt(scMatch[1]);
+                        if (winners[String(raceNum)].indexOf(sc) !== -1) {
+                            addBadge(el, 'WINNER');
+                        }
                     }
                 }
             }
-        }
 
-        if (hasExotics && currentRace && winExotics[String(currentRace)]) {
-            var exoticMatch = text.match(/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i);
-            if (exoticMatch) addBadge(el, 'HIT');
-        }
+            // Exotic winners
+            if (hasExotics && winExotics[String(raceNum)]) {
+                var exoticMatch = text.match(/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i);
+                if (exoticMatch) addBadge(el, 'HIT');
+            }
+        });
+    });
 
-        if (hasSequences) {
+    // Sequence winners (in their own sections, not inside race accordions)
+    if (hasSequences) {
+        var seqEls = tipsContent.querySelectorAll('.seq-variant-card, p, li, strong');
+        seqEls.forEach(function(el) {
+            var text = el.textContent || '';
             var variantMatch = text.match(/^(Skinny|Balanced|Wide)\s*\(/i);
             if (variantMatch) {
                 var variant = variantMatch[1].toLowerCase();
@@ -1240,14 +1251,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (winSequences[si].variant === variant) { addBadge(el, 'HIT'); break; }
                 }
             }
-        }
-
-        if (hasSequences && /^Multi\b/i.test(text)) {
-            for (var j = 0; j < winSequences.length; j++) {
-                if (winSequences[j].type === 'big3_multi') { addBadge(el, 'HIT'); break; }
+            if (/^Multi\b/i.test(text)) {
+                for (var j = 0; j < winSequences.length; j++) {
+                    if (winSequences[j].type === 'big3_multi') { addBadge(el, 'HIT'); break; }
+                }
             }
-        }
-    });
+        });
+    }
 
     // --- Section Nav: smooth scroll + scroll spy ---
     (function() {

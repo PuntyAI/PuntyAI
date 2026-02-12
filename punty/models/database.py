@@ -184,6 +184,7 @@ async def init_db() -> None:
             "ALTER TABLE meetings ADD COLUMN rainfall REAL",
             "ALTER TABLE meetings ADD COLUMN irrigation BOOLEAN",
             "ALTER TABLE meetings ADD COLUMN going_stick REAL",
+            "ALTER TABLE meetings ADD COLUMN weather_humidity INTEGER",
         ]:
             try:
                 await conn.execute(_text(col))

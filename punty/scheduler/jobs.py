@@ -1052,6 +1052,40 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Conditions refresh failed for {venue}: {e}")
             results["errors"].append(f"conditions_refresh: {str(e)}")
 
+        # Step 2c: WillyWeather enhanced weather (supplements PF data)
+        try:
+            from punty.scrapers.willyweather import WillyWeatherScraper
+            ww = await WillyWeatherScraper.from_settings(db)
+            if ww:
+                try:
+                    weather_data = await ww.get_weather(venue)
+                    if weather_data:
+                        if weather_data.get("temp") is not None:
+                            meeting.weather_temp = weather_data["temp"]
+                        if weather_data.get("wind_speed") is not None:
+                            meeting.weather_wind_speed = weather_data["wind_speed"]
+                        if weather_data.get("wind_direction"):
+                            meeting.weather_wind_dir = weather_data["wind_direction"]
+                        if weather_data.get("condition"):
+                            meeting.weather_condition = weather_data["condition"]
+                        if weather_data.get("humidity") is not None:
+                            meeting.weather_humidity = weather_data["humidity"]
+                        if weather_data.get("rainfall_chance") is not None:
+                            meeting.rainfall = f"{weather_data['rainfall_chance']}% chance, {weather_data['rainfall_amount']}mm"
+                        await db.commit()
+                        logger.info(
+                            f"WillyWeather updated: {venue} — "
+                            f"{weather_data.get('condition')}, {weather_data.get('temp')}°C, "
+                            f"wind {weather_data.get('wind_speed')}km/h {weather_data.get('wind_direction')}, "
+                            f"humidity {weather_data.get('humidity')}%"
+                        )
+                        results["steps"].append("willyweather: success")
+                finally:
+                    await ww.close()
+        except Exception as e:
+            logger.warning(f"WillyWeather refresh failed for {venue}: {e}")
+            results["errors"].append(f"willyweather: {str(e)}")
+
         # Step 3: Check jockey/gear changes via racing.com (Playwright)
         try:
             logger.info(f"Step 3: Checking jockey/gear changes for {venue}...")

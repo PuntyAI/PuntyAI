@@ -405,6 +405,7 @@ PROVIDER_KEYS = {
     "telegram": ["telegram_bot_token", "telegram_owner_id"],
     "anthropic": ["anthropic_api_key"],
     "punting_form": ["punting_form_api_key"],
+    "willyweather": ["willyweather_api_key"],
 }
 
 

@@ -56,8 +56,13 @@ class FacebookFormatter:
     @classmethod
     def _clean_markdown(cls, content: str) -> str:
         """Clean markdown for Facebook plain text with Unicode bold headings."""
-        # Remove the title line (content already has its own heading)
-        content = re.sub(r'^\*PUNTY EARLY MAIL[^*]*\*\s*\n*', '', content, flags=re.IGNORECASE)
+        # Convert title line to Unicode bold heading
+        content = re.sub(
+            r'^\*PUNTY EARLY MAIL([^*]*)\*',
+            lambda m: cls.to_bold(f"PUNTY EARLY MAIL{m.group(1)}"),
+            content,
+            flags=re.IGNORECASE,
+        )
         # Convert markdown headers to Unicode bold (handle optional "2) " numbering)
         content = re.sub(
             r"^#{1,3}\s+(?:\d+\)\s*)?(.+)$",

@@ -95,6 +95,7 @@ TRACKS = {
     "Flemington": {
         "state": "VIC", "tier": "metro",
         "circumference": 2312, "straight": 450, "direction": "anti-clockwise",
+        "straight_bearing": 200,  # runners finish heading SSW
         "surface": "turf",
         "notes": "Unique 1200m straight course. Long straight favours closers in "
                  "staying races. Wide track. Downhill into straight.",
@@ -102,6 +103,7 @@ TRACKS = {
     "Caulfield": {
         "state": "VIC", "tier": "metro",
         "circumference": 2080, "straight": 367, "direction": "anti-clockwise",
+        "straight_bearing": 220,  # runners finish heading SW
         "surface": "turf",
         "notes": "Heath course (shorter circumference 1,446m also used). Tight turns "
                  "can disadvantage wide runners. Inside barrier advantage.",
@@ -109,6 +111,7 @@ TRACKS = {
     "Moonee Valley": {
         "state": "VIC", "tier": "metro",
         "circumference": 1805, "straight": 173, "direction": "anti-clockwise",
+        "straight_bearing": 180,  # runners finish heading S
         "surface": "turf",
         "notes": "Shortest straight in Australia. Huge on-pace bias — leaders/on-pace "
                  "runners dominate. Barrier draw critical. Must be near the lead.",
@@ -116,6 +119,7 @@ TRACKS = {
     "Sandown": {
         "state": "VIC", "tier": "metro",
         "circumference": 2097, "straight": 491, "direction": "anti-clockwise",
+        "straight_bearing": 250,  # runners finish heading WSW
         "surface": "turf",
         "notes": "Longest straight of Victorian metro tracks. Suits closers in "
                  "staying races. Hillside course also used (1502m circ, 403m straight).",
@@ -125,6 +129,7 @@ TRACKS = {
     "Pakenham": {
         "state": "VIC", "tier": "provincial",
         "circumference": 1400, "straight": 300, "direction": "anti-clockwise",
+        "straight_bearing": 200,  # runners finish heading SSW
         "surface": "synthetic",
         "notes": "Racing Club synthetic surface. Smaller track — barrier and on-pace "
                  "running helps. Also has turf track.",
@@ -139,6 +144,7 @@ TRACKS = {
     "Ballarat": {
         "state": "VIC", "tier": "provincial",
         "circumference": 1900, "straight": 450, "direction": "anti-clockwise",
+        "straight_bearing": 250,  # runners finish heading WSW
         "surface": "turf",
         "notes": "Long straight for a provincial track. Hosts most grass meetings "
                  "in regional Victoria (32+ per year). Also has synthetic.",
@@ -221,6 +227,7 @@ TRACKS = {
     "Randwick": {
         "state": "NSW", "tier": "metro",
         "circumference": 2224, "straight": 410, "direction": "anti-clockwise",
+        "straight_bearing": 350,  # runners finish heading NNW
         "surface": "turf",
         "notes": "Kensington track also used (1,489m circ, 306m straight). "
                  "Big galloping track. Suits horses that can sustain a run.",
@@ -228,6 +235,7 @@ TRACKS = {
     "Rosehill": {
         "state": "NSW", "tier": "metro",
         "circumference": 2048, "straight": 408, "direction": "anti-clockwise",
+        "straight_bearing": 200,  # runners finish heading SSW
         "surface": "turf",
         "notes": "Tight-turning track. Can get heavy in winter. Inside draw helps.",
     },
@@ -247,6 +255,7 @@ TRACKS = {
     "Newcastle": {
         "state": "NSW", "tier": "provincial",
         "circumference": 2036, "straight": 355, "direction": "anti-clockwise",
+        "straight_bearing": 120,  # runners finish heading ESE
         "surface": "turf",
         "notes": "Broadmeadow racecourse. Good provincial track.",
     },
@@ -303,12 +312,14 @@ TRACKS = {
     "Doomben": {
         "state": "QLD", "tier": "metro",
         "circumference": 1715, "straight": 341, "direction": "anti-clockwise",
+        "straight_bearing": 100,  # runners finish heading E
         "surface": "turf",
         "notes": "Smaller metro track. On-pace bias common. Tight turns.",
     },
     "Eagle Farm": {
         "state": "QLD", "tier": "metro",
         "circumference": 2027, "straight": 434, "direction": "anti-clockwise",
+        "straight_bearing": 160,  # runners finish heading SSE
         "surface": "turf",
         "notes": "Long straight suits closers. Major carnival track. Has had "
                  "surface issues historically.",
@@ -318,6 +329,7 @@ TRACKS = {
     "Gold Coast": {
         "state": "QLD", "tier": "provincial",
         "circumference": 2060, "straight": 410, "direction": "anti-clockwise",
+        "straight_bearing": 160,  # runners finish heading SSE
         "surface": "turf",
         "notes": "Good-sized track. Fair racing surface.",
     },
@@ -357,6 +369,7 @@ TRACKS = {
     "Morphettville": {
         "state": "SA", "tier": "metro",
         "circumference": 2339, "straight": 334, "direction": "anti-clockwise",
+        "straight_bearing": 350,  # runners finish heading NNW
         "surface": "turf",
         "notes": "Main SA metro track. Also has Parks course (2100m circ). "
                  "Large circumference but shorter straight than expected.",
@@ -378,6 +391,7 @@ TRACKS = {
     "Ascot": {
         "state": "WA", "tier": "metro",
         "circumference": 2022, "straight": 294, "direction": "anti-clockwise",
+        "straight_bearing": 180,  # runners finish heading S
         "surface": "turf",
         "notes": "Summer metro track. Short straight — on-pace advantage. "
                  "Inside barrier critical.",
@@ -411,6 +425,7 @@ TRACKS = {
     "Hobart": {
         "state": "TAS", "tier": "metro",
         "circumference": 1990, "straight": 350, "direction": "anti-clockwise",
+        "straight_bearing": 180,  # runners finish heading S
         "surface": "turf",
         "notes": "Elwick racecourse. Main Tasmanian track.",
     },

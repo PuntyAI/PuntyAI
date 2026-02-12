@@ -35,6 +35,7 @@ class Meeting(Base):
     weather_temp: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     weather_wind_speed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     weather_wind_dir: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    weather_humidity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rail_bias_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Conditions data
@@ -70,6 +71,7 @@ class Meeting(Base):
             "weather_temp": self.weather_temp,
             "weather_wind_speed": self.weather_wind_speed,
             "weather_wind_dir": self.weather_wind_dir,
+            "weather_humidity": self.weather_humidity,
             "rail_bias_comment": self.rail_bias_comment,
             "rainfall": self.rainfall,
             "irrigation": self.irrigation,

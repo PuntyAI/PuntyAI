@@ -14,7 +14,6 @@ GREETINGS = [
     "Rightio Ratbags",
     "Rightio Galah Gang",
     "Rightio Drongos",
-    "Rightio You Feral Lot",
     "Rightio Ticket Munchers",
     "Rightio Cooked Units",
     "Rightio Form Freaks",
@@ -155,10 +154,10 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         '', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
-    # Style exotic section header as inline heading
+    # Style exotic section header as inline heading (no trailing blank line gap)
     content = re.sub(
-        r'^\*{1,2}(Degenerate\s+Exotic\s+(?:of\s+the\s+Race)?)\*{1,2}\s*$',
-        r'<span class="exotic-title">\1</span>',
+        r'^\*{1,2}(Degenerate\s+Exotic\s+(?:of\s+the\s+Race)?)\*{1,2}\s*\n?',
+        r'<div class="exotic-title">\1</div>',
         content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
@@ -275,7 +274,7 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         if not p:
             continue
         # Skip if already has block-level HTML
-        if p.startswith('<h') or p.startswith('<ul') or p.startswith('<ol') or p.startswith('<hr'):
+        if p.startswith(('<h', '<ul', '<ol', '<hr', '<div')):
             formatted_paragraphs.append(p)
         else:
             # Convert single newlines to <br> within paragraph
@@ -285,10 +284,12 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     content = '\n'.join(formatted_paragraphs)
 
     # Highlight "Punty's Pick:" lines with special styling
+    # Match various apostrophe forms and optional colon
     content = re.sub(
-        r'(<strong>Punty\'?s Pick:</strong>)',
+        r"(<strong>Punty['\u2019]?s\s+Pick:?</strong>)",
         r'<span class="puntys-pick">\1</span>',
-        content
+        content,
+        flags=re.IGNORECASE,
     )
 
     return content

@@ -110,8 +110,7 @@ class TwitterFormatter:
     @classmethod
     def _clean_markdown(cls, content: str) -> str:
         """Convert markdown formatting to Unicode equivalents for X."""
-        # Remove the PUNTY EARLY MAIL title line (content has its own heading)
-        content = re.sub(r'^\*PUNTY EARLY MAIL[^*]*\*\s*\n*', '', content, flags=re.IGNORECASE)
+        # Keep the PUNTY EARLY MAIL title — it gets converted to Unicode bold below
         # Remove literal "### 1) HEADER" lines (AI template artifact)
         content = re.sub(r'^#{1,3}\s+\d+\)\s*HEADER\s*$', '', content, flags=re.MULTILINE)
         # Remove headers and any leading section numbers like "### 2) MEET SNAPSHOT"

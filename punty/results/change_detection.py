@@ -34,6 +34,8 @@ class ChangeAlert:
         """Unique key to prevent duplicate alerts."""
         if self.change_type == "track_condition":
             return f"track:{self.old_value}->{self.new_value}"
+        if self.change_type == "weather":
+            return f"weather:{self.message[:60]}"
         return f"{self.change_type}:R{self.race_number}:{self.horse_name}"
 
 

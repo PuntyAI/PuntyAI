@@ -39,6 +39,7 @@ class ResultsMonitor:
         self.alerted_changes: dict[str, set[str]] = {}  # {meeting_id: set of dedup keys}
         self.last_change_check: dict[str, datetime] = {}  # rate limit per meeting
         self.last_jockey_check: dict[str, datetime] = {}  # Playwright rate limit
+        self.last_weather_check: dict[str, datetime] = {}  # WillyWeather rate limit
         self.task: Optional[asyncio.Task] = None
         self.last_check: Optional[datetime] = None
         self.poll_interval = POLL_MIN  # display value
@@ -192,6 +193,7 @@ class ResultsMonitor:
                 self.alerted_changes.clear()
                 self.last_change_check.clear()
                 self.last_jockey_check.clear()
+                self.last_weather_check.clear()
                 self._last_reset_date = today
                 logger.info(f"Daily reset: cleared {old_races} processed races, {old_wrapups} wrapups")
 
@@ -459,6 +461,12 @@ class ResultsMonitor:
             await self._check_pre_race_changes(db, meeting, races, statuses)
         except Exception as e:
             logger.warning(f"Pre-race change check failed for {meeting.venue}: {e}", exc_info=True)
+
+        # Weather refresh (every 30 min per meeting)
+        try:
+            await self._check_weather_changes(db, meeting)
+        except Exception as e:
+            logger.warning(f"Weather check failed for {meeting.venue}: {e}", exc_info=True)
 
         for race_num, status in statuses.items():
             if status in ("Paying", "Closed") and race_num not in self.processed_races[meeting_id]:
@@ -1201,6 +1209,125 @@ class ResultsMonitor:
             except Exception as e:
                 logger.warning(f"Failed to post {alert.change_type} alert: {e}")
 
+    async def _check_weather_changes(self, db: AsyncSession, meeting):
+        """Check for significant weather changes via WillyWeather (every 30 min)."""
+        meeting_id = meeting.id
+        now = melb_now()
+
+        # Rate limit: 30 min per meeting
+        last = self.last_weather_check.get(meeting_id)
+        if last and (now - last).total_seconds() < 1800:
+            return
+
+        from punty.scrapers.willyweather import WillyWeatherScraper, analyse_wind_impact
+
+        ww = await WillyWeatherScraper.from_settings(db)
+        if not ww:
+            return
+
+        try:
+            weather = await ww.get_weather(meeting.venue)
+        finally:
+            await ww.close()
+
+        self.last_weather_check[meeting_id] = now
+
+        if not weather:
+            return
+
+        changes = []
+
+        # Check wind shift
+        new_wind = weather.get("wind_speed")
+        old_wind = meeting.weather_wind_speed
+        new_dir = weather.get("wind_direction")
+        old_dir = meeting.weather_wind_dir
+        if new_wind is not None and old_wind is not None:
+            wind_diff = abs(new_wind - old_wind)
+            if wind_diff >= 10:
+                changes.append(f"Wind shifted to {new_wind}km/h {new_dir or ''} (was {old_wind}km/h {old_dir or ''})")
+            elif new_dir and old_dir and new_dir != old_dir and new_wind >= 15:
+                changes.append(f"Wind direction changed: {old_dir} → {new_dir} at {new_wind}km/h")
+
+        # Check temp change
+        new_temp = weather.get("temp")
+        old_temp = meeting.weather_temp
+        if new_temp is not None and old_temp is not None:
+            temp_diff = abs(new_temp - old_temp)
+            if temp_diff >= 3:
+                changes.append(f"Temperature {'up' if new_temp > old_temp else 'down'} to {new_temp}°C (was {old_temp}°C)")
+
+        # Check humidity change (significant for track conditions)
+        new_humidity = weather.get("humidity")
+        old_humidity = getattr(meeting, "weather_humidity", None)
+        if new_humidity is not None and old_humidity is not None:
+            humidity_diff = abs(new_humidity - old_humidity)
+            if humidity_diff >= 15:
+                changes.append(f"Humidity {'up' if new_humidity > old_humidity else 'down'} to {new_humidity}% (was {old_humidity}%)")
+
+        # Check rain starting
+        obs = weather.get("observation", {})
+        if obs:
+            rain_since_9am = obs.get("rain_since_9am")
+            if rain_since_9am and rain_since_9am > 0:
+                old_rainfall = meeting.rainfall
+                was_dry = not old_rainfall or "0%" in str(old_rainfall) or old_rainfall == 0
+                if was_dry:
+                    changes.append(f"Rain recorded: {rain_since_9am}mm since 9am")
+
+        if not changes:
+            # Still update weather fields silently
+            self._apply_weather_to_meeting(meeting, weather)
+            await db.commit()
+            return
+
+        # Build alert message
+        wind_analysis = analyse_wind_impact(
+            meeting.venue,
+            new_wind or 0,
+            new_dir or "",
+        )
+        parts = [f"Weather update at {meeting.venue}:"]
+        parts.extend(changes)
+        if wind_analysis and wind_analysis["strength"] != "negligible":
+            parts.append(wind_analysis["description"])
+        message = "\n".join(parts)
+
+        # Update meeting fields
+        self._apply_weather_to_meeting(meeting, weather)
+        await db.commit()
+
+        # Post via change alert system
+        from punty.results.change_detection import ChangeAlert
+        alert = ChangeAlert(
+            change_type="weather",
+            meeting_id=meeting_id,
+            message=message,
+        )
+        dedup_key = alert.dedup_key
+        if meeting_id not in self.alerted_changes:
+            self.alerted_changes[meeting_id] = set()
+        if dedup_key not in self.alerted_changes[meeting_id]:
+            self.alerted_changes[meeting_id].add(dedup_key)
+            await self._post_change_alert(db, meeting, alert)
+            logger.info(f"Weather alert posted for {meeting.venue}: {'; '.join(changes)}")
+
+    @staticmethod
+    def _apply_weather_to_meeting(meeting, weather: dict):
+        """Update meeting weather fields from WillyWeather data."""
+        if weather.get("temp") is not None:
+            meeting.weather_temp = weather["temp"]
+        if weather.get("wind_speed") is not None:
+            meeting.weather_wind_speed = weather["wind_speed"]
+        if weather.get("wind_direction"):
+            meeting.weather_wind_dir = weather["wind_direction"]
+        if weather.get("condition"):
+            meeting.weather_condition = weather["condition"]
+        if weather.get("humidity") is not None:
+            meeting.weather_humidity = weather["humidity"]
+        if weather.get("rainfall_chance") is not None:
+            meeting.rainfall = f"{weather['rainfall_chance']}% chance, {weather['rainfall_amount']}mm"
+
     async def _post_change_alert(self, db: AsyncSession, meeting, alert):
         """Post a change detection alert to Twitter and Facebook."""
         from punty.models.content import Content
@@ -1249,6 +1376,7 @@ class ResultsMonitor:
             "track_condition": "track_alert",
             "jockey_change": "jockey_alert",
             "gear_change": "gear_alert",
+            "weather": "weather_alert",
         }
         update = LiveUpdate(
             meeting_id=meeting.id,

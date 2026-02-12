@@ -387,6 +387,32 @@
                     </div>
                 </div>
 
+                <!-- WillyWeather API -->
+                <div id="ww-section">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">WillyWeather (Weather)</label>
+                    <div id="ww-display" class="flex items-center space-x-2">
+                        <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
+                            {{ api_key_status.willyweather if api_key_status.willyweather else 'Not configured' }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-700' if api_key_status.willyweather else 'bg-red-100 text-red-700' }}">
+                            {{ 'Active' if api_key_status.willyweather else 'Missing' }}
+                        </span>
+                        <button onclick="document.getElementById('ww-edit').classList.remove('hidden'); this.parentElement.classList.add('hidden')"
+                                class="text-punty-coral hover:underline text-sm">Configure</button>
+                    </div>
+                    <div id="ww-edit" class="hidden space-y-2 mt-2">
+                        <input type="text" id="ww_api_key" placeholder="WillyWeather API Key"
+                               class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        <p class="text-xs text-gray-400">Tracks 10 locations: Flemington, Pakenham, Ballarat, Randwick, Newcastle, Eagle Farm, Gold Coast, Morphettville, Ascot, Hobart. Other venues use search fallback.</p>
+                        <div class="flex space-x-2">
+                            <button onclick="saveApiKeys('willyweather', {willyweather_api_key: document.getElementById('ww_api_key').value})"
+                                    class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save</button>
+                            <button onclick="document.getElementById('ww-edit').classList.add('hidden'); document.getElementById('ww-display').classList.remove('hidden')"
+                                    class="text-gray-500 hover:underline text-sm">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 

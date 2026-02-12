@@ -750,11 +750,64 @@ class ContentGenerator:
         races = context.get("races", [])
         summary = context.get("summary", {})
 
+        # Build detailed weather line
+        weather_parts = []
+        if meeting.get("weather_condition"):
+            weather_parts.append(meeting["weather_condition"])
+        elif meeting.get("weather"):
+            weather_parts.append(str(meeting["weather"]))
+        if meeting.get("weather_temp") is not None:
+            weather_parts.append(f"{meeting['weather_temp']}°C")
+        if meeting.get("weather_humidity") is not None:
+            weather_parts.append(f"humidity {meeting['weather_humidity']}%")
+        if meeting.get("weather_wind_speed") is not None:
+            wind_str = f"wind {meeting['weather_wind_speed']}km/h"
+            if meeting.get("weather_wind_dir"):
+                wind_str += f" {meeting['weather_wind_dir']}"
+            weather_parts.append(wind_str)
+        weather_line = ", ".join(weather_parts) if weather_parts else "TBC"
+
+        # Rainfall info
+        rainfall_line = ""
+        if meeting.get("rainfall"):
+            rainfall_line = f"\nRainfall: {meeting['rainfall']}"
+
+        # Wind impact analysis
+        wind_impact_line = ""
+        if meeting.get("wind_impact"):
+            wind_impact_line = f"\nWind impact: {meeting['wind_impact']}"
+
+        # Observational data (live station readings)
+        obs_line = ""
+        obs = meeting.get("observation")
+        if obs:
+            obs_parts = []
+            if obs.get("rain_since_9am") and obs["rain_since_9am"] > 0:
+                obs_parts.append(f"{obs['rain_since_9am']}mm rain since 9am")
+            if obs.get("rain_last_hour") and obs["rain_last_hour"] > 0:
+                obs_parts.append(f"{obs['rain_last_hour']}mm last hour")
+            if obs.get("wind_gust"):
+                obs_parts.append(f"gusts {obs['wind_gust']}km/h")
+            if obs.get("feels_like") is not None and meeting.get("weather_temp") is not None:
+                if abs(obs["feels_like"] - meeting["weather_temp"]) >= 2:
+                    obs_parts.append(f"feels like {obs['feels_like']}°C")
+            if obs_parts:
+                obs_line = f"\nLive conditions: {', '.join(obs_parts)}"
+
+        # Hourly rain probability summary (race-time rain risk)
+        rain_prob_line = ""
+        hourly_rain = meeting.get("hourly_rain_prob")
+        if hourly_rain:
+            high_prob = [e for e in hourly_rain if e.get("probability", 0) >= 40]
+            if high_prob:
+                times = [e.get("time", "")[-8:-3] for e in high_prob]  # HH:MM
+                rain_prob_line = f"\nRain risk: {high_prob[0]['probability']}%+ chance at {', '.join(times)}"
+
         parts = [
             f"## {meeting.get('venue', 'Unknown')} - {meeting.get('date', 'Unknown')}",
             f"Track: {meeting.get('track_condition', 'TBC')}",
             f"Rail: {meeting.get('rail_position', 'TBC')}",
-            f"Weather: {meeting.get('weather', 'TBC')}",
+            f"Weather: {weather_line}{rainfall_line}{wind_impact_line}{obs_line}{rain_prob_line}",
             "",
             f"**{summary.get('total_races', 0)} races, {summary.get('total_runners', 0)} runners, {summary.get('scratchings', 0)} scratchings**",
             "",
