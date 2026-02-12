@@ -221,6 +221,29 @@ async def init_db() -> None:
                 if "duplicate column" not in err_msg and "already exists" not in err_msg:
                     logger.warning(f"DB migration warning: {col[:50]}... - {e}")
 
+        # --- Make content.meeting_id nullable (SQLite table rebuild) ---
+        try:
+            row = await conn.execute(_text(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='content'"
+            ))
+            create_sql = row.scalar()
+            if create_sql and '"meeting_id" VARCHAR(64) NOT NULL' in create_sql:
+                logger.info("Migrating content table: making meeting_id nullable")
+                new_sql = create_sql.replace(
+                    '"meeting_id" VARCHAR(64) NOT NULL',
+                    '"meeting_id" VARCHAR(64)',
+                )
+                # SQLite table rebuild: rename -> recreate -> copy -> drop old
+                await conn.execute(_text("ALTER TABLE content RENAME TO _content_old"))
+                await conn.execute(_text(new_sql))
+                await conn.execute(_text(
+                    "INSERT INTO content SELECT * FROM _content_old"
+                ))
+                await conn.execute(_text("DROP TABLE _content_old"))
+                logger.info("Content table migration complete: meeting_id now nullable")
+        except Exception as e:
+            logger.warning(f"Content meeting_id nullable migration: {e}")
+
         # Create indexes on existing tables (IF NOT EXISTS handled by SQLite)
         for idx in [
             "CREATE INDEX IF NOT EXISTS ix_meetings_date ON meetings(date)",
