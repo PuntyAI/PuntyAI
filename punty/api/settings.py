@@ -291,6 +291,7 @@ PROVIDER_KEYS = {
     "facebook": ["facebook_page_id", "facebook_page_access_token", "facebook_app_id", "facebook_app_secret"],
     "telegram": ["telegram_bot_token", "telegram_owner_id"],
     "anthropic": ["anthropic_api_key"],
+    "punting_form": ["punting_form_api_key"],
 }
 
 
