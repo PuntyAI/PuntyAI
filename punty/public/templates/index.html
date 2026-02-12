@@ -46,58 +46,73 @@
 </section>
 
 <!-- Today's Best Bet -->
+<style>
+    .bb-card {
+        display: block; position: relative; overflow: hidden;
+        border-radius: 16px; text-decoration: none; color: inherit;
+        background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0a1628 100%);
+        border: 2px solid rgba(255,0,128,0.35);
+        transition: transform 0.2s, border-color 0.2s;
+    }
+    .bb-card:hover { transform: translateY(-2px); border-color: rgba(255,0,128,0.6); }
+    .bb-glow-l { position: absolute; top: -80px; left: -80px; width: 240px; height: 240px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(255,0,128,0.3), transparent 70%); pointer-events: none; }
+    .bb-glow-r { position: absolute; bottom: -80px; right: -80px; width: 240px; height: 240px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(0,212,255,0.2), transparent 70%); pointer-events: none; }
+    .bb-inner { position: relative; padding: 24px 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .bb-left { display: flex; align-items: center; gap: 16px; }
+    .bb-trophy { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--gradient-sunset); box-shadow: 0 0 24px rgba(255,0,128,0.4); flex-shrink: 0; }
+    .bb-label { font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: var(--magenta); }
+    .bb-horse { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 28px; line-height: 1.1; color: #fff; }
+    .bb-meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .bb-meta-sep { margin: 0 6px; color: rgba(255,255,255,0.15); }
+    .bb-right { display: flex; align-items: center; gap: 16px; }
+    .bb-stat { text-align: center; padding: 0 12px; }
+    .bb-stat-label { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+    .bb-stat-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 24px; color: #fff; }
+    .bb-arrow { font-size: 22px; color: var(--magenta); }
+    .bb-returned .bb-stat-val { color: #4ade80; }
+    .bb-roi-box { text-align: center; padding: 12px 20px; border-radius: 14px; background: linear-gradient(135deg, rgba(74,222,128,0.18), rgba(74,222,128,0.05)); border: 1px solid rgba(74,222,128,0.35); box-shadow: 0 0 20px rgba(74,222,128,0.12); }
+    .bb-roi-label { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #4ade80; }
+    .bb-roi-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 30px; color: #4ade80; line-height: 1.1; }
+    @media (max-width: 768px) {
+        .bb-inner { padding: 20px; gap: 16px; }
+        .bb-horse { font-size: 22px; }
+        .bb-stat-val { font-size: 20px; }
+        .bb-roi-val { font-size: 24px; }
+        .bb-right { width: 100%; justify-content: space-between; }
+    }
+</style>
 <section id="best-bet-section" {% if not stats.best_bet %}style="display: none;"{% endif %}>
-    <div class="max-w-6xl mx-auto px-4 sm:px-8 pt-10 pb-2">
-        <a id="bb-venue-link" href="{% if stats.best_bet %}/tips/{{ stats.best_bet.meeting_id }}{% else %}#{% endif %}" class="best-bet-card block relative rounded-2xl overflow-hidden transition-transform hover:-translate-y-1" style="background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0a1628 100%); border: 2px solid rgba(255,0,128,0.3);">
-            <!-- Animated glow effects -->
-            <div class="absolute -top-20 -left-20 w-60 h-60 rounded-full blur-3xl" style="background: radial-gradient(circle, rgba(255,0,128,0.25), transparent 70%);"></div>
-            <div class="absolute -bottom-20 -right-20 w-60 h-60 rounded-full blur-3xl" style="background: radial-gradient(circle, rgba(0,212,255,0.15), transparent 70%);"></div>
-
-            <div class="relative p-5 md:p-6">
-                <div class="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
-                    <!-- Left: Trophy + Name -->
-                    <div class="flex items-center gap-4 flex-shrink-0">
-                        <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-3xl" style="background: var(--gradient-sunset); box-shadow: 0 0 20px rgba(255,0,128,0.4);">
-                            <span aria-hidden="true">&#x1F3C6;</span>
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-display font-bold uppercase tracking-[0.2em]" style="color: var(--magenta);">Today's Best Bet</div>
-                            <div class="font-heading font-bold text-2xl md:text-3xl leading-tight" id="bb-name">
-                                {% if stats.best_bet %}{{ stats.best_bet.display_name }}{% endif %}
-                            </div>
-                            <div class="text-sm mt-0.5" style="color: var(--text-muted);">
-                                <span id="bb-venue">{% if stats.best_bet %}{{ stats.best_bet.venue }}{% if stats.best_bet.race_number %} R{{ stats.best_bet.race_number }}{% endif %}{% endif %}</span>
-                                <span class="mx-1.5" style="color: var(--border-subtle);">|</span>
-                                <span id="bb-type">{% if stats.best_bet %}{{ stats.best_bet.bet_type }}{% endif %}</span>
-                                <span id="bb-odds-inline">{% if stats.best_bet and stats.best_bet.odds %}<span class="mx-1.5" style="color: var(--border-subtle);">|</span>${{ "%.2f"|format(stats.best_bet.odds) }}{% endif %}</span>
-                            </div>
+    <div style="max-width: 72rem; margin: 0 auto; padding: 40px 16px 8px;">
+        <a id="bb-venue-link" href="{% if stats.best_bet %}/tips/{{ stats.best_bet.meeting_id }}{% else %}#{% endif %}" class="bb-card">
+            <div class="bb-glow-l"></div>
+            <div class="bb-glow-r"></div>
+            <div class="bb-inner">
+                <div class="bb-left">
+                    <div class="bb-trophy">&#x1F3C6;</div>
+                    <div>
+                        <div class="bb-label">Today's Best Bet</div>
+                        <div class="bb-horse" id="bb-name">{% if stats.best_bet %}{{ stats.best_bet.display_name }}{% endif %}</div>
+                        <div class="bb-meta">
+                            <span id="bb-venue">{% if stats.best_bet %}{{ stats.best_bet.venue }}{% if stats.best_bet.race_number %} R{{ stats.best_bet.race_number }}{% endif %}{% endif %}</span>
+                            <span class="bb-meta-sep">|</span>
+                            <span id="bb-type">{% if stats.best_bet %}{{ stats.best_bet.bet_type }}{% endif %}</span>
+                            <span id="bb-odds-inline">{% if stats.best_bet and stats.best_bet.odds %}<span class="bb-meta-sep">|</span>${{ "%.2f"|format(stats.best_bet.odds) }}{% endif %}</span>
                         </div>
                     </div>
-
-                    <!-- Right: Financials -->
-                    <div class="flex items-center gap-3 md:gap-5 md:ml-auto">
-                        <div class="text-center px-3">
-                            <div class="text-[10px] font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Staked</div>
-                            <div class="font-display font-bold text-xl md:text-2xl" id="bb-stake">
-                                {% if stats.best_bet %}${{ "%.0f"|format(stats.best_bet.stake) }}{% endif %}
-                            </div>
-                        </div>
-
-                        <div class="text-xl" style="color: var(--magenta);">&#x2192;</div>
-
-                        <div class="text-center px-3">
-                            <div class="text-[10px] font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Returned</div>
-                            <div class="font-display font-bold text-xl md:text-2xl" style="color: #4ade80;" id="bb-returned">
-                                {% if stats.best_bet %}${{ "%.0f"|format(stats.best_bet.returned) }}{% endif %}
-                            </div>
-                        </div>
-
-                        <div class="text-center px-5 py-3 rounded-2xl" style="background: linear-gradient(135deg, rgba(74,222,128,0.15), rgba(74,222,128,0.05)); border: 1px solid rgba(74,222,128,0.3); box-shadow: 0 0 15px rgba(74,222,128,0.1);">
-                            <div class="text-[10px] font-heading font-semibold uppercase tracking-wider" style="color: #4ade80;">ROI</div>
-                            <div class="font-display font-bold text-2xl md:text-3xl" style="color: #4ade80;" id="bb-roi">
-                                {% if stats.best_bet %}+{{ stats.best_bet.roi }}%{% endif %}
-                            </div>
-                        </div>
+                </div>
+                <div class="bb-right">
+                    <div class="bb-stat">
+                        <div class="bb-stat-label">Staked</div>
+                        <div class="bb-stat-val" id="bb-stake">{% if stats.best_bet %}${{ "%.0f"|format(stats.best_bet.stake) }}{% endif %}</div>
+                    </div>
+                    <div class="bb-arrow">&#x2192;</div>
+                    <div class="bb-stat bb-returned">
+                        <div class="bb-stat-label">Returned</div>
+                        <div class="bb-stat-val" id="bb-returned">{% if stats.best_bet %}${{ "%.0f"|format(stats.best_bet.returned) }}{% endif %}</div>
+                    </div>
+                    <div class="bb-roi-box">
+                        <div class="bb-roi-label">ROI</div>
+                        <div class="bb-roi-val" id="bb-roi">{% if stats.best_bet %}+{{ stats.best_bet.roi }}%{% endif %}</div>
                     </div>
                 </div>
             </div>

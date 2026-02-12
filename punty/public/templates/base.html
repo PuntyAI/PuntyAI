@@ -40,7 +40,7 @@
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <!-- Alpine.js (for dropdowns) -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -128,7 +128,7 @@
         .nav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
         .nav-link.active { color: var(--magenta); }
 
-        /* Toolbox dropdown */
+        /* Toolbox dropdown — pure CSS hover, no JS framework */
         .toolbox-wrap { position: relative; }
         .toolbox-btn {
             font-family: 'Rajdhani', sans-serif;
@@ -148,7 +148,14 @@
             background: var(--bg-card); border: 1px solid var(--border-subtle);
             border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
             z-index: 100; margin-top: 0.25rem;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.15s, visibility 0.15s;
         }
+        .toolbox-wrap:hover .toolbox-menu,
+        .toolbox-wrap.open .toolbox-menu {
+            opacity: 1; visibility: visible;
+        }
+        .toolbox-wrap:hover .toolbox-chevron { transform: rotate(180deg); }
         .toolbox-menu a {
             display: block;
             padding: 0.6rem 1.25rem;
@@ -378,12 +385,12 @@
                 <a href="/" class="nav-link">Home</a>
                 <a href="/tips" class="nav-link">Tips</a>
                 <a href="/stats" class="nav-link">Stats</a>
-                <div class="toolbox-wrap" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
-                    <button class="toolbox-btn" @click="open = !open">
+                <div class="toolbox-wrap">
+                    <button class="toolbox-btn" aria-expanded="false" aria-haspopup="true">
                         Toolbox
-                        <svg class="w-3.5 h-3.5 toolbox-chevron" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        <svg class="w-3.5 h-3.5 toolbox-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
-                    <div class="toolbox-menu" x-show="open" x-transition.opacity.duration.150ms @click.away="open = false" style="display: none;">
+                    <div class="toolbox-menu">
                         <a href="/how-it-works">How It Works</a>
                         <a href="/blog">Blog</a>
                         <a href="/glossary">Glossary</a>
@@ -419,12 +426,13 @@
             <a href="/" class="block py-3 nav-link">Home</a>
             <a href="/tips" class="block py-3 nav-link">Tips</a>
             <a href="/stats" class="block py-3 nav-link">Stats</a>
-            <div x-data="{ open: false }">
-                <button @click="open = !open" class="block py-3 nav-link w-full text-left flex items-center justify-between" style="background: none; border: none; cursor: pointer;">
+            <div>
+                <button id="mobile-toolbox-btn" class="block py-3 nav-link w-full text-left flex items-center justify-between" style="background: none; border: none; cursor: pointer;"
+                        onclick="var items=document.getElementById('mobile-toolbox-items');var chevron=this.querySelector('.toolbox-chevron');if(items.style.display==='none'){items.style.display='block';chevron.style.transform='rotate(180deg)'}else{items.style.display='none';chevron.style.transform=''}">
                     Toolbox
-                    <svg class="w-3.5 h-3.5 toolbox-chevron" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    <svg class="w-3.5 h-3.5 toolbox-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
-                <div class="mobile-toolbox-items" x-show="open" x-transition style="display: none;">
+                <div id="mobile-toolbox-items" class="mobile-toolbox-items" style="display: none;">
                     <a href="/how-it-works" class="block py-2 nav-link">How It Works</a>
                     <a href="/blog" class="block py-2 nav-link">Blog</a>
                     <a href="/glossary" class="block py-2 nav-link">Glossary</a>
