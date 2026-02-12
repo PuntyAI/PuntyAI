@@ -221,11 +221,14 @@ class SchedulerManager:
 
         - 00:05 AM: Calendar scrape (find meetings, auto-select, initial data load)
         - 05:00 AM: Morning scrape (full re-scrape + speed maps for all meetings)
+        - Thursday 22:00: Weekly pattern refresh (patterns, awards, ledger, news)
+        - Friday 08:00: Weekly blog generation
 
         Early mail generation is handled by meeting_pre_race_job
         which runs 2 hours before each meeting's first race.
         """
         from punty.scheduler.jobs import daily_calendar_scrape, daily_morning_scrape
+        from punty.scheduler.jobs import weekly_pattern_refresh, weekly_blog_job
         from punty.config import MELB_TZ
 
         logger.info("Scheduling daily calendar scrape job for 00:05 Melbourne time")
@@ -250,8 +253,32 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
+        # Weekly pattern refresh — Thursday 10pm
+        self.add_job(
+            "weekly-pattern-refresh",
+            weekly_pattern_refresh,
+            trigger_type="cron",
+            day_of_week="thu",
+            hour=22,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
+        # Weekly blog generation — Friday 8am
+        self.add_job(
+            "weekly-blog",
+            weekly_blog_job,
+            trigger_type="cron",
+            day_of_week="fri",
+            hour=8,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
         logger.info("Daily calendar scrape job configured")
         logger.info("Daily morning scrape job configured (05:00)")
+        logger.info("Weekly pattern refresh job configured (Thu 22:00)")
+        logger.info("Weekly blog job configured (Fri 08:00)")
 
     async def setup_legacy_morning_job(self) -> None:
         """Legacy method - kept for backwards compatibility.

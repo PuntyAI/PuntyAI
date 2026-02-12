@@ -168,7 +168,7 @@ async def detect_track_condition_change(
     old = pre_snapshot.track_condition
     new = meeting.track_condition
 
-    if not old or not new or _normalise_condition(old) == _normalise_condition(new):
+    if not old or not new or _base_condition(old) == _base_condition(new):
         return None
 
     msg = compose_track_alert(
@@ -196,6 +196,20 @@ def _normalise_condition(cond: str) -> str:
         return ""
     import re
     return re.sub(r"\s+", " ", cond.strip().lower().replace("(", "").replace(")", ""))
+
+
+def _base_condition(cond: str) -> str:
+    """Extract base condition word, ignoring numeric rating.
+
+    Only alerts on genuine condition changes (Good→Soft), not rating fluctuations
+    (Good 4→Good) caused by different sources reporting different detail levels.
+
+    Examples: 'Good 4' -> 'good', 'Soft 7' -> 'soft', 'Heavy 8' -> 'heavy'
+    """
+    if not cond:
+        return ""
+    import re
+    return re.sub(r"[\s\d()]+", " ", cond.strip().lower()).strip()
 
 
 # ── Jockey / gear detection ───────────────────────────────────────────────

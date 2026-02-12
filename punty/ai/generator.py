@@ -1127,6 +1127,151 @@ class ContentGenerator:
 
         return "\n".join(parts)
 
+    async def generate_weekly_blog(
+        self,
+        save: bool = True,
+    ) -> dict[str, Any]:
+        """Generate weekly blog (non-streaming wrapper)."""
+        result = {}
+        async for event in self.generate_weekly_blog_stream(save):
+            if event.get("status") == "complete":
+                result = event.get("result", {})
+            elif event.get("status") == "error":
+                raise ValueError(event.get("label", "Blog generation failed"))
+        return result
+
+    async def generate_weekly_blog_stream(
+        self,
+        save: bool = True,
+    ):
+        """Generate weekly blog 'From the Horse's Mouth' with SSE progress events."""
+        from punty.context.blog_builder import build_blog_context
+        from punty.formatters.blog import extract_blog_title, generate_blog_slug
+        from punty.config import melb_today
+        from datetime import timedelta
+
+        total_steps = 5
+        step = 0
+
+        def evt(label, status="running", **extra):
+            nonlocal step
+            if status == "running":
+                step += 1
+            return {"step": step, "total": total_steps, "label": label, "status": status, **extra}
+
+        try:
+            await self._ensure_openai_key()
+            yield evt("Building blog context (patterns, awards, ledger, nominations, news)...")
+
+            blog_context = await build_blog_context(self.db)
+            if not blog_context or len(blog_context) < 50:
+                raise ValueError("Insufficient data for blog generation — run weekly pattern refresh first")
+            yield evt(f"Blog context built ({len(blog_context)} chars)", "done")
+
+            yield evt("Loading personality & blog prompt...")
+            personality = load_prompt("personality")
+            blog_prompt = load_prompt("weekly_blog")
+
+            today = melb_today()
+            week_start = today - timedelta(days=7)
+            yield evt("Prompts loaded", "done")
+
+            yield evt("Generating weekly blog with AI (this may take a moment)...")
+            system_prompt = f"""{personality}
+
+You are writing your weekly blog column. Be entertaining, data-driven, and brutally honest.
+"""
+            raw_content = None
+            for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+                try:
+                    raw_content = await asyncio.wait_for(
+                        self.ai_client.generate_with_context(
+                            system_prompt=system_prompt,
+                            context=blog_context,
+                            instruction=blog_prompt + f"\n\nGenerate the blog for the week of {week_start.isoformat()} to {today.isoformat()}",
+                            temperature=0.9,
+                        ),
+                        timeout=600.0,
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    logger.error(f"Blog generation timed out (attempt {attempt + 1})")
+                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                        yield evt(f"Generation timed out — retrying (attempt {attempt + 2})...", "warning")
+                    else:
+                        raise Exception(f"Blog generation timed out after {MAX_RATE_LIMIT_RETRIES + 1} attempts")
+                except RateLimitError:
+                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                        logger.warning(f"Rate limit hit for blog, pausing {RATE_LIMIT_PAUSE}s")
+                        yield evt(f"Rate limit reached — pausing {RATE_LIMIT_PAUSE}s...", "warning")
+                        await asyncio.sleep(RATE_LIMIT_PAUSE)
+                        yield evt(f"Retrying AI generation (attempt {attempt + 2})...")
+                    else:
+                        raise
+
+            if raw_content is None:
+                raise Exception("AI generation failed — no content returned")
+
+            yield evt("Blog generated", "done")
+
+            result = {
+                "raw_content": raw_content,
+                "meeting_id": None,
+                "content_type": ContentType.WEEKLY_BLOG.value,
+            }
+
+            if save:
+                yield evt("Saving blog content...")
+                content = await self._save_blog_content(raw_content, week_start)
+                result["content_id"] = content.id
+                result["status"] = content.status
+                result["blog_slug"] = content.blog_slug
+                yield evt("Blog saved", "done")
+            else:
+                step += 1
+                yield evt("Save skipped", "done")
+
+            yield {"step": total_steps, "total": total_steps, "label": "Weekly blog generated", "status": "complete", "result": result}
+
+        except Exception as e:
+            logger.error(f"Weekly blog generation failed: {e}")
+            yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
+
+    async def _save_blog_content(self, raw_content: str, week_start) -> "Content":
+        """Save blog content with blog-specific fields."""
+        from punty.formatters.blog import extract_blog_title, generate_blog_slug, format_blog_html
+
+        blog_title = extract_blog_title(raw_content)
+        blog_slug = generate_blog_slug(week_start)
+
+        # Check for existing blog with same slug — supersede it
+        existing = await self.db.execute(
+            select(Content).where(
+                Content.blog_slug == blog_slug,
+                Content.status.in_(["pending_review", "approved", "sent"]),
+            )
+        )
+        for old in existing.scalars().all():
+            old.status = ContentStatus.SUPERSEDED.value
+
+        content = Content(
+            id=str(uuid.uuid4()),
+            meeting_id=None,
+            content_type=ContentType.WEEKLY_BLOG.value,
+            status=ContentStatus.PENDING_REVIEW.value,
+            requires_review=True,
+            raw_content=raw_content,
+            blog_title=blog_title,
+            blog_slug=blog_slug,
+            blog_week_start=week_start,
+        )
+
+        self.db.add(content)
+        await self.db.commit()
+
+        logger.info(f"Saved blog {content.id} — '{blog_title}' ({blog_slug})")
+        return content
+
     async def _save_content(
         self,
         result: dict,

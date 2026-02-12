@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}{{ blog.title }} | PuntyAI Blog{% endblock %}
+
+{% block og_title %}{{ blog.title }}{% endblock %}
+{% block og_description %}{{ blog.excerpt }}{% endblock %}
+{% block og_url %}https://punty.ai/blog/{{ blog.slug }}{% endblock %}
+
+{% block twitter_title %}{{ blog.title }}{% endblock %}
+{% block twitter_description %}{{ blog.excerpt }}{% endblock %}
+
+{% block head %}
+<style>
+    .blog-article {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    @media (min-width: 640px) {
+        .blog-article { padding: 3rem; }
+    }
+
+    .blog-article h1.blog-h1 {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 800;
+        font-size: 2rem;
+        color: #fff;
+        margin: 1.5rem 0 1rem;
+        line-height: 1.2;
+    }
+    .blog-article h2.blog-h2 {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 1.5rem;
+        color: var(--cyan);
+        margin: 2rem 0 0.75rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-subtle);
+    }
+    .blog-article h3.blog-h3 {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 1.25rem;
+        color: var(--magenta);
+        margin: 1.5rem 0 0.5rem;
+    }
+    .blog-article p {
+        color: var(--text-secondary);
+        line-height: 1.8;
+        margin-bottom: 1rem;
+    }
+    .blog-article p.blog-subtitle {
+        font-style: italic;
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+    }
+    .blog-article strong {
+        color: #fff;
+        font-weight: 700;
+    }
+    .blog-article em {
+        color: var(--text-secondary);
+    }
+    .blog-article ul.blog-list {
+        list-style: none;
+        padding: 0;
+        margin: 0.75rem 0 1.25rem;
+    }
+    .blog-article ul.blog-list li {
+        color: var(--text-secondary);
+        padding: 0.5rem 0 0.5rem 1.5rem;
+        position: relative;
+        line-height: 1.6;
+    }
+    .blog-article ul.blog-list li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.95rem;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--gradient-sunset);
+    }
+    .blog-article hr.blog-divider {
+        border: none;
+        height: 2px;
+        background: var(--gradient-header);
+        margin: 2rem 0;
+        opacity: 0.4;
+    }
+    .blog-article a {
+        color: var(--cyan);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .blog-article a:hover {
+        color: #fff;
+    }
+
+    .blog-meta {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.85rem;
+    }
+
+    .blog-share-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        font-family: 'Rajdhani', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        transition: all 0.15s;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
+        background: var(--bg-card-alt);
+    }
+    .blog-share-btn:hover {
+        color: #fff;
+        border-color: rgba(255,255,255,0.2);
+    }
+
+    .blog-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 0;
+    }
+    .blog-nav a {
+        color: var(--text-muted);
+        text-decoration: none;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transition: color 0.15s;
+    }
+    .blog-nav a:hover { color: var(--magenta); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-8 py-12">
+    <!-- Breadcrumb -->
+    <div class="mb-6">
+        <a href="/blog" class="text-sm" style="color: var(--text-muted); text-decoration: none; font-family: 'Rajdhani', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
+            &larr; All Blog Posts
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="font-heading text-3xl md:text-4xl font-bold mb-3"
+            style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            {{ blog.title }}
+        </h1>
+        <div class="flex items-center gap-4 blog-meta" style="color: var(--text-muted);">
+            <span style="color: var(--cyan);">{{ blog.date_formatted }}</span>
+            <span>&bull;</span>
+            <span>By Punty</span>
+        </div>
+    </div>
+
+    <!-- Article -->
+    <div class="blog-article">
+        {{ blog.html_content | safe }}
+    </div>
+
+    <!-- Share -->
+    <div class="flex items-center gap-3 mb-8">
+        <span class="text-sm font-semibold" style="color: var(--text-muted);">Share:</span>
+        <a href="https://twitter.com/intent/tweet?url=https://punty.ai/blog/{{ blog.slug }}&text={{ blog.title | urlencode }}"
+           target="_blank" rel="noopener" class="blog-share-btn">
+            &#x1D54F; Post
+        </a>
+        <a href="https://www.facebook.com/sharer/sharer.php?u=https://punty.ai/blog/{{ blog.slug }}"
+           target="_blank" rel="noopener" class="blog-share-btn">
+            f Share
+        </a>
+        <button onclick="navigator.clipboard.writeText('https://punty.ai/blog/{{ blog.slug }}').then(()=>this.textContent='Copied!')"
+                class="blog-share-btn" style="cursor:pointer;">
+            Copy Link
+        </button>
+    </div>
+
+    <!-- Navigation -->
+    <div class="blog-nav" style="border-top: 1px solid var(--border-subtle);">
+        <div>
+            {% if prev_blog %}
+            <a href="/blog/{{ prev_blog.slug }}">&larr; {{ prev_blog.title[:40] }}{% if prev_blog.title|length > 40 %}...{% endif %}</a>
+            {% endif %}
+        </div>
+        <div>
+            {% if next_blog %}
+            <a href="/blog/{{ next_blog.slug }}">{{ next_blog.title[:40] }}{% if next_blog.title|length > 40 %}...{% endif %} &rarr;</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

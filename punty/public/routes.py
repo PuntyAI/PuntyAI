@@ -271,6 +271,63 @@ async def get_winner_stats() -> dict:
                 "roi": roi,
             })
 
+        # Today's Best Bet — highest PNL winning pick today
+        best_bet = None
+        if meeting_ids:
+            best_bet_result = await db.execute(
+                select(Pick, Meeting)
+                .join(Meeting, Pick.meeting_id == Meeting.id)
+                .where(
+                    and_(
+                        Pick.settled == True,
+                        Pick.hit == True,
+                        Pick.pnl > 0,
+                        Meeting.date == today,
+                    )
+                )
+                .order_by(Pick.pnl.desc())
+                .limit(1)
+            )
+            best_row = best_bet_result.first()
+            if best_row:
+                bp, bm = best_row
+                stake = bp.bet_stake or bp.exotic_stake or 0
+                pnl = float(bp.pnl or 0)
+                roi = round(pnl / stake * 100, 1) if stake > 0 else 0
+                returned = stake + pnl
+
+                if bp.pick_type == "selection":
+                    display = bp.horse_name or "Runner"
+                    bet_label = (bp.bet_type or "win").replace("_", " ").title()
+                elif bp.pick_type == "exotic":
+                    display = bp.exotic_type or "Exotic"
+                    bet_label = "Exotic"
+                elif bp.pick_type == "sequence":
+                    display = (bp.sequence_type or "Sequence").replace("_", " ").title()
+                    if bp.sequence_variant:
+                        display += f" ({bp.sequence_variant.title()})"
+                    bet_label = "Sequence"
+                elif bp.pick_type == "big3_multi":
+                    display = "Big 3 Multi"
+                    bet_label = "Multi"
+                else:
+                    display = "Winner"
+                    bet_label = bp.pick_type or "Bet"
+
+                best_bet = {
+                    "display_name": display,
+                    "venue": bm.venue,
+                    "race_number": bp.race_number,
+                    "bet_type": bet_label,
+                    "odds": float(bp.odds_at_tip) if bp.odds_at_tip else None,
+                    "stake": round(stake, 2),
+                    "returned": round(returned, 2),
+                    "pnl": round(pnl, 2),
+                    "roi": roi,
+                    "pick_type": bp.pick_type,
+                    "meeting_id": bm.id,
+                }
+
         # Punty's Picks — only selections flagged as is_puntys_pick
         pp_result = await db.execute(
             select(
@@ -311,6 +368,7 @@ async def get_winner_stats() -> dict:
             "meetings_today": len(today_meetings),
             "all_races_complete": all_races_complete,
             "pick_ranks": pick_ranks,
+            "best_bet": best_bet,
         }
 
 
@@ -355,6 +413,156 @@ async def glossary(request: Request):
 async def calculator(request: Request):
     """Betting calculator page."""
     return templates.TemplateResponse("calculator.html", {"request": request})
+
+
+@router.get("/blog", response_class=HTMLResponse)
+async def blog_listing(request: Request, page: int = 1):
+    """Public blog listing page."""
+    import re
+    per_page = 10
+
+    async with async_session() as db:
+        # Count total published blogs
+        count_result = await db.execute(
+            select(func.count(Content.id)).where(
+                and_(
+                    Content.content_type == "weekly_blog",
+                    Content.status.in_(["approved", "sent"]),
+                )
+            )
+        )
+        total = count_result.scalar() or 0
+        total_pages = max(1, (total + per_page - 1) // per_page)
+
+        # Fetch page of blogs
+        offset = (page - 1) * per_page
+        result = await db.execute(
+            select(Content).where(
+                and_(
+                    Content.content_type == "weekly_blog",
+                    Content.status.in_(["approved", "sent"]),
+                )
+            ).order_by(Content.created_at.desc())
+            .offset(offset).limit(per_page)
+        )
+        blogs_raw = result.scalars().all()
+
+        blogs = []
+        for b in blogs_raw:
+            # Extract excerpt (first substantial paragraph)
+            excerpt = ""
+            if b.raw_content:
+                for line in b.raw_content.split("\n"):
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#") or stripped.startswith("*FROM") or stripped.startswith("---"):
+                        continue
+                    if len(stripped) > 50:
+                        excerpt = re.sub(r'\*+', '', stripped)[:200]
+                        if len(stripped) > 200:
+                            excerpt = excerpt.rsplit(" ", 1)[0] + "..."
+                        break
+
+            blogs.append({
+                "slug": b.blog_slug or b.id,
+                "title": b.blog_title or "From the Horse's Mouth",
+                "date_formatted": b.blog_week_start.strftime("%A, %d %B %Y") if b.blog_week_start else (
+                    b.created_at.strftime("%A, %d %B %Y") if b.created_at else ""
+                ),
+                "excerpt": excerpt,
+            })
+
+    return templates.TemplateResponse(
+        "blog.html",
+        {
+            "request": request,
+            "blogs": blogs,
+            "page": page,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+        }
+    )
+
+
+@router.get("/blog/{slug}", response_class=HTMLResponse)
+async def blog_post(request: Request, slug: str):
+    """Public individual blog post page."""
+    from fastapi import HTTPException
+    from punty.formatters.blog import format_blog_html
+    import re
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(Content).where(
+                and_(
+                    Content.blog_slug == slug,
+                    Content.content_type == "weekly_blog",
+                    Content.status.in_(["approved", "sent"]),
+                )
+            )
+        )
+        content = result.scalar_one_or_none()
+        if not content:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+
+        # Format to HTML
+        html_content = format_blog_html(content.raw_content or "")
+
+        # Extract excerpt for meta tags
+        excerpt = ""
+        if content.raw_content:
+            for line in content.raw_content.split("\n"):
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or stripped.startswith("*FROM") or stripped.startswith("---"):
+                    continue
+                if len(stripped) > 50:
+                    excerpt = re.sub(r'\*+', '', stripped)[:160]
+                    break
+
+        blog_data = {
+            "title": content.blog_title or "From the Horse's Mouth",
+            "slug": content.blog_slug,
+            "html_content": html_content,
+            "excerpt": excerpt,
+            "date_formatted": content.blog_week_start.strftime("%A, %d %B %Y") if content.blog_week_start else (
+                content.created_at.strftime("%A, %d %B %Y") if content.created_at else ""
+            ),
+        }
+
+        # Prev/next navigation
+        prev_result = await db.execute(
+            select(Content).where(
+                and_(
+                    Content.content_type == "weekly_blog",
+                    Content.status.in_(["approved", "sent"]),
+                    Content.created_at < content.created_at,
+                )
+            ).order_by(Content.created_at.desc()).limit(1)
+        )
+        prev_blog_raw = prev_result.scalar_one_or_none()
+        prev_blog = {"slug": prev_blog_raw.blog_slug, "title": prev_blog_raw.blog_title or "Previous"} if prev_blog_raw else None
+
+        next_result = await db.execute(
+            select(Content).where(
+                and_(
+                    Content.content_type == "weekly_blog",
+                    Content.status.in_(["approved", "sent"]),
+                    Content.created_at > content.created_at,
+                )
+            ).order_by(Content.created_at.asc()).limit(1)
+        )
+        next_blog_raw = next_result.scalar_one_or_none()
+        next_blog = {"slug": next_blog_raw.blog_slug, "title": next_blog_raw.blog_title or "Next"} if next_blog_raw else None
+
+    return templates.TemplateResponse(
+        "blog_post.html",
+        {
+            "request": request,
+            "blog": blog_data,
+            "prev_blog": prev_blog,
+            "next_blog": next_blog,
+        }
+    )
 
 
 @router.get("/terms", response_class=HTMLResponse)

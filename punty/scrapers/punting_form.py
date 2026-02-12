@@ -430,6 +430,16 @@ class PuntingFormScraper(BaseScraper):
             params["raceNumber"] = race_number
         return await self._api_get("/form/form", params)
 
+    # ---- Future meetings & nominations ----
+
+    async def get_future_meetings(self, date_str: str) -> list[dict]:
+        """Get meetings for a future date. Does NOT use module-level cache."""
+        return await self._api_get("/form/meetingslist", {"meetingDate": date_str})
+
+    async def get_future_fields(self, meeting_id: int) -> dict:
+        """Get nominations/acceptances for a future meeting."""
+        return await self._api_get("/form/fields", {"meetingId": meeting_id})
+
     # ---- Conditions (cached) ----
 
     async def get_conditions(self, jurisdiction: int = 0) -> list:

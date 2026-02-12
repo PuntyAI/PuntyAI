@@ -126,6 +126,47 @@ async def validate_wrapup(content: Content, db: AsyncSession) -> tuple[bool, lis
     return is_valid, issues
 
 
+async def validate_weekly_blog(content: Content, db: AsyncSession) -> tuple[bool, list[str]]:
+    """Validate weekly blog content before auto-approval.
+
+    Checks:
+    - Min 3000 chars
+    - Required sections present
+    - Contains Gamble Responsibly footer
+    - No placeholder text
+
+    Returns: (is_valid, list_of_issues)
+    """
+    issues = []
+    raw = content.raw_content or ""
+
+    if len(raw) < 1500:
+        issues.append(f"Blog too short ({len(raw)} chars, need 1500+)")
+
+    # Check for placeholder text
+    placeholders = re.findall(r'\{[A-Z_]+\}', raw)
+    if placeholders:
+        issues.append(f"Contains placeholders: {placeholders[:5]}")
+
+    # Required sections
+    required = [
+        (r"(?i)punty\s*awards", "PUNTY AWARDS"),
+        (r"(?i)(crystal\s*ball|upcoming\s*group)", "CRYSTAL BALL"),
+        (r"(?i)pattern\s*spotlight", "PATTERN SPOTLIGHT"),
+        (r"(?i)(the\s*ledger|weekly\s*p&l|weekly\s*ledger)", "THE LEDGER"),
+    ]
+    for pattern, name in required:
+        if not re.search(pattern, raw):
+            issues.append(f"Missing section: {name}")
+
+    # Must contain Gamble Responsibly
+    if not re.search(r"(?i)gamble\s*responsibly", raw):
+        issues.append("Missing 'Gamble Responsibly' footer")
+
+    is_valid = len(issues) == 0
+    return is_valid, issues
+
+
 async def auto_approve_content(content_id: str, db: AsyncSession) -> dict:
     """Auto-approve content after validation.
 
@@ -151,6 +192,8 @@ async def auto_approve_content(content_id: str, db: AsyncSession) -> dict:
         is_valid, issues = await validate_early_mail(content, db)
     elif content.content_type == "meeting_wrapup":
         is_valid, issues = await validate_wrapup(content, db)
+    elif content.content_type == "weekly_blog":
+        is_valid, issues = await validate_weekly_blog(content, db)
     else:
         is_valid, issues = True, []
 

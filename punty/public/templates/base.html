@@ -39,6 +39,8 @@
     <link rel="stylesheet" href="/static/tailwind.css">
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- Alpine.js (for dropdowns) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -125,6 +127,47 @@
         }
         .nav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
         .nav-link.active { color: var(--magenta); }
+
+        /* Toolbox dropdown */
+        .toolbox-wrap { position: relative; }
+        .toolbox-btn {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem; font-weight: 600;
+            letter-spacing: 1px; text-transform: uppercase;
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px; cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex; align-items: center; gap: 0.25rem;
+            background: none; border: none;
+        }
+        .toolbox-btn:hover { color: #fff; background: rgba(255,255,255,0.06); }
+        .toolbox-menu {
+            position: absolute; top: 100%; left: 0;
+            min-width: 200px; padding: 0.5rem 0;
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            z-index: 100; margin-top: 0.25rem;
+        }
+        .toolbox-menu a {
+            display: block;
+            padding: 0.6rem 1.25rem;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem; font-weight: 600;
+            letter-spacing: 0.5px; text-transform: uppercase;
+            color: var(--text-secondary); text-decoration: none;
+            transition: all 0.12s;
+        }
+        .toolbox-menu a:hover { color: #fff; background: rgba(255,255,255,0.06); }
+        .toolbox-chevron { transition: transform 0.15s; }
+
+        /* Mobile toolbox sub-items */
+        .mobile-toolbox-items { padding-left: 1rem; }
+        .mobile-toolbox-items a {
+            font-size: 0.85rem;
+            padding: 0.4rem 0;
+            color: var(--text-muted);
+        }
 
         /* Buttons */
         .btn-primary {
@@ -335,8 +378,18 @@
                 <a href="/" class="nav-link">Home</a>
                 <a href="/tips" class="nav-link">Tips</a>
                 <a href="/stats" class="nav-link">Stats</a>
-                <a href="/how-it-works" class="nav-link">How It Works</a>
-                <a href="/glossary" class="nav-link">Glossary</a>
+                <div class="toolbox-wrap" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
+                    <button class="toolbox-btn" @click="open = !open">
+                        Toolbox
+                        <svg class="w-3.5 h-3.5 toolbox-chevron" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div class="toolbox-menu" x-show="open" x-transition.opacity.duration.150ms @click.away="open = false" style="display: none;">
+                        <a href="/how-it-works">How It Works</a>
+                        <a href="/blog">Blog</a>
+                        <a href="/glossary">Glossary</a>
+                        <a href="/calculator">Bet Calculator</a>
+                    </div>
+                </div>
                 <a href="/about" class="nav-link">About</a>
                 <a href="/contact" class="nav-link">Contact</a>
             </nav>
@@ -366,8 +419,18 @@
             <a href="/" class="block py-3 nav-link">Home</a>
             <a href="/tips" class="block py-3 nav-link">Tips</a>
             <a href="/stats" class="block py-3 nav-link">Stats</a>
-            <a href="/how-it-works" class="block py-3 nav-link">How It Works</a>
-            <a href="/glossary" class="block py-3 nav-link">Glossary</a>
+            <div x-data="{ open: false }">
+                <button @click="open = !open" class="block py-3 nav-link w-full text-left flex items-center justify-between" style="background: none; border: none; cursor: pointer;">
+                    Toolbox
+                    <svg class="w-3.5 h-3.5 toolbox-chevron" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div class="mobile-toolbox-items" x-show="open" x-transition style="display: none;">
+                    <a href="/how-it-works" class="block py-2 nav-link">How It Works</a>
+                    <a href="/blog" class="block py-2 nav-link">Blog</a>
+                    <a href="/glossary" class="block py-2 nav-link">Glossary</a>
+                    <a href="/calculator" class="block py-2 nav-link">Bet Calculator</a>
+                </div>
+            </div>
             <a href="/about" class="block py-3 nav-link">About</a>
             <a href="/contact" class="block py-3 nav-link">Contact</a>
         </nav>
@@ -407,6 +470,7 @@
                     <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
                         <li><a href="/tips" class="hover:text-white transition-colors">Tips</a></li>
                         <li><a href="/stats" class="hover:text-white transition-colors">Stats</a></li>
+                        <li><a href="/blog" class="hover:text-white transition-colors">Blog</a></li>
                         <li><a href="/how-it-works" class="hover:text-white transition-colors">How It Works</a></li>
                         <li><a href="/glossary" class="hover:text-white transition-colors">Glossary</a></li>
                         <li><a href="/calculator" class="hover:text-white transition-colors">Betting Calculator</a></li>

@@ -1421,14 +1421,15 @@ class ResultsMonitor:
                 if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                     runner.gear_changes = r["gear_changes"]
 
-        # Track condition from racing.com (normalised comparison to prevent
-        # false change alerts from format differences like "Good 4" vs "Good (4)")
+        # Track condition from racing.com — only update if more specific
+        # (prevents "Good 4" being overwritten by bare "Good", which causes
+        # flip-flopping between sources and noisy change alerts)
         tc = field_data.get("meeting", {}).get("track_condition")
         if tc:
             from punty.models.meeting import Meeting
-            from punty.results.change_detection import _normalise_condition
+            from punty.scrapers.orchestrator import _is_more_specific
             meeting = await db.get(Meeting, meeting_id)
-            if meeting and _normalise_condition(meeting.track_condition or "") != _normalise_condition(tc):
+            if meeting and _is_more_specific(tc, meeting.track_condition or ""):
                 meeting.track_condition = tc
 
         await db.flush()

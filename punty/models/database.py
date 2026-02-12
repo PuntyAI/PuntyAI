@@ -124,6 +124,29 @@ async def init_db() -> None:
                 action VARCHAR(20) NOT NULL,
                 changed_at DATETIME NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS future_races (
+                id VARCHAR(128) PRIMARY KEY,
+                venue VARCHAR(100) NOT NULL,
+                date DATE NOT NULL,
+                race_number INTEGER,
+                race_name VARCHAR(200) NOT NULL,
+                group_level VARCHAR(20),
+                distance INTEGER,
+                prize_money INTEGER,
+                state VARCHAR(10),
+                scraped_at DATETIME NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS future_nominations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                future_race_id VARCHAR(128) NOT NULL REFERENCES future_races(id) ON DELETE CASCADE,
+                horse_name VARCHAR(100) NOT NULL,
+                trainer VARCHAR(100),
+                jockey VARCHAR(100),
+                barrier INTEGER,
+                weight REAL,
+                last_start VARCHAR(200),
+                career_record VARCHAR(100)
+            )""",
         ]:
             try:
                 await conn.execute(_text(table_sql))
@@ -185,6 +208,10 @@ async def init_db() -> None:
             "ALTER TABLE meetings ADD COLUMN irrigation BOOLEAN",
             "ALTER TABLE meetings ADD COLUMN going_stick REAL",
             "ALTER TABLE meetings ADD COLUMN weather_humidity INTEGER",
+            # Blog columns on content table
+            "ALTER TABLE content ADD COLUMN blog_title VARCHAR(200)",
+            "ALTER TABLE content ADD COLUMN blog_slug VARCHAR(200) UNIQUE",
+            "ALTER TABLE content ADD COLUMN blog_week_start DATE",
         ]:
             try:
                 await conn.execute(_text(col))
@@ -227,6 +254,12 @@ async def init_db() -> None:
             # Settings audit indexes
             "CREATE INDEX IF NOT EXISTS ix_settings_audit_key ON settings_audit(key)",
             "CREATE INDEX IF NOT EXISTS ix_settings_audit_changed_at ON settings_audit(changed_at)",
+            # Future races indexes
+            "CREATE INDEX IF NOT EXISTS ix_future_races_date ON future_races(date)",
+            "CREATE INDEX IF NOT EXISTS ix_future_races_group ON future_races(group_level)",
+            "CREATE INDEX IF NOT EXISTS ix_future_noms_race_id ON future_nominations(future_race_id)",
+            # Blog indexes
+            "CREATE INDEX IF NOT EXISTS ix_content_blog_slug ON content(blog_slug)",
         ]:
             try:
                 await conn.execute(_text(idx))

@@ -142,6 +142,39 @@ async def generate_content_stream(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@router.get("/blog/generate-stream")
+async def generate_blog_stream(db: AsyncSession = Depends(get_db)):
+    """SSE stream of weekly blog generation progress."""
+    from punty.ai.generator import ContentGenerator
+
+    generator = ContentGenerator(db)
+
+    async def event_generator():
+        async for event in generator.generate_weekly_blog_stream():
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/blog/latest")
+async def get_latest_blog(db: AsyncSession = Depends(get_db)):
+    """Get the latest published weekly blog."""
+    from punty.models.content import Content, ContentStatus
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Content)
+        .where(Content.content_type == "weekly_blog")
+        .where(Content.status.in_(["approved", "sent"]))
+        .order_by(Content.created_at.desc())
+        .limit(1)
+    )
+    content = result.scalar_one_or_none()
+    if not content:
+        raise HTTPException(status_code=404, detail="No published blog found")
+    return content.to_dict()
+
+
 @router.get("/{content_id}")
 async def get_content(content_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific content item."""

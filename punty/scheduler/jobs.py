@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -1339,3 +1340,160 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
 
     logger.info(f"Post-race job complete for {meeting_id}: {results}")
     return results
+
+
+async def weekly_pattern_refresh() -> dict:
+    """Thursday night pattern refresh — builds all data needed for Friday blog.
+
+    Runs: patterns, awards, ledger, future nominations, news headlines.
+    Stores results in AppSettings for the blog context builder.
+    """
+    from punty.models.database import async_session
+    from punty.models.settings import AppSettings
+    from punty.scheduler.activity_log import log_system
+    import json
+
+    results = {"steps": [], "errors": []}
+    log_system("Starting weekly pattern refresh", status="info")
+
+    async with async_session() as db:
+        # Step 1: Deep pattern analysis
+        try:
+            from punty.patterns.engine import run_deep_pattern_analysis
+            patterns = await run_deep_pattern_analysis(db)
+            # Store as JSON in AppSettings
+            await _upsert_setting(db, "weekly_patterns", json.dumps(patterns))
+            results["steps"].append(f"patterns: {len(patterns)} dimensions")
+        except Exception as e:
+            logger.error(f"Pattern analysis failed: {e}")
+            results["errors"].append(f"patterns: {e}")
+
+        # Step 2: Weekly awards
+        try:
+            from punty.patterns.awards import compute_weekly_awards
+            awards = await compute_weekly_awards(db)
+            await _upsert_setting(db, "weekly_awards", json.dumps(awards))
+            results["steps"].append(f"awards: {len(awards)} categories")
+        except Exception as e:
+            logger.error(f"Awards computation failed: {e}")
+            results["errors"].append(f"awards: {e}")
+
+        # Step 3: Weekly ledger
+        try:
+            from punty.patterns.weekly_summary import build_weekly_ledger
+            ledger = await build_weekly_ledger(db)
+            await _upsert_setting(db, "weekly_ledger", json.dumps(ledger))
+            results["steps"].append(f"ledger: P&L ${ledger.get('this_week', {}).get('total_pnl', 0):+.2f}")
+        except Exception as e:
+            logger.error(f"Ledger computation failed: {e}")
+            results["errors"].append(f"ledger: {e}")
+
+        # Step 4: Future nominations
+        try:
+            from punty.scrapers.future_races import scrape_future_group_races
+            future = await scrape_future_group_races(db)
+            results["steps"].append(f"future_races: {future.get('races_found', 0)} races")
+        except Exception as e:
+            logger.error(f"Future races scrape failed: {e}")
+            results["errors"].append(f"future_races: {e}")
+
+        # Step 5: News headlines
+        try:
+            from punty.scrapers.news import NewsScraper
+            scraper = NewsScraper()
+            headlines = await scraper.scrape_headlines()
+            await _upsert_setting(db, "recent_news_headlines", json.dumps(headlines))
+            results["steps"].append(f"news: {len(headlines)} headlines")
+        except Exception as e:
+            logger.error(f"News scrape failed: {e}")
+            results["errors"].append(f"news: {e}")
+
+        await db.commit()
+
+    if results["errors"]:
+        log_system(f"Pattern refresh completed with errors: {results['errors']}", status="warning")
+    else:
+        log_system("Pattern refresh complete", status="success")
+
+    logger.info(f"Weekly pattern refresh complete: {results}")
+    return results
+
+
+async def weekly_blog_job() -> dict:
+    """Friday morning blog generation job.
+
+    1. Check pattern data freshness (run inline if stale)
+    2. Generate blog via AI
+    3. Validate and auto-approve
+    4. Post teaser to Twitter + Facebook
+    """
+    from punty.models.database import async_session
+    from punty.models.settings import AppSettings
+    from punty.scheduler.activity_log import log_system
+    from punty.ai.generator import ContentGenerator
+    from punty.scheduler.automation import auto_approve_and_post
+
+    results = {"steps": [], "errors": []}
+    log_system("Starting weekly blog generation", status="info")
+
+    async with async_session() as db:
+        # Step 1: Check pattern data freshness
+        result = await db.execute(
+            select(AppSettings).where(AppSettings.key == "weekly_patterns")
+        )
+        setting = result.scalar_one_or_none()
+        if not setting or not setting.value:
+            logger.info("Pattern data stale — running inline refresh")
+            results["steps"].append("pattern_refresh: inline")
+            await weekly_pattern_refresh()
+        else:
+            results["steps"].append("pattern_data: fresh")
+
+    # Step 2: Generate blog (needs fresh db session)
+    content_id = None
+    async with async_session() as db:
+        try:
+            generator = ContentGenerator(db)
+            async for event in generator.generate_weekly_blog_stream():
+                if event.get("status") == "error":
+                    raise Exception(event.get("label", "Unknown error"))
+                if event.get("result", {}).get("content_id"):
+                    content_id = event["result"]["content_id"]
+
+            results["steps"].append("generate_blog: success")
+            results["content_id"] = content_id
+        except Exception as e:
+            logger.error(f"Blog generation failed: {e}")
+            results["errors"].append(f"generate_blog: {e}")
+
+    # Step 3-4: Auto-approve and post
+    if content_id:
+        async with async_session() as db:
+            try:
+                post_result = await auto_approve_and_post(content_id, db)
+                results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
+                results["post_result"] = post_result
+            except Exception as e:
+                logger.error(f"Blog auto-approve/post failed: {e}")
+                results["errors"].append(f"auto_approve_post: {e}")
+
+    if results["errors"]:
+        log_system(f"Blog job completed with errors: {results['errors']}", status="warning")
+    else:
+        log_system("Weekly blog published", status="success")
+
+    logger.info(f"Weekly blog job complete: {results}")
+    return results
+
+
+async def _upsert_setting(db, key: str, value: str):
+    """Upsert an AppSettings row."""
+    from punty.models.settings import AppSettings
+
+    result = await db.execute(select(AppSettings).where(AppSettings.key == key))
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.value = value
+    else:
+        db.add(AppSettings(key=key, value=value))
+    await db.flush()

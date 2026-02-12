@@ -1,11 +1,11 @@
 """Models for content generation, context, and scheduling."""
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Index, String, Integer, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Index, String, Integer, Boolean, DateTime, Date, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from punty.config import melb_now_naive
@@ -34,6 +34,7 @@ class ContentType(str, Enum):
     UPDATE_ALERT = "update_alert"
     ENGAGEMENT = "engagement"
     MEETING_WRAPUP = "meeting_wrapup"
+    WEEKLY_BLOG = "weekly_blog"
 
 
 class ContextSnapshot(Base):
@@ -90,7 +91,7 @@ class Content(Base):
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    meeting_id: Mapped[str] = mapped_column(String(64), ForeignKey("meetings.id"))
+    meeting_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("meetings.id"), nullable=True)
     race_id: Mapped[Optional[str]] = mapped_column(
         String(64), ForeignKey("races.id"), nullable=True
     )
@@ -117,6 +118,11 @@ class Content(Base):
     sent_to_facebook: Mapped[bool] = mapped_column(Boolean, default=False)
     facebook_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
+    # Blog fields (only for weekly_blog content type)
+    blog_title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    blog_slug: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, unique=True)
+    blog_week_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
@@ -124,7 +130,7 @@ class Content(Base):
     )
 
     # Relationships
-    meeting: Mapped["Meeting"] = relationship("Meeting")
+    meeting: Mapped[Optional["Meeting"]] = relationship("Meeting")
     context_snapshot: Mapped[Optional["ContextSnapshot"]] = relationship("ContextSnapshot")
 
     def to_dict(self) -> dict:
@@ -148,6 +154,9 @@ class Content(Base):
             "twitter_id": self.twitter_id,
             "sent_to_facebook": self.sent_to_facebook,
             "facebook_id": self.facebook_id,
+            "blog_title": self.blog_title,
+            "blog_slug": self.blog_slug,
+            "blog_week_start": self.blog_week_start.isoformat() if self.blog_week_start else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
