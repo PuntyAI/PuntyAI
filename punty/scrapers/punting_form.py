@@ -471,7 +471,11 @@ class PuntingFormScraper(BaseScraper):
 
     def _parse_condition(self, cond: dict) -> dict:
         """Parse a conditions entry into our format."""
-        tc_num = cond.get("trackConditionNumber", 0)
+        tc_num_raw = cond.get("trackConditionNumber", 0)
+        try:
+            tc_num = int(tc_num_raw) if tc_num_raw else 0
+        except (ValueError, TypeError):
+            tc_num = 0
         tc_label = cond.get("trackCondition", "")
         # Prefer _CONDITION_LABELS (includes rating number, e.g. "Good 4")
         # over tc_label (often just "Good" without rating)

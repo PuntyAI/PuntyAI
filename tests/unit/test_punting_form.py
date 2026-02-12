@@ -752,6 +752,16 @@ class TestConditionsParsing:
         result = self.scraper._parse_condition(cond)
         assert result["condition"] == "Soft 6"
 
+    def test_condition_number_as_string(self):
+        """API often returns trackConditionNumber as string, not int."""
+        cond = {
+            "track": "Test",
+            "trackCondition": "Good",
+            "trackConditionNumber": "4",
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["condition"] == "Good 4"
+
     def test_condition_label_fallback(self):
         cond = {
             "track": "Test",
