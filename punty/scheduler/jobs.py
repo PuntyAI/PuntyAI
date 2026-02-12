@@ -1392,7 +1392,7 @@ async def weekly_pattern_refresh() -> dict:
         try:
             from punty.scrapers.future_races import scrape_future_group_races
             future = await scrape_future_group_races(db)
-            results["steps"].append(f"future_races: {future.get('races_found', 0)} races")
+            results["steps"].append(f"future_races: {future.get('group_races_found', 0)} races")
         except Exception as e:
             logger.error(f"Future races scrape failed: {e}")
             results["errors"].append(f"future_races: {e}")
