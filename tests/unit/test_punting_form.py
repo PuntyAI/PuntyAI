@@ -682,11 +682,11 @@ class TestConditionsParsing:
             "trackConditionNumber": 4,
             "rail": "Out 3m",
             "weather": "Fine",
-            "penetrometer": 4.2,
-            "wind": 15,
+            "penetrometer": "4.20",
+            "wind": "15",
             "windDirection": "NW",
-            "rainfall": 2.5,
-            "irrigation": True,
+            "rainfall": "2.5",
+            "irrigation": "6mm last 24hrs",
             "comment": "",
             "abandonded": False,
         }
@@ -700,6 +700,17 @@ class TestConditionsParsing:
         assert result["rainfall"] == 2.5
         assert result["irrigation"] is True
         assert result["going_stick"] is None
+
+    def test_nil_rainfall_is_none(self):
+        cond = {"track": "Test", "trackCondition": "Good", "rainfall": "Nil", "irrigation": "Nil"}
+        result = self.scraper._parse_condition(cond)
+        assert result["rainfall"] is None
+        assert result["irrigation"] is False
+
+    def test_string_penetrometer(self):
+        cond = {"track": "Test", "trackCondition": "Good", "penetrometer": "6.40"}
+        result = self.scraper._parse_condition(cond)
+        assert result["penetrometer"] == 6.4
 
     def test_going_stick_from_comment(self):
         cond = {

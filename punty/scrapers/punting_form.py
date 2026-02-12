@@ -462,16 +462,42 @@ class PuntingFormScraper(BaseScraper):
                 except (ValueError, TypeError):
                     pass
 
+        # Parse numeric fields (PF returns strings like "6.40", "Nil", etc.)
+        def _to_float(val) -> float | None:
+            if val is None:
+                return None
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
+        def _to_int(val) -> int | None:
+            if val is None:
+                return None
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return None
+
+        # Rainfall: PF returns "Nil" or "2.5" or descriptive strings
+        raw_rainfall = cond.get("rainfall")
+        rainfall = _to_float(raw_rainfall)
+
+        # Irrigation: PF returns descriptive strings like "6mm last 24hrs..."
+        # Truthy if any irrigation string is present and not empty/Nil
+        raw_irrigation = cond.get("irrigation")
+        irrigation = bool(raw_irrigation and str(raw_irrigation).strip().lower() not in ("", "nil", "none", "no", "0"))
+
         return {
             "venue": cond.get("track"),
             "condition": condition,
             "rail": cond.get("rail"),
             "weather": cond.get("weather"),
-            "penetrometer": cond.get("penetrometer"),
-            "wind_speed": cond.get("wind"),
+            "penetrometer": _to_float(cond.get("penetrometer")),
+            "wind_speed": _to_int(cond.get("wind")),
             "wind_direction": cond.get("windDirection"),
-            "rainfall": cond.get("rainfall"),
-            "irrigation": cond.get("irrigation"),
+            "rainfall": rainfall,
+            "irrigation": irrigation,
             "going_stick": going_stick,
             "abandoned": cond.get("abandonded", False),  # PF typo in API
         }
