@@ -44,8 +44,11 @@ def _detect_group_level(
         if re.search(pattern, name_lower):
             return level
     # High prize money but no explicit group label
-    if prize_money >= GROUP_PRIZE_THRESHOLD:
-        return "Stakes"
+    try:
+        if int(prize_money) >= GROUP_PRIZE_THRESHOLD:
+            return "Stakes"
+    except (TypeError, ValueError):
+        pass
     return None
 
 
@@ -136,7 +139,10 @@ async def _process_future_meeting(
             race_name = race_data.get("name") or race_data.get("raceName") or ""
             race_num = race_data.get("number") or race_data.get("raceNumber")
             distance = race_data.get("distance")
-            prize = race_data.get("prizeMoney") or race_data.get("prize") or 0
+            try:
+                prize = int(race_data.get("prizeMoney") or race_data.get("prize") or 0)
+            except (TypeError, ValueError):
+                prize = 0
             group_field = race_data.get("group") or ""
 
             group_level = _detect_group_level(race_name, prize, group_field)
