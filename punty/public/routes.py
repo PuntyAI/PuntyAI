@@ -271,8 +271,49 @@ async def get_winner_stats() -> dict:
                 "roi": roi,
             })
 
-        # Today's Best Bet — highest PNL winning pick today
+        # Best Bet — highest PNL winning pick today, fallback to recent
         best_bet = None
+
+        def _build_best_bet(bp, bm, is_today=True):
+            stake = bp.bet_stake or bp.exotic_stake or 0
+            pnl = float(bp.pnl or 0)
+            roi = round(pnl / stake * 100, 1) if stake > 0 else 0
+            returned = stake + pnl
+
+            if bp.pick_type == "selection":
+                display = bp.horse_name or "Runner"
+                bet_label = (bp.bet_type or "win").replace("_", " ").title()
+            elif bp.pick_type == "exotic":
+                display = bp.exotic_type or "Exotic"
+                bet_label = "Exotic"
+            elif bp.pick_type == "sequence":
+                display = (bp.sequence_type or "Sequence").replace("_", " ").title()
+                if bp.sequence_variant:
+                    display += f" ({bp.sequence_variant.title()})"
+                bet_label = "Sequence"
+            elif bp.pick_type == "big3_multi":
+                display = "Big 3 Multi"
+                bet_label = "Multi"
+            else:
+                display = "Winner"
+                bet_label = bp.pick_type or "Bet"
+
+            return {
+                "display_name": display,
+                "venue": bm.venue,
+                "race_number": bp.race_number,
+                "bet_type": bet_label,
+                "odds": float(bp.odds_at_tip) if bp.odds_at_tip else None,
+                "stake": round(stake, 2),
+                "returned": round(returned, 2),
+                "pnl": round(pnl, 2),
+                "roi": roi,
+                "pick_type": bp.pick_type,
+                "meeting_id": bm.id,
+                "is_today": is_today,
+            }
+
+        # Try today first
         if meeting_ids:
             best_bet_result = await db.execute(
                 select(Pick, Meeting)
@@ -290,43 +331,30 @@ async def get_winner_stats() -> dict:
             )
             best_row = best_bet_result.first()
             if best_row:
-                bp, bm = best_row
-                stake = bp.bet_stake or bp.exotic_stake or 0
-                pnl = float(bp.pnl or 0)
-                roi = round(pnl / stake * 100, 1) if stake > 0 else 0
-                returned = stake + pnl
+                best_bet = _build_best_bet(*best_row, is_today=True)
 
-                if bp.pick_type == "selection":
-                    display = bp.horse_name or "Runner"
-                    bet_label = (bp.bet_type or "win").replace("_", " ").title()
-                elif bp.pick_type == "exotic":
-                    display = bp.exotic_type or "Exotic"
-                    bet_label = "Exotic"
-                elif bp.pick_type == "sequence":
-                    display = (bp.sequence_type or "Sequence").replace("_", " ").title()
-                    if bp.sequence_variant:
-                        display += f" ({bp.sequence_variant.title()})"
-                    bet_label = "Sequence"
-                elif bp.pick_type == "big3_multi":
-                    display = "Big 3 Multi"
-                    bet_label = "Multi"
-                else:
-                    display = "Winner"
-                    bet_label = bp.pick_type or "Bet"
-
-                best_bet = {
-                    "display_name": display,
-                    "venue": bm.venue,
-                    "race_number": bp.race_number,
-                    "bet_type": bet_label,
-                    "odds": float(bp.odds_at_tip) if bp.odds_at_tip else None,
-                    "stake": round(stake, 2),
-                    "returned": round(returned, 2),
-                    "pnl": round(pnl, 2),
-                    "roi": roi,
-                    "pick_type": bp.pick_type,
-                    "meeting_id": bm.id,
-                }
+        # Fallback: most recent winning bet from last 7 days
+        if not best_bet:
+            from datetime import timedelta
+            recent_cutoff = today - timedelta(days=7)
+            recent_result = await db.execute(
+                select(Pick, Meeting)
+                .join(Meeting, Pick.meeting_id == Meeting.id)
+                .where(
+                    and_(
+                        Pick.settled == True,
+                        Pick.hit == True,
+                        Pick.pnl > 0,
+                        Meeting.date >= recent_cutoff,
+                        Meeting.date < today,
+                    )
+                )
+                .order_by(Pick.pnl.desc())
+                .limit(1)
+            )
+            recent_row = recent_result.first()
+            if recent_row:
+                best_bet = _build_best_bet(*recent_row, is_today=False)
 
         # Punty's Picks — only selections flagged as is_puntys_pick
         pp_result = await db.execute(

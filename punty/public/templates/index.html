@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Hero Section -->
-<section class="relative overflow-hidden py-16 md:py-24">
+<section class="relative overflow-hidden py-10 md:py-16">
     <!-- Background glow effects -->
     <div class="absolute top-1/2 left-1/4 w-96 h-96 bg-punty-magenta/20 rounded-full blur-3xl -translate-y-1/2"></div>
     <div class="absolute top-1/2 right-1/4 w-96 h-96 bg-punty-cyan/10 rounded-full blur-3xl -translate-y-1/2"></div>
@@ -81,53 +81,70 @@
         .bb-right { width: 100%; justify-content: space-between; }
     }
 </style>
-<section id="best-bet-section" {% if not stats.best_bet %}style="display: none;"{% endif %}>
-    <div style="max-width: 72rem; margin: 0 auto; padding: 40px 16px 8px;">
-        <a id="bb-venue-link" href="{% if stats.best_bet %}/tips/{{ stats.best_bet.meeting_id }}{% else %}#{% endif %}" class="bb-card">
+<section id="best-bet-section">
+    <div style="max-width: 72rem; margin: 0 auto; padding: 24px 16px 8px;">
+        {% if stats.best_bet %}
+        <a id="bb-venue-link" href="/tips/{{ stats.best_bet.meeting_id }}" class="bb-card">
             <div class="bb-glow-l"></div>
             <div class="bb-glow-r"></div>
             <div class="bb-inner">
                 <div class="bb-left">
                     <div class="bb-trophy">&#x1F3C6;</div>
                     <div>
-                        <div class="bb-label">Today's Best Bet</div>
-                        <div class="bb-horse" id="bb-name">{% if stats.best_bet %}{{ stats.best_bet.display_name }}{% endif %}</div>
+                        <div class="bb-label">{% if stats.best_bet.is_today %}Today's Best Bet{% else %}Recent Best Bet{% endif %}</div>
+                        <div class="bb-horse" id="bb-name">{{ stats.best_bet.display_name }}</div>
                         <div class="bb-meta">
-                            <span id="bb-venue">{% if stats.best_bet %}{{ stats.best_bet.venue }}{% if stats.best_bet.race_number %} R{{ stats.best_bet.race_number }}{% endif %}{% endif %}</span>
+                            <span id="bb-venue">{{ stats.best_bet.venue }}{% if stats.best_bet.race_number %} R{{ stats.best_bet.race_number }}{% endif %}</span>
                             <span class="bb-meta-sep">|</span>
-                            <span id="bb-type">{% if stats.best_bet %}{{ stats.best_bet.bet_type }}{% endif %}</span>
-                            <span id="bb-odds-inline">{% if stats.best_bet and stats.best_bet.odds %}<span class="bb-meta-sep">|</span>${{ "%.2f"|format(stats.best_bet.odds) }}{% endif %}</span>
+                            <span id="bb-type">{{ stats.best_bet.bet_type }}</span>
+                            {% if stats.best_bet.odds %}<span id="bb-odds-inline"><span class="bb-meta-sep">|</span>${{ "%.2f"|format(stats.best_bet.odds) }}</span>{% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="bb-right">
                     <div class="bb-stat">
                         <div class="bb-stat-label">Staked</div>
-                        <div class="bb-stat-val" id="bb-stake">{% if stats.best_bet %}${{ "%.0f"|format(stats.best_bet.stake) }}{% endif %}</div>
+                        <div class="bb-stat-val" id="bb-stake">${{ "%.0f"|format(stats.best_bet.stake) }}</div>
                     </div>
                     <div class="bb-arrow">&#x2192;</div>
                     <div class="bb-stat bb-returned">
                         <div class="bb-stat-label">Returned</div>
-                        <div class="bb-stat-val" id="bb-returned">{% if stats.best_bet %}${{ "%.0f"|format(stats.best_bet.returned) }}{% endif %}</div>
+                        <div class="bb-stat-val" id="bb-returned">${{ "%.0f"|format(stats.best_bet.returned) }}</div>
                     </div>
                     <div class="bb-roi-box">
                         <div class="bb-roi-label">ROI</div>
-                        <div class="bb-roi-val" id="bb-roi">{% if stats.best_bet %}+{{ stats.best_bet.roi }}%{% endif %}</div>
+                        <div class="bb-roi-val" id="bb-roi">+{{ stats.best_bet.roi }}%</div>
                     </div>
                 </div>
             </div>
         </a>
+        {% else %}
+        <div class="bb-card" style="cursor: default;">
+            <div class="bb-glow-l"></div>
+            <div class="bb-glow-r"></div>
+            <div class="bb-inner" style="justify-content: center; text-align: center;">
+                <div class="bb-left" style="justify-content: center;">
+                    <div class="bb-trophy" style="opacity: 0.5;">&#x1F3C6;</div>
+                    <div>
+                        <div class="bb-label">Today's Best Bet</div>
+                        <div class="bb-horse" style="font-size: 22px; opacity: 0.6;">Awaiting Results</div>
+                        <div class="bb-meta">Punty's picks are locked in — first winner takes the crown</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </section>
 
 <!-- Stats Section -->
-<section class="py-16 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
+<section class="py-10 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
         <div class="grid md:grid-cols-3 gap-6 text-center">
             <!-- Meetings Today -->
-            <div class="card p-6">
+            <div class="card p-5">
                 <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-secondary);">Meetings Today</div>
                 <!-- Next Race Countdown -->
                 <div id="next-race-container" class="mt-3 pt-3" style="border-top: 1px solid var(--border-subtle); display: none;">
                     <div class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
@@ -137,17 +154,17 @@
             </div>
 
             <!-- Today's Winners -->
-            <div class="card p-6">
+            <div class="card p-5">
                 <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-secondary);" id="today-winners-label">
                     {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
                 </div>
             </div>
 
             <!-- All-Time Winners -->
-            <div class="card p-6">
+            <div class="card p-5">
                 <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Total Winners</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-secondary);">Total Winners</div>
             </div>
         </div>
 
@@ -169,7 +186,7 @@
         {% endif %}
 
         <!-- Stats CTA -->
-        <div class="text-center mt-8">
+        <div class="text-center mt-6">
             <a href="/stats" class="btn-secondary inline-flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 View Punty's Full Stats
@@ -177,7 +194,7 @@
         </div>
 
         <!-- Wins Ticker -->
-        <div id="wins-ticker" class="mt-8 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+        <div id="wins-ticker" class="mt-6 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
             <div class="flex items-center px-4 py-2" style="border-bottom: 1px solid var(--border-subtle);">
                 <span class="text-lg mr-2" style="color: var(--magenta);">&#x1F3C6;</span>
                 <span class="font-heading font-semibold text-sm uppercase tracking-wider" style="color: var(--text-muted);">Recent Wins</span>
@@ -235,16 +252,16 @@
 
 <!-- Today's Tips Section -->
 {% if stats.todays_tips %}
-<section class="py-16">
+<section class="py-10">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-12">
+        <h2 class="text-3xl font-heading font-bold text-center mb-8">
             Today's <span style="color: var(--magenta);">Early Mail</span>
         </h2>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for tip in stats.todays_tips %}
             <a href="/tips/{{ tip.meeting_id }}"
-               class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1">
+               class="card p-5 hover:border-punty-magenta transition-all hover:-translate-y-1">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background: var(--gradient-sunset);">
                         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -260,7 +277,7 @@
             {% endfor %}
         </div>
 
-        <div class="text-center mt-8">
+        <div class="text-center mt-6">
             <a href="/tips" class="btn-secondary inline-flex items-center gap-2">
                 See All Tips
             </a>
@@ -270,12 +287,12 @@
 {% endif %}
 
 <!-- Video Section -->
-<section class="py-16" style="background: var(--bg-card);">
+<section class="py-10" style="background: var(--bg-card);">
     <div class="max-w-4xl mx-auto px-4 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-4">
+        <h2 class="text-3xl font-heading font-bold text-center mb-3">
             Meet <span style="color: var(--magenta);">Punty</span>
         </h2>
-        <p class="text-center mb-8" style="color: var(--text-secondary);">
+        <p class="text-center mb-6" style="color: var(--text-secondary);">
             Watch how Punty analyses the form and finds the winners
         </p>
 
@@ -328,19 +345,19 @@
 </script>
 
 <!-- How It Works Preview -->
-<section class="py-16">
+<section class="py-10">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-12">
+        <h2 class="text-3xl font-heading font-bold text-center mb-8">
             How <span style="color: var(--cyan);">Punty</span> Picks Winners
         </h2>
 
-        <div class="grid md:grid-cols-4 gap-8">
+        <div class="grid md:grid-cols-4 gap-6">
             <!-- Step 1 -->
             <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     1
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Crunch The Form</h3>
+                <h3 class="font-heading font-bold text-xl mb-2">Crunch The Form</h3>
                 <p style="color: var(--text-secondary);">
                     AI analyses thousands of data points - form, track conditions, barriers, jockeys, trainers, and more.
                 </p>
@@ -348,10 +365,10 @@
 
             <!-- Step 2 -->
             <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     2
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Read The Track</h3>
+                <h3 class="font-heading font-bold text-xl mb-2">Read The Track</h3>
                 <p style="color: var(--text-secondary);">
                     Speed maps, rail positions, weather conditions - all factored in to find where the winners will come from.
                 </p>
@@ -359,10 +376,10 @@
 
             <!-- Step 3 -->
             <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     3
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Find The Value</h3>
+                <h3 class="font-heading font-bold text-xl mb-2">Find The Value</h3>
                 <p style="color: var(--text-secondary);">
                     A 5-factor probability model calculates every runner's true win chance.
                     When our number beats the market — that's a value bet.
@@ -372,19 +389,19 @@
 
             <!-- Step 4 -->
             <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Live Updates</h3>
+                <h3 class="font-heading font-bold text-xl mb-2">Live Updates</h3>
                 <p style="color: var(--text-secondary);">
                     Punty watches every race live. Win celebrations, pace analysis, and real-time track reads throughout the day.
                 </p>
             </div>
         </div>
 
-        <div class="text-center mt-12">
+        <div class="text-center mt-8">
             <a href="/how-it-works" class="btn-primary">
                 Learn More
             </a>
@@ -393,17 +410,17 @@
 </section>
 
 <!-- CTA Section -->
-<section class="py-20 relative overflow-hidden">
+<section class="py-14 relative overflow-hidden">
     <div class="absolute inset-0 bg-gradient-to-r from-punty-magenta/20 via-punty-purple/10 to-punty-cyan/20"></div>
 
     <div class="max-w-4xl mx-auto px-4 sm:px-8 text-center relative">
         <img src="/static/punty-character.jpg" alt="Punty"
              class="w-24 h-24 rounded-full mx-auto mb-6 object-cover border-4" style="border-color: var(--magenta);">
 
-        <h2 class="text-3xl md:text-4xl font-heading font-bold mb-6">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold mb-4">
             Ready to Stop Losing Your Arse?
         </h2>
-        <p class="text-lg mb-8" style="color: var(--text-secondary);">
+        <p class="text-lg mb-6" style="color: var(--text-secondary);">
             Free daily tips and live race-day updates.
             No signup bullshit, no paywalls (yet). Just solid picks.
         </p>
@@ -441,27 +458,29 @@
                         if (detailEl) detailEl.textContent = pr.hits + '/' + pr.total;
                     });
                 }
-                // Update best bet
-                var bbSection = document.getElementById('best-bet-section');
-                if (data.best_bet) {
-                    bbSection.style.display = '';
-                    document.getElementById('bb-name').textContent = data.best_bet.display_name;
-                    var venueText = data.best_bet.venue;
-                    if (data.best_bet.race_number) venueText += ' R' + data.best_bet.race_number;
-                    document.getElementById('bb-venue').textContent = venueText;
-                    document.getElementById('bb-venue-link').href = '/tips/' + data.best_bet.meeting_id;
-                    document.getElementById('bb-type').textContent = data.best_bet.bet_type;
-                    var oddsInline = document.getElementById('bb-odds-inline');
-                    if (data.best_bet.odds) {
-                        oddsInline.innerHTML = '<span class="mx-1.5" style="color: var(--border-subtle);">|</span>$' + data.best_bet.odds.toFixed(2);
-                    } else {
-                        oddsInline.textContent = '';
+                // Update best bet (only update if today's winner arrived)
+                if (data.best_bet && data.best_bet.is_today) {
+                    var nameEl = document.getElementById('bb-name');
+                    if (nameEl) {
+                        nameEl.textContent = data.best_bet.display_name;
+                        var venueText = data.best_bet.venue;
+                        if (data.best_bet.race_number) venueText += ' R' + data.best_bet.race_number;
+                        document.getElementById('bb-venue').textContent = venueText;
+                        var link = document.getElementById('bb-venue-link');
+                        if (link) link.href = '/tips/' + data.best_bet.meeting_id;
+                        document.getElementById('bb-type').textContent = data.best_bet.bet_type;
+                        var oddsInline = document.getElementById('bb-odds-inline');
+                        if (oddsInline) {
+                            if (data.best_bet.odds) {
+                                oddsInline.innerHTML = '<span class="bb-meta-sep">|</span>$' + data.best_bet.odds.toFixed(2);
+                            } else {
+                                oddsInline.textContent = '';
+                            }
+                        }
+                        document.getElementById('bb-stake').textContent = '$' + Math.round(data.best_bet.stake);
+                        document.getElementById('bb-returned').textContent = '$' + Math.round(data.best_bet.returned);
+                        document.getElementById('bb-roi').textContent = '+' + data.best_bet.roi + '%';
                     }
-                    document.getElementById('bb-stake').textContent = '$' + Math.round(data.best_bet.stake);
-                    document.getElementById('bb-returned').textContent = '$' + Math.round(data.best_bet.returned);
-                    document.getElementById('bb-roi').textContent = '+' + data.best_bet.roi + '%';
-                } else {
-                    bbSection.style.display = 'none';
                 }
             })
             .catch(() => {});
