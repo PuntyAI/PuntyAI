@@ -37,6 +37,11 @@ class Meeting(Base):
     weather_wind_dir: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     rail_bias_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # PF conditions data
+    rainfall: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    irrigation: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    going_stick: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=melb_now_naive, onupdate=melb_now_naive
@@ -66,6 +71,9 @@ class Meeting(Base):
             "weather_wind_speed": self.weather_wind_speed,
             "weather_wind_dir": self.weather_wind_dir,
             "rail_bias_comment": self.rail_bias_comment,
+            "rainfall": self.rainfall,
+            "irrigation": self.irrigation,
+            "going_stick": self.going_stick,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

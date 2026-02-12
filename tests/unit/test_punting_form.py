@@ -1,13 +1,21 @@
 """Unit tests for Punting Form API scraper."""
 
+import json
 import pytest
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from punty.scrapers.punting_form import (
     PuntingFormScraper,
     RUN_STYLE_MAP,
     _settle_to_position,
+    _record_to_json,
+    _a2e_to_json,
+    _parse_pf_start_time,
+    _parse_last10,
+    _pf_runner_to_dict,
+    _pf_form_entry_to_history,
+    _CONDITION_LABELS,
 )
 
 
@@ -361,3 +369,502 @@ class TestScrapeSpeedMaps:
         # Should still get race data (from settle positions, not runStyle)
         race1 = next(e for e in events if e.get("race_number") == 1)
         assert len(race1["positions"]) >= 1  # At least Good Feel
+
+
+# ---- Test _record_to_json ----
+
+class TestRecordToJson:
+    def test_valid_record(self):
+        record = {"starts": 10, "firsts": 3, "seconds": 2, "thirds": 1}
+        result = json.loads(_record_to_json(record))
+        assert result == {"starts": 10, "wins": 3, "seconds": 2, "thirds": 1}
+
+    def test_none_record(self):
+        assert _record_to_json(None) is None
+
+    def test_zero_starts(self):
+        assert _record_to_json({"starts": 0, "firsts": 0, "seconds": 0, "thirds": 0}) is None
+
+    def test_empty_dict(self):
+        assert _record_to_json({}) is None
+
+
+# ---- Test _a2e_to_json ----
+
+class TestA2eToJson:
+    def test_career_only(self):
+        career = {"a2E": 1.15, "poT": 12.5, "strikeRate": 22.0, "wins": 50, "runners": 227}
+        result = json.loads(_a2e_to_json(career, None))
+        assert "career" in result
+        assert result["career"]["a2e"] == 1.15
+        assert result["career"]["strike_rate"] == 22.0
+
+    def test_career_and_last100(self):
+        career = {"a2E": 1.1, "poT": 10.0, "strikeRate": 20.0, "wins": 50, "runners": 250}
+        last100 = {"a2E": 1.2, "poT": 15.0, "strikeRate": 25.0, "wins": 25, "runners": 100}
+        result = json.loads(_a2e_to_json(career, last100))
+        assert "career" in result
+        assert "last100" in result
+        assert result["last100"]["a2e"] == 1.2
+
+    def test_with_combo_stats(self):
+        career = {"a2E": 1.0, "poT": 10.0, "strikeRate": 15.0, "wins": 10, "runners": 67}
+        combo_career = {"a2E": 1.5, "poT": 20.0, "strikeRate": 30.0, "wins": 3, "runners": 10}
+        result = json.loads(_a2e_to_json(career, None, combo_career, None))
+        assert "combo_career" in result
+        assert result["combo_career"]["a2e"] == 1.5
+
+    def test_empty_returns_none(self):
+        assert _a2e_to_json(None, None) is None
+
+    def test_zero_runners_excluded(self):
+        assert _a2e_to_json({"runners": 0}, None) is None
+
+
+# ---- Test _parse_pf_start_time ----
+
+class TestParsePfStartTime:
+    def test_us_format(self):
+        result = _parse_pf_start_time("2/12/2026 7:45:00 AM")
+        assert isinstance(result, datetime)
+        assert result.month == 2
+        assert result.day == 12
+        assert result.hour == 7
+        assert result.minute == 45
+
+    def test_pm_time(self):
+        result = _parse_pf_start_time("2/12/2026 2:30:00 PM")
+        assert result.hour == 14
+        assert result.minute == 30
+
+    def test_none_input(self):
+        assert _parse_pf_start_time(None) is None
+
+    def test_empty_string(self):
+        assert _parse_pf_start_time("") is None
+
+    def test_invalid_format(self):
+        assert _parse_pf_start_time("not-a-date") is None
+
+    def test_iso_fallback(self):
+        result = _parse_pf_start_time("2026-02-12T07:45:00")
+        assert result is not None
+        assert result.hour == 7
+
+
+# ---- Test _parse_last10 ----
+
+class TestParseLast10:
+    def test_simple_form(self):
+        form, last_five = _parse_last10("12345")
+        assert form == "12345"
+        assert last_five == "12345"
+
+    def test_with_spell_breaks(self):
+        form, last_five = _parse_last10("40x42")
+        assert form == "4042"
+        assert last_five == "4042"
+
+    def test_with_spaces(self):
+        form, last_five = _parse_last10("  12x34  ")
+        assert form == "1234"
+        assert last_five == "1234"
+
+    def test_long_form(self):
+        form, last_five = _parse_last10("1234567890")
+        assert form == "1234567890"
+        assert last_five == "12345"
+
+    def test_none_input(self):
+        form, last_five = _parse_last10(None)
+        assert form == ""
+        assert last_five == ""
+
+    def test_empty_string(self):
+        form, last_five = _parse_last10("")
+        assert form == ""
+        assert last_five == ""
+
+
+# ---- Test _pf_runner_to_dict ----
+
+SAMPLE_PF_RUNNER = {
+    "name": "Good Feel",
+    "tabNo": 2,
+    "barrier": 5,
+    "weightTotal": 58.5,
+    "jockey": {"fullName": "Craig Williams"},
+    "trainer": {"fullName": "Ciaron Maher", "location": "Pakenham"},
+    "age": 4,
+    "sex": "Gelding",
+    "colour": "Bay",
+    "sire": "Snitzel",
+    "dam": "Lady Feel",
+    "sireofDam": "Redoute's Choice",
+    "last10": "12x31",
+    "careerStarts": 15,
+    "careerWins": 4,
+    "careerSeconds": 3,
+    "careerThirds": 2,
+    "prizeMoney": 250000,
+    "handicap": 62,
+    "gearChanges": "Blinkers OFF",
+    "trackRecord": {"starts": 5, "firsts": 2, "seconds": 1, "thirds": 0},
+    "distanceRecord": {"starts": 8, "firsts": 3, "seconds": 2, "thirds": 1},
+    "trackDistRecord": {"starts": 3, "firsts": 1, "seconds": 1, "thirds": 0},
+    "firstUpRecord": {"starts": 4, "firsts": 1, "seconds": 1, "thirds": 0},
+    "secondUpRecord": {"starts": 3, "firsts": 1, "seconds": 0, "thirds": 1},
+    "goodRecord": {"starts": 10, "firsts": 3, "seconds": 2, "thirds": 1},
+    "softRecord": {"starts": 3, "firsts": 1, "seconds": 1, "thirds": 0},
+    "heavyRecord": {"starts": 2, "firsts": 0, "seconds": 0, "thirds": 1},
+    "jockeyA2E_Career": {"a2E": 1.15, "poT": 12.5, "strikeRate": 22.0, "wins": 50, "runners": 227},
+    "jockeyA2E_Last100": {"a2E": 1.2, "poT": 15.0, "strikeRate": 25.0, "wins": 25, "runners": 100},
+    "trainerA2E_Career": {"a2E": 1.1, "poT": 10.0, "strikeRate": 18.0, "wins": 200, "runners": 1111},
+    "trainerA2E_Last100": {"a2E": 1.3, "poT": 14.0, "strikeRate": 22.0, "wins": 22, "runners": 100},
+    "trainerJockeyA2E_Career": {"a2E": 1.5, "poT": 20.0, "strikeRate": 30.0, "wins": 3, "runners": 10},
+    "trainerJockeyA2E_Last100": None,
+}
+
+
+class TestPfRunnerToDict:
+    def test_basic_fields(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "pak-2026-02-12-r1", "pak-2026-02-12")
+        assert result["horse_name"] == "Good Feel"
+        assert result["saddlecloth"] == 2
+        assert result["barrier"] == 5
+        assert result["weight"] == 58.5
+        assert result["jockey"] == "Craig Williams"
+        assert result["trainer"] == "Ciaron Maher"
+        assert result["trainer_location"] == "Pakenham"
+
+    def test_pedigree(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        assert result["sire"] == "Snitzel"
+        assert result["dam"] == "Lady Feel"
+        assert result["dam_sire"] == "Redoute's Choice"
+
+    def test_career_record(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        assert result["career_record"] == "15: 4-3-2"
+
+    def test_form_parsing(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        assert result["form"] == "1231"
+        assert result["last_five"] == "1231"
+
+    def test_stats_as_json(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        track = json.loads(result["track_stats"])
+        assert track["starts"] == 5
+        assert track["wins"] == 2
+
+    def test_a2e_jockey_stats(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        jockey = json.loads(result["jockey_stats"])
+        assert "career" in jockey
+        assert "last100" in jockey
+        assert "combo_career" in jockey
+        assert jockey["career"]["a2e"] == 1.15
+
+    def test_a2e_trainer_stats(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        trainer = json.loads(result["trainer_stats"])
+        assert trainer["career"]["a2e"] == 1.1
+        assert trainer["last100"]["a2e"] == 1.3
+
+    def test_id_generation(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "pak-2026-02-12-r1", "pak-2026-02-12")
+        assert result["id"] == "pak-2026-02-12-r1-5-good-feel"
+
+    def test_gear_changes(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        assert result["gear_changes"] == "Blinkers OFF"
+
+    def test_odds_default_none(self):
+        result = _pf_runner_to_dict(SAMPLE_PF_RUNNER, "r1", "m1")
+        assert result["current_odds"] is None
+        assert result["opening_odds"] is None
+        assert result["place_odds"] is None
+
+
+# ---- Test _pf_form_entry_to_history ----
+
+SAMPLE_PF_FORM_ENTRY = {
+    "meetingDate": "2026-01-15T00:00:00",
+    "track": {"name": "Flemington"},
+    "distance": 1600,
+    "raceClass": "BM78",
+    "prizeMoney": 100000,
+    "trackCondition": "Good 4",
+    "starters": 12,
+    "position": 1,
+    "margin": 0.5,
+    "weight": 58.0,
+    "weightTotal": 58.5,
+    "jockey": {"fullName": "Damien Oliver"},
+    "barrier": 3,
+    "priceSP": 4.50,
+    "priceTAB": 4.20,
+    "priceBF": 5.10,
+    "flucs": "opening,5.00;mid,4.50;starting,4.20;",
+    "inRun": "finish,1;settling_down,3;m800,2;m400,1;",
+    "officialRaceTime": "1:34.56",
+    "stewardsReport": "Held up on turn",
+    "top4Finishers": [
+        {"runnerName": "Good Feel", "position": 1},
+        {"runnerName": "Second Runner", "position": 2},
+        {"runnerName": "Third Runner", "position": 3},
+    ],
+    "isBarrierTrial": False,
+}
+
+
+class TestPfFormEntryToHistory:
+    def test_basic_fields(self):
+        result = _pf_form_entry_to_history(SAMPLE_PF_FORM_ENTRY)
+        assert result["date"] == "2026-01-15"
+        assert result["venue"] == "Flemington"
+        assert result["distance"] == 1600
+        assert result["class"] == "BM78"
+        assert result["position"] == 1
+        assert result["margin"] == 0.5
+
+    def test_flucs_parsing(self):
+        result = _pf_form_entry_to_history(SAMPLE_PF_FORM_ENTRY)
+        assert result["flucs"]["opening"] == 5.00
+        assert result["flucs"]["mid"] == 4.50
+        assert result["flucs"]["starting"] == 4.20
+
+    def test_in_run_parsing(self):
+        result = _pf_form_entry_to_history(SAMPLE_PF_FORM_ENTRY)
+        assert result["at800"] == "2"
+        assert result["at400"] == "1"
+        assert result["settled"] == "3"
+
+    def test_top4(self):
+        result = _pf_form_entry_to_history(SAMPLE_PF_FORM_ENTRY)
+        assert len(result["top4"]) == 3
+        assert result["top4"][0]["name"] == "Good Feel"
+
+    def test_prices(self):
+        result = _pf_form_entry_to_history(SAMPLE_PF_FORM_ENTRY)
+        assert result["sp"] == 4.50
+        assert result["sp_tab"] == 4.20
+        assert result["sp_bf"] == 5.10
+
+    def test_empty_flucs(self):
+        entry = {**SAMPLE_PF_FORM_ENTRY, "flucs": ""}
+        result = _pf_form_entry_to_history(entry)
+        assert result["flucs"] is None
+
+    def test_empty_in_run(self):
+        entry = {**SAMPLE_PF_FORM_ENTRY, "inRun": ""}
+        result = _pf_form_entry_to_history(entry)
+        assert result["at800"] is None
+        assert result["at400"] is None
+
+    def test_barrier_trial_flag(self):
+        entry = {**SAMPLE_PF_FORM_ENTRY, "isBarrierTrial": True}
+        result = _pf_form_entry_to_history(entry)
+        assert result["is_trial"] is True
+
+
+# ---- Test conditions parsing ----
+
+class TestConditionsParsing:
+    def setup_method(self):
+        self.scraper = PuntingFormScraper(api_key="test-key")
+
+    def test_parse_basic_condition(self):
+        cond = {
+            "track": "Pakenham",
+            "trackCondition": "Good 4",
+            "trackConditionNumber": 4,
+            "rail": "Out 3m",
+            "weather": "Fine",
+            "penetrometer": 4.2,
+            "wind": 15,
+            "windDirection": "NW",
+            "rainfall": 2.5,
+            "irrigation": True,
+            "comment": "",
+            "abandonded": False,
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["condition"] == "Good 4"
+        assert result["rail"] == "Out 3m"
+        assert result["weather"] == "Fine"
+        assert result["penetrometer"] == 4.2
+        assert result["wind_speed"] == 15
+        assert result["wind_direction"] == "NW"
+        assert result["rainfall"] == 2.5
+        assert result["irrigation"] is True
+        assert result["going_stick"] is None
+
+    def test_going_stick_from_comment(self):
+        cond = {
+            "track": "Flemington",
+            "trackCondition": "Good 4",
+            "trackConditionNumber": 4,
+            "comment": "Track is in good order. Going Stick: 11.8",
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["going_stick"] == 11.8
+
+    def test_condition_label_fallback(self):
+        cond = {
+            "track": "Test",
+            "trackCondition": "",
+            "trackConditionNumber": 8,
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["condition"] == "Heavy 8"
+
+    def test_abandoned(self):
+        cond = {
+            "track": "Test",
+            "trackCondition": "Heavy 10",
+            "trackConditionNumber": 10,
+            "abandonded": True,  # PF typo
+        }
+        result = self.scraper._parse_condition(cond)
+        assert result["abandoned"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_conditions_for_venue_match(self):
+        conditions = [
+            {"track": "Pakenham", "trackCondition": "Good 4", "trackConditionNumber": 4},
+            {"track": "Flemington", "trackCondition": "Soft 5", "trackConditionNumber": 5},
+        ]
+        self.scraper._conditions_cache = conditions
+        result = await self.scraper.get_conditions_for_venue("Pakenham")
+        assert result is not None
+        assert result["condition"] == "Good 4"
+
+    @pytest.mark.asyncio
+    async def test_get_conditions_for_venue_no_match(self):
+        conditions = [
+            {"track": "Flemington", "trackCondition": "Soft 5", "trackConditionNumber": 5},
+        ]
+        self.scraper._conditions_cache = conditions
+        result = await self.scraper.get_conditions_for_venue("Sandown")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_conditions_sponsor_prefix(self):
+        conditions = [
+            {"track": "Pakenham", "trackCondition": "Good 4", "trackConditionNumber": 4},
+        ]
+        self.scraper._conditions_cache = conditions
+        result = await self.scraper.get_conditions_for_venue("Sportsbet Pakenham")
+        assert result is not None
+        assert result["condition"] == "Good 4"
+
+
+# ---- Test scratchings ----
+
+class TestScratchings:
+    def setup_method(self):
+        self.scraper = PuntingFormScraper(api_key="test-key")
+
+    @pytest.mark.asyncio
+    async def test_filter_by_meeting_id(self):
+        self.scraper._scratchings_cache = [
+            {"meetingId": 237271, "raceNo": 1, "tabNo": 3, "deduction": 2.5, "timeStamp": "2026-02-12T10:00:00"},
+            {"meetingId": 237271, "raceNo": 3, "tabNo": 7, "deduction": 1.0, "timeStamp": "2026-02-12T10:05:00"},
+            {"meetingId": 237270, "raceNo": 1, "tabNo": 1, "deduction": 3.0, "timeStamp": "2026-02-12T09:00:00"},
+        ]
+        result = await self.scraper.get_scratchings_for_meeting(237271)
+        assert len(result) == 2
+        assert result[0]["race_number"] == 1
+        assert result[0]["tab_no"] == 3
+        assert result[0]["deduction"] == 2.5
+
+    @pytest.mark.asyncio
+    async def test_no_scratchings(self):
+        self.scraper._scratchings_cache = []
+        result = await self.scraper.get_scratchings_for_meeting(999999)
+        assert result == []
+
+
+# ---- Test scrape_meeting_data ----
+
+SAMPLE_PF_FIELDS = {
+    "track": {"name": "Pakenham", "abbrev": "PKM"},
+    "railPosition": "True",
+    "meetingId": 237271,
+    "races": [
+        {
+            "number": 1,
+            "name": "Maiden Plate",
+            "distance": 1200,
+            "raceClass": "MDN",
+            "prizeMoney": "40000",
+            "startTimeUTC": "2/12/2026 7:45:00 AM",
+            "ageRestrictions": "3yo+",
+            "weightType": "Set Weights",
+            "runners": [SAMPLE_PF_RUNNER],
+        }
+    ],
+}
+
+
+class TestScrapeMeetingData:
+    def setup_method(self):
+        self.scraper = PuntingFormScraper(api_key="test-key")
+
+    @pytest.mark.asyncio
+    async def test_successful_meeting_scrape(self):
+        with patch.object(self.scraper, "resolve_meeting_id", return_value=237271):
+            with patch.object(self.scraper, "get_fields", return_value=SAMPLE_PF_FIELDS):
+                with patch.object(self.scraper, "get_form", side_effect=Exception("no form")):
+                    with patch.object(self.scraper, "get_scratchings_for_meeting", return_value=[]):
+                        result = await self.scraper.scrape_meeting_data("Pakenham", date(2026, 2, 12))
+
+        assert "meeting" in result
+        assert "races" in result
+        assert "runners" in result
+        assert len(result["races"]) == 1
+        assert len(result["runners"]) == 1
+
+        race = result["races"][0]
+        assert race["name"] == "Maiden Plate"
+        assert race["distance"] == 1200
+        assert race["class_"] == "MDN"
+        assert race["prize_money"] == 40000
+        assert race["age_restriction"] == "3yo+"
+
+        runner = result["runners"][0]
+        assert runner["horse_name"] == "Good Feel"
+        assert runner["dam_sire"] == "Redoute's Choice"
+        assert runner["trainer_location"] == "Pakenham"
+
+    @pytest.mark.asyncio
+    async def test_meeting_not_found(self):
+        with patch.object(self.scraper, "resolve_meeting_id", return_value=None):
+            result = await self.scraper.scrape_meeting_data("Unknown", date(2026, 2, 12))
+        assert result["races"] == []
+        assert result["runners"] == []
+
+    @pytest.mark.asyncio
+    async def test_scratchings_applied(self):
+        scratchings = [{"race_number": 1, "tab_no": 2, "deduction": 2.0, "timestamp": None}]
+        with patch.object(self.scraper, "resolve_meeting_id", return_value=237271):
+            with patch.object(self.scraper, "get_fields", return_value=SAMPLE_PF_FIELDS):
+                with patch.object(self.scraper, "get_form", side_effect=Exception("no form")):
+                    with patch.object(self.scraper, "get_scratchings_for_meeting", return_value=scratchings):
+                        result = await self.scraper.scrape_meeting_data("Pakenham", date(2026, 2, 12))
+
+        runner = result["runners"][0]
+        assert runner["scratched"] is True
+
+
+# ---- Test _CONDITION_LABELS ----
+
+class TestConditionLabels:
+    def test_all_labels_present(self):
+        assert len(_CONDITION_LABELS) == 10
+        assert _CONDITION_LABELS[1] == "Firm 1"
+        assert _CONDITION_LABELS[4] == "Good 4"
+        assert _CONDITION_LABELS[7] == "Soft 7"
+        assert _CONDITION_LABELS[10] == "Heavy 10"

@@ -66,6 +66,7 @@ MEETING_FIELDS = [
     "track_condition", "weather", "rail_position",
     "penetrometer", "weather_condition", "weather_temp",
     "weather_wind_speed", "weather_wind_dir", "rail_bias_comment",
+    "rainfall", "irrigation", "going_stick",
 ]
 
 
@@ -120,7 +121,10 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
 
 
 async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
-    """Run all scrapers for a selected meeting and merge data into DB."""
+    """Run all scrapers for a selected meeting and merge data into DB.
+
+    Pipeline: PF fields → PF conditions → racing.com (odds+comments supplement) → TAB odds
+    """
     from punty.scrapers.playwright_base import scrape_lock
     from punty.scheduler.activity_log import log_scrape_start, log_scrape_complete, log_scrape_error
 
@@ -136,47 +140,68 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession) -> dict:
 
     # Acquire scrape lock to prevent concurrent Playwright operations
     async with scrape_lock(venue):
-        # Primary form data — racing.com GraphQL
+        # Step 1: PF API — primary runner/race data
+        pf_scraper = None
+        try:
+            from punty.scrapers.punting_form import PuntingFormScraper
+            pf_scraper = await PuntingFormScraper.from_settings(db)
+            data = await pf_scraper.scrape_meeting_data(venue, race_date)
+            await _upsert_meeting_data(db, meeting, data)
+        except Exception as e:
+            logger.error(f"PF primary scrape failed: {e}")
+            errors.append(f"punting_form: {e}")
+            # Fallback to racing.com if PF fails entirely
+            try:
+                from punty.scrapers.racing_com import RacingComScraper
+                scraper = RacingComScraper()
+                try:
+                    data = await scraper.scrape_meeting(venue, race_date)
+                    await _upsert_meeting_data(db, meeting, data)
+                finally:
+                    await scraper.close()
+            except Exception as e2:
+                logger.error(f"racing.com fallback also failed: {e2}")
+                errors.append(f"racing.com_fallback: {e2}")
+
+        # Step 2: PF conditions — replaces track_conditions.py
+        if not meeting.track_condition_locked:
+            try:
+                if pf_scraper is None:
+                    from punty.scrapers.punting_form import PuntingFormScraper
+                    pf_scraper = await PuntingFormScraper.from_settings(db)
+                cond = await pf_scraper.get_conditions_for_venue(venue)
+                if cond:
+                    _apply_pf_conditions(meeting, cond)
+            except Exception as e:
+                logger.error(f"PF conditions failed: {e}")
+                errors.append(f"pf_conditions: {e}")
+
+        # Step 3: racing.com — supplementary odds + comments only
         try:
             from punty.scrapers.racing_com import RacingComScraper
             scraper = RacingComScraper()
             try:
                 data = await scraper.scrape_meeting(venue, race_date)
-                await _upsert_meeting_data(db, meeting, data)
+                await _merge_racing_com_supplement(db, meeting_id, data)
             finally:
                 await scraper.close()
         except Exception as e:
-            logger.error(f"racing.com scrape failed: {e}")
-            errors.append(f"racing.com: {e}")
+            logger.error(f"racing.com supplement failed: {e}")
+            errors.append(f"racing.com_supplement: {e}")
 
-        # Track conditions (supplementary) — skip if manually locked
-        try:
-            from punty.scrapers.track_conditions import scrape_track_conditions
-            state = _guess_state(venue)
-            if state and not meeting.track_condition_locked:
-                conditions = await scrape_track_conditions(state)
-                for cond in conditions:
-                    if cond["venue"] and cond["venue"].lower() in venue.lower():
-                        meeting.track_condition = cond.get("condition") or meeting.track_condition
-                        meeting.rail_position = cond.get("rail") or meeting.rail_position
-                        meeting.weather = cond.get("weather") or meeting.weather
-                        break
-        except Exception as e:
-            logger.error(f"track conditions scrape failed: {e}")
-            errors.append(f"track_conditions: {e}")
+        # Close PF scraper
+        if pf_scraper:
+            await pf_scraper.close()
 
-        # If no races were found and not already classified, mark as trial/jumpout
-        # BUT only if the racing.com scrape succeeded - otherwise we can't know for sure
-        racing_com_failed = any("racing.com" in e for e in errors)
-        if not racing_com_failed and (not meeting.meeting_type or meeting.meeting_type == "race"):
+        # If no races were found, classify as trial/jumpout
+        pf_failed = any("punting_form" in e for e in errors)
+        if not pf_failed and (not meeting.meeting_type or meeting.meeting_type == "race"):
             race_count = await db.execute(
                 select(Race).where(Race.meeting_id == meeting_id).limit(1)
             )
             if not race_count.scalar_one_or_none():
                 meeting.meeting_type = _classify_meeting_type(venue)
                 if meeting.meeting_type == "race":
-                    # No races found but venue name didn't match trial patterns —
-                    # still likely a trial/jumpout if racing.com has no form data
                     meeting.meeting_type = "trial"
                     logger.info(f"No races found for {venue} — classified as trial")
 
@@ -236,82 +261,83 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         return
 
     try:
-        # Step 1: racing.com GraphQL data (form + speed maps + odds in one pass)
-        yield {"step": 0, "total": total_steps, "label": "Scraping racing.com GraphQL data...", "status": "running"}
-        try:
-            from punty.scrapers.racing_com import RacingComScraper
-            scraper = RacingComScraper()
-            try:
-                data = await scraper.scrape_meeting(venue, race_date)
-                race_count = len(data.get("races", []))
-                runner_count = len(data.get("runners", []))
-                await _upsert_meeting_data(db, meeting, data)
-                yield {"step": 1, "total": total_steps,
-                       "label": f"GraphQL complete — {race_count} races, {runner_count} runners", "status": "done"}
-            finally:
-                await scraper.close()
-        except Exception as e:
-            logger.error(f"racing.com scrape failed: {e}")
-            errors.append(f"racing.com: {e}")
-            yield {"step": 1, "total": total_steps, "label": f"racing.com failed: {e}", "status": "error"}
+        pf_scraper = None
 
-        # Step 2: Track conditions (supplementary) — skip if manually locked
-        yield {"step": 1, "total": total_steps, "label": "Scraping track conditions...", "status": "running"}
+        # Step 1: PF API — primary runner/race data
+        yield {"step": 0, "total": total_steps, "label": "Scraping PF API fields data...", "status": "running"}
+        try:
+            from punty.scrapers.punting_form import PuntingFormScraper
+            pf_scraper = await PuntingFormScraper.from_settings(db)
+            data = await pf_scraper.scrape_meeting_data(venue, race_date)
+            race_count = len(data.get("races", []))
+            runner_count = len(data.get("runners", []))
+            await _upsert_meeting_data(db, meeting, data)
+            yield {"step": 1, "total": total_steps,
+                   "label": f"PF complete — {race_count} races, {runner_count} runners", "status": "done"}
+        except Exception as e:
+            logger.error(f"PF primary scrape failed: {e}")
+            errors.append(f"punting_form: {e}")
+            yield {"step": 1, "total": total_steps, "label": f"PF failed: {e}, trying racing.com fallback...", "status": "error"}
+            # Fallback to racing.com for primary data
+            try:
+                from punty.scrapers.racing_com import RacingComScraper
+                scraper = RacingComScraper()
+                try:
+                    data = await scraper.scrape_meeting(venue, race_date)
+                    race_count = len(data.get("races", []))
+                    runner_count = len(data.get("runners", []))
+                    await _upsert_meeting_data(db, meeting, data)
+                    yield {"step": 1, "total": total_steps,
+                           "label": f"racing.com fallback — {race_count} races, {runner_count} runners", "status": "done"}
+                finally:
+                    await scraper.close()
+            except Exception as e2:
+                logger.error(f"racing.com fallback also failed: {e2}")
+                errors.append(f"racing.com_fallback: {e2}")
+
+        # Step 2: PF conditions + weather — replaces track_conditions.py
+        yield {"step": 1, "total": total_steps, "label": "Fetching PF conditions/weather...", "status": "running"}
         try:
             if meeting.track_condition_locked:
                 logger.info(f"Track condition locked for {venue}: {meeting.track_condition!r} (manual override)")
                 yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (locked)", "status": "done"}
             else:
-              from punty.scrapers.track_conditions import scrape_track_conditions, scrape_sportsbetform_conditions
-              state = _guess_state(venue)
-              found = False
-
-              # Try primary source (racingaustralia.horse)
-              if state:
-                conditions = await scrape_track_conditions(state)
-                for cond in conditions:
-                    if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
-                        new_cond = cond.get("condition")
-                        if new_cond and _is_more_specific(new_cond, meeting.track_condition):
-                            logger.info(f"Track condition for {venue}: {meeting.track_condition!r} → {new_cond!r} (from racingaustralia)")
-                            meeting.track_condition = new_cond
-                        meeting.rail_position = cond.get("rail") or meeting.rail_position
-                        meeting.weather = cond.get("weather") or meeting.weather
-                        found = True
-                        break
-
-              # Try fallback source (sportsbetform.com.au) if not found
-              if not found and not meeting.track_condition:
-                logger.info(f"Primary track conditions not found for {venue}, trying sportsbetform...")
-                try:
-                    fallback = await scrape_sportsbetform_conditions()
-                    for cond in fallback:
-                        if cond.get("venue") and (cond["venue"].lower() in venue.lower() or venue.lower() in cond["venue"].lower()):
-                            new_cond = cond.get("condition")
-                            if new_cond:
-                                logger.info(f"Track condition for {venue}: {meeting.track_condition!r} → {new_cond!r} (from sportsbetform)")
-                                meeting.track_condition = new_cond
-                            meeting.rail_position = cond.get("rail") or meeting.rail_position
-                            meeting.weather = cond.get("weather") or meeting.weather
-                            found = True
-                            break
-                except Exception as e:
-                    logger.warning(f"Sportsbetform fallback failed: {e}")
-
-              if found:
-                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition or 'N/A'}", "status": "done"}
-              elif meeting.track_condition:
-                # GraphQL data available
-                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (from GraphQL)", "status": "done"}
-              else:
-                yield {"step": 2, "total": total_steps, "label": "Track conditions: not available", "status": "done"}
+                if pf_scraper is None:
+                    from punty.scrapers.punting_form import PuntingFormScraper
+                    pf_scraper = await PuntingFormScraper.from_settings(db)
+                cond = await pf_scraper.get_conditions_for_venue(venue)
+                if cond:
+                    _apply_pf_conditions(meeting, cond)
+                    yield {"step": 2, "total": total_steps,
+                           "label": f"Conditions: {meeting.track_condition or 'N/A'} | Rain: {cond.get('rainfall', 'N/A')}mm",
+                           "status": "done"}
+                elif meeting.track_condition:
+                    yield {"step": 2, "total": total_steps, "label": f"Conditions: {meeting.track_condition} (from PF fields)", "status": "done"}
+                else:
+                    yield {"step": 2, "total": total_steps, "label": "Conditions: not available", "status": "done"}
         except Exception as e:
-            logger.error(f"track conditions scrape failed: {e}")
-            errors.append(f"track_conditions: {e}")
-            yield {"step": 2, "total": total_steps, "label": f"Track conditions failed: {e}", "status": "error"}
+            logger.error(f"PF conditions failed: {e}")
+            errors.append(f"pf_conditions: {e}")
+            yield {"step": 2, "total": total_steps, "label": f"Conditions failed: {e}", "status": "error"}
 
-        # Step 3: TAB odds (supplementary — GraphQL already has multi-provider odds)
-        yield {"step": 2, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
+        # Step 3: racing.com — supplementary odds + comments
+        yield {"step": 2, "total": total_steps, "label": "Scraping racing.com odds + comments...", "status": "running"}
+        try:
+            from punty.scrapers.racing_com import RacingComScraper
+            scraper = RacingComScraper()
+            try:
+                data = await scraper.scrape_meeting(venue, race_date)
+                await _merge_racing_com_supplement(db, meeting_id, data)
+            finally:
+                await scraper.close()
+            yield {"step": 3, "total": total_steps, "label": "racing.com odds/comments complete", "status": "done"}
+        except Exception as e:
+            logger.error(f"racing.com supplement failed: {e}")
+            errors.append(f"racing.com_supplement: {e}")
+            yield {"step": 3, "total": total_steps, "label": f"racing.com supplement failed: {e}", "status": "error"}
+
+        # Step 4: TAB odds (supplementary)
+        yield {"step": 3, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
         try:
             from punty.scrapers.tab import TabScraper
             scraper = TabScraper()
@@ -320,23 +346,15 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 await _merge_odds(db, meeting_id, data.get("runners_odds", []))
             finally:
                 await scraper.close()
-            yield {"step": 3, "total": total_steps, "label": "TAB odds complete", "status": "done"}
+            yield {"step": 4, "total": total_steps, "label": "TAB odds complete", "status": "done"}
         except Exception as e:
             logger.error(f"TAB scrape failed: {e}")
             errors.append(f"tab: {e}")
-            yield {"step": 3, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
+            yield {"step": 4, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
 
-        # Step 4: Trainer stats from Racing Australia
-        yield {"step": 3, "total": total_steps, "label": "Fetching trainer stats...", "status": "running"}
-        try:
-            result = await populate_trainer_stats(db, meeting_id)
-            matched = result.get("matched", 0)
-            total = result.get("total", 0)
-            yield {"step": 4, "total": total_steps, "label": f"Trainer stats: {matched}/{total} matched", "status": "done"}
-        except Exception as e:
-            logger.error(f"Trainer stats failed: {e}")
-            errors.append(f"trainer_stats: {e}")
-            yield {"step": 4, "total": total_steps, "label": f"Trainer stats failed: {e}", "status": "error"}
+        # Close PF scraper
+        if pf_scraper:
+            await pf_scraper.close()
 
         await db.commit()
         error_count = len(errors)
@@ -616,6 +634,69 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
             for field in RUNNER_FIELDS:
                 runner_kwargs[field] = runner.get(field)
             db.add(Runner(**runner_kwargs))
+
+    await db.flush()
+
+
+def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
+    """Apply PF conditions data to a Meeting object."""
+    new_cond = cond.get("condition")
+    if new_cond and _is_more_specific(new_cond, meeting.track_condition):
+        logger.info(f"PF condition for {meeting.venue}: {meeting.track_condition!r} → {new_cond!r}")
+        meeting.track_condition = new_cond
+    meeting.rail_position = cond.get("rail") or meeting.rail_position
+    meeting.weather = cond.get("weather") or meeting.weather
+    if cond.get("penetrometer") is not None:
+        meeting.penetrometer = cond["penetrometer"]
+    if cond.get("wind_speed") is not None:
+        meeting.weather_wind_speed = cond["wind_speed"]
+    if cond.get("wind_direction"):
+        meeting.weather_wind_dir = cond["wind_direction"]
+    if cond.get("rainfall") is not None:
+        meeting.rainfall = cond["rainfall"]
+    if cond.get("irrigation") is not None:
+        meeting.irrigation = cond["irrigation"]
+    if cond.get("going_stick") is not None:
+        meeting.going_stick = cond["going_stick"]
+
+
+# Fields from racing.com that supplement PF data (odds, comments only)
+_SUPPLEMENT_FIELDS = [
+    "current_odds", "opening_odds", "place_odds",
+    "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair",
+    "odds_flucs", "comment_long", "comment_short", "comments", "stewards_comment",
+]
+
+
+async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: dict) -> None:
+    """Merge racing.com odds and comments into existing runners (PF-sourced).
+
+    Only updates odds and comment fields — does NOT overwrite PF's primary runner data.
+    """
+    for runner_data in data.get("runners", []):
+        horse_name = runner_data.get("horse_name", "")
+        race_id = runner_data.get("race_id", "")
+        if not (horse_name and race_id):
+            continue
+
+        result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.horse_name == horse_name,
+            )
+        )
+        runner = result.scalar_one_or_none()
+        if not runner:
+            continue
+
+        for field in _SUPPLEMENT_FIELDS:
+            val = runner_data.get(field)
+            if val is not None:
+                # Don't overwrite existing odds with None or 0
+                if field.startswith("odds_") or field in ("current_odds", "opening_odds", "place_odds"):
+                    if not val:
+                        continue
+                setattr(runner, field, val)
 
     await db.flush()
 

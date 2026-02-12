@@ -1,11 +1,15 @@
-"""Punting Form API scraper for speed maps, ratings, and form data.
+"""Punting Form API scraper for speed maps, ratings, form data, conditions.
+
+Primary data source for PuntyAI. Provides runner fields, form history,
+speed maps, ratings, track conditions, weather, and scratchings.
 
 Requires API key stored in app_settings as 'punting_form_api_key'.
 API docs: https://docs.puntingform.com.au/
 """
 
+import json as _json
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any, AsyncGenerator, Optional
 
 import httpx
@@ -24,6 +28,14 @@ RUN_STYLE_MAP = {
     "mf": "midfield",
     "mf/bm": "midfield",
     "bm": "backmarker",
+}
+
+# PF track condition number to label
+_CONDITION_LABELS = {
+    1: "Firm 1", 2: "Firm 2",
+    3: "Good 3", 4: "Good 4",
+    5: "Soft 5", 6: "Soft 6", 7: "Soft 7",
+    8: "Heavy 8", 9: "Heavy 9", 10: "Heavy 10",
 }
 
 
@@ -52,13 +64,230 @@ def _settle_to_position(settle: int, field_size: int) -> Optional[str]:
         return "backmarker"
 
 
+def _record_to_json(record: dict | None) -> str | None:
+    """Convert PF record dict {starts, firsts, seconds, thirds} to JSON string."""
+    if not record or record.get("starts", 0) == 0:
+        return None
+    return _json.dumps({
+        "starts": record.get("starts", 0),
+        "wins": record.get("firsts", 0),
+        "seconds": record.get("seconds", 0),
+        "thirds": record.get("thirds", 0),
+    })
+
+
+def _a2e_to_json(career: dict | None, last100: dict | None,
+                 combo_career: dict | None = None,
+                 combo_last100: dict | None = None) -> str | None:
+    """Convert PF A2E stat dicts to JSON string for jockey_stats/trainer_stats."""
+    data = {}
+
+    def _extract(src: dict | None, key: str):
+        if not src or not src.get("runners"):
+            return
+        data[key] = {
+            "a2e": src.get("a2E"),
+            "pot": src.get("poT"),
+            "strike_rate": src.get("strikeRate"),
+            "wins": src.get("wins"),
+            "runners": src.get("runners"),
+        }
+
+    _extract(career, "career")
+    _extract(last100, "last100")
+    _extract(combo_career, "combo_career")
+    _extract(combo_last100, "combo_last100")
+    return _json.dumps(data) if data else None
+
+
+def _parse_pf_start_time(time_str: str | None) -> datetime | None:
+    """Parse PF startTimeUTC like '2/12/2026 7:45:00 AM' to datetime."""
+    if not time_str:
+        return None
+    try:
+        # PF uses US-style: M/D/YYYY H:MM:SS AM/PM
+        return datetime.strptime(time_str.strip(), "%m/%d/%Y %I:%M:%S %p")
+    except (ValueError, TypeError):
+        try:
+            # Try ISO format as fallback
+            return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
+
+def _parse_last10(last10: str | None) -> tuple[str, str]:
+    """Parse PF last10 like '40x42' → (form='4042', last_five='4042').
+
+    'x' marks spell breaks, spaces are padding. Strip both.
+    Returns (form_string, last_five_string).
+    """
+    if not last10:
+        return ("", "")
+    # Strip spaces and 'x' separators
+    cleaned = last10.strip().replace("x", "").replace(" ", "")
+    # PF uses '0' for unplaced (10th+), keep as-is
+    last_five = cleaned[:5]
+    return (cleaned, last_five)
+
+
+def _pf_runner_to_dict(pf_runner: dict, race_id: str, meeting_id: str) -> dict:
+    """Convert PF /form/fields runner to our Runner dict format."""
+    jockey = pf_runner.get("jockey") or {}
+    trainer = pf_runner.get("trainer") or {}
+
+    horse_name = (pf_runner.get("name") or "").strip()
+    barrier = pf_runner.get("barrier") or 0
+    tab_no = pf_runner.get("tabNo")
+
+    # Generate runner ID matching BaseScraper pattern
+    horse_slug = horse_name.lower().replace(" ", "-").replace("'", "")[:20]
+    runner_id = f"{race_id}-{barrier}-{horse_slug}"
+
+    # Form
+    form_full, last_five = _parse_last10(pf_runner.get("last10"))
+
+    # Career record string
+    starts = pf_runner.get("careerStarts", 0)
+    wins = pf_runner.get("careerWins", 0)
+    seconds = pf_runner.get("careerSeconds", 0)
+    thirds = pf_runner.get("careerThirds", 0)
+    career_record = f"{starts}: {wins}-{seconds}-{thirds}"
+
+    # Jockey stats (A2E) — includes combo stats for trainer+jockey combo
+    jockey_stats = _a2e_to_json(
+        pf_runner.get("jockeyA2E_Career"),
+        pf_runner.get("jockeyA2E_Last100"),
+        pf_runner.get("trainerJockeyA2E_Career"),
+        pf_runner.get("trainerJockeyA2E_Last100"),
+    )
+
+    # Trainer stats (A2E)
+    trainer_stats = _a2e_to_json(
+        pf_runner.get("trainerA2E_Career"),
+        pf_runner.get("trainerA2E_Last100"),
+    )
+
+    return {
+        "id": runner_id,
+        "race_id": race_id,
+        "horse_name": horse_name,
+        "saddlecloth": tab_no,
+        "barrier": barrier,
+        "weight": pf_runner.get("weightTotal"),
+        "jockey": (jockey.get("fullName") or "").strip(),
+        "trainer": (trainer.get("fullName") or "").strip(),
+        "trainer_location": (trainer.get("location") or "").strip() or None,
+        "form": form_full,
+        "last_five": last_five,
+        "career_record": career_record,
+        "horse_age": pf_runner.get("age"),
+        "horse_sex": pf_runner.get("sex"),
+        "horse_colour": pf_runner.get("colour"),
+        "sire": pf_runner.get("sire"),
+        "dam": pf_runner.get("dam"),
+        "dam_sire": pf_runner.get("sireofDam"),
+        "career_prize_money": pf_runner.get("prizeMoney"),
+        "handicap_rating": pf_runner.get("handicap") if pf_runner.get("handicap") else None,
+        "gear_changes": (pf_runner.get("gearChanges") or "").strip() or None,
+        "scratched": pf_runner.get("emergencyIndicator", False) is True and pf_runner.get("tabNo") is None,
+        # Stats (structured records → JSON)
+        "track_stats": _record_to_json(pf_runner.get("trackRecord")),
+        "distance_stats": _record_to_json(pf_runner.get("distanceRecord")),
+        "track_dist_stats": _record_to_json(pf_runner.get("trackDistRecord")),
+        "first_up_stats": _record_to_json(pf_runner.get("firstUpRecord")),
+        "second_up_stats": _record_to_json(pf_runner.get("secondUpRecord")),
+        "good_track_stats": _record_to_json(pf_runner.get("goodRecord")),
+        "soft_track_stats": _record_to_json(pf_runner.get("softRecord")),
+        "heavy_track_stats": _record_to_json(pf_runner.get("heavyRecord")),
+        "jockey_stats": jockey_stats,
+        "trainer_stats": trainer_stats,
+        # Fields PF doesn't provide (will be filled by racing.com supplement)
+        "current_odds": None,
+        "opening_odds": None,
+        "place_odds": None,
+    }
+
+
+def _pf_form_entry_to_history(entry: dict) -> dict:
+    """Convert a single PF form entry to our form_history JSON format."""
+    track = entry.get("track") or {}
+    jockey = entry.get("jockey") or {}
+
+    # Parse flucs string like "opening,1.70;mid,1.75;starting,1.65;"
+    flucs_str = entry.get("flucs", "")
+    flucs = {}
+    if flucs_str:
+        for part in flucs_str.strip(";").split(";"):
+            if "," in part:
+                k, v = part.split(",", 1)
+                try:
+                    flucs[k.strip()] = float(v.strip())
+                except (ValueError, TypeError):
+                    pass
+
+    # Parse in-run positions like "finish,1;settling_down,1;m800,1;m400,1;"
+    in_run = entry.get("inRun", "")
+    at800 = None
+    at400 = None
+    settled = None
+    if in_run:
+        for part in in_run.strip(";").split(";"):
+            if "," in part:
+                k, v = part.split(",", 1)
+                k = k.strip()
+                if k == "m800":
+                    at800 = v.strip()
+                elif k == "m400":
+                    at400 = v.strip()
+                elif k == "settling_down":
+                    settled = v.strip()
+
+    # Top 4 finishers
+    top4_raw = entry.get("top4Finishers") or []
+    top4 = [{"name": t.get("runnerName"), "pos": t.get("position")} for t in top4_raw[:4]]
+
+    # Meeting date
+    meet_date = entry.get("meetingDate", "")
+    if "T" in meet_date:
+        meet_date = meet_date.split("T")[0]
+
+    return {
+        "date": meet_date,
+        "venue": track.get("name"),
+        "distance": entry.get("distance"),
+        "class": entry.get("raceClass"),
+        "prize": entry.get("prizeMoney"),
+        "track": entry.get("trackCondition"),
+        "field_size": entry.get("starters"),
+        "position": entry.get("position"),
+        "margin": entry.get("margin"),
+        "weight": entry.get("weight") or entry.get("weightTotal"),
+        "jockey": jockey.get("fullName"),
+        "barrier": entry.get("barrier"),
+        "sp": entry.get("priceSP"),
+        "sp_tab": entry.get("priceTAB"),
+        "sp_bf": entry.get("priceBF"),
+        "flucs": flucs if flucs else None,
+        "time": entry.get("officialRaceTime"),
+        "settled": settled,
+        "at800": at800,
+        "at400": at400,
+        "comment": entry.get("stewardsReport"),
+        "top4": top4 if top4 else None,
+        "is_trial": entry.get("isBarrierTrial", False),
+    }
+
+
 class PuntingFormScraper(BaseScraper):
-    """Scraper for Punting Form API — speed maps, ratings, and form data."""
+    """Scraper for Punting Form API — primary data source for PuntyAI."""
 
     def __init__(self, api_key: str):
         super().__init__()
         self.api_key = api_key
         self._client: Optional[httpx.AsyncClient] = None
+        # Session-level caches (one API call covers all venues)
+        self._conditions_cache: list | None = None
+        self._scratchings_cache: list | None = None
 
     @classmethod
     async def from_settings(cls, db) -> "PuntingFormScraper":
@@ -154,24 +383,255 @@ class PuntingFormScraper(BaseScraper):
             "meetingId": meeting_id,
         })
 
-    # ---- Conditions ----
+    # ---- Fields (runner base data) ----
+
+    async def get_fields(self, meeting_id: int, race_number: int = 0) -> dict:
+        """Fetch race fields with full runner data.
+
+        race_number=0 returns all races. Returns dict with track, races, runners etc.
+        """
+        params = {"meetingId": meeting_id}
+        if race_number > 0:
+            params["raceNumber"] = race_number
+        return await self._api_get("/form/fields", params)
+
+    # ---- Form history ----
+
+    async def get_form(self, meeting_id: int, race_number: int = 0, runs: int = 10) -> list:
+        """Fetch historical form data (up to 10 past starts per runner)."""
+        params = {"meetingId": meeting_id, "runs": runs}
+        if race_number > 0:
+            params["raceNumber"] = race_number
+        return await self._api_get("/form/form", params)
+
+    # ---- Conditions (cached) ----
 
     async def get_conditions(self, jurisdiction: int = 0) -> list:
-        """Fetch track conditions and weather for upcoming meetings.
+        """Fetch track conditions and weather for all upcoming meetings.
 
-        jurisdiction: 0=all, 1=?, 2=?
+        Results are cached for the session (one call covers all venues).
         """
-        return await self._api_get("/Updates/Conditions", {
-            "jurisdiction": jurisdiction,
-        })
+        if self._conditions_cache is None:
+            self._conditions_cache = await self._api_get("/Updates/Conditions", {
+                "jurisdiction": jurisdiction,
+            })
+        return self._conditions_cache
 
-    # ---- Scratchings ----
+    async def get_conditions_for_venue(self, venue: str) -> dict | None:
+        """Get conditions for a specific venue. Returns parsed dict or None."""
+        conditions = await self.get_conditions()
+        venue_lower = venue.lower().strip()
+
+        # Strip sponsor prefixes for matching
+        sponsor_prefixes = [
+            "sportsbet ", "ladbrokes ", "bet365 ", "aquis ", "pointsbet ",
+            "picklebet park ", "southside ", "tab ",
+        ]
+        clean_venue = venue_lower
+        for prefix in sponsor_prefixes:
+            if clean_venue.startswith(prefix):
+                clean_venue = clean_venue[len(prefix):]
+                break
+
+        for cond in conditions:
+            track = (cond.get("track") or "").lower().strip()
+            if not track:
+                continue
+            if track == clean_venue or track == venue_lower:
+                return self._parse_condition(cond)
+            if track in clean_venue or clean_venue in track:
+                return self._parse_condition(cond)
+        return None
+
+    def _parse_condition(self, cond: dict) -> dict:
+        """Parse a PF conditions entry into our format."""
+        tc_num = cond.get("trackConditionNumber", 0)
+        tc_label = cond.get("trackCondition", "")
+        # Build condition string like "Good 4" from number if label is missing
+        condition = tc_label or _CONDITION_LABELS.get(tc_num) or None
+
+        # Parse going stick from comment field (e.g. "Going Stick: 11.8")
+        going_stick = None
+        comment = cond.get("comment") or ""
+        if "going stick" in comment.lower():
+            import re
+            m = re.search(r"going\s*stick[:\s]*([0-9.]+)", comment, re.IGNORECASE)
+            if m:
+                try:
+                    going_stick = float(m.group(1))
+                except (ValueError, TypeError):
+                    pass
+
+        return {
+            "venue": cond.get("track"),
+            "condition": condition,
+            "rail": cond.get("rail"),
+            "weather": cond.get("weather"),
+            "penetrometer": cond.get("penetrometer"),
+            "wind_speed": cond.get("wind"),
+            "wind_direction": cond.get("windDirection"),
+            "rainfall": cond.get("rainfall"),
+            "irrigation": cond.get("irrigation"),
+            "going_stick": going_stick,
+            "abandoned": cond.get("abandonded", False),  # PF typo in API
+        }
+
+    # ---- Scratchings (cached) ----
 
     async def get_scratchings(self, jurisdiction: int = 0) -> list:
-        """Fetch upcoming scratchings with timestamps and deductions."""
-        return await self._api_get("/Updates/Scratchings", {
-            "jurisdiction": jurisdiction,
-        })
+        """Fetch upcoming scratchings. Cached for session."""
+        if self._scratchings_cache is None:
+            self._scratchings_cache = await self._api_get("/Updates/Scratchings", {
+                "jurisdiction": jurisdiction,
+            })
+        return self._scratchings_cache
+
+    async def get_scratchings_for_meeting(self, pf_meeting_id: int) -> list[dict]:
+        """Get scratchings for a specific PF meeting ID."""
+        all_scratchings = await self.get_scratchings()
+        return [
+            {
+                "race_number": s.get("raceNo"),
+                "tab_no": s.get("tabNo"),
+                "deduction": s.get("deduction"),
+                "timestamp": s.get("timeStamp"),
+            }
+            for s in all_scratchings
+            if s.get("meetingId") == pf_meeting_id or str(s.get("meetingId")) == str(pf_meeting_id)
+        ]
+
+    # ---- Full meeting scrape (primary data source) ----
+
+    async def scrape_meeting_data(
+        self, venue: str, race_date: date
+    ) -> dict[str, Any]:
+        """Scrape full meeting data from PF API.
+
+        Returns dict in same format as RacingComScraper.scrape_meeting():
+        {"meeting": {...}, "races": [...], "runners": [...]}
+        """
+        meeting_id_str = self.generate_meeting_id(venue, race_date)
+
+        # Resolve PF meeting ID
+        pf_meeting_id = await self.resolve_meeting_id(venue, race_date)
+        if not pf_meeting_id:
+            logger.warning(f"PF: Meeting not found for {venue} on {race_date}")
+            return {"meeting": {"id": meeting_id_str, "venue": venue, "date": race_date},
+                    "races": [], "runners": []}
+
+        # Fetch fields (all races)
+        fields_data = await self.get_fields(pf_meeting_id)
+
+        # fields_data is a dict with track, races, meetingId, railPosition, etc.
+        track_info = fields_data.get("track") or {}
+
+        meeting_dict = {
+            "id": meeting_id_str,
+            "venue": track_info.get("name") or venue,
+            "date": race_date,
+            "rail_position": fields_data.get("railPosition"),
+            "meet_code": track_info.get("abbrev"),
+        }
+
+        races = []
+        runners = []
+
+        for pf_race in fields_data.get("races", []):
+            race_num = pf_race.get("number", 0)
+            race_id = f"{meeting_id_str}-r{race_num}"
+
+            # Parse start time
+            start_time = _parse_pf_start_time(pf_race.get("startTimeUTC"))
+
+            # Parse prize money
+            prize = pf_race.get("prizeMoney")
+            try:
+                prize = int(str(prize).replace(",", "")) if prize else None
+            except (ValueError, TypeError):
+                prize = None
+
+            race_data = {
+                "id": race_id,
+                "meeting_id": meeting_id_str,
+                "race_number": race_num,
+                "name": pf_race.get("name", f"Race {race_num}"),
+                "distance": pf_race.get("distance"),
+                "class_": pf_race.get("raceClass"),
+                "prize_money": prize,
+                "start_time": start_time,
+                "status": "scheduled",
+                "race_type": "Thoroughbred",
+                "age_restriction": pf_race.get("ageRestrictions"),
+                "weight_type": pf_race.get("weightType"),
+                "field_size": None,  # set after counting non-scratched runners
+            }
+
+            # Process runners
+            race_runners = []
+            pf_runners = pf_race.get("runners", [])
+            for pf_runner in pf_runners:
+                runner_dict = _pf_runner_to_dict(pf_runner, race_id, meeting_id_str)
+                race_runners.append(runner_dict)
+
+            # Set field size (non-emergency runners)
+            race_data["field_size"] = sum(
+                1 for r in race_runners if not r.get("scratched")
+            )
+
+            races.append(race_data)
+            runners.extend(race_runners)
+
+        logger.info(f"PF: Scraped {len(races)} races, {len(runners)} runners for {venue}")
+
+        # Fetch form history and attach to runners
+        try:
+            form_data = await self.get_form(pf_meeting_id, runs=10)
+            # form_data is a list of runners (when raceNumber=0, it's per the fields endpoint structure)
+            # Actually /form/form returns same structure as /form/fields but with forms[] populated
+            if isinstance(form_data, dict):
+                # Dict response: iterate races
+                for pf_race in form_data.get("races", []):
+                    race_num = pf_race.get("number", 0)
+                    for pf_runner in pf_race.get("runners", []):
+                        forms = pf_runner.get("forms", [])
+                        if forms:
+                            name = (pf_runner.get("name") or "").strip()
+                            history = [_pf_form_entry_to_history(f) for f in forms]
+                            # Find matching runner and attach form_history
+                            for r in runners:
+                                if r["horse_name"] == name and r["race_id"].endswith(f"-r{race_num}"):
+                                    r["form_history"] = _json.dumps(history)
+                                    break
+            elif isinstance(form_data, list):
+                # List response: each item is a runner with forms[]
+                for pf_runner in form_data:
+                    forms = pf_runner.get("forms", [])
+                    if forms:
+                        name = (pf_runner.get("name") or "").strip()
+                        history = [_pf_form_entry_to_history(f) for f in forms]
+                        for r in runners:
+                            if r["horse_name"] == name:
+                                r["form_history"] = _json.dumps(history)
+                                break
+        except Exception as e:
+            logger.warning(f"PF form history failed (non-fatal): {e}")
+
+        # Apply scratchings
+        try:
+            scratchings = await self.get_scratchings_for_meeting(pf_meeting_id)
+            for s in scratchings:
+                race_num = s.get("race_number")
+                tab_no = s.get("tab_no")
+                if race_num and tab_no:
+                    race_id = f"{meeting_id_str}-r{race_num}"
+                    for r in runners:
+                        if r["race_id"] == race_id and r.get("saddlecloth") == tab_no:
+                            r["scratched"] = True
+                            break
+        except Exception as e:
+            logger.warning(f"PF scratchings failed (non-fatal): {e}")
+
+        return {"meeting": meeting_dict, "races": races, "runners": runners}
 
     # ---- Combined speed map + ratings scrape ----
 
@@ -337,6 +797,10 @@ class PuntingFormScraper(BaseScraper):
 
     # ---- Legacy interface (kept for compatibility) ----
 
+    async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
+        """Full meeting scrape via PF API (replaces old empty stub)."""
+        return await self.scrape_meeting_data(venue, race_date)
+
     async def scrape_race_insights(
         self, venue: str, race_date: date, race_num: int
     ) -> dict[str, Any]:
@@ -366,10 +830,6 @@ class PuntingFormScraper(BaseScraper):
             "race_number": race_num,
         }
 
-    async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
-        """Not primary use case for PF — returns empty data."""
-        return {"meeting": {}, "races": [], "runners": []}
-
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
-        """Not implemented for PF."""
+        """Not implemented for PF (dividends come from TAB)."""
         return []

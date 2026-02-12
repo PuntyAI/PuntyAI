@@ -180,6 +180,10 @@ async def init_db() -> None:
             "ALTER TABLE meetings ADD COLUMN track_condition_locked BOOLEAN DEFAULT 0",
             # Punty's Pick flag (best-bet recommendation per race)
             "ALTER TABLE picks ADD COLUMN is_puntys_pick BOOLEAN DEFAULT 0",
+            # PF conditions data
+            "ALTER TABLE meetings ADD COLUMN rainfall REAL",
+            "ALTER TABLE meetings ADD COLUMN irrigation BOOLEAN",
+            "ALTER TABLE meetings ADD COLUMN going_stick REAL",
         ]:
             try:
                 await conn.execute(_text(col))

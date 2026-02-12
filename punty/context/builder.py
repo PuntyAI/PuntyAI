@@ -56,6 +56,9 @@ class ContextBuilder:
                 "weather_wind_speed": meeting.weather_wind_speed,
                 "weather_wind_dir": meeting.weather_wind_dir,
                 "rail_bias_comment": meeting.rail_bias_comment,
+                "rainfall": meeting.rainfall,
+                "irrigation": meeting.irrigation,
+                "going_stick": meeting.going_stick,
             },
             "races": [],
             "summary": {
@@ -525,6 +528,9 @@ class ContextBuilder:
             "weather_condition": race.meeting.weather_condition,
             "weather_temp": race.meeting.weather_temp,
             "rail_bias_comment": race.meeting.rail_bias_comment,
+            "rainfall": race.meeting.rainfall,
+            "irrigation": race.meeting.irrigation,
+            "going_stick": race.meeting.going_stick,
         }
 
         race_context = self._build_race_context(race)

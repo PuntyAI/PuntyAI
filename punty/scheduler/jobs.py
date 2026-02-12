@@ -989,36 +989,26 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Odds refresh failed for {venue}: {e}")
             results["errors"].append(f"refresh_odds: {str(e)}")
 
-        # Step 2: Refresh track conditions + weather (racingaustralia.horse)
+        # Step 2: Refresh track conditions + weather via PF API
         try:
-            logger.info(f"Step 2: Refreshing track conditions/weather for {venue}...")
-            from punty.scrapers.orchestrator import _is_more_specific
-            from punty.scrapers.track_conditions import scrape_track_conditions
-            from punty.scrapers.orchestrator import _guess_state
+            logger.info(f"Step 2: Refreshing conditions/weather for {venue} via PF...")
+            from punty.scrapers.punting_form import PuntingFormScraper
+            from punty.scrapers.orchestrator import _apply_pf_conditions
 
             if not meeting.track_condition_locked:
-                state = _guess_state(venue)
-                if state:
-                    conditions = await scrape_track_conditions(state)
-                    for cond in conditions:
-                        if cond.get("venue") and (
-                            cond["venue"].lower() in venue.lower()
-                            or venue.lower() in cond["venue"].lower()
-                        ):
-                            new_cond = cond.get("condition")
-                            if new_cond and _is_more_specific(new_cond, meeting.track_condition):
-                                logger.info(f"Track condition update: {meeting.track_condition!r} → {new_cond!r}")
-                                meeting.track_condition = new_cond
-                            if cond.get("rail"):
-                                meeting.rail_position = cond["rail"]
-                            if cond.get("weather"):
-                                meeting.weather = cond["weather"]
-                            break
-                    await db.commit()
-            results["steps"].append("track_weather_refresh: success")
+                pf = await PuntingFormScraper.from_settings(db)
+                try:
+                    cond = await pf.get_conditions_for_venue(venue)
+                    if cond:
+                        _apply_pf_conditions(meeting, cond)
+                        await db.commit()
+                        logger.info(f"PF conditions for {venue}: {meeting.track_condition} | rain={cond.get('rainfall')}mm")
+                finally:
+                    await pf.close()
+            results["steps"].append("pf_conditions_refresh: success")
         except Exception as e:
-            logger.error(f"Track/weather refresh failed for {venue}: {e}")
-            results["errors"].append(f"track_weather_refresh: {str(e)}")
+            logger.error(f"PF conditions refresh failed for {venue}: {e}")
+            results["errors"].append(f"pf_conditions_refresh: {str(e)}")
 
         # Step 3: Check jockey/gear changes via racing.com (Playwright)
         try:
