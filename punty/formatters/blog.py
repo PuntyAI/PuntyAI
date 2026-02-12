@@ -152,13 +152,16 @@ def extract_blog_title(raw_content: str) -> str:
     if not raw_content:
         return "From the Horse's Mouth"
 
-    # Look for the first italic title line: *FROM THE HORSE'S MOUTH — Week of ...*
+    # Look for the title line: *FROM THE HORSE'S MOUTH — {funny headline}*
     for line in raw_content.split("\n")[:10]:
         stripped = line.strip()
         if stripped.startswith("*FROM") and stripped.endswith("*"):
             return stripped.strip("*").strip()
         if stripped.startswith("# FROM"):
             return stripped.lstrip("# ").strip()
+        # Handle **bold** title format
+        if stripped.startswith("**FROM") and stripped.endswith("**"):
+            return stripped.strip("*").strip()
 
     return "From the Horse's Mouth"
 

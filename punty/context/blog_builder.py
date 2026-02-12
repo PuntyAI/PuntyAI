@@ -106,7 +106,7 @@ async def build_blog_context(db: AsyncSession) -> str:
                     sections.append(f"  {entry['insight_text']}")
         sections.append("")
 
-    # ── Future Nominations (Crystal Ball) ──────────────────────────────
+    # ── Future Races (Crystal Ball) ─────────────────────────────────────
     try:
         from punty.models.future_race import FutureRace, FutureNomination
         from sqlalchemy.orm import selectinload
@@ -123,24 +123,33 @@ async def build_blog_context(db: AsyncSession) -> str:
         if future_races:
             sections.append("=== UPCOMING GROUP RACES (CRYSTAL BALL) ===")
             for fr in future_races:
-                sections.append(f"\n{fr.race_name} — {fr.venue} ({fr.date.isoformat()})")
+                # Races within 2 days have declared fields (barriers, jockeys, weights)
+                days_away = (fr.date - today).days
+                is_declared = days_away <= 2
+                field_label = "Declared Field" if is_declared else "Nominations"
+
+                sections.append(f"\n{fr.race_name} — {fr.venue} ({fr.date.isoformat()}) {'[FIELDS DECLARED]' if is_declared else ''}")
                 if fr.distance:
                     sections.append(f"  Distance: {fr.distance}m")
                 if fr.prize_money:
                     sections.append(f"  Prize: ${fr.prize_money:,}")
                 if fr.nominations:
-                    sections.append(f"  Nominations ({len(fr.nominations)}):")
-                    for nom in fr.nominations[:10]:
+                    sections.append(f"  {field_label} ({len(fr.nominations)}):")
+                    for nom in fr.nominations[:15]:
                         parts = [f"    {nom.horse_name}"]
-                        if nom.trainer:
-                            parts.append(f"(T: {nom.trainer})")
+                        if nom.barrier and is_declared:
+                            parts.append(f"(Bar {nom.barrier})")
                         if nom.jockey:
                             parts.append(f"(J: {nom.jockey})")
+                        if nom.trainer:
+                            parts.append(f"(T: {nom.trainer})")
+                        if nom.weight and is_declared:
+                            parts.append(f"{nom.weight}kg")
                         if nom.career_record:
                             parts.append(f"Record: {nom.career_record}")
                         sections.append(" ".join(parts))
-                    if len(fr.nominations) > 10:
-                        sections.append(f"    ... and {len(fr.nominations) - 10} more")
+                    if len(fr.nominations) > 15:
+                        sections.append(f"    ... and {len(fr.nominations) - 15} more")
             sections.append("")
     except Exception as e:
         logger.debug(f"Future races context failed: {e}")

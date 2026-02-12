@@ -1188,7 +1188,7 @@ You are writing your weekly blog column. Be entertaining, data-driven, and bruta
                         self.ai_client.generate_with_context(
                             system_prompt=system_prompt,
                             context=blog_context,
-                            instruction=blog_prompt + f"\n\nGenerate the blog for the week of {week_start.isoformat()} to {today.isoformat()}",
+                            instruction=blog_prompt + f"\n\nGenerate the blog for the week ending {today.isoformat()}. Come up with a funny, punchy headline — do NOT include dates in the title.",
                             temperature=0.9,
                         ),
                         timeout=600.0,
