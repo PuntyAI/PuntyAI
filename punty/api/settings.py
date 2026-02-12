@@ -21,9 +21,23 @@ def _get_user_email(request: Request) -> str:
         return "system"
 
 
+_SENSITIVE_KEYS = {
+    "anthropic_api_key", "openai_api_key", "twitter_api_secret",
+    "twitter_access_token", "twitter_access_secret", "smtp_password",
+    "facebook_page_access_token", "facebook_app_secret",
+    "telegram_bot_token", "resend_api_key", "punting_form_api_key",
+    "willyweather_api_key",
+}
+
+
 async def _record_audit(db: AsyncSession, key: str, old_value: str | None, new_value: str | None, changed_by: str, action: str = "updated"):
     """Record a settings change in the audit log."""
     from punty.models.settings import SettingsAudit
+
+    # Mask sensitive values — never store secrets in audit log
+    if key in _SENSITIVE_KEYS:
+        old_value = "***REDACTED***" if old_value else None
+        new_value = "***CHANGED***" if new_value else None
 
     entry = SettingsAudit(
         key=key,

@@ -210,14 +210,16 @@ class TestToolReadFile:
         test_file = tmp_path / "test.txt"
         test_file.write_text("hello world")
 
-        result = await tool_read_file(str(test_file))
+        with patch("punty.telegram.tools.PROJECT_ROOT", str(tmp_path)):
+            result = await tool_read_file(str(test_file))
         assert "hello world" in result
 
     @pytest.mark.asyncio
-    async def test_missing_file_returns_error(self):
+    async def test_missing_file_returns_error(self, tmp_path):
         from punty.telegram.tools import tool_read_file
 
-        result = await tool_read_file("/tmp/nonexistent_file_xyz_123.txt")
+        with patch("punty.telegram.tools.PROJECT_ROOT", str(tmp_path)):
+            result = await tool_read_file(str(tmp_path / "nonexistent_file_xyz_123.txt"))
         assert "not found" in result.lower()
 
     @pytest.mark.asyncio
@@ -227,9 +229,17 @@ class TestToolReadFile:
         test_file = tmp_path / "big.txt"
         test_file.write_text("\n".join(f"line {i}" for i in range(1000)))
 
-        result = await tool_read_file(str(test_file), max_lines=10)
+        with patch("punty.telegram.tools.PROJECT_ROOT", str(tmp_path)):
+            result = await tool_read_file(str(test_file), max_lines=10)
         assert "line 0" in result
         assert "1000 lines total" in result
+
+    @pytest.mark.asyncio
+    async def test_path_traversal_blocked(self):
+        from punty.telegram.tools import tool_read_file
+
+        result = await tool_read_file("../../etc/passwd")
+        assert "escapes project root" in result.lower()
 
 
 class TestToolEditFile:
@@ -242,7 +252,8 @@ class TestToolEditFile:
         test_file = tmp_path / "test.py"
         test_file.write_text("def hello():\n    return 'world'\n")
 
-        result = await tool_edit_file(str(test_file), "world", "universe")
+        with patch("punty.telegram.tools.PROJECT_ROOT", str(tmp_path)):
+            result = await tool_edit_file(str(test_file), "world", "universe")
         assert "Replaced" in result
         assert "universe" in test_file.read_text()
 
@@ -253,15 +264,24 @@ class TestToolEditFile:
         test_file = tmp_path / "test.py"
         test_file.write_text("hello world")
 
-        result = await tool_edit_file(str(test_file), "nonexistent", "replacement")
+        with patch("punty.telegram.tools.PROJECT_ROOT", str(tmp_path)):
+            result = await tool_edit_file(str(test_file), "nonexistent", "replacement")
         assert "not found" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_file_not_found(self):
+    async def test_file_not_found(self, tmp_path):
         from punty.telegram.tools import tool_edit_file
 
-        result = await tool_edit_file("/tmp/nonexistent_xyz.py", "old", "new")
+        with patch("punty.telegram.tools.PROJECT_ROOT", str(tmp_path)):
+            result = await tool_edit_file(str(tmp_path / "nonexistent_xyz.py"), "old", "new")
         assert "not found" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_path_traversal_blocked(self):
+        from punty.telegram.tools import tool_edit_file
+
+        result = await tool_edit_file("../../etc/shadow", "old", "new")
+        assert "escapes project root" in result.lower()
 
 
 class TestToolQueryDb:

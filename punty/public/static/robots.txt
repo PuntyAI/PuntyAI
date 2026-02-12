@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 
 Sitemap: https://punty.ai/sitemap.xml
+Sitemap: https://punty.ai/sitemap-blog.xml
+Sitemap: https://punty.ai/sitemap-tips.xml

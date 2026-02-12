@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endblock %}
+{% block title %}{% if meta_title %}{{ meta_title }}{% else %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endif %}{% endblock %}
 
 {% block og_title %}{{ meeting.venue }} Tips - {{ meeting.date_formatted }} | PuntyAI{% endblock %}
 {% block og_description %}Punty's horse racing tips and live updates for {{ meeting.venue }} on {{ meeting.date_formatted }}. AI analysis, pace reads, and win celebrations for Australian thoroughbred racing.{% endblock %}
@@ -9,12 +9,13 @@
 {% block twitter_description %}Punty's horse racing tips and live updates for {{ meeting.venue }} on {{ meeting.date_formatted }}. AI analysis, pace reads, and win celebrations for Australian thoroughbred racing.{% endblock %}
 
 {% block head %}
-<meta name="description" content="Punty's horse racing tips and live updates for {{ meeting.venue }} on {{ meeting.date_formatted }}. AI analysis, live pace reads, and win celebrations for Australian thoroughbred racing.">
+<meta name="description" content="{% if meta_description %}{{ meta_description }}{% else %}Punty's horse racing tips and live updates for {{ meeting.venue }} on {{ meeting.date_formatted }}. AI analysis, live pace reads, and win celebrations for Australian thoroughbred racing.{% endif %}">
+<link rel="canonical" href="https://punty.ai/tips/{{ meeting.id }}">
 {% endblock %}
 
 {% block content %}
 <section class="py-12">
-    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8">
         <!-- Back Link -->
         <a href="/tips" class="inline-flex items-center gap-2 mb-8 text-sm font-heading font-semibold transition-colors hover:text-punty-magenta" style="color: var(--text-secondary);">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

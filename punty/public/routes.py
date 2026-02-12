@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, and_, or_
 
@@ -519,14 +519,14 @@ async def blog_post(request: Request, slug: str):
                     excerpt = re.sub(r'\*+', '', stripped)[:160]
                     break
 
+        blog_date = content.blog_week_start or (content.created_at.date() if content.created_at else None)
         blog_data = {
             "title": content.blog_title or "From the Horse's Mouth",
             "slug": content.blog_slug,
             "html_content": html_content,
             "excerpt": excerpt,
-            "date_formatted": content.blog_week_start.strftime("%A, %d %B %Y") if content.blog_week_start else (
-                content.created_at.strftime("%A, %d %B %Y") if content.created_at else ""
-            ),
+            "date_formatted": blog_date.strftime("%A, %d %B %Y") if blog_date else "",
+            "date_iso": blog_date.isoformat() if blog_date else "",
         }
 
         # Prev/next navigation
@@ -581,12 +581,6 @@ async def privacy(request: Request):
 async def data_deletion(request: Request):
     """Data deletion instructions page."""
     return templates.TemplateResponse("data-deletion.html", {"request": request})
-
-
-@router.get("/sitemap.xml")
-async def sitemap():
-    """Serve sitemap.xml for search engines."""
-    return FileResponse(static_dir / "sitemap.xml", media_type="application/xml")
 
 
 @router.get("/robots.txt")
@@ -1466,6 +1460,12 @@ async def meeting_tips_page(request: Request, meeting_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Meeting not found or no tips available")
 
+    # Dynamic meta tags for SEO
+    venue = data["meeting"].get("venue", "")
+    date_str = data["meeting"].get("date_formatted", "")
+    meta_title = f"{venue} Racing Tips {date_str} | PuntyAI"
+    meta_desc = f"AI racing tips and form guide for {venue} on {date_str}. Early mail analysis, selections, exotics, and live race updates."
+
     return templates.TemplateResponse(
         "meeting_tips.html",
         {
@@ -1481,5 +1481,112 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "venue_stats": data.get("venue_stats"),
             "races": data.get("races", []),
             "meeting_stats": data.get("meeting_stats", []),
+            "meta_title": meta_title,
+            "meta_description": meta_desc,
         }
     )
+
+
+# ──────────────────────────────────────────────
+# SEO: Dynamic sitemaps + llms.txt
+# ──────────────────────────────────────────────
+
+@router.get("/llms.txt")
+async def llms_txt():
+    """Serve llms.txt for AI crawler discovery."""
+    return FileResponse(static_dir / "llms.txt", media_type="text/plain")
+
+
+@router.get("/sitemap.xml")
+async def sitemap_index():
+    """Main sitemap index linking to sub-sitemaps."""
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    xml += '  <sitemap><loc>https://punty.ai/sitemap-static.xml</loc></sitemap>\n'
+    xml += '  <sitemap><loc>https://punty.ai/sitemap-blog.xml</loc></sitemap>\n'
+    xml += '  <sitemap><loc>https://punty.ai/sitemap-tips.xml</loc></sitemap>\n'
+    xml += '</sitemapindex>'
+    return Response(content=xml, media_type="application/xml")
+
+
+@router.get("/sitemap-static.xml")
+async def sitemap_static():
+    """Static pages sitemap."""
+    pages = [
+        ("https://punty.ai/", "1.0", "daily"),
+        ("https://punty.ai/tips", "0.9", "daily"),
+        ("https://punty.ai/stats", "0.8", "daily"),
+        ("https://punty.ai/blog", "0.8", "daily"),
+        ("https://punty.ai/how-it-works", "0.7", "monthly"),
+        ("https://punty.ai/calculator", "0.7", "monthly"),
+        ("https://punty.ai/glossary", "0.7", "monthly"),
+        ("https://punty.ai/about", "0.6", "monthly"),
+        ("https://punty.ai/contact", "0.5", "monthly"),
+    ]
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for loc, priority, freq in pages:
+        xml += f'  <url><loc>{loc}</loc><changefreq>{freq}</changefreq><priority>{priority}</priority></url>\n'
+    xml += '</urlset>'
+    return Response(content=xml, media_type="application/xml")
+
+
+@router.get("/sitemap-blog.xml")
+async def sitemap_blog():
+    """Dynamic sitemap for all published blog posts."""
+    async with async_session() as db:
+        result = await db.execute(
+            select(Content).where(
+                and_(
+                    Content.content_type == "weekly_blog",
+                    Content.status.in_(["approved", "sent"]),
+                    Content.blog_slug.isnot(None),
+                )
+            ).order_by(Content.created_at.desc())
+        )
+        blogs = result.scalars().all()
+
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for blog in blogs:
+        lastmod = blog.created_at.strftime("%Y-%m-%d") if blog.created_at else ""
+        xml += f'  <url>\n'
+        xml += f'    <loc>https://punty.ai/blog/{blog.blog_slug}</loc>\n'
+        if lastmod:
+            xml += f'    <lastmod>{lastmod}</lastmod>\n'
+        xml += f'    <changefreq>never</changefreq>\n'
+        xml += f'    <priority>0.8</priority>\n'
+        xml += f'  </url>\n'
+    xml += '</urlset>'
+    return Response(content=xml, media_type="application/xml")
+
+
+@router.get("/sitemap-tips.xml")
+async def sitemap_tips():
+    """Dynamic sitemap for meeting tips pages."""
+    async with async_session() as db:
+        result = await db.execute(
+            select(Meeting.id, Meeting.date).join(
+                Content, Content.meeting_id == Meeting.id
+            ).where(
+                and_(
+                    Content.content_type == "early_mail",
+                    Content.status.in_(["approved", "sent"]),
+                )
+            ).order_by(Meeting.date.desc()).limit(500)
+        )
+        meetings = result.all()
+
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for mid, mdate in meetings:
+        lastmod = mdate.strftime("%Y-%m-%d") if mdate else ""
+        xml += f'  <url>\n'
+        xml += f'    <loc>https://punty.ai/tips/{mid}</loc>\n'
+        if lastmod:
+            xml += f'    <lastmod>{lastmod}</lastmod>\n'
+        xml += f'    <changefreq>never</changefreq>\n'
+        xml += f'    <priority>0.7</priority>\n'
+        xml += f'  </url>\n'
+    xml += '</urlset>'
+    return Response(content=xml, media_type="application/xml")

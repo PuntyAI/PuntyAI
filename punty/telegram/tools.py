@@ -13,12 +13,23 @@ PROJECT_ROOT = "/opt/puntyai"
 DB_PATH = "/opt/puntyai/data/punty.db"
 
 
-def _resolve_path(path: str) -> str:
-    """Resolve a path, treating relative paths as relative to PROJECT_ROOT."""
+def _resolve_path(path: str, must_be_within_root: bool = True) -> str:
+    """Resolve a path, treating relative paths as relative to PROJECT_ROOT.
+
+    Args:
+        path: File path (relative or absolute).
+        must_be_within_root: If True, reject paths that resolve outside PROJECT_ROOT.
+
+    Raises:
+        ValueError: If the resolved path escapes PROJECT_ROOT.
+    """
     p = Path(path)
     if not p.is_absolute():
         p = Path(PROJECT_ROOT) / p
-    return str(p)
+    resolved = p.resolve()
+    if must_be_within_root and not str(resolved).startswith(str(Path(PROJECT_ROOT).resolve())):
+        raise ValueError(f"Path escapes project root: {path}")
+    return str(resolved)
 
 
 def _truncate(text: str, limit: int = MAX_OUTPUT_LENGTH) -> str:
@@ -69,6 +80,9 @@ async def tool_read_file(path: str, max_lines: int = 500) -> str:
     """Read a file's contents."""
     try:
         resolved = _resolve_path(path)
+    except ValueError as e:
+        return str(e)
+    try:
         p = Path(resolved)
 
         if not p.exists():
@@ -93,6 +107,9 @@ async def tool_write_file(path: str, content: str) -> str:
     """Write content to a file."""
     try:
         resolved = _resolve_path(path)
+    except ValueError as e:
+        return str(e)
+    try:
         p = Path(resolved)
 
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -107,6 +124,9 @@ async def tool_edit_file(path: str, old_text: str, new_text: str) -> str:
     """Replace first occurrence of old_text with new_text in a file."""
     try:
         resolved = _resolve_path(path)
+    except ValueError as e:
+        return str(e)
+    try:
         p = Path(resolved)
 
         if not p.exists():
@@ -132,6 +152,9 @@ async def tool_list_files(path: str = PROJECT_ROOT, pattern: str = "*") -> str:
     """List files in a directory with optional glob pattern."""
     try:
         resolved = _resolve_path(path)
+    except ValueError as e:
+        return str(e)
+    try:
         p = Path(resolved)
 
         if not p.exists():

@@ -286,7 +286,7 @@
             position: relative;
             background: var(--bg-card);
             border: 2px solid var(--magenta);
-            border-radius: 16px;
+            border-radius: 12px;
             padding: 1.5rem;
         }
         .punty-quote::before {
@@ -327,8 +327,36 @@
         }
     </style>
     {% block head %}{% endblock %}
+
+    <!-- Organization + WebSite Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "PuntyAI",
+        "url": "https://punty.ai",
+        "description": "AI-powered horse racing tips and analysis for Australian thoroughbred racing",
+        "publisher": {
+            "@type": "Organization",
+            "name": "PuntyAI",
+            "url": "https://punty.ai",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://punty.ai/static/punty-logo-wide.png",
+                "width": 600,
+                "height": 120
+            },
+            "sameAs": [
+                "https://x.com/PuntyAI",
+                "https://www.facebook.com/PuntyAI"
+            ]
+        }
+    }
+    </script>
+    {% block schema %}{% endblock %}
 </head>
 <body class="min-h-screen font-body">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[10000] focus:bg-white focus:text-black focus:px-4 focus:py-2 focus:rounded">Skip to main content</a>
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TV3M2P22"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -445,7 +473,7 @@
     </header>
 
     <!-- Main Content -->
-    <main>
+    <main id="main-content">
         {% block content %}{% endblock %}
     </main>
 

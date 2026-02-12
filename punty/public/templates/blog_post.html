@@ -10,11 +10,13 @@
 {% block twitter_description %}{{ blog.excerpt }}{% endblock %}
 
 {% block head %}
+<link rel="canonical" href="https://punty.ai/blog/{{ blog.slug }}">
+<meta name="description" content="{{ blog.excerpt }}">
 <style>
     .blog-article {
         background: var(--bg-card);
         border: 1px solid var(--border-subtle);
-        border-radius: 16px;
+        border-radius: 12px;
         padding: 2rem;
         margin-bottom: 2rem;
     }
@@ -152,8 +154,38 @@
 </style>
 {% endblock %}
 
+{% block schema %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "{{ blog.title }}",
+    "description": "{{ blog.excerpt }}",
+    "datePublished": "{{ blog.date_iso }}",
+    "dateModified": "{{ blog.date_iso }}",
+    "author": {
+        "@type": "Organization",
+        "name": "PuntyAI",
+        "url": "https://punty.ai"
+    },
+    "publisher": {
+        "@type": "Organization",
+        "name": "PuntyAI",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://punty.ai/static/punty-logo-wide.png"
+        }
+    },
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://punty.ai/blog/{{ blog.slug }}"
+    }
+}
+</script>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-3xl mx-auto px-4 sm:px-8 py-12">
+<div class="max-w-4xl mx-auto px-4 sm:px-8 py-12">
     <!-- Breadcrumb -->
     <div class="mb-6">
         <a href="/blog" class="text-sm" style="color: var(--text-muted); text-decoration: none; font-family: 'Rajdhani', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">

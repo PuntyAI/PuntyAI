@@ -1,0 +1,36 @@
+# PuntyAI — AI Horse Racing Tips
+# https://punty.ai
+
+> PuntyAI is an AI-powered horse racing tips and analysis platform for Australian thoroughbred racing.
+> Free daily tips, form guides, live race updates, betting glossary, and weekly blog.
+
+## Pages
+
+- [Home](https://punty.ai/): Today's racing overview, live countdown, best bet of the day
+- [Tips Archive](https://punty.ai/tips): Browse all racing tips by date and venue
+- [Stats & Performance](https://punty.ai/stats): Full transparency on strike rates, ROI, and P&L by bet type
+- [Blog — From the Horse's Mouth](https://punty.ai/blog): Weekly racing blog with data-driven insights, awards, and previews
+- [How It Works](https://punty.ai/how-it-works): How PuntyAI analyses races and generates tips
+- [Bet Calculator](https://punty.ai/calculator): Calculate potential returns for win, place, each-way, and exotic bets
+- [Glossary](https://punty.ai/glossary): Australian horse racing betting terms explained
+- [About](https://punty.ai/about): About PuntyAI and the team behind it
+- [Contact](https://punty.ai/contact): Get in touch
+
+## Content Types
+
+- **Early Mail**: Pre-race analysis published 2 hours before first race, covering form, track conditions, pace maps, and market moves
+- **Race Tips**: 4 selections per race with bet type recommendations (Win, Place, Each Way, Saver Win)
+- **Exotic Bets**: Trifecta, Exacta, Quinella picks per race
+- **Sequence Bets**: Quaddie and Big 6 selections with skinny/balanced/wide variants
+- **Live Updates**: Real-time race results, celebrations, and track condition changes
+- **Meeting Wrapups**: Post-meeting summary with P&L results
+- **Weekly Blog**: Data-driven racing insights, pattern analysis, and upcoming Group race previews
+
+## Social
+
+- X/Twitter: https://x.com/PuntyAI
+- Facebook: https://www.facebook.com/PuntyAI
+
+## Contact
+
+- Website: https://punty.ai/contact

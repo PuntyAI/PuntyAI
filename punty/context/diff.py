@@ -205,33 +205,3 @@ def _detect_speed_map_changes(
                 })
 
     return changes
-
-
-def summarize_changes(changes: list[dict]) -> str:
-    """Create human-readable summary of changes."""
-    if not changes:
-        return "No significant changes detected."
-
-    summary_parts = []
-
-    # Group by type
-    scratchings = [c for c in changes if c["type"] == "scratching"]
-    odds_moves = [c for c in changes if c["type"] == "odds_movement"]
-    speed_maps = [c for c in changes if c["type"] in ["speed_maps_available", "speed_map_change"]]
-    track = [c for c in changes if c["type"] == "track_condition"]
-
-    if scratchings:
-        horses = [c["horse"] for c in scratchings]
-        summary_parts.append(f"Scratchings: {', '.join(horses)}")
-
-    if odds_moves:
-        movers = [f"{c['horse']} ({c['direction']})" for c in odds_moves]
-        summary_parts.append(f"Odds movements: {', '.join(movers)}")
-
-    if speed_maps:
-        summary_parts.append(f"Speed map updates in {len(speed_maps)} race(s)")
-
-    if track:
-        summary_parts.append(f"Track: {track[0]['new']}")
-
-    return " | ".join(summary_parts)

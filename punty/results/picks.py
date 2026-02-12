@@ -551,10 +551,7 @@ async def _settle_picks_for_race_impl(
         seq_pnl = 0.0
         if all_hit:
             last_leg_race_id = f"{meeting_id}-r{start + num_legs - 1}"
-            last_leg_result = await db.execute(
-                select(Race).where(Race.id == last_leg_race_id)
-            )
-            last_leg_race = last_leg_result.scalar_one_or_none()
+            last_leg_race = seq_race_map.get(last_leg_race_id)
             if last_leg_race and last_leg_race.exotic_results:
                 try:
                     exotic_divs = json.loads(last_leg_race.exotic_results)
@@ -1098,8 +1095,8 @@ async def store_picks_as_memories(
             try:
                 flucs = json.loads(runner.odds_flucs)
                 if flucs and len(flucs) >= 2:
-                    opening = flucs[-1].get("odds", 0)
-                    current = flucs[0].get("odds", 0)
+                    opening = flucs[0].get("odds", 0)
+                    current = flucs[-1].get("odds", 0)
                     if opening and current:
                         pct_change = (current - opening) / opening * 100
                         if pct_change <= -20:
