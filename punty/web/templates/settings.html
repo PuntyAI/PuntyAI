@@ -149,6 +149,26 @@
             </form>
         </div>
 
+        <!-- Probability Model Weights -->
+        <div class="bg-white rounded-lg shadow lg:col-span-2">
+            <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Probability Model</h2>
+                    <p class="text-sm text-gray-500">Configure the 9-factor probability engine weights (must total 100%)</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="prob-total" class="text-sm font-mono font-bold">100%</span>
+                    <button onclick="resetProbabilityWeights()"
+                            class="text-sm text-gray-500 hover:text-punty-coral">
+                        Reset to Defaults
+                    </button>
+                </div>
+            </div>
+            <div class="p-6" id="prob-weights-form">
+                <div class="text-sm text-gray-500 mb-4">Loading...</div>
+            </div>
+        </div>
+
         <!-- Punty Persona Settings -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-punty-border">
@@ -541,6 +561,134 @@
 </div>
 
 <script>
+// ── Probability Model Weights ──
+const PROB_CATEGORIES = [
+    {id: 'market-intelligence', label: 'Market Intelligence', color: '#e91e8c'},
+    {id: 'form-fitness',        label: 'Form & Fitness',      color: '#00d4ff'},
+    {id: 'race-dynamics',       label: 'Race Dynamics',        color: '#ff6b35'},
+    {id: 'connections',         label: 'Connections',          color: '#9d4edd'},
+    {id: 'physical',            label: 'Physical',             color: '#ffc107'},
+];
+
+let probFactors = [];
+
+async function loadProbabilityWeights() {
+    try {
+        const resp = await fetch('/api/settings/probability-weights');
+        const data = await resp.json();
+        probFactors = data.factors;
+        renderProbabilityForm(data.factors);
+    } catch(e) {
+        document.getElementById('prob-weights-form').innerHTML =
+            '<div class="text-sm text-red-500">Failed to load probability weights</div>';
+    }
+}
+
+function renderProbabilityForm(factors) {
+    const container = document.getElementById('prob-weights-form');
+    const grouped = {};
+    factors.forEach(f => {
+        if (!grouped[f.category]) grouped[f.category] = [];
+        grouped[f.category].push(f);
+    });
+
+    let html = '';
+    PROB_CATEGORIES.forEach(cat => {
+        const items = grouped[cat.label] || [];
+        if (!items.length) return;
+        html += `<div class="mb-5">
+            <h3 class="text-sm font-semibold uppercase tracking-wider mb-3" style="color: ${cat.color}">${cat.label}</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">`;
+        items.forEach(f => {
+            html += `<div class="flex items-center gap-3 bg-punty-card2 rounded-lg px-4 py-3">
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-white">${f.label}</div>
+                    <div class="text-xs text-gray-500">${f.description}</div>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <input type="number" id="pw-${f.key}" value="${f.weight}" min="0" max="100" step="1"
+                           onchange="updateProbTotal()" oninput="updateProbTotal()"
+                           class="w-16 bg-gray-800 border border-gray-600 text-white text-center rounded px-2 py-1 text-sm font-mono">
+                    <span class="text-xs text-gray-500">%</span>
+                </div>
+            </div>`;
+        });
+        html += `</div></div>`;
+    });
+
+    html += `<div class="mt-4 pt-4 border-t border-punty-border flex items-center gap-3">
+        <button onclick="saveProbabilityWeights()"
+                class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
+            Save Weights
+        </button>
+        <span id="prob-save-status" class="text-sm text-gray-500"></span>
+    </div>`;
+
+    container.innerHTML = html;
+    updateProbTotal();
+}
+
+function updateProbTotal() {
+    let total = 0;
+    probFactors.forEach(f => {
+        const el = document.getElementById('pw-' + f.key);
+        if (el) total += parseFloat(el.value) || 0;
+    });
+    const totalEl = document.getElementById('prob-total');
+    totalEl.textContent = total + '%';
+    if (Math.abs(total - 100) <= 1) {
+        totalEl.className = 'text-sm font-mono font-bold text-green-500';
+    } else {
+        totalEl.className = 'text-sm font-mono font-bold text-red-500';
+    }
+}
+
+async function saveProbabilityWeights() {
+    const weights = {};
+    probFactors.forEach(f => {
+        const el = document.getElementById('pw-' + f.key);
+        if (el) weights[f.key] = parseFloat(el.value) || 0;
+    });
+    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+    if (Math.abs(total - 100) > 2) {
+        document.getElementById('prob-save-status').textContent = 'Weights must total 100% (currently ' + total + '%)';
+        document.getElementById('prob-save-status').className = 'text-sm text-red-500';
+        return;
+    }
+    try {
+        const resp = await fetch('/api/settings/probability-weights', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({weights}),
+        });
+        if (resp.ok) {
+            document.getElementById('prob-save-status').textContent = 'Saved!';
+            document.getElementById('prob-save-status').className = 'text-sm text-green-500';
+            setTimeout(() => { document.getElementById('prob-save-status').textContent = ''; }, 2000);
+        } else {
+            const err = await resp.json();
+            document.getElementById('prob-save-status').textContent = err.detail || 'Save failed';
+            document.getElementById('prob-save-status').className = 'text-sm text-red-500';
+        }
+    } catch(e) {
+        document.getElementById('prob-save-status').textContent = 'Network error';
+        document.getElementById('prob-save-status').className = 'text-sm text-red-500';
+    }
+}
+
+async function resetProbabilityWeights() {
+    if (!confirm('Reset probability weights to defaults?')) return;
+    try {
+        const resp = await fetch('/api/settings/probability-weights/reset', {method: 'POST'});
+        if (resp.ok) {
+            loadProbabilityWeights();
+        }
+    } catch(e) {}
+}
+
+// Load on page init
+document.addEventListener('DOMContentLoaded', () => { loadProbabilityWeights(); });
+
 async function exchangeFacebookToken() {
     const pageId = document.getElementById('fb_page_id').value;
     const appId = document.getElementById('fb_app_id').value;

@@ -235,6 +235,119 @@ async def get_audit_log(
     }
 
 
+# --- Probability Model Weights (must come BEFORE /{key} catch-all) ---
+
+class ProbabilityWeightsUpdate(BaseModel):
+    """Update probability model weights."""
+    weights: dict[str, float]  # factor_key → percentage (0-100)
+
+
+@router.get("/probability-weights")
+async def get_probability_weights(db: AsyncSession = Depends(get_db)):
+    """Get current probability model weights and factor metadata."""
+    from punty.models.settings import AppSettings
+    from punty.probability import FACTOR_REGISTRY, DEFAULT_WEIGHTS
+    import json
+
+    result = await db.execute(select(AppSettings).where(AppSettings.key == "probability_weights"))
+    setting = result.scalar_one_or_none()
+
+    if setting and setting.value:
+        stored = json.loads(setting.value)
+    else:
+        # Convert decimals to percentages for display
+        stored = {k: round(v * 100) for k, v in DEFAULT_WEIGHTS.items()}
+
+    # Build factor metadata with categories
+    factors = []
+    for key, meta in FACTOR_REGISTRY.items():
+        factors.append({
+            "key": key,
+            "label": meta["label"],
+            "category": meta["category"],
+            "description": meta["description"],
+            "default": round(DEFAULT_WEIGHTS.get(key, 0) * 100),
+            "weight": stored.get(key, round(DEFAULT_WEIGHTS.get(key, 0) * 100)),
+        })
+
+    return {
+        "weights": stored,
+        "factors": factors,
+    }
+
+
+@router.put("/probability-weights")
+async def update_probability_weights(
+    update: ProbabilityWeightsUpdate, request: Request, db: AsyncSession = Depends(get_db),
+):
+    """Update probability model weights. Values are percentages (0-100) and must sum to ~100."""
+    from punty.models.settings import AppSettings
+    from punty.probability import FACTOR_REGISTRY
+    import json
+
+    # Validate all keys exist in registry
+    for key in update.weights:
+        if key not in FACTOR_REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Unknown factor '{key}'")
+
+    # Validate all values are non-negative
+    for key, val in update.weights.items():
+        if val < 0:
+            raise HTTPException(status_code=400, detail=f"Weight for '{key}' cannot be negative")
+
+    # Validate sum is close to 100
+    total = sum(update.weights.values())
+    if abs(total - 100) > 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Weights must sum to 100% (currently {total:.1f}%)",
+        )
+
+    result = await db.execute(select(AppSettings).where(AppSettings.key == "probability_weights"))
+    setting = result.scalar_one_or_none()
+    old_value = setting.value if setting else None
+
+    weights_json = json.dumps(update.weights)
+    if setting:
+        setting.value = weights_json
+    else:
+        setting = AppSettings(
+            key="probability_weights",
+            value=weights_json,
+            description="Probability model factor weights (percentages)",
+        )
+        db.add(setting)
+
+    action = "updated" if old_value is not None else "created"
+    await _record_audit(db, "probability_weights", old_value, weights_json, _get_user_email(request), action)
+    await db.commit()
+
+    return {"status": "saved", "total": total}
+
+
+@router.post("/probability-weights/reset")
+async def reset_probability_weights(request: Request, db: AsyncSession = Depends(get_db)):
+    """Reset probability weights to defaults."""
+    from punty.models.settings import AppSettings
+    from punty.probability import DEFAULT_WEIGHTS
+    import json
+
+    result = await db.execute(select(AppSettings).where(AppSettings.key == "probability_weights"))
+    setting = result.scalar_one_or_none()
+    old_value = setting.value if setting else None
+
+    if setting:
+        await db.delete(setting)
+
+    await _record_audit(db, "probability_weights", old_value, "RESET TO DEFAULTS", _get_user_email(request))
+    await db.commit()
+
+    return {
+        "status": "reset",
+        "weights": {k: round(v * 100) for k, v in DEFAULT_WEIGHTS.items()},
+    }
+
+
 # --- Generic setting by key (catch-all, must come AFTER specific routes) ---
 
 @router.get("/{key}")

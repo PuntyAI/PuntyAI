@@ -1,12 +1,13 @@
 """Probability calculation engine for horse racing picks.
 
 Calculates win/place probability, value detection, and recommended stakes
-for each runner in a race using multi-factor analysis:
-  - Market consensus (50%): Multi-bookmaker median odds → implied probability
-  - Form rating (20%): Recent results + track/distance/condition stats
-  - Pace factor (15%): Speed map position + map factor analysis
-  - Market movement (10%): Odds fluctuation direction/magnitude
-  - Class/fitness (5%): Class stats + days since last run
+for each runner in a race using multi-factor analysis across 9 factors
+grouped into 5 categories:
+  - Market Intelligence: Market consensus + market movement
+  - Form & Fitness: Form rating + class/fitness
+  - Race Dynamics: Pace factor + barrier draw
+  - Connections: Jockey & trainer stats
+  - Physical: Weight carried + horse profile
 """
 
 import json
@@ -18,12 +19,47 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Weights for composite probability calculation
-WEIGHT_MARKET = 0.50
-WEIGHT_FORM = 0.20
-WEIGHT_PACE = 0.15
-WEIGHT_MOVEMENT = 0.10
-WEIGHT_CLASS = 0.05
+# Factor registry — defines all probability factors with metadata
+FACTOR_REGISTRY = {
+    "market":         {"label": "Market Consensus", "category": "Market Intelligence",
+                       "description": "Multi-bookmaker median odds stripped of overround"},
+    "movement":       {"label": "Market Movement",  "category": "Market Intelligence",
+                       "description": "Odds shift direction and magnitude — smart money signals"},
+    "form":           {"label": "Form Rating",      "category": "Form & Fitness",
+                       "description": "Recent results, track/distance/condition win rates"},
+    "class_fitness":  {"label": "Class & Fitness",   "category": "Form & Fitness",
+                       "description": "Class level suitability and fitness from spell length"},
+    "pace":           {"label": "Pace Factor",       "category": "Race Dynamics",
+                       "description": "Speed map position, pace scenario, and map factor"},
+    "barrier":        {"label": "Barrier Draw",      "category": "Race Dynamics",
+                       "description": "Gate position advantage relative to field size and distance"},
+    "jockey_trainer": {"label": "Jockey & Trainer",  "category": "Connections",
+                       "description": "Jockey and trainer win rate statistics"},
+    "weight_carried": {"label": "Weight Carried",    "category": "Physical",
+                       "description": "Carried weight relative to race average"},
+    "horse_profile":  {"label": "Horse Profile",     "category": "Physical",
+                       "description": "Age and sex peak performance assessment"},
+}
+
+# Default weights (must sum to 1.0)
+DEFAULT_WEIGHTS = {
+    "market": 0.25,
+    "movement": 0.08,
+    "form": 0.18,
+    "class_fitness": 0.05,
+    "pace": 0.12,
+    "barrier": 0.10,
+    "jockey_trainer": 0.12,
+    "weight_carried": 0.05,
+    "horse_profile": 0.05,
+}
+
+# Legacy aliases for backward compatibility
+WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
+WEIGHT_FORM = DEFAULT_WEIGHTS["form"]
+WEIGHT_PACE = DEFAULT_WEIGHTS["pace"]
+WEIGHT_MOVEMENT = DEFAULT_WEIGHTS["movement"]
+WEIGHT_CLASS = DEFAULT_WEIGHTS["class_fitness"]
 
 # Baseline win rate for an average runner (1/field_size fallback)
 DEFAULT_BASELINE = 0.10
@@ -78,6 +114,7 @@ def calculate_race_probabilities(
     race: Any,
     meeting: Any,
     pool: float = DEFAULT_POOL,
+    weights: dict[str, float] | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
 
@@ -86,6 +123,7 @@ def calculate_race_probabilities(
         race: Race ORM object (or dict)
         meeting: Meeting ORM object (or dict)
         pool: Total stake pool per race (default $20)
+        weights: Custom factor weights (key → 0.0-1.0). Defaults to DEFAULT_WEIGHTS.
 
     Returns:
         Dict mapping runner_id → RunnerProbability
@@ -94,12 +132,18 @@ def calculate_race_probabilities(
     if not active:
         return {}
 
+    w = weights if weights else DEFAULT_WEIGHTS
     field_size = len(active)
     baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
     track_condition = _get(meeting, "track_condition") or _get(race, "track_condition") or ""
+    race_distance = _get(race, "distance") or 1400
 
     # Determine pace scenario from race analysis or speed map positions
     pace_scenario = _determine_pace_scenario(active)
+
+    # Pre-calculate shared values
+    overround = _calculate_overround(active)
+    avg_weight = _average_weight(active)
 
     # Step 1: Calculate raw scores for each runner
     raw_scores: dict[str, float] = {}
@@ -107,49 +151,31 @@ def calculate_race_probabilities(
     runner_odds: dict[str, float] = {}
     factor_details: dict[str, dict] = {}
 
-    # Pre-calculate market overround
-    overround = _calculate_overround(active)
-
     for runner in active:
         rid = _get(runner, "id", "")
 
-        # Market consensus
-        mkt = _market_consensus(runner, overround)
-        market_implied[rid] = mkt
+        # Calculate all factor scores
+        scores = {
+            "market":         _market_consensus(runner, overround),
+            "movement":       _market_movement_factor(runner),
+            "form":           _form_rating(runner, track_condition, baseline),
+            "class_fitness":  _class_factor(runner, baseline),
+            "pace":           _pace_factor(runner, pace_scenario),
+            "barrier":        _barrier_draw_factor(runner, field_size, race_distance),
+            "jockey_trainer": _jockey_trainer_factor(runner, baseline),
+            "weight_carried": _weight_factor(runner, avg_weight),
+            "horse_profile":  _horse_profile_factor(runner),
+        }
 
-        # Median odds for this runner
+        market_implied[rid] = scores["market"]
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
 
-        # Form rating
-        form = _form_rating(runner, track_condition, baseline)
-
-        # Pace factor
-        pace = _pace_factor(runner, pace_scenario)
-
-        # Market movement
-        movement = _market_movement_factor(runner)
-
-        # Class/fitness
-        cls = _class_factor(runner, baseline)
-
-        # Composite raw score
-        raw = (
-            WEIGHT_MARKET * mkt
-            + WEIGHT_FORM * form
-            + WEIGHT_PACE * pace
-            + WEIGHT_MOVEMENT * movement
-            + WEIGHT_CLASS * cls
-        )
+        # Composite raw score — weighted sum of all factors
+        raw = sum(w.get(k, 0.0) * v for k, v in scores.items())
 
         raw_scores[rid] = max(0.001, raw)  # floor to prevent zero
-        factor_details[rid] = {
-            "market": round(mkt, 4),
-            "form": round(form, 4),
-            "pace": round(pace, 4),
-            "movement": round(movement, 4),
-            "class": round(cls, 4),
-        }
+        factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
 
     # Step 2: Normalize to sum to 1.0
     total = sum(raw_scores.values())
@@ -196,7 +222,7 @@ def calculate_race_probabilities(
 
 
 # ──────────────────────────────────────────────
-# Factor 1: Market Consensus (50%)
+# Factor: Market Consensus
 # ──────────────────────────────────────────────
 
 def _calculate_overround(runners: list) -> float:
@@ -235,7 +261,7 @@ def _get_median_odds(runner: Any) -> Optional[float]:
 
 
 # ──────────────────────────────────────────────
-# Factor 2: Form Rating (20%)
+# Factor: Form Rating
 # ──────────────────────────────────────────────
 
 def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
@@ -340,7 +366,7 @@ def _condition_stats_field(track_condition: str) -> Optional[str]:
 
 
 # ──────────────────────────────────────────────
-# Factor 3: Pace/Speed Factor (15%)
+# Factor: Pace/Speed
 # ──────────────────────────────────────────────
 
 def _pace_factor(runner: Any, pace_scenario: str) -> float:
@@ -407,7 +433,7 @@ def _determine_pace_scenario(runners: list) -> str:
 
 
 # ──────────────────────────────────────────────
-# Factor 4: Market Movement (10%)
+# Factor: Market Movement
 # ──────────────────────────────────────────────
 
 def _market_movement_factor(runner: Any) -> float:
@@ -454,7 +480,7 @@ def _market_movement_factor(runner: Any) -> float:
 
 
 # ──────────────────────────────────────────────
-# Factor 5: Class/Fitness (5%)
+# Factor: Class/Fitness
 # ──────────────────────────────────────────────
 
 def _class_factor(runner: Any, baseline: float) -> float:
@@ -481,6 +507,157 @@ def _class_factor(runner: Any, baseline: float) -> float:
             score -= 0.05  # long layoff concern
         elif days > 60:
             score -= 0.03  # moderate layoff
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Barrier Draw
+# ──────────────────────────────────────────────
+
+def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400) -> float:
+    """Score based on barrier position relative to field size and distance.
+
+    Inside barriers get a slight boost; wide gates are penalized more at
+    shorter distances where there's less time to recover.
+    """
+    score = 0.5  # neutral
+    barrier = _get(runner, "barrier")
+    if not barrier or not isinstance(barrier, (int, float)) or barrier < 1:
+        return score
+
+    barrier = int(barrier)
+
+    # Relative position (0.0 = rail, 1.0 = widest)
+    if field_size <= 1:
+        return score
+    relative = (barrier - 1) / max(field_size - 1, 1)
+
+    # Distance multiplier — barriers matter more in sprints
+    if distance <= 1200:
+        dist_mult = 1.3
+    elif distance <= 1600:
+        dist_mult = 1.0
+    else:
+        dist_mult = 0.7
+
+    # Inside (relative < 0.3) = advantage; outside (relative > 0.7) = disadvantage
+    if relative <= 0.15:
+        score += 0.06 * dist_mult  # inside 2-3 gates
+    elif relative <= 0.30:
+        score += 0.03 * dist_mult  # inner quarter
+    elif relative >= 0.85:
+        score -= 0.08 * dist_mult  # widest gates
+    elif relative >= 0.70:
+        score -= 0.04 * dist_mult  # outer quarter
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Jockey & Trainer
+# ──────────────────────────────────────────────
+
+def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
+    """Score based on jockey and trainer win rate statistics.
+
+    Jockey weighted 60%, trainer 40% — jockey has more direct race impact.
+    """
+    score = 0.5
+    signals = 0
+    signal_sum = 0.0
+
+    # Jockey stats (60% weight)
+    jockey = parse_stats_string(_get(runner, "jockey_stats"))
+    if jockey and jockey.starts >= 5:
+        j_score = _stat_to_score(jockey.win_rate, baseline)
+        signal_sum += j_score * 0.6
+        signals += 0.6
+
+    # Trainer stats (40% weight)
+    trainer = parse_stats_string(_get(runner, "trainer_stats"))
+    if trainer and trainer.starts >= 5:
+        t_score = _stat_to_score(trainer.win_rate, baseline)
+        signal_sum += t_score * 0.4
+        signals += 0.4
+
+    if signals > 0:
+        score = signal_sum / signals
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Weight Carried
+# ──────────────────────────────────────────────
+
+def _weight_factor(runner: Any, avg_weight: float) -> float:
+    """Score based on carried weight relative to race average.
+
+    Lighter weight = advantage (approx 0.5kg per length at 1600m).
+    """
+    score = 0.5
+    weight = _get(runner, "weight")
+    if not weight or not isinstance(weight, (int, float)) or weight <= 0:
+        return score
+    if avg_weight <= 0:
+        return score
+
+    diff = weight - avg_weight  # positive = heavier than average
+
+    # Map weight difference to score adjustment
+    # ±3kg from average → ±0.10 score change
+    adjustment = -(diff / 3.0) * 0.10
+    score += max(-0.15, min(0.15, adjustment))
+
+    return max(0.05, min(0.95, score))
+
+
+def _average_weight(runners: list) -> float:
+    """Calculate average carried weight across active runners."""
+    weights = []
+    for r in runners:
+        w = _get(r, "weight")
+        if w and isinstance(w, (int, float)) and w > 0:
+            weights.append(float(w))
+    return statistics.mean(weights) if weights else 0.0
+
+
+# ──────────────────────────────────────────────
+# Factor: Horse Profile
+# ──────────────────────────────────────────────
+
+def _horse_profile_factor(runner: Any) -> float:
+    """Score based on horse age and sex.
+
+    Peak racing age is 4-5yo for gallopers. Young (2yo) and older (8+)
+    horses get a mild penalty.
+    """
+    score = 0.5
+
+    age = _get(runner, "horse_age")
+    if age and isinstance(age, (int, float)):
+        age = int(age)
+        if 4 <= age <= 5:
+            score += 0.05  # peak age
+        elif age == 3 or age == 6:
+            score += 0.02  # near peak
+        elif age == 2:
+            score -= 0.03  # immature, less predictable
+        elif age == 7:
+            score -= 0.01  # slight decline
+        elif age >= 8:
+            score -= 0.04  # declining
+
+    sex = _get(runner, "horse_sex")
+    if sex and isinstance(sex, str):
+        sex_lower = sex.lower().strip()
+        # Geldings are slightly more consistent runners
+        if sex_lower in ("gelding", "g"):
+            score += 0.01
+        # Mares can be inconsistent in certain conditions
+        elif sex_lower in ("mare", "m", "filly", "f"):
+            score -= 0.01
 
     return max(0.05, min(0.95, score))
 

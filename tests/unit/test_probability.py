@@ -6,6 +6,8 @@ import pytest
 from punty.probability import (
     RunnerProbability,
     StatsRecord,
+    FACTOR_REGISTRY,
+    DEFAULT_WEIGHTS,
     calculate_race_probabilities,
     parse_stats_string,
     _market_consensus,
@@ -16,6 +18,11 @@ from punty.probability import (
     _pace_factor,
     _market_movement_factor,
     _class_factor,
+    _barrier_draw_factor,
+    _jockey_trainer_factor,
+    _weight_factor,
+    _horse_profile_factor,
+    _average_weight,
     _place_probability,
     _recommended_stake,
     _determine_pace_scenario,
@@ -55,6 +62,12 @@ def _make_runner(
     pf_jockey_factor=None,
     pf_settle=None,
     handicap_rating=None,
+    barrier=None,
+    weight=None,
+    jockey_stats=None,
+    trainer_stats=None,
+    horse_age=None,
+    horse_sex=None,
 ):
     return {
         "id": id,
@@ -84,6 +97,12 @@ def _make_runner(
         "pf_jockey_factor": pf_jockey_factor,
         "pf_settle": pf_settle,
         "handicap_rating": handicap_rating,
+        "barrier": barrier,
+        "weight": weight,
+        "jockey_stats": jockey_stats,
+        "trainer_stats": trainer_stats,
+        "horse_age": horse_age,
+        "horse_sex": horse_sex,
     }
 
 
@@ -556,7 +575,11 @@ class TestCalculateRaceProbabilities:
         assert "form" in factors
         assert "pace" in factors
         assert "movement" in factors
-        assert "class" in factors
+        assert "class_fitness" in factors
+        assert "barrier" in factors
+        assert "jockey_trainer" in factors
+        assert "weight_carried" in factors
+        assert "horse_profile" in factors
 
     def test_runners_without_odds_get_probability(self):
         """Runners without odds should still get a probability (from other factors)."""
@@ -634,3 +657,239 @@ class TestConditionStatsField:
 
     def test_empty(self):
         assert _condition_stats_field("") is None
+
+
+# ──────────────────────────────────────────────
+# Factor Registry
+# ──────────────────────────────────────────────
+
+class TestFactorRegistry:
+    def test_default_weights_sum_to_one(self):
+        total = sum(DEFAULT_WEIGHTS.values())
+        assert abs(total - 1.0) < 0.001, f"Default weights sum to {total}, expected 1.0"
+
+    def test_all_registry_keys_in_defaults(self):
+        for key in FACTOR_REGISTRY:
+            assert key in DEFAULT_WEIGHTS, f"Factor '{key}' missing from DEFAULT_WEIGHTS"
+
+    def test_all_default_keys_in_registry(self):
+        for key in DEFAULT_WEIGHTS:
+            assert key in FACTOR_REGISTRY, f"Weight '{key}' missing from FACTOR_REGISTRY"
+
+    def test_registry_has_required_fields(self):
+        for key, meta in FACTOR_REGISTRY.items():
+            assert "label" in meta, f"Factor '{key}' missing label"
+            assert "category" in meta, f"Factor '{key}' missing category"
+            assert "description" in meta, f"Factor '{key}' missing description"
+
+
+# ──────────────────────────────────────────────
+# Barrier Draw Factor
+# ──────────────────────────────────────────────
+
+class TestBarrierDrawFactor:
+    def test_inside_barrier_advantage(self):
+        runner = _make_runner(barrier=1)
+        score = _barrier_draw_factor(runner, field_size=12, distance=1200)
+        assert score > 0.5, "Inside barrier should score above neutral"
+
+    def test_wide_barrier_penalty(self):
+        runner = _make_runner(barrier=14)
+        score = _barrier_draw_factor(runner, field_size=14, distance=1200)
+        assert score < 0.5, "Widest barrier should score below neutral"
+
+    def test_middle_barrier_neutral(self):
+        runner = _make_runner(barrier=6)
+        score = _barrier_draw_factor(runner, field_size=12, distance=1400)
+        assert abs(score - 0.5) < 0.05, "Middle barrier should be near neutral"
+
+    def test_sprint_amplifies_barrier(self):
+        runner = _make_runner(barrier=1)
+        sprint = _barrier_draw_factor(runner, field_size=12, distance=1000)
+        staying = _barrier_draw_factor(runner, field_size=12, distance=2400)
+        assert sprint > staying, "Barrier matters more in sprints"
+
+    def test_no_barrier_data_returns_neutral(self):
+        runner = _make_runner(barrier=None)
+        assert _barrier_draw_factor(runner, field_size=12) == 0.5
+
+    def test_single_runner_field(self):
+        runner = _make_runner(barrier=1)
+        assert _barrier_draw_factor(runner, field_size=1) == 0.5
+
+    def test_score_bounds(self):
+        for b in [1, 5, 10, 16, 20]:
+            runner = _make_runner(barrier=b)
+            score = _barrier_draw_factor(runner, field_size=20, distance=1200)
+            assert 0.05 <= score <= 0.95
+
+
+# ──────────────────────────────────────────────
+# Jockey & Trainer Factor
+# ──────────────────────────────────────────────
+
+class TestJockeyTrainerFactor:
+    def test_strong_jockey(self):
+        runner = _make_runner(jockey_stats="50: 15-10-5")
+        score = _jockey_trainer_factor(runner, baseline=0.10)
+        assert score > 0.5, "High jockey win rate should score above neutral"
+
+    def test_strong_trainer(self):
+        runner = _make_runner(trainer_stats="100: 25-15-10")
+        score = _jockey_trainer_factor(runner, baseline=0.10)
+        assert score > 0.5, "High trainer win rate should score above neutral"
+
+    def test_both_strong(self):
+        runner = _make_runner(jockey_stats="50: 15-10-5", trainer_stats="100: 25-15-10")
+        score = _jockey_trainer_factor(runner, baseline=0.10)
+        assert score > 0.5
+
+    def test_weak_connections(self):
+        runner = _make_runner(jockey_stats="50: 2-3-5", trainer_stats="100: 3-5-10")
+        score = _jockey_trainer_factor(runner, baseline=0.10)
+        assert score < 0.55, "Low win rates should score near or below neutral"
+
+    def test_no_data_returns_neutral(self):
+        runner = _make_runner()
+        assert _jockey_trainer_factor(runner, baseline=0.10) == 0.5
+
+    def test_insufficient_starts_ignored(self):
+        runner = _make_runner(jockey_stats="3: 2-1-0")  # < 5 starts
+        assert _jockey_trainer_factor(runner, baseline=0.10) == 0.5
+
+    def test_score_bounds(self):
+        runner = _make_runner(jockey_stats="100: 50-20-10", trainer_stats="200: 80-40-20")
+        score = _jockey_trainer_factor(runner, baseline=0.10)
+        assert 0.05 <= score <= 0.95
+
+
+# ──────────────────────────────────────────────
+# Weight Factor
+# ──────────────────────────────────────────────
+
+class TestWeightFactor:
+    def test_lighter_is_advantage(self):
+        runner = _make_runner(weight=54.0)
+        score = _weight_factor(runner, avg_weight=57.0)
+        assert score > 0.5, "Lighter weight should score above neutral"
+
+    def test_heavier_is_disadvantage(self):
+        runner = _make_runner(weight=60.0)
+        score = _weight_factor(runner, avg_weight=57.0)
+        assert score < 0.5, "Heavier weight should score below neutral"
+
+    def test_average_weight_neutral(self):
+        runner = _make_runner(weight=57.0)
+        score = _weight_factor(runner, avg_weight=57.0)
+        assert abs(score - 0.5) < 0.01, "Average weight should be neutral"
+
+    def test_no_weight_data_returns_neutral(self):
+        runner = _make_runner(weight=None)
+        assert _weight_factor(runner, avg_weight=57.0) == 0.5
+
+    def test_zero_avg_weight_returns_neutral(self):
+        runner = _make_runner(weight=55.0)
+        assert _weight_factor(runner, avg_weight=0.0) == 0.5
+
+    def test_score_bounds(self):
+        for w in [48.0, 52.0, 57.0, 62.0, 66.0]:
+            runner = _make_runner(weight=w)
+            score = _weight_factor(runner, avg_weight=57.0)
+            assert 0.05 <= score <= 0.95
+
+
+class TestAverageWeight:
+    def test_basic(self):
+        runners = [
+            _make_runner(weight=54.0),
+            _make_runner(weight=56.0),
+            _make_runner(weight=58.0),
+        ]
+        assert _average_weight(runners) == pytest.approx(56.0)
+
+    def test_ignores_none(self):
+        runners = [
+            _make_runner(weight=54.0),
+            _make_runner(weight=None),
+            _make_runner(weight=56.0),
+        ]
+        assert _average_weight(runners) == pytest.approx(55.0)
+
+    def test_all_none_returns_zero(self):
+        runners = [_make_runner(weight=None), _make_runner(weight=None)]
+        assert _average_weight(runners) == 0.0
+
+
+# ──────────────────────────────────────────────
+# Horse Profile Factor
+# ──────────────────────────────────────────────
+
+class TestHorseProfileFactor:
+    def test_peak_age(self):
+        runner = _make_runner(horse_age=4)
+        score = _horse_profile_factor(runner)
+        assert score > 0.5, "4yo should score above neutral"
+
+    def test_peak_age_5(self):
+        runner = _make_runner(horse_age=5)
+        score = _horse_profile_factor(runner)
+        assert score > 0.5, "5yo should score above neutral"
+
+    def test_young_horse_penalty(self):
+        runner = _make_runner(horse_age=2)
+        score = _horse_profile_factor(runner)
+        assert score < 0.5, "2yo should score below neutral"
+
+    def test_old_horse_penalty(self):
+        runner = _make_runner(horse_age=9)
+        score = _horse_profile_factor(runner)
+        assert score < 0.5, "9yo should score below neutral"
+
+    def test_gelding_slight_boost(self):
+        runner = _make_runner(horse_sex="Gelding")
+        score = _horse_profile_factor(runner)
+        assert score >= 0.5, "Gelding should be neutral or slight positive"
+
+    def test_no_data_returns_neutral(self):
+        runner = _make_runner()
+        assert _horse_profile_factor(runner) == 0.5
+
+    def test_score_bounds(self):
+        for age in [2, 3, 4, 5, 6, 7, 8, 9, 10]:
+            runner = _make_runner(horse_age=age)
+            score = _horse_profile_factor(runner)
+            assert 0.05 <= score <= 0.95
+
+
+# ──────────────────────────────────────────────
+# Custom Weights
+# ──────────────────────────────────────────────
+
+class TestCustomWeights:
+    def test_custom_weights_applied(self):
+        """Custom weights should change probability outcomes."""
+        runners = [
+            _make_runner(id="r1", current_odds=3.0, last_five="11111", barrier=1, weight=54.0),
+            _make_runner(id="r2", current_odds=5.0, last_five="55555", barrier=12, weight=60.0),
+        ]
+        race = _make_race()
+        meeting = _make_meeting()
+
+        # Default weights
+        default_results = calculate_race_probabilities(runners, race, meeting)
+
+        # Heavy form weights — should amplify the form difference
+        custom = {k: 0.0 for k in DEFAULT_WEIGHTS}
+        custom["form"] = 1.0  # 100% form
+        custom_results = calculate_race_probabilities(runners, race, meeting, weights=custom)
+
+        # With form-only weights, the form gap between 11111 and 55555 should be more extreme
+        default_gap = default_results["r1"].win_probability - default_results["r2"].win_probability
+        custom_gap = custom_results["r1"].win_probability - custom_results["r2"].win_probability
+        assert custom_gap > default_gap, "Pure form weights should amplify form advantage"
+
+    def test_none_weights_uses_defaults(self):
+        runners = [_make_runner(id="r1", current_odds=3.0)]
+        r1 = calculate_race_probabilities(runners, _make_race(), _make_meeting())
+        r2 = calculate_race_probabilities(runners, _make_race(), _make_meeting(), weights=None)
+        assert r1["r1"].win_probability == r2["r1"].win_probability

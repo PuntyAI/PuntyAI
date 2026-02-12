@@ -127,69 +127,44 @@
                         <p class="mb-6" style="color: var(--text-secondary);">
                             Every runner gets a calculated win and place probability using a
                             multi-factor model. Not guesswork. Not vibes.
-                            Actual maths combining five weighted signals:
+                            Actual maths combining nine weighted signals across five categories:
                         </p>
 
-                        <!-- 5-Factor Weights -->
+                        <!-- Category Descriptions -->
                         <div class="space-y-3 mb-6">
-                            <div>
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-heading font-bold text-sm" style="color: var(--magenta);">Market Consensus</span>
-                                    <span class="font-display font-bold text-sm" style="color: var(--magenta);">50%</span>
-                                </div>
-                                <div class="w-full h-2 rounded-full" style="background: rgba(233, 30, 140, 0.15);">
-                                    <div class="h-full rounded-full" style="width: 50%; background: var(--magenta);"></div>
-                                </div>
-                                <p class="text-xs mt-1" style="color: var(--text-muted);">
-                                    Multi-bookmaker median odds stripped of overround — what the market really thinks
+                            <div class="flex items-start gap-3 p-3 rounded-lg" style="background: rgba(233, 30, 140, 0.06); border-left: 3px solid var(--magenta);">
+                                <span class="font-heading font-bold text-sm flex-shrink-0" style="color: var(--magenta); min-width: 140px;">Market Intelligence</span>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Cross-referencing odds from multiple bookmakers, stripped of overround.
+                                    Tracking where the money is moving and what the smart punters think.
                                 </p>
                             </div>
-                            <div>
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-heading font-bold text-sm" style="color: var(--cyan);">Form Rating</span>
-                                    <span class="font-display font-bold text-sm" style="color: var(--cyan);">20%</span>
-                                </div>
-                                <div class="w-full h-2 rounded-full" style="background: rgba(0, 212, 255, 0.15);">
-                                    <div class="h-full rounded-full" style="width: 20%; background: var(--cyan);"></div>
-                                </div>
-                                <p class="text-xs mt-1" style="color: var(--text-muted);">
-                                    Recent results, track/distance/condition win rates, and career form
+                            <div class="flex items-start gap-3 p-3 rounded-lg" style="background: rgba(0, 212, 255, 0.06); border-left: 3px solid var(--cyan);">
+                                <span class="font-heading font-bold text-sm flex-shrink-0" style="color: var(--cyan); min-width: 140px;">Form & Fitness</span>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Recent results, track and distance win rates, condition specialists,
+                                    class level suitability, and days since last start.
                                 </p>
                             </div>
-                            <div>
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-heading font-bold text-sm" style="color: var(--orange);">Pace Factor</span>
-                                    <span class="font-display font-bold text-sm" style="color: var(--orange);">15%</span>
-                                </div>
-                                <div class="w-full h-2 rounded-full" style="background: rgba(255, 107, 53, 0.15);">
-                                    <div class="h-full rounded-full" style="width: 15%; background: var(--orange);"></div>
-                                </div>
-                                <p class="text-xs mt-1" style="color: var(--text-muted);">
-                                    Speed map position, pace advantage/disadvantage, and settling position
+                            <div class="flex items-start gap-3 p-3 rounded-lg" style="background: rgba(255, 107, 53, 0.06); border-left: 3px solid var(--orange);">
+                                <span class="font-heading font-bold text-sm flex-shrink-0" style="color: var(--orange); min-width: 140px;">Race Dynamics</span>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Speed maps, pace scenarios, barrier draw advantage, and how the race
+                                    shape favours different running styles.
                                 </p>
                             </div>
-                            <div>
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-heading font-bold text-sm" style="color: var(--yellow);">Market Movement</span>
-                                    <span class="font-display font-bold text-sm" style="color: var(--yellow);">10%</span>
-                                </div>
-                                <div class="w-full h-2 rounded-full" style="background: rgba(255, 193, 7, 0.15);">
-                                    <div class="h-full rounded-full" style="width: 10%; background: var(--yellow);"></div>
-                                </div>
-                                <p class="text-xs mt-1" style="color: var(--text-muted);">
-                                    How odds are shifting — heavy support signals smart money, drifters flag concern
+                            <div class="flex items-start gap-3 p-3 rounded-lg" style="background: rgba(157, 78, 221, 0.06); border-left: 3px solid var(--purple);">
+                                <span class="font-heading font-bold text-sm flex-shrink-0" style="color: var(--purple); min-width: 140px;">Connections</span>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Jockey and trainer win rate statistics — who's in form and who
+                                    makes a difference on race day.
                                 </p>
                             </div>
-                            <div>
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-heading font-bold text-sm" style="color: var(--purple);">Class & Fitness</span>
-                                    <span class="font-display font-bold text-sm" style="color: var(--purple);">5%</span>
-                                </div>
-                                <div class="w-full h-2 rounded-full" style="background: rgba(157, 78, 221, 0.15);">
-                                    <div class="h-full rounded-full" style="width: 5%; background: var(--purple);"></div>
-                                </div>
-                                <p class="text-xs mt-1" style="color: var(--text-muted);">
-                                    Class level suitability and days since last run
+                            <div class="flex items-start gap-3 p-3 rounded-lg" style="background: rgba(255, 193, 7, 0.06); border-left: 3px solid var(--yellow);">
+                                <span class="font-heading font-bold text-sm flex-shrink-0" style="color: var(--yellow); min-width: 140px;">Physical Profile</span>
+                                <p class="text-sm" style="color: var(--text-secondary);">
+                                    Weight carried relative to the field, horse age and sex —
+                                    the physical factors that influence performance.
                                 </p>
                             </div>
                         </div>

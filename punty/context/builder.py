@@ -29,6 +29,22 @@ class ContextBuilder:
     ) -> dict[str, Any]:
         """Build full context for a race meeting."""
         from punty.models.meeting import Meeting, Race, Runner
+        from punty.models.settings import AppSettings
+
+        # Load custom probability weights (once for all races)
+        self._probability_weights = None
+        try:
+            wt_result = await self.db.execute(
+                select(AppSettings).where(AppSettings.key == "probability_weights")
+            )
+            wt_setting = wt_result.scalar_one_or_none()
+            if wt_setting and wt_setting.value:
+                import json as _json
+                raw = _json.loads(wt_setting.value)
+                # Convert percentages (0-100) to decimals (0.0-1.0)
+                self._probability_weights = {k: v / 100.0 for k, v in raw.items()}
+        except Exception:
+            logger.debug("Failed to load probability weights, using defaults")
 
         result = await self.db.execute(
             select(Meeting)
@@ -262,6 +278,7 @@ class ContextBuilder:
 
             probs = calculate_race_probabilities(
                 active_runners, race, meeting_ctx,
+                weights=getattr(self, "_probability_weights", None),
             )
 
             # Inject probability data into each runner's context dict
