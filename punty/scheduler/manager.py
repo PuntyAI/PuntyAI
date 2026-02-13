@@ -64,11 +64,17 @@ class SchedulerManager:
             trigger_type: One of 'interval', 'cron', 'date'
             **trigger_kwargs: Arguments for the trigger
         """
+        from punty.config import MELB_TZ
+
         if trigger_type == "interval":
             trigger = IntervalTrigger(**trigger_kwargs)
         elif trigger_type == "cron":
+            if "timezone" not in trigger_kwargs:
+                trigger_kwargs["timezone"] = MELB_TZ
             trigger = CronTrigger(**trigger_kwargs)
         elif trigger_type == "date":
+            if "timezone" not in trigger_kwargs:
+                trigger_kwargs["timezone"] = MELB_TZ
             trigger = DateTrigger(**trigger_kwargs)
         else:
             raise ValueError(f"Unknown trigger type: {trigger_type}")
