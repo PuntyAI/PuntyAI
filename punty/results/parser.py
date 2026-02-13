@@ -144,8 +144,8 @@ def _normalize_exotic_type(raw: str) -> str:
     if "first" in t and ("4" in t or "four" in t):
         return "First4 Box"
     if "trifecta" in t:
-        if "box" in t or "standout" not in t:
-            return "Trifecta Box"
+        if "standout" in t:
+            return "Trifecta Standout"
         return "Trifecta Box"
     if "exacta" in t:
         if "standout" in t:

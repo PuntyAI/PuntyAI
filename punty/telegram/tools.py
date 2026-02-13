@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import shlex
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -44,8 +45,9 @@ async def tool_bash(command: str, timeout: int = BASH_TIMEOUT) -> str:
     try:
         timeout = min(max(timeout, 1), MAX_BASH_TIMEOUT)
 
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        args = shlex.split(command)
+        proc = await asyncio.create_subprocess_exec(
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=PROJECT_ROOT,

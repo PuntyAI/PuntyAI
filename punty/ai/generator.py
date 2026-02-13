@@ -216,7 +216,7 @@ class ContentGenerator:
                     else:
                         raise Exception(f"AI generation timed out after {MAX_TIMEOUT_RETRIES + 1} attempts")
 
-            if raw_content is None:
+            if not raw_content or not raw_content.strip():
                 raise Exception("AI generation failed - no content returned")
 
             await self._log_token_usage("early_mail", meeting_id)
@@ -617,7 +617,7 @@ class ContentGenerator:
                 temperature=0.8,
             )
 
-            if raw_content is None:
+            if not raw_content or not raw_content.strip():
                 raise Exception("AI generation failed - no content returned")
 
             await self._log_token_usage("wrapup", meeting_id)
@@ -1359,7 +1359,7 @@ You are writing your weekly blog column. Be entertaining, data-driven, and bruta
                     else:
                         raise Exception(f"Blog generation timed out after {MAX_TIMEOUT_RETRIES + 1} attempts")
 
-            if raw_content is None:
+            if not raw_content or not raw_content.strip():
                 raise Exception("AI generation failed — no content returned")
 
             await self._log_token_usage("weekly_blog")

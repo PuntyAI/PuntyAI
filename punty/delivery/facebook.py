@@ -94,6 +94,8 @@ class FacebookDelivery:
             if resp.status_code != 200:
                 error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                 error_msg = error_data.get("error", {}).get("message", resp.text)
+                content.status = "delivery_failed"
+                await self.db.commit()
                 raise ValueError(f"Facebook API error ({resp.status_code}): {error_msg}")
 
             post_data = resp.json()
@@ -117,6 +119,8 @@ class FacebookDelivery:
 
         except httpx.HTTPError as e:
             logger.error(f"Facebook HTTP error: {e}")
+            content.status = "delivery_failed"
+            await self.db.commit()
             raise ValueError(f"Facebook API error: {e}")
 
     async def post_update(self, message: str) -> dict:

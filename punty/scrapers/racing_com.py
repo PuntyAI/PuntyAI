@@ -104,7 +104,8 @@ class RacingComScraper(BaseScraper):
                 try:
                     body = await response.text()
                     data = _json.loads(body)
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to parse GraphQL response: {e}")
                     return
 
                 url = response.url

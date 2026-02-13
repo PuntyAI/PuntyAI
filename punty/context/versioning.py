@@ -37,10 +37,9 @@ async def create_context_snapshot(
     from punty.models.content import ContextSnapshot
 
     # Acquire per-meeting lock to prevent concurrent version collisions
-    if meeting_id not in _snapshot_locks:
-        _snapshot_locks[meeting_id] = asyncio.Lock()
+    lock = _snapshot_locks.setdefault(meeting_id, asyncio.Lock())
 
-    async with _snapshot_locks[meeting_id]:
+    async with lock:
         builder = ContextBuilder(db)
 
         # Build current context

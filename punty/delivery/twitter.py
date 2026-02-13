@@ -138,6 +138,8 @@ class TwitterDelivery:
 
         except Exception as e:
             logger.error(f"Twitter API error: {e}")
+            content.status = "delivery_failed"
+            await self.db.commit()
             raise ValueError(f"Twitter API error: {e}")
 
     async def send_thread(self, content_id: str) -> dict:
@@ -183,6 +185,8 @@ class TwitterDelivery:
             logger.info(f"Posted tweet: {tweet_id}")
         except Exception as e:
             logger.error(f"Twitter API error: {e}")
+            content.status = "delivery_failed"
+            await self.db.commit()
             raise ValueError(f"Twitter API error: {e}")
 
         # Update content status and store tweet ID
@@ -331,6 +335,8 @@ class TwitterDelivery:
 
         except Exception as e:
             logger.error(f"Twitter API error: {e}")
+            content.status = "delivery_failed"
+            await self.db.commit()
             raise ValueError(f"Twitter API error: {e}")
 
     def _format_long_post(self, raw_content: str, content_type: str, venue: str) -> str:

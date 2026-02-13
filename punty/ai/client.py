@@ -118,7 +118,11 @@ class AIClient:
                         reasoning={"effort": self.reasoning_effort},
                         max_output_tokens=max_tokens,
                     )
-                    content = response.output_text
+                    try:
+                        content = response.output_text
+                    except (AttributeError, TypeError, KeyError) as e:
+                        logger.error(f"Malformed API response from {self.model}: {e}")
+                        raise Exception(f"Malformed API response: {e}")
                     self._record_usage(response, is_responses_api=True)
                 else:
                     # Fallback to Chat Completions for older models
@@ -132,7 +136,11 @@ class AIClient:
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
-                    content = response.choices[0].message.content
+                    try:
+                        content = response.choices[0].message.content
+                    except (AttributeError, TypeError, IndexError, KeyError) as e:
+                        logger.error(f"Malformed API response from {self.model}: {e}")
+                        raise Exception(f"Malformed API response: {e}")
                     self._record_usage(response, is_responses_api=False)
 
                 usage = self.last_usage
