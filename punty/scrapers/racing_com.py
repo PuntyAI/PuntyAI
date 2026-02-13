@@ -973,6 +973,10 @@ class RacingComScraper(BaseScraper):
 
                 try:
                     race_url = self._build_race_url(venue, race_date, race_num)
+                    # Navigate to blank first to force full SPA reload on each race
+                    if race_num > race_numbers[0]:
+                        await page.goto("about:blank", wait_until="domcontentloaded")
+                        await page.wait_for_timeout(300)
                     await page.goto(race_url, wait_until="domcontentloaded")
                     await page.wait_for_timeout(3000)
 
