@@ -921,6 +921,26 @@ class ContentGenerator:
                 if runner.get("trainer_stats"):
                     details.append(f"Trainer@track: {runner['trainer_stats']}")
 
+                # Strike rates (career + recent form)
+                jsr = runner.get("jockey_strike_rate")
+                if jsr:
+                    a2e = jsr["last100_a2e"]
+                    tag = "HOT" if a2e >= 1.15 else "COLD" if a2e <= 0.80 else ""
+                    sr_str = f"Jockey SR: {jsr['career_sr']}% ({jsr['career_wins']}/{jsr['career_starts']})"
+                    sr_str += f", L100: {jsr['last100_sr']}% (A2E {a2e})"
+                    if tag:
+                        sr_str += f" [{tag}]"
+                    details.append(sr_str)
+                tsr = runner.get("trainer_strike_rate")
+                if tsr:
+                    a2e = tsr["last100_a2e"]
+                    tag = "HOT" if a2e >= 1.15 else "COLD" if a2e <= 0.80 else ""
+                    sr_str = f"Trainer SR: {tsr['career_sr']}% ({tsr['career_wins']}/{tsr['career_starts']})"
+                    sr_str += f", L100: {tsr['last100_sr']}% (A2E {a2e})"
+                    if tag:
+                        sr_str += f" [{tag}]"
+                    details.append(sr_str)
+
                 # Class stats
                 if runner.get("class_stats"):
                     details.append(f"Class: {runner['class_stats']}")

@@ -61,6 +61,23 @@ class ContextBuilder:
         # Fetch live WillyWeather data for hourly forecasts and observations
         ww_data = await self._fetch_willyweather(meeting)
 
+        # Fetch PF strike rates (cached per process, fetched once per day)
+        self._jockey_strike_rates, self._trainer_strike_rates = {}, {}
+        try:
+            from punty.scrapers.punting_form import PuntingFormScraper
+            from punty.models.settings import get_api_key
+            api_key = await get_api_key(self.db, "punting_form_api_key")
+            if api_key:
+                pf = PuntingFormScraper(api_key=api_key)
+                try:
+                    rates = await pf.get_all_strike_rates()
+                    self._jockey_strike_rates = rates.get("jockeys", {})
+                    self._trainer_strike_rates = rates.get("trainers", {})
+                finally:
+                    await pf.close()
+        except Exception as e:
+            logger.debug(f"Strike rate fetch failed: {e}")
+
         context = {
             "meeting": {
                 "id": meeting.id,
@@ -329,6 +346,14 @@ class ContextBuilder:
                     runner_data["jockey_stats"] = runner.jockey_stats
                     runner_data["trainer_stats"] = runner.trainer_stats
                     runner_data["class_stats"] = runner.class_stats
+
+                    # PF strike rates (global career stats)
+                    jockey_name = (runner.jockey or "").strip().lower()
+                    trainer_name = (runner.trainer or "").strip().lower()
+                    if jockey_name and jockey_name in self._jockey_strike_rates:
+                        runner_data["jockey_strike_rate"] = self._jockey_strike_rates[jockey_name]
+                    if trainer_name and trainer_name in self._trainer_strike_rates:
+                        runner_data["trainer_strike_rate"] = self._trainer_strike_rates[trainer_name]
 
                     # Gear
                     runner_data["gear"] = runner.gear

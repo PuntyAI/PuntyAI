@@ -919,3 +919,143 @@ class TestConditionLabels:
         assert _CONDITION_LABELS[4] == "Good 4"
         assert _CONDITION_LABELS[7] == "Soft 7"
         assert _CONDITION_LABELS[10] == "Heavy 10"
+
+
+# ---- Test Strike Rates ----
+
+SAMPLE_STRIKE_RATE_PAYLOAD = [
+    {
+        "startDate": "2026-02-13T00:00:00",
+        "entityId": 7232,
+        "entityName": "Kelly Myers",
+        "careerWins": 279,
+        "careerStarts": 8063,
+        "careerSeconds": 834,
+        "careerThirds": 768,
+        "last100Wins": 11,
+        "last100Starts": 100,
+        "last100Seconds": 12,
+        "last100Thirds": 13,
+        "careerExpectedWins": 303.4,
+        "careerPL": -8349.08,
+        "careerTurnvoer": 44614.5,
+        "last100ExpectedWins": 13.39,
+        "last100PL": -306.88,
+        "last100Turnvoer": 2125.63,
+    },
+    {
+        "startDate": "2026-02-13T00:00:00",
+        "entityId": 5001,
+        "entityName": "C J Waller",
+        "careerWins": 4200,
+        "careerStarts": 20000,
+        "careerSeconds": 3000,
+        "careerThirds": 2500,
+        "last100Wins": 28,
+        "last100Starts": 100,
+        "last100Seconds": 18,
+        "last100Thirds": 12,
+        "careerExpectedWins": 3800.0,
+        "careerPL": 5000.0,
+        "careerTurnvoer": 100000.0,
+        "last100ExpectedWins": 22.0,
+        "last100PL": 800.0,
+        "last100Turnvoer": 5000.0,
+    },
+]
+
+
+class TestStrikeRates:
+    def setup_method(self):
+        from punty.scrapers.punting_form import _strike_rate_cache
+        _strike_rate_cache.clear()
+        self.scraper = PuntingFormScraper(api_key="test-key")
+
+    @pytest.mark.asyncio
+    async def test_get_strike_rates_parses_correctly(self):
+        with patch.object(self.scraper, "_api_get", return_value=SAMPLE_STRIKE_RATE_PAYLOAD):
+            result = await self.scraper.get_strike_rates(entity_type=1)
+
+        assert len(result) == 2
+        assert "kelly myers" in result
+        assert "c j waller" in result
+
+        km = result["kelly myers"]
+        assert km["name"] == "Kelly Myers"
+        assert km["career_starts"] == 8063
+        assert km["career_wins"] == 279
+        assert km["career_sr"] == round(279 / 8063 * 100, 1)
+        assert km["last100_wins"] == 11
+        assert km["last100_sr"] == 11.0
+        assert km["career_a2e"] == round(279 / 303.4, 2)
+        assert km["last100_a2e"] == round(11 / 13.39, 2)
+        assert km["career_pl"] == -8349.08
+        assert km["last100_pl"] == -306.88
+
+    @pytest.mark.asyncio
+    async def test_strike_rate_cache(self):
+        with patch.object(self.scraper, "_api_get", return_value=SAMPLE_STRIKE_RATE_PAYLOAD) as mock_get:
+            result1 = await self.scraper.get_strike_rates(entity_type=1)
+            result2 = await self.scraper.get_strike_rates(entity_type=1)
+
+        mock_get.assert_called_once()
+        assert result1 is result2
+
+    @pytest.mark.asyncio
+    async def test_get_all_strike_rates(self):
+        async def mock_api(path, params):
+            return SAMPLE_STRIKE_RATE_PAYLOAD
+
+        with patch.object(self.scraper, "_api_get", side_effect=mock_api):
+            result = await self.scraper.get_all_strike_rates()
+
+        assert "jockeys" in result
+        assert "trainers" in result
+        assert len(result["jockeys"]) == 2
+        assert len(result["trainers"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_hot_jockey_detection(self):
+        """Jockey with last100_a2e >= 1.15 should be detectable."""
+        with patch.object(self.scraper, "_api_get", return_value=SAMPLE_STRIKE_RATE_PAYLOAD):
+            result = await self.scraper.get_strike_rates(entity_type=1)
+
+        waller = result["c j waller"]
+        assert waller["last100_a2e"] == round(28 / 22.0, 2)
+        assert waller["last100_a2e"] >= 1.15  # HOT
+
+    @pytest.mark.asyncio
+    async def test_cold_jockey_detection(self):
+        """Jockey with last100_a2e <= 0.80 should be detectable."""
+        with patch.object(self.scraper, "_api_get", return_value=SAMPLE_STRIKE_RATE_PAYLOAD):
+            result = await self.scraper.get_strike_rates(entity_type=1)
+
+        km = result["kelly myers"]
+        assert km["last100_a2e"] == round(11 / 13.39, 2)
+        assert km["last100_a2e"] <= 0.85  # COLD or borderline
+
+    @pytest.mark.asyncio
+    async def test_empty_entity_name_skipped(self):
+        data = [{"entityName": "", "careerWins": 1, "careerStarts": 10}]
+        with patch.object(self.scraper, "_api_get", return_value=data):
+            result = await self.scraper.get_strike_rates(entity_type=1)
+        assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_zero_starts_no_division_error(self):
+        data = [{
+            "entityName": "Test Jockey",
+            "careerWins": 0, "careerStarts": 0,
+            "careerSeconds": 0, "careerThirds": 0,
+            "last100Wins": 0, "last100Starts": 0,
+            "last100Seconds": 0, "last100Thirds": 0,
+            "careerExpectedWins": 0, "careerPL": 0, "careerTurnvoer": 0,
+            "last100ExpectedWins": 0, "last100PL": 0, "last100Turnvoer": 0,
+        }]
+        with patch.object(self.scraper, "_api_get", return_value=data):
+            result = await self.scraper.get_strike_rates(entity_type=1)
+        tj = result["test jockey"]
+        assert tj["career_sr"] == 0
+        assert tj["career_a2e"] == 0
+        assert tj["last100_sr"] == 0
+        assert tj["last100_a2e"] == 0

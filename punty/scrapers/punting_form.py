@@ -41,10 +41,15 @@ _CONDITION_LABELS = {
 # Survives across scraper instances within the same process.
 _meetings_cache: dict[str, list[dict]] = {}
 
+# Module-level cache: strike rates keyed by entity type (1=jockey, 2=trainer).
+# Name → stats dict.  Populated once per day (data is the same for all meetings).
+_strike_rate_cache: dict[int, dict[str, dict]] = {}
+
 
 def clear_meetings_cache():
     """Clear stale meeting cache. Called at midnight by scheduler."""
     _meetings_cache.clear()
+    _strike_rate_cache.clear()
 
 
 def _settle_to_position(settle: int, field_size: int) -> Optional[str]:
@@ -617,6 +622,72 @@ class PuntingFormScraper(BaseScraper):
             for s in all_scratchings
             if s.get("meetingId") == pf_meeting_id or str(s.get("meetingId")) == str(pf_meeting_id)
         ]
+
+    # ---- Strike Rates ----
+
+    async def get_strike_rates(self, entity_type: int = 1) -> dict[str, dict]:
+        """Fetch strike rates for jockeys (1) or trainers (2).
+
+        Returns dict keyed by lowercase entity name → stats dict with:
+        - career_starts, career_wins, career_seconds, career_thirds, career_sr
+        - last100_starts, last100_wins, last100_seconds, last100_thirds, last100_sr
+        - career_expected_wins, career_a2e (actual / expected ratio)
+        - last100_expected_wins, last100_a2e
+        - career_pl, last100_pl (profit/loss at SP)
+        """
+        if entity_type in _strike_rate_cache:
+            return _strike_rate_cache[entity_type]
+
+        raw = await self._api_get("/form/strikerate", {
+            "entityType": entity_type,
+            "jurisdiction": 0,
+        })
+
+        result: dict[str, dict] = {}
+        for item in raw:
+            name = (item.get("entityName") or "").strip()
+            if not name:
+                continue
+
+            career_starts = item.get("careerStarts", 0)
+            career_wins = item.get("careerWins", 0)
+            career_expected = item.get("careerExpectedWins", 0)
+            last100_starts = item.get("last100Starts", 0)
+            last100_wins = item.get("last100Wins", 0)
+            last100_expected = item.get("last100ExpectedWins", 0)
+
+            result[name.lower()] = {
+                "name": name,
+                "career_starts": career_starts,
+                "career_wins": career_wins,
+                "career_seconds": item.get("careerSeconds", 0),
+                "career_thirds": item.get("careerThirds", 0),
+                "career_sr": round(career_wins / career_starts * 100, 1) if career_starts else 0,
+                "career_expected_wins": career_expected,
+                "career_a2e": round(career_wins / career_expected, 2) if career_expected else 0,
+                "career_pl": item.get("careerPL", 0),
+                "last100_starts": last100_starts,
+                "last100_wins": last100_wins,
+                "last100_seconds": item.get("last100Seconds", 0),
+                "last100_thirds": item.get("last100Thirds", 0),
+                "last100_sr": round(last100_wins / last100_starts * 100, 1) if last100_starts else 0,
+                "last100_expected_wins": last100_expected,
+                "last100_a2e": round(last100_wins / last100_expected, 2) if last100_expected else 0,
+                "last100_pl": item.get("last100PL", 0),
+            }
+
+        _strike_rate_cache[entity_type] = result
+        logger.info(f"Cached {len(result)} strike rates for entity_type={entity_type}")
+        return result
+
+    async def get_all_strike_rates(self) -> dict[str, dict[str, dict]]:
+        """Fetch both jockey and trainer strike rates.
+
+        Returns {"jockeys": {name: stats}, "trainers": {name: stats}}.
+        """
+        jockeys = await self.get_strike_rates(entity_type=1)
+        trainers = await self.get_strike_rates(entity_type=2)
+        return {"jockeys": jockeys, "trainers": trainers}
 
     # ---- Full meeting scrape (primary data source) ----
 
