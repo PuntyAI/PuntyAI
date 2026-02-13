@@ -441,6 +441,37 @@ async def populate_pattern_insights(db: AsyncSession) -> int:
     return count
 
 
+async def _get_deep_learning_patterns(db: AsyncSession) -> list[dict]:
+    """Query PatternInsight rows from deep learning analyses.
+
+    Returns HIGH and MEDIUM confidence patterns, sorted by edge size.
+    """
+    result = await db.execute(
+        select(PatternInsight)
+        .where(PatternInsight.pattern_type.like("deep_learning_%"))
+        .order_by(PatternInsight.avg_pnl.desc())  # avg_pnl stores edge
+    )
+    rows = result.scalars().all()
+    patterns = []
+    for r in rows:
+        try:
+            conds = json.loads(r.conditions_json) if r.conditions_json else {}
+        except (json.JSONDecodeError, TypeError):
+            conds = {}
+        confidence = conds.get("confidence", "LOW")
+        if confidence in ("HIGH", "MEDIUM"):
+            patterns.append({
+                "type": r.pattern_type,
+                "key": r.pattern_key,
+                "insight": r.insight_text,
+                "confidence": confidence,
+                "sample_size": r.sample_count,
+                "win_rate": r.hit_rate,
+                "edge": r.avg_pnl,
+            })
+    return patterns
+
+
 # ──────────────────────────────────────────────
 # Strategy context builder (for prompt injection)
 # ──────────────────────────────────────────────
@@ -561,6 +592,18 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
     for d in _generate_directives(overall, recent, ranks):
         parts.append(f"- {d}")
     parts.append("")
+
+    # Historical patterns from deep learning analysis
+    try:
+        dl_patterns = await _get_deep_learning_patterns(db)
+    except Exception:
+        dl_patterns = []
+    if dl_patterns:
+        parts.append("### HISTORICAL PATTERNS (From Deep Learning Analysis)")
+        parts.append("Statistical patterns discovered from 280K+ historical runners:")
+        for p in dl_patterns[:15]:  # Cap at 15 most relevant
+            parts.append(f"- [{p['confidence']}] {p['insight']}")
+        parts.append("")
 
     # ROI targets
     parts.append("### ROI TARGETS")
