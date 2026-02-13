@@ -704,55 +704,69 @@ async def get_learnings_stats(db: AsyncSession = Depends(get_db)):
 async def cleanup_database(request: Request, db: AsyncSession = Depends(get_db)):
     """Delete superseded/rejected content and other accumulated stale data."""
     from punty.models.content import Content, ContextSnapshot
-    from punty.models.live_update import LiveUpdate
     from punty.models.settings import SettingsAudit
     from datetime import timedelta
+    import asyncio
 
     user_email = _get_user_email(request)
-    deleted = {}
     now = melb_now_naive()
 
-    # 1. Superseded content
-    result = await db.execute(delete(Content).where(Content.status == "superseded"))
-    deleted["superseded_content"] = result.rowcount
+    # Retry logic for SQLite lock contention with results monitor
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            deleted = {}
 
-    # 2. Rejected content
-    result = await db.execute(delete(Content).where(Content.status == "rejected"))
-    deleted["rejected_content"] = result.rowcount
+            # 1. Superseded content
+            result = await db.execute(delete(Content).where(Content.status == "superseded"))
+            deleted["superseded_content"] = result.rowcount
 
-    # 3. Draft content older than 7 days
-    cutoff = now - timedelta(days=7)
-    result = await db.execute(
-        delete(Content).where(Content.status == "draft", Content.created_at < cutoff)
-    )
-    deleted["old_drafts"] = result.rowcount
+            # 2. Rejected content
+            result = await db.execute(delete(Content).where(Content.status == "rejected"))
+            deleted["rejected_content"] = result.rowcount
 
-    # 4. Context snapshots older than 14 days (keep recent for change detection)
-    snap_cutoff = now - timedelta(days=14)
-    result = await db.execute(
-        delete(ContextSnapshot).where(ContextSnapshot.created_at < snap_cutoff)
-    )
-    deleted["old_snapshots"] = result.rowcount
+            # 3. Draft content older than 7 days
+            cutoff = now - timedelta(days=7)
+            result = await db.execute(
+                delete(Content).where(Content.status == "draft", Content.created_at < cutoff)
+            )
+            deleted["old_drafts"] = result.rowcount
 
-    # 5. Audit log entries older than 90 days
-    audit_cutoff = now - timedelta(days=90)
-    result = await db.execute(
-        delete(SettingsAudit).where(SettingsAudit.changed_at < audit_cutoff)
-    )
-    deleted["old_audit_logs"] = result.rowcount
+            # 4. Context snapshots older than 14 days (keep recent for change detection)
+            snap_cutoff = now - timedelta(days=14)
+            result = await db.execute(
+                delete(ContextSnapshot).where(ContextSnapshot.created_at < snap_cutoff)
+            )
+            deleted["old_snapshots"] = result.rowcount
 
-    total = sum(deleted.values())
+            # 5. Audit log entries older than 90 days
+            audit_cutoff = now - timedelta(days=90)
+            result = await db.execute(
+                delete(SettingsAudit).where(SettingsAudit.changed_at < audit_cutoff)
+            )
+            deleted["old_audit_logs"] = result.rowcount
 
-    await _record_audit(
-        db, "database_cleanup",
-        None, str(deleted),
-        user_email, action="cleanup",
-    )
-    await db.commit()
+            total = sum(deleted.values())
 
-    return {
-        "status": "success",
-        "message": f"Cleaned up {total} records",
-        "total": total,
-        "breakdown": deleted,
-    }
+            await _record_audit(
+                db, "database_cleanup",
+                None, str(deleted),
+                user_email, action="cleanup",
+            )
+            await db.commit()
+
+            return {
+                "status": "success",
+                "message": f"Cleaned up {total} records",
+                "total": total,
+                "breakdown": deleted,
+            }
+        except Exception as e:
+            await db.rollback()
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                await asyncio.sleep(2)
+                continue
+            raise HTTPException(
+                status_code=503,
+                detail=f"Database busy, please try again in a moment ({e})",
+            )
