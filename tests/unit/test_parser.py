@@ -73,6 +73,37 @@ Multi (all three to win): 10U × ~324.00 = ~3240U collect
         assert picks[3]["pick_type"] == "big3_multi"
         assert picks[3]["multi_odds"] == 324.00
 
+    def test_parse_big3_bold_format_unicode_quote(self):
+        """Test **bold** headers with Unicode right single quote."""
+        content = """
+**PUNTY\u2019S BIG 3 + MULTI**
+*1 - GOLD RUSH* (Race 2, No.5) \u2014 $4.50
+   Why: Best form
+*2 - SILVER STAR* (Race 4, No.3) \u2014 $6.00
+   Why: Good value
+*3 - BRONZE MEDAL* (Race 6, No.8) \u2014 $12.00
+   Why: Live chance
+Multi (all three to win): 10U \u00d7 ~324.00 = ~3240U collect
+
+**RACE-BY-RACE**
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_big3(content, "test-content", "test-meeting", next_id)
+
+        assert len(picks) == 4  # 3 horses + 1 multi
+        assert picks[0]["horse_name"] == "GOLD RUSH"
+        assert picks[0]["race_number"] == 2
+        assert picks[0]["saddlecloth"] == 5
+        assert picks[0]["odds_at_tip"] == 4.50
+        assert picks[1]["horse_name"] == "SILVER STAR"
+        assert picks[2]["horse_name"] == "BRONZE MEDAL"
+        assert picks[3]["pick_type"] == "big3_multi"
+
     def test_parse_big3_no_multi(self):
         content = """
 *PUNTY'S BIG 3*

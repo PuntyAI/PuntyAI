@@ -738,14 +738,16 @@ async def _get_meeting_pick_stats(db, meeting_id: str) -> list[dict]:
     def _norm_exotic(raw: str) -> str:
         low = raw.lower().strip()
         return {
-            "box trifecta": "Trifecta Box", "trifecta box": "Trifecta Box",
-            "trifecta (box)": "Trifecta Box", "trifecta (boxed)": "Trifecta Box",
-            "trifecta boxed": "Trifecta Box", "exacta standout": "Exacta Standout",
-            "exacta (standout)": "Exacta Standout",
-            "trifecta standout": "Trifecta Standout",
-            "trifecta (standout)": "Trifecta Standout",
-            "first four": "First Four", "first 4": "First Four",
-            "first four (boxed)": "First Four", "first four box": "First Four",
+            "box trifecta": "Trifecta", "trifecta box": "Trifecta",
+            "trifecta (box)": "Trifecta", "trifecta (boxed)": "Trifecta",
+            "trifecta boxed": "Trifecta", "exacta standout": "Exacta",
+            "exacta (standout)": "Exacta",
+            "trifecta standout": "Trifecta",
+            "trifecta (standout)": "Trifecta",
+            "first four": "First 4", "first 4": "First 4",
+            "first four (boxed)": "First 4", "first four box": "First 4",
+            "first4": "First 4", "first4 box": "First 4",
+            "first 4 standout": "First 4", "first four standout": "First 4",
         }.get(low, raw)
 
     stats = []
@@ -786,8 +788,7 @@ async def _get_meeting_pick_stats(db, meeting_id: str) -> list[dict]:
             Pick.pick_type == "exotic", Pick.exotic_type.isnot(None),
         )).group_by(Pick.exotic_type)
     )
-    ex_order = ["Quinella", "Exacta", "Exacta Standout", "Trifecta",
-                "Trifecta Box", "Trifecta Standout", "First Four"]
+    ex_order = ["Quinella", "Exacta", "Trifecta", "First 4"]
     ex_map = {}
     for et, total, hits, pnl, staked in ex_result.all():
         label = _norm_exotic(et)
@@ -1194,20 +1195,20 @@ async def get_bet_type_stats(
 
     # Desired display order
     _SEL_ORDER = ["Win", "Saver Win", "Place", "Each Way"]
-    _EXOTIC_ORDER = ["Quinella", "Exacta", "Exacta Standout", "Trifecta", "Trifecta Box", "Trifecta Standout", "First Four"]
+    _EXOTIC_ORDER = ["Quinella", "Exacta", "Trifecta", "First 4"]
     _SEQ_ORDER = ["Early Quaddie", "Quaddie", "Big6"]
     _VARIANT_ORDER = ["Skinny", "Balanced", "Wide"]
 
     def _normalise_exotic(raw: str) -> str:
         low = raw.lower().strip()
-        if low in ("box trifecta", "trifecta box", "trifecta (box)", "trifecta (boxed)", "trifecta boxed"):
-            return "Trifecta Box"
+        if low in ("box trifecta", "trifecta box", "trifecta (box)", "trifecta (boxed)", "trifecta boxed",
+                    "trifecta standout", "trifecta (standout)"):
+            return "Trifecta"
         if low in ("exacta standout", "exacta (standout)"):
-            return "Exacta Standout"
-        if low in ("trifecta standout", "trifecta (standout)"):
-            return "Trifecta Standout"
-        if low in ("first four", "first 4", "first four (boxed)", "first four box"):
-            return "First Four"
+            return "Exacta"
+        if low in ("first four", "first 4", "first four (boxed)", "first four box",
+                    "first4", "first4 box", "first 4 standout", "first four standout"):
+            return "First 4"
         return raw
 
     def _esc(s: str) -> str:

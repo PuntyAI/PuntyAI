@@ -634,7 +634,7 @@ class ResultsMonitor:
                     Content.status.notin_(["rejected", "superseded"]),
                 )
             )
-            if existing_wrapup.scalar_one_or_none():
+            if existing_wrapup.scalars().first():
                 logger.info(f"Wrap-up already exists for {meeting.venue} — skipping")
                 self.wrapups_generated.add(meeting_id)
                 return

@@ -717,20 +717,41 @@ async def cleanup_database(request: Request, db: AsyncSession = Depends(get_db))
         try:
             deleted = {}
 
-            # 1. Superseded content
-            result = await db.execute(delete(Content).where(Content.status == "superseded"))
-            deleted["superseded_content"] = result.rowcount
+            from punty.models.pick import Pick
 
-            # 2. Rejected content
-            result = await db.execute(delete(Content).where(Content.status == "rejected"))
-            deleted["rejected_content"] = result.rowcount
+            # 1. Superseded content — delete associated picks first
+            sup_ids = (await db.execute(
+                select(Content.id).where(Content.status == "superseded")
+            )).scalars().all()
+            if sup_ids:
+                await db.execute(delete(Pick).where(Pick.content_id.in_(sup_ids)))
+                result = await db.execute(delete(Content).where(Content.id.in_(sup_ids)))
+                deleted["superseded_content"] = result.rowcount
+            else:
+                deleted["superseded_content"] = 0
 
-            # 3. Draft content older than 7 days
+            # 2. Rejected content — delete associated picks first
+            rej_ids = (await db.execute(
+                select(Content.id).where(Content.status == "rejected")
+            )).scalars().all()
+            if rej_ids:
+                await db.execute(delete(Pick).where(Pick.content_id.in_(rej_ids)))
+                result = await db.execute(delete(Content).where(Content.id.in_(rej_ids)))
+                deleted["rejected_content"] = result.rowcount
+            else:
+                deleted["rejected_content"] = 0
+
+            # 3. Draft content older than 7 days — delete associated picks first
             cutoff = now - timedelta(days=7)
-            result = await db.execute(
-                delete(Content).where(Content.status == "draft", Content.created_at < cutoff)
-            )
-            deleted["old_drafts"] = result.rowcount
+            draft_ids = (await db.execute(
+                select(Content.id).where(Content.status == "draft", Content.created_at < cutoff)
+            )).scalars().all()
+            if draft_ids:
+                await db.execute(delete(Pick).where(Pick.content_id.in_(draft_ids)))
+                result = await db.execute(delete(Content).where(Content.id.in_(draft_ids)))
+                deleted["old_drafts"] = result.rowcount
+            else:
+                deleted["old_drafts"] = 0
 
             # 4. Context snapshots older than 14 days (keep recent for change detection)
             snap_cutoff = now - timedelta(days=14)

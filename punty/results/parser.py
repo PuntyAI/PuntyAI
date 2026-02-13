@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 # --- Big 3 section ---
 _BIG3_SECTION = re.compile(
-    r"\*(?:PUNTY'?S?\s+)?BIG\s*3.*?\*\s*\n(.*?)(?=\n###|\n\*RACE-BY-RACE|\n\*Race\s+\d|\Z)",
+    r"\*{1,2}(?:PUNTY['\u2019]?S?\s+)?BIG\s*3.*?\*{1,2}\s*\n(.*?)(?=\n###|\n\*{1,2}RACE|\n\*{1,2}Race\s+\d|\Z)",
     re.DOTALL | re.IGNORECASE,
 )
 _BIG3_HORSE = re.compile(

@@ -114,31 +114,6 @@ Format:
 
 If none hit, omit this section entirely.
 
-*Punty Ledger*
-Break into clear buckets by bet type.
-Each line shows Staked | Returned | Net.
-
-Required buckets (only include if bets exist in that category):
-
-Selections:
-- Win
-- Place
-- Each Way
-
-Exotics:
-- Exacta
-- Quinella
-- Trifecta
-- First 4
-
-Sequences:
-- Early Quaddie
-- Quaddie
-- Big 6
-
-Other:
-- Big 3 Multi
-
 *Big 3 Multi Result*
 State clearly whether it hit or missed.
 Name the three legs with race numbers.
