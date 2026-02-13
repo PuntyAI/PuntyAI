@@ -696,8 +696,8 @@ def _generate_directives(
     """Generate actionable strategy directives from performance data."""
     directives: list[str] = []
 
-    profitable = sorted([s for s in overall if s["roi"] > 0], key=lambda x: x["roi"], reverse=True)
-    losing = sorted([s for s in overall if s["roi"] < -10 and s["bets"] >= 10], key=lambda x: x["roi"])
+    profitable = sorted([s for s in overall if s["roi"] > 0 and s["bets"] >= 30], key=lambda x: x["roi"], reverse=True)
+    losing = sorted([s for s in overall if s["roi"] < -10 and s["bets"] >= 30], key=lambda x: x["roi"])
 
     if profitable:
         b = profitable[0]
@@ -750,7 +750,7 @@ def _generate_directives(
     if exotic_items:
         # Find best and worst exotic types
         profitable_exotics = [s for s in exotic_items if s["roi"] > 0]
-        losing_exotics = [s for s in exotic_items if s["roi"] < -20 and s["bets"] >= 5]
+        losing_exotics = [s for s in exotic_items if s["roi"] < -20 and s["bets"] >= 30]
         if profitable_exotics:
             best = max(profitable_exotics, key=lambda x: x["roi"])
             directives.append(
@@ -777,7 +777,7 @@ def _generate_directives(
     seq_items = [s for s in overall if s["category"] == "sequence"]
     if seq_items:
         profitable_seqs = [s for s in seq_items if s["roi"] > 0]
-        losing_seqs = [s for s in seq_items if s["roi"] < -20 and s["bets"] >= 5]
+        losing_seqs = [s for s in seq_items if s["roi"] < -20 and s["bets"] >= 30]
         if profitable_seqs:
             for ps in profitable_seqs:
                 directives.append(
@@ -792,9 +792,9 @@ def _generate_directives(
         # Check if Big6 or Early Quaddie are consistently losing
         big6_items = [s for s in seq_items if "big6" in s.get("sub_type", "").lower() or "big 6" in s.get("sub_type", "").lower()]
         early_q_items = [s for s in seq_items if "early" in s.get("sub_type", "").lower()]
-        if big6_items and all(s["roi"] < 0 for s in big6_items):
+        if big6_items and all(s["roi"] < 0 for s in big6_items) and sum(s["bets"] for s in big6_items) >= 50:
             directives.append("DROP BIG 6 — consistently unprofitable across all variants")
-        if early_q_items and all(s["roi"] < 0 for s in early_q_items):
+        if early_q_items and all(s["roi"] < 0 for s in early_q_items) and sum(s["bets"] for s in early_q_items) >= 50:
             directives.append("DROP EARLY QUADDIE — consistently unprofitable across all variants")
 
     # Trend comparison

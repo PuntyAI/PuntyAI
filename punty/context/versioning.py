@@ -1,5 +1,6 @@
 """Context versioning and snapshot management."""
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -11,6 +12,9 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+# Per-meeting locks to prevent concurrent snapshot creation
+_snapshot_locks: dict[str, asyncio.Lock] = {}
 
 
 async def create_context_snapshot(
@@ -32,65 +36,70 @@ async def create_context_snapshot(
     from punty.context.diff import detect_significant_changes
     from punty.models.content import ContextSnapshot
 
-    builder = ContextBuilder(db)
+    # Acquire per-meeting lock to prevent concurrent version collisions
+    if meeting_id not in _snapshot_locks:
+        _snapshot_locks[meeting_id] = asyncio.Lock()
 
-    # Build current context
-    context = await builder.build_meeting_context(meeting_id)
-    if not context:
-        return None
+    async with _snapshot_locks[meeting_id]:
+        builder = ContextBuilder(db)
 
-    # Calculate hash
-    context_json = builder.context_to_json(context)
-    data_hash = hashlib.sha256(context_json.encode()).hexdigest()[:16]
+        # Build current context
+        context = await builder.build_meeting_context(meeting_id)
+        if not context:
+            return None
 
-    # Get previous snapshot
-    previous = await get_latest_snapshot(db, meeting_id)
+        # Calculate hash
+        context_json = builder.context_to_json(context)
+        data_hash = hashlib.sha256(context_json.encode()).hexdigest()[:16]
 
-    # Check if data has changed
-    if previous and previous.data_hash == data_hash and not force:
-        logger.debug(f"No changes detected for {meeting_id}")
-        return None
+        # Get previous snapshot
+        previous = await get_latest_snapshot(db, meeting_id)
 
-    # Detect significant changes
-    significant_changes = []
-    if previous:
-        prev_context = json.loads(previous.snapshot_json)
-        significant_changes = detect_significant_changes(prev_context, context)
+        # Check if data has changed
+        if previous and previous.data_hash == data_hash and not force:
+            logger.debug(f"No changes detected for {meeting_id}")
+            return None
 
-    # Get next version number
-    result = await db.execute(
-        select(func.max(ContextSnapshot.version)).where(
-            ContextSnapshot.meeting_id == meeting_id
+        # Detect significant changes
+        significant_changes = []
+        if previous:
+            prev_context = json.loads(previous.snapshot_json)
+            significant_changes = detect_significant_changes(prev_context, context)
+
+        # Get next version number
+        result = await db.execute(
+            select(func.max(ContextSnapshot.version)).where(
+                ContextSnapshot.meeting_id == meeting_id
+            )
         )
-    )
-    max_version = result.scalar() or 0
-    new_version = max_version + 1
+        max_version = result.scalar() or 0
+        new_version = max_version + 1
 
-    # Create snapshot
-    snapshot = ContextSnapshot(
-        id=str(uuid.uuid4()),
-        meeting_id=meeting_id,
-        version=new_version,
-        data_hash=data_hash,
-        snapshot_json=context_json,
-        significant_changes=json.dumps(significant_changes) if significant_changes else None,
-    )
+        # Create snapshot
+        snapshot = ContextSnapshot(
+            id=str(uuid.uuid4()),
+            meeting_id=meeting_id,
+            version=new_version,
+            data_hash=data_hash,
+            snapshot_json=context_json,
+            significant_changes=json.dumps(significant_changes) if significant_changes else None,
+        )
 
-    db.add(snapshot)
-    await db.commit()
+        db.add(snapshot)
+        await db.commit()
 
-    logger.info(
-        f"Created context snapshot v{new_version} for {meeting_id} "
-        f"(changes: {len(significant_changes)})"
-    )
+        logger.info(
+            f"Created context snapshot v{new_version} for {meeting_id} "
+            f"(changes: {len(significant_changes)})"
+        )
 
-    return {
-        "id": snapshot.id,
-        "version": new_version,
-        "data_hash": data_hash,
-        "significant_changes": significant_changes,
-        "context": context,
-    }
+        return {
+            "id": snapshot.id,
+            "version": new_version,
+            "data_hash": data_hash,
+            "significant_changes": significant_changes,
+            "context": context,
+        }
 
 
 async def get_latest_snapshot(

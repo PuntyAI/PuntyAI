@@ -12,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from punty.config import settings
 from punty.auth import AuthMiddleware, CSRFMiddleware, router as auth_router, PUBLIC_SITE_HOSTS, PUBLIC_SITE_PATHS, PUBLIC_SITE_PREFIXES_EXTRA
+from punty.rate_limit import RateLimitMiddleware
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
 from punty.public.routes import router as public_router
@@ -198,11 +199,12 @@ app = FastAPI(
 )
 
 # Middleware stack (order matters — added in reverse, outermost first):
-# SessionMiddleware → HostnameRoutingMiddleware → AuthMiddleware → CSRFMiddleware → GZip → CacheControl
+# SessionMiddleware → HostnameRoutingMiddleware → RateLimit → AuthMiddleware → CSRFMiddleware → GZip → CacheControl
 app.add_middleware(CacheControlMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(AuthMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(HostnameRoutingMiddleware)
 app.add_middleware(
     SessionMiddleware,

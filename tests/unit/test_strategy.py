@@ -197,7 +197,7 @@ class TestGenerateDirectives:
         assert not any("REDUCE WIN" in d for d in directives)
 
     def test_small_sample_not_flagged_losing(self):
-        """Bet types with fewer than 10 bets should NOT be flagged as losing."""
+        """Bet types with fewer than 30 bets should NOT be flagged as losing."""
         overall = [
             _make_stat("selection", "Saver Win", 5, 0, 50.0, -50.0, 8.0, 0.0),  # -100% but only 5 bets
         ]
@@ -215,7 +215,7 @@ class TestGenerateDirectives:
     def test_exotic_loser_directive(self):
         """Losing exotic type with enough samples should generate EXOTIC LOSER directive."""
         overall = [
-            _make_stat("exotic", "First4 Box", 10, 0, 200.0, -200.0, 0, 0.0),  # -100% ROI
+            _make_stat("exotic", "First4 Box", 30, 0, 600.0, -600.0, 0, 0.0),  # -100% ROI
         ]
         directives = _generate_directives(overall, [], [])
         assert any("EXOTIC LOSER" in d and "First4 Box" in d for d in directives)
@@ -248,26 +248,26 @@ class TestGenerateDirectives:
     def test_sequence_loser_directive(self):
         """Losing sequence variant with enough samples should generate SEQUENCE LOSER."""
         overall = [
-            _make_stat("sequence", "Quaddie (Wide)", 10, 0, 1000.0, -1000.0, 0, 0.0),  # -100% ROI
+            _make_stat("sequence", "Quaddie (Wide)", 30, 0, 3000.0, -3000.0, 0, 0.0),  # -100% ROI
         ]
         directives = _generate_directives(overall, [], [])
         assert any("SEQUENCE LOSER" in d and "Quaddie (Wide)" in d for d in directives)
 
     def test_drop_big6_directive(self):
-        """All Big 6 variants losing should generate DROP BIG 6."""
+        """All Big 6 variants losing with 50+ total bets should generate DROP BIG 6."""
         overall = [
-            _make_stat("sequence", "Big 6 (Skinny)", 5, 0, 50.0, -50.0, 0, 0.0),
-            _make_stat("sequence", "Big 6 (Balanced)", 5, 0, 250.0, -250.0, 0, 0.0),
-            _make_stat("sequence", "Big 6 (Wide)", 5, 0, 500.0, -500.0, 0, 0.0),
+            _make_stat("sequence", "Big 6 (Skinny)", 20, 0, 200.0, -200.0, 0, 0.0),
+            _make_stat("sequence", "Big 6 (Balanced)", 15, 0, 750.0, -750.0, 0, 0.0),
+            _make_stat("sequence", "Big 6 (Wide)", 15, 0, 1500.0, -1500.0, 0, 0.0),
         ]
         directives = _generate_directives(overall, [], [])
         assert any("DROP BIG 6" in d for d in directives)
 
     def test_drop_early_quaddie_directive(self):
-        """All Early Quaddie variants losing should generate DROP EARLY QUADDIE."""
+        """All Early Quaddie variants losing with 50+ total bets should generate DROP EARLY QUADDIE."""
         overall = [
-            _make_stat("sequence", "Early Quaddie (Skinny)", 5, 0, 50.0, -50.0, 0, 0.0),
-            _make_stat("sequence", "Early Quaddie (Balanced)", 5, 0, 250.0, -250.0, 0, 0.0),
+            _make_stat("sequence", "Early Quaddie (Skinny)", 25, 0, 250.0, -250.0, 0, 0.0),
+            _make_stat("sequence", "Early Quaddie (Balanced)", 25, 0, 1250.0, -1250.0, 0, 0.0),
         ]
         directives = _generate_directives(overall, [], [])
         assert any("DROP EARLY QUADDIE" in d for d in directives)

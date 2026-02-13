@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import logging
 import secrets
+import time
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Request
@@ -13,6 +14,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from punty.config import settings
+
+# Session timeout constants
+SESSION_MAX_AGE = 7 * 24 * 3600      # 7 days absolute max
+SESSION_IDLE_TIMEOUT = 24 * 3600     # 24 hours idle timeout
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +71,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Check session
         user = request.session.get("user")
         if user:
+            now = time.time()
+            created_at = request.session.get("_created_at", 0)
+            last_active = request.session.get("_last_active", 0)
+
+            # Expire if session too old or idle too long
+            if (created_at and now - created_at > SESSION_MAX_AGE) or \
+               (last_active and now - last_active > SESSION_IDLE_TIMEOUT):
+                request.session.clear()
+                logger.info(f"Session expired for {user.get('email', '?')}")
+                if path.startswith("/api/"):
+                    return JSONResponse({"detail": "Session expired"}, status_code=401)
+                return RedirectResponse(url="/login?error=Session+expired.+Please+log+in+again.")
+
+            # Update last active timestamp
+            request.session["_last_active"] = now
             return await call_next(request)
 
         # Not authenticated
@@ -188,11 +208,14 @@ async def auth_callback(request: Request):
         logger.warning(f"Rejected login from {email}")
         return RedirectResponse(url="/login?error=Access+denied.+Not+authorised.")
 
+    now = time.time()
     request.session["user"] = {
         "email": email,
         "name": user_info.get("name", ""),
         "picture": user_info.get("picture", ""),
     }
+    request.session["_created_at"] = now
+    request.session["_last_active"] = now
     logger.info(f"User logged in: {email}")
     return RedirectResponse(url="/", status_code=302)
 
