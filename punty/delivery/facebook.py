@@ -1,5 +1,6 @@
 """Facebook Page delivery via Graph API."""
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -11,6 +12,9 @@ from punty.config import melb_now_naive
 from punty.formatters.facebook import format_facebook
 
 logger = logging.getLogger(__name__)
+
+MAX_DELIVERY_RETRIES = 2
+RETRY_DELAYS = [5, 15]  # seconds
 
 GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
 
@@ -80,48 +84,62 @@ class FacebookDelivery:
             formatted = format_facebook(content.raw_content, content.content_type, venue)
             content.facebook_formatted = formatted
 
-        # Post to Facebook Graph API
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{GRAPH_API_BASE}/{self._page_id}/feed",
-                    data={
-                        "message": formatted,
-                        "access_token": self._access_token,
-                    },
-                )
+        # Post to Facebook Graph API with retry
+        last_error = None
+        for attempt in range(MAX_DELIVERY_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{GRAPH_API_BASE}/{self._page_id}/feed",
+                        data={
+                            "message": formatted,
+                            "access_token": self._access_token,
+                        },
+                    )
 
-            if resp.status_code != 200:
-                error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-                error_msg = error_data.get("error", {}).get("message", resp.text)
-                content.status = "delivery_failed"
+                if resp.status_code != 200:
+                    error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                    error_msg = error_data.get("error", {}).get("message", resp.text)
+                    # Don't retry auth errors (4xx) — only retry network/server errors (5xx)
+                    if resp.status_code < 500:
+                        content.status = "delivery_failed"
+                        await self.db.commit()
+                        raise ValueError(f"Facebook API error ({resp.status_code}): {error_msg}")
+                    raise httpx.HTTPStatusError(
+                        f"Server error {resp.status_code}: {error_msg}",
+                        request=resp.request, response=resp,
+                    )
+
+                post_data = resp.json()
+                post_id = post_data.get("id", "")
+
+                # Update content
+                content.sent_at = melb_now_naive()
+                content.status = ContentStatus.SENT.value
+                content.facebook_id = post_id
+                content.sent_to_facebook = True
                 await self.db.commit()
-                raise ValueError(f"Facebook API error ({resp.status_code}): {error_msg}")
 
-            post_data = resp.json()
-            post_id = post_data.get("id", "")
+                logger.info(f"Posted to Facebook: {content_id} -> {post_id}")
 
-            # Update content
-            content.sent_at = melb_now_naive()
-            content.status = ContentStatus.SENT.value
-            content.facebook_id = post_id
-            content.sent_to_facebook = True
-            await self.db.commit()
+                return {
+                    "status": "posted",
+                    "content_id": content_id,
+                    "post_id": post_id,
+                    "url": f"https://facebook.com/{post_id}" if post_id else None,
+                }
 
-            logger.info(f"Posted to Facebook: {content_id} -> {post_id}")
+            except (httpx.HTTPError, httpx.HTTPStatusError) as e:
+                last_error = e
+                if attempt < MAX_DELIVERY_RETRIES:
+                    delay = RETRY_DELAYS[attempt]
+                    logger.warning(f"Facebook send attempt {attempt + 1} failed: {e}, retrying in {delay}s")
+                    await asyncio.sleep(delay)
 
-            return {
-                "status": "posted",
-                "content_id": content_id,
-                "post_id": post_id,
-                "url": f"https://facebook.com/{post_id}" if post_id else None,
-            }
-
-        except httpx.HTTPError as e:
-            logger.error(f"Facebook HTTP error: {e}")
-            content.status = "delivery_failed"
-            await self.db.commit()
-            raise ValueError(f"Facebook API error: {e}")
+        logger.error(f"Facebook API error after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
+        content.status = "delivery_failed"
+        await self.db.commit()
+        raise ValueError(f"Facebook API error: {last_error}")
 
     async def post_update(self, message: str) -> dict:
         """Post a standalone live update to the Facebook Page.

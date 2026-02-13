@@ -288,6 +288,23 @@ class ContextBuilder:
 
         active_runners = []
         for runner in sorted(race.runners, key=lambda r: r.saddlecloth or r.barrier or 99):
+            # Audit trail for malformed runner data
+            missing_fields = []
+            if not runner.horse_name:
+                missing_fields.append("horse_name")
+            if runner.saddlecloth is None:
+                missing_fields.append("saddlecloth")
+            if not runner.jockey:
+                missing_fields.append("jockey")
+            if not runner.trainer:
+                missing_fields.append("trainer")
+            if missing_fields:
+                logger.warning(
+                    f"Runner data incomplete in {race.id}: "
+                    f"sc={runner.saddlecloth} name={runner.horse_name!r} "
+                    f"missing=[{', '.join(missing_fields)}]"
+                )
+
             runner_data = {
                 "saddlecloth": runner.saddlecloth,
                 "barrier": runner.barrier,

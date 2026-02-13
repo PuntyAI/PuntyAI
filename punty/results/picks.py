@@ -30,7 +30,16 @@ async def store_picks_from_content(
 
     pick_dicts = parse_early_mail(raw_content, content_id, meeting_id)
     if not pick_dicts:
-        logger.warning(f"No picks parsed from content {content_id}")
+        logger.warning(f"No picks parsed from content {content_id} — flagging for review")
+        # Flag content for manual review when parser finds zero picks
+        from punty.models.content import Content
+        content_result = await db.execute(
+            select(Content).where(Content.id == content_id)
+        )
+        content = content_result.scalar_one_or_none()
+        if content and content.status not in ("sent", "delivery_failed"):
+            content.status = "pending_review"
+            await db.commit()
         return 0
 
     # Calculate probabilities for each race to attach to picks
@@ -110,6 +119,30 @@ async def _settle_picks_for_race_impl(
     runners = result.scalars().all()
     if not runners:
         return 0
+
+    # Alert if all runners are scratched (race abandoned)
+    active_runners = [r for r in runners if not r.scratched]
+    if not active_runners:
+        logger.warning(
+            f"All runners scratched in {race_id} — race likely abandoned. "
+            f"Voiding all unsettled picks for this race."
+        )
+        # Void all unsettled picks for this abandoned race
+        unsettled = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.settled == False,
+            )
+        )
+        for pick in unsettled.scalars().all():
+            pick.pnl = 0.0
+            pick.hit = False
+            pick.settled = True
+            pick.settled_at = now
+            settled_count += 1
+        await db.commit()
+        return settled_count
 
     runners_by_saddlecloth = {r.saddlecloth: r for r in runners if r.saddlecloth}
     runners_by_name = {r.horse_name.upper(): r for r in runners}
@@ -396,10 +429,28 @@ async def _settle_picks_for_race_impl(
             else:
                 # Flat format: [1, 5, 8, 9] - boxed bet
                 exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
+                original_count = len(exotic_runners_int)
                 # Remove scratched runners from our selections
                 exotic_runners_int = [x for x in exotic_runners_int if x not in scratched_saddlecloths]
                 is_standout = "standout" in exotic_type
                 is_boxed = "box" in exotic_type
+
+                # Void (refund) if scratchings leave too few runners to form the bet,
+                # or if the standout runner itself was scratched
+                required = {"trifecta": 3, "exacta": 2, "quinella": 2, "first": 4}
+                min_needed = next((v for k, v in required.items() if k in exotic_type), 3)
+                standout_scratched = is_standout and original_count > len(exotic_runners_int) and (
+                    exotic_runners_int == [] or exotic_runners_int[0] != int(exotic_runners[0])
+                )
+                if len(exotic_runners_int) < min_needed or standout_scratched:
+                    # Void: refund stake
+                    pick.pnl = 0.0
+                    pick.hit = False
+                    pick.settled = True
+                    pick.settled_at = now
+                    settled_count += 1
+                    logger.info(f"Voided exotic {pick.id}: scratching left {len(exotic_runners_int)}/{min_needed} runners")
+                    continue
 
                 if "trifecta" in exotic_type:
                     if len(top_sc_int) >= 3 and len(exotic_runners_int) >= 3:

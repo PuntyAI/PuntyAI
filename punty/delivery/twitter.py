@@ -13,6 +13,9 @@ from punty.formatters.twitter import format_twitter
 
 logger = logging.getLogger(__name__)
 
+MAX_DELIVERY_RETRIES = 2
+RETRY_DELAYS = [5, 15]  # seconds
+
 
 class TwitterDelivery:
     """Send content via Twitter API v2 using Tweepy.
@@ -114,33 +117,41 @@ class TwitterDelivery:
                 f"Tweet too long: {len(formatted)} chars. Use send_thread() instead."
             )
 
-        # Post tweet (blocking Tweepy call → run in thread)
-        try:
-            client = self._get_client()
-            response = await asyncio.to_thread(client.create_tweet, text=formatted)
-            tweet_id = response.data["id"]
+        # Post tweet (blocking Tweepy call → run in thread) with retry
+        last_error = None
+        for attempt in range(MAX_DELIVERY_RETRIES + 1):
+            try:
+                client = self._get_client()
+                response = await asyncio.to_thread(client.create_tweet, text=formatted)
+                tweet_id = response.data["id"]
 
-            # Update content status and store tweet ID
-            content.sent_at = melb_now_naive()
-            content.status = ContentStatus.SENT.value
-            content.twitter_id = tweet_id
-            content.sent_to_twitter = True
-            await self.db.commit()
+                # Update content status and store tweet ID
+                content.sent_at = melb_now_naive()
+                content.status = ContentStatus.SENT.value
+                content.twitter_id = tweet_id
+                content.sent_to_twitter = True
+                await self.db.commit()
 
-            logger.info(f"Posted tweet: {content_id} -> {tweet_id}")
+                logger.info(f"Posted tweet: {content_id} -> {tweet_id}")
 
-            return {
-                "status": "posted",
-                "content_id": content_id,
-                "tweet_id": tweet_id,
-                "url": f"https://twitter.com/i/status/{tweet_id}",
-            }
+                return {
+                    "status": "posted",
+                    "content_id": content_id,
+                    "tweet_id": tweet_id,
+                    "url": f"https://twitter.com/i/status/{tweet_id}",
+                }
 
-        except Exception as e:
-            logger.error(f"Twitter API error: {e}")
-            content.status = "delivery_failed"
-            await self.db.commit()
-            raise ValueError(f"Twitter API error: {e}")
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_DELIVERY_RETRIES:
+                    delay = RETRY_DELAYS[attempt]
+                    logger.warning(f"Twitter send attempt {attempt + 1} failed: {e}, retrying in {delay}s")
+                    await asyncio.sleep(delay)
+
+        logger.error(f"Twitter API error after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
+        content.status = "delivery_failed"
+        await self.db.commit()
+        raise ValueError(f"Twitter API error: {last_error}")
 
     async def send_thread(self, content_id: str) -> dict:
         """Post content as a thread of tweets.
@@ -177,17 +188,26 @@ class TwitterDelivery:
         # Format as single long-form post (X Premium supports long posts)
         tweet_text = format_twitter(content.raw_content, content.content_type, venue)
 
-        # Post single tweet (blocking → thread)
-        try:
-            client = self._get_client()
-            response = await asyncio.to_thread(client.create_tweet, text=tweet_text)
-            tweet_id = response.data["id"]
-            logger.info(f"Posted tweet: {tweet_id}")
-        except Exception as e:
-            logger.error(f"Twitter API error: {e}")
+        # Post single tweet (blocking → thread) with retry
+        last_error = None
+        for attempt in range(MAX_DELIVERY_RETRIES + 1):
+            try:
+                client = self._get_client()
+                response = await asyncio.to_thread(client.create_tweet, text=tweet_text)
+                tweet_id = response.data["id"]
+                logger.info(f"Posted tweet: {tweet_id}")
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_DELIVERY_RETRIES:
+                    delay = RETRY_DELAYS[attempt]
+                    logger.warning(f"Twitter thread attempt {attempt + 1} failed: {e}, retrying in {delay}s")
+                    await asyncio.sleep(delay)
+        else:
+            logger.error(f"Twitter API error after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
             content.status = "delivery_failed"
             await self.db.commit()
-            raise ValueError(f"Twitter API error: {e}")
+            raise ValueError(f"Twitter API error: {last_error}")
 
         # Update content status and store tweet ID
         content.sent_at = melb_now_naive()

@@ -171,7 +171,7 @@ def calculate_race_probabilities(
             "pace":           _pace_factor(runner, pace_scenario),
             "barrier":        _barrier_draw_factor(runner, field_size, race_distance),
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
-            "weight_carried": _weight_factor(runner, avg_weight),
+            "weight_carried": _weight_factor(runner, avg_weight, race_distance),
             "horse_profile":  _horse_profile_factor(runner),
             "deep_learning":  _deep_learning_factor(
                 runner, meeting, race_distance, track_condition,
@@ -302,7 +302,7 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
 
     # Track + distance stats (strongest form indicator)
     td = parse_stats_string(_get(runner, "track_dist_stats"))
-    if td and td.starts >= 2:
+    if td and td.starts >= 4:
         td_score = _stat_to_score(td.win_rate, baseline)
         signal_sum += td_score * 1.5  # higher weight for track+distance
         signals += 1.5
@@ -311,7 +311,7 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
     cond_stats_field = _condition_stats_field(track_condition)
     if cond_stats_field:
         cond = parse_stats_string(_get(runner, cond_stats_field))
-        if cond and cond.starts >= 2:
+        if cond and cond.starts >= 3:
             signal_sum += _stat_to_score(cond.win_rate, baseline)
             signals += 1
 
@@ -614,10 +614,11 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
 # Factor: Weight Carried
 # ──────────────────────────────────────────────
 
-def _weight_factor(runner: Any, avg_weight: float) -> float:
+def _weight_factor(runner: Any, avg_weight: float, race_distance: int = 1400) -> float:
     """Score based on carried weight relative to race average.
 
-    Lighter weight = advantage (approx 0.5kg per length at 1600m).
+    Lighter weight = advantage. Impact scales with distance:
+    sprints (<1200m) weight matters most, stayers (>2000m) less so.
     """
     score = 0.5
     weight = _get(runner, "weight")
@@ -628,10 +629,15 @@ def _weight_factor(runner: Any, avg_weight: float) -> float:
 
     diff = weight - avg_weight  # positive = heavier than average
 
+    # Distance multiplier: sprints amplify weight impact, staying races diminish it
+    # 1000m → 1.3x, 1200m → 1.15x, 1400m → 1.0x, 1600m → 0.9x, 2000m → 0.75x, 2400m → 0.65x
+    dist = max(800, min(3200, race_distance))
+    distance_mult = 1.0 + (1400 - dist) * 0.0005
+
     # Map weight difference to score adjustment
-    # ±3kg from average → ±0.10 score change
-    adjustment = -(diff / 3.0) * 0.10
-    score += max(-0.15, min(0.15, adjustment))
+    # ±3kg from average → ±0.10 score change (at 1400m baseline)
+    adjustment = -(diff / 3.0) * 0.10 * distance_mult
+    score += max(-0.20, min(0.20, adjustment))
 
     return max(0.05, min(0.95, score))
 
@@ -747,12 +753,13 @@ def _apply_market_floor(
 ) -> dict[str, float]:
     """Blend probabilities towards market when model strongly disagrees.
 
-    Prevents the model from giving a runner less than 50% of what the
+    Prevents the model from giving a runner less than 35% of what the
     market implies. For a $1.40 favourite (market 59%), this ensures the
-    model gives at least ~30% instead of the compressed 17% that happens
+    model gives at least ~21% instead of the compressed 17% that happens
     when most factors are neutral.
 
     Only applies to runners with meaningful market presence (>5% implied).
+    Uses 70/30 blend (model-heavy) to preserve model signal.
     Re-normalizes after adjustments to maintain probabilities summing to 1.0.
     """
     adjusted = dict(win_probs)
@@ -762,9 +769,9 @@ def _apply_market_floor(
         mkt = market_implied.get(rid, 0)
         if mkt > 0.05:  # Only for runners with real market presence
             ratio = adjusted[rid] / mkt if mkt > 0 else 1.0
-            if ratio < 0.5:
-                # Blend 50/50 between model and market
-                adjusted[rid] = adjusted[rid] * 0.5 + mkt * 0.5
+            if ratio < 0.35:
+                # Blend 70/30 model/market to preserve model signal
+                adjusted[rid] = adjusted[rid] * 0.7 + mkt * 0.3
                 needs_renorm = True
 
     if needs_renorm:
