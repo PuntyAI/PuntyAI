@@ -70,6 +70,18 @@ async def validate_early_mail(content: Content, db: AsyncSession) -> tuple[bool,
     if len(saddlecloth_matches) < 5:
         issues.append(f"Too few saddlecloth numbers ({len(saddlecloth_matches)})")
 
+    # Probability-based validation (picks vs race data)
+    try:
+        from punty.validation.content_validator import validate_early_mail_probability
+        prob_result = await validate_early_mail_probability(raw, content.meeting_id, db)
+        for issue in prob_result.errors:
+            issues.append(f"R{issue.race_number} [{issue.category}]: {issue.message}")
+        # Log warnings but don't block approval
+        for issue in prob_result.warnings:
+            logger.info(f"Validation warning R{issue.race_number}: {issue.message}")
+    except Exception as e:
+        logger.debug(f"Probability validation skipped: {e}")
+
     is_valid = len(issues) == 0
     return is_valid, issues
 

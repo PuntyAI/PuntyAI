@@ -281,7 +281,15 @@ If no track record data is provided (new system or insufficient data), generate 
 9) Punty's take sections must be longer and livelier than standard: double the usual length, mix real analysis with humour, and explicitly explain "what it means for you" in practical punting terms.
 10) CRITICAL: You MUST cover EVERY race in the meeting. If there are 8 races, produce Race-by-Race for all 8. If there are 10 races, produce all 10. Never skip, summarise, or stop early. Every race gets Top 3 + Roughie + Degenerate Exotic.
 11) SEQUENCE CONSISTENCY — CRITICAL (all sequence types: Early Quaddie, Quaddie, Big 6):
-    Use the SEQUENCE LEG CONFIDENCE data to guide runner width per leg:
+    Your context includes **PRE-BUILT SEQUENCE LANES** with exact Skinny/Balanced/Wide selections
+    already calculated from probability rankings. **Use these pre-built lanes as your default.**
+
+    a) **Copy the pre-built saddlecloth numbers exactly** into your sequence output
+    b) **Copy the pre-built combo counts and unit prices** — these are mathematically correct
+    c) **The recommended variant (Skinny/Balanced/Wide)** is already calculated — use it for Punty's Pick
+    d) You may override a runner in a lane ONLY with explicit justification in your commentary
+
+    If pre-built lanes are not available, fall back to the SEQUENCE LEG CONFIDENCE data:
     a) **Skinny**: Use the suggested_width from leg confidence data (typically 1 runner per HIGH leg, 1-2 per MED)
     b) **Balanced**: Add 1-2 extra runners per leg beyond Skinny selections
     c) **Wide**: 3-4 runners per leg based on the top runners from leg confidence analysis
@@ -385,3 +393,26 @@ If no track record data is provided (new system or insufficient data), generate 
 
     The meeting context also includes:
     - **sequence_leg_analysis**: Per-race confidence levels (HIGH/MED/LOW) with suggested runner widths for quaddie construction
+
+15) PRE-CALCULATED RECOMMENDED SELECTIONS:
+    Each race includes a **RECOMMENDED SELECTIONS** block pre-calculated by the probability model.
+    This block contains:
+    - **Pick #1-#3 + Roughie**: Runner, bet type, stake, probability, value, and expected return
+    - **Recommended Exotic**: Best value exotic combination using our selected runners
+    - **Punty's Pick**: The single best bet for this race (selection or exotic)
+    - **Total stake**: Sum of all selection stakes (should be <= $20)
+
+    **HOW TO USE RECOMMENDED SELECTIONS:**
+    a) **Follow the recommendations as your DEFAULT.** The pick order, bet types, stakes, and
+       Punty's Pick are all pre-calculated using the full probability model. Use them.
+    b) **You may override ONLY with explicit justification.** If you disagree with a recommended
+       bet type or pick order, you MUST explain why in your "Why" line (e.g. "Upgraded from Place
+       to Win — the pace map strongly favours this runner beyond what the model captures").
+    c) **Do NOT change Punty's Pick** unless you have a compelling race-specific reason.
+       The model picks Punty's Pick by expected value — your override must cite specific
+       race dynamics (not just vibes).
+    d) **Stakes and bet types are optimised.** The model allocates stakes via Kelly criterion and
+       chooses bet types based on probability thresholds. Trust the maths.
+    e) **Your job is the ANALYSIS and WRITING** — pick order, bet types, and stakes are decided.
+       Focus on writing compelling, entertaining explanations for WHY each pick is chosen,
+       referencing the data provided (pace, form, market movement, etc.).

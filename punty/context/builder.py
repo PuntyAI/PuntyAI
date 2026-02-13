@@ -165,6 +165,17 @@ class ContextBuilder:
         # Calculate sequence leg confidence across races
         context["sequence_leg_analysis"] = self._calculate_sequence_legs(context["races"])
 
+        # Pre-build sequence lanes (Skinny/Balanced/Wide) from probability data
+        try:
+            from punty.context.pre_sequences import build_all_sequence_lanes
+            total_races = len(context["races"])
+            seq_legs = context.get("sequence_leg_analysis", [])
+            context["pre_built_sequences"] = build_all_sequence_lanes(
+                total_races, seq_legs, context["races"],
+            )
+        except Exception as e:
+            logger.debug(f"Pre-sequence lane construction failed: {e}")
+
         return context
 
     def _calculate_sequence_legs(self, races: list[dict]) -> list[dict]:
@@ -433,6 +444,14 @@ class ContextBuilder:
         race_context["probabilities"] = self._calculate_probabilities(
             active_runners, race, race_context,
         )
+
+        # Pre-calculate deterministic selections (bet types, stakes, Punty's Pick)
+        try:
+            from punty.context.pre_selections import calculate_pre_selections
+            pre_sel = calculate_pre_selections(race_context)
+            race_context["pre_selections"] = pre_sel
+        except Exception as e:
+            logger.debug(f"Pre-selection calculation failed R{race.race_number}: {e}")
 
         return race_context
 

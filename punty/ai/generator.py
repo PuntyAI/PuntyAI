@@ -1153,6 +1153,12 @@ class ContentGenerator:
                         f"{ec['combos']} | {ec['format']} |"
                     )
 
+            # Pre-calculated recommended selections
+            pre_sel = race.get("pre_selections")
+            if pre_sel:
+                from punty.context.pre_selections import format_pre_selections
+                parts.append(format_pre_selections(pre_sel))
+
             parts.append("")
 
         # Add summary insights
@@ -1270,6 +1276,12 @@ class ContentGenerator:
                     for r in top[:width + 1]
                 )
                 parts.append(f"- Race {rn}: **{conf}** confidence (use {width} runner{'s' if width > 1 else ''}) — {top_str}")
+
+        # Pre-built sequence lanes (algorithmic Skinny/Balanced/Wide)
+        pre_seqs = context.get("pre_built_sequences", [])
+        if pre_seqs:
+            from punty.context.pre_sequences import format_sequence_lanes
+            parts.append(format_sequence_lanes(pre_seqs))
 
         return "\n".join(parts)
 
