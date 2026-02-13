@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+
+{% block title %}Probability Engine - PuntyAI{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Probability Engine</h1>
+            <p class="text-gray-500 text-sm">Self-tuning model performance &amp; calibration</p>
+        </div>
+        <a href="/" class="text-punty-coral hover:underline text-sm">&larr; Dashboard</a>
+    </div>
+
+    <!-- Summary Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-3xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {% if summary.brier_model is not none %}
+                {{ '%.3f'|format(summary.brier_model) }}
+                {% else %}---{% endif %}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Brier Score</div>
+            <div class="text-xs text-gray-400 mt-0.5">Lower = better</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-3xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {% if summary.brier_market is not none %}
+                {{ '%.3f'|format(summary.brier_market) }}
+                {% else %}---{% endif %}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Market Brier</div>
+            <div class="text-xs text-gray-400 mt-0.5">Baseline comparison</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-3xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ summary.total_settled }}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Picks Analyzed</div>
+            <div class="text-xs text-gray-400 mt-0.5">{{ summary.total_with_factors }} with factors</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-3xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {% if summary.last_tune_date %}
+                {{ summary.last_tune_picks }}
+                {% else %}---{% endif %}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Last Tune</div>
+            <div class="text-xs text-gray-400 mt-0.5">
+                {% if summary.last_tune_date %}
+                {{ summary.last_tune_date[:10] }}
+                {% else %}Not yet tuned{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Calibration Chart -->
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Calibration</h2>
+            <p class="text-xs text-gray-400">Predicted probability vs actual win rate. Perfect model = diagonal line.</p>
+        </div>
+        {% if calibration and calibration|length > 0 %}
+        <div style="position: relative; height: 300px; width: 100%;">
+            <canvas id="calibrationChart"></canvas>
+        </div>
+        {% else %}
+        <div class="text-center py-12 text-gray-500">
+            <p class="text-lg font-medium">Not enough data yet</p>
+            <p class="text-sm">Calibration will appear once picks are settled</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Factor Performance -->
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Factor Performance</h2>
+            <p class="text-xs text-gray-400">Edge = avg factor score for winners minus losers. Positive edge = factor helps predict winners.</p>
+        </div>
+        {% if factor_table and factor_table|length > 0 %}
+        <div style="position: relative; height: 320px; width: 100%;">
+            <canvas id="factorChart"></canvas>
+        </div>
+
+        <!-- Factor Table -->
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-xs text-gray-500 uppercase">
+                        <th class="text-left py-2 px-3">Factor</th>
+                        <th class="text-left py-2 px-3">Category</th>
+                        <th class="text-right py-2 px-3">Weight</th>
+                        <th class="text-right py-2 px-3">Default</th>
+                        <th class="text-right py-2 px-3">Edge</th>
+                        <th class="text-right py-2 px-3">Accuracy</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in factor_table|sort(attribute='weight', reverse=true) %}
+                    <tr class="border-t" style="border-color: var(--border-subtle);">
+                        <td class="py-2 px-3 font-medium">{{ f.label }}</td>
+                        <td class="py-2 px-3 text-gray-500 text-xs">{{ f.category }}</td>
+                        <td class="py-2 px-3 text-right font-bold {{ 'text-green-500' if f.weight > f.default_weight else 'text-red-400' if f.weight < f.default_weight else 'text-gray-300' }}">
+                            {{ '%.1f'|format(f.weight) }}%
+                            {% if f.weight != f.default_weight %}
+                            <span class="text-xs text-gray-400 ml-1">({{ '%+.1f'|format(f.weight - f.default_weight) }})</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-right text-gray-400">{{ '%.1f'|format(f.default_weight) }}%</td>
+                        <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if f.edge > 0.01 else 'text-red-400' if f.edge < -0.01 else 'text-gray-400' }}">
+                            {{ '%+.3f'|format(f.edge) }}
+                        </td>
+                        <td class="py-2 px-3 text-right {{ 'text-green-500' if f.accuracy > 0.05 else 'text-red-400' if f.accuracy < -0.05 else 'text-gray-400' }}">
+                            {{ '%+.3f'|format(f.accuracy) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12 text-gray-500">
+            <p class="text-lg font-medium">Factor data not yet available</p>
+            <p class="text-sm">Factor breakdown will be stored on new picks going forward</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Weight History -->
+    {% if weight_history and weight_history|length > 0 %}
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Weight History</h2>
+            <p class="text-xs text-gray-400">How factor weights have changed over auto-tuning cycles</p>
+        </div>
+        <div style="position: relative; height: 280px; width: 100%;">
+            <canvas id="weightHistoryChart"></canvas>
+        </div>
+
+        <!-- Tuning Log Table -->
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-xs text-gray-500 uppercase">
+                        <th class="text-left py-2 px-3">Date</th>
+                        <th class="text-right py-2 px-3">Picks</th>
+                        <th class="text-left py-2 px-3">Changes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in weight_history[:10] %}
+                    <tr class="border-t" style="border-color: var(--border-subtle);">
+                        <td class="py-2 px-3 font-medium text-gray-300">
+                            {{ entry.date[:10] if entry.date else '?' }}
+                        </td>
+                        <td class="py-2 px-3 text-right text-gray-400">{{ entry.picks_analyzed }}</td>
+                        <td class="py-2 px-3">
+                            {% for key, delta in entry.changes.items() %}
+                            <span class="inline-block text-xs px-1.5 py-0.5 rounded mr-1 mb-0.5 {{ 'bg-green-900/30 text-green-400' if delta > 0 else 'bg-red-900/30 text-red-400' }}">
+                                {{ key }}: {{ '%+.1f'|format(delta) }}
+                            </span>
+                            {% endfor %}
+                            {% if not entry.changes %}
+                            <span class="text-xs text-gray-500">No significant changes</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Value Performance -->
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Value Performance</h2>
+            <p class="text-xs text-gray-400">ROI by value rating bucket. Value &gt;1.0 means our model thinks the horse is underpriced by the market.</p>
+        </div>
+        {% if value_performance and value_performance|length > 0 %}
+        <div style="position: relative; height: 250px; width: 100%;">
+            <canvas id="valueChart"></canvas>
+        </div>
+
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-xs text-gray-500 uppercase">
+                        <th class="text-left py-2 px-3">Value Bucket</th>
+                        <th class="text-right py-2 px-3">Picks</th>
+                        <th class="text-right py-2 px-3">Hit Rate</th>
+                        <th class="text-right py-2 px-3">Total P&amp;L</th>
+                        <th class="text-right py-2 px-3">ROI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in value_performance %}
+                    {% if v.count > 0 %}
+                    <tr class="border-t" style="border-color: var(--border-subtle);">
+                        <td class="py-2 px-3 font-medium">{{ v.bucket }}</td>
+                        <td class="py-2 px-3 text-right">{{ v.count }}</td>
+                        <td class="py-2 px-3 text-right">{{ '%.1f'|format(v.hit_rate * 100) }}%</td>
+                        <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if v.total_pnl >= 0 else 'text-red-400' }}">
+                            {{ '%+.0f'|format(v.total_pnl) }}U
+                        </td>
+                        <td class="py-2 px-3 text-right font-bold {{ 'text-green-500' if v.roi >= 0 else 'text-red-400' }}">
+                            {{ '%+.1f'|format(v.roi) }}%
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12 text-gray-500">
+            <p class="text-lg font-medium">Not enough data yet</p>
+            <p class="text-sm">Value performance will appear once picks are settled</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Category Breakdown -->
+    {% if categories and categories|length > 0 %}
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Category Breakdown</h2>
+            <p class="text-xs text-gray-400">Performance by distance &amp; track condition</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-xs text-gray-500 uppercase">
+                        <th class="text-left py-2 px-3">Category</th>
+                        <th class="text-right py-2 px-3">Picks</th>
+                        <th class="text-right py-2 px-3">Wins</th>
+                        <th class="text-right py-2 px-3">Hit Rate</th>
+                        <th class="text-right py-2 px-3">ROI</th>
+                        <th class="text-right py-2 px-3">Brier</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in categories %}
+                    <tr class="border-t" style="border-color: var(--border-subtle);">
+                        <td class="py-2 px-3 font-medium">{{ c.category }}</td>
+                        <td class="py-2 px-3 text-right">{{ c.picks }}</td>
+                        <td class="py-2 px-3 text-right">{{ c.wins }}</td>
+                        <td class="py-2 px-3 text-right">{{ '%.1f'|format(c.hit_rate * 100) }}%</td>
+                        <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if c.roi >= 0 else 'text-red-400' }}">
+                            {{ '%+.1f'|format(c.roi) }}%
+                        </td>
+                        <td class="py-2 px-3 text-right text-gray-400">{{ '%.3f'|format(c.brier) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if calibration and calibration|length > 0 %}
+(function() {
+    var calData = {{ calibration | tojson }};
+    var labels = calData.map(function(d) { return d.bucket; });
+    var predicted = calData.map(function(d) { return d.predicted_avg * 100; });
+    var actual = calData.map(function(d) { return d.actual_rate * 100; });
+    var market = calData.map(function(d) { return d.market_rate * 100; });
+    // Perfect calibration line
+    var perfect = calData.map(function(d) { return d.predicted_avg * 100; });
+
+    var ctx = document.getElementById('calibrationChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Actual Win Rate',
+                    data: actual,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56,189,248,0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                },
+                {
+                    label: 'Perfect Calibration',
+                    data: perfect,
+                    borderColor: 'rgba(255,255,255,0.2)',
+                    borderWidth: 2,
+                    borderDash: [8, 4],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                },
+                {
+                    label: 'Market Baseline',
+                    data: market,
+                    borderColor: '#f472b6',
+                    borderWidth: 2,
+                    borderDash: [4, 4],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 3,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true, position: 'top',
+                    labels: { color: '#9ca3af', usePointStyle: true, font: { family: 'Rajdhani', size: 12 } }
+                },
+                tooltip: {
+                    backgroundColor: '#1a1a25', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                    titleFont: { family: 'Rajdhani', size: 14, weight: '600' },
+                    bodyFont: { family: 'Source Sans Pro', size: 12 },
+                    callbacks: {
+                        label: function(ctx) {
+                            var d = calData[ctx.dataIndex];
+                            if (ctx.datasetIndex === 0) return 'Actual: ' + ctx.parsed.y.toFixed(1) + '% (' + d.count + ' picks)';
+                            return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: { color: '#606070', font: { family: 'Rajdhani', size: 12 } }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: {
+                        color: '#606070', font: { family: 'Rajdhani', size: 12 },
+                        callback: function(v) { return v.toFixed(0) + '%'; }
+                    },
+                    title: { display: true, text: 'Win Rate %', color: '#606070', font: { family: 'Rajdhani' } }
+                }
+            }
+        }
+    });
+})();
+{% endif %}
+
+{% if factor_table and factor_table|length > 0 %}
+(function() {
+    var factors = {{ factor_table | tojson }};
+    // Sort by edge descending
+    factors.sort(function(a, b) { return b.edge - a.edge; });
+
+    var labels = factors.map(function(f) { return f.label; });
+    var edges = factors.map(function(f) { return f.edge; });
+    var colors = edges.map(function(e) { return e >= 0 ? '#4ade80' : '#f87171'; });
+
+    var ctx = document.getElementById('factorChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Factor Edge',
+                data: edges,
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1a1a25', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                    callbacks: {
+                        label: function(ctx) {
+                            var f = factors[ctx.dataIndex];
+                            return [
+                                'Edge: ' + (f.edge >= 0 ? '+' : '') + f.edge.toFixed(4),
+                                'Winners: ' + f.winner_avg.toFixed(3) + ' | Losers: ' + f.loser_avg.toFixed(3),
+                                'Weight: ' + f.weight.toFixed(1) + '%',
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: {
+                        color: '#606070', font: { family: 'Rajdhani', size: 12 },
+                        callback: function(v) { return (v >= 0 ? '+' : '') + v.toFixed(3); }
+                    },
+                    title: { display: true, text: 'Edge (Winner Avg - Loser Avg)', color: '#606070', font: { family: 'Rajdhani' } }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#9ca3af', font: { family: 'Rajdhani', size: 12 } }
+                }
+            }
+        }
+    });
+})();
+{% endif %}
+
+{% if weight_history and weight_history|length > 0 %}
+(function() {
+    var history = {{ weight_history | tojson }};
+    // Reverse to chronological order
+    history = history.slice().reverse();
+    var labels = history.map(function(h) { return h.date ? h.date.substring(5, 10) : '?'; });
+
+    // Get all factor keys from the latest entry
+    var allKeys = Object.keys(history[history.length - 1].new_weights || {});
+    var factorColors = {
+        'market': '#f472b6', 'form': '#38bdf8', 'pace': '#facc15',
+        'barrier': '#a78bfa', 'jockey_trainer': '#4ade80', 'movement': '#fb923c',
+        'class_fitness': '#94a3b8', 'weight_carried': '#e879f9', 'horse_profile': '#67e8f9',
+        'deep_learning': '#f97316',
+    };
+
+    var datasets = allKeys.map(function(key) {
+        var data = history.map(function(h) { return (h.new_weights || {})[key] || 0; });
+        return {
+            label: key.replace('_', ' '),
+            data: data,
+            borderColor: factorColors[key] || '#666',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+        };
+    });
+
+    var ctx = document.getElementById('weightHistoryChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true, position: 'top',
+                    labels: { color: '#9ca3af', usePointStyle: true, pointStyle: 'line', padding: 10, font: { family: 'Rajdhani', size: 11 } }
+                },
+                tooltip: {
+                    backgroundColor: '#1a1a25', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                    callbacks: {
+                        label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%'; }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: { color: '#606070', font: { family: 'Rajdhani', size: 12 } }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: {
+                        color: '#606070', font: { family: 'Rajdhani', size: 12 },
+                        callback: function(v) { return v.toFixed(0) + '%'; }
+                    },
+                    title: { display: true, text: 'Weight %', color: '#606070', font: { family: 'Rajdhani' } }
+                }
+            }
+        }
+    });
+})();
+{% endif %}
+
+{% if value_performance and value_performance|length > 0 %}
+(function() {
+    var valData = {{ value_performance | tojson }};
+    var labels = valData.map(function(d) { return d.bucket; });
+    var rois = valData.map(function(d) { return d.roi; });
+    var colors = rois.map(function(r) { return r >= 0 ? '#4ade80' : '#f87171'; });
+
+    var ctx = document.getElementById('valueChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'ROI %',
+                data: rois,
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1a1a25', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                    callbacks: {
+                        label: function(ctx) {
+                            var d = valData[ctx.dataIndex];
+                            return [
+                                'ROI: ' + (d.roi >= 0 ? '+' : '') + d.roi.toFixed(1) + '%',
+                                'Picks: ' + d.count + ' | Wins: ' + (d.hit_rate * 100).toFixed(0) + '%',
+                                'P&L: ' + (d.total_pnl >= 0 ? '+' : '') + d.total_pnl.toFixed(0) + 'U',
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#9ca3af', font: { family: 'Rajdhani', size: 12 } }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: {
+                        color: '#606070', font: { family: 'Rajdhani', size: 12 },
+                        callback: function(v) { return (v >= 0 ? '+' : '') + v + '%'; }
+                    },
+                    title: { display: true, text: 'ROI %', color: '#606070', font: { family: 'Rajdhani' } }
+                }
+            }
+        }
+    });
+})();
+{% endif %}
+</script>
+{% endblock %}

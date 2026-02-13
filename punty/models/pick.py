@@ -61,6 +61,9 @@ class Pick(Base):
     confidence: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # HIGH/MED/LOW
     recommended_stake: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Factor breakdown from probability model (JSON dict of factor→score 0.0-1.0)
+    factors_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Punty's Pick flag (the highlighted "best bet" recommendation per race)
     is_puntys_pick: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
 
@@ -104,6 +107,7 @@ class Pick(Base):
             "value_rating": self.value_rating,
             "confidence": self.confidence,
             "recommended_stake": self.recommended_stake,
+            "factors_json": self.factors_json,
             "is_puntys_pick": self.is_puntys_pick,
             "hit": self.hit,
             "pnl": self.pnl,

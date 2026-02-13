@@ -69,6 +69,9 @@ async def store_picks_from_content(
                 if not pd.get("recommended_stake"):
                     pd["recommended_stake"] = rp.recommended_stake
                 pd.setdefault("place_probability", rp.place_probability)
+                # Store factor breakdown for self-tuning analysis
+                if rp.factors:
+                    pd["factors_json"] = json.dumps(rp.factors)
 
         pick = Pick(**pd)
         db.add(pick)

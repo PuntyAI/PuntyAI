@@ -136,6 +136,15 @@ async def init_db() -> None:
                 state VARCHAR(10),
                 scraped_at DATETIME NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS probability_tuning_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                old_weights_json TEXT NOT NULL,
+                new_weights_json TEXT NOT NULL,
+                metrics_json TEXT DEFAULT '{}',
+                reason VARCHAR(20) DEFAULT 'auto_tune',
+                picks_analyzed INTEGER DEFAULT 0,
+                created_at DATETIME NOT NULL
+            )""",
             """CREATE TABLE IF NOT EXISTS future_nominations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 future_race_id VARCHAR(128) NOT NULL REFERENCES future_races(id) ON DELETE CASCADE,
@@ -212,6 +221,8 @@ async def init_db() -> None:
             "ALTER TABLE content ADD COLUMN blog_title VARCHAR(200)",
             "ALTER TABLE content ADD COLUMN blog_slug VARCHAR(200) UNIQUE",
             "ALTER TABLE content ADD COLUMN blog_week_start DATE",
+            # Probability factor breakdown on picks
+            "ALTER TABLE picks ADD COLUMN factors_json TEXT",
         ]:
             try:
                 await conn.execute(_text(col))
@@ -294,6 +305,8 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_future_noms_race_id ON future_nominations(future_race_id)",
             # Blog indexes
             "CREATE INDEX IF NOT EXISTS ix_content_blog_slug ON content(blog_slug)",
+            # Probability tuning log indexes
+            "CREATE INDEX IF NOT EXISTS ix_tuning_log_created ON probability_tuning_log(created_at)",
         ]:
             try:
                 await conn.execute(_text(idx))

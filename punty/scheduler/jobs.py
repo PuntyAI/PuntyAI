@@ -1269,6 +1269,19 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
                 logger.error(f"Auto-approve/post failed for {venue}: {e}")
                 results["errors"].append(f"auto_approve_post: {str(e)}")
 
+        # Step 5: Auto-tune probability weights
+        try:
+            from punty.probability_tuning import maybe_tune_weights
+            tune_result = await maybe_tune_weights(db)
+            if tune_result:
+                results["steps"].append(f"probability_tune: adjusted {tune_result['max_change_pct']:.1f}%")
+                await db.commit()
+            else:
+                results["steps"].append("probability_tune: skipped (cooldown/insufficient data)")
+        except Exception as e:
+            logger.warning(f"Probability tuning failed: {e}")
+            results["errors"].append(f"probability_tune: {str(e)}")
+
     results["completed_at"] = melb_now().isoformat()
 
     # Log completion

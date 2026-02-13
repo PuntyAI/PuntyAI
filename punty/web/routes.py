@@ -409,6 +409,30 @@ async def review_detail(
     )
 
 
+@router.get("/probability", response_class=HTMLResponse)
+async def probability_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
+    """Probability engine self-tuning dashboard (read-only)."""
+    try:
+        from punty.probability_tuning import get_dashboard_data
+        data = await get_dashboard_data(db)
+    except Exception as e:
+        data = {
+            "calibration": [], "value_performance": [], "factor_performance": {},
+            "factor_table": [], "brier": {}, "categories": [],
+            "current_weights": {}, "weight_history": [],
+            "summary": {
+                "total_settled": 0, "total_with_factors": 0,
+                "brier_model": None, "brier_market": None,
+                "last_tune_date": None, "last_tune_picks": 0,
+            },
+        }
+
+    return templates.TemplateResponse(
+        "probability.html",
+        {"request": request, **data},
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Settings page for API keys, scheduler config, prompts."""

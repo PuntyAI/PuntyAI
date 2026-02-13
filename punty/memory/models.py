@@ -155,6 +155,20 @@ class PatternInsight(Base):
         self.conditions_json = json.dumps(value)
 
 
+class TuningLog(Base):
+    """Logs each probability weight tuning event."""
+
+    __tablename__ = "probability_tuning_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    old_weights_json: Mapped[str] = mapped_column(Text)
+    new_weights_json: Mapped[str] = mapped_column(Text)
+    metrics_json: Mapped[str] = mapped_column(Text, default="{}")
+    reason: Mapped[str] = mapped_column(String(20), default="auto_tune")
+    picks_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
+
+
 class RaceAssessment(Base):
     """Stores post-race LLM assessments for learning from predictions.
 
