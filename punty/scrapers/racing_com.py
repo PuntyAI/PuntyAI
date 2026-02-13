@@ -260,13 +260,19 @@ class RacingComScraper(BaseScraper):
 
                 # 2. Navigate to each race page to trigger GraphQL queries
                 for race_num in range(1, race_count + 1):
+                  try:
                     # Use #/full-form hash to go directly to Full Form view
                     # This triggers lazy loading of extended form history on scroll
                     race_url = f"{self._build_race_url(venue, race_date, race_num)}#/full-form"
                     logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
 
-                    await page.goto(race_url, wait_until="networkidle")
-                    await page.wait_for_timeout(2500)
+                    await page.goto(race_url, wait_until="domcontentloaded")
+                    # Wait for race entries to appear (more reliable than networkidle)
+                    try:
+                        await page.wait_for_selector("[class*='runner'], [class*='entry'], [class*='field']", timeout=10000)
+                    except Exception:
+                        pass
+                    await page.wait_for_timeout(3000)
 
                     # Dismiss cookie banner on first race
                     if race_num == 1:
@@ -320,6 +326,9 @@ class RacingComScraper(BaseScraper):
                     # Check if we got entries for this race
                     if race_num not in race_entries_by_num:
                         logger.warning(f"Race {race_num}: no entries captured after page load")
+                  except Exception as e:
+                    logger.error(f"Race {race_num} scrape failed, continuing: {e}")
+                    continue
             finally:
                 # Always remove listener to prevent memory leaks
                 try:
@@ -897,7 +906,7 @@ class RacingComScraper(BaseScraper):
     async def check_race_fields(
         self, venue: str, race_date: date, race_numbers: list[int]
     ) -> dict:
-        """Lightweight poll — load race field pages to capture jockey/gear/scratching changes.
+        """Lightweight poll — load race field pages to capture jockey/gear/scratching/odds changes.
 
         Returns:
             {
@@ -911,6 +920,7 @@ class RacingComScraper(BaseScraper):
                             "jockey": str | None,
                             "gear": str | None,
                             "gear_changes": str | None,
+                            "odds": dict | None,  # {odds_tab, odds_sportsbet, ...}
                         }
                     ]
                 }
@@ -926,6 +936,7 @@ class RacingComScraper(BaseScraper):
             for race_num in race_numbers:
                 captured_entries: list[dict] = []
                 captured_meeting: dict = {}
+                captured_betting: list[dict] = []
 
                 async def capture_graphql(response):
                     if "graphql.rmdprod.racing.com" not in response.url:
@@ -951,12 +962,19 @@ class RacingComScraper(BaseScraper):
                         if entries:
                             captured_entries.extend(entries)
 
+                    # Capture betting data (odds)
+                    if "GetBettingData" in url:
+                        bd = data.get("data", {}).get("GetBettingData", {})
+                        entries = bd.get("formRaceEntries", []) if isinstance(bd, dict) else []
+                        if entries:
+                            captured_betting.extend(entries)
+
                 page.on("response", capture_graphql)
 
                 try:
                     race_url = self._build_race_url(venue, race_date, race_num)
-                    await page.goto(race_url, wait_until="load")
-                    await page.wait_for_timeout(3000)
+                    await page.goto(race_url, wait_until="domcontentloaded")
+                    await page.wait_for_timeout(4000)
                 except Exception as e:
                     logger.debug(f"Failed to load R{race_num} fields: {e}")
                 finally:
@@ -967,6 +985,14 @@ class RacingComScraper(BaseScraper):
                     tc = captured_meeting.get("trackCondition")
                     rail_tc = captured_meeting.get("railAndTrackCondition")
                     meeting_tc = tc or rail_tc
+
+                # Build odds lookup from betting data
+                odds_by_horse: dict[str, dict] = {}
+                for entry in captured_betting:
+                    name = (entry.get("horseName") or "").strip()
+                    odds_arr = entry.get("oddsByProvider", [])
+                    if name and odds_arr:
+                        odds_by_horse[name] = self._parse_odds_array(odds_arr)
 
                 # Parse runner entries
                 runners = []
@@ -981,10 +1007,12 @@ class RacingComScraper(BaseScraper):
                         "jockey": entry.get("jockeyName"),
                         "gear": entry.get("lastGear"),
                         "gear_changes": entry.get("gearChanges"),
+                        "odds": odds_by_horse.get(horse_name),
                     })
 
+                odds_count = sum(1 for r in runners if r.get("odds"))
                 result["races"][race_num] = runners
-                logger.debug(f"Field check {venue} R{race_num}: {len(runners)} runners")
+                logger.debug(f"Field check {venue} R{race_num}: {len(runners)} runners, {odds_count} with odds")
 
             result["meeting"]["track_condition"] = meeting_tc
 

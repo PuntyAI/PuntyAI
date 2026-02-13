@@ -810,7 +810,8 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     field_data = await field_scraper.check_race_fields(
                         venue, meeting.date, race_numbers
                     )
-                    # Apply jockey/gear/scratching updates
+                    # Apply jockey/gear/scratching/odds updates
+                    odds_updated = 0
                     for race_num, runners in field_data.get("races", {}).items():
                         race_id = f"{meeting_id}-r{race_num}"
                         for r in runners:
@@ -837,6 +838,32 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                             if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                                 logger.info(f"Gear change: {horse_name} (R{race_num}) {r['gear_changes']}")
                                 runner.gear_changes = r["gear_changes"]
+                            # Apply odds if runner has none or odds are fresher
+                            odds_data = r.get("odds")
+                            if odds_data and not runner.current_odds:
+                                # Pick best available odds (TAB preferred)
+                                best_odds = (
+                                    odds_data.get("odds_tab")
+                                    or odds_data.get("odds_sportsbet")
+                                    or odds_data.get("odds_bet365")
+                                    or odds_data.get("odds_ladbrokes")
+                                )
+                                if best_odds:
+                                    runner.current_odds = best_odds
+                                    if not runner.opening_odds:
+                                        runner.opening_odds = best_odds
+                                    odds_updated += 1
+                                # Always apply provider-specific odds
+                                for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
+                                    val = odds_data.get(field)
+                                    if val and not getattr(runner, field, None):
+                                        setattr(runner, field, val)
+                                if odds_data.get("place_odds") and not runner.place_odds:
+                                    runner.place_odds = odds_data["place_odds"]
+                                if odds_data.get("odds_flucs") and not runner.odds_flucs:
+                                    runner.odds_flucs = odds_data["odds_flucs"]
+                    if odds_updated:
+                        logger.info(f"Updated odds for {odds_updated} runners in {venue}")
 
                     # Update track condition if changed
                     tc = field_data.get("meeting", {}).get("track_condition")
