@@ -34,6 +34,8 @@ from punty.probability import (
     _get_move_type,
     _odds_to_sp_range,
     _get_state_for_venue,
+    _boost_market_weight,
+    _apply_market_floor,
 )
 
 
@@ -1288,3 +1290,141 @@ class TestCalculateWithDLPatterns:
         runners = [_make_runner(id="r1", current_odds=3.0)]
         results = calculate_race_probabilities(runners, _make_race(), _make_meeting())
         assert "deep_learning" in results["r1"].factors
+
+
+# ──────────────────────────────────────────────
+# Market Weight Boost
+# ──────────────────────────────────────────────
+
+class TestBoostMarketWeight:
+    def test_no_boost_when_enough_data(self):
+        """When factors have real signals, weights stay default."""
+        # All factors diverge significantly from 0.5
+        scores = {
+            "r1": {"market": 0.6, "form": 0.7, "pace": 0.3, "barrier": 0.65,
+                   "movement": 0.4, "class_fitness": 0.3, "jockey_trainer": 0.7,
+                   "weight_carried": 0.6, "horse_profile": 0.55, "deep_learning": 0.6},
+        }
+        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
+        assert result["market"] == DEFAULT_WEIGHTS["market"]
+
+    def test_boost_when_many_neutral(self):
+        """When most factors are neutral, market weight increases."""
+        # Most factors at 0.5 (no information)
+        scores = {
+            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
+                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
+                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
+        }
+        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
+        assert result["market"] > DEFAULT_WEIGHTS["market"]
+
+    def test_weights_still_sum_to_one(self):
+        """Boosted weights must still sum to 1.0."""
+        scores = {
+            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
+                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
+                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
+        }
+        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
+        total = sum(result.values())
+        assert abs(total - 1.0) < 0.001, f"Boosted weights sum to {total}"
+
+    def test_empty_scores_returns_original(self):
+        """Empty scores dict returns original weights."""
+        result = _boost_market_weight(DEFAULT_WEIGHTS, {})
+        assert result == DEFAULT_WEIGHTS
+
+    def test_multiple_runners_averaged(self):
+        """Neutral ratio is calculated across all runners."""
+        scores = {
+            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
+                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
+                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
+            "r2": {"market": 0.1, "form": 0.50, "pace": 0.50, "barrier": 0.50,
+                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
+                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
+        }
+        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
+        assert result["market"] > DEFAULT_WEIGHTS["market"]
+
+    def test_market_boost_capped(self):
+        """Market weight can't exceed ~50% even with 100% neutral factors."""
+        scores = {
+            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
+                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
+                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
+        }
+        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
+        assert result["market"] <= 0.55  # 22% + 28% max boost = 50%
+
+
+# ──────────────────────────────────────────────
+# Market Floor
+# ──────────────────────────────────────────────
+
+class TestApplyMarketFloor:
+    def test_no_adjustment_when_model_agrees(self):
+        """No blending when model probabilities are close to market."""
+        win_probs = {"r1": 0.45, "r2": 0.30, "r3": 0.25}
+        market = {"r1": 0.50, "r2": 0.30, "r3": 0.20}
+        result = _apply_market_floor(win_probs, market)
+        # r1: 0.45/0.50 = 0.90 > 0.50, no adjustment
+        assert result["r1"] == pytest.approx(0.45, abs=0.01)
+
+    def test_floor_applied_for_strong_favourite(self):
+        """Favourite probability is boosted when model strongly disagrees."""
+        # Model gives fav 17%, market says 60%
+        win_probs = {"fav": 0.17, "r2": 0.14, "r3": 0.14, "r4": 0.14,
+                     "r5": 0.14, "r6": 0.14, "r7": 0.13}
+        market = {"fav": 0.60, "r2": 0.12, "r3": 0.10, "r4": 0.08,
+                  "r5": 0.05, "r6": 0.03, "r7": 0.02}
+        result = _apply_market_floor(win_probs, market)
+        # fav: 0.17/0.60 = 0.28 < 0.50 → blended = 0.17*0.5 + 0.60*0.5 = 0.385 (pre-renorm)
+        assert result["fav"] > 0.25  # should be significantly boosted after renorm
+
+    def test_probabilities_sum_to_one(self):
+        """After floor + renormalization, probs still sum to 1.0."""
+        win_probs = {"fav": 0.17, "r2": 0.14, "r3": 0.14, "r4": 0.14,
+                     "r5": 0.14, "r6": 0.14, "r7": 0.13}
+        market = {"fav": 0.60, "r2": 0.12, "r3": 0.10, "r4": 0.08,
+                  "r5": 0.05, "r6": 0.03, "r7": 0.02}
+        result = _apply_market_floor(win_probs, market)
+        total = sum(result.values())
+        assert abs(total - 1.0) < 0.001, f"Floor-adjusted probs sum to {total}"
+
+    def test_small_market_runners_not_adjusted(self):
+        """Runners with <5% market implied aren't floor-adjusted."""
+        win_probs = {"r1": 0.50, "r2": 0.30, "longshot": 0.20}
+        market = {"r1": 0.50, "r2": 0.30, "longshot": 0.03}  # 3% implied
+        result = _apply_market_floor(win_probs, market)
+        # longshot: 0.20/0.03 = 6.67 > 0.50, and mkt < 0.05 — no adjustment
+        assert result == win_probs
+
+    def test_cranbourne_r1_scenario(self):
+        """Simulates the Cranbourne R1 scenario — $1.40 fav must get proper probability."""
+        # 7-horse field, favourite at $1.40
+        runners = [
+            _make_runner(id="fav", current_odds=1.4, last_five="11213"),
+            _make_runner(id="r2", current_odds=6.7),
+            _make_runner(id="r3", current_odds=7.4),
+            _make_runner(id="r4", current_odds=9.1),
+            _make_runner(id="r5", current_odds=14.9),
+            _make_runner(id="r6", current_odds=53.7),
+            _make_runner(id="r7", current_odds=65.6),
+        ]
+        race = _make_race(field_size=7, distance=1000)
+        meeting = _make_meeting(venue="Cranbourne")
+        results = calculate_race_probabilities(runners, race, meeting)
+
+        # Favourite must have highest probability
+        assert results["fav"].win_probability > results["r2"].win_probability
+        # Favourite probability should be at least 25% (not the compressed 17%)
+        assert results["fav"].win_probability >= 0.25, (
+            f"Favourite only got {results['fav'].win_probability:.1%}, "
+            f"expected >= 25% for a $1.40 shot"
+        )
+        # Value rating shouldn't be absurdly low
+        assert results["fav"].value_rating >= 0.4, (
+            f"Value rating {results['fav'].value_rating:.2f}x is too low"
+        )

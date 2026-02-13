@@ -152,11 +152,12 @@ def calculate_race_probabilities(
     overround = _calculate_overround(active)
     avg_weight = _average_weight(active)
 
-    # Step 1: Calculate raw scores for each runner
+    # Step 1: Calculate raw factor scores for each runner
     raw_scores: dict[str, float] = {}
     market_implied: dict[str, float] = {}
     runner_odds: dict[str, float] = {}
     factor_details: dict[str, dict] = {}
+    all_factor_scores: dict[str, dict] = {}
 
     for runner in active:
         rid = _get(runner, "id", "")
@@ -178,23 +179,34 @@ def calculate_race_probabilities(
             ),
         }
 
+        all_factor_scores[rid] = scores
         market_implied[rid] = scores["market"]
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
-
-        # Composite raw score — weighted sum of all factors
-        raw = sum(w.get(k, 0.0) * v for k, v in scores.items())
-
-        raw_scores[rid] = max(0.001, raw)  # floor to prevent zero
         factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
+
+    # Step 1b: Dynamic market weight boost for low-information races
+    eff_w = _boost_market_weight(w, all_factor_scores)
+
+    # Step 1c: Compute weighted sums with effective weights
+    for rid, scores in all_factor_scores.items():
+        raw = sum(eff_w.get(k, 0.0) * v for k, v in scores.items())
+        raw_scores[rid] = max(0.001, raw)
 
     # Step 2: Normalize to sum to 1.0
     total = sum(raw_scores.values())
+    win_probs: dict[str, float] = {}
+    for rid in raw_scores:
+        win_probs[rid] = raw_scores[rid] / total if total > 0 else baseline
+
+    # Step 2b: Market floor — prevent extreme disagreement with market
+    win_probs = _apply_market_floor(win_probs, market_implied)
+
     results: dict[str, RunnerProbability] = {}
 
     for runner in active:
         rid = _get(runner, "id", "")
-        win_prob = raw_scores[rid] / total if total > 0 else baseline
+        win_prob = win_probs.get(rid, baseline)
 
         # Place probability
         place_prob = _place_probability(win_prob, field_size)
@@ -671,6 +683,96 @@ def _horse_profile_factor(runner: Any) -> float:
             score -= 0.01
 
     return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Market Weight Boost & Floor
+# ──────────────────────────────────────────────
+
+def _boost_market_weight(
+    weights: dict[str, float],
+    all_scores: dict[str, dict],
+) -> dict[str, float]:
+    """Boost market weight when other factors lack information.
+
+    When most non-market factors return near-neutral (0.5), it means
+    there's limited form/stats data (e.g. maiden races). In these cases,
+    market consensus is the strongest signal and should be weighted higher.
+
+    Thresholds:
+      - neutral_ratio <= 0.4 → no boost (enough data)
+      - neutral_ratio 0.8+ → full boost (market weight up to ~50%)
+    """
+    if not all_scores:
+        return weights
+
+    non_market_keys = [k for k in weights if k != "market"]
+
+    # Count how many non-market factors are near-neutral across all runners
+    total_checks = 0
+    neutral_count = 0
+    for scores in all_scores.values():
+        for k in non_market_keys:
+            total_checks += 1
+            if abs(scores.get(k, 0.5) - 0.5) <= 0.05:
+                neutral_count += 1
+
+    neutral_ratio = neutral_count / total_checks if total_checks > 0 else 0
+
+    if neutral_ratio <= 0.4:
+        return weights  # Enough information, use default weights
+
+    # Boost market weight proportionally to how little info we have
+    # neutral_ratio 0.4 → no boost, 0.8+ → full boost
+    boost_factor = min(1.0, (neutral_ratio - 0.4) / 0.4)
+    max_boost = 0.28  # Market weight can increase from 22% up to ~50%
+    boost = boost_factor * max_boost
+
+    effective = dict(weights)
+    effective["market"] = weights["market"] + boost
+
+    # Scale non-market weights down to maintain sum = 1.0
+    non_market_total = sum(weights[k] for k in non_market_keys)
+    if non_market_total > 0:
+        scale = (1.0 - effective["market"]) / non_market_total
+        for k in non_market_keys:
+            effective[k] = weights[k] * scale
+
+    return effective
+
+
+def _apply_market_floor(
+    win_probs: dict[str, float],
+    market_implied: dict[str, float],
+) -> dict[str, float]:
+    """Blend probabilities towards market when model strongly disagrees.
+
+    Prevents the model from giving a runner less than 50% of what the
+    market implies. For a $1.40 favourite (market 59%), this ensures the
+    model gives at least ~30% instead of the compressed 17% that happens
+    when most factors are neutral.
+
+    Only applies to runners with meaningful market presence (>5% implied).
+    Re-normalizes after adjustments to maintain probabilities summing to 1.0.
+    """
+    adjusted = dict(win_probs)
+    needs_renorm = False
+
+    for rid in adjusted:
+        mkt = market_implied.get(rid, 0)
+        if mkt > 0.05:  # Only for runners with real market presence
+            ratio = adjusted[rid] / mkt if mkt > 0 else 1.0
+            if ratio < 0.5:
+                # Blend 50/50 between model and market
+                adjusted[rid] = adjusted[rid] * 0.5 + mkt * 0.5
+                needs_renorm = True
+
+    if needs_renorm:
+        total = sum(adjusted.values())
+        if total > 0:
+            adjusted = {rid: p / total for rid, p in adjusted.items()}
+
+    return adjusted
 
 
 # ──────────────────────────────────────────────
