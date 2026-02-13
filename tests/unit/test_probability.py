@@ -27,6 +27,13 @@ from punty.probability import (
     _recommended_stake,
     _determine_pace_scenario,
     _condition_stats_field,
+    _deep_learning_factor,
+    _get_dist_bucket,
+    _normalize_condition,
+    _get_barrier_bucket,
+    _get_move_type,
+    _odds_to_sp_range,
+    _get_state_for_venue,
 )
 
 
@@ -68,6 +75,8 @@ def _make_runner(
     trainer_stats=None,
     horse_age=None,
     horse_sex=None,
+    jockey=None,
+    trainer=None,
 ):
     return {
         "id": id,
@@ -103,6 +112,8 @@ def _make_runner(
         "trainer_stats": trainer_stats,
         "horse_age": horse_age,
         "horse_sex": horse_sex,
+        "jockey": jockey,
+        "trainer": trainer,
     }
 
 
@@ -893,3 +904,387 @@ class TestCustomWeights:
         r1 = calculate_race_probabilities(runners, _make_race(), _make_meeting())
         r2 = calculate_race_probabilities(runners, _make_race(), _make_meeting(), weights=None)
         assert r1["r1"].win_probability == r2["r1"].win_probability
+
+
+# ──────────────────────────────────────────────
+# Deep Learning Factor
+# ──────────────────────────────────────────────
+
+class TestDeepLearningFactor:
+    def test_neutral_no_patterns(self):
+        """Returns 0.5 when no patterns available."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        score = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, None)
+        assert score == 0.5
+
+    def test_neutral_empty_patterns(self):
+        """Returns 0.5 when patterns list is empty."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        score = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, [])
+        assert score == 0.5
+
+    def test_matching_pace_pattern_positive(self):
+        """Matching pace pattern with positive edge raises score above 0.5."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {
+                "venue": "Cranbourne",
+                "dist_bucket": "sprint",
+                "condition": "Good",
+                "style": "leader",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.10,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        assert score > 0.5
+
+    def test_matching_pace_pattern_negative(self):
+        """Matching pace pattern with negative edge lowers score below 0.5."""
+        runner = _make_runner(speed_map_position="backmarker")
+        meeting = _make_meeting(venue="Flemington")
+        patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {
+                "venue": "Flemington",
+                "dist_bucket": "middle",
+                "condition": "Good",
+                "style": "backmarker",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": -0.10,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1600, "Good 4", 10, patterns)
+        assert score < 0.5
+
+    def test_non_matching_pattern_stays_neutral(self):
+        """Pattern for a different venue doesn't affect score."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {
+                "venue": "Randwick",
+                "dist_bucket": "sprint",
+                "condition": "Good",
+                "style": "leader",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.10,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        assert score == 0.5
+
+    def test_barrier_bias_pattern(self):
+        """Barrier bias pattern matches correctly."""
+        runner = _make_runner(barrier=2)
+        meeting = _make_meeting(venue="Flemington")
+        patterns = [{
+            "type": "deep_learning_barrier_bias",
+            "conditions": {
+                "venue": "Flemington",
+                "dist_bucket": "middle",
+                "barrier_bucket": "inside",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.08,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1600, "Good 4", 12, patterns)
+        assert score > 0.5
+
+    def test_jockey_trainer_pattern(self):
+        """Jockey/trainer combo pattern matches correctly."""
+        runner = _make_runner(jockey="J McDonald", trainer="C Waller")
+        meeting = _make_meeting(venue="Randwick")
+        patterns = [{
+            "type": "deep_learning_jockey_trainer",
+            "conditions": {
+                "jockey": "J McDonald",
+                "trainer": "C Waller",
+                "state": "NSW",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.12,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1400, "Good 4", 10, patterns)
+        assert score > 0.5
+
+    def test_market_pattern(self):
+        """Market pattern matches based on state and SP range."""
+        runner = _make_runner(current_odds=4.0)
+        meeting = _make_meeting(venue="Flemington")
+        patterns = [{
+            "type": "deep_learning_market",
+            "conditions": {
+                "state": "VIC",
+                "sp_range": "$3-$5",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.05,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, patterns)
+        assert score > 0.5
+
+    def test_condition_specialist_pattern(self):
+        """Condition specialist pattern matches on track condition."""
+        runner = _make_runner()
+        meeting = _make_meeting(venue="Rosehill")
+        patterns = [{
+            "type": "deep_learning_condition_specialist",
+            "conditions": {
+                "condition": "Heavy",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.09,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1400, "Heavy 8", 10, patterns)
+        assert score > 0.5
+
+    def test_edge_capped_per_pattern(self):
+        """Individual pattern edge is capped at ±0.15."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {
+                "venue": "Cranbourne",
+                "dist_bucket": "sprint",
+                "condition": "Good",
+                "style": "leader",
+                "confidence": "HIGH",
+            },
+            "confidence": "HIGH",
+            "edge": 0.50,  # huge edge
+        }]
+        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        # With cap of 0.15 per pattern × 1.0 conf = max +0.15 from 0.5 = 0.65
+        assert score <= 0.65 + 0.001
+
+    def test_total_adjustment_capped(self):
+        """Total adjustment across all patterns is capped at ±0.25."""
+        runner = _make_runner(speed_map_position="leader", barrier=2, current_odds=4.0)
+        meeting = _make_meeting(venue="Cranbourne")
+        patterns = [
+            {
+                "type": "deep_learning_pace",
+                "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                               "condition": "Good", "style": "leader", "confidence": "HIGH"},
+                "confidence": "HIGH", "edge": 0.15,
+            },
+            {
+                "type": "deep_learning_barrier_bias",
+                "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                               "barrier_bucket": "inside", "confidence": "HIGH"},
+                "confidence": "HIGH", "edge": 0.15,
+            },
+            {
+                "type": "deep_learning_market",
+                "conditions": {"state": "VIC", "sp_range": "$3-$5", "confidence": "HIGH"},
+                "confidence": "HIGH", "edge": 0.15,
+            },
+        ]
+        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, patterns)
+        # Total would be 3×0.15=0.45, but capped at 0.25, so max score = 0.75
+        assert score <= 0.75 + 0.001
+        assert score >= 0.70  # should be close to cap
+
+    def test_multiple_patterns_combine(self):
+        """Multiple matching patterns contribute additively."""
+        runner = _make_runner(speed_map_position="leader", barrier=2)
+        meeting = _make_meeting(venue="Cranbourne")
+        single_pattern = [{
+            "type": "deep_learning_pace",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "condition": "Good", "style": "leader", "confidence": "HIGH"},
+            "confidence": "HIGH", "edge": 0.08,
+        }]
+        double_patterns = single_pattern + [{
+            "type": "deep_learning_barrier_bias",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "barrier_bucket": "inside", "confidence": "HIGH"},
+            "confidence": "HIGH", "edge": 0.06,
+        }]
+        score_single = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, single_pattern)
+        score_double = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, double_patterns)
+        assert score_double > score_single
+
+    def test_medium_confidence_has_lower_weight(self):
+        """MEDIUM confidence patterns contribute 60% of HIGH patterns."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        high_pattern = [{
+            "type": "deep_learning_pace",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "condition": "Good", "style": "leader", "confidence": "HIGH"},
+            "confidence": "HIGH", "edge": 0.10,
+        }]
+        med_pattern = [{
+            "type": "deep_learning_pace",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "condition": "Good", "style": "leader", "confidence": "MEDIUM"},
+            "confidence": "MEDIUM", "edge": 0.10,
+        }]
+        score_high = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, high_pattern)
+        score_med = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, med_pattern)
+        # HIGH: 0.5 + 0.10×1.0 = 0.60
+        # MED:  0.5 + 0.10×0.6 = 0.56
+        assert score_high > score_med
+        assert score_high == pytest.approx(0.60, abs=0.01)
+        assert score_med == pytest.approx(0.56, abs=0.01)
+
+    def test_low_confidence_skipped(self):
+        """LOW confidence patterns are ignored."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "condition": "Good", "style": "leader", "confidence": "LOW"},
+            "confidence": "LOW", "edge": 0.10,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        assert score == 0.5
+
+    def test_score_bounded(self):
+        """Score stays within [0.05, 0.95] bounds."""
+        runner = _make_runner(speed_map_position="leader")
+        meeting = _make_meeting(venue="Cranbourne")
+        patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "condition": "Good", "style": "leader", "confidence": "HIGH"},
+            "confidence": "HIGH", "edge": -0.50,
+        }]
+        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        assert score >= 0.05
+        assert score <= 0.95
+
+
+class TestDeepLearningHelpers:
+    def test_dist_bucket_sprint(self):
+        assert _get_dist_bucket(1000) == "sprint"
+        assert _get_dist_bucket(1100) == "sprint"
+
+    def test_dist_bucket_short(self):
+        assert _get_dist_bucket(1200) == "short"
+        assert _get_dist_bucket(1300) == "short"
+
+    def test_dist_bucket_middle(self):
+        assert _get_dist_bucket(1400) == "middle"
+        assert _get_dist_bucket(1600) == "middle"
+        assert _get_dist_bucket(1800) == "middle"
+
+    def test_dist_bucket_staying(self):
+        assert _get_dist_bucket(2000) == "staying"
+        assert _get_dist_bucket(3200) == "staying"
+
+    def test_normalize_condition_good(self):
+        assert _normalize_condition("Good 4") == "Good"
+        assert _normalize_condition("Good") == "Good"
+
+    def test_normalize_condition_soft(self):
+        assert _normalize_condition("Soft 5") == "Soft"
+
+    def test_normalize_condition_heavy(self):
+        assert _normalize_condition("Heavy 8") == "Heavy"
+
+    def test_normalize_condition_synthetic(self):
+        assert _normalize_condition("Synthetic") == "Synthetic"
+
+    def test_normalize_condition_empty(self):
+        assert _normalize_condition("") == ""
+
+    def test_barrier_bucket_inside(self):
+        assert _get_barrier_bucket(1, 12) == "inside"
+        assert _get_barrier_bucket(3, 12) == "inside"
+
+    def test_barrier_bucket_middle(self):
+        assert _get_barrier_bucket(6, 12) == "middle"
+
+    def test_barrier_bucket_outside(self):
+        assert _get_barrier_bucket(11, 12) == "outside"
+
+    def test_barrier_bucket_no_data(self):
+        assert _get_barrier_bucket(None, 12) == ""
+        assert _get_barrier_bucket(1, 1) == ""
+
+    def test_move_type_big_mover(self):
+        runner = _make_runner(opening_odds=8.0, current_odds=5.0)
+        assert _get_move_type(runner) == "big_mover"
+
+    def test_move_type_fader(self):
+        runner = _make_runner(opening_odds=4.0, current_odds=6.0)
+        assert _get_move_type(runner) == "fader"
+
+    def test_move_type_steady(self):
+        runner = _make_runner(opening_odds=5.0, current_odds=5.2)
+        assert _get_move_type(runner) == "steady"
+
+    def test_move_type_no_data(self):
+        runner = _make_runner()
+        assert _get_move_type(runner) == ""
+
+    def test_odds_to_sp_range(self):
+        assert _odds_to_sp_range(1.5) == "$1-$3"
+        assert _odds_to_sp_range(4.0) == "$3-$5"
+        assert _odds_to_sp_range(6.0) == "$5-$8"
+        assert _odds_to_sp_range(10.0) == "$8-$12"
+        assert _odds_to_sp_range(15.0) == "$12-$20"
+        assert _odds_to_sp_range(50.0) == "$20+"
+
+    def test_state_for_venue(self):
+        assert _get_state_for_venue("Flemington") == "VIC"
+        assert _get_state_for_venue("Randwick") == "NSW"
+        assert _get_state_for_venue("Eagle Farm") == "QLD"
+        assert _get_state_for_venue("Morphettville") == "SA"
+        assert _get_state_for_venue("Ascot") == "WA"
+        assert _get_state_for_venue("Hobart") == "TAS"
+
+    def test_state_for_unknown_venue(self):
+        assert _get_state_for_venue("Timbuktu") == ""
+        assert _get_state_for_venue("") == ""
+
+
+class TestCalculateWithDLPatterns:
+    def test_dl_patterns_passed_through(self):
+        """DL patterns parameter is accepted and affects probabilities."""
+        runners = [
+            _make_runner(id="r1", current_odds=2.0, speed_map_position="leader"),
+            _make_runner(id="r2", current_odds=4.0, speed_map_position="midfield"),
+        ]
+        race = _make_race(distance=1000)
+        meeting = _make_meeting(venue="Cranbourne")
+
+        # Without patterns
+        results_no_dl = calculate_race_probabilities(runners, race, meeting)
+
+        # With a pattern that boosts leaders at Cranbourne sprints
+        dl_patterns = [{
+            "type": "deep_learning_pace",
+            "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
+                           "condition": "Good", "style": "leader", "confidence": "HIGH"},
+            "confidence": "HIGH", "edge": 0.10,
+        }]
+        results_with_dl = calculate_race_probabilities(
+            runners, race, meeting, dl_patterns=dl_patterns,
+        )
+
+        # r1 (leader) should get a boost, r2 (midfield) shouldn't
+        assert results_with_dl["r1"].win_probability > results_no_dl["r1"].win_probability
+
+    def test_deep_learning_factor_in_factors_dict(self):
+        """The deep_learning factor should appear in the factors breakdown."""
+        runners = [_make_runner(id="r1", current_odds=3.0)]
+        results = calculate_race_probabilities(runners, _make_race(), _make_meeting())
+        assert "deep_learning" in results["r1"].factors

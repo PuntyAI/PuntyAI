@@ -375,5 +375,13 @@ If no track record data is provided (new system or insufficient data), generate 
     - **value_plays**: Runners where our model sees value (value_rating > 1.05)
     - **exotic_combinations**: Pre-calculated exotic combinations with Harville model probabilities and value ratios (value ≥ 1.2x only). Use these for the Degenerate Exotic and exotic Punty's Pick.
 
+    **CRITICAL — DO NOT OVERRIDE MODEL PROBABILITIES:**
+    The probability numbers (punty_win_probability, punty_place_probability, punty_value_rating) are
+    calculated by Punty's 10-factor probability model which includes deep learning pattern analysis.
+    You MUST use these numbers as-is in your output. Do NOT recalculate or adjust probabilities
+    based on your own interpretation of historical patterns or race context. The model has already
+    factored in pace, barriers, form, market, jockey/trainer, deep learning patterns, and more.
+    Your job is to write compelling analysis around these numbers, not override them.
+
     The meeting context also includes:
     - **sequence_leg_analysis**: Per-race confidence levels (HIGH/MED/LOW) with suggested runner widths for quaddie construction

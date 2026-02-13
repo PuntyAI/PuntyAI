@@ -46,6 +46,14 @@ class ContextBuilder:
         except Exception:
             logger.debug("Failed to load probability weights, using defaults")
 
+        # Load deep learning patterns (once for all races in this meeting)
+        self._dl_patterns = []
+        try:
+            from punty.probability import load_dl_patterns_for_probability
+            self._dl_patterns = await load_dl_patterns_for_probability(self.db)
+        except Exception as e:
+            logger.debug(f"Failed to load DL patterns: {e}")
+
         result = await self.db.execute(
             select(Meeting)
             .where(Meeting.id == meeting_id)
@@ -447,6 +455,7 @@ class ContextBuilder:
             probs = calculate_race_probabilities(
                 active_runners, race, meeting_ctx,
                 weights=getattr(self, "_probability_weights", None),
+                dl_patterns=getattr(self, "_dl_patterns", None),
             )
 
             # Inject probability data into each runner's context dict

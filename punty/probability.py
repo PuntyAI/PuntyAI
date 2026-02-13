@@ -1,13 +1,14 @@
 """Probability calculation engine for horse racing picks.
 
 Calculates win/place probability, value detection, and recommended stakes
-for each runner in a race using multi-factor analysis across 9 factors
-grouped into 5 categories:
+for each runner in a race using multi-factor analysis across 10 factors
+grouped into 6 categories:
   - Market Intelligence: Market consensus + market movement
   - Form & Fitness: Form rating + class/fitness
   - Race Dynamics: Pace factor + barrier draw
   - Connections: Jockey & trainer stats
   - Physical: Weight carried + horse profile
+  - Pattern Intelligence: Deep learning patterns from historical analysis
 """
 
 import json
@@ -40,19 +41,22 @@ FACTOR_REGISTRY = {
                        "description": "Carried weight relative to race average"},
     "horse_profile":  {"label": "Horse Profile",     "category": "Physical",
                        "description": "Age and sex peak performance assessment"},
+    "deep_learning":  {"label": "Deep Learning",     "category": "Pattern Intelligence",
+                       "description": "Historical pattern edges from 280K+ runners analysis"},
 }
 
 # Default weights (must sum to 1.0)
 DEFAULT_WEIGHTS = {
-    "market": 0.25,
-    "movement": 0.08,
-    "form": 0.18,
+    "market": 0.22,
+    "movement": 0.07,
+    "form": 0.15,
     "class_fitness": 0.05,
-    "pace": 0.12,
-    "barrier": 0.10,
-    "jockey_trainer": 0.12,
+    "pace": 0.11,
+    "barrier": 0.09,
+    "jockey_trainer": 0.11,
     "weight_carried": 0.05,
     "horse_profile": 0.05,
+    "deep_learning": 0.10,
 }
 
 # Legacy aliases for backward compatibility
@@ -116,6 +120,7 @@ def calculate_race_probabilities(
     meeting: Any,
     pool: float = DEFAULT_POOL,
     weights: dict[str, float] | None = None,
+    dl_patterns: list[dict] | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
 
@@ -125,6 +130,7 @@ def calculate_race_probabilities(
         meeting: Meeting ORM object (or dict)
         pool: Total stake pool per race (default $20)
         weights: Custom factor weights (key → 0.0-1.0). Defaults to DEFAULT_WEIGHTS.
+        dl_patterns: Deep learning patterns from PatternInsight table.
 
     Returns:
         Dict mapping runner_id → RunnerProbability
@@ -166,6 +172,10 @@ def calculate_race_probabilities(
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
             "weight_carried": _weight_factor(runner, avg_weight),
             "horse_profile":  _horse_profile_factor(runner),
+            "deep_learning":  _deep_learning_factor(
+                runner, meeting, race_distance, track_condition,
+                field_size, dl_patterns,
+            ),
         }
 
         market_implied[rid] = scores["market"]
@@ -664,6 +674,286 @@ def _horse_profile_factor(runner: Any) -> float:
 
 
 # ──────────────────────────────────────────────
+# Factor: Deep Learning Patterns
+# ──────────────────────────────────────────────
+
+def _deep_learning_factor(
+    runner: Any,
+    meeting: Any,
+    race_distance: int,
+    track_condition: str,
+    field_size: int,
+    dl_patterns: list[dict] | None,
+) -> float:
+    """Score based on matching deep learning patterns from historical analysis.
+
+    Matches runner attributes against 844+ statistical patterns discovered
+    from 280K+ historical runners. Each matching pattern's edge contributes
+    to the score, weighted by confidence and capped to prevent dominance.
+    """
+    if not dl_patterns:
+        return 0.5  # neutral when no patterns available
+
+    score = 0.5
+    total_adjustment = 0.0
+
+    # Pre-compute runner attributes for matching
+    venue = _get(meeting, "venue") or ""
+    dist_bucket = _get_dist_bucket(race_distance)
+    condition = _normalize_condition(track_condition)
+    position = _get(runner, "speed_map_position") or ""
+    pace_style = _position_to_style(position)
+    barrier = _get(runner, "barrier")
+    barrier_bucket = _get_barrier_bucket(barrier, field_size) if barrier else ""
+    jockey = _get(runner, "jockey") or ""
+    trainer = _get(runner, "trainer") or ""
+    move_type = _get_move_type(runner)
+
+    # Derive state from venue using assessment mapping
+    state = _get_state_for_venue(venue)
+
+    for pattern in dl_patterns:
+        p_type = pattern.get("type", "")
+        conds = pattern.get("conditions", {})
+        edge = pattern.get("edge", 0.0)
+        confidence = pattern.get("confidence", "LOW")
+
+        if not edge or confidence == "LOW":
+            continue
+
+        # Confidence multiplier: HIGH patterns count more
+        conf_mult = 1.0 if confidence == "HIGH" else 0.6
+
+        matched = False
+
+        if p_type == "deep_learning_pace" and pace_style:
+            matched = (
+                _venue_matches(conds.get("venue", ""), venue)
+                and conds.get("dist_bucket") == dist_bucket
+                and _condition_matches(conds.get("condition", ""), condition)
+                and conds.get("style") == pace_style
+            )
+
+        elif p_type == "deep_learning_barrier_bias" and barrier_bucket:
+            matched = (
+                _venue_matches(conds.get("venue", ""), venue)
+                and conds.get("dist_bucket") == dist_bucket
+                and conds.get("barrier_bucket") == barrier_bucket
+            )
+
+        elif p_type == "deep_learning_jockey_trainer" and jockey and trainer:
+            matched = (
+                conds.get("jockey", "").lower() == jockey.lower()
+                and conds.get("trainer", "").lower() == trainer.lower()
+                and (not state or conds.get("state") == state)
+            )
+
+        elif p_type == "deep_learning_track_dist_cond":
+            matched = (
+                _venue_matches(conds.get("venue", ""), venue)
+                and conds.get("dist_bucket") == dist_bucket
+                and _condition_matches(conds.get("condition", ""), condition)
+            )
+
+        elif p_type == "deep_learning_acceleration" and move_type:
+            matched = (
+                _venue_matches(conds.get("venue", ""), venue)
+                and conds.get("dist_bucket") == dist_bucket
+                and _condition_matches(conds.get("condition", ""), condition)
+                and conds.get("move_type") == move_type
+            )
+
+        elif p_type == "deep_learning_pace_collapse" and pace_style == "leader":
+            matched = (
+                _venue_matches(conds.get("venue", ""), venue)
+                and conds.get("dist_bucket") == dist_bucket
+                and _condition_matches(conds.get("condition", ""), condition)
+            )
+
+        elif p_type == "deep_learning_condition_specialist":
+            matched = _condition_matches(
+                conds.get("condition", ""), condition
+            )
+
+        elif p_type == "deep_learning_market" and state:
+            odds = _get_median_odds(runner)
+            if odds:
+                sp_range = _odds_to_sp_range(odds)
+                matched = (
+                    conds.get("state") == state
+                    and conds.get("sp_range") == sp_range
+                )
+
+        if matched:
+            # Cap individual pattern contribution
+            capped_edge = max(-0.15, min(0.15, edge))
+            total_adjustment += capped_edge * conf_mult
+
+    # Cap total adjustment to prevent extreme swings
+    total_adjustment = max(-0.25, min(0.25, total_adjustment))
+    score += total_adjustment
+
+    return max(0.05, min(0.95, score))
+
+
+def _get_dist_bucket(distance: int) -> str:
+    """Map distance to bucket matching deep learning patterns."""
+    if distance <= 1100:
+        return "sprint"
+    elif distance <= 1300:
+        return "short"
+    elif distance <= 1800:
+        return "middle"
+    else:
+        return "staying"
+
+
+def _normalize_condition(condition: str) -> str:
+    """Normalize track condition to match pattern keys."""
+    if not condition:
+        return ""
+    c = condition.lower().strip()
+    if "heavy" in c or "hvy" in c:
+        return "Heavy"
+    if "soft" in c or "sft" in c:
+        return "Soft"
+    if "synthetic" in c or "all weather" in c:
+        return "Synthetic"
+    if "firm" in c:
+        return "Firm"
+    # Default to Good (includes Good 3, Good 4, etc.)
+    if "good" in c or "gd" in c:
+        return "Good"
+    return "Good"
+
+
+def _position_to_style(position: str) -> str:
+    """Map speed_map_position to pattern style key."""
+    mapping = {
+        "leader": "leader",
+        "on_pace": "on_pace",
+        "midfield": "midfield",
+        "backmarker": "backmarker",
+    }
+    return mapping.get(position, "")
+
+
+def _get_barrier_bucket(barrier: Any, field_size: int) -> str:
+    """Map barrier number to inside/middle/outside bucket."""
+    if not barrier or not isinstance(barrier, (int, float)) or field_size < 2:
+        return ""
+    b = int(barrier)
+    third = max(1, field_size / 3)
+    if b <= third:
+        return "inside"
+    elif b <= third * 2:
+        return "middle"
+    else:
+        return "outside"
+
+
+def _get_move_type(runner: Any) -> str:
+    """Determine market movement type for acceleration pattern matching."""
+    opening = _get(runner, "opening_odds")
+    current = _get(runner, "current_odds")
+    if not opening or not current or opening <= 0:
+        return ""
+    pct = ((current - opening) / opening) * 100
+    if pct <= -20:
+        return "big_mover"
+    elif pct <= -10:
+        return "improver"
+    elif pct >= 20:
+        return "fader"
+    elif abs(pct) < 10:
+        return "steady"
+    return ""
+
+
+def _odds_to_sp_range(odds: float) -> str:
+    """Map odds to SP range bucket matching market patterns."""
+    if odds < 3:
+        return "$1-$3"
+    elif odds < 5:
+        return "$3-$5"
+    elif odds < 8:
+        return "$5-$8"
+    elif odds < 12:
+        return "$8-$12"
+    elif odds < 20:
+        return "$12-$20"
+    else:
+        return "$20+"
+
+
+def _venue_matches(pattern_venue: str, meeting_venue: str) -> bool:
+    """Check if a pattern venue matches the meeting venue (partial match)."""
+    if not pattern_venue or not meeting_venue:
+        return False
+    pv = pattern_venue.lower().strip()
+    mv = meeting_venue.lower().strip()
+    return pv in mv or mv in pv
+
+
+def _condition_matches(pattern_cond: str, normalized_cond: str) -> bool:
+    """Check if pattern condition matches normalized condition."""
+    if not pattern_cond or not normalized_cond:
+        return False
+    # Pattern conditions can be "G", "S5", "H10", "Good", "Soft", etc.
+    pc = pattern_cond.lower().strip()
+    nc = normalized_cond.lower().strip()
+    # Direct match
+    if pc == nc:
+        return True
+    # Short code matches: G→Good, S→Soft, H→Heavy
+    if pc.startswith("g") and nc == "good":
+        return True
+    if pc.startswith("s") and nc == "soft":
+        return True
+    if pc.startswith("h") and nc == "heavy":
+        return True
+    if pc == "synthetic" and nc == "synthetic":
+        return True
+    return False
+
+
+# Inline venue-to-state mapping (subset of assessment.py)
+_VENUE_STATE = {
+    "flemington": "VIC", "caulfield": "VIC", "moonee valley": "VIC",
+    "sandown": "VIC", "pakenham": "VIC", "cranbourne": "VIC",
+    "mornington": "VIC", "ballarat": "VIC", "bendigo": "VIC",
+    "geelong": "VIC", "sale": "VIC", "warrnambool": "VIC",
+    "kilmore": "VIC", "wangaratta": "VIC",
+    "randwick": "NSW", "rosehill": "NSW", "canterbury": "NSW",
+    "warwick farm": "NSW", "newcastle": "NSW", "kembla grange": "NSW",
+    "gosford": "NSW", "wyong": "NSW", "hawkesbury": "NSW",
+    "tamworth": "NSW", "taree": "NSW", "nowra": "NSW",
+    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD",
+    "sunshine coast": "QLD", "toowoomba": "QLD", "ipswich": "QLD",
+    "mackay": "QLD", "rockhampton": "QLD", "cairns": "QLD",
+    "morphettville": "SA", "murray bridge": "SA", "gawler": "SA",
+    "port augusta": "SA", "port lincoln": "SA",
+    "ascot": "WA", "belmont": "WA", "bunbury": "WA", "albany": "WA",
+    "hobart": "TAS", "launceston": "TAS", "devonport": "TAS",
+    "fannie bay": "NT", "darwin": "NT", "alice springs": "NT",
+}
+
+
+def _get_state_for_venue(venue: str) -> str:
+    """Look up state from venue name."""
+    if not venue:
+        return ""
+    v = venue.lower().strip()
+    if v in _VENUE_STATE:
+        return _VENUE_STATE[v]
+    # Partial match
+    for known, state in _VENUE_STATE.items():
+        if known in v or v in known:
+            return state
+    return ""
+
+
+# ──────────────────────────────────────────────
 # Place Probability
 # ──────────────────────────────────────────────
 
@@ -1095,3 +1385,42 @@ def calculate_sequence_leg_confidence(
         ))
 
     return results
+
+
+# ──────────────────────────────────────────────
+# Deep Learning Pattern Loader (async)
+# ──────────────────────────────────────────────
+
+async def load_dl_patterns_for_probability(db) -> list[dict]:
+    """Load deep learning patterns with structured conditions for probability matching.
+
+    Returns all HIGH and MEDIUM confidence patterns with their full conditions
+    dict so the probability model can match them against runner attributes.
+    """
+    from sqlalchemy import select
+    from punty.memory.models import PatternInsight
+
+    result = await db.execute(
+        select(PatternInsight)
+        .where(PatternInsight.pattern_type.like("deep_learning_%"))
+    )
+    rows = result.scalars().all()
+
+    patterns = []
+    for r in rows:
+        try:
+            conds = json.loads(r.conditions_json) if r.conditions_json else {}
+        except (json.JSONDecodeError, TypeError):
+            conds = {}
+        confidence = conds.get("confidence", "LOW")
+        if confidence not in ("HIGH", "MEDIUM"):
+            continue
+        patterns.append({
+            "type": r.pattern_type,
+            "key": r.pattern_key,
+            "conditions": conds,
+            "confidence": confidence,
+            "sample_size": r.sample_count,
+            "edge": r.avg_pnl,
+        })
+    return patterns
