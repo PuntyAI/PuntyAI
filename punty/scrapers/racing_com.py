@@ -974,7 +974,16 @@ class RacingComScraper(BaseScraper):
                 try:
                     race_url = self._build_race_url(venue, race_date, race_num)
                     await page.goto(race_url, wait_until="domcontentloaded")
-                    await page.wait_for_timeout(4000)
+                    await page.wait_for_timeout(3000)
+
+                    # Click odds element to trigger GetBettingData_CD (lazy-loaded)
+                    try:
+                        odds_el = page.locator("[class*=odds]").first
+                        if await odds_el.is_visible(timeout=2000):
+                            await odds_el.click()
+                            await page.wait_for_timeout(2000)
+                    except Exception:
+                        pass
                 except Exception as e:
                     logger.debug(f"Failed to load R{race_num} fields: {e}")
                 finally:
