@@ -930,6 +930,7 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
     """
     from punty.models.database import async_session
     from punty.models.meeting import Meeting
+    from punty.models.content import Content
     from punty.config import melb_now
     from punty.ai.generator import ContentGenerator
     from punty.scheduler.activity_log import log_scheduler_job, log_system
@@ -1006,23 +1007,34 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
             logger.warning(f"Max retries reached, proceeding with unsettled picks: {meeting_id}")
             results["steps"].append("settlement_check: max_retries_reached")
 
-        # Step 2: Generate wrap-up
+        # Step 2: Generate wrap-up (skip if one already exists)
         content_id = None
-        try:
-            logger.info(f"Step 2: Generating wrap-up for {venue}...")
-            generator = ContentGenerator(db)
+        existing_wrapup = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting_id,
+                Content.content_type == "meeting_wrapup",
+                Content.status.notin_(["rejected", "superseded"]),
+            )
+        )
+        if existing_wrapup.scalars().first():
+            logger.info(f"Wrap-up already exists for {venue} — skipping generation")
+            results["steps"].append("generate_wrapup: skipped (already exists)")
+        else:
+            try:
+                logger.info(f"Step 2: Generating wrap-up for {venue}...")
+                generator = ContentGenerator(db)
 
-            async for event in generator.generate_meeting_wrapup_stream(meeting_id):
-                if event.get("status") == "error":
-                    raise Exception(event.get("label", "Unknown error"))
-                if event.get("content_id"):
-                    content_id = event.get("content_id")
+                async for event in generator.generate_meeting_wrapup_stream(meeting_id):
+                    if event.get("status") == "error":
+                        raise Exception(event.get("label", "Unknown error"))
+                    if event.get("content_id"):
+                        content_id = event.get("content_id")
 
-            results["steps"].append("generate_wrapup: success")
-            results["content_id"] = content_id
-        except Exception as e:
-            logger.error(f"Wrap-up generation failed for {venue}: {e}")
-            results["errors"].append(f"generate_wrapup: {str(e)}")
+                results["steps"].append("generate_wrapup: success")
+                results["content_id"] = content_id
+            except Exception as e:
+                logger.error(f"Wrap-up generation failed for {venue}: {e}")
+                results["errors"].append(f"generate_wrapup: {str(e)}")
 
         # Step 3 & 4: Auto-approve and post to Twitter
         if content_id:
