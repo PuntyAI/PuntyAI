@@ -126,6 +126,28 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
+    # Get token usage summary (today + 7-day + 30-day)
+    token_stats = {"today_cost": 0, "week_cost": 0, "month_cost": 0, "today_calls": 0}
+    try:
+        _text = __import__("sqlalchemy").text
+        from datetime import timedelta
+        for period, key in [
+            (today, "today"),
+            (today - timedelta(days=7), "week"),
+            (today - timedelta(days=30), "month"),
+        ]:
+            row = await db.execute(_text(
+                "SELECT COUNT(*) as calls, COALESCE(SUM(estimated_cost), 0) as cost "
+                "FROM token_usage WHERE created_at >= :since"
+            ), {"since": str(period)})
+            r = row.first()
+            if r:
+                token_stats[f"{key}_cost"] = round(r[1], 2)
+                if key == "today":
+                    token_stats["today_calls"] = r[0]
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -140,6 +162,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "performance": performance,
             "cumulative_pnl": cumulative_pnl,
             "all_time_stats": all_time_stats,
+            "token_stats": token_stats,
         },
     )
 

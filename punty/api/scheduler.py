@@ -86,13 +86,6 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db)):
     return {"status": "deleted"}
 
 
-@router.post("/run/{job_type}")
-async def run_job_now(job_type: str, meeting_id: str, db: AsyncSession = Depends(get_db)):
-    """Manually trigger a job to run immediately."""
-    # Will be implemented with scheduler
-    return {"status": "triggered", "job_type": job_type, "meeting_id": meeting_id}
-
-
 @router.get("/status")
 async def scheduler_status():
     """Get scheduler status and scheduled jobs."""

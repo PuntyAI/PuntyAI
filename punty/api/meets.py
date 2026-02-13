@@ -487,7 +487,3 @@ async def get_race_probabilities(
     }
 
 
-@router.post("/scrape")
-async def scrape_meeting(venue: str, date: str, db: AsyncSession = Depends(get_db)):
-    """Trigger scraping for a race meeting (legacy endpoint)."""
-    return {"status": "queued", "venue": venue, "date": date}

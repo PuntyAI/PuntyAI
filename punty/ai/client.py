@@ -3,6 +3,8 @@
 import asyncio
 import logging
 import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional, Literal
 
 from openai import AsyncOpenAI, RateLimitError
@@ -18,6 +20,27 @@ DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
 # Reasoning effort levels for GPT-5.2 Responses API
 ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
 
+# Cost per million tokens (GPT-5.2 estimates — update as pricing changes)
+TOKEN_COSTS = {
+    "gpt-5.2": {"input": 2.50, "output": 10.00},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+}
+DEFAULT_COST = {"input": 5.00, "output": 15.00}
+
+
+@dataclass
+class TokenUsage:
+    """Token usage from a single API call."""
+
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    reasoning_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost: float = 0.0
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 class AIClient:
     """Wrapper for OpenAI API client using Responses API for GPT-5.2."""
@@ -32,6 +55,7 @@ class AIClient:
         self._api_key = api_key
         self._client: Optional[AsyncOpenAI] = None
         self.reasoning_effort = reasoning_effort
+        self.last_usage: Optional[TokenUsage] = None
 
     @property
     def client(self) -> AsyncOpenAI:
@@ -95,6 +119,7 @@ class AIClient:
                         max_output_tokens=max_tokens,
                     )
                     content = response.output_text
+                    self._record_usage(response, is_responses_api=True)
                 else:
                     # Fallback to Chat Completions for older models
                     logger.info(f"Using {self.model} (Chat Completions)")
@@ -108,8 +133,16 @@ class AIClient:
                         max_tokens=max_tokens,
                     )
                     content = response.choices[0].message.content
+                    self._record_usage(response, is_responses_api=False)
 
-                logger.info(f"Generated {len(content)} characters with {self.model}")
+                usage = self.last_usage
+                usage_str = ""
+                if usage:
+                    usage_str = (
+                        f" | tokens: {usage.input_tokens:,}in + {usage.output_tokens:,}out"
+                        f" = {usage.total_tokens:,} | ${usage.estimated_cost:.3f}"
+                    )
+                logger.info(f"Generated {len(content)} chars with {self.model}{usage_str}")
                 return content
 
             except RateLimitError as e:
@@ -135,6 +168,36 @@ class AIClient:
 
         # Should not reach here, but just in case
         raise last_error
+
+    def _record_usage(self, response, is_responses_api: bool) -> None:
+        """Extract and store token usage from API response."""
+        try:
+            usage = TokenUsage(model=self.model)
+
+            if is_responses_api and hasattr(response, "usage") and response.usage:
+                usage.input_tokens = getattr(response.usage, "input_tokens", 0) or 0
+                usage.output_tokens = getattr(response.usage, "output_tokens", 0) or 0
+                # Reasoning tokens are part of output_tokens for Responses API
+                if hasattr(response.usage, "output_tokens_details"):
+                    details = response.usage.output_tokens_details
+                    usage.reasoning_tokens = getattr(details, "reasoning_tokens", 0) or 0
+            elif not is_responses_api and hasattr(response, "usage") and response.usage:
+                usage.input_tokens = getattr(response.usage, "prompt_tokens", 0) or 0
+                usage.output_tokens = getattr(response.usage, "completion_tokens", 0) or 0
+
+            usage.total_tokens = usage.input_tokens + usage.output_tokens
+
+            # Estimate cost
+            costs = TOKEN_COSTS.get(self.model, DEFAULT_COST)
+            usage.estimated_cost = (
+                (usage.input_tokens / 1_000_000) * costs["input"]
+                + (usage.output_tokens / 1_000_000) * costs["output"]
+            )
+
+            self.last_usage = usage
+        except Exception as e:
+            logger.debug(f"Could not extract token usage: {e}")
+            self.last_usage = None
 
     async def generate_with_context(
         self,
@@ -219,3 +282,45 @@ Generate the improved version maintaining Punty's voice."""
             temperature=0.7,
             max_tokens=2000,
         )
+
+
+async def record_token_usage(
+    db,
+    usage: TokenUsage,
+    content_type: str = "",
+    meeting_id: str = "",
+) -> None:
+    """Record token usage to the database for cost tracking.
+
+    Args:
+        db: AsyncSession
+        usage: TokenUsage from AIClient.last_usage
+        content_type: e.g. 'early_mail', 'wrapup', 'assessment', 'fix'
+        meeting_id: associated meeting ID if applicable
+    """
+    try:
+        _text = __import__("sqlalchemy").text
+        await db.execute(
+            _text(
+                "INSERT INTO token_usage "
+                "(model, content_type, meeting_id, input_tokens, output_tokens, "
+                "reasoning_tokens, total_tokens, estimated_cost, created_at) "
+                "VALUES (:model, :content_type, :meeting_id, :input_tokens, "
+                ":output_tokens, :reasoning_tokens, :total_tokens, "
+                ":estimated_cost, :created_at)"
+            ),
+            {
+                "model": usage.model,
+                "content_type": content_type or "",
+                "meeting_id": meeting_id or "",
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
+                "total_tokens": usage.total_tokens,
+                "estimated_cost": usage.estimated_cost,
+                "created_at": usage.timestamp.isoformat(),
+            },
+        )
+        await db.commit()
+    except Exception as e:
+        logger.debug(f"Failed to record token usage: {e}")

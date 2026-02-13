@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncGenerator
 
-from openai import RateLimitError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -19,9 +18,8 @@ from punty.models.content import Content, ContentStatus, ContentType
 
 logger = logging.getLogger(__name__)
 
-# Rate limit retry settings
-RATE_LIMIT_PAUSE = 60  # seconds to pause when rate limited
-MAX_RATE_LIMIT_RETRIES = 2  # retries at the stream level (on top of client retries)
+# Timeout retry settings (rate limits handled by AIClient internally)
+MAX_TIMEOUT_RETRIES = 1  # 1 retry for timeouts (2 total attempts)
 
 # Load prompts from files
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
@@ -40,16 +38,27 @@ def load_prompt(name: str) -> str:
 
 
 class _PersonalityCache:
-    """In-memory cache for personality prompt loaded from DB."""
+    """In-memory cache for personality prompt loaded from DB with TTL."""
+
+    TTL_SECONDS = 600  # 10 minutes
 
     def __init__(self):
         self._content: str | None = None
+        self._set_at: float = 0
 
     def get(self) -> str | None:
-        return self._content
+        import time
+        if self._content is not None and (time.time() - self._set_at) < self.TTL_SECONDS:
+            return self._content
+        if self._content is not None:
+            logger.debug("Personality cache expired, will reload from DB")
+            self._content = None
+        return None
 
     def set(self, content: str):
+        import time
         self._content = content
+        self._set_at = time.time()
 
 
 _personality_cache = _PersonalityCache()
@@ -63,6 +72,15 @@ class ContentGenerator:
         self.ai_client = AIClient(model=model)
         self.context_builder = ContextBuilder(db)
         self._openai_key_loaded = False
+
+    async def _log_token_usage(self, content_type: str, meeting_id: str = ""):
+        """Record token usage from the last AI call."""
+        if self.ai_client.last_usage:
+            from punty.ai.client import record_token_usage
+            await record_token_usage(
+                self.db, self.ai_client.last_usage,
+                content_type=content_type, meeting_id=meeting_id,
+            )
 
     async def _ensure_openai_key(self):
         """Load OpenAI key from DB if not already set."""
@@ -177,9 +195,9 @@ class ContentGenerator:
 ## Analysis Framework Weights
 {analysis_weights}
 """
-            # Generate with rate limit retry, timeout, and status feedback
+            # Generate with timeout retry (rate limits handled by AIClient)
             raw_content = None
-            for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+            for attempt in range(MAX_TIMEOUT_RETRIES + 1):
                 try:
                     raw_content = await asyncio.wait_for(
                         self.ai_client.generate_with_context(
@@ -193,22 +211,15 @@ class ContentGenerator:
                     break  # Success
                 except asyncio.TimeoutError:
                     logger.error(f"AI generation timed out for {venue} (attempt {attempt + 1})")
-                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                    if attempt < MAX_TIMEOUT_RETRIES:
                         yield evt(f"Generation timed out — retrying (attempt {attempt + 2})...", "warning")
                     else:
-                        raise Exception(f"AI generation timed out after {MAX_RATE_LIMIT_RETRIES + 1} attempts")
-                except RateLimitError as e:
-                    if attempt < MAX_RATE_LIMIT_RETRIES:
-                        logger.warning(f"Rate limit hit for {venue}, pausing {RATE_LIMIT_PAUSE}s (attempt {attempt + 1}/{MAX_RATE_LIMIT_RETRIES + 1})")
-                        yield evt(f"Rate limit reached — pausing for {RATE_LIMIT_PAUSE}s before retry...", "warning")
-                        await asyncio.sleep(RATE_LIMIT_PAUSE)
-                        yield evt(f"Retrying AI generation (attempt {attempt + 2})...")
-                    else:
-                        logger.error(f"Rate limit: All retries exhausted for {venue}")
-                        raise  # Re-raise to be caught by outer exception handler
+                        raise Exception(f"AI generation timed out after {MAX_TIMEOUT_RETRIES + 1} attempts")
 
             if raw_content is None:
                 raise Exception("AI generation failed - no content returned")
+
+            await self._log_token_usage("early_mail", meeting_id)
 
             yield evt("AI content generated", "done")
 
@@ -270,6 +281,7 @@ class ContentGenerator:
             instruction=initialise_prompt + f"\n\nInitialise meeting for {context['meeting']['venue']} on {context['meeting']['date']}",
             temperature=0.7,
         )
+        await self._log_token_usage("initialise", meeting_id)
 
         result = {
             "raw_content": raw_content,
@@ -451,6 +463,7 @@ class ContentGenerator:
             instruction=preview_prompt + f"\n\nGenerate preview for Race {race_number}",
             temperature=0.8,
         )
+        await self._log_token_usage("race_preview", meeting_id)
 
         result = {
             "raw_content": raw_content,
@@ -526,6 +539,7 @@ class ContentGenerator:
                 instruction=results_prompt + f"\n\nGenerate results commentary for Race {race_number}",
                 temperature=0.8,
             )
+            await self._log_token_usage("results", meeting_id)
             yield evt("AI content generated", "done")
 
             result = {
@@ -595,29 +609,18 @@ class ContentGenerator:
 ## Analysis Framework Weights
 {analysis_weights}
 """
-            # Generate with rate limit retry and status feedback
-            raw_content = None
-            for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
-                try:
-                    raw_content = await self.ai_client.generate_with_context(
-                        system_prompt=system_prompt,
-                        context=context_str,
-                        instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {venue} on {context['meeting']['date']}",
-                        temperature=0.8,
-                    )
-                    break  # Success
-                except RateLimitError as e:
-                    if attempt < MAX_RATE_LIMIT_RETRIES:
-                        logger.warning(f"Rate limit hit for wrapup {venue}, pausing {RATE_LIMIT_PAUSE}s (attempt {attempt + 1}/{MAX_RATE_LIMIT_RETRIES + 1})")
-                        yield evt(f"Rate limit reached — pausing for {RATE_LIMIT_PAUSE}s before retry...", "warning")
-                        await asyncio.sleep(RATE_LIMIT_PAUSE)
-                        yield evt(f"Retrying AI generation (attempt {attempt + 2})...")
-                    else:
-                        logger.error(f"Rate limit: All retries exhausted for wrapup {venue}")
-                        raise
+            # Generate (rate limits handled by AIClient)
+            raw_content = await self.ai_client.generate_with_context(
+                system_prompt=system_prompt,
+                context=context_str,
+                instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {venue} on {context['meeting']['date']}",
+                temperature=0.8,
+            )
 
             if raw_content is None:
                 raise Exception("AI generation failed - no content returned")
+
+            await self._log_token_usage("wrapup", meeting_id)
 
             yield evt("AI content generated", "done")
 
@@ -675,6 +678,7 @@ class ContentGenerator:
             instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {context['meeting']['venue']} on {context['meeting']['date']}",
             temperature=0.8,
         )
+        await self._log_token_usage("wrapup_direct", meeting_id)
 
         result = {
             "raw_content": raw_content,
@@ -716,6 +720,7 @@ class ContentGenerator:
             instruction=update_prompt,
             temperature=0.7,
         )
+        await self._log_token_usage("update_alert", meeting_id)
 
         result = {
             "raw_content": raw_content,
@@ -1323,7 +1328,7 @@ class ContentGenerator:
 You are writing your weekly blog column. Be entertaining, data-driven, and brutally honest.
 """
             raw_content = None
-            for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+            for attempt in range(MAX_TIMEOUT_RETRIES + 1):
                 try:
                     raw_content = await asyncio.wait_for(
                         self.ai_client.generate_with_context(
@@ -1337,21 +1342,15 @@ You are writing your weekly blog column. Be entertaining, data-driven, and bruta
                     break
                 except asyncio.TimeoutError:
                     logger.error(f"Blog generation timed out (attempt {attempt + 1})")
-                    if attempt < MAX_RATE_LIMIT_RETRIES:
+                    if attempt < MAX_TIMEOUT_RETRIES:
                         yield evt(f"Generation timed out — retrying (attempt {attempt + 2})...", "warning")
                     else:
-                        raise Exception(f"Blog generation timed out after {MAX_RATE_LIMIT_RETRIES + 1} attempts")
-                except RateLimitError:
-                    if attempt < MAX_RATE_LIMIT_RETRIES:
-                        logger.warning(f"Rate limit hit for blog, pausing {RATE_LIMIT_PAUSE}s")
-                        yield evt(f"Rate limit reached — pausing {RATE_LIMIT_PAUSE}s...", "warning")
-                        await asyncio.sleep(RATE_LIMIT_PAUSE)
-                        yield evt(f"Retrying AI generation (attempt {attempt + 2})...")
-                    else:
-                        raise
+                        raise Exception(f"Blog generation timed out after {MAX_TIMEOUT_RETRIES + 1} attempts")
 
             if raw_content is None:
                 raise Exception("AI generation failed — no content returned")
+
+            await self._log_token_usage("weekly_blog")
 
             yield evt("Blog generated", "done")
 

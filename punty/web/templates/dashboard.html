@@ -21,7 +21,7 @@
     </div>
 
     <!-- Hero Stats Row -->
-    <div class="grid grid-cols-3 md:grid-cols-3 gap-3 sm:gap-4">
+    <div class="grid grid-cols-4 md:grid-cols-4 gap-3 sm:gap-4">
         <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
             <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 {{ all_time_stats.today_winners or 0 }}
@@ -39,6 +39,15 @@
                 {{ todays_meetings|length }}
             </div>
             <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Meetings Today</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-3xl font-display font-black" style="color: var(--punty-cyan);">
+                ${{ token_stats.month_cost if token_stats is defined else '0' }}
+            </div>
+            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">AI Cost (30d)</div>
+            {% if token_stats is defined and token_stats.today_cost %}
+            <div class="text-xs text-gray-600 mt-0.5">${{ token_stats.today_cost }} today</div>
+            {% endif %}
         </div>
     </div>
 
@@ -488,12 +497,6 @@
     <div class="bg-punty-blue/10 rounded-lg p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div class="flex flex-wrap gap-3">
-            <button class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90 flex items-center space-x-2"
-                    hx-post="/api/meets/scrape"
-                    hx-include="[name='venue'],[name='date']">
-                <span>&#x1F50D;</span>
-                <span>Scrape New Meeting</span>
-            </button>
             <button class="bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90 flex items-center space-x-2">
                 <span>&#x1F4DD;</span>
                 <span>Generate Early Mail</span>

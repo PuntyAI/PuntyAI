@@ -145,6 +145,18 @@ async def init_db() -> None:
                 picks_analyzed INTEGER DEFAULT 0,
                 created_at DATETIME NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS token_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model VARCHAR(50) NOT NULL,
+                content_type VARCHAR(30),
+                meeting_id VARCHAR(64),
+                input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                reasoning_tokens INTEGER DEFAULT 0,
+                total_tokens INTEGER DEFAULT 0,
+                estimated_cost REAL DEFAULT 0.0,
+                created_at DATETIME NOT NULL
+            )""",
             """CREATE TABLE IF NOT EXISTS future_nominations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 future_race_id VARCHAR(128) NOT NULL REFERENCES future_races(id) ON DELETE CASCADE,
@@ -307,6 +319,13 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_content_blog_slug ON content(blog_slug)",
             # Probability tuning log indexes
             "CREATE INDEX IF NOT EXISTS ix_tuning_log_created ON probability_tuning_log(created_at)",
+            # Token usage indexes
+            "CREATE INDEX IF NOT EXISTS ix_token_usage_created ON token_usage(created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_token_usage_content_type ON token_usage(content_type)",
+            # Composite indexes for frequently queried patterns
+            "CREATE INDEX IF NOT EXISTS ix_picks_settled_hit ON picks(settled, hit)",
+            "CREATE INDEX IF NOT EXISTS ix_picks_settled_at ON picks(settled_at)",
+            "CREATE INDEX IF NOT EXISTS ix_content_meeting_type_status ON content(meeting_id, content_type, status)",
         ]:
             try:
                 await conn.execute(_text(idx))
