@@ -16,15 +16,44 @@ class TabScraper(BaseScraper):
     BASE_URL = "https://www.tab.com.au"
     API_URL = "https://api.tab.com.au/v1"
 
+    SPONSOR_PREFIXES = [
+        "ladbrokes", "tab", "bet365", "sportsbet", "neds", "pointsbet",
+        "unibet", "betfair", "palmerbet", "bluebet", "topsport", "aquis",
+        "picklebet",
+    ]
+
+    VENUE_ALIASES = {
+        "park kilmore": "kilmore",
+        "park-kilmore": "kilmore",
+        "sandown lakeside": "sandown",
+        "sandown-lakeside": "sandown",
+        "thomas farms rc murray bridge": "murray-bridge",
+        "thomas-farms-rc-murray-bridge": "murray-bridge",
+    }
+
+    def _venue_slug(self, venue: str) -> str:
+        """Convert venue name to TAB URL slug, stripping sponsor prefixes."""
+        slug = venue.lower().strip()
+        for prefix in self.SPONSOR_PREFIXES:
+            if slug.startswith(prefix + " "):
+                slug = slug[len(prefix) + 1:]
+                break
+            if slug.startswith(prefix + "-"):
+                slug = slug[len(prefix) + 1:]
+                break
+        if slug in self.VENUE_ALIASES:
+            return self.VENUE_ALIASES[slug]
+        slug_dashed = slug.replace(" ", "-")
+        if slug_dashed in self.VENUE_ALIASES:
+            return self.VENUE_ALIASES[slug_dashed]
+        return slug_dashed
+
     async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
         """Scrape odds data from TAB for a meeting.
 
         Note: This supplements data from racing.com with live odds.
         """
         logger.info(f"Scraping TAB odds for {venue} on {race_date}")
-
-        # TAB typically uses an API for data
-        # We'll try both the website and API approaches
 
         try:
             # Build API URL
@@ -39,7 +68,7 @@ class TabScraper(BaseScraper):
                 logger.debug("API not accessible, trying website")
 
             # Fall back to website scraping
-            venue_slug = venue.lower().replace(" ", "-")
+            venue_slug = self._venue_slug(venue)
             web_url = f"{self.BASE_URL}/racing/meetings/{venue_slug}/{date_str}"
 
             html = await self.fetch(web_url)
@@ -60,10 +89,17 @@ class TabScraper(BaseScraper):
         except json.JSONDecodeError:
             raise ScraperError("Invalid API response")
 
-        # Extract relevant meeting
+        # Extract relevant meeting — match on raw name or cleaned slug
         meeting = None
+        venue_lower = venue.lower()
+        venue_slug = self._venue_slug(venue)
         for m in data.get("meetings", []):
-            if m.get("venueName", "").lower() == venue.lower():
+            api_venue = m.get("venueName", "").lower()
+            if api_venue == venue_lower or api_venue == venue_slug:
+                meeting = m
+                break
+            # Partial match: "Kilmore" in "bet365 Park Kilmore"
+            if api_venue in venue_lower or venue_slug in api_venue:
                 meeting = m
                 break
 
@@ -164,7 +200,7 @@ class TabScraper(BaseScraper):
         results = []
 
         try:
-            venue_slug = venue.lower().replace(" ", "-")
+            venue_slug = self._venue_slug(venue)
             date_str = race_date.strftime("%Y-%m-%d")
             url = f"{self.BASE_URL}/racing/results/{venue_slug}/{date_str}"
 
@@ -211,7 +247,7 @@ class TabScraper(BaseScraper):
         logger.info(f"Scraping live odds for R{race_number} at {venue}")
 
         try:
-            venue_slug = venue.lower().replace(" ", "-")
+            venue_slug = self._venue_slug(venue)
             date_str = race_date.strftime("%Y-%m-%d")
             url = f"{self.BASE_URL}/racing/{venue_slug}/{date_str}/race-{race_number}"
 

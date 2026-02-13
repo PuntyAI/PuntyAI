@@ -753,8 +753,17 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.warning(f"Failed to post celebration reply: {e}")
 
-            # Facebook live updates disabled until commenting permission is resolved
-            fb_post_id = None
+            # Post to Facebook as comment under early mail post
+            fb_comment_id = None
+            if early_mail.facebook_id:
+                facebook = FacebookDelivery(db)
+                if await facebook.is_configured():
+                    try:
+                        fb_result = await facebook.post_comment(early_mail.facebook_id, tweet_text)
+                        fb_comment_id = fb_result.get("comment_id")
+                        logger.info(f"Posted celebration Facebook comment for {pick.horse_name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to post celebration Facebook comment: {e}")
 
             # Save to DB regardless of post success
             update = LiveUpdate(
@@ -764,7 +773,7 @@ class ResultsMonitor:
                 content=tweet_text,
                 tweet_id=reply_tweet_id,
                 parent_tweet_id=thread_parent or early_mail.twitter_id,
-                facebook_comment_id=fb_post_id,
+                facebook_comment_id=fb_comment_id,
                 parent_facebook_id=early_mail.facebook_id,
                 horse_name=pick.horse_name,
                 odds=pick.odds_at_tip,
@@ -848,9 +857,17 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"Failed to post clean sweep to Twitter: {e}")
 
-        # Post to Facebook
-        # Facebook live updates disabled until commenting permission is resolved
-        fb_post_id = None
+        # Post to Facebook as comment under early mail post
+        fb_comment_id = None
+        if early_mail and early_mail.facebook_id:
+            facebook = FacebookDelivery(db)
+            if await facebook.is_configured():
+                try:
+                    fb_result = await facebook.post_comment(early_mail.facebook_id, tweet_text)
+                    fb_comment_id = fb_result.get("comment_id")
+                    logger.info(f"Posted clean sweep Facebook comment")
+                except Exception as e:
+                    logger.warning(f"Failed to post clean sweep Facebook comment: {e}")
 
         update = LiveUpdate(
             meeting_id=meeting.id,
@@ -859,7 +876,7 @@ class ResultsMonitor:
             content=tweet_text,
             tweet_id=reply_tweet_id,
             parent_tweet_id=thread_parent or (early_mail.twitter_id if early_mail else None),
-            facebook_comment_id=fb_post_id,
+            facebook_comment_id=fb_comment_id,
             parent_facebook_id=early_mail.facebook_id if early_mail else None,
             pnl=total_pnl,
         )
@@ -943,8 +960,17 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"Failed to post pace analysis reply: {e}")
 
-        # Facebook live updates disabled until commenting permission is resolved
-        fb_post_id = None
+        # Post to Facebook as comment under early mail post
+        fb_comment_id = None
+        if early_mail.facebook_id:
+            facebook = FacebookDelivery(db)
+            if await facebook.is_configured():
+                try:
+                    fb_result = await facebook.post_comment(early_mail.facebook_id, tweet_text)
+                    fb_comment_id = fb_result.get("comment_id")
+                    logger.info(f"Posted pace analysis Facebook comment")
+                except Exception as e:
+                    logger.warning(f"Failed to post pace analysis Facebook comment: {e}")
 
         # Save to DB regardless of post success
         update = LiveUpdate(
@@ -954,7 +980,7 @@ class ResultsMonitor:
             content=tweet_text,
             tweet_id=reply_tweet_id,
             parent_tweet_id=thread_parent or early_mail.twitter_id,
-            facebook_comment_id=fb_post_id,
+            facebook_comment_id=fb_comment_id,
             parent_facebook_id=early_mail.facebook_id,
         )
         db.add(update)
@@ -1366,9 +1392,17 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"Failed to post {alert.change_type} Twitter reply: {e}")
 
-        # Post to Facebook as standalone update
-        fb_post_id = None
-        # Facebook live updates disabled until commenting permission is resolved
+        # Post to Facebook as comment under early mail post
+        fb_comment_id = None
+        if early_mail.facebook_id:
+            facebook = FacebookDelivery(db)
+            if await facebook.is_configured():
+                try:
+                    fb_result = await facebook.post_comment(early_mail.facebook_id, tweet_text)
+                    fb_comment_id = fb_result.get("comment_id")
+                    logger.info(f"Posted {alert.change_type} Facebook comment")
+                except Exception as e:
+                    logger.warning(f"Failed to post {alert.change_type} Facebook comment: {e}")
 
         # Save to LiveUpdate
         update_type_map = {
@@ -1385,7 +1419,7 @@ class ResultsMonitor:
             content=tweet_text,
             tweet_id=reply_tweet_id,
             parent_tweet_id=thread_parent or early_mail.twitter_id,
-            facebook_comment_id=fb_post_id,
+            facebook_comment_id=fb_comment_id,
             parent_facebook_id=early_mail.facebook_id,
             horse_name=alert.horse_name,
         )

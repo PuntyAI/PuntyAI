@@ -833,8 +833,8 @@ class ContentGenerator:
                 parts.append(f"Pace Disadvantaged: {', '.join(dis_list)}")
 
             parts.append("")
-            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | Market Move | Speed Rank | Map Factor | Win% | Place% | Value |")
-            parts.append("|-----|-------|---------|--------|------|------|-----------|-------------|------------|------------|------|--------|-------|")
+            parts.append("| No. | Horse | Barrier | Jockey | Trainer | Odds | Form | Speed Map | Market Move | Speed Rank | Map Factor | Win% | Place% | Value |")
+            parts.append("|-----|-------|---------|--------|---------|------|------|-----------|-------------|------------|------------|------|--------|-------|")
 
             for runner in race.get("runners", []):
                 if runner.get("scratched"):
@@ -863,6 +863,7 @@ class ContentGenerator:
                 parts.append(
                     f"| {saddlecloth} | {runner.get('horse_name', 'Unknown')} | "
                     f"{runner.get('barrier', '-')} | {runner.get('jockey', '-')} | "
+                    f"{runner.get('trainer', '-')} | "
                     f"${runner.get('current_odds', '-')} | {runner.get('form', '-')} | "
                     f"{runner.get('speed_map_position', '-')} | {market_move} | {pf_speed} | {pf_map} | "
                     f"{win_pct} | {place_pct} | {value_str} |"

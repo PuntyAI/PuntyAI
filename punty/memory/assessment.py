@@ -926,7 +926,7 @@ def build_rag_context_from_assessments(assessments: list[dict[str, Any]]) -> str
 
     for a in assessments:
         hit_marker = "✓" if a.get("top_pick_hit") else "✗"
-        pnl = a.get("total_pnl", 0)
+        pnl = a.get("total_pnl") or 0
         pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"${pnl:.2f}"
 
         # Build descriptive header with available context

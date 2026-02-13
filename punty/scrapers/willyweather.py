@@ -26,6 +26,7 @@ VENUE_LOCATIONS: dict[str, dict] = {
     "moonee valley": {"id": 39330, "bearing": 180, "state": "VIC"},
     "sandown":       {"id": 39330, "bearing": 250, "state": "VIC"},
     "pakenham":      {"id": 13859, "bearing": 200, "state": "VIC"},
+    "kilmore":       {"id": 11158, "bearing": 200, "state": "VIC"},  # uses Ballarat station as nearest
     "ballarat":      {"id": 11158, "bearing": 250, "state": "VIC"},
     # NSW
     "randwick":      {"id": 5017,  "bearing": 350, "state": "NSW"},
@@ -66,6 +67,15 @@ def analyse_wind_impact(venue: str, wind_speed: int, wind_direction: str) -> dic
     """
     venue_key = venue.lower().strip()
     venue_data = VENUE_LOCATIONS.get(venue_key)
+    if not venue_data:
+        # Strip sponsor prefix and retry
+        clean = WillyWeatherScraper._strip_sponsor(venue)
+        venue_data = VENUE_LOCATIONS.get(clean)
+        if not venue_data:
+            for key, data in VENUE_LOCATIONS.items():
+                if key in clean or clean in key:
+                    venue_data = data
+                    break
     if not venue_data or not venue_data.get("bearing"):
         return None
 
@@ -206,12 +216,37 @@ class WillyWeatherScraper:
 
         return None
 
+    _SPONSOR_PREFIXES = [
+        "ladbrokes", "tab", "bet365", "sportsbet", "neds", "pointsbet",
+        "unibet", "betfair", "palmerbet", "bluebet", "topsport", "aquis",
+        "picklebet",
+    ]
+
+    @staticmethod
+    def _strip_sponsor(venue: str) -> str:
+        """Strip sponsor prefix from venue name (e.g. 'bet365 Park Kilmore' → 'park kilmore')."""
+        v = venue.lower().strip()
+        for prefix in WillyWeatherScraper._SPONSOR_PREFIXES:
+            if v.startswith(prefix + " "):
+                return v[len(prefix) + 1:]
+        return v
+
     def _resolve_location_id(self, venue: str) -> int | None:
         """Resolve venue name to WillyWeather location ID from pre-mapped dict."""
         venue_key = venue.lower().strip()
         venue_data = VENUE_LOCATIONS.get(venue_key)
         if venue_data:
             return venue_data["id"]
+        # Try with sponsor prefix stripped
+        clean = self._strip_sponsor(venue)
+        if clean != venue_key:
+            venue_data = VENUE_LOCATIONS.get(clean)
+            if venue_data:
+                return venue_data["id"]
+            # Partial match: check if any known venue is contained in the clean name
+            for key, data in VENUE_LOCATIONS.items():
+                if key in clean or clean in key:
+                    return data["id"]
         return None
 
     def _resolve_with_state_fallback(self, venue: str, state: str | None = None) -> int | None:
@@ -243,8 +278,10 @@ class WillyWeatherScraper:
         try:
             from punty.memory.racing_knowledge import TRACKS
             venue_lower = venue.lower().strip()
+            clean = WillyWeatherScraper._strip_sponsor(venue)
             for track_name, track_data in TRACKS.items():
-                if track_name.lower() == venue_lower:
+                tk = track_name.lower()
+                if tk == venue_lower or tk == clean or tk in clean or clean in tk:
                     return track_data.get("state")
         except Exception:
             pass
