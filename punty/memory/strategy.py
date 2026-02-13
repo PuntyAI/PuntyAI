@@ -215,13 +215,18 @@ async def aggregate_puntys_pick_performance(
     db: AsyncSession,
     window_days: Optional[int] = None,
 ) -> Optional[dict[str, Any]]:
-    """Aggregate performance of Punty's Pick selections (is_puntys_pick=True)."""
+    """Aggregate performance of ALL Punty's Picks (is_puntys_pick=True).
+
+    Includes both selection and exotic Punty's Picks.
+    Uses bet_stake for selections, exotic_stake for exotics.
+    """
     date_filter = []
     if window_days:
         cutoff = melb_today() - timedelta(days=window_days)
         date_filter.append(Pick.settled_at >= cutoff)
 
-    q = (
+    # Selection Punty's Picks
+    sel_q = (
         select(
             func.count(Pick.id),
             func.sum(case((Pick.hit == True, 1), else_=0)),
@@ -237,23 +242,57 @@ async def aggregate_puntys_pick_performance(
             *date_filter,
         )
     )
-    result = await db.execute(q)
-    row = result.one()
-    bets = row[0] or 0
-    if bets == 0:
+    sel_row = (await db.execute(sel_q)).one()
+
+    # Exotic Punty's Picks
+    exo_q = (
+        select(
+            func.count(Pick.id),
+            func.sum(case((Pick.hit == True, 1), else_=0)),
+            func.sum(Pick.exotic_stake),
+            func.sum(Pick.pnl),
+        )
+        .where(
+            Pick.settled == True,
+            Pick.pick_type == "exotic",
+            Pick.is_puntys_pick == True,
+            *date_filter,
+        )
+    )
+    exo_row = (await db.execute(exo_q)).one()
+
+    sel_bets = sel_row[0] or 0
+    exo_bets = exo_row[0] or 0
+    total_bets = sel_bets + exo_bets
+
+    if total_bets == 0:
         return None
-    winners = int(row[1] or 0)
-    staked = float(row[2] or 0)
-    pnl = float(row[3] or 0)
-    avg_odds = float(row[4] or 0)
+
+    sel_winners = int(sel_row[1] or 0)
+    exo_winners = int(exo_row[1] or 0)
+    sel_staked = float(sel_row[2] or 0)
+    exo_staked = float(exo_row[2] or 0)
+    sel_pnl = float(sel_row[3] or 0)
+    exo_pnl = float(exo_row[3] or 0)
+    sel_avg_odds = float(sel_row[4] or 0)
+
+    total_winners = sel_winners + exo_winners
+    total_staked = sel_staked + exo_staked
+    total_pnl = sel_pnl + exo_pnl
+
     return {
-        "bets": bets,
-        "winners": winners,
-        "strike_rate": round(winners / bets * 100, 1) if bets else 0,
-        "staked": round(staked, 2),
-        "pnl": round(pnl, 2),
-        "roi": round(pnl / staked * 100, 1) if staked else 0,
-        "avg_odds": round(avg_odds, 2),
+        "bets": total_bets,
+        "winners": total_winners,
+        "strike_rate": round(total_winners / total_bets * 100, 1) if total_bets else 0,
+        "staked": round(total_staked, 2),
+        "pnl": round(total_pnl, 2),
+        "roi": round(total_pnl / total_staked * 100, 1) if total_staked else 0,
+        "avg_odds": round(sel_avg_odds, 2),
+        # Breakdown
+        "selection_bets": sel_bets,
+        "selection_winners": sel_winners,
+        "exotic_bets": exo_bets,
+        "exotic_winners": exo_winners,
     }
 
 
@@ -494,6 +533,11 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
             f"- **All-Time**: {pp['bets']} picks, {pp['winners']} winners "
             f"({pp['strike_rate']}% SR), {_pnl_str(pp['pnl'])} P&L ({pp['roi']:+.1f}% ROI)"
         )
+        if pp.get("selection_bets") and pp.get("exotic_bets"):
+            parts.append(
+                f"  - Selections: {pp['selection_bets']} picks, {pp['selection_winners']} winners"
+                f"  |  Exotics: {pp['exotic_bets']} picks, {pp['exotic_winners']} winners"
+            )
         if pp["strike_rate"] < 30:
             parts.append(
                 f"- **WARNING**: Your best-bet picks are only hitting {pp['strike_rate']}%. "

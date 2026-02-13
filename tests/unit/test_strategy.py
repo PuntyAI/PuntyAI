@@ -12,6 +12,7 @@ from punty.memory.strategy import (
     _insight_text,
     aggregate_bet_type_performance,
     aggregate_tip_rank_performance,
+    aggregate_puntys_pick_performance,
     build_strategy_context,
     populate_pattern_insights,
 )
@@ -203,6 +204,83 @@ class TestGenerateDirectives:
         directives = _generate_directives(overall, [], [])
         assert not any("REDUCE" in d for d in directives)
 
+    def test_exotic_winner_directive(self):
+        """Profitable exotic type should generate EXOTIC WINNER directive."""
+        overall = [
+            _make_stat("exotic", "Trifecta Box", 20, 5, 400.0, 80.0, 0, 120.0),  # +20% ROI
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("EXOTIC WINNER" in d and "Trifecta Box" in d for d in directives)
+
+    def test_exotic_loser_directive(self):
+        """Losing exotic type with enough samples should generate EXOTIC LOSER directive."""
+        overall = [
+            _make_stat("exotic", "First4 Box", 10, 0, 200.0, -200.0, 0, 0.0),  # -100% ROI
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("EXOTIC LOSER" in d and "First4 Box" in d for d in directives)
+
+    def test_exotic_alert_overall(self):
+        """Very negative overall exotic ROI should generate EXOTIC ALERT."""
+        overall = [
+            _make_stat("exotic", "Trifecta Box", 30, 2, 600.0, -200.0, 0, 50.0),  # -33% ROI
+            _make_stat("exotic", "Exacta", 20, 3, 400.0, -100.0, 0, 40.0),  # -25% ROI
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("EXOTIC ALERT" in d for d in directives)
+
+    def test_exotic_no_alert_when_profitable(self):
+        """No EXOTIC ALERT when overall exotic ROI is acceptable."""
+        overall = [
+            _make_stat("exotic", "Trifecta Box", 30, 8, 600.0, 60.0, 0, 120.0),  # +10% ROI
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert not any("EXOTIC ALERT" in d for d in directives)
+
+    def test_sequence_winner_directive(self):
+        """Profitable sequence variant should generate SEQUENCE WINNER."""
+        overall = [
+            _make_stat("sequence", "Quaddie (Skinny)", 15, 3, 150.0, 50.0, 0, 80.0),  # +33% ROI
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("SEQUENCE WINNER" in d and "Quaddie (Skinny)" in d for d in directives)
+
+    def test_sequence_loser_directive(self):
+        """Losing sequence variant with enough samples should generate SEQUENCE LOSER."""
+        overall = [
+            _make_stat("sequence", "Quaddie (Wide)", 10, 0, 1000.0, -1000.0, 0, 0.0),  # -100% ROI
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("SEQUENCE LOSER" in d and "Quaddie (Wide)" in d for d in directives)
+
+    def test_drop_big6_directive(self):
+        """All Big 6 variants losing should generate DROP BIG 6."""
+        overall = [
+            _make_stat("sequence", "Big 6 (Skinny)", 5, 0, 50.0, -50.0, 0, 0.0),
+            _make_stat("sequence", "Big 6 (Balanced)", 5, 0, 250.0, -250.0, 0, 0.0),
+            _make_stat("sequence", "Big 6 (Wide)", 5, 0, 500.0, -500.0, 0, 0.0),
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("DROP BIG 6" in d for d in directives)
+
+    def test_drop_early_quaddie_directive(self):
+        """All Early Quaddie variants losing should generate DROP EARLY QUADDIE."""
+        overall = [
+            _make_stat("sequence", "Early Quaddie (Skinny)", 5, 0, 50.0, -50.0, 0, 0.0),
+            _make_stat("sequence", "Early Quaddie (Balanced)", 5, 0, 250.0, -250.0, 0, 0.0),
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert any("DROP EARLY QUADDIE" in d for d in directives)
+
+    def test_no_drop_when_some_profitable(self):
+        """Don't drop Big 6 if any variant is profitable."""
+        overall = [
+            _make_stat("sequence", "Big 6 (Skinny)", 10, 2, 100.0, 50.0, 0, 80.0),  # +50%
+            _make_stat("sequence", "Big 6 (Wide)", 10, 0, 1000.0, -1000.0, 0, 0.0),  # -100%
+        ]
+        directives = _generate_directives(overall, [], [])
+        assert not any("DROP BIG 6" in d for d in directives)
+
 
 class TestBuildStrategyContext:
     """Tests for build_strategy_context output formatting."""
@@ -263,3 +341,33 @@ class TestBuildStrategyContext:
         assert "LOSING" in result
         assert "Top Pick" in result
         assert "Roughie" in result
+
+    @pytest.mark.asyncio
+    async def test_puntys_pick_shows_breakdown_with_exotics(self):
+        """When exotic Punty's Picks exist, context should show selection/exotic breakdown."""
+        mock_overall = [
+            _make_stat("selection", "Win", 50, 12, 400.0, -40.0, 4.0, 30.0),
+        ]
+
+        async def mock_agg(db, window_days=None):
+            return mock_overall
+
+        mock_pp = {
+            "bets": 25, "winners": 8, "strike_rate": 32.0,
+            "staked": 280.0, "pnl": 20.0, "roi": 7.1, "avg_odds": 3.80,
+            "selection_bets": 20, "selection_winners": 6,
+            "exotic_bets": 5, "exotic_winners": 2,
+        }
+
+        async def mock_pp_agg(db, window_days=None):
+            return mock_pp
+
+        db = AsyncMock()
+        with patch("punty.memory.strategy.aggregate_bet_type_performance", side_effect=mock_agg), \
+             patch("punty.memory.strategy.aggregate_tip_rank_performance", return_value=[]), \
+             patch("punty.memory.strategy.aggregate_puntys_pick_performance", side_effect=mock_pp_agg), \
+             patch("punty.memory.strategy.get_recent_results_with_context", return_value=[]):
+            result = await build_strategy_context(db)
+
+        assert "Selections: 20 picks, 6 winners" in result
+        assert "Exotics: 5 picks, 2 winners" in result
