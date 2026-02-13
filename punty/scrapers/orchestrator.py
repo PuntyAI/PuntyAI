@@ -637,22 +637,49 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
 
 
 async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
-    """Quick refresh of odds and scratchings for a meeting.
+    """Quick refresh of conditions and scratchings for a meeting.
 
-    Uses racing.com as primary source (multi-bookmaker odds).
+    Uses PF API for lightweight HTTP calls (no Playwright needed).
+    Odds are already captured by the main racing.com scrape.
     """
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
         raise ValueError(f"Meeting not found: {meeting_id}")
 
     try:
-        from punty.scrapers.racing_com import RacingComScraper
-        scraper = RacingComScraper()
-        try:
-            data = await scraper.scrape_meeting(meeting.venue, meeting.date)
-            await _merge_racing_com_supplement(db, meeting_id, data)
-        finally:
-            await scraper.close()
+        from punty.scrapers.punting_form import PuntingFormScraper
+
+        pf = await PuntingFormScraper.from_settings(db)
+        if pf:
+            try:
+                # Refresh conditions (track, rail, weather, penetrometer)
+                cond = await pf.get_conditions_for_venue(meeting.venue)
+                if cond:
+                    _apply_pf_conditions(meeting, cond)
+
+                # Refresh scratchings
+                pf_meeting_id = await pf.resolve_meeting_id(meeting.venue, meeting.date)
+                if pf_meeting_id:
+                    scratchings = await pf.get_scratchings_for_meeting(pf_meeting_id)
+                    if scratchings:
+                        for s in scratchings:
+                            race_num = s.get("raceNo") or s.get("race_number")
+                            tab_no = s.get("tabNo") or s.get("saddlecloth")
+                            if race_num and tab_no:
+                                race_id = f"{meeting_id}-r{race_num}"
+                                runner = await db.execute(
+                                    select(Runner).where(
+                                        Runner.race_id == race_id,
+                                        Runner.saddlecloth == tab_no,
+                                    )
+                                )
+                                r = runner.scalar_one_or_none()
+                                if r and not r.scratched:
+                                    r.scratched = True
+                                    logger.info(f"Scratched {r.horse_name} (R{race_num} #{tab_no}) via PF API")
+            finally:
+                await pf.close()
+
         await db.commit()
         return {"meeting_id": meeting_id, "status": "ok"}
     except Exception as e:

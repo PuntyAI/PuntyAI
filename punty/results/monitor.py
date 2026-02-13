@@ -456,18 +456,7 @@ class ResultsMonitor:
         finally:
             await scraper.close()
 
-        # Pre-race change detection (scratchings, track condition, jockey/gear)
-        try:
-            await self._check_pre_race_changes(db, meeting, races, statuses)
-        except Exception as e:
-            logger.warning(f"Pre-race change check failed for {meeting.venue}: {e}", exc_info=True)
-
-        # Weather refresh (every 30 min per meeting)
-        try:
-            await self._check_weather_changes(db, meeting)
-        except Exception as e:
-            logger.warning(f"Weather check failed for {meeting.venue}: {e}", exc_info=True)
-
+        # Process results FIRST — this is time-critical for live settlement
         for race_num, status in statuses.items():
             if status in ("Paying", "Closed") and race_num not in self.processed_races[meeting_id]:
                 # Check if race already has results in DB (from before restart)
@@ -593,6 +582,18 @@ class ResultsMonitor:
                 except Exception as e:
                     import traceback
                     logger.error(f"Failed to process result {meeting.venue} R{race_num}: {e}\n{traceback.format_exc()}")
+
+        # Pre-race change detection AFTER results (scratchings, track condition, jockey/gear)
+        try:
+            await self._check_pre_race_changes(db, meeting, races, statuses)
+        except Exception as e:
+            logger.warning(f"Pre-race change check failed for {meeting.venue}: {e}", exc_info=True)
+
+        # Weather refresh (every 30 min per meeting)
+        try:
+            await self._check_weather_changes(db, meeting)
+        except Exception as e:
+            logger.warning(f"Weather check failed for {meeting.venue}: {e}", exc_info=True)
 
         # Backfill exotic dividends from TabTouch for races missing them
         await self._backfill_tabtouch_exotics(db, meeting, statuses)
