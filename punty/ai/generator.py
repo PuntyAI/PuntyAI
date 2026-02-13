@@ -1153,9 +1153,15 @@ class ContentGenerator:
         sequences = self._get_sequence_lanes(total_races)
         if sequences:
             parts.append("\n## SEQUENCE LANES (use these exact race ranges)")
+            eq = sequences.get("early_quad")
+            if eq:
+                parts.append(f"- EARLY QUADDIE: Races {eq[0]}-{eq[1]}")
             q = sequences.get("quaddie")
             if q:
                 parts.append(f"- QUADDIE (main): Races {q[0]}-{q[1]}")
+            b6 = sequences.get("big6")
+            if b6:
+                parts.append(f"- BIG 6: Races {b6[0]}-{b6[1]}")
 
         # Sequence leg confidence analysis
         seq_legs = context.get("sequence_leg_analysis", [])
