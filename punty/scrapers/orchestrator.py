@@ -680,7 +680,14 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
     for field in MEETING_FIELDS:
         val = m.get(field)
         if val is not None:
-            setattr(meeting, field, val)
+            if field == "track_condition" and meeting.track_condition:
+                if _is_more_specific(val, meeting.track_condition):
+                    logger.info(f"Track condition update via upsert: {meeting.track_condition!r} → {val!r}")
+                    meeting.track_condition = val
+                else:
+                    logger.debug(f"Skipping track condition {val!r} (existing {meeting.track_condition!r} is better)")
+            else:
+                setattr(meeting, field, val)
 
     for r in data.get("races", []):
         existing_race = await db.get(Race, r["id"])

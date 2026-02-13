@@ -294,8 +294,8 @@ class SchedulerManager:
         await self.setup_daily_morning_job()
 
     def get_morning_job_time(self) -> Optional[str]:
-        """Get the scheduled time for the morning prep job."""
-        job = self.get_job("daily-morning-prep")
+        """Get the scheduled time for the morning scrape job."""
+        job = self.get_job("daily-morning-scrape")
         if job and job.next_run_time:
             return job.next_run_time.strftime("%H:%M")
         return None

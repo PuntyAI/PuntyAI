@@ -47,7 +47,7 @@ def _schedule_calendar_retry(scheduler_manager, race_date: date) -> None:
         job_id,
         daily_calendar_scrape,
         trigger_type="date",
-        run_date=next_hour.replace(tzinfo=None),
+        run_date=next_hour,
     )
     logger.info(f"Scheduled calendar retry at {next_hour.strftime('%H:%M')} Melbourne time")
 
