@@ -306,6 +306,12 @@ async def _settle_picks_for_race_impl(
         settled_count += 1
 
     # --- Exotics ---
+    # Build set of scratched saddlecloths for exotic adjustment
+    scratched_saddlecloths = {
+        r.saddlecloth for r in runners
+        if r.scratched and r.saddlecloth
+    }
+
     result = await db.execute(
         select(Pick).where(
             Pick.meeting_id == meeting_id,
@@ -346,6 +352,7 @@ async def _settle_picks_for_race_impl(
             if is_legs_format:
                 # Legs format: [[leg1], [leg2], ...]
                 # Check hit: each position winner must be in corresponding leg
+                # TAB rule: scratched runners in a leg become free passes (any runner fills)
                 legs = exotic_runners
                 required_positions = {"trifecta": 3, "exacta": 2, "quinella": 2, "first": 4}
                 req_pos = 3  # default for trifecta
@@ -354,10 +361,20 @@ async def _settle_picks_for_race_impl(
                         req_pos = v
                         break
 
+                # Expand legs: if all runners in a leg are scratched, it's a free pass
+                adjusted_legs = []
+                for leg in legs:
+                    leg_ints = [int(x) for x in leg]
+                    non_scratched = [x for x in leg_ints if x not in scratched_saddlecloths]
+                    if non_scratched:
+                        adjusted_legs.append(non_scratched)
+                    else:
+                        # All selections in this leg scratched — any runner fills
+                        adjusted_legs.append(top_sc_int[:req_pos + 1])
+                legs = adjusted_legs
+
                 if len(legs) >= req_pos and len(top_sc_int) >= req_pos:
                     if "quinella" in exotic_type:
-                        # Quinella: any order — check both orderings across legs
-                        # e.g. legs=[[1,2],[3,4]]: 1st in leg0 AND 2nd in leg1, OR vice versa
                         a, b = top_sc_int[0], top_sc_int[1]
                         hit = (
                             (a in legs[0] and b in legs[1]) or
@@ -379,6 +396,8 @@ async def _settle_picks_for_race_impl(
             else:
                 # Flat format: [1, 5, 8, 9] - boxed bet
                 exotic_runners_int = [int(x) for x in exotic_runners if str(x).isdigit()]
+                # Remove scratched runners from our selections
+                exotic_runners_int = [x for x in exotic_runners_int if x not in scratched_saddlecloths]
                 is_standout = "standout" in exotic_type
                 is_boxed = "box" in exotic_type
 
@@ -542,8 +561,22 @@ async def _settle_picks_for_race_impl(
 
             # Find winner of this leg
             winner = seq_winner_map.get(leg_race_id)
-            if not winner or winner.saddlecloth not in leg_saddlecloths:
+            if not winner:
                 all_hit = False
+            elif winner.saddlecloth not in leg_saddlecloths:
+                # Check if all our selections in this leg were scratched (free pass)
+                # Load scratched runners for this leg's race
+                leg_runners_result = await db.execute(
+                    select(Runner).where(Runner.race_id == leg_race_id)
+                )
+                leg_runners = leg_runners_result.scalars().all()
+                leg_scratched = {r.saddlecloth for r in leg_runners if r.scratched and r.saddlecloth}
+                non_scratched_selections = [s for s in leg_saddlecloths if s not in leg_scratched]
+                if not non_scratched_selections:
+                    # All our selections scratched — free pass, leg counts as hit
+                    pass
+                else:
+                    all_hit = False
 
         if not all_resolved:
             continue

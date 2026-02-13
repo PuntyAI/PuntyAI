@@ -867,16 +867,25 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
 
 def _validate_result(result: dict, race_id: str) -> dict | None:
     """Validate and sanitize a single result entry. Returns None if invalid."""
-    # Validate position
+    import re as _re
+    # Validate position (handles dead heats like "=1", "DH1", "D1")
     position = result.get("position")
     if position is not None:
         try:
             position = int(position)
-            if position < 1 or position > 30:
-                logger.warning(f"{race_id}: Invalid position {position}, skipping")
-                return None
         except (ValueError, TypeError):
-            logger.warning(f"{race_id}: Non-integer position '{position}', skipping")
+            # Try to extract numeric part from dead heat strings
+            pos_str = str(position).strip()
+            match = _re.search(r"\d+", pos_str)
+            if match:
+                position = int(match.group())
+                result["dead_heat"] = True
+                logger.info(f"{race_id}: Dead heat detected — position '{pos_str}' → {position}")
+            else:
+                logger.warning(f"{race_id}: Non-integer position '{position}', skipping")
+                return None
+        if position < 1 or position > 30:
+            logger.warning(f"{race_id}: Invalid position {position}, skipping")
             return None
         result["position"] = position
 
@@ -921,7 +930,7 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
     # Validate: check for duplicate winners
     positions = [r.get("position") for r in results_data.get("results", []) if r.get("position") is not None]
     if positions.count(1) > 1:
-        logger.warning(f"{race_id}: Multiple winners detected ({positions.count(1)}), data may be corrupt")
+        logger.info(f"{race_id}: Dead heat — {positions.count(1)} runners share 1st place")
 
     # Update runner result fields
     matched = 0
