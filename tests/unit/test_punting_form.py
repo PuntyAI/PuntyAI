@@ -708,7 +708,7 @@ class TestConditionsParsing:
         assert result["penetrometer"] == 4.2
         assert result["wind_speed"] == 15
         assert result["wind_direction"] == "NW"
-        assert result["rainfall"] == 2.5
+        assert result["rainfall"] == "2.5"
         assert result["irrigation"] is True
         assert result["going_stick"] is None
 

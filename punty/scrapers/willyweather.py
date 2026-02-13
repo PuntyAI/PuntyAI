@@ -319,8 +319,8 @@ class WillyWeatherScraper:
                 entries = rain_days[0].get("entries", [])
                 if entries:
                     rainfall_chance = entries[0].get("probability")
-                    start = entries[0].get("startRange", 0)
-                    end = entries[0].get("endRange", 0)
+                    start = entries[0].get("startRange") or 0
+                    end = entries[0].get("endRange") or 0
                     rainfall_amount = f"{start}-{end}"
 
             # Wind (hourly entries — forecast has speed/direction/directionText, no gust)

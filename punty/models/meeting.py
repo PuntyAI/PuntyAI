@@ -39,7 +39,7 @@ class Meeting(Base):
     rail_bias_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Conditions data
-    rainfall: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    rainfall: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     irrigation: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     going_stick: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 

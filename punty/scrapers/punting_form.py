@@ -573,7 +573,8 @@ class PuntingFormScraper(BaseScraper):
 
         # Rainfall: API returns "Nil" or "2.5" or descriptive strings
         raw_rainfall = cond.get("rainfall")
-        rainfall = _to_float(raw_rainfall)
+        rainfall_float = _to_float(raw_rainfall)
+        rainfall = str(rainfall_float) if rainfall_float is not None else None
 
         # Irrigation: API returns descriptive strings like "6mm last 24hrs..."
         # Truthy if any irrigation string is present and not empty/Nil
