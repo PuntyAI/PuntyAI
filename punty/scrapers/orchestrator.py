@@ -22,20 +22,33 @@ def _normalise_track(cond: str | None) -> str:
 
 
 def _is_more_specific(new_cond: str | None, old_cond: str | None) -> bool:
-    """Return True if new condition is more specific (has rating number) than old."""
+    """Return True if new condition is more specific (has rating number) than old.
+
+    Never overwrites a rated condition (e.g. "Good 4") with a different
+    base category (e.g. "Soft 5") — protects against stale PF data
+    overriding accurate TAB/Racing.com conditions.
+    """
     import re
     if not new_cond:
         return False
     if not old_cond:
         return True
-    # A condition with a rating number (e.g. "Good 4") is more specific than without (e.g. "Good")
     new_has_rating = bool(re.search(r"\d", new_cond))
     old_has_rating = bool(re.search(r"\d", old_cond))
+    # New has rating, old doesn't → more specific
     if new_has_rating and not old_has_rating:
         return True
+    # Old has rating, new doesn't → keep old
     if not new_has_rating and old_has_rating:
         return False
-    # Both have or lack ratings — newer data is preferred
+    # Both have ratings — only update if same base category
+    # (don't let "Soft 5" overwrite "Good 4")
+    if new_has_rating and old_has_rating:
+        new_base = new_cond.strip().split()[0].lower()
+        old_base = old_cond.strip().split()[0].lower()
+        if new_base != old_base:
+            return False
+    # Same base or neither has rating — newer is preferred
     return True
 
 

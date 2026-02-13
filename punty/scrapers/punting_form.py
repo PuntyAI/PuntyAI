@@ -537,10 +537,9 @@ class PuntingFormScraper(BaseScraper):
         # over tc_label (often just "Good" without rating)
         condition = _CONDITION_LABELS.get(tc_num) or tc_label or None
 
-        # If condition has no numeric rating (e.g. "Good" not "Good 4"),
-        # try to infer from penetrometer reading (common for WA tracks)
-        if condition and not any(c.isdigit() for c in (condition or "")):
-            condition = self._infer_rating_from_penetrometer(condition, cond) or condition
+        # Don't infer track ratings from penetrometer — use only official data.
+        # If the API returns "Good" without a number, keep it as "Good" and
+        # let TAB/Racing.com provide the specific rating (e.g. "Good 4").
 
         # Parse going stick from comment field (e.g. "Going Stick: 11.8")
         going_stick = None
