@@ -545,7 +545,7 @@ class ContextBuilder:
             value_plays = [
                 {"horse": name, "value": data["value_rating"], "edge": round(data["edge"] * 100, 1)}
                 for name, data in ranked
-                if data["value_rating"] > 1.05
+                if data["value_rating"] > 0.90
             ]
 
             # Calculate exotic combinations

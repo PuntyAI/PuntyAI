@@ -70,7 +70,7 @@ WEIGHT_CLASS = DEFAULT_WEIGHTS["class_fitness"]
 DEFAULT_BASELINE = 0.10
 
 # Value detection thresholds
-VALUE_THRESHOLD = 1.05       # 5% edge minimum
+VALUE_THRESHOLD = 0.90       # include near-fair-value horses
 STRONG_VALUE_THRESHOLD = 1.20  # 20% edge = strong value
 
 # Kelly fraction (quarter-Kelly for conservative sizing)

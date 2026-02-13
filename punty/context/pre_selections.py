@@ -19,7 +19,7 @@ STAKE_STEP = 0.50      # round to nearest 50c
 
 # Bet type thresholds
 WIN_MIN_PROB = 0.18          # 18% win prob minimum for Win bet
-WIN_MIN_VALUE = 1.05         # 5% edge minimum for Win
+WIN_MIN_VALUE = 0.90         # allow Win bets at near-fair odds
 SAVER_WIN_MIN_PROB = 0.14    # 14% for secondary Win bet
 EACH_WAY_MIN_PROB = 0.15     # 15% win prob for Each Way
 EACH_WAY_MAX_PROB = 0.40     # above 40% just go Win
@@ -131,8 +131,13 @@ def calculate_pre_selections(
             puntys_pick=None, total_stake=0.0,
         )
 
-    # Sort by expected value (win_prob * odds - 1) descending
-    candidates.sort(key=lambda c: c["ev"], reverse=True)
+    # Score by probability-weighted value: high win chance + value overlay
+    # Probability dominates; value capped at 2.0x to prevent longshots
+    # overriding strong contenders at short prices
+    for c in candidates:
+        capped_value = max(1.0, min(c["value_rating"], 2.0))
+        c["score"] = c["win_prob"] * capped_value
+    candidates.sort(key=lambda c: c["score"], reverse=True)
 
     # Separate roughie candidates (odds >= $8, value >= 1.1)
     roughie_pool = [
