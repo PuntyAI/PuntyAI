@@ -57,7 +57,7 @@
     .bb-card:hover { transform: translateY(-2px); border-color: rgba(255,0,128,0.6); }
     .bb-glow-l { position: absolute; top: -80px; left: -80px; width: 240px; height: 240px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(255,0,128,0.3), transparent 70%); pointer-events: none; }
     .bb-glow-r { position: absolute; bottom: -80px; right: -80px; width: 240px; height: 240px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(0,212,255,0.2), transparent 70%); pointer-events: none; }
-    .bb-inner { position: relative; padding: 24px 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .bb-inner { position: relative; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
     .bb-left { display: flex; align-items: center; gap: 16px; }
     .bb-trophy { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--gradient-sunset); box-shadow: 0 0 24px rgba(255,0,128,0.4); flex-shrink: 0; }
     .bb-label { font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: var(--magenta); }
@@ -81,8 +81,8 @@
         .bb-right { width: 100%; justify-content: space-between; }
     }
 </style>
-<section id="best-bet-section">
-    <div style="max-width: 72rem; margin: 0 auto; padding: 24px 16px 8px;">
+<section id="best-bet-section" class="pt-6 pb-2">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8">
         {% if stats.best_bet %}
         <a id="bb-venue-link" href="/tips/{{ stats.best_bet.meeting_id }}" class="bb-card">
             <div class="bb-glow-l"></div>
@@ -138,15 +138,15 @@
 </section>
 
 <!-- Stats Section -->
-<section class="py-16 border-y" style="border-color: var(--border-subtle); background: var(--bg-card);">
+<section class="py-16" style="background: var(--bg-card); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
         <div class="grid md:grid-cols-3 gap-6 text-center">
             <!-- Meetings Today -->
-            <div class="card p-5">
+            <div class="card p-8">
                 <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-secondary);">Meetings Today</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
                 <!-- Next Race Countdown -->
-                <div id="next-race-container" class="mt-3 pt-3" style="border-top: 1px solid var(--border-subtle); display: none;">
+                <div id="next-race-container" class="mt-4 pt-4" style="border-top: 1px solid var(--border-subtle); display: none;">
                     <div class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
                     <div id="next-race-venue" class="text-sm font-semibold" style="color: var(--cyan);"></div>
                     <div id="next-race-countdown" class="text-lg font-display font-bold" style="color: var(--magenta);"></div>
@@ -154,30 +154,30 @@
             </div>
 
             <!-- Today's Winners -->
-            <div class="card p-5">
+            <div class="card p-8">
                 <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-secondary);" id="today-winners-label">
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
                     {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
                 </div>
             </div>
 
             <!-- All-Time Winners -->
-            <div class="card p-5">
+            <div class="card p-8">
                 <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-secondary);">Total Winners</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Total Winners</div>
             </div>
         </div>
 
         <!-- Strike Rates by Pick -->
         {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6" id="strike-rates">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8" id="strike-rates">
             {% for pr in stats.pick_ranks %}
             {% if pr.rank >= 1 %}
-            <div class="rounded-xl p-4 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+            <div class="rounded-xl p-5 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
                 <div class="text-2xl font-display font-bold" style="color: {{ {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'}[pr.rank|string] }};">
                     <span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span>
                 </div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">{{ pr.label }}</div>
+                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-muted);">{{ pr.label }}</div>
                 <div class="text-xs mt-1" style="color: var(--text-muted);"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
             </div>
             {% endif %}
@@ -186,7 +186,7 @@
         {% endif %}
 
         <!-- Stats CTA -->
-        <div class="text-center mt-6">
+        <div class="text-center mt-8">
             <a href="/stats" class="btn-secondary inline-flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 View Punty's Full Stats
@@ -194,13 +194,13 @@
         </div>
 
         <!-- Wins Ticker -->
-        <div id="wins-ticker" class="mt-6 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-            <div class="flex items-center px-4 py-2" style="border-bottom: 1px solid var(--border-subtle);">
+        <div id="wins-ticker" class="mt-8 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+            <div class="flex items-center px-5 py-3" style="border-bottom: 1px solid var(--border-subtle);">
                 <span class="text-lg mr-2" style="color: var(--magenta);">&#x1F3C6;</span>
                 <span class="font-heading font-semibold text-sm uppercase tracking-wider" style="color: var(--text-muted);">Recent Wins</span>
             </div>
-            <div class="ticker-container relative overflow-hidden" style="height: 52px;">
-                <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-4 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+            <div class="ticker-container relative overflow-hidden" style="height: 56px;">
+                <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-5 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
                     <span class="text-sm" style="color: var(--text-muted);">Loading wins...</span>
                 </div>
             </div>
@@ -220,10 +220,10 @@
         display: inline-flex;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.5rem 1rem;
+        padding: 0.625rem 1.25rem;
         background: rgba(255,255,255,0.03);
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.06);
     }
     .win-celebration {
         font-family: 'Rajdhani', sans-serif;
@@ -261,16 +261,16 @@
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for tip in stats.todays_tips %}
             <a href="/tips/{{ tip.meeting_id }}"
-               class="card p-5 hover:border-punty-magenta transition-all hover:-translate-y-1">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background: var(--gradient-sunset);">
+               class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1">
+                <div class="flex items-center gap-5">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--gradient-sunset);">
                         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
                     </div>
                     <div>
                         <div class="font-heading font-bold text-lg">{{ tip.venue }}</div>
-                        <div class="text-sm" style="color: var(--cyan);">View Tips →</div>
+                        <div class="text-sm" style="color: var(--cyan);">View Tips &rarr;</div>
                     </div>
                 </div>
             </a>
@@ -353,49 +353,49 @@
 
         <div class="grid md:grid-cols-4 gap-6">
             <!-- Step 1 -->
-            <div class="text-center">
+            <div class="card p-6 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     1
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-2">Crunch The Form</h3>
-                <p style="color: var(--text-secondary);">
+                <h3 class="font-heading font-bold text-xl mb-3">Crunch The Form</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
                     AI analyses thousands of data points - form, track conditions, barriers, jockeys, trainers, and more.
                 </p>
             </div>
 
             <!-- Step 2 -->
-            <div class="text-center">
+            <div class="card p-6 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     2
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-2">Read The Track</h3>
-                <p style="color: var(--text-secondary);">
+                <h3 class="font-heading font-bold text-xl mb-3">Read The Track</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
                     Speed maps, rail positions, weather conditions - all factored in to find where the winners will come from.
                 </p>
             </div>
 
             <!-- Step 3 -->
-            <div class="text-center">
+            <div class="card p-6 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     3
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-2">Find The Value</h3>
-                <p style="color: var(--text-secondary);">
-                    A 5-factor probability model calculates every runner's true win chance.
+                <h3 class="font-heading font-bold text-xl mb-3">Find The Value</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
+                    A 9-factor probability model calculates every runner's true win chance.
                     When our number beats the market — that's a value bet.
                     <a href="/how-it-works#step-2" class="font-semibold" style="color: var(--cyan);">See how it works</a>
                 </p>
             </div>
 
             <!-- Step 4 -->
-            <div class="text-center">
+            <div class="card p-6 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
                     <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                 </div>
-                <h3 class="font-heading font-bold text-xl mb-2">Live Updates</h3>
-                <p style="color: var(--text-secondary);">
+                <h3 class="font-heading font-bold text-xl mb-3">Live Updates</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
                     Punty watches every race live. Win celebrations, pace analysis, and real-time track reads throughout the day.
                 </p>
             </div>
