@@ -775,73 +775,12 @@ async def scrape_speed_maps(
 async def scrape_odds(
     db: AsyncSession, meeting_id: str, venue: str, race_date: date
 ) -> dict:
-    """Scrape live odds and update runner data."""
-    from punty.scrapers.tab import TabScraper
-    from punty.models.meeting import Runner, Race
-    from sqlalchemy import select
+    """Scrape live odds and update runner data via racing.com (multi-bookmaker)."""
+    from punty.scrapers.orchestrator import refresh_odds
 
     logger.info(f"Running scrape_odds for {venue} on {race_date}")
-
-    scraper = TabScraper()
-    try:
-        data = await scraper.scrape_meeting(venue, race_date)
-        runners_odds = data.get("runners_odds", [])
-
-        updated_count = 0
-        scratchings_count = 0
-
-        # Get all races for this meeting
-        result = await db.execute(
-            select(Race).where(Race.meeting_id == meeting_id)
-        )
-        races = result.scalars().all()
-        races_by_num = {r.race_number: r for r in races}
-
-        for odds_data in runners_odds:
-            race = races_by_num.get(odds_data.get("race_number"))
-            if not race:
-                continue
-
-            # Find runner
-            result = await db.execute(
-                select(Runner).where(
-                    Runner.race_id == race.id,
-                    Runner.horse_name.ilike(odds_data["horse_name"])
-                )
-            )
-            runner = result.scalar_one_or_none()
-
-            if not runner:
-                # Try matching by barrier
-                result = await db.execute(
-                    select(Runner).where(
-                        Runner.race_id == race.id,
-                        Runner.barrier == odds_data.get("barrier")
-                    )
-                )
-                runner = result.scalar_one_or_none()
-
-            if runner:
-                if odds_data.get("current_odds"):
-                    runner.current_odds = odds_data["current_odds"]
-                    updated_count += 1
-                if odds_data.get("opening_odds") and not runner.opening_odds:
-                    runner.opening_odds = odds_data["opening_odds"]
-                if odds_data.get("scratched") and not runner.scratched:
-                    runner.scratched = True
-                    runner.scratching_reason = odds_data.get("scratching_reason")
-                    scratchings_count += 1
-
-        await db.commit()
-
-        return {
-            "status": "success",
-            "updated_count": updated_count,
-            "scratchings_count": scratchings_count,
-        }
-
-    finally:
-        await scraper.close()
+    result = await refresh_odds(meeting_id, db)
+    return {"status": result.get("status", "error")}
 
 
 async def scrape_results(

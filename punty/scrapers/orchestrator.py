@@ -433,7 +433,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             errors.append(f"racing.com_supplement: {e}")
             yield {"step": 3, "total": total_steps, "label": f"racing.com supplement failed: {e}", "status": "error"}
 
-        # Step 4: TAB odds (supplementary)
+        # Step 4: TAB odds (optional supplementary — racing.com is primary)
         yield {"step": 3, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
         try:
             from punty.scrapers.tab import TabScraper
@@ -445,9 +445,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 await scraper.close()
             yield {"step": 4, "total": total_steps, "label": "TAB odds complete", "status": "done"}
         except Exception as e:
-            logger.error(f"TAB scrape failed: {e}")
-            errors.append(f"tab: {e}")
-            yield {"step": 4, "total": total_steps, "label": f"TAB odds failed: {e}", "status": "error"}
+            logger.debug(f"TAB scrape skipped (optional): {e}")
+            yield {"step": 4, "total": total_steps, "label": "TAB odds skipped (optional)", "status": "done"}
 
         # Close scraper
         if pf_scraper:
@@ -638,29 +637,20 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
 
 
 async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
-    """Quick refresh of odds and scratchings for a meeting."""
+    """Quick refresh of odds and scratchings for a meeting.
+
+    Uses racing.com as primary source (multi-bookmaker odds).
+    """
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
         raise ValueError(f"Meeting not found: {meeting_id}")
 
     try:
-        from punty.scrapers.tab import TabScraper
-        scraper = TabScraper()
+        from punty.scrapers.racing_com import RacingComScraper
+        scraper = RacingComScraper()
         try:
             data = await scraper.scrape_meeting(meeting.venue, meeting.date)
-            await _merge_odds(db, meeting_id, data.get("runners_odds", []))
-            # Update track condition if TAB provides a genuinely different AND
-            # more specific value (prevents overwriting "Good 4" with bare "Good")
-            # Skip entirely if condition is manually locked
-            tab_condition = data.get("meeting", {}).get("track_condition")
-            if meeting.track_condition_locked:
-                logger.debug(f"Track condition locked for {meeting.venue}, ignoring TAB condition {tab_condition!r}")
-            elif tab_condition and _normalise_track(tab_condition) != _normalise_track(meeting.track_condition):
-                if _is_more_specific(tab_condition, meeting.track_condition):
-                    logger.info(f"TAB track condition update: {meeting.track_condition!r} → {tab_condition!r}")
-                    meeting.track_condition = tab_condition
-                else:
-                    logger.debug(f"TAB condition {tab_condition!r} less specific than {meeting.track_condition!r}, skipping")
+            await _merge_racing_com_supplement(db, meeting_id, data)
         finally:
             await scraper.close()
         await db.commit()
