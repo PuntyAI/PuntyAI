@@ -88,6 +88,9 @@ Each race includes a "Pre-Calculated Exotic Combinations" table with the best va
 2. Pick the combination with the highest value ratio that aligns with your race analysis
 3. If no combinations show value ≥ 1.2x, pick the best available and note the risk
 
+**CONSISTENCY RULE — Exotic runners should primarily come from your Top 3 + Roughie picks.**
+Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your Trifecta Box should use those runners (or a subset plus the Roughie). Only include a runner NOT in your selections if the exotic model shows significantly better value (≥ 1.5x vs ≤ 1.2x with selection runners) AND you explain why in the exotic reason line. A random runner appearing in the exotic but nowhere in the selections confuses punters and breaks trust.
+
 **Exotic type hierarchy (based on actual performance data):**
 - **Trifecta Box (4 runners)**: Our BEST performing exotic (+3.5% ROI). Use when you have 4 genuine contenders.
 - **Exacta (straight)**: Use when you have a STRONG view on 1st and 2nd. Only when top pick >30% probability.
