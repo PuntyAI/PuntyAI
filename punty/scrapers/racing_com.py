@@ -933,83 +933,96 @@ class RacingComScraper(BaseScraper):
         async with new_page() as page:
             meeting_tc = None
 
-            for race_num in race_numbers:
-                captured_entries: list[dict] = []
-                captured_meeting: dict = {}
-                captured_betting: list[dict] = []
+            # Shared accumulators — keyed by race number
+            entries_by_race: dict[int, list] = {}
+            betting_by_race: dict[int, list] = {}
+            captured_meeting: dict = {}
+            current_race: list[int] = [race_numbers[0]]  # mutable ref for closure
 
-                async def capture_graphql(response):
-                    if "graphql.rmdprod.racing.com" not in response.url:
-                        return
-                    try:
-                        body = await response.text()
-                        data = _json.loads(body)
-                    except Exception:
-                        return
-
-                    url = response.url
-
-                    # Capture meeting data (track condition) from first page load
-                    if "getMeeting_CD" in url:
-                        gm = data.get("data", {}).get("getMeeting", {})
-                        if gm:
-                            captured_meeting.update(gm)
-
-                    # Capture race entries
-                    if "getRaceEntriesForField" in url or "getRaceEntries" in url:
-                        form = data.get("data", {}).get("getRaceForm", {})
-                        entries = form.get("formRaceEntries", []) if isinstance(form, dict) else []
-                        if entries:
-                            captured_entries.extend(entries)
-
-                    # Capture betting data (odds)
-                    if "GetBettingData" in url:
-                        bd = data.get("data", {}).get("GetBettingData", {})
-                        entries = bd.get("formRaceEntries", []) if isinstance(bd, dict) else []
-                        if entries:
-                            captured_betting.extend(entries)
-
-                page.on("response", capture_graphql)
-
+            async def capture_graphql(response):
+                if "graphql.rmdprod.racing.com" not in response.url:
+                    return
                 try:
-                    race_url = self._build_race_url(venue, race_date, race_num)
-                    # Navigate to blank first to force full SPA reload on each race
-                    if race_num > race_numbers[0]:
-                        await page.goto("about:blank", wait_until="domcontentloaded")
-                        await page.wait_for_timeout(300)
-                    await page.goto(race_url, wait_until="domcontentloaded")
-                    await page.wait_for_timeout(3000)
+                    body = await response.text()
+                    data = _json.loads(body)
+                except Exception:
+                    return
 
-                    # Click odds element to trigger GetBettingData_CD (lazy-loaded)
+                url = response.url
+                rn = current_race[0]
+
+                if "getMeeting_CD" in url:
+                    gm = data.get("data", {}).get("getMeeting", {})
+                    if gm:
+                        captured_meeting.update(gm)
+
+                if "getRaceEntriesForField" in url or "getRaceEntries" in url:
+                    form = data.get("data", {}).get("getRaceForm", {})
+                    entries = form.get("formRaceEntries", []) if isinstance(form, dict) else []
+                    if entries:
+                        # Determine race number from entries if possible
+                        entry_rn = entries[0].get("raceNumber") if entries else None
+                        key = entry_rn or rn
+                        entries_by_race.setdefault(key, []).extend(entries)
+
+                if "GetBettingData" in url:
+                    bd = data.get("data", {}).get("GetBettingData", {})
+                    entries = bd.get("formRaceEntries", []) if isinstance(bd, dict) else []
+                    if entries:
+                        # Determine race number from entries
+                        entry_rn = entries[0].get("raceNumber") if entries else None
+                        key = entry_rn or rn
+                        betting_by_race.setdefault(key, []).extend(entries)
+
+            page.on("response", capture_graphql)
+
+            try:
+                for race_num in race_numbers:
+                    current_race[0] = race_num
                     try:
-                        odds_el = page.locator("[class*=odds]").first
-                        if await odds_el.is_visible(timeout=2000):
-                            await odds_el.click()
-                            await page.wait_for_timeout(2000)
-                    except Exception:
-                        pass
-                except Exception as e:
-                    logger.debug(f"Failed to load R{race_num} fields: {e}")
-                finally:
-                    page.remove_listener("response", capture_graphql)
+                        race_url = self._build_race_url(venue, race_date, race_num)
+                        # Navigate to blank first to force full SPA reload
+                        if race_num > race_numbers[0]:
+                            await page.goto("about:blank", wait_until="domcontentloaded")
+                            await page.wait_for_timeout(300)
+                        await page.goto(race_url, wait_until="domcontentloaded")
+                        await page.wait_for_timeout(3000)
 
-                # Parse meeting track condition from first load
-                if captured_meeting and not meeting_tc:
-                    tc = captured_meeting.get("trackCondition")
-                    rail_tc = captured_meeting.get("railAndTrackCondition")
-                    meeting_tc = tc or rail_tc
+                        # Click odds element to trigger GetBettingData_CD (lazy-loaded)
+                        try:
+                            odds_el = page.locator("[class*=odds]").first
+                            if await odds_el.is_visible(timeout=2000):
+                                await odds_el.click()
+                                await page.wait_for_timeout(2500)
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        logger.debug(f"Failed to load R{race_num} fields: {e}")
+                        continue
+            finally:
+                page.remove_listener("response", capture_graphql)
+
+            # Parse meeting track condition
+            if captured_meeting:
+                tc = captured_meeting.get("trackCondition")
+                rail_tc = captured_meeting.get("railAndTrackCondition")
+                meeting_tc = tc or rail_tc
+
+            # Build results per race
+            for race_num in race_numbers:
+                entries = entries_by_race.get(race_num, [])
+                betting = betting_by_race.get(race_num, [])
 
                 # Build odds lookup from betting data
                 odds_by_horse: dict[str, dict] = {}
-                for entry in captured_betting:
+                for entry in betting:
                     name = (entry.get("horseName") or "").strip()
                     odds_arr = entry.get("oddsByProvider", [])
                     if name and odds_arr:
                         odds_by_horse[name] = self._parse_odds_array(odds_arr)
 
-                # Parse runner entries
                 runners = []
-                for entry in captured_entries:
+                for entry in entries:
                     horse_name = (entry.get("horseName") or "").strip()
                     if not horse_name:
                         continue
