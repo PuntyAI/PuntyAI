@@ -986,14 +986,14 @@ class RacingComScraper(BaseScraper):
                             await page.goto("about:blank", wait_until="domcontentloaded")
                             await page.wait_for_timeout(300)
                         await page.goto(race_url, wait_until="domcontentloaded")
-                        await page.wait_for_timeout(3000)
+                        await page.wait_for_timeout(4000)
 
                         # Click odds element to trigger GetBettingData_CD (lazy-loaded)
                         try:
                             odds_el = page.locator("[class*=odds]").first
                             if await odds_el.is_visible(timeout=2000):
                                 await odds_el.click()
-                                await page.wait_for_timeout(2500)
+                                await page.wait_for_timeout(3000)
                         except Exception:
                             pass
                     except Exception as e:
