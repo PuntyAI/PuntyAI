@@ -46,6 +46,8 @@ class RacingComScraper(BaseScraper):
         "sandown-lakeside": "sandown",
         "thomas farms rc murray bridge": "murray-bridge",
         "thomas-farms-rc-murray-bridge": "murray-bridge",
+        "park kilmore": "kilmore",
+        "park-kilmore": "kilmore",
     }
 
     def _venue_slug(self, venue: str) -> str:
