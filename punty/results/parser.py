@@ -103,6 +103,15 @@ _PUNTYS_PICK_HORSE = re.compile(
     r"(?:^|[+])\s*(?:\*?([A-Z][A-Z\s'\u2019\-]+?)\*?\s*)?\(No\.(\d+)\)",
     re.IGNORECASE,
 )
+# Exotic Punty's Pick format:
+#   *Punty's Pick:* Trifecta Box [1, 5, 8, 12] — $20 (Value: 1.8x)
+_PUNTYS_PICK_EXOTIC = re.compile(
+    r"(Trifecta\s+Box|Exacta|Quinella|First4\s+Box)\s*"
+    r"\[([^\]]+)\]\s*"
+    r"[–\-—]\s*\$(\d+\.?\d*)"
+    r"(?:\s*\(Value:\s*(\d+\.?\d*)x\))?",
+    re.IGNORECASE,
+)
 
 _SEQ_COSTING = re.compile(
     # Handles two formats:
@@ -121,6 +130,30 @@ def _normalize_bet_type(raw: str) -> str:
     if t in ("win (saver)", "saver win"):
         return "saver_win"
     return t.replace(" ", "_")
+
+
+def _normalize_exotic_type(raw: str) -> str:
+    """Normalize exotic type to canonical name for consistent tracking.
+
+    Canonical names: Exacta, Quinella, Trifecta Box, First4 Box
+    """
+    t = raw.strip().lower()
+    # Remove parentheses and extra whitespace
+    t = re.sub(r"\s*\(.*?\)\s*", " ", t).strip()
+
+    if "first" in t and ("4" in t or "four" in t):
+        return "First4 Box"
+    if "trifecta" in t:
+        if "box" in t or "standout" not in t:
+            return "Trifecta Box"
+        return "Trifecta Box"
+    if "exacta" in t:
+        if "standout" in t:
+            return "Exacta"  # Standout exacta is still a straight exacta
+        return "Exacta"
+    if "quinella" in t or "quin" in t:
+        return "Quinella"
+    return raw.strip()
 
 
 def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list[dict]:
@@ -326,24 +359,58 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "value_rating": value_rating,
             })
 
-        # Punty's Pick — mark the highlighted best-bet selection(s)
+        # Punty's Pick — mark the highlighted best-bet selection(s) or create exotic pick
         puntys_pick_m = _PUNTYS_PICK.search(section)
         if puntys_pick_m:
             pick_line = puntys_pick_m.group(1)
-            puntys_saddlecloths = set()
-            for hm in _PUNTYS_PICK_HORSE.finditer(pick_line):
-                puntys_saddlecloths.add(int(hm.group(2)))
-            # Mark matching selections in this race
-            for p in picks:
-                if (p.get("race_number") == race_num
-                        and p.get("pick_type") == "selection"
-                        and p.get("saddlecloth") in puntys_saddlecloths):
-                    p["is_puntys_pick"] = True
+
+            # Check for exotic Punty's Pick format first
+            exotic_pp_m = _PUNTYS_PICK_EXOTIC.search(pick_line)
+            if exotic_pp_m:
+                exotic_type = _normalize_exotic_type(exotic_pp_m.group(1))
+                runners = [int(x) for x in re.findall(r'\d+', exotic_pp_m.group(2))]
+                stake = float(exotic_pp_m.group(3))
+                value = float(exotic_pp_m.group(4)) if exotic_pp_m.group(4) else None
+                picks.append({
+                    "id": next_id(),
+                    "content_id": content_id,
+                    "meeting_id": meeting_id,
+                    "race_number": race_num,
+                    "horse_name": None,
+                    "saddlecloth": None,
+                    "tip_rank": None,
+                    "odds_at_tip": None,
+                    "place_odds_at_tip": None,
+                    "pick_type": "exotic",
+                    "bet_type": None,
+                    "bet_stake": None,
+                    "exotic_type": exotic_type,
+                    "exotic_runners": json.dumps(runners),
+                    "exotic_stake": stake,
+                    "is_puntys_pick": True,
+                    "value_rating": value,
+                    "sequence_type": None,
+                    "sequence_variant": None,
+                    "sequence_legs": None,
+                    "sequence_start_race": None,
+                    "multi_odds": None,
+                    "estimated_return_pct": None,
+                })
+            else:
+                # Selection Punty's Pick — mark matching selections
+                puntys_saddlecloths = set()
+                for hm in _PUNTYS_PICK_HORSE.finditer(pick_line):
+                    puntys_saddlecloths.add(int(hm.group(2)))
+                for p in picks:
+                    if (p.get("race_number") == race_num
+                            and p.get("pick_type") == "selection"
+                            and p.get("saddlecloth") in puntys_saddlecloths):
+                        p["is_puntys_pick"] = True
 
         # Exotic
         exotic_m = _EXOTIC.search(section)
         if exotic_m:
-            exotic_type = exotic_m.group(1).strip()
+            exotic_type = _normalize_exotic_type(exotic_m.group(1))
             runners_str = exotic_m.group(2).strip()
             # Parse runners — handles various formats:
             #   "1, 2, 4" (simple box)

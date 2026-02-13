@@ -585,21 +585,16 @@ def _insight_text(stat: dict, window: str) -> str:
 
 
 def _normalise_exotic(raw: str) -> str:
+    """Normalize exotic type names to canonical forms for consistent tracking."""
     low = raw.lower().strip()
-    if "trifecta" in low and "box" in low:
-        return "Trifecta Box"
-    if "exacta" in low and "standout" in low:
-        return "Exacta Standout"
-    if "trifecta" in low and "standout" in low:
-        return "Trifecta Standout"
     if "first" in low and ("four" in low or "4" in low):
-        return "First Four"
+        return "First4 Box"
+    if "trifecta" in low:
+        return "Trifecta Box"  # All trifectas are boxed in our system
     if "quinella" in low:
         return "Quinella"
     if "exacta" in low:
         return "Exacta"
-    if "trifecta" in low:
-        return "Trifecta"
     return raw.title()
 
 
@@ -658,6 +653,58 @@ def _generate_directives(
         elif ew_s["roi"] < -20:
             directives.append(f"EACH WAY bleeding at {ew_s['roi']:+.1f}% ROI — reserve for genuine value only ($8+)")
 
+    # Exotic-specific directives
+    exotic_items = [s for s in overall if s["category"] == "exotic"]
+    if exotic_items:
+        # Find best and worst exotic types
+        profitable_exotics = [s for s in exotic_items if s["roi"] > 0]
+        losing_exotics = [s for s in exotic_items if s["roi"] < -20 and s["bets"] >= 5]
+        if profitable_exotics:
+            best = max(profitable_exotics, key=lambda x: x["roi"])
+            directives.append(
+                f"EXOTIC WINNER: {best['sub_type']} at {best['roi']:+.1f}% ROI over {best['bets']} bets — "
+                "favour this format"
+            )
+        if losing_exotics:
+            worst = min(losing_exotics, key=lambda x: x["roi"])
+            directives.append(
+                f"EXOTIC LOSER: {worst['sub_type']} bleeding at {worst['roi']:+.1f}% ROI — "
+                "only use when pre-calculated value ≥ 2.0x"
+            )
+        total_exotic_roi = (
+            sum(s["pnl"] for s in exotic_items) / sum(s["staked"] for s in exotic_items) * 100
+            if sum(s["staked"] for s in exotic_items) > 0 else 0
+        )
+        if total_exotic_roi < -20:
+            directives.append(
+                f"EXOTIC ALERT: Overall exotic ROI is {total_exotic_roi:+.1f}% — "
+                "only pick exotics from the pre-calculated value table (value ≥ 1.2x)"
+            )
+
+    # Sequence-specific directives
+    seq_items = [s for s in overall if s["category"] == "sequence"]
+    if seq_items:
+        profitable_seqs = [s for s in seq_items if s["roi"] > 0]
+        losing_seqs = [s for s in seq_items if s["roi"] < -20 and s["bets"] >= 5]
+        if profitable_seqs:
+            for ps in profitable_seqs:
+                directives.append(
+                    f"SEQUENCE WINNER: {ps['sub_type']} at {ps['roi']:+.1f}% ROI — keep running this variant"
+                )
+        if losing_seqs:
+            for ls in losing_seqs:
+                directives.append(
+                    f"SEQUENCE LOSER: {ls['sub_type']} at {ls['roi']:+.1f}% ROI — "
+                    "drop this variant or tighten leg selections"
+                )
+        # Check if Big6 or Early Quaddie are consistently losing
+        big6_items = [s for s in seq_items if "big6" in s.get("sub_type", "").lower() or "big 6" in s.get("sub_type", "").lower()]
+        early_q_items = [s for s in seq_items if "early" in s.get("sub_type", "").lower()]
+        if big6_items and all(s["roi"] < 0 for s in big6_items):
+            directives.append("DROP BIG 6 — consistently unprofitable across all variants")
+        if early_q_items and all(s["roi"] < 0 for s in early_q_items):
+            directives.append("DROP EARLY QUADDIE — consistently unprofitable across all variants")
+
     # Trend comparison
     if recent and overall:
         r_pnl = sum(s["pnl"] for s in recent)
@@ -666,10 +713,6 @@ def _generate_directives(
             directives.append("MOMENTUM POSITIVE — recent form improving, keep it up")
         elif r_pnl < 0 and o_pnl > 0:
             directives.append("RECENT SLUMP — tighten selections and reduce exotic exposure")
-
-    # Punty's Pick challenge
-    # (pp_stats passed from caller via keyword arg not available here,
-    # so we rely on the context block above to set the tone)
 
     if not directives:
         directives.append("Keep building the sample — need more data for clear patterns")

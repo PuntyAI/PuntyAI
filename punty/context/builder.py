@@ -129,7 +129,60 @@ class ContextBuilder:
                             })
                             break
 
+        # Calculate sequence leg confidence across races
+        context["sequence_leg_analysis"] = self._calculate_sequence_legs(context["races"])
+
         return context
+
+    def _calculate_sequence_legs(self, races: list[dict]) -> list[dict]:
+        """Calculate sequence leg confidence for quaddie construction."""
+        from punty.probability import calculate_sequence_leg_confidence
+
+        try:
+            # Build races_data from probability-enriched race contexts
+            races_data = []
+            for race_ctx in races:
+                probs = race_ctx.get("probabilities", {})
+                ranked = probs.get("probability_ranked", [])
+                if not ranked:
+                    continue
+
+                # Build runner list from ranked data + runner context
+                runners = []
+                for entry in ranked:
+                    horse_name = entry.get("horse")
+                    # Find matching runner in race context for saddlecloth
+                    for r in race_ctx.get("runners", []):
+                        if r.get("horse_name") == horse_name and not r.get("scratched"):
+                            runners.append({
+                                "saddlecloth": r.get("saddlecloth", 0),
+                                "horse_name": horse_name,
+                                "win_prob": r.get("_win_prob_raw", 0),
+                                "value_rating": r.get("punty_value_rating", 1.0),
+                            })
+                            break
+
+                races_data.append({
+                    "race_number": race_ctx["race_number"],
+                    "runners": runners,
+                })
+
+            if not races_data:
+                return []
+
+            legs = calculate_sequence_leg_confidence(races_data)
+            return [
+                {
+                    "race_number": leg.race_number,
+                    "confidence": leg.leg_confidence,
+                    "suggested_width": leg.suggested_width,
+                    "top_runners": leg.top_runners,
+                }
+                for leg in legs
+            ]
+        except Exception as e:
+            logger.debug(f"Sequence leg confidence calculation failed: {e}")
+            return []
 
     @staticmethod
     def _get_wind_impact(meeting) -> str | None:
@@ -308,7 +361,10 @@ class ContextBuilder:
         self, active_runners: list, race, race_context: dict,
     ) -> dict[str, Any]:
         """Calculate and inject probabilities for all active runners."""
-        from punty.probability import calculate_race_probabilities
+        from punty.probability import (
+            calculate_race_probabilities,
+            calculate_exotic_combinations,
+        )
 
         try:
             meeting_ctx = {"track_condition": race.track_condition}
@@ -324,6 +380,8 @@ class ContextBuilder:
 
             # Inject probability data into each runner's context dict
             prob_summary = {}
+            exotic_runners_data = []  # For exotic combination calculations
+
             for runner_data in race_context["runners"]:
                 if runner_data.get("scratched"):
                     continue
@@ -341,6 +399,9 @@ class ContextBuilder:
                     runner_data["punty_place_value_rating"] = round(rp.place_value_rating, 2)
                     runner_data["punty_recommended_stake"] = rp.recommended_stake
                     runner_data["punty_market_implied"] = f"{rp.market_implied * 100:.1f}%"
+                    # Store raw values for generator rendering
+                    runner_data["_win_prob_raw"] = rp.win_probability
+                    runner_data["_place_prob_raw"] = rp.place_probability
 
                     prob_summary[runner_data["horse_name"]] = {
                         "win_prob": rp.win_probability,
@@ -349,7 +410,17 @@ class ContextBuilder:
                         "place_value_rating": rp.place_value_rating,
                         "edge": rp.edge,
                         "recommended_stake": rp.recommended_stake,
+                        "saddlecloth": runner_data.get("saddlecloth"),
                     }
+
+                    # Build data for exotic calculator
+                    exotic_runners_data.append({
+                        "saddlecloth": runner_data.get("saddlecloth", 0),
+                        "horse_name": runner_data.get("horse_name", ""),
+                        "win_prob": rp.win_probability,
+                        "market_implied": rp.market_implied,
+                        "value_rating": rp.value_rating,
+                    })
 
             # Build sorted probability ranking and value plays for AI
             ranked = sorted(
@@ -361,12 +432,34 @@ class ContextBuilder:
                 if data["value_rating"] > 1.05
             ]
 
+            # Calculate exotic combinations
+            exotic_combos = []
+            if len(exotic_runners_data) >= 2:
+                try:
+                    combos = calculate_exotic_combinations(exotic_runners_data)
+                    exotic_combos = [
+                        {
+                            "type": c.exotic_type,
+                            "runners": c.runners,
+                            "runner_names": c.runner_names,
+                            "probability": f"{c.estimated_probability * 100:.1f}%",
+                            "value": c.value_ratio,
+                            "combos": c.num_combos,
+                            "format": c.format,
+                        }
+                        for c in combos
+                    ]
+                except Exception as e:
+                    logger.debug(f"Exotic combination calculation failed: {e}")
+
             return {
                 "probability_ranked": [
-                    {"horse": name, "win_prob": f"{data['win_prob'] * 100:.1f}%"}
+                    {"horse": name, "win_prob": f"{data['win_prob'] * 100:.1f}%",
+                     "saddlecloth": data.get("saddlecloth")}
                     for name, data in ranked
                 ],
                 "value_plays": value_plays,
+                "exotic_combinations": exotic_combos,
             }
         except Exception as e:
             logger.warning(f"Probability calculation failed: {e}")

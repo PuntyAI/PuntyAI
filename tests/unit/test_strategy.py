@@ -63,24 +63,27 @@ class TestPnlStr:
 
 
 class TestNormaliseExotic:
-    """Tests for exotic type normalisation."""
+    """Tests for exotic type normalisation — canonical names."""
 
     def test_trifecta_box(self):
         assert _normalise_exotic("trifecta_box") == "Trifecta Box"
         assert _normalise_exotic("Trifecta Box") == "Trifecta Box"
 
-    def test_exacta_standout(self):
-        assert _normalise_exotic("exacta_standout") == "Exacta Standout"
+    def test_exacta_standout_normalized(self):
+        # Standout exacta normalizes to "Exacta" (canonical name)
+        assert _normalise_exotic("exacta_standout") == "Exacta"
+        assert _normalise_exotic("Exacta Standout") == "Exacta"
 
     def test_quinella(self):
         assert _normalise_exotic("quinella") == "Quinella"
 
     def test_first_four(self):
-        assert _normalise_exotic("first_four") == "First Four"
-        assert _normalise_exotic("first_4") == "First Four"
+        assert _normalise_exotic("first_four") == "First4 Box"
+        assert _normalise_exotic("first_4") == "First4 Box"
+        assert _normalise_exotic("First Four Box") == "First4 Box"
 
     def test_plain_trifecta(self):
-        assert _normalise_exotic("trifecta") == "Trifecta"
+        assert _normalise_exotic("trifecta") == "Trifecta Box"
 
     def test_plain_exacta(self):
         assert _normalise_exotic("exacta") == "Exacta"

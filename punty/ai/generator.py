@@ -833,8 +833,8 @@ class ContentGenerator:
                 parts.append(f"Pace Disadvantaged: {', '.join(dis_list)}")
 
             parts.append("")
-            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | Market Move | Speed Rank | Map Factor |")
-            parts.append("|-----|-------|---------|--------|------|------|-----------|-------------|------------|------------|")
+            parts.append("| No. | Horse | Barrier | Jockey | Odds | Form | Speed Map | Market Move | Speed Rank | Map Factor | Win% | Place% | Value |")
+            parts.append("|-----|-------|---------|--------|------|------|-----------|-------------|------------|------------|------|--------|-------|")
 
             for runner in race.get("runners", []):
                 if runner.get("scratched"):
@@ -855,11 +855,17 @@ class ContentGenerator:
                             market_move = f"${from_price:.0f}→${to_price:.0f} IN"
                         else:
                             market_move = f"${from_price:.0f}→${to_price:.0f} OUT"
+                # Probability columns
+                win_pct = runner.get("punty_win_probability", "-")
+                place_pct = runner.get("punty_place_probability", "-")
+                value_r = runner.get("punty_value_rating")
+                value_str = f"{value_r:.2f}" if value_r else "-"
                 parts.append(
                     f"| {saddlecloth} | {runner.get('horse_name', 'Unknown')} | "
                     f"{runner.get('barrier', '-')} | {runner.get('jockey', '-')} | "
                     f"${runner.get('current_odds', '-')} | {runner.get('form', '-')} | "
-                    f"{runner.get('speed_map_position', '-')} | {market_move} | {pf_speed} | {pf_map} |"
+                    f"{runner.get('speed_map_position', '-')} | {market_move} | {pf_speed} | {pf_map} | "
+                    f"{win_pct} | {place_pct} | {value_str} |"
                 )
 
             # Add detailed runner stats below the table
@@ -1020,6 +1026,39 @@ class ContentGenerator:
 
                     parts.append(f"- No.{fh['saddlecloth']} {horse}: {' | '.join(starts_str)}")
 
+            # Probability Rankings and Value Plays
+            probs = race.get("probabilities", {})
+            prob_ranked = probs.get("probability_ranked", [])
+            value_plays = probs.get("value_plays", [])
+            exotic_combos = probs.get("exotic_combinations", [])
+
+            if prob_ranked:
+                parts.append("")
+                parts.append("**Probability Rankings (our model):**")
+                for i, entry in enumerate(prob_ranked[:6], 1):
+                    sc = f"No.{entry.get('saddlecloth', '?')}" if entry.get('saddlecloth') else ""
+                    parts.append(f"  {i}. {entry['horse']} {sc} — {entry['win_prob']}")
+
+            if value_plays:
+                parts.append("")
+                parts.append("**VALUE PLAYS (our prob > market by 5%+):**")
+                for vp in value_plays:
+                    parts.append(f"  - {vp['horse']}: Value {vp['value']:.2f}x (edge +{vp['edge']:.1f}%)")
+
+            if exotic_combos:
+                parts.append("")
+                parts.append("**Pre-Calculated Exotic Combinations (value ≥ 1.2x):**")
+                parts.append("| Type | Runners | Prob | Value | Combos | Format |")
+                parts.append("|------|---------|------|-------|--------|--------|")
+                for ec in exotic_combos[:6]:
+                    runners_str = ", ".join(str(r) for r in ec["runners"])
+                    names_str = ", ".join(ec.get("runner_names", []))
+                    parts.append(
+                        f"| {ec['type']} | [{runners_str}] {names_str} | "
+                        f"{ec['probability']} | {ec['value']:.2f}x | "
+                        f"{ec['combos']} | {ec['format']} |"
+                    )
+
             parts.append("")
 
         # Add summary insights
@@ -1113,17 +1152,24 @@ class ContentGenerator:
         sequences = self._get_sequence_lanes(total_races)
         if sequences:
             parts.append("\n## SEQUENCE LANES (use these exact race ranges)")
-            eq = sequences.get("early_quad")
             q = sequences.get("quaddie")
-            b6 = sequences.get("big6")
-            if eq:
-                parts.append(f"- EARLY QUADDIE: Races {eq[0]}-{eq[1]}")
             if q:
                 parts.append(f"- QUADDIE (main): Races {q[0]}-{q[1]}")
-            if b6:
-                parts.append(f"- BIG 6: Races {b6[0]}-{b6[1]}")
-            elif total_races <= 7:
-                parts.append("- BIG 6: Not applicable (7 race meeting)")
+
+        # Sequence leg confidence analysis
+        seq_legs = context.get("sequence_leg_analysis", [])
+        if seq_legs:
+            parts.append("\n## SEQUENCE LEG CONFIDENCE (probability-based)")
+            for leg in seq_legs:
+                conf = leg["confidence"]
+                width = leg["suggested_width"]
+                rn = leg["race_number"]
+                top = leg.get("top_runners", [])
+                top_str = ", ".join(
+                    f"No.{r['saddlecloth']} {r['horse_name']} ({r['win_prob']*100:.0f}%)"
+                    for r in top[:width + 1]
+                )
+                parts.append(f"- Race {rn}: **{conf}** confidence (use {width} runner{'s' if width > 1 else ''}) — {top_str}")
 
         return "\n".join(parts)
 
