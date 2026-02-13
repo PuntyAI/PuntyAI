@@ -1320,6 +1320,299 @@ def analyse_race_speed_quality(session) -> list[Pattern]:
     return patterns
 
 
+def analyse_standard_times(session) -> list[Pattern]:
+    """Pattern 16: Pre-compute standard times by venue+distance+condition.
+
+    Builds a lookup table of median race times for each combination,
+    stored as a single PatternInsight. Used by time_ratings.py for
+    per-runner speed comparisons during generation.
+    """
+    import re
+
+    patterns = []
+
+    def _venue_key(venue):
+        return re.sub(r"[^a-z]", "", venue.lower()) if venue else ""
+
+    rows = session.execute(text("""
+        SELECT r.venue, r.distance, r.track_condition,
+               r.official_time_secs
+        FROM historical_races r
+        WHERE r.official_time_secs IS NOT NULL
+          AND r.official_time_secs > 0
+          AND r.distance IS NOT NULL
+          AND r.venue IS NOT NULL
+    """)).fetchall()
+
+    # Group times by venue_key + distance_bucket + condition_group
+    groups: dict[str, list[float]] = defaultdict(list)
+    for venue, distance, condition, time_secs in rows:
+        vk = _venue_key(venue)
+        db = _distance_bucket(distance)
+        cg = _condition_group(condition)
+        key = f"{vk}_{db}_{cg}"
+        groups[key].append(time_secs)
+
+    # Build lookup table with median times (min 5 races for reliability)
+    lookup = {}
+    for key, times in groups.items():
+        if len(times) >= 5:
+            sorted_times = sorted(times)
+            mid = len(sorted_times) // 2
+            median = (sorted_times[mid] + sorted_times[mid - 1]) / 2 if len(sorted_times) % 2 == 0 else sorted_times[mid]
+            lookup[key] = {
+                "median": round(median, 2),
+                "count": len(times),
+            }
+
+    if lookup:
+        # Store as a single pattern with the full lookup table
+        patterns.append(Pattern(
+            pattern_type="deep_learning_standard_times",
+            dimension="standard_times_lookup",
+            description=(
+                f"Standard time lookup table: {len(lookup)} venue/distance/condition combinations"
+            ),
+            sample_size=sum(v["count"] for v in lookup.values()),
+            win_rate=0,
+            base_rate=0,
+            edge=0,
+            p_value=0.001,
+            confidence="HIGH",
+            metadata={"lookup": lookup},
+        ))
+
+    return patterns
+
+
+def analyse_weight_impact(session) -> list[Pattern]:
+    """Pattern 17: Weight change impact on next-start performance.
+
+    Compares weight carried vs last-start weight from form_history.
+    Groups by weight change class and distance bucket to find if
+    weight increases or decreases significantly affect win rate.
+    """
+    patterns = []
+
+    runners = session.execute(text("""
+        SELECT hr.form_history, hr.weight, hr.won, hr.placed,
+               r.distance, r.state
+        FROM historical_runners hr
+        JOIN historical_races r ON hr.race_fk = r.id
+        WHERE hr.finish_position IS NOT NULL
+          AND hr.weight IS NOT NULL
+          AND hr.form_history IS NOT NULL
+    """)).fetchall()
+
+    agg: dict[str, dict] = defaultdict(lambda: {"count": 0, "wins": 0, "places": 0})
+
+    for form_json, weight, won, placed, distance, state in runners:
+        try:
+            history = json.loads(form_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not history or not isinstance(history[0], dict):
+            continue
+
+        last_weight = history[0].get("weight")
+        if not last_weight:
+            continue
+        try:
+            last_w = float(last_weight)
+            cur_w = float(weight)
+        except (ValueError, TypeError):
+            continue
+
+        if not (45 <= last_w <= 75 and 45 <= cur_w <= 75):
+            continue
+
+        diff = cur_w - last_w
+        if diff >= 3:
+            change_class = "weight_up_big"
+        elif diff >= 1:
+            change_class = "weight_up_small"
+        elif diff <= -3:
+            change_class = "weight_down_big"
+        elif diff <= -1:
+            change_class = "weight_down_small"
+        else:
+            change_class = "weight_same"
+
+        db = _distance_bucket(distance)
+        key = f"{change_class}_{db}_{state or 'ALL'}"
+
+        agg[key]["count"] += 1
+        agg[key]["wins"] += 1 if won else 0
+        agg[key]["places"] += 1 if placed else 0
+        agg[key]["change_class"] = change_class
+        agg[key]["dist_bucket"] = db
+        agg[key]["state"] = state
+
+    total = sum(d["count"] for d in agg.values()) or 1
+    total_wins = sum(d["wins"] for d in agg.values())
+    base_rate = total_wins / total
+
+    for key, data in agg.items():
+        count = data["count"]
+        wins = data["wins"]
+        if count < MIN_SAMPLES:
+            continue
+        win_rate = wins / count
+        place_rate = data["places"] / count
+        edge = win_rate - base_rate
+        p_val = _binomial_p_value(wins, count, base_rate)
+
+        if p_val < SIGNIFICANCE_LEVEL and abs(edge) > 0.02:
+            change = data["change_class"].replace("_", " ")
+            patterns.append(Pattern(
+                pattern_type="deep_learning_weight_impact",
+                dimension=key,
+                description=(
+                    f"{change} in {data['dist_bucket']} ({data['state'] or 'ALL'}): "
+                    f"win {win_rate*100:.1f}% place {place_rate*100:.1f}% "
+                    f"({'+' if edge > 0 else ''}{edge*100:.1f}% edge)"
+                ),
+                sample_size=count,
+                win_rate=win_rate,
+                base_rate=base_rate,
+                edge=edge,
+                p_value=p_val,
+                confidence=_confidence_label(p_val, count),
+                metadata={**data, "place_rate": place_rate},
+            ))
+
+    return patterns
+
+
+def analyse_poor_run_bounceback(session) -> list[Pattern]:
+    """Pattern 18: Bounce-back after a poor run with potential excuse.
+
+    Identifies horses whose last run was poor (finished well back with
+    wide margin) and whether they bounce back next start. Approximates
+    the stewards excuse concept using margin and positional data from
+    form_history — e.g. horses that settled forward but dropped back
+    (possible interference/held up), or ran on late (ran_on excuse).
+    """
+    patterns = []
+
+    runners = session.execute(text("""
+        SELECT hr.form_history, hr.won, hr.placed, hr.starting_price,
+               r.distance, r.state, r.venue
+        FROM historical_runners hr
+        JOIN historical_races r ON hr.race_fk = r.id
+        WHERE hr.finish_position IS NOT NULL
+          AND hr.form_history IS NOT NULL
+    """)).fetchall()
+
+    agg: dict[str, dict] = defaultdict(lambda: {"count": 0, "wins": 0, "places": 0})
+
+    for form_json, won, placed, sp, distance, state, venue in runners:
+        try:
+            history = json.loads(form_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not history or not isinstance(history[0], dict):
+            continue
+
+        last = history[0]
+        last_pos = last.get("pos")
+        last_margin = last.get("margin")
+
+        if last_pos is None or last_margin is None:
+            continue
+
+        try:
+            pos = int(last_pos)
+            margin = float(last_margin)
+        except (ValueError, TypeError):
+            continue
+
+        # Classify the last run
+        if pos <= 3:
+            continue  # Not a poor run
+
+        # Check in-run data for excuse-like patterns
+        in_run = last.get("in_run", "")
+        excuse_type = None
+
+        if in_run:
+            # Parse in-run positions: "settling_down,2;m800,3;m400,5;finish,8;"
+            positions = {}
+            for segment in in_run.split(";"):
+                parts = segment.strip().split(",")
+                if len(parts) == 2:
+                    try:
+                        positions[parts[0]] = int(parts[1])
+                    except ValueError:
+                        pass
+
+            settle = positions.get("settling_down")
+            finish = positions.get("finish") or pos
+
+            if settle and finish:
+                # Horse settled forward but dropped back = likely held up / interference
+                if settle <= 3 and finish >= 6:
+                    excuse_type = "dropped_back"
+                # Horse settled back but ran on = ran_on excuse
+                elif settle >= 5 and finish < settle:
+                    excuse_type = "ran_on"
+
+        if not excuse_type:
+            # Wide margin but not catastrophic = general poor run
+            if 3 < margin <= 10:
+                excuse_type = "moderate_loss"
+            elif margin > 10:
+                excuse_type = "heavy_loss"
+            else:
+                continue
+
+        db = _distance_bucket(distance)
+        key = f"bounceback_{excuse_type}_{db}_{state or 'ALL'}"
+
+        agg[key]["count"] += 1
+        agg[key]["wins"] += 1 if won else 0
+        agg[key]["places"] += 1 if placed else 0
+        agg[key]["excuse_type"] = excuse_type
+        agg[key]["dist_bucket"] = db
+        agg[key]["state"] = state
+
+    total = sum(d["count"] for d in agg.values()) or 1
+    total_wins = sum(d["wins"] for d in agg.values())
+    base_rate = total_wins / total
+
+    for key, data in agg.items():
+        count = data["count"]
+        wins = data["wins"]
+        if count < MIN_SAMPLES:
+            continue
+        win_rate = wins / count
+        place_rate = data["places"] / count
+        edge = win_rate - base_rate
+        p_val = _binomial_p_value(wins, count, base_rate)
+
+        if p_val < SIGNIFICANCE_LEVEL and abs(edge) > 0.02:
+            excuse = data["excuse_type"].replace("_", " ")
+            patterns.append(Pattern(
+                pattern_type="deep_learning_bounceback",
+                dimension=key,
+                description=(
+                    f"Bounce-back after {excuse} in {data['dist_bucket']} "
+                    f"({data['state'] or 'ALL'}): "
+                    f"win {win_rate*100:.1f}% place {place_rate*100:.1f}% "
+                    f"({'+' if edge > 0 else ''}{edge*100:.1f}% edge)"
+                ),
+                sample_size=count,
+                win_rate=win_rate,
+                base_rate=base_rate,
+                edge=edge,
+                p_value=p_val,
+                confidence=_confidence_label(p_val, count),
+                metadata={**data, "place_rate": place_rate},
+            ))
+
+    return patterns
+
+
 # ==============================================================
 # Orchestrator
 # ==============================================================
@@ -1340,11 +1633,14 @@ ALL_ANALYSES = [
     ("Coming Into Form", analyse_coming_into_form),
     ("Class Movers (Up/Down)", analyse_class_movers),
     ("Race Speed Quality", analyse_race_speed_quality),
+    ("Standard Times Lookup", analyse_standard_times),
+    ("Weight Impact", analyse_weight_impact),
+    ("Poor Run Bounce-back", analyse_poor_run_bounceback),
 ]
 
 
 def run_all_analyses(db_path=None) -> list[Pattern]:
-    """Run all 15 pattern analyses and return significant patterns."""
+    """Run all 18 pattern analyses and return significant patterns."""
     session = get_session(db_path)
     all_patterns: list[Pattern] = []
 

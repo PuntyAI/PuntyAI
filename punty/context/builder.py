@@ -61,6 +61,14 @@ class ContextBuilder:
         # Fetch live WillyWeather data for hourly forecasts and observations
         ww_data = await self._fetch_willyweather(meeting)
 
+        # Load standard times for time rating comparisons (cached per process)
+        self._standard_times = {}
+        try:
+            from punty.context.time_ratings import load_standard_times
+            self._standard_times = await load_standard_times(self.db)
+        except Exception as e:
+            logger.debug(f"Standard times load failed: {e}")
+
         # Fetch PF strike rates (cached per process, fetched once per day)
         self._jockey_strike_rates, self._trainer_strike_rates = {}, {}
         try:
@@ -331,6 +339,44 @@ class ContextBuilder:
                     runner_data["comment_long"] = runner.comment_long
                     runner_data["comment_short"] = runner.comment_short
                     runner_data["stewards_comment"] = runner.stewards_comment
+
+                    # Parse form history for enriched analysis
+                    fh_parsed = None
+                    if runner.form_history:
+                        try:
+                            fh_parsed = json.loads(runner.form_history) if isinstance(runner.form_history, str) else runner.form_history
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+                    # Stewards excuse parsing (excuses for poor finishes)
+                    if fh_parsed:
+                        try:
+                            from punty.context.stewards import extract_form_excuses
+                            excuses = extract_form_excuses(fh_parsed)
+                            if excuses:
+                                runner_data["form_excuses"] = excuses
+                        except Exception:
+                            pass
+
+                    # Standard time ratings (FAST/STANDARD/SLOW vs venue benchmarks)
+                    if fh_parsed and self._standard_times:
+                        try:
+                            from punty.context.time_ratings import rate_form_times
+                            ratings = rate_form_times(fh_parsed, self._standard_times)
+                            if ratings:
+                                runner_data["time_ratings"] = ratings
+                        except Exception:
+                            pass
+
+                    # Weight-specific form analysis
+                    if fh_parsed and runner.weight:
+                        try:
+                            from punty.context.weight_analysis import analyse_weight_form
+                            weight_data = analyse_weight_form(fh_parsed, float(runner.weight))
+                            if weight_data:
+                                runner_data["weight_analysis"] = weight_data
+                        except Exception:
+                            pass
 
                     # Stats
                     runner_data["track_dist_stats"] = runner.track_dist_stats

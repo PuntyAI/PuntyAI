@@ -1000,6 +1000,74 @@ class ContentGenerator:
                 for s in stewards:
                     parts.append(f"- {s['horse']}: {s['comment']}")
 
+            # Last-start excuses (legitimate reasons for poor runs)
+            excuse_lines = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                excuses = runner.get("form_excuses")
+                if excuses:
+                    for exc in excuses:
+                        pos = exc.get("position", "?")
+                        venue = exc.get("venue", "")
+                        dist = exc.get("distance", "")
+                        text = exc.get("excuse_text", "")
+                        excuse_lines.append(
+                            f"- {runner.get('horse_name')}: finished {pos}th "
+                            f"at {venue} {dist}m — {text}"
+                        )
+            if excuse_lines:
+                parts.append("")
+                parts.append("**LAST-START EXCUSES (legitimate reasons for poor runs — consider bounce-back):**")
+                for line in excuse_lines[:10]:
+                    parts.append(line)
+
+            # Speed ratings (race times vs venue/distance standards)
+            speed_lines = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                ratings = runner.get("time_ratings")
+                if ratings:
+                    notable = [r for r in ratings if r.get("rating") in ("FAST", "SLOW")]
+                    for r in notable[:2]:
+                        speed_lines.append(
+                            f"- {runner.get('horse_name')}: {r['rating']} "
+                            f"at {r.get('venue', '')} {r.get('distance', '')}m "
+                            f"({r.get('diff_pct', 0):+.1f}% vs standard)"
+                        )
+            if speed_lines:
+                parts.append("")
+                parts.append("**SPEED RATINGS (vs venue/distance standards):**")
+                for line in speed_lines[:12]:
+                    parts.append(line)
+
+            # Weight form analysis (performance at different weight bands)
+            weight_lines = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                wa = runner.get("weight_analysis")
+                if wa:
+                    warning = wa.get("warning")
+                    change = wa.get("weight_change")
+                    optimal = wa.get("optimal_band")
+                    if warning:
+                        weight_lines.append(
+                            f"- {runner.get('horse_name')}: WARNING — {warning}"
+                        )
+                    elif change and abs(change) >= 2:
+                        direction = "up" if change > 0 else "down"
+                        weight_lines.append(
+                            f"- {runner.get('horse_name')}: {abs(change):.0f}kg {direction} from last start"
+                            + (f" (best at {optimal} weights)" if optimal else "")
+                        )
+            if weight_lines:
+                parts.append("")
+                parts.append("**WEIGHT FORM ANALYSIS:**")
+                for line in weight_lines[:10]:
+                    parts.append(line)
+
             # Extended form history (past starts with sectionals)
             form_histories = []
             for runner in race.get("runners", []):
