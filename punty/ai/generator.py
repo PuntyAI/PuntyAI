@@ -364,7 +364,7 @@ class ContentGenerator:
                     learning_parts.append("")
 
             # Only include runner-level memories if we have enough settled data
-            if stats.get("settled_memories", 0) >= 10:
+            if (stats.get("settled_memories") or 0) >= 10:
                 runner_learning_parts = [
                     "## INDIVIDUAL RUNNER PATTERNS",
                     f"(Based on {stats['settled_memories']} settled predictions, {stats['hit_rate']:.1f}% hit rate, avg PNL: {stats['avg_pnl']:+.2f}U)",
@@ -412,7 +412,7 @@ class ContentGenerator:
             return ""
 
         except Exception as e:
-            logger.warning(f"Failed to build learning context: {e}")
+            logger.warning(f"Failed to build learning context: {e}", exc_info=True)
             return ""
 
     async def generate_race_preview(

@@ -268,7 +268,7 @@ class MemoryStore:
             )
             patterns = result.scalars().all()
             for p in patterns:
-                if p.sample_count >= 10:  # Only use well-supported patterns
+                if (p.sample_count or 0) >= 10:  # Only use well-supported patterns
                     insights.append(p.insight_text)
 
         # Market movement patterns
@@ -283,7 +283,7 @@ class MemoryStore:
             )
             patterns = result.scalars().all()
             for p in patterns:
-                if p.sample_count >= 5:
+                if (p.sample_count or 0) >= 5:
                     insights.append(p.insight_text)
 
         return insights

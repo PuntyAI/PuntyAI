@@ -381,7 +381,12 @@ async def populate_pattern_insights(db: AsyncSession) -> int:
     Called after settlement. Populates the previously-empty table with
     bet_type_overall, bet_type_30d, and tip_rank pattern rows.
     """
-    await db.execute(delete(PatternInsight))
+    # Only delete non-deep-learning patterns (preserve deep_learning_* rows)
+    await db.execute(
+        delete(PatternInsight).where(
+            ~PatternInsight.pattern_type.like("deep_learning_%")
+        )
+    )
 
     now = melb_now_naive()
     count = 0
