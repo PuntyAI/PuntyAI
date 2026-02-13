@@ -731,130 +731,185 @@ async def get_tips_calendar(
         }
 
 
-async def _get_meeting_pick_stats(db, meeting_id: str) -> list[dict]:
-    """Get bet-type stats for a specific meeting (same format as public stats page)."""
-    from sqlalchemy import case as sql_case
+def _norm_exotic(raw: str) -> str:
+    """Normalize exotic type names for display."""
+    low = raw.lower().strip()
+    return {
+        "box trifecta": "Trifecta", "trifecta box": "Trifecta",
+        "trifecta (box)": "Trifecta", "trifecta (boxed)": "Trifecta",
+        "trifecta boxed": "Trifecta", "exacta standout": "Exacta",
+        "exacta (standout)": "Exacta",
+        "trifecta standout": "Trifecta",
+        "trifecta (standout)": "Trifecta",
+        "first four": "First 4", "first 4": "First 4",
+        "first four (boxed)": "First 4", "first four box": "First 4",
+        "first4": "First 4", "first4 box": "First 4",
+        "first 4 standout": "First 4", "first four standout": "First 4",
+    }.get(low, raw)
 
-    def _norm_exotic(raw: str) -> str:
-        low = raw.lower().strip()
-        return {
-            "box trifecta": "Trifecta", "trifecta box": "Trifecta",
-            "trifecta (box)": "Trifecta", "trifecta (boxed)": "Trifecta",
-            "trifecta boxed": "Trifecta", "exacta standout": "Exacta",
-            "exacta (standout)": "Exacta",
-            "trifecta standout": "Trifecta",
-            "trifecta (standout)": "Trifecta",
-            "first four": "First 4", "first 4": "First 4",
-            "first four (boxed)": "First 4", "first four box": "First 4",
-            "first4": "First 4", "first4 box": "First 4",
-            "first 4 standout": "First 4", "first four standout": "First 4",
-        }.get(low, raw)
 
-    stats = []
+def _compute_pick_data(all_picks: list) -> dict:
+    """Compute winners, sequences, selections lookup, and stats from a single picks list.
 
-    # Selections by bet_type
-    sel_result = await db.execute(
-        select(
-            Pick.bet_type, func.count(Pick.id),
-            func.sum(sql_case((Pick.hit == True, 1), else_=0)),
-            func.sum(Pick.pnl), func.sum(Pick.bet_stake),
-        ).where(and_(
-            Pick.meeting_id == meeting_id, Pick.settled == True,
-            Pick.pick_type == "selection", Pick.bet_type.isnot(None),
-            Pick.bet_type != "exotics_only",
-        )).group_by(Pick.bet_type)
-    )
-    sel_map = {}
-    for bt, total, hits, pnl, staked in sel_result.all():
-        h, p, s = int(hits or 0), float(pnl or 0), float(staked or 0)
-        label = (bt or "").replace("_", " ").title()
-        sel_map[label] = {
-            "category": "Selections", "type": label, "won": h, "total": total,
-            "rate": round(h / total * 100, 1) if total else 0,
-            "pnl": round(p, 2), "staked": round(s, 2),
-        }
-    for k in ["Win", "Saver Win", "Place", "Each Way"]:
-        if k in sel_map:
-            stats.append(sel_map[k])
+    Returns dict with keys: winners_map, winning_exotics, winning_sequences,
+    sequence_results, picks_lookup, meeting_stats.
+    """
+    winners_map = {}       # {race_number: [saddlecloth, ...]}
+    winning_exotics = {}   # {race_number: exotic_type}
+    winning_sequences = [] # [{type, variant}]
+    sequence_results = []
+    picks_lookup = {}      # {race_number: {saddlecloth: {...}}}
 
-    # Exotics by type
-    ex_result = await db.execute(
-        select(
-            Pick.exotic_type, func.count(Pick.id),
-            func.sum(sql_case((Pick.hit == True, 1), else_=0)),
-            func.sum(Pick.pnl), func.sum(Pick.exotic_stake),
-        ).where(and_(
-            Pick.meeting_id == meeting_id, Pick.settled == True,
-            Pick.pick_type == "exotic", Pick.exotic_type.isnot(None),
-        )).group_by(Pick.exotic_type)
-    )
-    ex_order = ["Quinella", "Exacta", "Trifecta", "First 4"]
-    ex_map = {}
-    for et, total, hits, pnl, staked in ex_result.all():
-        label = _norm_exotic(et)
-        h, p, s = int(hits or 0), float(pnl or 0), float(staked or 0)
-        if label in ex_map:
-            ex_map[label]["won"] += h
-            ex_map[label]["total"] += total
-            ex_map[label]["pnl"] = round(ex_map[label]["pnl"] + p, 2)
-            ex_map[label]["staked"] = round(ex_map[label]["staked"] + s, 2)
-        else:
-            ex_map[label] = {
-                "category": "Exotics", "type": label, "won": h, "total": total,
-                "rate": 0, "pnl": round(p, 2), "staked": round(s, 2),
+    # Accumulators for stats
+    sel_stats = {}   # {bet_type: {total, hits, pnl, staked}}
+    ex_stats = {}    # {norm_type: {total, hits, pnl, staked}}
+    seq_stats = {}   # {(seq_type, variant): {total, hits, pnl, staked}}
+    b3_stats = {"total": 0, "hits": 0, "pnl": 0.0, "staked": 0.0}
+
+    for pick in all_picks:
+        # --- Selection picks lookup (all, not just settled) ---
+        if pick.pick_type == "selection" and pick.race_number and pick.saddlecloth:
+            picks_lookup.setdefault(pick.race_number, {})[pick.saddlecloth] = {
+                "tip_rank": pick.tip_rank,
+                "bet_type": pick.bet_type,
+                "hit": pick.hit,
+                "pnl": float(pick.pnl) if pick.pnl is not None else None,
             }
-    for v in ex_map.values():
-        v["rate"] = round(v["won"] / v["total"] * 100, 1) if v["total"] else 0
+
+        # --- Winners (settled + hit) ---
+        if pick.settled and pick.hit:
+            if pick.pick_type in ("selection", "big3") and pick.race_number and pick.saddlecloth:
+                winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
+            elif pick.pick_type == "exotic" and pick.race_number and pick.exotic_type:
+                winning_exotics[pick.race_number] = pick.exotic_type
+            elif pick.pick_type == "sequence" and pick.sequence_type:
+                winning_sequences.append({
+                    "type": pick.sequence_type,
+                    "variant": pick.sequence_variant,
+                })
+            elif pick.pick_type == "big3_multi":
+                winning_sequences.append({"type": "big3_multi", "variant": None})
+
+        # --- Settled sequence/multi results ---
+        if pick.settled and pick.pick_type in ("sequence", "big3_multi"):
+            seq_type = pick.sequence_type or pick.pick_type
+            label = (pick.sequence_type or "multi").replace("_", " ").title()
+            if pick.sequence_variant:
+                label += f" ({pick.sequence_variant.title()})"
+            sequence_results.append({
+                "type": seq_type,
+                "variant": pick.sequence_variant,
+                "label": label,
+                "hit": bool(pick.hit),
+                "pnl": float(pick.pnl) if pick.pnl is not None else 0.0,
+                "stake": float(pick.exotic_stake or pick.bet_stake or 0),
+            })
+
+        # --- Stats accumulators (settled only) ---
+        if not pick.settled:
+            continue
+
+        if pick.pick_type == "selection" and pick.bet_type and pick.bet_type != "exotics_only":
+            bt = pick.bet_type
+            if bt not in sel_stats:
+                sel_stats[bt] = {"total": 0, "hits": 0, "pnl": 0.0, "staked": 0.0}
+            sel_stats[bt]["total"] += 1
+            if pick.hit:
+                sel_stats[bt]["hits"] += 1
+            sel_stats[bt]["pnl"] += float(pick.pnl or 0)
+            sel_stats[bt]["staked"] += float(pick.bet_stake or 0)
+
+        elif pick.pick_type == "exotic" and pick.exotic_type:
+            label = _norm_exotic(pick.exotic_type)
+            if label not in ex_stats:
+                ex_stats[label] = {"total": 0, "hits": 0, "pnl": 0.0, "staked": 0.0}
+            ex_stats[label]["total"] += 1
+            if pick.hit:
+                ex_stats[label]["hits"] += 1
+            ex_stats[label]["pnl"] += float(pick.pnl or 0)
+            ex_stats[label]["staked"] += float(pick.exotic_stake or 0)
+
+        elif pick.pick_type == "sequence":
+            key = (pick.sequence_type, pick.sequence_variant)
+            if key not in seq_stats:
+                seq_stats[key] = {"total": 0, "hits": 0, "pnl": 0.0, "staked": 0.0}
+            seq_stats[key]["total"] += 1
+            if pick.hit:
+                seq_stats[key]["hits"] += 1
+            seq_stats[key]["pnl"] += float(pick.pnl or 0)
+            seq_stats[key]["staked"] += float(pick.exotic_stake or 0)
+
+        elif pick.pick_type == "big3_multi":
+            b3_stats["total"] += 1
+            if pick.hit:
+                b3_stats["hits"] += 1
+            b3_stats["pnl"] += float(pick.pnl or 0)
+            b3_stats["staked"] += float(pick.exotic_stake or 0)
+
+    # --- Build meeting_stats list ---
+    meeting_stats = []
+
+    # Selections by bet_type (ordered)
+    for k in ["win", "saver_win", "place", "each_way"]:
+        if k in sel_stats:
+            s = sel_stats[k]
+            label = k.replace("_", " ").title()
+            meeting_stats.append({
+                "category": "Selections", "type": label,
+                "won": s["hits"], "total": s["total"],
+                "rate": round(s["hits"] / s["total"] * 100, 1) if s["total"] else 0,
+                "pnl": round(s["pnl"], 2), "staked": round(s["staked"], 2),
+            })
+
+    # Exotics (ordered)
+    ex_order = ["Quinella", "Exacta", "Trifecta", "First 4"]
     for k in ex_order:
-        if k in ex_map:
-            stats.append(ex_map[k])
-    for k, v in ex_map.items():
+        if k in ex_stats:
+            s = ex_stats[k]
+            meeting_stats.append({
+                "category": "Exotics", "type": k,
+                "won": s["hits"], "total": s["total"],
+                "rate": round(s["hits"] / s["total"] * 100, 1) if s["total"] else 0,
+                "pnl": round(s["pnl"], 2), "staked": round(s["staked"], 2),
+            })
+    for k, s in ex_stats.items():
         if k not in ex_order:
-            stats.append(v)
+            meeting_stats.append({
+                "category": "Exotics", "type": k,
+                "won": s["hits"], "total": s["total"],
+                "rate": round(s["hits"] / s["total"] * 100, 1) if s["total"] else 0,
+                "pnl": round(s["pnl"], 2), "staked": round(s["staked"], 2),
+            })
 
     # Sequences
-    sq_result = await db.execute(
-        select(
-            Pick.sequence_type, Pick.sequence_variant, func.count(Pick.id),
-            func.sum(sql_case((Pick.hit == True, 1), else_=0)),
-            func.sum(Pick.pnl), func.sum(Pick.exotic_stake),
-        ).where(and_(
-            Pick.meeting_id == meeting_id, Pick.settled == True,
-            Pick.pick_type == "sequence",
-        )).group_by(Pick.sequence_type, Pick.sequence_variant)
-    )
-    for st, sv, total, hits, pnl, staked in sq_result.all():
-        h, p, s = int(hits or 0), float(pnl or 0), float(staked or 0)
+    for (st, sv), s in seq_stats.items():
         label = (st or "Sequence").replace("_", " ").title()
         if sv:
             label += f" ({sv.title()})"
-        stats.append({
-            "category": "Sequences", "type": label, "won": h, "total": total,
-            "rate": round(h / total * 100, 1) if total else 0,
-            "pnl": round(p, 2), "staked": round(s, 2),
+        meeting_stats.append({
+            "category": "Sequences", "type": label,
+            "won": s["hits"], "total": s["total"],
+            "rate": round(s["hits"] / s["total"] * 100, 1) if s["total"] else 0,
+            "pnl": round(s["pnl"], 2), "staked": round(s["staked"], 2),
         })
 
     # Big3 Multi
-    b3_result = await db.execute(
-        select(
-            func.count(Pick.id),
-            func.sum(sql_case((Pick.hit == True, 1), else_=0)),
-            func.sum(Pick.pnl), func.sum(Pick.exotic_stake),
-        ).where(and_(
-            Pick.meeting_id == meeting_id, Pick.settled == True,
-            Pick.pick_type == "big3_multi",
-        ))
-    )
-    row = b3_result.one()
-    if row[0] and row[0] > 0:
-        h, p, s = int(row[1] or 0), float(row[2] or 0), float(row[3] or 0)
-        stats.append({
-            "category": "Multi", "type": "Big 3 Multi", "won": h, "total": row[0],
-            "rate": round(h / row[0] * 100, 1) if row[0] else 0,
-            "pnl": round(p, 2), "staked": round(s, 2),
+    if b3_stats["total"] > 0:
+        meeting_stats.append({
+            "category": "Multi", "type": "Big 3 Multi",
+            "won": b3_stats["hits"], "total": b3_stats["total"],
+            "rate": round(b3_stats["hits"] / b3_stats["total"] * 100, 1) if b3_stats["total"] else 0,
+            "pnl": round(b3_stats["pnl"], 2), "staked": round(b3_stats["staked"], 2),
         })
 
-    return stats
+    return {
+        "winners_map": winners_map,
+        "winning_exotics": winning_exotics,
+        "winning_sequences": winning_sequences,
+        "sequence_results": sequence_results,
+        "picks_lookup": picks_lookup,
+        "meeting_stats": meeting_stats,
+    }
 
 
 async def get_meeting_tips(meeting_id: str) -> dict | None:
@@ -868,89 +923,30 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not meeting:
             return None
 
-        # Get early mail (approved or sent)
-        early_mail_result = await db.execute(
+        # Get early mail + wrapup in one query (2 content rows max)
+        content_result = await db.execute(
             select(Content).where(
                 and_(
                     Content.meeting_id == meeting_id,
-                    Content.content_type == "early_mail",
+                    Content.content_type.in_(["early_mail", "meeting_wrapup"]),
                     Content.status.in_(["approved", "sent"]),
                 )
             ).order_by(Content.created_at.desc())
         )
-        early_mail = early_mail_result.scalars().first()
-
-        # Get wrap-up (approved or sent) — use .first() since meetings can have multiple wrapups
-        wrapup_result = await db.execute(
-            select(Content).where(
-                and_(
-                    Content.meeting_id == meeting_id,
-                    Content.content_type == "meeting_wrapup",
-                    Content.status.in_(["approved", "sent"]),
-                )
-            ).order_by(Content.created_at.desc())
-        )
-        wrapup = wrapup_result.scalars().first()
+        all_content = content_result.scalars().all()
+        early_mail = next((c for c in all_content if c.content_type == "early_mail"), None)
+        wrapup = next((c for c in all_content if c.content_type == "meeting_wrapup"), None)
 
         # If no sent content at all, return None
         if not early_mail and not wrapup:
             return None
 
-        # Get Punty's winning picks for win tick display
-        from punty.models.pick import Pick
-        import json as _json
-        winners_result = await db.execute(
-            select(Pick).where(
-                and_(
-                    Pick.meeting_id == meeting_id,
-                    Pick.settled == True,
-                    Pick.hit == True,
-                )
-            )
+        # Load ALL picks for this meeting in one query — compute everything in Python
+        picks_result = await db.execute(
+            select(Pick).where(Pick.meeting_id == meeting_id)
         )
-        winners_map = {}       # {race_number: [saddlecloth, ...]} for selections/big3
-        winning_exotics = {}   # {race_number: exotic_type} for hit exotics
-        winning_sequences = [] # [{type, variant, start_race}] for hit sequences
-        for pick in winners_result.scalars().all():
-            if pick.pick_type in ("selection", "big3") and pick.race_number and pick.saddlecloth:
-                winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
-            elif pick.pick_type == "exotic" and pick.race_number and pick.exotic_type:
-                winning_exotics[pick.race_number] = pick.exotic_type
-            elif pick.pick_type == "sequence" and pick.sequence_type:
-                winning_sequences.append({
-                    "type": pick.sequence_type,
-                    "variant": pick.sequence_variant,
-                })
-            elif pick.pick_type == "big3_multi":
-                winning_sequences.append({
-                    "type": "big3_multi",
-                    "variant": None,
-                })
-
-        # Get ALL settled sequence/multi picks for results display
-        seq_result = await db.execute(
-            select(Pick).where(
-                and_(
-                    Pick.meeting_id == meeting_id,
-                    Pick.settled == True,
-                    Pick.pick_type.in_(["sequence", "big3_multi"]),
-                )
-            )
-        )
-        sequence_results = []
-        for pick in seq_result.scalars().all():
-            seq_type = pick.sequence_type or pick.pick_type
-            label = (pick.sequence_type or "multi").replace("_", " ").title()
-            if pick.sequence_variant:
-                label += f" ({pick.sequence_variant.title()})"
-            sequence_results.append({
-                "type": seq_type,
-                "variant": pick.sequence_variant,
-                "label": label,
-                "hit": bool(pick.hit),
-                "pnl": float(pick.pnl) if pick.pnl is not None else 0.0,
-                "stake": float(pick.exotic_stake or pick.bet_stake or 0),
-            })
+        all_picks = picks_result.scalars().all()
+        pick_data = _compute_pick_data(all_picks)
 
         # Get live updates (celebrations + pace analysis)
         updates_result = await db.execute(
@@ -987,21 +983,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             for runner in runners_result.scalars().all():
                 runners_by_race.setdefault(runner.race_id, []).append(runner)
 
-        # Fetch all selection picks for form guide highlighting
-        all_sel_result = await db.execute(
-            select(Pick).where(and_(
-                Pick.meeting_id == meeting_id, Pick.pick_type == "selection",
-            ))
-        )
-        picks_lookup = {}
-        for pick in all_sel_result.scalars().all():
-            if pick.race_number and pick.saddlecloth:
-                picks_lookup.setdefault(pick.race_number, {})[pick.saddlecloth] = {
-                    "tip_rank": pick.tip_rank,
-                    "bet_type": pick.bet_type,
-                    "hit": pick.hit,
-                    "pnl": float(pick.pnl) if pick.pnl is not None else None,
-                }
+        picks_lookup = pick_data["picks_lookup"]
 
         # Build races data for template
         races_data = []
@@ -1033,30 +1015,31 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "runners": runners_data,
             })
 
-        # Meeting-specific bet stats
-        meeting_stats = await _get_meeting_pick_stats(db, meeting_id)
-
-        # Venue historical stats (Punty's track record here)
+        # Venue historical stats (Punty's track record here) — single query
         from sqlalchemy import case
         venue_stats = None
         if meeting.venue:
             venue_meetings = select(Meeting.id).where(
                 and_(Meeting.venue == meeting.venue, Meeting.id != meeting.id)
             )
-            venue_sel = await db.execute(
+            venue_result = await db.execute(
                 select(
                     func.count(Pick.id),
                     func.sum(case((Pick.hit == True, 1), else_=0)),
                     func.sum(Pick.pnl),
                     func.sum(Pick.bet_stake),
+                    func.count(func.distinct(Pick.meeting_id)),
                 ).where(and_(
                     Pick.settled == True,
                     Pick.pick_type == "selection",
                     Pick.meeting_id.in_(venue_meetings),
                 ))
             )
-            row = venue_sel.one()
-            total, hits, pnl, staked = int(row[0] or 0), int(row[1] or 0), float(row[2] or 0), float(row[3] or 0)
+            row = venue_result.one()
+            total, hits, pnl, staked, meetings_count = (
+                int(row[0] or 0), int(row[1] or 0), float(row[2] or 0),
+                float(row[3] or 0), int(row[4] or 0),
+            )
             if total >= 4:
                 venue_stats = {
                     "total": total,
@@ -1064,17 +1047,8 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                     "rate": round(hits / total * 100, 1) if total > 0 else 0,
                     "pnl": round(pnl, 2),
                     "staked": round(staked, 2),
-                    "meetings": 0,
+                    "meetings": meetings_count,
                 }
-                # Count distinct meetings
-                mc = await db.execute(
-                    select(func.count(func.distinct(Pick.meeting_id))).where(and_(
-                        Pick.settled == True,
-                        Pick.pick_type == "selection",
-                        Pick.meeting_id.in_(venue_meetings),
-                    ))
-                )
-                venue_stats["meetings"] = mc.scalar() or 0
 
         # Generate seed from meeting date for consistent rotation
         seed = hash(meeting.id) if meeting.id else 0
@@ -1099,14 +1073,14 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "content": format_html(wrapup.raw_content, "meeting_wrapup", seed + 1),
                 "created_at": wrapup.created_at.isoformat() if wrapup.created_at else None,
             } if wrapup else None,
-            "winners": winners_map,
-            "winning_exotics": winning_exotics,
-            "winning_sequences": winning_sequences,
-            "sequence_results": sequence_results,
+            "winners": pick_data["winners_map"],
+            "winning_exotics": pick_data["winning_exotics"],
+            "winning_sequences": pick_data["winning_sequences"],
+            "sequence_results": pick_data["sequence_results"],
             "live_updates": live_updates,
             "venue_stats": venue_stats,
             "races": races_data,
-            "meeting_stats": meeting_stats,
+            "meeting_stats": pick_data["meeting_stats"],
         }
 
 
@@ -1495,7 +1469,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
     meta_title = f"{venue} Racing Tips {date_str} | PuntyAI"
     meta_desc = f"AI racing tips and form guide for {venue} on {date_str}. Early mail analysis, selections, exotics, and live race updates."
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         "meeting_tips.html",
         {
             "request": request,
@@ -1514,6 +1488,8 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "meta_description": meta_desc,
         }
     )
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
 
 
 # ──────────────────────────────────────────────
