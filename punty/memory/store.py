@@ -311,7 +311,7 @@ class MemoryStore:
             parts.append("**Similar Past Situations:**")
             for mem in similar:
                 outcome = "✓" if mem.get("hit") else "✗"
-                pnl = mem.get("pnl", 0)
+                pnl = mem.get("pnl") or 0
                 pnl_str = f"+{pnl:.1f}U" if pnl > 0 else f"{pnl:.1f}U"
                 ctx = mem.get("context", {})
                 rnr = mem.get("runner", {})

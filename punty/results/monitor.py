@@ -36,6 +36,7 @@ class ResultsMonitor:
         self.processed_races: dict[str, set[int]] = {}  # {meeting_id: {race_nums}}
         self.wrapups_generated: set[str] = set()
         self.pace_updates_posted: dict[str, int] = {}  # {meeting_id: count}
+        self.weather_alerts_posted: dict[str, int] = {}  # {meeting_id: count}
         self.alerted_changes: dict[str, set[str]] = {}  # {meeting_id: set of dedup keys}
         self.last_change_check: dict[str, datetime] = {}  # rate limit per meeting
         self.last_jockey_check: dict[str, datetime] = {}  # Playwright rate limit
@@ -190,6 +191,7 @@ class ResultsMonitor:
                 self.processed_races.clear()
                 self.wrapups_generated.clear()
                 self.pace_updates_posted.clear()
+                self.weather_alerts_posted.clear()
                 self.alerted_changes.clear()
                 self.last_change_check.clear()
                 self.last_jockey_check.clear()
@@ -702,7 +704,6 @@ class ResultsMonitor:
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
-        from punty.delivery.facebook import FacebookDelivery
         from punty.results.celebrations import compose_celebration_tweet
 
         result = await db.execute(
@@ -754,17 +755,8 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.warning(f"Failed to post celebration reply: {e}")
 
-            # Post to Facebook as standalone post
-            # (commenting requires pages_manage_engagement — App Review pending)
+            # Facebook live updates disabled (standalone posts not useful without commenting)
             fb_post_id = None
-            facebook = FacebookDelivery(db)
-            if await facebook.is_configured():
-                try:
-                    fb_result = await facebook.post_update(tweet_text)
-                    fb_post_id = fb_result.get("post_id")
-                    logger.info(f"Posted celebration to Facebook for {pick.horse_name}")
-                except Exception as e:
-                    logger.warning(f"Failed to post celebration to Facebook: {e}")
 
             # Save to DB regardless of post success
             update = LiveUpdate(
@@ -789,7 +781,6 @@ class ResultsMonitor:
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
-        from punty.delivery.facebook import FacebookDelivery
         from punty.results.celebrations import compose_clean_sweep_tweet
 
         # Get all selections for this race
@@ -858,17 +849,8 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"Failed to post clean sweep to Twitter: {e}")
 
-        # Post to Facebook as standalone post
-        # (commenting requires pages_manage_engagement — App Review pending)
+        # Facebook live updates disabled (standalone posts not useful without commenting)
         fb_post_id = None
-        facebook = FacebookDelivery(db)
-        if await facebook.is_configured():
-            try:
-                fb_result = await facebook.post_update(tweet_text)
-                fb_post_id = fb_result.get("post_id")
-                logger.info(f"Posted clean sweep to Facebook")
-            except Exception as e:
-                logger.warning(f"Failed to post clean sweep to Facebook: {e}")
 
         update = LiveUpdate(
             meeting_id=meeting.id,
@@ -890,7 +872,6 @@ class ResultsMonitor:
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
-        from punty.delivery.facebook import FacebookDelivery
 
         meeting_id = meeting.id
 
@@ -963,15 +944,8 @@ class ResultsMonitor:
 
         # Post to Facebook as standalone post
         # (commenting requires pages_manage_engagement — App Review pending)
+        # Facebook live updates disabled (standalone posts not useful without commenting)
         fb_post_id = None
-        facebook = FacebookDelivery(db)
-        if await facebook.is_configured():
-            try:
-                fb_result = await facebook.post_update(tweet_text)
-                fb_post_id = fb_result.get("post_id")
-                logger.info(f"Posted pace analysis to Facebook")
-            except Exception as e:
-                logger.warning(f"Failed to post pace analysis to Facebook: {e}")
 
         # Save to DB regardless of post success
         update = LiveUpdate(
@@ -1264,43 +1238,36 @@ class ResultsMonitor:
 
         changes = []
 
-        # Check wind shift
-        new_wind = weather.get("wind_speed")
-        old_wind = meeting.weather_wind_speed
-        new_dir = weather.get("wind_direction")
-        old_dir = meeting.weather_wind_dir
-        if new_wind is not None and old_wind is not None:
-            wind_diff = abs(new_wind - old_wind)
-            if wind_diff >= 10:
-                changes.append(f"Wind shifted to {new_wind}km/h {new_dir or ''} (was {old_wind}km/h {old_dir or ''})")
-            elif new_dir and old_dir and new_dir != old_dir and new_wind >= 15:
-                changes.append(f"Wind direction changed: {old_dir} → {new_dir} at {new_wind}km/h")
-
-        # Check temp change
-        new_temp = weather.get("temp")
-        old_temp = meeting.weather_temp
-        if new_temp is not None and old_temp is not None:
-            temp_diff = abs(new_temp - old_temp)
-            if temp_diff >= 3:
-                changes.append(f"Temperature {'up' if new_temp > old_temp else 'down'} to {new_temp}°C (was {old_temp}°C)")
-
-        # Check humidity change (significant for track conditions)
-        new_humidity = weather.get("humidity")
-        old_humidity = getattr(meeting, "weather_humidity", None)
-        if new_humidity is not None and old_humidity is not None:
-            humidity_diff = abs(new_humidity - old_humidity)
-            if humidity_diff >= 15:
-                changes.append(f"Humidity {'up' if new_humidity > old_humidity else 'down'} to {new_humidity}% (was {old_humidity}%)")
-
-        # Check rain starting
+        # Alert for track-impacting weather: rain, significant wind, storms
         obs = weather.get("observation", {})
         if obs:
+            # Rain alerts
             rain_since_9am = obs.get("rain_since_9am")
             if rain_since_9am and rain_since_9am > 0:
                 old_rainfall = meeting.rainfall
                 was_dry = not old_rainfall or "0%" in str(old_rainfall) or old_rainfall == 0
                 if was_dry:
                     changes.append(f"Rain recorded: {rain_since_9am}mm since 9am")
+                elif rain_since_9am >= 5:
+                    changes.append(f"Heavy rain: {rain_since_9am}mm since 9am")
+
+            # Significant wind change (gusts ≥40 km/h or sustained ≥30 km/h)
+            gust = obs.get("wind_gust") or weather.get("wind_gust")
+            wind_speed = weather.get("wind_speed") or obs.get("wind_speed")
+            if gust and gust >= 40:
+                changes.append(f"Strong wind gusts: {gust} km/h")
+            elif wind_speed and wind_speed >= 30:
+                changes.append(f"Strong winds: {wind_speed} km/h sustained")
+
+            # Storm detection (heavy rain + strong wind = storm conditions)
+            if rain_since_9am and rain_since_9am >= 3 and gust and gust >= 35:
+                changes.append("Storm conditions detected")
+
+        # Cap at 2 weather alerts per meeting
+        if meeting_id not in self.weather_alerts_posted:
+            self.weather_alerts_posted[meeting_id] = 0
+        if self.weather_alerts_posted[meeting_id] >= 2:
+            changes = []
 
         if not changes:
             # Still update weather fields silently
@@ -1309,15 +1276,8 @@ class ResultsMonitor:
             return
 
         # Build alert message
-        wind_analysis = analyse_wind_impact(
-            meeting.venue,
-            new_wind or 0,
-            new_dir or "",
-        )
         parts = [f"Weather update at {meeting.venue}:"]
         parts.extend(changes)
-        if wind_analysis and wind_analysis["strength"] != "negligible":
-            parts.append(wind_analysis["description"])
         message = "\n".join(parts)
 
         # Update meeting fields
@@ -1337,6 +1297,7 @@ class ResultsMonitor:
         if dedup_key not in self.alerted_changes[meeting_id]:
             self.alerted_changes[meeting_id].add(dedup_key)
             await self._post_change_alert(db, meeting, alert)
+            self.weather_alerts_posted[meeting_id] = self.weather_alerts_posted.get(meeting_id, 0) + 1
             logger.info(f"Weather alert posted for {meeting.venue}: {'; '.join(changes)}")
 
     @staticmethod
@@ -1356,11 +1317,10 @@ class ResultsMonitor:
             meeting.rainfall = f"{weather['rainfall_chance']}% chance, {weather['rainfall_amount']}mm"
 
     async def _post_change_alert(self, db: AsyncSession, meeting, alert):
-        """Post a change detection alert to Twitter and Facebook."""
+        """Post a change detection alert to Twitter."""
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
-        from punty.delivery.facebook import FacebookDelivery
 
         # Find the meeting's early mail for reply threading
         em_result = await db.execute(
@@ -1397,14 +1357,8 @@ class ResultsMonitor:
         # (commenting requires pages_manage_engagement — App Review pending)
         fb_post_id = None
         if early_mail.facebook_id:
-            facebook = FacebookDelivery(db)
-            if await facebook.is_configured():
-                try:
-                    fb_result = await facebook.post_update(tweet_text)
-                    fb_post_id = fb_result.get("post_id")
-                    logger.info(f"Posted {alert.change_type} to Facebook")
-                except Exception as e:
-                    logger.warning(f"Failed to post {alert.change_type} to Facebook: {e}")
+            # Facebook live updates disabled (standalone posts not useful without commenting)
+            pass
 
         # Save to LiveUpdate
         update_type_map = {
