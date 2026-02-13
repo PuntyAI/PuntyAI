@@ -711,19 +711,19 @@ def _generate_directives(
             "Consider switching to Place or Each Way instead"
         )
 
-    # Tip rank insights
+    # Tip rank insights (need >= 30 bets for reliable signal)
     if ranks:
         top = next((r for r in ranks if r["rank"] == 1), None)
         roughie = next((r for r in ranks if r["rank"] == 4), None)
-        if top and top["roi"] < 0:
+        if top and top["bets"] >= 30 and top["roi"] < 0:
             directives.append(
                 f"YOUR TOP PICKS return {top['roi']:+.1f}% ROI — be more selective with #1 confidence calls"
             )
-        if roughie and roughie["roi"] > 0:
+        if roughie and roughie["bets"] >= 30 and roughie["roi"] > 0:
             directives.append(
                 f"ROUGHIES are profitable at {roughie['roi']:+.1f}% ROI — keep hunting value at big odds"
             )
-        elif roughie and roughie["strike_rate"] < 5:
+        elif roughie and roughie["bets"] >= 30 and roughie["strike_rate"] < 5:
             directives.append(
                 f"ROUGHIES hitting only {roughie['strike_rate']}% — consider 'Exotics only' more often"
             )
@@ -731,7 +731,7 @@ def _generate_directives(
     # Place vs Win comparison
     win_s = next((s for s in overall if s["sub_type"] == "Win"), None)
     place_s = next((s for s in overall if s["sub_type"] == "Place"), None)
-    if win_s and place_s and place_s["roi"] > win_s["roi"] + 10:
+    if win_s and place_s and win_s["bets"] >= 30 and place_s["bets"] >= 30 and place_s["roi"] > win_s["roi"] + 10:
         directives.append(
             f"PLACE outperforming WIN ({place_s['roi']:+.1f}% vs {win_s['roi']:+.1f}% ROI) — "
             "use Place as your default for close races"
@@ -739,7 +739,7 @@ def _generate_directives(
 
     # Each Way
     ew_s = next((s for s in overall if s["sub_type"] == "Each Way"), None)
-    if ew_s:
+    if ew_s and ew_s["bets"] >= 30:
         if ew_s["roi"] > 0:
             directives.append(f"EACH WAY working at {ew_s['roi']:+.1f}% ROI — keep using on $6-$15 value plays")
         elif ew_s["roi"] < -20:
@@ -749,7 +749,7 @@ def _generate_directives(
     exotic_items = [s for s in overall if s["category"] == "exotic"]
     if exotic_items:
         # Find best and worst exotic types
-        profitable_exotics = [s for s in exotic_items if s["roi"] > 0]
+        profitable_exotics = [s for s in exotic_items if s["roi"] > 0 and s["bets"] >= 30]
         losing_exotics = [s for s in exotic_items if s["roi"] < -20 and s["bets"] >= 30]
         if profitable_exotics:
             best = max(profitable_exotics, key=lambda x: x["roi"])

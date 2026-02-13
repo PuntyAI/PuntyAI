@@ -207,7 +207,7 @@ class TestGenerateDirectives:
     def test_exotic_winner_directive(self):
         """Profitable exotic type should generate EXOTIC WINNER directive."""
         overall = [
-            _make_stat("exotic", "Trifecta Box", 20, 5, 400.0, 80.0, 0, 120.0),  # +20% ROI
+            _make_stat("exotic", "Trifecta Box", 30, 5, 600.0, 120.0, 0, 180.0),  # +20% ROI
         ]
         directives = _generate_directives(overall, [], [])
         assert any("EXOTIC WINNER" in d and "Trifecta Box" in d for d in directives)

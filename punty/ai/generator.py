@@ -25,6 +25,9 @@ MAX_TIMEOUT_RETRIES = 1  # 1 retry for timeouts (2 total attempts)
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 
+REQUIRED_PROMPTS = {"early_mail", "personality", "wrap_up", "weekly_blog", "results"}
+
+
 def load_prompt(name: str) -> str:
     """Load prompt template from file (or DB cache for personality)."""
     if name == "personality":
@@ -34,6 +37,8 @@ def load_prompt(name: str) -> str:
     prompt_file = PROMPTS_DIR / f"{name}.md"
     if prompt_file.exists():
         return prompt_file.read_text(encoding="utf-8")
+    if name in REQUIRED_PROMPTS:
+        logger.error(f"Required prompt template missing: {prompt_file}")
     return ""
 
 
@@ -281,6 +286,8 @@ class ContentGenerator:
             instruction=initialise_prompt + f"\n\nInitialise meeting for {context['meeting']['venue']} on {context['meeting']['date']}",
             temperature=0.7,
         )
+        if not raw_content or not raw_content.strip():
+            raise Exception("AI generation failed - no content returned")
         await self._log_token_usage("initialise", meeting_id)
 
         result = {
@@ -463,6 +470,8 @@ class ContentGenerator:
             instruction=preview_prompt + f"\n\nGenerate preview for Race {race_number}",
             temperature=0.8,
         )
+        if not raw_content or not raw_content.strip():
+            raise Exception("AI generation failed - no content returned")
         await self._log_token_usage("race_preview", meeting_id)
 
         result = {
@@ -678,6 +687,8 @@ class ContentGenerator:
             instruction=wrapup_prompt + f"\n\nGenerate meeting wrap-up for {context['meeting']['venue']} on {context['meeting']['date']}",
             temperature=0.8,
         )
+        if not raw_content or not raw_content.strip():
+            raise Exception("AI generation failed - no content returned")
         await self._log_token_usage("wrapup_direct", meeting_id)
 
         result = {
@@ -720,6 +731,8 @@ class ContentGenerator:
             instruction=update_prompt,
             temperature=0.7,
         )
+        if not raw_content or not raw_content.strip():
+            raise Exception("AI generation failed - no content returned")
         await self._log_token_usage("update_alert", meeting_id)
 
         result = {
