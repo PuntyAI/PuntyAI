@@ -561,6 +561,33 @@
             </div>
         </div>
 
+        <!-- Database Cleanup -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-punty-border">
+                <h2 class="text-lg font-semibold text-gray-900">Database Clean Up</h2>
+                <p class="text-sm text-gray-500">Remove stale data to keep the database lean</p>
+            </div>
+            <div class="p-6 space-y-3">
+                <div class="text-sm text-gray-600 space-y-1">
+                    <p>This will permanently delete:</p>
+                    <ul class="list-disc list-inside ml-2 text-gray-500">
+                        <li>Superseded content (replaced by newer versions)</li>
+                        <li>Rejected content</li>
+                        <li>Old drafts (7+ days)</li>
+                        <li>Old context snapshots (14+ days)</li>
+                        <li>Old audit logs (90+ days)</li>
+                    </ul>
+                </div>
+                <div class="flex items-center gap-3 pt-2">
+                    <button onclick="cleanupDatabase()"
+                            class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-500 text-sm font-medium">
+                        Clean Up
+                    </button>
+                    <span id="cleanup-status" class="text-sm text-gray-500"></span>
+                </div>
+            </div>
+        </div>
+
         <!-- Punty Personality -->
         <div class="bg-white rounded-lg shadow lg:col-span-2">
             <div class="px-6 py-4 border-b border-punty-border">
@@ -1038,6 +1065,40 @@ async function resetPersonality() {
         showToast('Personality reloaded from file', 'success');
     } catch (e) {
         showToast('Reset failed: ' + e.message, 'error');
+    }
+}
+
+async function cleanupDatabase() {
+    if (!confirm('Delete all superseded, rejected, and stale content? This cannot be undone.')) return;
+
+    const statusEl = document.getElementById('cleanup-status');
+    statusEl.textContent = 'Cleaning up...';
+    statusEl.style.color = '#d97706';
+
+    try {
+        const resp = await fetch('/api/settings/cleanup', { method: 'POST' });
+        const data = await resp.json();
+
+        if (resp.ok) {
+            const parts = [];
+            const b = data.breakdown;
+            if (b.superseded_content) parts.push(`${b.superseded_content} superseded`);
+            if (b.rejected_content) parts.push(`${b.rejected_content} rejected`);
+            if (b.old_drafts) parts.push(`${b.old_drafts} old drafts`);
+            if (b.old_snapshots) parts.push(`${b.old_snapshots} snapshots`);
+            if (b.old_audit_logs) parts.push(`${b.old_audit_logs} audit logs`);
+            statusEl.textContent = parts.length ? `Deleted: ${parts.join(', ')}` : 'Nothing to clean up';
+            statusEl.style.color = '#059669';
+            showToast(`Cleaned up ${data.total} records`, 'success');
+        } else {
+            statusEl.textContent = data.detail || 'Cleanup failed';
+            statusEl.style.color = '#dc2626';
+            showToast('Cleanup failed', 'error');
+        }
+    } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+        statusEl.style.color = '#dc2626';
+        showToast('Cleanup failed', 'error');
     }
 }
 </script>

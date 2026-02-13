@@ -4,7 +4,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, delete, func
 
 from punty.config import melb_now_naive
 from punty.models.database import get_db
@@ -697,4 +697,62 @@ async def get_learnings_stats(db: AsyncSession = Depends(get_db)):
         "any_pick_hit_rate": round(any_hits / total * 100, 1) if total > 0 else 0,
         "avg_pnl": round(avg_pnl, 2),
         "total_pnl": round(total_pnl, 2),
+    }
+
+
+@router.post("/cleanup")
+async def cleanup_database(request: Request, db: AsyncSession = Depends(get_db)):
+    """Delete superseded/rejected content and other accumulated stale data."""
+    from punty.models.content import Content, ContextSnapshot
+    from punty.models.live_update import LiveUpdate
+    from punty.models.settings import SettingsAudit
+    from datetime import timedelta
+
+    user_email = _get_user_email(request)
+    deleted = {}
+    now = melb_now_naive()
+
+    # 1. Superseded content
+    result = await db.execute(delete(Content).where(Content.status == "superseded"))
+    deleted["superseded_content"] = result.rowcount
+
+    # 2. Rejected content
+    result = await db.execute(delete(Content).where(Content.status == "rejected"))
+    deleted["rejected_content"] = result.rowcount
+
+    # 3. Draft content older than 7 days
+    cutoff = now - timedelta(days=7)
+    result = await db.execute(
+        delete(Content).where(Content.status == "draft", Content.created_at < cutoff)
+    )
+    deleted["old_drafts"] = result.rowcount
+
+    # 4. Context snapshots older than 14 days (keep recent for change detection)
+    snap_cutoff = now - timedelta(days=14)
+    result = await db.execute(
+        delete(ContextSnapshot).where(ContextSnapshot.created_at < snap_cutoff)
+    )
+    deleted["old_snapshots"] = result.rowcount
+
+    # 5. Audit log entries older than 90 days
+    audit_cutoff = now - timedelta(days=90)
+    result = await db.execute(
+        delete(SettingsAudit).where(SettingsAudit.changed_at < audit_cutoff)
+    )
+    deleted["old_audit_logs"] = result.rowcount
+
+    total = sum(deleted.values())
+
+    await _record_audit(
+        db, "database_cleanup",
+        None, str(deleted),
+        user_email, action="cleanup",
+    )
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Cleaned up {total} records",
+        "total": total,
+        "breakdown": deleted,
     }
