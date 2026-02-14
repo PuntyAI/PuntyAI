@@ -606,6 +606,117 @@ async def get_tuning_history(
     return history
 
 
+async def analyze_context_performance(
+    db: AsyncSession, lookback_days: int = 60,
+) -> dict:
+    """Analyze model performance by racing context (venue type / distance / class).
+
+    Groups settled picks by context and computes per-context Brier score,
+    strike rate, and ROI. This reveals where context multipliers are helping
+    or hurting and which contexts need better profiles.
+
+    Returns {
+        "by_venue_type": [...],
+        "by_distance": [...],
+        "by_class": [...],
+        "context_impact": {"with": brier, "without_estimate": brier, "delta": ...},
+    }
+    """
+    cutoff = melb_now_naive() - timedelta(days=lookback_days)
+
+    result = await db.execute(
+        select(
+            Pick.win_probability, Pick.hit, Pick.pnl, Pick.bet_stake,
+            Pick.value_rating, Pick.factors_json,
+            Race.distance, Race.class_,
+            Meeting.venue, Meeting.track_condition,
+        )
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .outerjoin(
+            Race,
+            and_(Race.meeting_id == Pick.meeting_id, Race.race_number == Pick.race_number),
+        )
+        .where(
+            Pick.pick_type == "selection",
+            Pick.settled == True,
+            Pick.win_probability.isnot(None),
+            Pick.created_at >= cutoff,
+        )
+    )
+    rows = result.all()
+
+    if not rows:
+        return {}
+
+    from punty.probability import (
+        _get_dist_bucket, _context_class_bucket, _context_venue_type,
+        _get_state_for_venue,
+    )
+
+    # Group by various dimensions
+    venue_groups = {}
+    dist_groups = {}
+    class_groups = {}
+
+    for wp, hit, pnl, stake, vr, factors_json, distance, race_class, venue, condition in rows:
+        outcome = 1.0 if hit else 0.0
+        brier_val = (wp - outcome) ** 2
+
+        # Market Brier for comparison
+        market_prob = (wp / vr) if vr and vr > 0 else wp
+        market_brier = (market_prob - outcome) ** 2
+
+        entry = {
+            "brier": brier_val,
+            "market_brier": market_brier,
+            "hit": bool(hit),
+            "pnl": pnl or 0,
+            "stake": stake or 0,
+        }
+
+        # Venue type grouping
+        state = _get_state_for_venue(venue or "")
+        vtype = _context_venue_type(venue or "", state)
+        venue_groups.setdefault(vtype, []).append(entry)
+
+        # Distance grouping
+        dbucket = _get_dist_bucket(distance or 1400)
+        dist_groups.setdefault(dbucket, []).append(entry)
+
+        # Class grouping
+        cbucket = _context_class_bucket(race_class or "")
+        class_groups.setdefault(cbucket, []).append(entry)
+
+    def _summarize(groups: dict) -> list:
+        summary = []
+        for key, entries in sorted(groups.items(), key=lambda x: -len(x[1])):
+            if len(entries) < 5:
+                continue
+            n = len(entries)
+            brier = sum(e["brier"] for e in entries) / n
+            market_b = sum(e["market_brier"] for e in entries) / n
+            wins = sum(1 for e in entries if e["hit"])
+            total_pnl = sum(e["pnl"] for e in entries)
+            total_staked = sum(e["stake"] for e in entries)
+            summary.append({
+                "context": key,
+                "picks": n,
+                "brier": round(brier, 4),
+                "market_brier": round(market_b, 4),
+                "beats_market": brier < market_b,
+                "hit_rate": round(wins / n, 4),
+                "total_pnl": round(total_pnl, 2),
+                "roi": round(total_pnl / total_staked * 100, 1) if total_staked else 0,
+            })
+        return summary
+
+    return {
+        "by_venue_type": _summarize(venue_groups),
+        "by_distance": _summarize(dist_groups),
+        "by_class": _summarize(class_groups),
+    }
+
+
 async def get_dashboard_data(db: AsyncSession) -> dict:
     """Aggregate all dashboard data in one call."""
     # Try 60-day window first; fall back to all-time if empty
@@ -619,6 +730,7 @@ async def get_dashboard_data(db: AsyncSession) -> dict:
     factor_perf = await analyze_factor_performance(db, lookback_days=lookback)
     brier = await calculate_brier_score(db, lookback_days=lookback)
     categories = await calculate_category_breakdown(db, lookback_days=lookback)
+    context_perf = await analyze_context_performance(db, lookback_days=lookback)
     weight_history = await get_tuning_history(db, limit=20)
     current_weights = await _get_current_weights(db)
 
@@ -672,6 +784,7 @@ async def get_dashboard_data(db: AsyncSession) -> dict:
         "factor_table": factor_table,
         "brier": brier,
         "categories": categories,
+        "context_performance": context_perf,
         "current_weights": weights_pct,
         "weight_history": weight_history,
         "summary": {
