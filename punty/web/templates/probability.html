@@ -311,6 +311,17 @@
             </div>
         </div>
 
+        <!-- Bet Type Selector -->
+        <div class="flex gap-2 mb-3">
+            <template x-for="bt in ['win', 'place', 'top4']">
+                <button @click="betType = bt; updateProfile()"
+                        :class="betType === bt ? 'bg-cyan-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                        class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                        x-text="({'win':'Win','place':'Place','top4':'Top 4 (Exotic)'})[bt]">
+                </button>
+            </template>
+        </div>
+
         <!-- Active Profile Key -->
         <div class="mb-3 flex items-center gap-2 flex-wrap">
             <span class="text-xs text-gray-400">Active:</span>
@@ -348,7 +359,12 @@
                 {% for ins in ctx_insights %}
                 <div class="flex items-center justify-between text-xs p-2 rounded bg-gray-50">
                     <span class="font-mono text-gray-500 truncate">{{ ins.key.replace('|', ' / ') }}</span>
-                    <span class="font-medium ml-2 whitespace-nowrap {{ 'text-green-600' if ins.mult > 1 else 'text-red-500' }}">{{ fl.get(ins.factor, ins.factor) }} {{ '%.2f'|format(ins.mult) }}x</span>
+                    <span class="ml-2 whitespace-nowrap flex items-center gap-1">
+                        {% if ins.bet_type and ins.bet_type != 'win' %}
+                        <span class="px-1 py-0.5 rounded text-[10px] font-medium {% if ins.bet_type == 'place' %}bg-blue-100 text-blue-600{% else %}bg-purple-100 text-purple-600{% endif %}">{{ ins.bet_type|upper }}</span>
+                        {% endif %}
+                        <span class="font-medium {{ 'text-green-600' if ins.mult > 1 else 'text-red-500' }}">{{ fl.get(ins.factor, ins.factor) }} {{ '%.2f'|format(ins.mult) }}x</span>
+                    </span>
                 </div>
                 {% endfor %}
             </div>
@@ -814,11 +830,17 @@ function contextExplorer() {
     });
 
     return {
-        venue: '', distance: '', raceClass: '',
+        venue: '', distance: '', raceClass: '', betType: 'win',
         activeProfile: null, activeKey: '', activeN: 0,
         fallbackUsed: false, fallbackKey: '',
         getMult: function(factor) {
             if (!this.activeProfile) return undefined;
+            // New nested structure: profile.win, profile.place, profile.top4
+            var sub = this.activeProfile[this.betType];
+            if (sub && typeof sub === 'object') {
+                return sub[factor];
+            }
+            // Legacy flat structure
             return this.activeProfile[factor];
         },
         updateProfile: function() {

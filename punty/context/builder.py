@@ -570,11 +570,13 @@ class ContextBuilder:
 
             # Get context multipliers for this race (for AI prompt)
             context_mults = {}
+            context_mults_place = {}
             try:
                 from punty.probability import _get_context_multipliers
                 meeting_obj = race.meeting if hasattr(race, "meeting") else None
                 if meeting_obj:
-                    context_mults = _get_context_multipliers(race, meeting_obj)
+                    context_mults = _get_context_multipliers(race, meeting_obj, "win")
+                    context_mults_place = _get_context_multipliers(race, meeting_obj, "place")
             except Exception:
                 pass
 
@@ -587,6 +589,7 @@ class ContextBuilder:
                 "value_plays": value_plays,
                 "exotic_combinations": exotic_combos,
                 "context_multipliers": context_mults,
+                "context_multipliers_place": context_mults_place,
             }
         except Exception as e:
             logger.warning(f"Probability calculation failed: {e}")

@@ -499,27 +499,37 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
                 if row[0]
             }
 
-            # Also match fallback profiles for today's venue types
-            # (e.g., metro_vic|sprint|open when a metro VIC venue races)
-            for key, p in ctx.get("profiles", {}).items():
-                parts = key.split("|")
-                venue_part = parts[0] if parts else ""
-                # Only include if venue is racing today
-                if venue_part not in today_venues:
-                    continue
-                for f, mult in p.items():
-                    if f == "_n" or not isinstance(mult, (int, float)):
-                        continue
-                    if abs(mult - 1.0) > 0.3:
-                        ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0)})
+            # Extract insights from profiles, handling nested bet-type structure
+            def _extract_insights(source, threshold, venue_filter=True):
+                for key, p in source.items():
+                    if venue_filter:
+                        parts = key.split("|")
+                        venue_part = parts[0] if parts else ""
+                        if venue_part not in today_venues:
+                            continue
+                    # Check for nested bet-type structure (win/place/top4 sub-dicts)
+                    outcome_types = ["win", "place", "top4"]
+                    has_nested = any(ot in p and isinstance(p[ot], dict) for ot in outcome_types)
+                    if has_nested:
+                        for ot in outcome_types:
+                            sub = p.get(ot, {})
+                            if not isinstance(sub, dict):
+                                continue
+                            for f, mult in sub.items():
+                                if not isinstance(mult, (int, float)):
+                                    continue
+                                if abs(mult - 1.0) > threshold:
+                                    ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0), "bet_type": ot})
+                    else:
+                        # Legacy flat structure
+                        for f, mult in p.items():
+                            if f == "_n" or not isinstance(mult, (int, float)):
+                                continue
+                            if abs(mult - 1.0) > threshold:
+                                ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0), "bet_type": "win"})
 
-            # Also include matching fallback profiles
-            for key, p in ctx.get("fallbacks", {}).items():
-                for f, mult in p.items():
-                    if f == "_n" or not isinstance(mult, (int, float)):
-                        continue
-                    if abs(mult - 1.0) > 0.5:
-                        ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0)})
+            _extract_insights(ctx.get("profiles", {}), 0.3, venue_filter=True)
+            _extract_insights(ctx.get("fallbacks", {}), 0.5, venue_filter=False)
 
             ctx_insights.sort(key=lambda x: -x["dist"])
             ctx_insights = ctx_insights[:10]

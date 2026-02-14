@@ -109,7 +109,7 @@ def _track_key(venue: str) -> str:
     return v.replace(" ", "_").replace("'", "")
 
 
-def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
+def _get_context_multipliers(race: Any, meeting: Any, outcome_type: str = "win") -> dict[str, float]:
     """Get factor multipliers for the current race context.
 
     Uses hierarchical fallback (per-track first, then venue-type):
@@ -119,6 +119,10 @@ def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
     4. venue_type|distance       (e.g. metro_vic|sprint)
     5. distance|class            (e.g. sprint|open)
     6. Default: empty (no adjustment)
+
+    Args:
+        outcome_type: "win", "place", or "top4" — selects which outcome's
+            multipliers to use from the nested profile structure.
     """
     data = _load_context_profiles()
     if not data:
@@ -149,7 +153,14 @@ def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
 
     for source, key in lookup_order:
         if key in source:
-            return {k: v for k, v in source[key].items() if k != "_n"}
+            profile = source[key]
+            # New nested structure: profile["win"], profile["place"], etc.
+            if outcome_type in profile and isinstance(profile[outcome_type], dict):
+                return dict(profile[outcome_type])
+            # Legacy flat structure (backward compat)
+            if "market" in profile:
+                return {k: v for k, v in profile.items() if k != "_n"}
+            return {}
 
     return {}
 

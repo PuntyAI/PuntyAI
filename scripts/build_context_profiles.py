@@ -35,6 +35,13 @@ MIN_SAMPLE = 50   # 50 runners minimum per context for quintile analysis
 MULT_MIN = 0.5    # raised from 0.3 to prevent near-elimination of factors
 MULT_MAX = 2.5
 
+# Outcome functions for per-bet-type profiles
+OUTCOME_FNS = {
+    "win": lambda e: e["position"] == 1,
+    "place": lambda e: e["position"] <= 3,
+    "top4": lambda e: e["position"] <= 4,
+}
+
 MONTH_DIRS = {
     1: "January", 2: "February", 3: "March", 4: "April",
     5: "May", 6: "June", 7: "July", 8: "August",
@@ -362,6 +369,7 @@ def build_profiles(data_dirs: list[Path], min_sample: int = MIN_SAMPLE) -> dict:
                             "ctx_dist_class": ctx_dist_class,
                             "signals": sigs,
                             "won": won,
+                            "position": pos,
                         })
 
             print(f"  {year_label}/{month_name}: {total_runners:,} runners loaded")
@@ -377,24 +385,27 @@ def build_profiles(data_dirs: list[Path], min_sample: int = MIN_SAMPLE) -> dict:
     for track, count in sorted(track_runner_counts.items(), key=lambda x: -x[1])[:20]:
         print(f"  {track:25s}: {count:,} runners")
 
-    # ── Compute overall signal spreads ────────────────────────────────────────
+    # ── Compute overall signal spreads per outcome type ─────────────────────
 
-    print("\nComputing overall signal spreads...")
+    print("\nComputing overall signal spreads per outcome type...")
 
     factor_names = ["market", "form", "class_fitness", "pace", "barrier",
                     "jockey_trainer", "weight_carried", "horse_profile", "movement"]
 
-    overall_spreads = {}
-    for factor in factor_names:
-        vals = [(e["signals"][factor], e["won"])
-                for e in all_entries
-                if e["signals"].get(factor) is not None]
-        spread = _quintile_spread(vals, min_sample=min_sample)
-        overall_spreads[factor] = spread
-        if spread is not None:
-            print(f"  {factor:20s}: {spread*100:+6.1f}% spread ({len(vals):,} runners)")
-        else:
-            print(f"  {factor:20s}: insufficient data ({len(vals):,} runners)")
+    overall_spreads = {}  # {outcome_name: {factor: spread}}
+    for outcome_name, outcome_fn in OUTCOME_FNS.items():
+        overall_spreads[outcome_name] = {}
+        print(f"\n  [{outcome_name}]")
+        for factor in factor_names:
+            vals = [(e["signals"][factor], outcome_fn(e))
+                    for e in all_entries
+                    if e["signals"].get(factor) is not None]
+            spread = _quintile_spread(vals, min_sample=min_sample)
+            overall_spreads[outcome_name][factor] = spread
+            if spread is not None:
+                print(f"    {factor:20s}: {spread*100:+6.1f}% spread ({len(vals):,} runners)")
+            else:
+                print(f"    {factor:20s}: insufficient data ({len(vals):,} runners)")
 
     # ── Compute per-context spreads ───────────────────────────────────────────
 
@@ -409,62 +420,71 @@ def build_profiles(data_dirs: list[Path], min_sample: int = MIN_SAMPLE) -> dict:
     profiles = {}
     fallbacks = {}
 
-    def _compute_mults(ctx_entries, min_n=MIN_SAMPLE):
+    def _compute_mults(ctx_entries, outcome_name, outcome_fn, min_n=MIN_SAMPLE):
         if len(ctx_entries) < min_n:
             return {}
         mults = {}
+        os_for_outcome = overall_spreads.get(outcome_name, {})
         for factor in factor_names:
-            vals = [(e["signals"][factor], e["won"])
+            vals = [(e["signals"][factor], outcome_fn(e))
                     for e in ctx_entries
                     if e["signals"].get(factor) is not None]
             ctx_spread = _quintile_spread(vals, min_sample=min_n)
-            overall = overall_spreads.get(factor)
+            overall = os_for_outcome.get(factor)
             if ctx_spread is not None and overall and abs(overall) > 0.005:
                 mult = ctx_spread / overall
                 mults[factor] = round(max(MULT_MIN, min(MULT_MAX, mult)), 3)
         return mults
 
+    def _build_multi_outcome_profile(ctx_entries):
+        """Build a profile with sub-keys for each outcome type."""
+        if len(ctx_entries) < MIN_SAMPLE:
+            return None
+        profile = {"_n": len(ctx_entries)}
+        has_data = False
+        for outcome_name, outcome_fn in OUTCOME_FNS.items():
+            mults = _compute_mults(ctx_entries, outcome_name, outcome_fn)
+            if mults:
+                profile[outcome_name] = mults
+                has_data = True
+        return profile if has_data else None
+
     # Level 1: Per-track profiles (e.g., "flemington|sprint|open")
     track_profile_count = 0
     for ctx_key, ctx_entries in _group_by(all_entries, "ctx_track").items():
-        mults = _compute_mults(ctx_entries)
-        if mults:
-            profiles[ctx_key] = mults
-            profiles[ctx_key]["_n"] = len(ctx_entries)
+        profile = _build_multi_outcome_profile(ctx_entries)
+        if profile:
+            profiles[ctx_key] = profile
             track_profile_count += 1
 
     # Level 2: Venue-type profiles (e.g., "metro_vic|sprint|open")
     vtype_profile_count = 0
     for ctx_key, ctx_entries in _group_by(all_entries, "ctx_vtype").items():
         if ctx_key not in profiles:  # don't overwrite per-track
-            mults = _compute_mults(ctx_entries)
-            if mults:
-                profiles[ctx_key] = mults
-                profiles[ctx_key]["_n"] = len(ctx_entries)
+            profile = _build_multi_outcome_profile(ctx_entries)
+            if profile:
+                profiles[ctx_key] = profile
                 vtype_profile_count += 1
 
     # Level 3: Track + distance fallback
     for ctx_key, ctx_entries in _group_by(all_entries, "ctx_track_dist").items():
-        mults = _compute_mults(ctx_entries)
-        if mults:
-            fallbacks[ctx_key] = mults
-            fallbacks[ctx_key]["_n"] = len(ctx_entries)
+        profile = _build_multi_outcome_profile(ctx_entries)
+        if profile:
+            fallbacks[ctx_key] = profile
 
     # Level 4: Venue-type + distance fallback
     for ctx_key, ctx_entries in _group_by(all_entries, "ctx_vtype_dist").items():
         if ctx_key not in fallbacks:
-            mults = _compute_mults(ctx_entries)
-            if mults:
-                fallbacks[ctx_key] = mults
-                fallbacks[ctx_key]["_n"] = len(ctx_entries)
+            profile = _build_multi_outcome_profile(ctx_entries)
+            if profile:
+                fallbacks[ctx_key] = profile
 
     # Level 5: Distance + class fallback
     for ctx_key, ctx_entries in _group_by(all_entries, "ctx_dist_class").items():
         if ctx_key not in fallbacks:
-            mults = _compute_mults(ctx_entries)
-            if mults:
-                fallbacks[ctx_key] = mults
-                fallbacks[ctx_key]["_n"] = len(ctx_entries)
+            profile = _build_multi_outcome_profile(ctx_entries)
+            if profile:
+                fallbacks[ctx_key] = profile
 
     result = {
         "profiles": profiles,
@@ -476,8 +496,12 @@ def build_profiles(data_dirs: list[Path], min_sample: int = MIN_SAMPLE) -> dict:
             "mult_range": [MULT_MIN, MULT_MAX],
             "track_profiles": track_profile_count,
             "vtype_profiles": vtype_profile_count,
-            "overall_spreads": {k: round(v * 100, 2) if v else None
-                                for k, v in overall_spreads.items()},
+            "outcome_types": list(OUTCOME_FNS.keys()),
+            "overall_spreads": {
+                outcome: {k: round(v * 100, 2) if v else None
+                          for k, v in spreads.items()}
+                for outcome, spreads in overall_spreads.items()
+            },
         },
     }
 
@@ -486,17 +510,20 @@ def build_profiles(data_dirs: list[Path], min_sample: int = MIN_SAMPLE) -> dict:
     print(f"  Venue-type: {vtype_profile_count}")
     print(f"  Total profiles: {len(profiles)}")
     print(f"  Fallbacks: {len(fallbacks)}")
+    print(f"  Outcome types: {list(OUTCOME_FNS.keys())}")
 
     # Sample per-track profiles
     track_profiles = {k: v for k, v in profiles.items()
                       if k.count("|") == 2 and not k.startswith("metro_") and not k.startswith("provincial") and not k.startswith("country")}
     if track_profiles:
         print("\nSample per-track profiles:")
-        for ctx in sorted(track_profiles.keys())[:10]:
-            mults = track_profiles[ctx]
-            n = mults.get("_n", 0)
-            factor_strs = [f"{f}={mults.get(f, 1.0):.2f}" for f in factor_names if f in mults]
-            print(f"  {ctx:45s} (n={n:,}): {', '.join(factor_strs[:5])}")
+        for ctx in sorted(track_profiles.keys())[:5]:
+            p = track_profiles[ctx]
+            n = p.get("_n", 0)
+            for outcome in OUTCOME_FNS:
+                if outcome in p:
+                    factor_strs = [f"{f}={p[outcome].get(f, 1.0):.2f}" for f in factor_names if f in p[outcome]]
+                    print(f"  {ctx:40s} [{outcome:5s}] (n={n:,}): {', '.join(factor_strs[:5])}")
 
     return result
 

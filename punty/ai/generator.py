@@ -1151,8 +1151,9 @@ class ContentGenerator:
             value_plays = probs.get("value_plays", [])
             exotic_combos = probs.get("exotic_combinations", [])
 
-            # Per-race context multipliers
+            # Per-race context multipliers (win + place)
             ctx_mults = probs.get("context_multipliers", {})
+            ctx_mults_place = probs.get("context_multipliers_place", {})
             if ctx_mults:
                 factor_labels = {
                     "market": "Market", "form": "Form", "class_fitness": "Class",
@@ -1162,7 +1163,13 @@ class ContentGenerator:
                 notable = []
                 for f, mult in sorted(ctx_mults.items(), key=lambda x: abs(x[1] - 1.0), reverse=True):
                     label = factor_labels.get(f, f)
-                    if mult >= 1.3:
+                    place_mult = ctx_mults_place.get(f)
+                    # Show win vs place difference when significant
+                    if place_mult and abs(mult - place_mult) >= 0.4:
+                        w_str = f"{mult:.1f}x"
+                        p_str = f"{place_mult:.1f}x"
+                        notable.append(f"**{label}** Win {w_str} / Place {p_str}")
+                    elif mult >= 1.3:
                         notable.append(f"**{label} {mult:.1f}x** (STRONG)")
                     elif mult <= 0.7:
                         notable.append(f"{label} {mult:.1f}x (weak)")
