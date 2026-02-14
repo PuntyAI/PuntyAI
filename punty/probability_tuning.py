@@ -566,6 +566,7 @@ async def get_tuning_history(
     """Get recent tuning events for dashboard."""
     result = await db.execute(
         select(TuningLog)
+        .where(TuningLog.reason == "auto_tune")
         .order_by(TuningLog.created_at.desc())
         .limit(limit)
     )
@@ -580,10 +581,14 @@ async def get_tuning_history(
         except (json.JSONDecodeError, TypeError):
             old_w, new_w, metrics = {}, {}, {}
 
-        # Find biggest change
+        # Find biggest change (skip non-numeric values from other tuning systems)
         changes = {}
         for key in set(list(old_w.keys()) + list(new_w.keys())):
-            delta = (new_w.get(key, 0) or 0) - (old_w.get(key, 0) or 0)
+            old_val = old_w.get(key, 0)
+            new_val = new_w.get(key, 0)
+            if not isinstance(old_val, (int, float)) or not isinstance(new_val, (int, float)):
+                continue
+            delta = (new_val or 0) - (old_val or 0)
             if abs(delta) >= 0.1:
                 changes[key] = round(delta, 1)
 
