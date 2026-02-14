@@ -2189,11 +2189,11 @@ def calculate_exotic_combinations(
 
     # Per-type value thresholds based on actual P&L data
     VALUE_THRESHOLDS = {
-        "Quinella": 1.4,           # Low dividends, needs higher edge (-64% ROI)
+        "Quinella": 1.2,           # High-probability play, both runners in selections
         "Exacta": 1.2,
         "Trifecta Box": 1.2,      # Best performer (+3.5% ROI)
         "Trifecta Standout": 1.2,
-        "First4": 1.3,            # Positional legs format
+        "First4": 1.2,            # Positional legs format — targeted, fewer combos
         "First4 Box": 1.5,        # Rare, extreme value only (0/50 all-time)
     }
 

@@ -417,27 +417,36 @@ def _select_exotic(
 ) -> RecommendedExotic | None:
     """Select the best exotic bet, enforcing consistency with selections.
 
-    Requires 75% overlap with selection saddlecloths (3 of 4 runners must
-    be in our picks). Falls back to Trifecta Box from selections if no
-    combo meets the threshold.
+    Overlap rules by exotic size:
+    - 2 runners (Quinella/Exacta): both must be in selections (100%)
+    - 3 runners (Trifecta): at least 2 of 3 in selections (67%)
+    - 4+ runners (First4/Trifecta Box 4): at least 3 of 4 in selections (75%)
+
+    Falls back to Trifecta Box from selections if no combo meets threshold.
     """
     if not exotic_combos:
         return None
-
-    MIN_OVERLAP = 0.75  # At least 75% of exotic runners must be in selections
 
     # Score exotics: value ratio + strong bonus for using our selected runners
     scored = []
     for ec in exotic_combos:
         runners = set(ec.get("runners", []))
+        n_runners = len(runners)
         overlap = len(runners & selection_saddlecloths)
-        overlap_ratio = overlap / len(runners) if runners else 0
+        overlap_ratio = overlap / n_runners if n_runners else 0
 
-        # Enforce minimum overlap — skip combos with too many outside runners
-        if overlap_ratio < MIN_OVERLAP:
+        # Size-based minimum overlap
+        if n_runners <= 2:
+            min_overlap = 1.0    # Quinella/Exacta: all runners must be our picks
+        elif n_runners == 3:
+            min_overlap = 0.66   # Trifecta 3: at least 2 of 3
+        else:
+            min_overlap = 0.75   # First4/Trifecta 4: at least 3 of 4
+
+        if overlap_ratio < min_overlap:
             continue
 
-        # Decisive preference for selection runners (1.0 bonus, up from 0.3)
+        # Decisive preference for selection runners (1.0 bonus)
         score = ec.get("value", 1.0) + overlap_ratio * 1.0
 
         scored.append((score, ec))
