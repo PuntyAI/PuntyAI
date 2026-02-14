@@ -131,13 +131,9 @@ def calculate_pre_selections(
             puntys_pick=None, total_stake=0.0,
         )
 
-    # Score by probability-weighted value: high win chance + value overlay
-    # Probability dominates; value capped at 1.3x so favourites/champions
-    # aren't overridden by longshots with inflated value ratings
-    for c in candidates:
-        capped_value = max(1.0, min(c["value_rating"], 1.3))
-        c["score"] = c["win_prob"] * capped_value
-    candidates.sort(key=lambda c: c["score"], reverse=True)
+    # Sort by win probability — pick the most likely winners first.
+    # Value is used for bet type decisions and the roughie slot, not pick order.
+    candidates.sort(key=lambda c: c["win_prob"], reverse=True)
 
     # Separate roughie candidates (odds >= $8, value >= 1.1)
     roughie_pool = [

@@ -419,7 +419,7 @@ class TestCalculatePreSelections:
         assert result.puntys_pick is not None
 
     def test_pick_order_by_ev(self):
-        """Highest EV runner should be pick #1."""
+        """Highest win probability runner should be pick #1."""
         runners = [
             _runner(1, "LowEV", 2.0, win_prob=0.10, value=0.80),
             _runner(2, "HighEV", 4.0, win_prob=0.35, value=1.20),
