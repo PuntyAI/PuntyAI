@@ -294,7 +294,7 @@
                 <select x-model="distance" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
                     <option value="">Any</option>
                     {% for d in ctx_distances %}
-                    <option value="{{ d }}">{% if d == 'sprint' %}Sprint (&le;1100m){% elif d == 'short' %}Short (1200-1399){% elif d == 'middle' %}Middle (1400-1799){% elif d == 'classic' %}Classic (1800-2199){% elif d == 'staying' %}Staying (2200+){% else %}{{ d }}{% endif %}</option>
+                    <option value="{{ d }}" :disabled="!isDistAvailable('{{ d }}')" :class="!isDistAvailable('{{ d }}') ? 'text-gray-300' : ''">{% if d == 'sprint' %}Sprint (&le;1100m){% elif d == 'short' %}Short (1200-1399){% elif d == 'middle' %}Middle (1400-1799){% elif d == 'classic' %}Classic (1800-2199){% elif d == 'staying' %}Staying (2200+){% else %}{{ d }}{% endif %}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -304,7 +304,7 @@
                     <option value="">Any</option>
                     {% set class_labels = {'maiden': 'Maiden', 'class1': 'Class 1', 'restricted': 'Restricted', 'class2': 'Class 2', 'class3': 'Class 3', 'bm58': 'BM58 & below', 'bm64': 'BM60-68', 'bm72': 'BM70-76', 'open': 'Open / Stakes'} %}
                     {% for c in ctx_classes %}
-                    <option value="{{ c }}">{{ class_labels.get(c, c) }}</option>
+                    <option value="{{ c }}" :disabled="!isClassAvailable('{{ c }}')" :class="!isClassAvailable('{{ c }}') ? 'text-gray-300' : ''">{{ class_labels.get(c, c) }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -322,10 +322,10 @@
         <div x-show="activeProfile" class="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4">
             {% set factor_list = [('market', 'Market'), ('form', 'Form'), ('class_fitness', 'Class'), ('pace', 'Pace'), ('barrier', 'Barrier'), ('jockey_trainer', 'J/T'), ('movement', 'Movement'), ('weight_carried', 'Weight'), ('horse_profile', 'Profile')] %}
             {% for fkey, flabel in factor_list %}
-            <div class="rounded-lg p-3 text-center border" :style="'background:' + heatColor(activeProfile && activeProfile.{{ fkey }}) + '; border-color:' + heatBorder(activeProfile && activeProfile.{{ fkey }})">
-                <div class="text-xs text-gray-600 font-medium mb-1">{{ flabel }}</div>
-                <div class="text-lg font-bold" :class="multClass(activeProfile && activeProfile.{{ fkey }})" x-text="formatMult(activeProfile && activeProfile.{{ fkey }})"></div>
-                <div class="text-xs mt-0.5" :class="multClass(activeProfile && activeProfile.{{ fkey }})" x-text="multDesc(activeProfile && activeProfile.{{ fkey }})"></div>
+            <div class="rounded-lg p-3 text-center border" :style="'background:' + heatColor(getMult('{{ fkey }}')) + '; border-color:' + heatBorder(getMult('{{ fkey }}'))">
+                <div class="text-xs font-medium mb-1" :class="activeProfile ? 'text-gray-300' : 'text-gray-600'">{{ flabel }}</div>
+                <div class="text-lg font-bold" :class="multClass(getMult('{{ fkey }}'))" x-text="formatMult(getMult('{{ fkey }}'))"></div>
+                <div class="text-xs mt-0.5" :class="multClass(getMult('{{ fkey }}'))" x-text="multDesc(getMult('{{ fkey }}'))"></div>
             </div>
             {% endfor %}
         </div>
@@ -788,28 +788,64 @@
 })();
 {% endif %}
 
+
+</script>
+
+{# Context explorer in isolated script block — separate from chart.js to prevent errors killing it #}
 {% if context_profiles and context_profiles.profiles %}
+<script>
 function contextExplorer() {
     var profiles = {{ context_profiles.profiles | tojson }};
     var fallbacks = {{ context_profiles.fallbacks | default({}) | tojson }};
 
+    // Pre-compute valid keys per venue for conditional dropdowns
+    var allKeys = Object.keys(profiles).concat(Object.keys(fallbacks));
+    var venueOptions = {};  // venue -> {distances: Set, classes: Set}
+    allKeys.forEach(function(k) {
+        var parts = k.split('|');
+        var dists = ['sprint','short','middle','classic','staying'];
+        if (parts.length >= 2 && dists.indexOf(parts[0]) === -1) {
+            var v = parts[0];
+            if (!venueOptions[v]) venueOptions[v] = {distances: {}, classes: {}};
+            if (parts[1]) venueOptions[v].distances[parts[1]] = true;
+            if (parts[2]) venueOptions[v].classes[parts[2]] = true;
+        }
+    });
+
     return {
         venue: '', distance: '', raceClass: '',
-        activeProfile: null,
-        activeKey: '',
-        activeN: 0,
-        fallbackUsed: false,
-        fallbackKey: '',
+        activeProfile: null, activeKey: '', activeN: 0,
+        fallbackUsed: false, fallbackKey: '',
+        getMult: function(factor) {
+            if (!this.activeProfile) return undefined;
+            return this.activeProfile[factor];
+        },
+        isDistAvailable: function(d) {
+            if (!this.venue) return true;
+            var opts = venueOptions[this.venue];
+            return opts ? !!opts.distances[d] : false;
+        },
+        isClassAvailable: function(c) {
+            if (!this.venue) return true;
+            var opts = venueOptions[this.venue];
+            return opts ? !!opts.classes[c] : false;
+        },
         updateProfile: function() {
             this.fallbackUsed = false;
             this.fallbackKey = '';
             this.activeN = 0;
+            // Reset distance/class if no longer valid for selected venue
+            if (this.venue && this.distance && !this.isDistAvailable(this.distance)) {
+                this.distance = '';
+            }
+            if (this.venue && this.raceClass && !this.isClassAvailable(this.raceClass)) {
+                this.raceClass = '';
+            }
             if (!this.venue && !this.distance && !this.raceClass) {
                 this.activeProfile = null;
                 this.activeKey = '';
                 return;
             }
-            // Try full key: venue|distance|class
             var fullKey = [this.venue, this.distance, this.raceClass].filter(Boolean).join('|');
             this.activeKey = fullKey;
 
@@ -825,22 +861,27 @@ function contextExplorer() {
                 this.fallbackKey = fullKey;
                 return;
             }
-            // Try venue + distance
             var venueDistKey = [this.venue, this.distance].filter(Boolean).join('|');
-            if (venueDistKey !== fullKey && (fallbacks[venueDistKey] || profiles[venueDistKey])) {
+            if (venueDistKey !== fullKey && (profiles[venueDistKey] || fallbacks[venueDistKey])) {
                 this.activeProfile = profiles[venueDistKey] || fallbacks[venueDistKey];
                 this.activeN = (this.activeProfile || {})._n || 0;
                 this.fallbackUsed = true;
                 this.fallbackKey = venueDistKey;
                 return;
             }
-            // Try distance + class
             var distClassKey = [this.distance, this.raceClass].filter(Boolean).join('|');
-            if (distClassKey !== fullKey && (fallbacks[distClassKey] || profiles[distClassKey])) {
+            if (distClassKey !== fullKey && (profiles[distClassKey] || fallbacks[distClassKey])) {
                 this.activeProfile = profiles[distClassKey] || fallbacks[distClassKey];
                 this.activeN = (this.activeProfile || {})._n || 0;
                 this.fallbackUsed = true;
                 this.fallbackKey = distClassKey;
+                return;
+            }
+            if (this.venue && (profiles[this.venue] || fallbacks[this.venue])) {
+                this.activeProfile = profiles[this.venue] || fallbacks[this.venue];
+                this.activeN = (this.activeProfile || {})._n || 0;
+                this.fallbackUsed = true;
+                this.fallbackKey = this.venue;
                 return;
             }
             this.activeProfile = null;
@@ -850,15 +891,15 @@ function contextExplorer() {
             return v.toFixed(2) + 'x';
         },
         multClass: function(v) {
-            if (v === undefined) return 'text-gray-500';
-            if (v >= 1.5) return 'text-green-700';
-            if (v >= 1.1) return 'text-green-600';
-            if (v > 0.9) return 'text-gray-700';
-            if (v > 0.5) return 'text-red-500';
-            return 'text-red-600';
+            if (v === undefined || v === null) return 'text-gray-500';
+            if (v >= 1.5) return 'text-green-400';
+            if (v >= 1.1) return 'text-green-300';
+            if (v > 0.9) return 'text-gray-300';
+            if (v > 0.5) return 'text-red-400';
+            return 'text-red-500';
         },
         multDesc: function(v) {
-            if (v === undefined) return '';
+            if (v === undefined || v === null) return '';
             if (v >= 2.0) return 'very strong';
             if (v >= 1.5) return 'amplified';
             if (v >= 1.1) return 'boosted';
@@ -867,24 +908,24 @@ function contextExplorer() {
             return 'suppressed';
         },
         heatColor: function(v) {
-            if (v === undefined) return '#f9fafb';
-            if (v >= 2.0) return 'rgba(34,197,94,0.15)';
-            if (v >= 1.5) return 'rgba(34,197,94,0.10)';
-            if (v >= 1.1) return 'rgba(34,197,94,0.05)';
-            if (v > 0.9) return '#f9fafb';
-            if (v > 0.5) return 'rgba(239,68,68,0.05)';
-            return 'rgba(239,68,68,0.10)';
+            if (v === undefined || v === null) return 'rgba(30,30,40,0.5)';
+            if (v >= 2.0) return 'rgba(34,197,94,0.20)';
+            if (v >= 1.5) return 'rgba(34,197,94,0.12)';
+            if (v >= 1.1) return 'rgba(34,197,94,0.06)';
+            if (v > 0.9) return 'rgba(30,30,40,0.5)';
+            if (v > 0.5) return 'rgba(239,68,68,0.08)';
+            return 'rgba(239,68,68,0.15)';
         },
         heatBorder: function(v) {
-            if (v === undefined) return '#e5e7eb';
-            if (v >= 1.5) return 'rgba(34,197,94,0.3)';
-            if (v >= 1.1) return 'rgba(34,197,94,0.15)';
-            if (v > 0.9) return '#e5e7eb';
-            if (v > 0.5) return 'rgba(239,68,68,0.15)';
-            return 'rgba(239,68,68,0.3)';
+            if (v === undefined || v === null) return 'rgba(100,100,120,0.3)';
+            if (v >= 1.5) return 'rgba(34,197,94,0.4)';
+            if (v >= 1.1) return 'rgba(34,197,94,0.2)';
+            if (v > 0.9) return 'rgba(100,100,120,0.3)';
+            if (v > 0.5) return 'rgba(239,68,68,0.2)';
+            return 'rgba(239,68,68,0.4)';
         },
     };
 }
-{% endif %}
 </script>
+{% endif %}
 {% endblock %}

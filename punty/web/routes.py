@@ -468,12 +468,13 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
             context_profiles = ctx
             # Extract unique dimension values from profile keys
             venue_set, dist_set, class_set = set(), set(), set()
+            dist_values = {"sprint", "short", "middle", "classic", "staying"}
             all_keys = list(ctx.get("profiles", {}).keys()) + list(ctx.get("fallbacks", {}).keys())
             for k in all_keys:
                 parts = k.split("|")
                 if len(parts) >= 2:
-                    # Could be venue|dist|class or dist|class or venue|dist
-                    if parts[0] in ("sprint", "short", "middle", "classic", "staying"):
+                    # Could be venue/track|dist|class or dist|class or venue/track|dist
+                    if parts[0] in dist_values:
                         dist_set.add(parts[0])
                         if len(parts) >= 2:
                             class_set.add(parts[1])

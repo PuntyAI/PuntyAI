@@ -37,8 +37,28 @@ def set_dl_pattern_cache(patterns: list[dict]) -> None:
 
 
 def get_dl_pattern_cache() -> list[dict] | None:
-    """Get cached DL patterns, or None if not loaded."""
-    return _dl_pattern_cache
+    """Get cached DL patterns. Falls back to JSON file if DB cache empty."""
+    if _dl_pattern_cache is not None:
+        return _dl_pattern_cache
+    # Fallback: load from exported JSON file (for backtesting / offline use)
+    return _load_dl_patterns_from_file()
+
+
+def _load_dl_patterns_from_file() -> list[dict] | None:
+    """Load DL patterns from JSON file as fallback when DB not available."""
+    global _dl_pattern_cache
+    dl_path = Path(__file__).parent / "data" / "dl_patterns.json"
+    if not dl_path.exists():
+        return None
+    try:
+        with open(dl_path, "r") as f:
+            patterns = json.load(f)
+        _dl_pattern_cache = patterns
+        logger.info("DL patterns loaded from file: %d patterns", len(patterns))
+        return patterns
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load DL patterns from file: %s", e)
+        return None
 
 
 # ──────────────────────────────────────────────
@@ -78,14 +98,27 @@ def _load_context_profiles() -> dict | None:
         return _CONTEXT_PROFILES
 
 
+def _track_key(venue: str) -> str:
+    """Normalize venue name to a stable track key for per-track profiles."""
+    v = venue.lower().strip()
+    # Normalize common aliases
+    if v in ("the valley", "moonee valley"):
+        return "moonee_valley"
+    if v in ("royal randwick", "randwick"):
+        return "randwick"
+    return v.replace(" ", "_").replace("'", "")
+
+
 def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
     """Get factor multipliers for the current race context.
 
-    Uses hierarchical fallback:
-    1. Full match: venue_type|distance|class
-    2. Venue+distance: venue_type|distance
-    3. Distance+class: distance|class
-    4. Default: all multipliers = 1.0
+    Uses hierarchical fallback (per-track first, then venue-type):
+    1. track|distance|class      (e.g. flemington|sprint|open)
+    2. venue_type|distance|class (e.g. metro_vic|sprint|open)
+    3. track|distance            (e.g. flemington|sprint)
+    4. venue_type|distance       (e.g. metro_vic|sprint)
+    5. distance|class            (e.g. sprint|open)
+    6. Default: empty (no adjustment)
     """
     data = _load_context_profiles()
     if not data:
@@ -100,25 +133,23 @@ def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
     distance = _get(race, "distance") or 1400
     race_class = _get(race, "class_") or ""
 
+    track = _track_key(venue)
     vtype = _context_venue_type(venue, state)
     dbucket = _get_dist_bucket(distance)
     cbucket = _context_class_bucket(race_class)
 
-    # Try hierarchical lookup
-    full_key = f"{vtype}|{dbucket}|{cbucket}"
-    if full_key in profiles:
-        result = {k: v for k, v in profiles[full_key].items() if k != "_n"}
-        return result
+    # Hierarchical lookup: per-track first, then venue-type category
+    lookup_order = [
+        (profiles, f"{track}|{dbucket}|{cbucket}"),
+        (profiles, f"{vtype}|{dbucket}|{cbucket}"),
+        (fallbacks, f"{track}|{dbucket}"),
+        (fallbacks, f"{vtype}|{dbucket}"),
+        (fallbacks, f"{dbucket}|{cbucket}"),
+    ]
 
-    venue_dist_key = f"{vtype}|{dbucket}"
-    if venue_dist_key in fallbacks:
-        result = {k: v for k, v in fallbacks[venue_dist_key].items() if k != "_n"}
-        return result
-
-    dist_class_key = f"{dbucket}|{cbucket}"
-    if dist_class_key in fallbacks:
-        result = {k: v for k, v in fallbacks[dist_class_key].items() if k != "_n"}
-        return result
+    for source, key in lookup_order:
+        if key in source:
+            return {k: v for k, v in source[key].items() if k != "_n"}
 
     return {}
 
@@ -178,6 +209,118 @@ def _context_class_bucket(race_class: str) -> str:
     return "bm64"
 
 
+# ──────────────────────────────────────────────
+# Calibrated Parameters (fitted from 190K historical runners)
+# ──────────────────────────────────────────────
+_CALIBRATION: dict | None = None
+
+
+def _load_calibration() -> dict | None:
+    """Load calibrated scoring parameters from historical analysis.
+
+    Contains empirical scoring curves (signal value -> win rate -> 0.05-0.95 score)
+    and optimal factor weights fitted from 190K+ runners with known results.
+    Falls back to hand-coded logic if not found.
+    """
+    global _CALIBRATION
+    if _CALIBRATION is not None:
+        return _CALIBRATION
+
+    cal_path = Path(__file__).parent / "data" / "calibrated_params.json"
+    if not cal_path.exists():
+        logger.debug("No calibration file found at %s", cal_path)
+        _CALIBRATION = {}
+        return _CALIBRATION
+
+    try:
+        with open(cal_path, "r") as f:
+            data = json.load(f)
+        _CALIBRATION = data
+        n_curves = len(data.get("scoring_curves", {}))
+        logger.info("Calibration loaded: %d scoring curves, weights=%s",
+                     n_curves, data.get("weights", {}))
+        return _CALIBRATION
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load calibration: %s", e)
+        _CALIBRATION = {}
+        return _CALIBRATION
+
+
+def _calibrated_score(signal_name: str, raw_value: float,
+                      fallback: float = 0.5) -> float:
+    """Look up empirical score from calibrated bin curve.
+
+    Interpolates between bins to produce a smooth score. The scoring curves
+    map raw signal values to 0.05-0.95 scores based on actual historical win rates.
+
+    Args:
+        signal_name: Name of the signal (e.g., "jockey_career_sr")
+        raw_value: Raw signal value to score
+        fallback: Score to return if no calibration available
+
+    Returns:
+        Score in [0.05, 0.95] range
+    """
+    cal = _load_calibration()
+    if not cal:
+        return fallback
+
+    curves = cal.get("scoring_curves", {})
+    curve = curves.get(signal_name)
+    if not curve:
+        return fallback
+
+    bins = curve.get("bins", [])
+    scores = curve.get("scores", [])
+    if not bins or not scores or len(bins) < 2:
+        return fallback
+
+    # Binary search for the right bin
+    if raw_value <= bins[0]:
+        return scores[0]
+    if raw_value >= bins[-1]:
+        return scores[-1]
+
+    # Find bin index and interpolate
+    for i in range(len(bins) - 1):
+        if raw_value < bins[i + 1]:
+            # Interpolate within bin
+            bin_start = bins[i]
+            bin_end = bins[i + 1]
+            if i < len(scores):
+                score_start = scores[i]
+                score_end = scores[min(i + 1, len(scores) - 1)]
+                if bin_end > bin_start:
+                    t = (raw_value - bin_start) / (bin_end - bin_start)
+                    return score_start + t * (score_end - score_start)
+                return score_start
+            return fallback
+
+    return scores[-1] if scores else fallback
+
+
+def _get_calibrated_weights() -> dict[str, float] | None:
+    """Get optimal factor weights from calibration, or None to use defaults."""
+    cal = _load_calibration()
+    if not cal:
+        return None
+    weights = cal.get("weights")
+    if not weights:
+        return None
+    # Calibration doesn't include deep_learning — add it with residual weight
+    if "deep_learning" not in weights:
+        # Give DL the average of the smaller factor weights
+        non_market_form = {k: v for k, v in weights.items()
+                          if k not in ("market", "form")}
+        dl_weight = sum(non_market_form.values()) / max(len(non_market_form), 1) * 0.8
+        weights["deep_learning"] = round(dl_weight, 4)
+    # Normalise to sum to 1.0
+    total = sum(weights.values())
+    if total > 0:
+        weights = {k: round(v / total, 4) for k, v in weights.items()}
+    return weights
+
+
 # Factor registry — defines all probability factors with metadata
 FACTOR_REGISTRY = {
     "market":         {"label": "Market Consensus", "category": "Market Intelligence",
@@ -203,20 +346,22 @@ FACTOR_REGISTRY = {
 }
 
 # Default weights (must sum to 1.0)
+# Calibrated from 190K+ historical runners via scripts/run_calibration.py
+# Previous hand-tuned weights: market=0.22, form=0.15, pace=0.11, jt=0.11, barrier=0.09, dl=0.10, movement=0.07, class=0.05, weight=0.05, profile=0.05
 DEFAULT_WEIGHTS = {
-    "market": 0.22,
-    "movement": 0.07,
-    "form": 0.15,
-    "class_fitness": 0.05,
-    "pace": 0.11,
-    "barrier": 0.09,
-    "jockey_trainer": 0.11,
-    "weight_carried": 0.05,
-    "horse_profile": 0.05,
-    "deep_learning": 0.10,
-}
+    "market": 0.40,
+    "form": 0.32,
+    "deep_learning": 0.08,
+    "jockey_trainer": 0.07,
+    "weight_carried": 0.04,
+    "horse_profile": 0.03,
+    "class_fitness": 0.03,
+    "barrier": 0.02,
+    "movement": 0.00,
+    "pace": 0.01,
+}  # sums to 1.0 — movement zeroed (100% neutral), pace near-zero (anti-predictive)
 
-# Legacy aliases for backward compatibility
+# Legacy aliases
 WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
 WEIGHT_FORM = DEFAULT_WEIGHTS["form"]
 WEIGHT_PACE = DEFAULT_WEIGHTS["pace"]
@@ -300,7 +445,7 @@ def calculate_race_probabilities(
     if dl_patterns is None:
         dl_patterns = get_dl_pattern_cache()
 
-    w = weights if weights else DEFAULT_WEIGHTS
+    w = weights if weights else (_get_calibrated_weights() or DEFAULT_WEIGHTS)
     field_size = len(active)
     baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
     track_condition = _get(meeting, "track_condition") or _get(race, "track_condition") or ""
@@ -324,8 +469,11 @@ def calculate_race_probabilities(
         rid = _get(runner, "id", "")
 
         # Calculate all factor scores
+        mkt_raw = _market_consensus(runner, overround)
+        # Use calibrated market curve if available (maps raw prob → better score)
+        mkt_score = _calibrated_score("market_prob", mkt_raw, fallback=mkt_raw) if mkt_raw > 0 else 0.0
         scores = {
-            "market":         _market_consensus(runner, overround),
+            "market":         mkt_score,
             "movement":       _market_movement_factor(runner),
             "form":           _form_rating(runner, track_condition, baseline),
             "class_fitness":  _class_factor(runner, baseline, race),
@@ -341,7 +489,7 @@ def calculate_race_probabilities(
         }
 
         all_factor_scores[rid] = scores
-        market_implied[rid] = scores["market"]
+        market_implied[rid] = mkt_raw  # raw market probability for value detection
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
         factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
@@ -372,6 +520,15 @@ def calculate_race_probabilities(
     win_probs: dict[str, float] = {}
     for rid in raw_scores:
         win_probs[rid] = raw_scores[rid] / total if total > 0 else baseline
+
+    # Step 2a: Sharpen distribution to fix favorite-longshot bias
+    # Model undershoots strong picks (predicts 22% when actual is 31%).
+    # Power > 1 concentrates probability on favorites, reducing longshot overestimate.
+    SHARPEN = 1.45
+    sharpened = {rid: p ** SHARPEN for rid, p in win_probs.items()}
+    sharp_total = sum(sharpened.values())
+    if sharp_total > 0:
+        win_probs = {rid: p / sharp_total for rid, p in sharpened.items()}
 
     # Step 2b: Market floor — prevent extreme disagreement with market
     win_probs = _apply_market_floor(win_probs, market_implied)
@@ -477,7 +634,7 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
     # Track + distance stats (strongest form indicator)
     td = parse_stats_string(_get(runner, "track_dist_stats"))
     if td and td.starts >= 4:
-        td_score = _stat_to_score(td.win_rate, baseline)
+        td_score = _stat_to_score(td.win_rate, baseline, "track_dist_sr")
         signal_sum += td_score * 1.5  # higher weight for track+distance
         signals += 1.5
 
@@ -486,13 +643,15 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
     if cond_stats_field:
         cond = parse_stats_string(_get(runner, cond_stats_field))
         if cond and cond.starts >= 3:
-            signal_sum += _stat_to_score(cond.win_rate, baseline)
+            cond_signal = {"good_track_stats": "cond_good_sr", "soft_track_stats": "cond_soft_sr",
+                           "heavy_track_stats": "cond_heavy_sr"}.get(cond_stats_field)
+            signal_sum += _stat_to_score(cond.win_rate, baseline, cond_signal)
             signals += 1
 
     # Distance stats (broader than track+distance)
     dist = parse_stats_string(_get(runner, "distance_stats"))
     if dist and dist.starts >= 3:
-        signal_sum += _stat_to_score(dist.win_rate, baseline) * 0.8
+        signal_sum += _stat_to_score(dist.win_rate, baseline, "distance_sr") * 0.8
         signals += 0.8
 
     # First-up / second-up stats
@@ -500,19 +659,19 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
     if days_since and days_since > 60:
         fu = parse_stats_string(_get(runner, "first_up_stats"))
         if fu and fu.starts >= 2:
-            signal_sum += _stat_to_score(fu.win_rate, baseline) * 0.7
+            signal_sum += _stat_to_score(fu.win_rate, baseline, "first_up_sr") * 0.7
             signals += 0.7
     elif days_since and 21 <= days_since <= 60:
         su = parse_stats_string(_get(runner, "second_up_stats"))
         if su and su.starts >= 2:
-            signal_sum += _stat_to_score(su.win_rate, baseline) * 0.5
+            signal_sum += _stat_to_score(su.win_rate, baseline, "second_up_sr") * 0.5
             signals += 0.5
 
     # Career win/place percentage (Q5-Q1: 26.6% win, 18.8% place)
     career = parse_stats_string(_get(runner, "career_record"))
     if career and career.starts >= 10:
-        career_win_score = _stat_to_score(career.win_rate, baseline)
-        career_place_score = _stat_to_score(career.place_rate, baseline * 3)
+        career_win_score = _stat_to_score(career.win_rate, baseline, "career_win_pct")
+        career_place_score = _stat_to_score(career.place_rate, baseline * 3, "career_place_pct")
         career_score = career_win_score * 0.7 + career_place_score * 0.3
         signal_sum += career_score * 0.6
         signals += 0.6
@@ -558,20 +717,26 @@ def _score_last_five(last_five: str) -> float:
     return max(0.05, min(0.95, score))
 
 
-def _stat_to_score(win_rate: float, baseline: float) -> float:
+def _stat_to_score(win_rate: float, baseline: float,
+                    signal_name: str | None = None) -> float:
     """Convert a win rate to a 0.0-1.0 score relative to baseline.
 
-    Piecewise linear mapping:
-      ratio 0 → 0.20, ratio 1 → 0.50, ratio 2 → 0.675, ratio 3+ → 0.85
+    Uses calibrated empirical curves when available (from 190K+ historical runners),
+    falls back to piecewise linear mapping.
     """
+    # Try calibrated curve first
+    if signal_name and win_rate > 0:
+        cal_score = _calibrated_score(signal_name, win_rate)
+        if cal_score != 0.5:  # 0.5 is the fallback default — means no curve found
+            return cal_score
+
+    # Fallback: piecewise linear
     if baseline <= 0:
         baseline = 0.10
     ratio = win_rate / baseline
     if ratio <= 1.0:
-        # Below-average to average: 0.2 → 0.5
         score = 0.2 + 0.3 * ratio
     else:
-        # Above-average: 0.5 → 0.85 (diminishing returns)
         score = 0.5 + 0.175 * min(ratio - 1.0, 2.0)
     return max(0.05, min(0.90, score))
 
@@ -952,8 +1117,8 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
         signals += 0.6
     else:
         jockey = parse_stats_string(j_raw)
-        if jockey and jockey.starts >= 3:  # lowered from 5 for racing.com small samples
-            j_score = _stat_to_score(jockey.win_rate, baseline)
+        if jockey and jockey.starts >= 3:
+            j_score = _stat_to_score(jockey.win_rate, baseline, "jockey_career_sr")
             signal_sum += j_score * 0.6
             signals += 0.6
 
@@ -967,7 +1132,7 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
     else:
         trainer = parse_stats_string(t_raw)
         if trainer and trainer.starts >= 3:
-            t_score = _stat_to_score(trainer.win_rate, baseline)
+            t_score = _stat_to_score(trainer.win_rate, baseline, "trainer_career_sr")
             signal_sum += t_score * 0.4
             signals += 0.4
 
@@ -1233,6 +1398,21 @@ def _deep_learning_factor(
     if not dl_patterns:
         return 0.5  # neutral when no patterns available
 
+    # Skip non-discriminative pattern types — these fire for ALL runners equally
+    # in a race, so they cancel out after normalization and just add noise.
+    # condition_specialist: matches every runner on that condition
+    # market: duplicates the market factor (already 40% weight)
+    # seasonal: matches every runner at that time of year
+    # track_dist_cond: matches every runner in the same race
+    # standard_times: lookup table, not a per-runner pattern
+    _SKIP_TYPES = {
+        "deep_learning_condition_specialist",
+        "deep_learning_market",
+        "deep_learning_seasonal",
+        "deep_learning_track_dist_cond",
+        "deep_learning_standard_times",
+    }
+
     score = 0.5
     total_adjustment = 0.0
 
@@ -1258,6 +1438,9 @@ def _deep_learning_factor(
         confidence = pattern.get("confidence", "LOW")
 
         if not edge or confidence == "LOW":
+            continue
+
+        if p_type in _SKIP_TYPES:
             continue
 
         # Confidence multiplier: HIGH patterns count more
@@ -1322,6 +1505,88 @@ def _deep_learning_factor(
                     conds.get("state") == state
                     and conds.get("sp_range") == sp_range
                 )
+
+        elif p_type == "deep_learning_class_mover" and state:
+            # Match class movers (upgrade/downgrade runners backed/drifting)
+            direction = conds.get("direction", "")
+            indicator = conds.get("indicator", "")
+            # Derive class movement from runner data
+            runner_class_move = _get(runner, "class_move") or ""
+            runner_mkt_move = _get_market_direction(runner)
+            matched = (
+                conds.get("state") == state
+                and direction == runner_class_move
+                and indicator == runner_mkt_move
+            )
+
+        elif p_type == "deep_learning_weight_impact":
+            # Match weight change impact by distance
+            change_class = conds.get("change_class", "")
+            runner_wt_change = _get_weight_change_class(runner)
+            matched = (
+                conds.get("dist_bucket") == dist_bucket
+                and conds.get("state") == state
+                and change_class == runner_wt_change
+            )
+
+        elif p_type == "deep_learning_form_trend" and state:
+            # Match form trend (improving/declining)
+            trend = conds.get("trend", "")
+            runner_trend = _get_form_trend(runner)
+            matched = (
+                conds.get("state") == state
+                and trend == runner_trend
+            )
+
+        elif p_type == "deep_learning_bounceback":
+            # Match bounceback candidates (excuse for last poor run)
+            excuse_type = conds.get("excuse_type", "")
+            runner_excuse = _get_excuse_type(runner)
+            matched = (
+                conds.get("dist_bucket") == dist_bucket
+                and conds.get("state") == state
+                and excuse_type == runner_excuse
+            )
+
+        elif p_type == "deep_learning_form_cycle":
+            # Match form cycle (runs this prep)
+            prep_runs = conds.get("prep_runs")
+            runner_prep = _get(runner, "prep_runs") or _get(runner, "runs_since_spell")
+            if prep_runs is not None and runner_prep is not None:
+                matched = (int(runner_prep) == int(prep_runs))
+
+        elif p_type == "deep_learning_class_transition":
+            # Match class transition patterns
+            transition = conds.get("transition", "")
+            runner_transition = _get(runner, "class_move") or ""
+            trans_map = {"class_drop": "downgrade", "class_rise": "upgrade"}
+            matched = (trans_map.get(transition, transition) == runner_transition)
+
+        elif p_type == "deep_learning_track_bias":
+            # Match track bias (wide/inside runners at specific venues)
+            width = conds.get("width", "")
+            pattern_venue = conds.get("venue", "")
+            runner_barrier = barrier or 0
+            # wide = barrier > 60% of field, inside = barrier <= 30%
+            if field_size > 0 and runner_barrier:
+                ratio = runner_barrier / field_size
+                runner_width = "wide" if ratio > 0.6 else "inside" if ratio <= 0.3 else "mid"
+            else:
+                runner_width = ""
+            matched = (
+                _venue_matches(pattern_venue, venue)
+                and conds.get("dist_bucket") == dist_bucket
+                and width == runner_width
+            )
+
+        elif p_type == "deep_learning_seasonal" and state:
+            # Match seasonal patterns
+            import datetime
+            month = conds.get("month")
+            matched = (
+                conds.get("state") == state
+                and month == datetime.date.today().month
+            )
 
         if matched:
             # Cap individual pattern contribution
@@ -1425,6 +1690,76 @@ def _odds_to_sp_range(odds: float) -> str:
         return "$12-$20"
     else:
         return "$20+"
+
+
+def _get_market_direction(runner: Any) -> str:
+    """Determine if runner is 'backed' or 'drifting' from market movement."""
+    opening = _get(runner, "opening_odds")
+    current = _get(runner, "current_odds")
+    if not opening or not current or opening <= 0:
+        return ""
+    pct = ((current - opening) / opening) * 100
+    if pct <= -5:
+        return "backed"
+    elif pct >= 5:
+        return "drifting"
+    return ""
+
+
+def _get_weight_change_class(runner: Any) -> str:
+    """Classify weight change for weight_impact pattern matching."""
+    wt = _get(runner, "weight")
+    last_wt = _get(runner, "last_start_weight")
+    if not wt or not last_wt:
+        return ""
+    diff = float(wt) - float(last_wt)
+    if diff > 2.0:
+        return "weight_up_big"
+    elif diff > 0:
+        return "weight_up_small"
+    elif diff < -2.0:
+        return "weight_down_big"
+    elif diff < 0:
+        return "weight_down_small"
+    return "weight_same"
+
+
+def _get_form_trend(runner: Any) -> str:
+    """Determine form trend from last_five or recent positions."""
+    last5 = _get(runner, "last_five") or ""
+    if not last5:
+        return ""
+    positions = []
+    for ch in str(last5).replace(" ", ""):
+        if ch.isdigit():
+            positions.append(int(ch))
+        elif ch.lower() == "x":
+            positions.append(9)
+    if len(positions) < 3:
+        return ""
+    recent = sum(positions[:2]) / 2  # last 2 starts
+    older = sum(positions[2:min(4, len(positions))]) / max(1, min(2, len(positions) - 2))
+    if recent < older - 1:
+        return "improving"
+    elif recent > older + 1:
+        return "declining"
+    return "steady"
+
+
+def _get_excuse_type(runner: Any) -> str:
+    """Determine bounceback excuse type from last start data."""
+    last_pos = _get(runner, "last_start_position")
+    margin = _get(runner, "last_start_margin")
+    if not last_pos:
+        return ""
+    pos = int(last_pos) if str(last_pos).isdigit() else 0
+    if pos == 0:
+        return ""
+    if margin and float(margin) > 10:
+        return "heavy_loss"
+    if pos >= 8:
+        return "bad_run"
+    return ""
 
 
 def _venue_matches(pattern_venue: str, meeting_venue: str) -> bool:

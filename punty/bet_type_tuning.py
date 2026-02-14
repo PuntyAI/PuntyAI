@@ -440,12 +440,13 @@ async def analyze_exotic_performance(
     trimmed = _trim_outliers(raw_picks)
     result = {}
 
-    for etype in ("Trifecta", "Exacta", "Quinella", "First4"):
-        type_picks = [p for p in trimmed if p.get("exotic_type") and etype.lower() in p["exotic_type"].lower()]
-        if not type_picks:
-            result[etype] = {"count": 0, "hit_rate": 0, "roi": 0}
-            continue
+    # Group by exact exotic_type (e.g., "Trifecta Box", "Trifecta Standout", "First4 Box")
+    type_groups: dict[str, list] = {}
+    for p in trimmed:
+        etype = p.get("exotic_type") or "Unknown"
+        type_groups.setdefault(etype, []).append(p)
 
+    for etype, type_picks in sorted(type_groups.items()):
         hits = sum(1 for p in type_picks if p["hit"])
         total_pnl = sum(p["pnl"] for p in type_picks if p["pnl"] is not None)
         count = len(type_picks)
@@ -454,7 +455,7 @@ async def analyze_exotic_performance(
         roi = total_pnl / total_staked if total_staked else 0
         avg_value = statistics.mean([p["value_rating"] for p in type_picks if p.get("value_rating")]) if any(p.get("value_rating") for p in type_picks) else 0
 
-        # Find optimal value threshold
+        # Find optimal value threshold using base type for min-sample grouping
         optimal_value = _find_optimal_value_threshold(type_picks)
 
         result[etype] = {
@@ -502,34 +503,35 @@ async def analyze_sequence_performance(
     db: AsyncSession,
     lookback_days: int = LOOKBACK_DAYS,
 ) -> dict:
-    """Analyze settled sequence picks by variant.
+    """Analyze settled sequence picks by type and variant.
 
-    Returns per-variant: count, hit_rate, roi, total_pnl, leg_analysis.
+    Returns:
+        {
+            "by_type": {"quaddie": {"skinny": {...}, ...}, "early_quaddie": {...}, "big6": {...}},
+            "flat": {"skinny": {...}, "balanced": {...}, "wide": {...}},
+        }
+    The "flat" key maintains backward compat for threshold tuning.
+    The "by_type" key powers the dashboard type+variant breakdown.
     """
     raw_picks = await _fetch_settled_picks(db, "sequence", lookback_days)
     if not raw_picks:
-        return {}
+        return {"by_type": {}, "flat": {}}
 
     trimmed = _trim_outliers(raw_picks)
-    result = {}
 
-    for variant in ("skinny", "balanced", "wide"):
-        var_picks = [p for p in trimmed if p.get("sequence_variant") == variant]
-        if not var_picks:
-            result[variant] = {"count": 0, "hit_rate": 0, "roi": 0}
-            continue
-
-        hits = sum(1 for p in var_picks if p["hit"])
-        total_pnl = sum(p["pnl"] for p in var_picks if p["pnl"] is not None)
-        count = len(var_picks)
+    def _analyze_group(picks: list[dict]) -> dict:
+        if not picks:
+            return {"count": 0, "hit_rate": 0, "roi": 0}
+        hits = sum(1 for p in picks if p["hit"])
+        total_pnl = sum(p["pnl"] for p in picks if p["pnl"] is not None)
+        count = len(picks)
         hit_rate = hits / count if count else 0
-        total_staked = sum(p.get("exotic_stake") or 10.0 for p in var_picks)
+        total_staked = sum(p.get("exotic_stake") or 10.0 for p in picks)
         roi = total_pnl / total_staked if total_staked else 0
 
-        # Confidence level analysis (from pick confidence field)
         conf_perf = {}
         for conf in ("HIGH", "MED", "LOW"):
-            conf_picks = [p for p in var_picks if p.get("confidence") == conf]
+            conf_picks = [p for p in picks if p.get("confidence") == conf]
             if conf_picks:
                 c_hits = sum(1 for p in conf_picks if p["hit"])
                 conf_perf[conf] = {
@@ -537,7 +539,7 @@ async def analyze_sequence_performance(
                     "hit_rate": round(c_hits / len(conf_picks), 4),
                 }
 
-        result[variant] = {
+        return {
             "count": count,
             "hit_rate": round(hit_rate, 4),
             "roi": round(roi, 4),
@@ -546,7 +548,24 @@ async def analyze_sequence_performance(
             "confidence_breakdown": conf_perf,
         }
 
-    return result
+    # Flat variant grouping (backward compat for threshold tuning)
+    flat = {}
+    for variant in ("skinny", "balanced", "wide"):
+        var_picks = [p for p in trimmed if p.get("sequence_variant") == variant]
+        flat[variant] = _analyze_group(var_picks)
+
+    # Nested type → variant grouping
+    by_type: dict[str, dict] = {}
+    seq_types = sorted({p.get("sequence_type") or "unknown" for p in trimmed})
+    for stype in seq_types:
+        by_type[stype] = {}
+        type_picks = [p for p in trimmed if p.get("sequence_type") == stype]
+        for variant in ("skinny", "balanced", "wide"):
+            var_picks = [p for p in type_picks if p.get("sequence_variant") == variant]
+            if var_picks:
+                by_type[stype][variant] = _analyze_group(var_picks)
+
+    return {"by_type": by_type, "flat": flat}
 
 
 # ── Combined tuner ──────────────────────────────────────────────────────────
@@ -692,7 +711,8 @@ async def maybe_tune_bet_thresholds(
 
     # ── Analyze sequences ───────────────────────────────────────────────
     seq_analysis = await analyze_sequence_performance(db)
-    total_sequences = sum(v.get("count", 0) for v in seq_analysis.values())
+    seq_flat = seq_analysis.get("flat", seq_analysis) if isinstance(seq_analysis, dict) and "flat" in seq_analysis else seq_analysis
+    total_sequences = sum(v.get("count", 0) for v in seq_flat.values())
 
     total_picks = total_selections + total_exotics + total_sequences
     if total_picks == 0:
@@ -714,7 +734,7 @@ async def maybe_tune_bet_thresholds(
 
     if total_sequences >= MIN_SEQUENCE_PICKS:
         new_thresholds["sequence"] = _compute_sequence_thresholds(
-            seq_analysis, current["sequence"]
+            seq_flat, current["sequence"]
         )
 
     # ── Check significance ──────────────────────────────────────────────
