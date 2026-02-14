@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DEFAULT_DATA_DIR = Path(r"D:\Punty\DatafromProform\2026")
-MIN_SAMPLE = 100  # raised from 50 for more reliable profiles
+MIN_SAMPLE = 50   # 50 runners minimum per context for quintile analysis
 MULT_MIN = 0.5    # raised from 0.3 to prevent near-elimination of factors
 MULT_MAX = 2.5
 
@@ -262,8 +262,6 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
                 meetings = json.load(f)
             for m in meetings:
                 md = m.get("MeetingDate", "")
-                if md and not md.startswith("2025"):
-                    continue
                 venue = m.get("Track", {}).get("Name", "")
                 state = m.get("Track", {}).get("State", "")
                 for race in m.get("Races", []):
