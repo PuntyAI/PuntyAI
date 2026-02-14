@@ -14,6 +14,31 @@ from punty.models.pick import Pick
 logger = logging.getLogger(__name__)
 
 
+async def _delete_social_posts(content: Content, db: AsyncSession) -> None:
+    """Delete Twitter and Facebook posts for superseded/unapproved content."""
+    if content.twitter_id:
+        try:
+            from punty.delivery.twitter import TwitterDelivery
+            twitter = TwitterDelivery(db)
+            await twitter.delete_tweet(content.twitter_id)
+            logger.info(f"Deleted tweet {content.twitter_id} for superseded content {content.id}")
+            content.twitter_id = None
+            content.sent_to_twitter = False
+        except Exception as e:
+            logger.warning(f"Could not delete tweet {content.twitter_id}: {e}")
+
+    if content.facebook_id:
+        try:
+            from punty.delivery.facebook import FacebookDelivery
+            fb = FacebookDelivery(db)
+            await fb.delete_post(content.facebook_id)
+            logger.info(f"Deleted Facebook post {content.facebook_id} for superseded content {content.id}")
+            content.facebook_id = None
+            content.sent_to_facebook = False
+        except Exception as e:
+            logger.warning(f"Could not delete Facebook post {content.facebook_id}: {e}")
+
+
 async def validate_early_mail(content: Content, db: AsyncSession) -> tuple[bool, list[str]]:
     """Validate early mail content before auto-approval.
 
@@ -235,6 +260,8 @@ async def auto_approve_content(content_id: str, db: AsyncSession) -> dict:
         for old in old_result.scalars().all():
             old.status = ContentStatus.SUPERSEDED.value
             await db.execute(sa_delete(Pick).where(Pick.content_id == old.id))
+            # Delete old social media posts
+            await _delete_social_posts(old, db)
 
         try:
             await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)

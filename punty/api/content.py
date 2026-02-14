@@ -252,6 +252,7 @@ async def generate_content(request: GenerateRequest, db: AsyncSession = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @router.post("/{content_id}/review")
 async def review_content(
     content_id: str, action: ReviewAction, db: AsyncSession = Depends(get_db)
@@ -300,6 +301,9 @@ async def review_content(
         from sqlalchemy import delete as sa_delete
         from punty.models.pick import Pick
         await db.execute(sa_delete(Pick).where(Pick.content_id == content.id))
+        # Delete social media posts if they exist
+        from punty.scheduler.automation import _delete_social_posts
+        await _delete_social_posts(content, db)
     elif action.action == "reject":
         content.status = ContentStatus.REJECTED
         content.review_notes = action.notes
