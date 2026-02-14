@@ -89,6 +89,45 @@ class TestPlaceBetSettlement:
         assert placed is False
         assert pnl == -6.0
 
+    def test_place_bet_small_field_third(self):
+        """Place bet on 3rd in 5-7 runner field should LOSE (only 2 places paid)."""
+        stake = 6.0
+        finish_position = 3
+        field_size = 6  # 5-7 runners = 2 places only
+
+        num_places = 2 if field_size <= 7 else 3
+        placed = finish_position <= num_places
+
+        assert placed is False  # 3rd doesn't pay in small field
+
+    def test_place_bet_small_field_second(self):
+        """Place bet on 2nd in 5-7 runner field should WIN (2 places paid)."""
+        stake = 6.0
+        place_odds = 1.80
+        finish_position = 2
+        field_size = 6
+
+        num_places = 2 if field_size <= 7 else 3
+        placed = finish_position <= num_places
+        pnl = round(place_odds * stake - stake, 2) if placed else round(-stake, 2)
+
+        assert placed is True
+        assert pnl == 4.8
+
+    def test_place_bet_large_field_third(self):
+        """Place bet on 3rd in 8+ runner field should WIN (3 places paid)."""
+        stake = 6.0
+        place_odds = 1.80
+        finish_position = 3
+        field_size = 10
+
+        num_places = 2 if field_size <= 7 else 3
+        placed = finish_position <= num_places
+        pnl = round(place_odds * stake - stake, 2) if placed else round(-stake, 2)
+
+        assert placed is True
+        assert pnl == 4.8
+
 
 class TestEachWaySettlement:
     """Tests for each way bet settlement calculations."""

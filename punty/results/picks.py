@@ -147,6 +147,15 @@ async def _settle_picks_for_race_impl(
     runners_by_saddlecloth = {r.saddlecloth: r for r in runners if r.saddlecloth}
     runners_by_name = {r.horse_name.upper(): r for r in runners}
 
+    # Determine number of paying places based on field size (TAB rules)
+    field_size = len(active_runners)
+    if field_size <= 4:
+        num_places = 0  # No place betting
+    elif field_size <= 7:
+        num_places = 2  # 1st and 2nd only
+    else:
+        num_places = 3  # 1st, 2nd, and 3rd
+
     # Load race for exotic results
     race_result = await db.execute(select(Race).where(Race.id == race_id))
     race = race_result.scalar_one_or_none()
@@ -194,7 +203,7 @@ async def _settle_picks_for_race_impl(
 
             stake = pick.bet_stake or 1.0
             won = runner.finish_position == 1
-            placed = runner.finish_position is not None and runner.finish_position <= 3
+            placed = runner.finish_position is not None and runner.finish_position <= num_places
 
             # Use fixed odds from tip time, fall back to tote dividends for backwards compatibility
             win_odds = pick.odds_at_tip or runner.win_dividend
