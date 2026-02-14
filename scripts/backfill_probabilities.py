@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from punty.models.database import AsyncSessionLocal, init_db
+from punty.models.database import async_session, init_db
 from punty.models.meeting import Meeting, Race, Runner
 from punty.models.pick import Pick
 from punty.probability import calculate_race_probabilities
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 async def backfill():
     await init_db()
 
-    async with AsyncSessionLocal() as db:
+    async with async_session() as db:
         # Count picks needing backfill
         total_result = await db.execute(
             select(func.count(Pick.id)).where(
