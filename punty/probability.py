@@ -559,14 +559,20 @@ def _score_last_five(last_five: str) -> float:
 
 
 def _stat_to_score(win_rate: float, baseline: float) -> float:
-    """Convert a win rate to a 0.0-1.0 score relative to baseline."""
-    # If win_rate is double the baseline, score should be ~0.7
-    # If win_rate is zero, score should be ~0.2
+    """Convert a win rate to a 0.0-1.0 score relative to baseline.
+
+    Piecewise linear mapping:
+      ratio 0 → 0.20, ratio 1 → 0.50, ratio 2 → 0.675, ratio 3+ → 0.85
+    """
     if baseline <= 0:
         baseline = 0.10
     ratio = win_rate / baseline
-    # Map ratio to score: 0→0.2, 1→0.5, 2→0.7, 3+→0.85
-    score = 0.2 + 0.3 * min(ratio, 3.0) / 3.0 * 2.0
+    if ratio <= 1.0:
+        # Below-average to average: 0.2 → 0.5
+        score = 0.2 + 0.3 * ratio
+    else:
+        # Above-average: 0.5 → 0.85 (diminishing returns)
+        score = 0.5 + 0.175 * min(ratio - 1.0, 2.0)
     return max(0.05, min(0.90, score))
 
 
@@ -736,7 +742,6 @@ def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
         if any(kw in rc_lower for kw in ("group", "listed", "stakes")):
             benchmark = 50000
         elif "bm" in rc_lower:
-            import re
             bm_match = re.search(r"bm\s*(\d+)", rc_lower)
             rating = int(bm_match.group(1)) if bm_match else 64
             benchmark = max(rating * 500, 15000)
@@ -1687,7 +1692,6 @@ def _parse_margin_value(margin: Any) -> Optional[float]:
         return _ABBREVS[ms]
 
     # Length format: "1.5L", "3L", "1.5", "3"
-    import re
     m = re.match(r"^([\d.]+)\s*L?$", ms)
     if m:
         try:
