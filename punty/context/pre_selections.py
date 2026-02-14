@@ -17,7 +17,7 @@ RACE_POOL = 20.0       # $20 per race
 MIN_STAKE = 1.0        # minimum bet
 STAKE_STEP = 0.50      # round to nearest 50c
 
-# Bet type thresholds
+# Bet type thresholds (defaults — can be overridden by tuned thresholds)
 WIN_MIN_PROB = 0.18          # 18% win prob minimum for Win bet
 WIN_MIN_VALUE = 0.90         # allow Win bets at near-fair odds
 SAVER_WIN_MIN_PROB = 0.14    # 14% for secondary Win bet
@@ -34,6 +34,24 @@ ROUGHIE_MIN_VALUE = 1.10
 
 # Punty's Pick exotic threshold
 EXOTIC_PUNTYS_PICK_VALUE = 1.5  # exotic needs 1.5x value to be Punty's Pick
+
+
+def _load_thresholds(overrides: dict | None = None) -> dict:
+    """Build thresholds dict from module defaults, with optional overrides."""
+    t = {
+        "win_min_prob": WIN_MIN_PROB,
+        "win_min_value": WIN_MIN_VALUE,
+        "saver_win_min_prob": SAVER_WIN_MIN_PROB,
+        "each_way_min_prob": EACH_WAY_MIN_PROB,
+        "each_way_max_prob": EACH_WAY_MAX_PROB,
+        "each_way_min_odds": EACH_WAY_MIN_ODDS,
+        "each_way_max_odds": EACH_WAY_MAX_ODDS,
+        "place_min_prob": PLACE_MIN_PROB,
+        "place_min_value": PLACE_MIN_VALUE,
+    }
+    if overrides:
+        t.update(overrides)
+    return t
 
 
 @dataclass
@@ -108,12 +126,14 @@ class RacePreSelections:
 def calculate_pre_selections(
     race_context: dict[str, Any],
     pool: float = RACE_POOL,
+    selection_thresholds: dict | None = None,
 ) -> RacePreSelections:
     """Calculate deterministic pre-selections for a single race.
 
     Args:
         race_context: Race dict from ContextBuilder with runners and probabilities.
         pool: Total stake pool (default $20).
+        selection_thresholds: Optional tuned thresholds from bet_type_tuning.
 
     Returns:
         RacePreSelections with ordered picks, exotic, and Punty's Pick.
@@ -122,6 +142,8 @@ def calculate_pre_selections(
     runners = race_context.get("runners", [])
     probs = race_context.get("probabilities", {})
     exotic_combos = probs.get("exotic_combinations", [])
+
+    thresholds = _load_thresholds(selection_thresholds)
 
     # Build runner data with probability info
     candidates = _build_candidates(runners)
@@ -163,18 +185,18 @@ def calculate_pre_selections(
             continue
         if roughie and c["saddlecloth"] == roughie["saddlecloth"]:
             continue  # reserve for roughie slot
-        picks.append(_make_pick(c, len(picks) + 1, is_roughie=False))
+        picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds))
         used_saddlecloths.add(c["saddlecloth"])
 
     # Add roughie as pick #4
     if roughie and roughie["saddlecloth"] not in used_saddlecloths:
-        picks.append(_make_pick(roughie, 4, is_roughie=True))
+        picks.append(_make_pick(roughie, 4, is_roughie=True, thresholds=thresholds))
         used_saddlecloths.add(roughie["saddlecloth"])
     elif len(picks) < 4:
         # No qualifying roughie — fill 4th from remaining
         for c in main_pool:
             if c["saddlecloth"] not in used_saddlecloths:
-                picks.append(_make_pick(c, len(picks) + 1, is_roughie=False))
+                picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds))
                 used_saddlecloths.add(c["saddlecloth"])
                 break
 
@@ -243,8 +265,9 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
     return candidates
 
 
-def _determine_bet_type(c: dict, rank: int, is_roughie: bool) -> str:
+def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None) -> str:
     """Determine optimal bet type for a runner based on probability profile."""
+    t = thresholds or _load_thresholds()
     win_prob = c["win_prob"]
     place_prob = c["place_prob"]
     odds = c["odds"]
@@ -253,49 +276,49 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool) -> str:
 
     # Roughie: usually Place (safer) unless strong value
     if is_roughie:
-        if win_prob >= WIN_MIN_PROB and value >= 1.20:
+        if win_prob >= t["win_min_prob"] and value >= 1.20:
             return "Win"  # strong roughie value
-        if place_prob >= PLACE_MIN_PROB:
+        if place_prob >= t["place_min_prob"]:
             return "Place"
         return "Place"  # default roughie to Place
 
     # Top pick (#1): prefer Win or Each Way
     if rank == 1:
-        if win_prob >= WIN_MIN_PROB and value >= WIN_MIN_VALUE:
+        if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
             # Each Way if in the sweet spot
-            if (EACH_WAY_MIN_ODDS <= odds <= EACH_WAY_MAX_ODDS
-                    and EACH_WAY_MIN_PROB <= win_prob <= EACH_WAY_MAX_PROB):
+            if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
+                    and t["each_way_min_prob"] <= win_prob <= t["each_way_max_prob"]):
                 return "Each Way"
             return "Win"
-        if (EACH_WAY_MIN_ODDS <= odds <= EACH_WAY_MAX_ODDS
-                and win_prob >= EACH_WAY_MIN_PROB):
+        if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
+                and win_prob >= t["each_way_min_prob"]):
             return "Each Way"
-        if place_prob >= PLACE_MIN_PROB and place_value >= PLACE_MIN_VALUE:
+        if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
         return "Win"  # fallback — at least try
 
     # Second pick (#2): Win if strong, Saver Win, or Place
     if rank == 2:
-        if win_prob >= WIN_MIN_PROB and value >= WIN_MIN_VALUE:
+        if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
             return "Saver Win"
-        if (EACH_WAY_MIN_ODDS <= odds <= EACH_WAY_MAX_ODDS
-                and win_prob >= EACH_WAY_MIN_PROB and value >= 1.0):
+        if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
+                and win_prob >= t["each_way_min_prob"] and value >= 1.0):
             return "Each Way"
-        if place_prob >= PLACE_MIN_PROB and place_value >= PLACE_MIN_VALUE:
+        if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
         return "Place"
 
     # Third pick (#3): Place-focused
-    if place_prob >= PLACE_MIN_PROB and place_value >= PLACE_MIN_VALUE:
+    if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
         return "Place"
-    if win_prob >= WIN_MIN_PROB and value >= 1.10:
+    if win_prob >= t["win_min_prob"] and value >= 1.10:
         return "Saver Win"
     return "Place"
 
 
-def _make_pick(c: dict, rank: int, is_roughie: bool) -> RecommendedPick:
+def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None) -> RecommendedPick:
     """Create a RecommendedPick from candidate data."""
-    bet_type = _determine_bet_type(c, rank, is_roughie)
+    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds)
     expected_return = _expected_return(c, bet_type)
 
     return RecommendedPick(

@@ -1087,6 +1087,21 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
             logger.warning(f"Probability tuning failed: {e}")
             results["errors"].append(f"probability_tune: {str(e)}")
 
+        # Step 6: Auto-tune bet type thresholds
+        try:
+            from punty.bet_type_tuning import maybe_tune_bet_thresholds
+            bt_result = await maybe_tune_bet_thresholds(db)
+            if bt_result:
+                results["steps"].append(
+                    f"bet_type_tune: adjusted {bt_result['max_change_key']} "
+                    f"({bt_result['max_change_pct']:.1f}%, {bt_result['picks_analyzed']} picks)"
+                )
+            else:
+                results["steps"].append("bet_type_tune: skipped (cooldown/insufficient data)")
+        except Exception as e:
+            logger.warning(f"Bet type tuning failed: {e}")
+            results["errors"].append(f"bet_type_tune: {str(e)}")
+
     results["completed_at"] = melb_now().isoformat()
 
     # Log completion

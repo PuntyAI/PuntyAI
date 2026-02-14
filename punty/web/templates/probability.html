@@ -264,6 +264,132 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Bet Type Performance -->
+    {% if bet_type %}
+    <div class="bg-punty-card rounded-xl p-4 sm:p-6 border border-punty-border">
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-xl">🎯</span>
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Bet Type Performance</h2>
+        </div>
+        <p class="text-xs text-gray-400 mb-4">Last 60 days of settled picks. Thresholds auto-tune to maximize strike rate &amp; ROI.</p>
+
+        <!-- Selection Bet Types -->
+        {% if bet_type.selection %}
+        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Selections</h3>
+        <div class="overflow-x-auto mb-4">
+            <table class="w-full text-sm">
+                <thead><tr class="border-b border-punty-border">
+                    <th class="py-2 px-3 text-left text-gray-500 font-semibold">Type</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Count</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Strike</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">P&amp;L</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Current</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Optimal</th>
+                </tr></thead>
+                <tbody>
+                {% for bt_key in ['win', 'saver_win', 'place', 'each_way'] %}
+                {% set d = bet_type.selection.get(bt_key, {}) %}
+                {% if d.get('count', 0) > 0 %}
+                <tr class="border-b border-punty-border/50">
+                    <td class="py-2 px-3 font-medium text-gray-200">{{ bt_key|replace('_', ' ')|title }}</td>
+                    <td class="py-2 px-3 text-right text-gray-400">{{ d.count }}</td>
+                    <td class="py-2 px-3 text-right">{{ '%.1f'|format(d.strike_rate * 100) }}%</td>
+                    <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if d.get('total_pnl', 0) >= 0 else 'text-red-400' }}">
+                        ${{ '%.2f'|format(d.get('total_pnl', 0)) }}
+                    </td>
+                    <td class="py-2 px-3 text-right text-gray-400">
+                        {% if bt_key == 'place' %}{{ '%.0f'|format(bet_type.current_thresholds.selection.place_min_prob * 100) }}%
+                        {% elif bt_key == 'each_way' %}{{ '%.0f'|format(bet_type.current_thresholds.selection.each_way_min_prob * 100) }}%
+                        {% else %}{{ '%.0f'|format(bet_type.current_thresholds.selection.win_min_prob * 100) }}%{% endif %}
+                    </td>
+                    <td class="py-2 px-3 text-right">
+                        {% if d.get('optimal_threshold', {}).get('threshold') %}
+                        <span class="text-cyan-400">{{ '%.0f'|format(d.optimal_threshold.threshold * 100) }}%</span>
+                        <span class="text-xs text-gray-500">(n={{ d.optimal_threshold.sample_size }})</span>
+                        {% else %}<span class="text-gray-500">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Exotic Performance -->
+        {% if bet_type.exotic %}
+        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">Exotics</h3>
+        <div class="overflow-x-auto mb-4">
+            <table class="w-full text-sm">
+                <thead><tr class="border-b border-punty-border">
+                    <th class="py-2 px-3 text-left text-gray-500 font-semibold">Type</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Count</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Hit Rate</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">ROI</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">P&amp;L</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Avg Value</th>
+                </tr></thead>
+                <tbody>
+                {% for etype in ['Trifecta', 'Exacta', 'Quinella', 'First4'] %}
+                {% set d = bet_type.exotic.get(etype, {}) %}
+                {% if d.get('count', 0) > 0 %}
+                <tr class="border-b border-punty-border/50">
+                    <td class="py-2 px-3 font-medium text-gray-200">{{ etype }}</td>
+                    <td class="py-2 px-3 text-right text-gray-400">{{ d.count }}</td>
+                    <td class="py-2 px-3 text-right">{{ '%.1f'|format(d.hit_rate * 100) }}%</td>
+                    <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if d.roi >= 0 else 'text-red-400' }}">
+                        {{ '%+.1f'|format(d.roi * 100) }}%
+                    </td>
+                    <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if d.get('total_pnl', 0) >= 0 else 'text-red-400' }}">
+                        ${{ '%.2f'|format(d.get('total_pnl', 0)) }}
+                    </td>
+                    <td class="py-2 px-3 text-right text-gray-400">{{ '%.2f'|format(d.avg_value) }}x</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Sequence Performance -->
+        {% if bet_type.sequence %}
+        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">Sequences</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="border-b border-punty-border">
+                    <th class="py-2 px-3 text-left text-gray-500 font-semibold">Variant</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Count</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Hit Rate</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">ROI</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">P&amp;L</th>
+                    <th class="py-2 px-3 text-right text-gray-500 font-semibold">Staked</th>
+                </tr></thead>
+                <tbody>
+                {% for variant in ['skinny', 'balanced', 'wide'] %}
+                {% set d = bet_type.sequence.get(variant, {}) %}
+                {% if d.get('count', 0) > 0 %}
+                <tr class="border-b border-punty-border/50">
+                    <td class="py-2 px-3 font-medium text-gray-200">{{ variant|title }}</td>
+                    <td class="py-2 px-3 text-right text-gray-400">{{ d.count }}</td>
+                    <td class="py-2 px-3 text-right">{{ '%.1f'|format(d.hit_rate * 100) }}%</td>
+                    <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if d.roi >= 0 else 'text-red-400' }}">
+                        {{ '%+.1f'|format(d.roi * 100) }}%
+                    </td>
+                    <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if d.get('total_pnl', 0) >= 0 else 'text-red-400' }}">
+                        ${{ '%.2f'|format(d.get('total_pnl', 0)) }}
+                    </td>
+                    <td class="py-2 px-3 text-right text-gray-400">${{ '%.2f'|format(d.get('total_staked', 0)) }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 

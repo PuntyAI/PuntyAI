@@ -63,6 +63,7 @@ def build_sequence_lanes(
     race_range: tuple[int, int],
     leg_analysis: list[dict],
     race_contexts: list[dict],
+    width_thresholds: dict | None = None,
 ) -> SequenceBlock | None:
     """Build Skinny/Balanced/Wide lanes for a sequence bet.
 
@@ -72,6 +73,7 @@ def build_sequence_lanes(
         leg_analysis: List of sequence leg analysis dicts from builder
             (race_number, confidence, suggested_width, top_runners)
         race_contexts: All race context dicts for the meeting
+        width_thresholds: Optional tuned widths from bet_type_tuning.
 
     Returns:
         SequenceBlock with all three lanes, or None if insufficient data.
@@ -124,9 +126,9 @@ def build_sequence_lanes(
         return None
 
     # Build three lane variants
-    skinny = _build_lane("Skinny", legs_data, SKINNY_OUTLAY)
-    balanced = _build_lane("Balanced", legs_data, BALANCED_OUTLAY)
-    wide = _build_lane("Wide", legs_data, WIDE_OUTLAY)
+    skinny = _build_lane("Skinny", legs_data, SKINNY_OUTLAY, width_thresholds)
+    balanced = _build_lane("Balanced", legs_data, BALANCED_OUTLAY, width_thresholds)
+    wide = _build_lane("Wide", legs_data, WIDE_OUTLAY, width_thresholds)
 
     # Determine recommendation based on confidence distribution
     recommended, reason = _recommend_variant(legs_data)
@@ -147,6 +149,7 @@ def _build_lane(
     variant: str,
     legs_data: list[dict],
     outlay: float,
+    width_thresholds: dict | None = None,
 ) -> SequenceLane:
     """Build a single lane variant from leg data."""
     lane_legs = []
@@ -157,8 +160,8 @@ def _build_lane(
         suggested = ld["suggested_width"]
         top = ld["top_runners"]
 
-        # Determine width based on variant
-        width = _width_for_variant(variant, confidence, suggested)
+        # Determine width based on variant (use tuned thresholds if available)
+        width = _width_for_variant(variant, confidence, suggested, width_thresholds)
 
         # Select runners (top N by probability)
         selected = top[:width]
@@ -202,8 +205,22 @@ def _build_lane(
     )
 
 
-def _width_for_variant(variant: str, confidence: str, suggested: int) -> int:
-    """Determine runner width for a leg based on variant and confidence."""
+def _width_for_variant(
+    variant: str, confidence: str, suggested: int, thresholds: dict | None = None,
+) -> int:
+    """Determine runner width for a leg based on variant and confidence.
+
+    If thresholds dict is provided (from bet_type_tuning), uses tuned widths.
+    Otherwise falls back to hardcoded defaults.
+    """
+    if thresholds:
+        conf_key = confidence.lower()
+        var_key = variant.lower()
+        key = f"width_{conf_key}_{var_key}"
+        if key in thresholds:
+            return thresholds[key]
+
+    # Hardcoded defaults
     if variant == "Skinny":
         if confidence == "HIGH":
             return 1

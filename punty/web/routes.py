@@ -450,9 +450,16 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
             },
         }
 
+    # Add bet type performance data
+    try:
+        from punty.bet_type_tuning import get_bet_type_dashboard
+        bet_type_data = await get_bet_type_dashboard(db)
+    except Exception:
+        bet_type_data = {"selection": {}, "exotic": {}, "sequence": {}, "current_thresholds": {}}
+
     return templates.TemplateResponse(
         "probability.html",
-        {"request": request, **data},
+        {"request": request, **data, "bet_type": bet_type_data},
     )
 
 
