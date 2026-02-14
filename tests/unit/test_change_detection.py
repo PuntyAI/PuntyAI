@@ -19,6 +19,7 @@ from punty.results.change_detection import (
     take_snapshot,
     _normalise_condition,
     _normalise_name,
+    _same_jockey,
     _horse_matches,
     _extract_track_number,
 )
@@ -110,6 +111,29 @@ class TestHelpers:
         assert _normalise_name("J. Smith") == "j smith"
         assert _normalise_name("J Smith") == "j smith"
         assert _normalise_name("  Craig Newitt ") == "craig newitt"
+
+    def test_same_jockey_full_vs_abbreviated(self):
+        """Abbreviated first names should match full names (same surname + initial)."""
+        assert _same_jockey("Craig Newitt", "C.Newitt") is True
+        assert _same_jockey("Michael Dee", "M.J.Dee") is True
+        assert _same_jockey("Thomas Stockdale", "T.Stockdale") is True
+        assert _same_jockey("Celine Gaudray", "C.G.Gaudray") is True
+
+    def test_same_jockey_identical(self):
+        assert _same_jockey("Craig Newitt", "Craig Newitt") is True
+        assert _same_jockey("J. McDonald", "J. McDonald") is True
+
+    def test_same_jockey_different_people(self):
+        assert _same_jockey("J. McDonald", "C. Williams") is False
+        assert _same_jockey("Craig Newitt", "Thomas Stockdale") is False
+
+    def test_same_jockey_different_initial_same_surname(self):
+        """Different first initials with same surname = different jockey."""
+        assert _same_jockey("C. Williams", "J. Williams") is False
+
+    def test_same_jockey_empty(self):
+        assert _same_jockey("", "J. Smith") is False
+        assert _same_jockey("J. Smith", "") is False
 
     def test_horse_matches_by_saddlecloth(self):
         pick = _make_pick(saddlecloth=5)

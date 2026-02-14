@@ -247,7 +247,7 @@ async def detect_jockey_gear_changes(
             if (
                 prev.jockey
                 and runner.jockey
-                and _normalise_name(prev.jockey) != _normalise_name(runner.jockey)
+                and not _same_jockey(prev.jockey, runner.jockey)
             ):
                 picks = await find_impacted_picks(db, meeting_id, race_num, horse, sc)
                 if picks:
@@ -301,6 +301,34 @@ async def detect_jockey_gear_changes(
 def _normalise_name(name: str) -> str:
     """Normalise jockey name for comparison (strip dots, extra spaces)."""
     return name.strip().replace(".", "").lower()
+
+
+def _same_jockey(name_a: str, name_b: str) -> bool:
+    """Check if two jockey name strings refer to the same person.
+
+    Handles abbreviated vs full names:
+    - "Craig Newitt" vs "C.Newitt" → same (surname match + initial match)
+    - "Michael Dee" vs "M.J.Dee" → same (surname match + initial match)
+    - "Thomas Stockdale" vs "T.Stockdale" → same
+    - "J. McDonald" vs "C. Williams" → different
+    """
+    a = name_a.strip().replace(".", " ").lower().split()
+    b = name_b.strip().replace(".", " ").lower().split()
+    if not a or not b:
+        return False
+
+    # Surnames must match (last token)
+    if a[-1] != b[-1]:
+        return False
+
+    # If surnames match and either has only initials for first name, check initial match
+    a_first = [p for p in a[:-1] if p]
+    b_first = [p for p in b[:-1] if p]
+    if not a_first or not b_first:
+        return True  # Surname match with no first name to compare
+
+    # Check if the first initial matches
+    return a_first[0][0] == b_first[0][0]
 
 
 # ── Pick impact analysis ──────────────────────────────────────────────────

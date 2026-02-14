@@ -1120,16 +1120,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Style Sequence Variant Cards ---
     function styleSequenceVariants(body) {
-        var allParas = body.querySelectorAll('p');
+        var allParas = Array.from(body.querySelectorAll('p'));
         var variantRe = /^(Skinny|Balanced|Wide)\s*\(\$([\d.]+)\):\s*/i;
         var costingRe = /\((\d+)\s*combos?\s*[×x]\s*\$([\d.]+)\s*=\s*\$([\d.]+)\)/;
         var returnRe = /est\.\s*return:\s*(\d+(?:\.\d+)?)%/i;
 
-        allParas.forEach(function(p) {
-            var text = p.textContent.trim();
+        function buildVariantCard(text) {
             var vm = text.match(variantRe);
-            if (!vm) return;
-
+            if (!vm) return null;
             var variant = vm[1].toLowerCase();
             var totalCost = vm[2];
             var cm = text.match(costingRe);
@@ -1138,14 +1136,11 @@ document.addEventListener('DOMContentLoaded', function() {
             var costDisplay = cm ? cm[3] : totalCost;
             var rm = text.match(returnRe);
             var returnPct = rm ? rm[1] : null;
-
-            // Extract legs: between variant header and costing parens
             var afterColon = text.replace(variantRe, '');
             var legsStr = cm ? afterColon.substring(0, afterColon.indexOf('(' + cm[1])).trim() : afterColon.trim();
 
             var card = document.createElement('div');
             card.className = 'seq-variant-card seq-variant-' + variant;
-
             var headerHtml = '<div class="flex items-center justify-between flex-wrap gap-2">';
             headerHtml += '<div class="flex items-center">';
             headerHtml += '<span class="seq-variant-badge">' + variant.charAt(0).toUpperCase() + variant.slice(1) + '</span>';
@@ -1154,27 +1149,50 @@ document.addEventListener('DOMContentLoaded', function() {
             headerHtml += '<div class="flex items-center gap-2">';
             if (combos) headerHtml += '<span class="seq-combos">' + combos + ' combos @ $' + unitPrice + '</span>';
             if (returnPct) headerHtml += '<span class="seq-return">' + returnPct + '%</span>';
-            headerHtml += '</div>';
-            headerHtml += '</div>';
-
+            headerHtml += '</div></div>';
             var legsHtml = '<div class="seq-legs">';
             var legs = legsStr.split('/');
             legs.forEach(function(leg, idx) {
                 if (idx > 0) legsHtml += '<span class="seq-leg-sep">/</span>';
                 legsHtml += '<span class="seq-leg">';
-                var runners = leg.trim().split(/,\s*/);
-                runners.forEach(function(r) {
+                leg.trim().split(/,\s*/).forEach(function(r) {
                     r = r.trim();
-                    if (r && /^\d+$/.test(r)) {
-                        legsHtml += '<span class="seq-leg-pill">' + r + '</span>';
-                    }
+                    if (r && /^\d+$/.test(r)) legsHtml += '<span class="seq-leg-pill">' + r + '</span>';
                 });
                 legsHtml += '</span>';
             });
             legsHtml += '</div>';
-
             card.innerHTML = headerHtml + legsHtml;
-            p.parentNode.replaceChild(card, p);
+            return card;
+        }
+
+        allParas.forEach(function(p) {
+            // Check if this <p> contains multiple variant lines (markdown <br> joins)
+            var innerHtml = p.innerHTML;
+            var lines = innerHtml.split(/<br\s*\/?>/i).map(function(l) {
+                // Strip HTML tags to get plain text for matching
+                var tmp = document.createElement('span');
+                tmp.innerHTML = l;
+                return tmp.textContent.trim();
+            }).filter(function(l) { return l.length > 0; });
+
+            // If multiple lines and at least one is a variant, process line by line
+            var hasVariant = lines.some(function(l) { return variantRe.test(l); });
+            if (!hasVariant) return;
+
+            var fragment = document.createDocumentFragment();
+            lines.forEach(function(line) {
+                var card = buildVariantCard(line);
+                if (card) {
+                    fragment.appendChild(card);
+                } else {
+                    // Non-variant line (e.g. Punty's Pick) — keep as <p>
+                    var newP = document.createElement('p');
+                    newP.textContent = line;
+                    fragment.appendChild(newP);
+                }
+            });
+            p.parentNode.replaceChild(fragment, p);
         });
 
         // Style Punty's Pick line
