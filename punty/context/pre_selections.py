@@ -132,10 +132,10 @@ def calculate_pre_selections(
         )
 
     # Score by probability-weighted value: high win chance + value overlay
-    # Probability dominates; value capped at 2.0x to prevent longshots
-    # overriding strong contenders at short prices
+    # Probability dominates; value capped at 1.3x so favourites/champions
+    # aren't overridden by longshots with inflated value ratings
     for c in candidates:
-        capped_value = max(1.0, min(c["value_rating"], 2.0))
+        capped_value = max(1.0, min(c["value_rating"], 1.3))
         c["score"] = c["win_prob"] * capped_value
     candidates.sort(key=lambda c: c["score"], reverse=True)
 
