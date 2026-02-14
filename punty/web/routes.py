@@ -459,7 +459,7 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
 
     # Load context profiles for the context-aware multiplier section
     context_profiles = {}
-    ctx_venues, ctx_distances, ctx_classes, ctx_conditions = [], [], [], []
+    ctx_venues, ctx_distances, ctx_classes = [], [], []
     ctx_insights = []
     try:
         from punty.probability import _load_context_profiles
@@ -467,27 +467,35 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
         if ctx:
             context_profiles = ctx
             # Extract unique dimension values from profile keys
-            venue_set, dist_set, class_set, cond_set = set(), set(), set(), set()
+            venue_set, dist_set, class_set = set(), set(), set()
             all_keys = list(ctx.get("profiles", {}).keys()) + list(ctx.get("fallbacks", {}).keys())
             for k in all_keys:
                 parts = k.split("|")
-                if len(parts) >= 3:
-                    venue_set.add(parts[0])
-                    dist_set.add(parts[1])
-                    class_set.add(parts[2])
-                if len(parts) >= 4:
-                    cond_set.add(parts[3])
+                if len(parts) >= 2:
+                    # Could be venue|dist|class or dist|class or venue|dist
+                    if parts[0] in ("sprint", "short", "middle", "classic", "staying"):
+                        dist_set.add(parts[0])
+                        if len(parts) >= 2:
+                            class_set.add(parts[1])
+                    else:
+                        venue_set.add(parts[0])
+                        if len(parts) >= 2:
+                            dist_set.add(parts[1])
+                        if len(parts) >= 3:
+                            class_set.add(parts[2])
             ctx_venues = sorted(venue_set)
             ctx_distances = [d for d in ["sprint", "short", "middle", "classic", "staying"] if d in dist_set]
-            ctx_classes = [c for c in ["maiden", "restricted", "mid_bm", "open"] if c in class_set]
-            ctx_conditions = sorted(cond_set)
+            class_order = ["maiden", "class1", "restricted", "class2", "class3", "bm58", "bm64", "bm72", "open"]
+            ctx_classes = [c for c in class_order if c in class_set]
             # Pre-compute top insights (most extreme multipliers)
             for key, p in ctx.get("profiles", {}).items():
                 for f, mult in p.items():
+                    if f == "_n" or not isinstance(mult, (int, float)):
+                        continue
                     if abs(mult - 1.0) > 0.5:
                         ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0)})
             ctx_insights.sort(key=lambda x: -x["dist"])
-            ctx_insights = ctx_insights[:8]
+            ctx_insights = ctx_insights[:10]
     except Exception:
         pass
 
@@ -500,7 +508,6 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
             "ctx_venues": ctx_venues,
             "ctx_distances": ctx_distances,
             "ctx_classes": ctx_classes,
-            "ctx_conditions": ctx_conditions,
             "ctx_insights": ctx_insights,
         },
     )

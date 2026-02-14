@@ -42,7 +42,6 @@ from punty.probability import (
     _get_context_multipliers,
     _context_venue_type,
     _context_class_bucket,
-    _context_cond_bucket,
     set_dl_pattern_cache,
     get_dl_pattern_cache,
 )
@@ -2026,15 +2025,17 @@ class TestContextHelpers:
 
     def test_class_bucket(self):
         assert _context_class_bucket("Maiden") == "maiden"
-        assert _context_class_bucket("Class 1") == "restricted"
-        assert _context_class_bucket("BM64") == "mid_bm"
+        assert _context_class_bucket("Class 1") == "class1"
+        assert _context_class_bucket("Restricted") == "restricted"
+        assert _context_class_bucket("Class 2") == "class2"
+        assert _context_class_bucket("Class 3") == "class3"
+        assert _context_class_bucket("BM55") == "bm58"
+        assert _context_class_bucket("BM64") == "bm64"
+        assert _context_class_bucket("BM72") == "bm72"
         assert _context_class_bucket("BM78") == "open"
         assert _context_class_bucket("Group 1") == "open"
-
-    def test_cond_bucket(self):
-        assert _context_cond_bucket("Good 4") == "good"
-        assert _context_cond_bucket("Soft 5") == "soft"
-        assert _context_cond_bucket("Heavy 8") == "heavy"
+        assert _context_class_bucket("Benchmark 58") == "bm58"
+        assert _context_class_bucket("Benchmark 65") == "bm64"
 
 
 class TestContextMultipliers:

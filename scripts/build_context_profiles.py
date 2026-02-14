@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DEFAULT_DATA_DIR = Path(r"D:\Punty\DatafromProform\2026")
-MIN_SAMPLE = 200  # minimum runners per context for a valid profile
+MIN_SAMPLE = 50  # minimum runners per context for quintile spread calc
 
 MONTH_DIRS = {
     1: "January", 2: "February", 3: "March", 4: "April",
@@ -72,22 +72,35 @@ def _class_bucket(race_class: str) -> str:
     rc = race_class.lower().strip().rstrip(";")
     if "maiden" in rc or "mdn" in rc:
         return "maiden"
-    if "class 1" in rc or "restricted" in rc or "cl1" in rc:
+    if "class 1" in rc or "cl1" in rc:
+        return "class1"
+    if "restricted" in rc or "rst " in rc:
         return "restricted"
-    # BM rating parsing
-    bm = re.search(r"bm\s*(\d+)", rc)
+    # BM/Benchmark rating parsing
+    bm = re.search(r"(?:bm|benchmark)\s*(\d+)", rc)
     if bm:
         rating = int(bm.group(1))
-        if rating <= 72:
-            return "mid_bm"
+        if rating <= 58:
+            return "bm58"
+        if rating <= 68:
+            return "bm64"
+        if rating <= 76:
+            return "bm72"
         return "open"
-    if any(kw in rc for kw in ("group", "listed", "stakes", "open", "quality")):
+    if any(kw in rc for kw in ("group", "listed", "stakes", "quality")):
         return "open"
-    if "class 2" in rc or "class 3" in rc or "cl2" in rc or "cl3" in rc:
-        return "mid_bm"
-    return "mid_bm"  # default fallback
+    if "open" in rc:
+        return "open"
+    if "class 2" in rc or "cl2" in rc:
+        return "class2"
+    if "class 3" in rc or "cl3" in rc:
+        return "class3"
+    if "class 4" in rc or "class 5" in rc or "class 6" in rc:
+        return "bm72"
+    return "bm64"  # default fallback
 
 def _cond_bucket(condition: str) -> str:
+    """Condition bucket — only used at runtime, not in historical profiles."""
     c = condition.lower().strip()
     if "heavy" in c or "hvy" in c:
         return "heavy"
@@ -311,11 +324,10 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
                 vtype = _venue_type(venue, state)
                 dbucket = _dist_bucket(distance)
                 cbucket = _class_bucket(rc)
-                condbucket = _cond_bucket(cond)
 
-                # Build context keys at multiple levels
-                ctx_full = f"{vtype}|{dbucket}|{cbucket}|{condbucket}"
-                ctx_no_cond = f"{vtype}|{dbucket}|{cbucket}"
+                # Build context keys at multiple levels (no condition — not in PF data)
+                ctx_full = f"{vtype}|{dbucket}|{cbucket}"
+                ctx_venue_dist = f"{vtype}|{dbucket}"
                 ctx_dist_class = f"{dbucket}|{cbucket}"
 
                 for r in race_runners:
@@ -329,7 +341,7 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
 
                     all_entries.append({
                         "ctx_full": ctx_full,
-                        "ctx_no_cond": ctx_no_cond,
+                        "ctx_venue_dist": ctx_venue_dist,
                         "ctx_dist_class": ctx_dist_class,
                         "signals": sigs,
                         "won": won,
@@ -373,10 +385,7 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
     profiles = {}
     fallbacks = {}
 
-    # Level 1: Full context (venue_type|distance|class|condition)
-    for ctx_key, ctx_entries in _group_by(all_entries, "ctx_full").items():
-        if len(ctx_entries) < min_sample:
-            continue
+    def _compute_mults(ctx_entries):
         mults = {}
         for factor in factor_names:
             vals = [(e["signals"][factor], e["won"])
@@ -387,44 +396,30 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
             if ctx_spread is not None and overall and abs(overall) > 0.005:
                 mult = ctx_spread / overall
                 mults[factor] = round(max(0.3, min(2.5, mult)), 3)
+        return mults
+
+    # Level 1: Full context (venue_type|distance|class)
+    for ctx_key, ctx_entries in _group_by(all_entries, "ctx_full").items():
+        mults = _compute_mults(ctx_entries)
         if mults:
             profiles[ctx_key] = mults
+            profiles[ctx_key]["_n"] = len(ctx_entries)
 
-    # Level 2: Without condition (venue_type|distance|class)
-    for ctx_key, ctx_entries in _group_by(all_entries, "ctx_no_cond").items():
-        if len(ctx_entries) < min_sample:
-            continue
-        mults = {}
-        for factor in factor_names:
-            vals = [(e["signals"][factor], e["won"])
-                    for e in ctx_entries
-                    if e["signals"].get(factor) is not None]
-            ctx_spread = _quintile_spread(vals)
-            overall = overall_spreads.get(factor)
-            if ctx_spread is not None and overall and abs(overall) > 0.005:
-                mult = ctx_spread / overall
-                mults[factor] = round(max(0.3, min(2.5, mult)), 3)
+    # Level 2: Venue + distance (fallback)
+    for ctx_key, ctx_entries in _group_by(all_entries, "ctx_venue_dist").items():
+        mults = _compute_mults(ctx_entries)
         if mults:
             fallbacks[ctx_key] = mults
+            fallbacks[ctx_key]["_n"] = len(ctx_entries)
 
-    # Level 3: Distance + class only
+    # Level 3: Distance + class only (fallback)
     for ctx_key, ctx_entries in _group_by(all_entries, "ctx_dist_class").items():
         if ctx_key in fallbacks:
-            continue  # don't overwrite venue-specific
-        if len(ctx_entries) < min_sample:
             continue
-        mults = {}
-        for factor in factor_names:
-            vals = [(e["signals"][factor], e["won"])
-                    for e in ctx_entries
-                    if e["signals"].get(factor) is not None]
-            ctx_spread = _quintile_spread(vals)
-            overall = overall_spreads.get(factor)
-            if ctx_spread is not None and overall and abs(overall) > 0.005:
-                mult = ctx_spread / overall
-                mults[factor] = round(max(0.3, min(2.5, mult)), 3)
+        mults = _compute_mults(ctx_entries)
         if mults:
             fallbacks[ctx_key] = mults
+            fallbacks[ctx_key]["_n"] = len(ctx_entries)
 
     result = {
         "profiles": profiles,

@@ -279,7 +279,7 @@
         </div>
 
         <!-- Context Selector -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div class="grid grid-cols-3 gap-3 mb-4">
             <div>
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Venue Type</label>
                 <select x-model="venue" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
@@ -302,17 +302,9 @@
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Class</label>
                 <select x-model="raceClass" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
                     <option value="">Any</option>
+                    {% set class_labels = {'maiden': 'Maiden', 'class1': 'Class 1', 'restricted': 'Restricted', 'class2': 'Class 2', 'class3': 'Class 3', 'bm58': 'BM58 & below', 'bm64': 'BM60-68', 'bm72': 'BM70-76', 'open': 'Open / Stakes'} %}
                     {% for c in ctx_classes %}
-                    <option value="{{ c }}">{{ c.replace('_', ' ') }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Condition</label>
-                <select x-model="condition" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
-                    <option value="">Any</option>
-                    {% for cn in ctx_conditions %}
-                    <option value="{{ cn }}">{{ cn }}</option>
+                    <option value="{{ c }}">{{ class_labels.get(c, c) }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -322,6 +314,7 @@
         <div class="mb-3 flex items-center gap-2 flex-wrap">
             <span class="text-xs text-gray-400">Active:</span>
             <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 text-gray-700" x-text="activeKey || 'Select a context'"></span>
+            <span x-show="activeN > 0" class="text-xs text-gray-400" x-text="'(' + activeN.toLocaleString() + ' runners)'"></span>
             <span x-show="fallbackUsed" class="text-xs text-amber-500 italic" x-text="'(fallback: ' + fallbackKey + ')'"></span>
         </div>
 
@@ -801,48 +794,51 @@ function contextExplorer() {
     var fallbacks = {{ context_profiles.fallbacks | default({}) | tojson }};
 
     return {
-        venue: '', distance: '', raceClass: '', condition: '',
+        venue: '', distance: '', raceClass: '',
         activeProfile: null,
         activeKey: '',
+        activeN: 0,
         fallbackUsed: false,
         fallbackKey: '',
         updateProfile: function() {
             this.fallbackUsed = false;
             this.fallbackKey = '';
-            if (!this.venue && !this.distance && !this.raceClass && !this.condition) {
+            this.activeN = 0;
+            if (!this.venue && !this.distance && !this.raceClass) {
                 this.activeProfile = null;
                 this.activeKey = '';
                 return;
             }
-            // Build lookup key
-            var parts = [this.venue, this.distance, this.raceClass, this.condition].filter(Boolean);
-            var fullKey = parts.join('|');
+            // Try full key: venue|distance|class
+            var fullKey = [this.venue, this.distance, this.raceClass].filter(Boolean).join('|');
             this.activeKey = fullKey;
 
-            // Try exact match in profiles
             if (profiles[fullKey]) {
                 this.activeProfile = profiles[fullKey];
+                this.activeN = profiles[fullKey]._n || 0;
                 return;
             }
-            // Try fallbacks
             if (fallbacks[fullKey]) {
                 this.activeProfile = fallbacks[fullKey];
+                this.activeN = fallbacks[fullKey]._n || 0;
                 this.fallbackUsed = true;
                 this.fallbackKey = fullKey;
                 return;
             }
-            // Try removing condition
-            var noCondKey = [this.venue, this.distance, this.raceClass].filter(Boolean).join('|');
-            if (profiles[noCondKey] || fallbacks[noCondKey]) {
-                this.activeProfile = profiles[noCondKey] || fallbacks[noCondKey];
+            // Try venue + distance
+            var venueDistKey = [this.venue, this.distance].filter(Boolean).join('|');
+            if (venueDistKey !== fullKey && (fallbacks[venueDistKey] || profiles[venueDistKey])) {
+                this.activeProfile = profiles[venueDistKey] || fallbacks[venueDistKey];
+                this.activeN = (this.activeProfile || {})._n || 0;
                 this.fallbackUsed = true;
-                this.fallbackKey = noCondKey;
+                this.fallbackKey = venueDistKey;
                 return;
             }
-            // Try distance + class only
+            // Try distance + class
             var distClassKey = [this.distance, this.raceClass].filter(Boolean).join('|');
-            if (profiles[distClassKey] || fallbacks[distClassKey]) {
+            if (distClassKey !== fullKey && (fallbacks[distClassKey] || profiles[distClassKey])) {
                 this.activeProfile = profiles[distClassKey] || fallbacks[distClassKey];
+                this.activeN = (this.activeProfile || {})._n || 0;
                 this.fallbackUsed = true;
                 this.fallbackKey = distClassKey;
                 return;

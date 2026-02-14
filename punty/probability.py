@@ -82,9 +82,9 @@ def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
     """Get factor multipliers for the current race context.
 
     Uses hierarchical fallback:
-    1. Full match: venue_type|distance|class|condition
-    2. Without condition: venue_type|distance|class
-    3. Distance+class only: distance|class
+    1. Full match: venue_type|distance|class
+    2. Venue+distance: venue_type|distance
+    3. Distance+class: distance|class
     4. Default: all multipliers = 1.0
     """
     data = _load_context_profiles()
@@ -99,25 +99,26 @@ def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
     state = _get_state_for_venue(venue)
     distance = _get(race, "distance") or 1400
     race_class = _get(race, "class_") or ""
-    condition = _get(meeting, "track_condition") or _get(race, "track_condition") or ""
 
     vtype = _context_venue_type(venue, state)
     dbucket = _get_dist_bucket(distance)
     cbucket = _context_class_bucket(race_class)
-    condbucket = _context_cond_bucket(condition)
 
     # Try hierarchical lookup
-    full_key = f"{vtype}|{dbucket}|{cbucket}|{condbucket}"
+    full_key = f"{vtype}|{dbucket}|{cbucket}"
     if full_key in profiles:
-        return profiles[full_key]
+        result = {k: v for k, v in profiles[full_key].items() if k != "_n"}
+        return result
 
-    no_cond_key = f"{vtype}|{dbucket}|{cbucket}"
-    if no_cond_key in fallbacks:
-        return fallbacks[no_cond_key]
+    venue_dist_key = f"{vtype}|{dbucket}"
+    if venue_dist_key in fallbacks:
+        result = {k: v for k, v in fallbacks[venue_dist_key].items() if k != "_n"}
+        return result
 
     dist_class_key = f"{dbucket}|{cbucket}"
     if dist_class_key in fallbacks:
-        return fallbacks[dist_class_key]
+        result = {k: v for k, v in fallbacks[dist_class_key].items() if k != "_n"}
+        return result
 
     return {}
 
@@ -150,25 +151,31 @@ def _context_class_bucket(race_class: str) -> str:
     rc = race_class.lower().strip().rstrip(";")
     if "maiden" in rc or "mdn" in rc:
         return "maiden"
-    if "class 1" in rc or "restricted" in rc or "cl1" in rc:
+    if "class 1" in rc or "cl1" in rc:
+        return "class1"
+    if "restricted" in rc or "rst " in rc:
         return "restricted"
-    bm = re.search(r"bm\s*(\d+)", rc)
+    bm = re.search(r"(?:bm|benchmark)\s*(\d+)", rc)
     if bm:
         rating = int(bm.group(1))
-        return "mid_bm" if rating <= 72 else "open"
-    if any(kw in rc for kw in ("group", "listed", "stakes", "open", "quality")):
+        if rating <= 58:
+            return "bm58"
+        if rating <= 68:
+            return "bm64"
+        if rating <= 76:
+            return "bm72"
         return "open"
-    return "mid_bm"
-
-
-def _context_cond_bucket(condition: str) -> str:
-    """Classify track condition for context profiles."""
-    c = condition.lower().strip()
-    if "heavy" in c or "hvy" in c:
-        return "heavy"
-    if "soft" in c or "sft" in c:
-        return "soft"
-    return "good"
+    if any(kw in rc for kw in ("group", "listed", "stakes", "quality")):
+        return "open"
+    if "open" in rc:
+        return "open"
+    if "class 2" in rc or "cl2" in rc:
+        return "class2"
+    if "class 3" in rc or "cl3" in rc:
+        return "class3"
+    if "class 4" in rc or "class 5" in rc or "class 6" in rc:
+        return "bm72"
+    return "bm64"
 
 
 # Factor registry — defines all probability factors with metadata
