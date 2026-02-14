@@ -280,7 +280,7 @@
         </div>
 
         <!-- Context Selector -->
-        <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="grid grid-cols-4 gap-3 mb-4">
             <div>
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Venue Type</label>
                 <select x-model="venue" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
@@ -309,23 +309,20 @@
                     {% endfor %}
                 </select>
             </div>
-        </div>
-
-        <!-- Bet Type Selector -->
-        <div class="flex gap-2 mb-3">
-            <template x-for="bt in ['win', 'place', 'top4']">
-                <button @click="betType = bt; updateProfile()"
-                        :class="betType === bt ? 'bg-cyan-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                        class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                        x-text="({'win':'Win','place':'Place','top4':'Top 4 (Exotic)'})[bt]">
-                </button>
-            </template>
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Bet Type</label>
+                <select x-model="betType" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                    <option value="win">Win</option>
+                    <option value="place">Place</option>
+                    <option value="top4">Top 4 (Exotic)</option>
+                </select>
+            </div>
         </div>
 
         <!-- Active Profile Key -->
         <div class="mb-3 flex items-center gap-2 flex-wrap">
             <span class="text-xs text-gray-400">Active:</span>
-            <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 text-gray-700" x-text="activeKey || 'Select a context'"></span>
+            <span class="text-xs font-mono px-2 py-1 rounded bg-gray-800 text-gray-300" x-text="activeKey || 'Select a context'"></span>
             <span x-show="activeN > 0" class="text-xs text-gray-400" x-text="'(' + activeN.toLocaleString() + ' runners)'"></span>
             <span x-show="fallbackUsed" class="text-xs text-amber-500 italic" x-text="'(fallback: ' + fallbackKey + ')'"></span>
         </div>
