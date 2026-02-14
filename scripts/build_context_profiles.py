@@ -27,7 +27,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-DEFAULT_DATA_DIR = Path(r"D:\Punty\DatafromProform\2026")
+DEFAULT_DATA_DIRS = [
+    Path(r"D:\Punty\DatafromProform\2025"),
+    Path(r"D:\Punty\DatafromProform\2026"),
+]
 MIN_SAMPLE = 50   # 50 runners minimum per context for quintile analysis
 MULT_MIN = 0.5    # raised from 0.3 to prevent near-elimination of factors
 MULT_MAX = 2.5
@@ -239,10 +242,16 @@ def _quintile_spread(values_with_wins: list[tuple[float, bool]], min_sample: int
 
 # ── Main processing ──────────────────────────────────────────────────────────
 
-def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
-    """Build context profiles from all PF historical data."""
+def build_profiles(data_dirs: list[Path], min_sample: int = MIN_SAMPLE) -> dict:
+    """Build context profiles from all PF historical data across multiple years."""
 
-    print(f"Loading data from {data_dir}...")
+    # Support single Path for backwards compat
+    if isinstance(data_dirs, Path):
+        data_dirs = [data_dirs]
+
+    print(f"Loading data from {len(data_dirs)} directories:")
+    for d in data_dirs:
+        print(f"  {d}")
     print(f"Settings: min_sample={min_sample}, mult_range=[{MULT_MIN}, {MULT_MAX}]")
     start = time.time()
 
@@ -251,103 +260,114 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
     total_files = 0
     track_runner_counts = defaultdict(int)
 
-    for month_num in range(1, 13):
-        month_name = MONTH_DIRS[month_num]
-
-        # Load race metadata
-        meetings_path = data_dir / month_name / "meetings.json"
-        race_meta = {}
-        if meetings_path.exists():
-            with open(meetings_path, "r", encoding="utf-8") as f:
-                meetings = json.load(f)
-            for m in meetings:
-                md = m.get("MeetingDate", "")
-                venue = m.get("Track", {}).get("Name", "")
-                state = m.get("Track", {}).get("State", "")
-                for race in m.get("Races", []):
-                    rid = race.get("RaceId")
-                    try:
-                        rid = int(rid)
-                    except (ValueError, TypeError):
-                        continue
-                    raw_class = (race.get("RaceClass", "") or "").rstrip(";").strip()
-                    cond = race.get("TrackCondition", "") or ""
-                    race_meta[rid] = {
-                        "distance": race.get("Distance", 1400),
-                        "race_class": raw_class,
-                        "venue": venue,
-                        "state": state,
-                        "condition": cond,
-                        "field_size": race.get("Starters", 12),
-                    }
-
-        # Load form files
-        form_dir = data_dir / month_name / "Form"
-        if not form_dir.exists() and month_num == 1:
-            form_dir = data_dir / "Form"
-        if not form_dir.exists():
+    for data_dir in data_dirs:
+        if not data_dir.exists():
+            print(f"  SKIPPING {data_dir} (not found)")
             continue
 
-        for fpath in sorted(form_dir.glob("*.json")):
-            try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    runners = json.load(f)
-            except (json.JSONDecodeError, UnicodeDecodeError):
+        year_label = data_dir.name
+        dir_runners_start = total_runners
+
+        for month_num in range(1, 13):
+            month_name = MONTH_DIRS[month_num]
+
+            # Load race metadata
+            meetings_path = data_dir / month_name / "meetings.json"
+            race_meta = {}
+            if meetings_path.exists():
+                with open(meetings_path, "r", encoding="utf-8") as f:
+                    meetings = json.load(f)
+                for m in meetings:
+                    md = m.get("MeetingDate", "")
+                    venue = m.get("Track", {}).get("Name", "")
+                    state = m.get("Track", {}).get("State", "")
+                    for race in m.get("Races", []):
+                        rid = race.get("RaceId")
+                        try:
+                            rid = int(rid)
+                        except (ValueError, TypeError):
+                            continue
+                        raw_class = (race.get("RaceClass", "") or "").rstrip(";").strip()
+                        cond = race.get("TrackCondition", "") or ""
+                        race_meta[rid] = {
+                            "distance": race.get("Distance", 1400),
+                            "race_class": raw_class,
+                            "venue": venue,
+                            "state": state,
+                            "condition": cond,
+                            "field_size": race.get("Starters", 12),
+                        }
+
+            # Load form files
+            form_dir = data_dir / month_name / "Form"
+            if not form_dir.exists() and month_num == 1:
+                form_dir = data_dir / "Form"
+            if not form_dir.exists():
                 continue
-            if not isinstance(runners, list):
-                continue
 
-            total_files += 1
-
-            races = defaultdict(list)
-            for r in runners:
-                rid = r.get("RaceId")
-                if rid:
-                    races[int(rid)].append(r)
-
-            for race_id, race_runners in races.items():
-                meta = race_meta.get(race_id, {})
-                if not meta:
+            for fpath in sorted(form_dir.glob("*.json")):
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        runners = json.load(f)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(runners, list):
                     continue
 
-                venue = meta.get("venue", "")
-                state = meta.get("state", "")
-                distance = meta.get("distance", 1400)
-                rc = meta.get("race_class", "")
+                total_files += 1
 
-                track = _track_key(venue)
-                vtype = _venue_type(venue, state)
-                dbucket = _dist_bucket(distance)
-                cbucket = _class_bucket(rc)
+                races = defaultdict(list)
+                for r in runners:
+                    rid = r.get("RaceId")
+                    if rid:
+                        races[int(rid)].append(r)
 
-                # Build context keys at multiple levels
-                ctx_track = f"{track}|{dbucket}|{cbucket}"
-                ctx_vtype = f"{vtype}|{dbucket}|{cbucket}"
-                ctx_track_dist = f"{track}|{dbucket}"
-                ctx_vtype_dist = f"{vtype}|{dbucket}"
-                ctx_dist_class = f"{dbucket}|{cbucket}"
-
-                for r in race_runners:
-                    pos = r.get("Position", 99)
-                    if pos is None or pos == 0:
+                for race_id, race_runners in races.items():
+                    meta = race_meta.get(race_id, {})
+                    if not meta:
                         continue
-                    won = pos == 1
 
-                    sigs = _derive_signals(r, meta)
-                    total_runners += 1
-                    track_runner_counts[track] += 1
+                    venue = meta.get("venue", "")
+                    state = meta.get("state", "")
+                    distance = meta.get("distance", 1400)
+                    rc = meta.get("race_class", "")
 
-                    all_entries.append({
-                        "ctx_track": ctx_track,
-                        "ctx_vtype": ctx_vtype,
-                        "ctx_track_dist": ctx_track_dist,
-                        "ctx_vtype_dist": ctx_vtype_dist,
-                        "ctx_dist_class": ctx_dist_class,
-                        "signals": sigs,
-                        "won": won,
-                    })
+                    track = _track_key(venue)
+                    vtype = _venue_type(venue, state)
+                    dbucket = _dist_bucket(distance)
+                    cbucket = _class_bucket(rc)
 
-        print(f"  {month_name}: {total_runners:,} runners loaded")
+                    # Build context keys at multiple levels
+                    ctx_track = f"{track}|{dbucket}|{cbucket}"
+                    ctx_vtype = f"{vtype}|{dbucket}|{cbucket}"
+                    ctx_track_dist = f"{track}|{dbucket}"
+                    ctx_vtype_dist = f"{vtype}|{dbucket}"
+                    ctx_dist_class = f"{dbucket}|{cbucket}"
+
+                    for r in race_runners:
+                        pos = r.get("Position", 99)
+                        if pos is None or pos == 0:
+                            continue
+                        won = pos == 1
+
+                        sigs = _derive_signals(r, meta)
+                        total_runners += 1
+                        track_runner_counts[track] += 1
+
+                        all_entries.append({
+                            "ctx_track": ctx_track,
+                            "ctx_vtype": ctx_vtype,
+                            "ctx_track_dist": ctx_track_dist,
+                            "ctx_vtype_dist": ctx_vtype_dist,
+                            "ctx_dist_class": ctx_dist_class,
+                            "signals": sigs,
+                            "won": won,
+                        })
+
+            print(f"  {year_label}/{month_name}: {total_runners:,} runners loaded")
+
+        dir_runners = total_runners - dir_runners_start
+        print(f"  {year_label} subtotal: {dir_runners:,} runners\n")
 
     elapsed = time.time() - start
     print(f"\nLoaded {total_runners:,} runners from {total_files} files in {elapsed:.1f}s")
@@ -483,17 +503,22 @@ def build_profiles(data_dir: Path, min_sample: int = MIN_SAMPLE) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Build context profiles from PF historical data")
-    parser.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
+    parser.add_argument("--data-dir", nargs="*", default=None,
+                        help="One or more data directories (default: 2025 + 2026)")
     parser.add_argument("--min-sample", type=int, default=MIN_SAMPLE)
     parser.add_argument("--output", default=str(Path(__file__).resolve().parent.parent / "punty" / "data" / "context_profiles.json"))
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir)
-    if not data_dir.exists():
-        print(f"ERROR: Data directory not found: {data_dir}")
+    if args.data_dir:
+        data_dirs = [Path(d) for d in args.data_dir]
+    else:
+        data_dirs = [d for d in DEFAULT_DATA_DIRS if d.exists()]
+
+    if not data_dirs:
+        print("ERROR: No data directories found")
         sys.exit(1)
 
-    result = build_profiles(data_dir, args.min_sample)
+    result = build_profiles(data_dirs, args.min_sample)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -79,9 +79,10 @@ class TestNormaliseExotic:
         assert _normalise_exotic("quinella") == "Quinella"
 
     def test_first_four(self):
-        assert _normalise_exotic("first_four") == "First4 Box"
-        assert _normalise_exotic("first_4") == "First4 Box"
+        assert _normalise_exotic("first_four") == "First4"
+        assert _normalise_exotic("first_4") == "First4"
         assert _normalise_exotic("First Four Box") == "First4 Box"
+        assert _normalise_exotic("First4 Box") == "First4 Box"
 
     def test_plain_trifecta(self):
         assert _normalise_exotic("trifecta") == "Trifecta Box"

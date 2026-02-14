@@ -545,7 +545,10 @@ class TestFormatPreSelections:
         assert "$" in formatted
 
     def test_exotic_in_output(self):
-        runners = [_runner(1, "A", 3.0, win_prob=0.30)]
+        runners = [
+            _runner(1, "A", 3.0, win_prob=0.30),
+            _runner(2, "B", 4.0, win_prob=0.25),
+        ]
         ctx = _race_context(runners)
         ctx["probabilities"]["exotic_combinations"] = [
             {"type": "Quinella", "runners": [1, 2],

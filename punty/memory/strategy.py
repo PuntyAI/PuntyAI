@@ -680,9 +680,13 @@ def _normalise_exotic(raw: str) -> str:
     """Normalize exotic type names to canonical forms for consistent tracking."""
     low = raw.lower().strip()
     if "first" in low and ("four" in low or "4" in low):
-        return "First4 Box"
+        if "box" in low:
+            return "First4 Box"
+        return "First4"
     if "trifecta" in low:
-        return "Trifecta Box"  # All trifectas are boxed in our system
+        if "standout" in low:
+            return "Trifecta Standout"
+        return "Trifecta Box"
     if "quinella" in low:
         return "Quinella"
     if "exacta" in low:

@@ -17,9 +17,13 @@ BALANCED_OUTLAY = 50.0
 WIDE_OUTLAY = 100.0
 
 # Maximum combos before a lane becomes impractical
-MAX_COMBOS_SKINNY = 12
-MAX_COMBOS_BALANCED = 100
-MAX_COMBOS_WIDE = 500
+# Tighter caps ensure meaningful flexi % (min ~$0.67/combo at $100)
+MAX_COMBOS_SKINNY = 8
+MAX_COMBOS_BALANCED = 60
+MAX_COMBOS_WIDE = 150
+
+# Minimum flexi percentage — skip lane if unit price is below this
+MIN_FLEXI_PCT = 50.0  # 50% = $0.50/combo minimum
 
 
 @dataclass
@@ -125,13 +129,28 @@ def build_sequence_lanes(
     if len(legs_data) != num_legs:
         return None
 
-    # Build three lane variants
-    skinny = _build_lane("Skinny", legs_data, SKINNY_OUTLAY, width_thresholds)
-    balanced = _build_lane("Balanced", legs_data, BALANCED_OUTLAY, width_thresholds)
-    wide = _build_lane("Wide", legs_data, WIDE_OUTLAY, width_thresholds)
+    is_big6 = "big" in sequence_type.lower() or "6" in sequence_type
+
+    # Build lane variants (Big6 skips Wide — -99.5% ROI historically)
+    skinny = _build_lane(
+        "Skinny", legs_data, SKINNY_OUTLAY, width_thresholds, is_big6=is_big6,
+    )
+    balanced = _build_lane(
+        "Balanced", legs_data, BALANCED_OUTLAY, width_thresholds, is_big6=is_big6,
+    )
+    if is_big6:
+        wide = None  # Big6 Wide removed: -99.5% ROI, unredeemable
+    else:
+        wide = _build_lane(
+            "Wide", legs_data, WIDE_OUTLAY, width_thresholds, is_big6=is_big6,
+        )
+
+    # Need at least skinny to generate a block
+    if not skinny:
+        return None
 
     # Determine recommendation based on confidence distribution
-    recommended, reason = _recommend_variant(legs_data)
+    recommended, reason = _recommend_variant(legs_data, has_wide=wide is not None)
 
     return SequenceBlock(
         sequence_type=sequence_type,
@@ -150,8 +169,12 @@ def _build_lane(
     legs_data: list[dict],
     outlay: float,
     width_thresholds: dict | None = None,
-) -> SequenceLane:
-    """Build a single lane variant from leg data."""
+    is_big6: bool = False,
+) -> SequenceLane | None:
+    """Build a single lane variant from leg data.
+
+    Returns None if the resulting flexi % is below MIN_FLEXI_PCT.
+    """
     lane_legs = []
 
     for ld in legs_data:
@@ -161,7 +184,9 @@ def _build_lane(
         top = ld["top_runners"]
 
         # Determine width based on variant (use tuned thresholds if available)
-        width = _width_for_variant(variant, confidence, suggested, width_thresholds)
+        width = _width_for_variant(
+            variant, confidence, suggested, width_thresholds, is_big6=is_big6,
+        )
 
         # Select runners (top N by probability)
         selected = top[:width]
@@ -194,6 +219,11 @@ def _build_lane(
 
     # Unit price = outlay / combos
     unit_price = round(outlay / total_combos, 2) if total_combos > 0 else outlay
+    flexi_pct = round(unit_price * 100, 1)
+
+    # Skip lane if flexi % is too low (prevents "win but lose money" scenarios)
+    if flexi_pct < MIN_FLEXI_PCT:
+        return None
 
     return SequenceLane(
         variant=variant,
@@ -201,15 +231,17 @@ def _build_lane(
         total_combos=total_combos,
         unit_price=unit_price,
         total_outlay=outlay,
-        flexi_pct=round(unit_price * 100, 1),
+        flexi_pct=flexi_pct,
     )
 
 
 def _width_for_variant(
-    variant: str, confidence: str, suggested: int, thresholds: dict | None = None,
+    variant: str, confidence: str, suggested: int,
+    thresholds: dict | None = None, *, is_big6: bool = False,
 ) -> int:
     """Determine runner width for a leg based on variant and confidence.
 
+    Big6 gets tighter widths than Quaddie (6 legs compound faster).
     If thresholds dict is provided (from bet_type_tuning), uses tuned widths.
     Otherwise falls back to hardcoded defaults.
     """
@@ -220,7 +252,19 @@ def _width_for_variant(
         if key in thresholds:
             return thresholds[key]
 
-    # Hardcoded defaults
+    # Big6 uses tighter widths to keep combos manageable
+    if is_big6:
+        if variant == "Skinny":
+            return 1  # Always 1 for Big6 skinny
+        elif variant == "Balanced":
+            if confidence == "HIGH":
+                return 1
+            else:  # MED or LOW
+                return 2
+        else:  # Wide — should not be called for Big6 but handle gracefully
+            return 2
+
+    # Quaddie / Early Quaddie defaults
     if variant == "Skinny":
         if confidence == "HIGH":
             return 1
@@ -268,7 +312,7 @@ def _trim_to_combo_limit(
     return legs
 
 
-def _recommend_variant(legs_data: list[dict]) -> tuple[str, str]:
+def _recommend_variant(legs_data: list[dict], *, has_wide: bool = True) -> tuple[str, str]:
     """Recommend Skinny/Balanced/Wide based on leg confidence distribution."""
     high = sum(1 for ld in legs_data if ld["confidence"] == "HIGH")
     med = sum(1 for ld in legs_data if ld["confidence"] == "MED")
@@ -280,7 +324,9 @@ def _recommend_variant(legs_data: list[dict]) -> tuple[str, str]:
     elif high >= total * 0.5:
         return "Balanced", f"{high} HIGH + {med} MED legs — mix of confidence levels."
     elif low >= total * 0.5:
-        return "Wide", f"{low}/{total} legs are LOW confidence — need coverage."
+        if has_wide:
+            return "Wide", f"{low}/{total} legs are LOW confidence — need coverage."
+        return "Balanced", f"{low}/{total} legs LOW confidence — Balanced (Wide unavailable)."
     else:
         return "Balanced", f"Mixed confidence ({high}H/{med}M/{low}L) — Balanced covers the spread."
 
@@ -347,6 +393,8 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
         lines.append(f"\n{block.sequence_type} (R{block.race_start}–R{block.race_end}):")
 
         for lane in [block.skinny, block.balanced, block.wide]:
+            if lane is None:
+                continue
             legs_str = " / ".join(
                 ", ".join(str(r) for r in leg.runners)
                 for leg in lane.legs

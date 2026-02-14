@@ -415,19 +415,30 @@ def _select_exotic(
     exotic_combos: list[dict],
     selection_saddlecloths: set[int],
 ) -> RecommendedExotic | None:
-    """Select the best exotic bet, preferring combos using our selections."""
+    """Select the best exotic bet, enforcing consistency with selections.
+
+    Requires 75% overlap with selection saddlecloths (3 of 4 runners must
+    be in our picks). Falls back to Trifecta Box from selections if no
+    combo meets the threshold.
+    """
     if not exotic_combos:
         return None
 
-    # Score exotics: value ratio + bonus for using our selected runners
+    MIN_OVERLAP = 0.75  # At least 75% of exotic runners must be in selections
+
+    # Score exotics: value ratio + strong bonus for using our selected runners
     scored = []
     for ec in exotic_combos:
         runners = set(ec.get("runners", []))
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / len(runners) if runners else 0
 
-        # Prefer combos that use our picks (consistency rule)
-        score = ec.get("value", 1.0) + overlap_ratio * 0.3
+        # Enforce minimum overlap — skip combos with too many outside runners
+        if overlap_ratio < MIN_OVERLAP:
+            continue
+
+        # Decisive preference for selection runners (1.0 bonus, up from 0.3)
+        score = ec.get("value", 1.0) + overlap_ratio * 1.0
 
         scored.append((score, ec))
 

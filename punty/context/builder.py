@@ -568,6 +568,16 @@ class ContextBuilder:
                 except Exception as e:
                     logger.debug(f"Exotic combination calculation failed: {e}")
 
+            # Get context multipliers for this race (for AI prompt)
+            context_mults = {}
+            try:
+                from punty.probability import _get_context_multipliers
+                meeting_obj = race.meeting if hasattr(race, "meeting") else None
+                if meeting_obj:
+                    context_mults = _get_context_multipliers(race, meeting_obj)
+            except Exception:
+                pass
+
             return {
                 "probability_ranked": [
                     {"horse": name, "win_prob": f"{data['win_prob'] * 100:.1f}%",
@@ -576,6 +586,7 @@ class ContextBuilder:
                 ],
                 "value_plays": value_plays,
                 "exotic_combinations": exotic_combos,
+                "context_multipliers": context_mults,
             }
         except Exception as e:
             logger.warning(f"Probability calculation failed: {e}")

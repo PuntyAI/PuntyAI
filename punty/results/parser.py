@@ -74,7 +74,8 @@ _EXOTIC = re.compile(
     r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
     r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s*\(?\s*(?:Standout|Box(?:ed)?)\s*\)?)?|"
     r"(?:Box(?:ed)?\s+)?(?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))|"
-    r"Standout\s+(?:Exacta|Quinella|Trifecta|First\s*(?:Four|4)))"
+    r"Standout\s+(?:Exacta|Quinella|Trifecta|First\s*(?:Four|4))|"
+    r"Trifecta\s+Standout|First4)"
     r":\s*(.+?)\s*"  # Capture everything up to the stake
     r"(?:[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)|"    # — $20 or — 2U
     r"\(\$(\d+\.?\d*)\))",                               # ($20)
@@ -106,7 +107,7 @@ _PUNTYS_PICK_HORSE = re.compile(
 # Exotic Punty's Pick format:
 #   *Punty's Pick:* Trifecta Box [1, 5, 8, 12] — $20 (Value: 1.8x)
 _PUNTYS_PICK_EXOTIC = re.compile(
-    r"(Trifecta\s+Box|Exacta|Quinella|First4\s+Box)\s*"
+    r"(Trifecta\s+Box|Trifecta\s+Standout|Exacta|Quinella|First4\s+Box|First4)\s*"
     r"\[([^\]]+)\]\s*"
     r"[–\-—]\s*\$(\d+\.?\d*)"
     r"(?:\s*\(Value:\s*(\d+\.?\d*)x\))?",
@@ -142,7 +143,9 @@ def _normalize_exotic_type(raw: str) -> str:
     t = re.sub(r"\s*\(.*?\)\s*", " ", t).strip()
 
     if "first" in t and ("4" in t or "four" in t):
-        return "First4 Box"
+        if "box" in t:
+            return "First4 Box"
+        return "First4"
     if "trifecta" in t:
         if "standout" in t:
             return "Trifecta Standout"

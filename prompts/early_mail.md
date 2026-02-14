@@ -88,27 +88,41 @@ Each race includes a "Pre-Calculated Exotic Combinations" table with the best va
 2. Pick the combination with the highest value ratio that aligns with your race analysis
 3. If no combinations show value ≥ 1.2x, pick the best available and note the risk
 
-**CONSISTENCY RULE — Exotic runners should primarily come from your Top 3 + Roughie picks.**
-Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your Trifecta Box should use those runners (or a subset plus the Roughie). Only include a runner NOT in your selections if the exotic model shows significantly better value (≥ 1.5x vs ≤ 1.2x with selection runners) AND you explain why in the exotic reason line. A random runner appearing in the exotic but nowhere in the selections confuses punters and breaks trust.
+**CONSISTENCY RULE — ALL exotic runners MUST come from your Top 3 + Roughie picks.**
+Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your Trifecta Box MUST use those runners (or a subset plus the Roughie). Do NOT include runners that aren't in your selections — it confuses punters and breaks trust. The pre-calculated exotic combinations already enforce this constraint.
 
 **Exotic type hierarchy (based on actual performance data):**
-- **Trifecta Box (4 runners)**: Our BEST performing exotic (+3.5% ROI). Use when you have 4 genuine contenders.
-- **Exacta (straight)**: Use when you have a STRONG view on 1st and 2nd. Only when top pick >30% probability.
-- **Quinella**: Use when two runners clearly stand above the rest but order uncertain.
-- **First4 Box**: High cost (24 combos). Only use when the pre-calculated value ratio is ≥ 1.5x.
+- **Trifecta Box (3-4 runners)**: Our BEST performing exotic. Default choice. Use 3 runners from Top 3, or 4 runners (Top 3 + Roughie) when all are genuine contenders.
+- **Exacta**: Use when you have a STRONG 1-2 view. Only when top pick >30% probability with clear runner-up.
+- **Trifecta Standout**: Top pick anchored 1st, 2-3 others fill 2nd/3rd. Use when top pick is dominant (>30% prob) but minor places are open.
+- **First4** (positional/legs format): Targeted positional bet. Format: `First4: 1 / 1,2 / 1,2,3 / 3,4,5 — $20`. Each position (1st/2nd/3rd/4th) has its own runner set. Much better than boxing — targets likely finishing order.
+- **Quinella**: Use when two runners clearly stand above the rest but order uncertain. Only when value ≥ 1.4x (low dividends need higher edge).
+- **First4 Box**: RARE. Only use when 5+ runners each have >12% win probability AND value ≥ 1.5x. Historically near-zero hit rate — use sparingly.
 
 **NAMING — Use ONLY these canonical names:**
 - "Exacta" (straight, 2 runners in order)
 - "Quinella" (2 runners, any order)
 - "Trifecta Box" (3-4 runners, any order in top 3)
-- "First4 Box" (4 runners, any order in top 4)
+- "Trifecta Standout" (1 runner anchored 1st, 2-3 runners for 2nd/3rd)
+- "First4" (positional legs format: `1 / 1,2 / 1,2,3 / 3,4,5`)
+- "First4 Box" (4-5 runners, any order in top 4 — RARE)
 Do NOT use variants like "Trifecta (Boxed)", "Box Trifecta", "Exacta Standout", etc.
 
 **Cost validation for boxed bets:**
 - Trifecta Box 3 runners = 6 combos × unit = $20 (ok)
 - Trifecta Box 4 runners = 24 combos × unit = $20 (ok, but lower unit)
-- First4 Box 4 runners = 24 combos × unit = $20 (ok)
+- First4 positional = ~30 combos (targeted, much better than box)
+- First4 Box 4 runners = 24 combos × unit = $20 (ok but RARE)
 - First4 Box 5 runners = 120 combos (TOO EXPENSIVE at $20 — avoid)
+
+**DYNAMIC THRESHOLDS:** Your context includes a "CURRENT TUNED THRESHOLDS" section with auto-adjusted optimal value thresholds for each exotic type. Use those values instead of the defaults listed above — they are learned from your actual results and updated regularly.
+
+**CONTEXT-AWARE FACTORS:** Each race includes a "Context factors" line showing which factors (pace, form, barrier, etc.) are MORE or LESS predictive for that specific race context (venue + distance + class). Use this to:
+- Emphasise the STRONGER factors in your analysis and commentary for that race
+- De-emphasise weaker factors
+- Guide exotic type selection: if Pace is 1.8x STRONG, favour exotics where pace-advantaged runners dominate
+- Explain why your picks differ from market expectations when context multipliers justify it
+- Example: "At Caulfield sprints, pace is 1.8x more predictive — backing the speed here"
 
 Print as: "Probability: {X}% | Value: {Y}x"
 
@@ -150,8 +164,8 @@ Wide ($100): {LEG1_WIDE} / {LEG2_WIDE} / {LEG3_WIDE} / {LEG4_WIDE} ({COMBOS} com
 BIG 6 (R{B6_START}–R{B6_END}) — if provided in context (6 legs, needs 8+ races)
 Skinny ($10): {LEG1} / {LEG2} / {LEG3} / {LEG4} / {LEG5} / {LEG6} ({COMBOS} combos × ${UNIT} = $10) — est. return: {X}%
 Balanced ($50): {LEG1} / {LEG2} / {LEG3} / {LEG4} / {LEG5} / {LEG6} ({COMBOS} combos × ${UNIT} = $50) — est. return: {X}%
-Wide ($100): {LEG1} / {LEG2} / {LEG3} / {LEG4} / {LEG5} / {LEG6} ({COMBOS} combos × ${UNIT} = $100) — est. return: {X}%
-*Punty's Pick:* {Skinny|Balanced|Wide} — {ONE_LINE_REASON}
+Big 6: Skinny and Balanced ONLY. No Wide — historically -99.5% ROI with 500+ combos producing tiny flexi percentages.
+*Punty's Pick:* {Skinny|Balanced} — {ONE_LINE_REASON}
 
 ### 6) *NUGGETS FROM THE TRACK*
 *1 - {NUGGET_1_TITLE}*
@@ -274,7 +288,7 @@ If no track record data is provided (new system or insufficient data), generate 
 2) Odds: print as "${WIN_ODDS} / ${PLACE_ODDS}" (e.g. "$3.50 / $1.45"). Use fixed odds from the data provided. Place odds are typically provided; if not, estimate as (win_odds - 1) / 3 + 1.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
 4) Exactly ONE "Degenerate Exotic of the Race" per race.
-5) Use the Pre-Calculated Exotic Combinations table to guide exotic selection. Prefer Trifecta Box (4 runners) — our best performing exotic. Use Exacta when you have a strong 1-2 view (top pick >30%). Use Quinella when two runners stand out but order is unclear. Use First4 Box only when value ratio ≥ 1.5x. Always check the value column — if no combination shows value ≥ 1.2x, note the risk.
+5) Use the Pre-Calculated Exotic Combinations table to guide exotic selection. Prefer Trifecta Box (3-4 runners) — our best performing exotic. Use Exacta when you have a strong 1-2 view (top pick >30%). Use Trifecta Standout when top pick is dominant but minor places are open. Use First4 (positional legs format) for targeted positional bets. Use Quinella only when value ≥ 1.4x. Use First4 Box RARELY — only when value ≥ 1.5x and 5+ genuine contenders. Always check the value column — if no combination shows value ≥ 1.2x, note the risk.
 6) Headings and key labels use single *bold*. Labels like *Punty's take:*, *What it means for you:*, and *Punty read:* MUST be wrapped in *bold* markers.
 7) Output is plain text (email/WhatsApp safe). No code fences in the OUTPUT. Use STRAIGHT apostrophes (') not curly/smart quotes.
 8) Do not ever mention external sources, tipsters, "mail from X", or "consensus" — write as Punty's take.

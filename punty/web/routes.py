@@ -488,13 +488,39 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
             ctx_distances = [d for d in ["sprint", "short", "middle", "classic", "staying"] if d in dist_set]
             class_order = ["maiden", "class1", "restricted", "class2", "class3", "bm58", "bm64", "bm72", "open"]
             ctx_classes = [c for c in class_order if c in class_set]
-            # Pre-compute top insights (most extreme multipliers)
+            # Filter insights to venues racing TODAY only
+            today = melb_now().date()
+            today_result = await db.execute(
+                select(Meeting.venue).where(Meeting.date == today)
+            )
+            today_venues = {
+                row[0].lower().replace(" ", "_")
+                for row in today_result.fetchall()
+                if row[0]
+            }
+
+            # Also match fallback profiles for today's venue types
+            # (e.g., metro_vic|sprint|open when a metro VIC venue races)
             for key, p in ctx.get("profiles", {}).items():
+                parts = key.split("|")
+                venue_part = parts[0] if parts else ""
+                # Only include if venue is racing today
+                if venue_part not in today_venues:
+                    continue
+                for f, mult in p.items():
+                    if f == "_n" or not isinstance(mult, (int, float)):
+                        continue
+                    if abs(mult - 1.0) > 0.3:
+                        ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0)})
+
+            # Also include matching fallback profiles
+            for key, p in ctx.get("fallbacks", {}).items():
                 for f, mult in p.items():
                     if f == "_n" or not isinstance(mult, (int, float)):
                         continue
                     if abs(mult - 1.0) > 0.5:
                         ctx_insights.append({"key": key, "factor": f, "mult": mult, "dist": abs(mult - 1.0)})
+
             ctx_insights.sort(key=lambda x: -x["dist"])
             ctx_insights = ctx_insights[:10]
     except Exception:

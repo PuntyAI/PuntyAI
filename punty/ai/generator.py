@@ -177,6 +177,18 @@ class ContentGenerator:
             race_count = len(context.get('races', []))
             yield evt(f"Context built — {venue}, {race_count} races", "done")
 
+            # Inject tuned bet type thresholds into context
+            try:
+                from punty.models.settings import AppSettings
+                result = await self.db.execute(
+                    select(AppSettings).where(AppSettings.key == "bet_type_thresholds")
+                )
+                setting = result.scalar_one_or_none()
+                if setting and setting.value:
+                    context["_bet_type_thresholds"] = setting.value
+            except Exception:
+                pass
+
             yield evt("Creating context snapshot...")
             snapshot = await create_context_snapshot(self.db, meeting_id)
             yield evt("Context snapshot saved", "done")
@@ -1139,6 +1151,27 @@ class ContentGenerator:
             value_plays = probs.get("value_plays", [])
             exotic_combos = probs.get("exotic_combinations", [])
 
+            # Per-race context multipliers
+            ctx_mults = probs.get("context_multipliers", {})
+            if ctx_mults:
+                factor_labels = {
+                    "market": "Market", "form": "Form", "class_fitness": "Class",
+                    "pace": "Pace", "barrier": "Barrier", "jockey_trainer": "Jockey/Trainer",
+                    "weight_carried": "Weight", "horse_profile": "Profile", "movement": "Movement",
+                }
+                notable = []
+                for f, mult in sorted(ctx_mults.items(), key=lambda x: abs(x[1] - 1.0), reverse=True):
+                    label = factor_labels.get(f, f)
+                    if mult >= 1.3:
+                        notable.append(f"**{label} {mult:.1f}x** (STRONG)")
+                    elif mult <= 0.7:
+                        notable.append(f"{label} {mult:.1f}x (weak)")
+                    elif abs(mult - 1.0) >= 0.15:
+                        direction = "↑" if mult > 1.0 else "↓"
+                        notable.append(f"{label} {mult:.1f}x{direction}")
+                if notable:
+                    parts.append(f"**Context factors:** {' | '.join(notable)}")
+
             if prob_ranked:
                 parts.append("")
                 parts.append("**Probability Rankings (our model):**")
@@ -1295,6 +1328,30 @@ class ContentGenerator:
         if pre_seqs:
             from punty.context.pre_sequences import format_sequence_lanes
             parts.append(format_sequence_lanes(pre_seqs))
+
+        # Tuned bet type thresholds (dynamic, not hardcoded)
+        try:
+            from punty.bet_type_tuning import DEFAULT_EXOTIC_THRESHOLDS
+            from punty.models.settings import AppSettings
+            thresholds_json = context.get("_bet_type_thresholds")
+            if thresholds_json:
+                import json as _json
+                thresholds = _json.loads(thresholds_json) if isinstance(thresholds_json, str) else thresholds_json
+            else:
+                thresholds = {}
+
+            exotic_t = thresholds.get("exotic", DEFAULT_EXOTIC_THRESHOLDS)
+            parts.append("\n## CURRENT TUNED THRESHOLDS (auto-adjusted from results)")
+            parts.append("These are the CURRENT optimal thresholds learned from your actual results:")
+            parts.append(f"- Trifecta min value: {exotic_t.get('min_value_trifecta', 1.2):.1f}x")
+            parts.append(f"- Exacta min value: {exotic_t.get('min_value_exacta', 1.1):.1f}x")
+            parts.append(f"- Quinella min value: {exotic_t.get('min_value_quinella', 1.0):.1f}x")
+            parts.append(f"- First4 min value: {exotic_t.get('min_value_first4', 1.5):.1f}x")
+            parts.append(f"- Punty's Pick exotic value: {exotic_t.get('puntys_pick_value', 1.5):.1f}x")
+            parts.append("Use these thresholds when selecting exotics, NOT the defaults in the prompt.")
+            parts.append("")
+        except Exception:
+            pass
 
         return "\n".join(parts)
 
