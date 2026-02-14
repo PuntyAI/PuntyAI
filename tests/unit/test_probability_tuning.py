@@ -568,9 +568,9 @@ class TestCategoryBreakdown:
             (0.15, True, 10.0, 5.0, 1.1, 1000, "Good 4"),   # sprint/Good
             (0.12, False, -5.0, 5.0, 0.9, 1000, "Good 3"),   # sprint/Good
             (0.10, False, -5.0, 5.0, 0.8, 1000, "Good"),      # sprint/Good
-            (0.20, True, 15.0, 5.0, 1.2, 2000, "Heavy 8"),    # staying/Heavy
-            (0.18, False, -5.0, 5.0, 1.0, 2000, "Heavy 10"),  # staying/Heavy
-            (0.15, True, 8.0, 5.0, 1.1, 2000, "Heavy 9"),     # staying/Heavy
+            (0.20, True, 15.0, 5.0, 1.2, 2400, "Heavy 8"),    # staying/Heavy
+            (0.18, False, -5.0, 5.0, 1.0, 2400, "Heavy 10"),  # staying/Heavy
+            (0.15, True, 8.0, 5.0, 1.1, 2400, "Heavy 9"),     # staying/Heavy
         ]
         db = AsyncMock()
         db.execute.return_value = MockResult(rows)

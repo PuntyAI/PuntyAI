@@ -13,13 +13,163 @@ grouped into 6 categories:
 
 import json
 import logging
+import os
 import re
 import statistics
 from dataclasses import dataclass, field
 from itertools import combinations, permutations
+from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────────
+# Deep Learning Pattern Cache (module-level, sync)
+# ──────────────────────────────────────────────
+_dl_pattern_cache: list[dict] | None = None
+
+
+def set_dl_pattern_cache(patterns: list[dict]) -> None:
+    """Store DL patterns in module-level cache for sync access."""
+    global _dl_pattern_cache
+    _dl_pattern_cache = patterns
+    logger.info("DL pattern cache set: %d patterns", len(patterns))
+
+
+def get_dl_pattern_cache() -> list[dict] | None:
+    """Get cached DL patterns, or None if not loaded."""
+    return _dl_pattern_cache
+
+
+# ──────────────────────────────────────────────
+# Context Profiles (pre-computed factor multipliers)
+# ──────────────────────────────────────────────
+_CONTEXT_PROFILES: dict | None = None
+
+
+def _load_context_profiles() -> dict | None:
+    """Load pre-computed context profiles from JSON file.
+
+    Profiles contain factor multipliers for different racing contexts
+    (venue type × distance × class × condition), computed from historical
+    analysis of 190K+ runners. Loaded once at first use.
+    """
+    global _CONTEXT_PROFILES
+    if _CONTEXT_PROFILES is not None:
+        return _CONTEXT_PROFILES
+
+    profiles_path = Path(__file__).parent / "data" / "context_profiles.json"
+    if not profiles_path.exists():
+        logger.debug("No context profiles file found at %s", profiles_path)
+        _CONTEXT_PROFILES = {}
+        return _CONTEXT_PROFILES
+
+    try:
+        with open(profiles_path, "r") as f:
+            data = json.load(f)
+        _CONTEXT_PROFILES = data
+        n_profiles = len(data.get("profiles", {}))
+        n_fallbacks = len(data.get("fallbacks", {}))
+        logger.info("Context profiles loaded: %d profiles, %d fallbacks", n_profiles, n_fallbacks)
+        return _CONTEXT_PROFILES
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load context profiles: %s", e)
+        _CONTEXT_PROFILES = {}
+        return _CONTEXT_PROFILES
+
+
+def _get_context_multipliers(race: Any, meeting: Any) -> dict[str, float]:
+    """Get factor multipliers for the current race context.
+
+    Uses hierarchical fallback:
+    1. Full match: venue_type|distance|class|condition
+    2. Without condition: venue_type|distance|class
+    3. Distance+class only: distance|class
+    4. Default: all multipliers = 1.0
+    """
+    data = _load_context_profiles()
+    if not data:
+        return {}
+
+    profiles = data.get("profiles", {})
+    fallbacks = data.get("fallbacks", {})
+
+    # Build context keys
+    venue = _get(meeting, "venue") or ""
+    state = _get_state_for_venue(venue)
+    distance = _get(race, "distance") or 1400
+    race_class = _get(race, "class_") or ""
+    condition = _get(meeting, "track_condition") or _get(race, "track_condition") or ""
+
+    vtype = _context_venue_type(venue, state)
+    dbucket = _get_dist_bucket(distance)
+    cbucket = _context_class_bucket(race_class)
+    condbucket = _context_cond_bucket(condition)
+
+    # Try hierarchical lookup
+    full_key = f"{vtype}|{dbucket}|{cbucket}|{condbucket}"
+    if full_key in profiles:
+        return profiles[full_key]
+
+    no_cond_key = f"{vtype}|{dbucket}|{cbucket}"
+    if no_cond_key in fallbacks:
+        return fallbacks[no_cond_key]
+
+    dist_class_key = f"{dbucket}|{cbucket}"
+    if dist_class_key in fallbacks:
+        return fallbacks[dist_class_key]
+
+    return {}
+
+
+def _context_venue_type(venue: str, state: str) -> str:
+    """Classify venue into type for context profiles."""
+    v = venue.lower().strip()
+    _METRO_VIC = {"flemington", "caulfield", "moonee valley", "sandown", "the valley"}
+    _METRO_NSW = {"randwick", "rosehill", "royal randwick", "canterbury", "warwick farm"}
+    _METRO_QLD = {"eagle farm", "doomben"}
+    _METRO_SA = {"morphettville"}
+    _METRO_WA = {"ascot", "belmont"}
+
+    if v in _METRO_VIC:
+        return "metro_vic"
+    if v in _METRO_NSW:
+        return "metro_nsw"
+    if v in _METRO_QLD:
+        return "metro_qld"
+    if v in _METRO_SA or v in _METRO_WA:
+        return "metro_other"
+    s = (state or "").upper().strip()
+    if s in ("VIC", "NSW", "QLD"):
+        return "provincial"
+    return "country"
+
+
+def _context_class_bucket(race_class: str) -> str:
+    """Classify race class for context profiles."""
+    rc = race_class.lower().strip().rstrip(";")
+    if "maiden" in rc or "mdn" in rc:
+        return "maiden"
+    if "class 1" in rc or "restricted" in rc or "cl1" in rc:
+        return "restricted"
+    bm = re.search(r"bm\s*(\d+)", rc)
+    if bm:
+        rating = int(bm.group(1))
+        return "mid_bm" if rating <= 72 else "open"
+    if any(kw in rc for kw in ("group", "listed", "stakes", "open", "quality")):
+        return "open"
+    return "mid_bm"
+
+
+def _context_cond_bucket(condition: str) -> str:
+    """Classify track condition for context profiles."""
+    c = condition.lower().strip()
+    if "heavy" in c or "hvy" in c:
+        return "heavy"
+    if "soft" in c or "sft" in c:
+        return "soft"
+    return "good"
+
 
 # Factor registry — defines all probability factors with metadata
 FACTOR_REGISTRY = {
@@ -139,6 +289,10 @@ def calculate_race_probabilities(
     if not active:
         return {}
 
+    # Use cached DL patterns if not explicitly passed
+    if dl_patterns is None:
+        dl_patterns = get_dl_pattern_cache()
+
     w = weights if weights else DEFAULT_WEIGHTS
     field_size = len(active)
     baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
@@ -167,12 +321,12 @@ def calculate_race_probabilities(
             "market":         _market_consensus(runner, overround),
             "movement":       _market_movement_factor(runner),
             "form":           _form_rating(runner, track_condition, baseline),
-            "class_fitness":  _class_factor(runner, baseline),
+            "class_fitness":  _class_factor(runner, baseline, race),
             "pace":           _pace_factor(runner, pace_scenario),
             "barrier":        _barrier_draw_factor(runner, field_size, race_distance),
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
-            "weight_carried": _weight_factor(runner, avg_weight, race_distance),
-            "horse_profile":  _horse_profile_factor(runner),
+            "weight_carried": _weight_factor(runner, avg_weight, race_distance, race),
+            "horse_profile":  _horse_profile_factor(runner, race),
             "deep_learning":  _deep_learning_factor(
                 runner, meeting, race_distance, track_condition,
                 field_size, dl_patterns,
@@ -184,6 +338,19 @@ def calculate_race_probabilities(
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
         factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
+
+    # Step 1a: Apply context multipliers (amplify/dampen factors by racing context)
+    ctx_mults = _get_context_multipliers(race, meeting)
+    if ctx_mults:
+        for rid, scores in all_factor_scores.items():
+            for factor, mult in ctx_mults.items():
+                if factor in scores and factor != "deep_learning":  # DL already context-aware
+                    original = scores[factor]
+                    adjusted = 0.5 + (original - 0.5) * mult
+                    scores[factor] = max(0.05, min(0.95, adjusted))
+        # Update factor_details with context-adjusted scores
+        for rid, scores in all_factor_scores.items():
+            factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
 
     # Step 1b: Dynamic market weight boost for low-information races
     eff_w = _boost_market_weight(w, all_factor_scores)
@@ -333,6 +500,28 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
         if su and su.starts >= 2:
             signal_sum += _stat_to_score(su.win_rate, baseline) * 0.5
             signals += 0.5
+
+    # Career win/place percentage (Q5-Q1: 26.6% win, 18.8% place)
+    career = parse_stats_string(_get(runner, "career_record"))
+    if career and career.starts >= 10:
+        career_win_score = _stat_to_score(career.win_rate, baseline)
+        career_place_score = _stat_to_score(career.place_rate, baseline * 3)
+        career_score = career_win_score * 0.7 + career_place_score * 0.3
+        signal_sum += career_score * 0.6
+        signals += 0.6
+
+    # Average condition score — aggregate across all track conditions (Q5-Q1: 10.6%)
+    cond_total_starts = 0
+    cond_total_wins = 0
+    for cond_field in ("good_track_stats", "soft_track_stats", "heavy_track_stats"):
+        cond_s = parse_stats_string(_get(runner, cond_field))
+        if cond_s:
+            cond_total_starts += cond_s.starts
+            cond_total_wins += cond_s.wins
+    if cond_total_starts >= 5:
+        avg_cond_wr = cond_total_wins / cond_total_starts
+        signal_sum += _stat_to_score(avg_cond_wr, baseline) * 0.4
+        signals += 0.4
 
     if signals > 0:
         score = signal_sum / signals
@@ -506,16 +695,85 @@ def _market_movement_factor(runner: Any) -> float:
 # Factor: Class/Fitness
 # ──────────────────────────────────────────────
 
-def _class_factor(runner: Any, baseline: float) -> float:
+def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
     """Score based on class suitability and fitness."""
     score = 0.5
+    has_signal = False
 
-    # Class stats
+    # Class stats (from parse_stats_string — handles both JSON and string formats)
     cls = parse_stats_string(_get(runner, "class_stats"))
     if cls and cls.starts >= 2:
         ratio = cls.win_rate / baseline if baseline > 0 else cls.win_rate / 0.10
         adjustment = (ratio - 1.0) * 0.15
         score += max(-0.15, min(0.15, adjustment))
+        has_signal = True
+
+    # Handicap rating as class proxy (higher = better class)
+    # Neutral point ~70, range ~45-115 for Australian racing
+    handicap = _get(runner, "handicap_rating")
+    if handicap and isinstance(handicap, (int, float)) and handicap > 0:
+        # Normalize around 70: below = class drop concern, above = class edge
+        deviation = (handicap - 70.0) / 30.0  # 30-point range = full swing
+        adj = max(-0.10, min(0.10, deviation * 0.10))
+        score += adj
+        has_signal = True
+
+    # Prize money per start (Q5-Q1: 16.1%)
+    career = parse_stats_string(_get(runner, "career_record"))
+    prize_money = _get(runner, "career_prize_money")
+    if career and career.starts >= 5 and prize_money and isinstance(prize_money, (int, float)) and prize_money > 0:
+        prize_per_start = prize_money / career.starts
+        # Class-appropriate benchmark
+        race_class = (_get(race, "class_") or "") if race else ""
+        rc_lower = race_class.lower()
+        if any(kw in rc_lower for kw in ("group", "listed", "stakes")):
+            benchmark = 50000
+        elif "bm" in rc_lower:
+            import re
+            bm_match = re.search(r"bm\s*(\d+)", rc_lower)
+            rating = int(bm_match.group(1)) if bm_match else 64
+            benchmark = max(rating * 500, 15000)
+        else:
+            benchmark = 15000  # Maiden/Class 1/Restricted
+        ratio = prize_per_start / benchmark if benchmark > 0 else 1.0
+        prize_adj = max(-0.10, min(0.10, (ratio - 1.0) * 0.10))
+        score += prize_adj
+        has_signal = True
+
+    # Average margin from recent starts (Q5-Q1: 10.6%)
+    form_hist = _get(runner, "form_history")
+    if form_hist:
+        try:
+            if isinstance(form_hist, str):
+                fh = json.loads(form_hist)
+            else:
+                fh = form_hist
+            if isinstance(fh, list):
+                margins = []
+                for start in fh[:5]:
+                    pos = start.get("position") or start.get("pos")
+                    margin_raw = start.get("margin")
+                    if pos == 1 or str(pos) == "1":
+                        margins.append(0.0)
+                    elif margin_raw is not None:
+                        mv = _parse_margin_value(margin_raw)
+                        if mv is not None:
+                            margins.append(mv)
+                if len(margins) >= 3:
+                    avg_margin = sum(margins) / len(margins)
+                    if avg_margin <= 2.0:
+                        score += 0.06
+                    elif avg_margin <= 4.0:
+                        score += 0.03
+                    elif avg_margin <= 6.0:
+                        pass  # neutral
+                    elif avg_margin <= 10.0:
+                        score -= 0.03
+                    else:
+                        score -= 0.06
+                    has_signal = True
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
 
     # Days since last run — fitness curve
     days = _get(runner, "days_since_last_run")
@@ -581,28 +839,151 @@ def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400) -> 
 # Factor: Jockey & Trainer
 # ──────────────────────────────────────────────
 
+def _parse_a2e_json(stats_str: Any) -> dict | None:
+    """Parse PF A2E JSON format: {"career": {"a2e": 1.07, ...}, "last100": {...}, ...}.
+
+    Returns parsed dict if valid A2E format, None otherwise.
+    """
+    if isinstance(stats_str, dict):
+        data = stats_str
+    elif isinstance(stats_str, str):
+        try:
+            data = json.loads(stats_str)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    else:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    # A2E format has "career" key with nested stats
+    if "career" in data and isinstance(data["career"], dict):
+        return data
+    return None
+
+
+def _a2e_to_score(a2e_data: dict, baseline: float) -> float:
+    """Score a jockey/trainer from PF A2E data.
+
+    Uses strike_rate vs baseline, A2E ratio (>1.0 = outperforming earnings),
+    and Profit on Turnover for a composite score.
+    """
+    career = a2e_data.get("career", {})
+    runners = career.get("runners", 0) or 0
+    if runners < 10:
+        return 0.5  # not enough data
+
+    score = 0.5
+    adjustments = 0.0
+    signals = 0
+
+    # Strike rate vs baseline (primary signal)
+    sr = career.get("strike_rate", 0) or 0
+    sr_decimal = sr / 100.0 if sr > 1 else sr  # handle both % and decimal
+    if sr_decimal > 0 and baseline > 0:
+        ratio = sr_decimal / baseline
+        # Map ratio: 0.5→-0.12, 1.0→0, 1.5→+0.12, 2.0→+0.20
+        adj = max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
+        adjustments += adj * 0.5
+        signals += 0.5
+
+    # A2E ratio (>1.0 means earning more than expected)
+    a2e = career.get("a2e", 0) or 0
+    if a2e > 0:
+        # Map a2e: 0.8→-0.08, 1.0→0, 1.2→+0.08, 1.5→+0.15
+        adj = max(-0.12, min(0.15, (a2e - 1.0) * 0.40))
+        adjustments += adj * 0.3
+        signals += 0.3
+
+    # Profit on Turnover
+    pot = career.get("pot", 0) or 0
+    if pot != 0:
+        # pot is percentage: -20 bad, 0 break-even, +10 good
+        adj = max(-0.08, min(0.10, pot / 100.0))
+        adjustments += adj * 0.2
+        signals += 0.2
+
+    # Use last100 for recency signal if available
+    last100 = a2e_data.get("last100", {})
+    if last100 and (last100.get("runners", 0) or 0) >= 20:
+        l100_sr = (last100.get("strike_rate", 0) or 0)
+        l100_decimal = l100_sr / 100.0 if l100_sr > 1 else l100_sr
+        if l100_decimal > 0 and sr_decimal > 0:
+            # Recent form vs career: trending up = bonus
+            trend = l100_decimal / sr_decimal if sr_decimal > 0 else 1.0
+            adj = max(-0.05, min(0.05, (trend - 1.0) * 0.10))
+            adjustments += adj
+            signals += 0.1 if adj != 0 else 0
+
+    if signals > 0:
+        score += adjustments / signals * signals  # preserve signal weighting
+
+    return max(0.05, min(0.95, score))
+
+
 def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
-    """Score based on jockey and trainer win rate statistics.
+    """Score based on jockey and trainer statistics.
 
     Jockey weighted 60%, trainer 40% — jockey has more direct race impact.
+    Supports PF A2E JSON format (rich career stats) and racing.com string format.
     """
     score = 0.5
     signals = 0
     signal_sum = 0.0
 
-    # Jockey stats (60% weight)
-    jockey = parse_stats_string(_get(runner, "jockey_stats"))
-    if jockey and jockey.starts >= 5:
-        j_score = _stat_to_score(jockey.win_rate, baseline)
+    # --- Jockey (60% weight) ---
+    j_raw = _get(runner, "jockey_stats")
+    j_a2e = _parse_a2e_json(j_raw)
+    if j_a2e:
+        j_score = _a2e_to_score(j_a2e, baseline)
         signal_sum += j_score * 0.6
         signals += 0.6
+    else:
+        jockey = parse_stats_string(j_raw)
+        if jockey and jockey.starts >= 3:  # lowered from 5 for racing.com small samples
+            j_score = _stat_to_score(jockey.win_rate, baseline)
+            signal_sum += j_score * 0.6
+            signals += 0.6
 
-    # Trainer stats (40% weight)
-    trainer = parse_stats_string(_get(runner, "trainer_stats"))
-    if trainer and trainer.starts >= 5:
-        t_score = _stat_to_score(trainer.win_rate, baseline)
+    # --- Trainer (40% weight) ---
+    t_raw = _get(runner, "trainer_stats")
+    t_a2e = _parse_a2e_json(t_raw)
+    if t_a2e:
+        t_score = _a2e_to_score(t_a2e, baseline)
         signal_sum += t_score * 0.4
         signals += 0.4
+    else:
+        trainer = parse_stats_string(t_raw)
+        if trainer and trainer.starts >= 3:
+            t_score = _stat_to_score(trainer.win_rate, baseline)
+            signal_sum += t_score * 0.4
+            signals += 0.4
+
+    # --- Combo bonus: jockey+trainer combination (20% extra signal) ---
+    if j_a2e and "combo_career" in j_a2e:
+        combo = j_a2e["combo_career"]
+        combo_runners = combo.get("runners", 0) or 0
+        if combo_runners >= 5:
+            combo_sr = (combo.get("strike_rate", 0) or 0)
+            combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
+            if combo_decimal > 0 and baseline > 0:
+                ratio = combo_decimal / baseline
+                combo_score = 0.5 + max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
+                signal_sum += combo_score * 0.2
+                signals += 0.2
+
+    # --- Combo last 100 rides (Q5-Q1: 13.1% — recency premium) ---
+    if j_a2e and "combo_last100" in j_a2e:
+        combo_l100 = j_a2e["combo_last100"]
+        combo_l100_runners = combo_l100.get("runners", 0) or 0
+        if combo_l100_runners >= 20:
+            l100_sr = (combo_l100.get("strike_rate", 0) or 0)
+            l100_decimal = l100_sr / 100.0 if l100_sr > 1 else l100_sr
+            if l100_decimal > 0 and baseline > 0:
+                ratio = l100_decimal / baseline
+                l100_score = 0.5 + max(-0.12, min(0.18, (ratio - 1.0) * 0.15))
+                signal_sum += l100_score * 0.25
+                signals += 0.25
 
     if signals > 0:
         score = signal_sum / signals
@@ -614,11 +995,17 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
 # Factor: Weight Carried
 # ──────────────────────────────────────────────
 
-def _weight_factor(runner: Any, avg_weight: float, race_distance: int = 1400) -> float:
+def _weight_factor(runner: Any, avg_weight: float, race_distance: int = 1400, race: Any = None) -> float:
     """Score based on carried weight relative to race average.
 
-    Lighter weight = advantage. Impact scales with distance:
-    sprints (<1200m) weight matters most, stayers (>2000m) less so.
+    In Australian handicap racing, heavier weight = handicapper rates horse higher.
+    Two competing effects:
+      - Class signal: heavier weight → better horse (positive, dominant effect)
+      - Physical burden: extra kgs slow the horse (negative, secondary effect)
+
+    Net effect: slight positive for heavier horses (class proxy dominates),
+    with diminishing returns at extreme weights where physical burden catches up.
+    Weight effect is amplified in low-class races (9.2% spread vs 4.1% open).
     """
     score = 0.5
     weight = _get(runner, "weight")
@@ -629,15 +1016,31 @@ def _weight_factor(runner: Any, avg_weight: float, race_distance: int = 1400) ->
 
     diff = weight - avg_weight  # positive = heavier than average
 
-    # Distance multiplier: sprints amplify weight impact, staying races diminish it
-    # 1000m → 1.3x, 1200m → 1.15x, 1400m → 1.0x, 1600m → 0.9x, 2000m → 0.75x, 2400m → 0.65x
-    dist = max(800, min(3200, race_distance))
-    distance_mult = 1.0 + (1400 - dist) * 0.0005
+    # Class proxy: heavier = better horse (small positive)
+    # +3kg above avg → +0.04, -3kg below avg → -0.04
+    class_adj = (diff / 3.0) * 0.04
 
-    # Map weight difference to score adjustment
-    # ±3kg from average → ±0.10 score change (at 1400m baseline)
-    adjustment = -(diff / 3.0) * 0.10 * distance_mult
-    score += max(-0.20, min(0.20, adjustment))
+    # Physical burden: only at extremes (>3kg above avg), mild negative
+    # This captures the diminishing returns of very heavy weights
+    burden_adj = 0.0
+    if diff > 3.0:
+        excess = diff - 3.0
+        burden_adj = -(excess / 3.0) * 0.03  # mild penalty for extreme weight
+
+    # Distance scaling: weight matters more in sprints
+    dist = max(800, min(3200, race_distance))
+    distance_mult = 1.0 + (1400 - dist) * 0.0003
+
+    # Class-dependent amplification: weight matters more in low-class (9.2% vs 4.1%)
+    race_class = (_get(race, "class_") or "") if race else ""
+    if race_class and any(
+        kw in race_class.lower()
+        for kw in ("maiden", "class 1", "restricted", "mdn")
+    ):
+        distance_mult *= 1.5
+
+    adjustment = (class_adj + burden_adj) * distance_mult
+    score += max(-0.10, min(0.10, adjustment))
 
     return max(0.05, min(0.95, score))
 
@@ -656,11 +1059,12 @@ def _average_weight(runners: list) -> float:
 # Factor: Horse Profile
 # ──────────────────────────────────────────────
 
-def _horse_profile_factor(runner: Any) -> float:
-    """Score based on horse age and sex.
+def _horse_profile_factor(runner: Any, race: Any = None) -> float:
+    """Score based on horse age and sex with context-dependent adjustments.
 
     Peak racing age is 4-5yo for gallopers. Young (2yo) and older (8+)
-    horses get a mild penalty.
+    horses get a mild penalty. Colts get a boost in low-class races (22% SR
+    in Maidens/Class 1 vs 8.6% for geldings — backtested across 267K runners).
     """
     score = 0.5
 
@@ -678,6 +1082,13 @@ def _horse_profile_factor(runner: Any) -> float:
         elif age >= 8:
             score -= 0.04  # declining
 
+    # Determine race class context for sex adjustment
+    race_class = (_get(race, "class_") or "") if race else ""
+    is_low_class = any(
+        kw in race_class.lower()
+        for kw in ("maiden", "class 1", "restricted", "mdn")
+    ) if race_class else False
+
     sex = _get(runner, "horse_sex")
     if sex and isinstance(sex, str):
         sex_lower = sex.lower().strip()
@@ -687,6 +1098,12 @@ def _horse_profile_factor(runner: Any) -> float:
         # Mares can be inconsistent in certain conditions
         elif sex_lower in ("mare", "m", "filly", "f"):
             score -= 0.01
+        # Colts: context-dependent (22% SR in low-class vs 8.6% in open)
+        elif sex_lower in ("colt", "c"):
+            if is_low_class:
+                score += 0.08  # strong advantage in maidens/low-class
+            else:
+                score -= 0.02  # slight penalty in open company
 
     return max(0.05, min(0.95, score))
 
@@ -731,7 +1148,7 @@ def _boost_market_weight(
     # Boost market weight proportionally to how little info we have
     # neutral_ratio 0.4 → no boost, 0.8+ → full boost
     boost_factor = min(1.0, (neutral_ratio - 0.4) / 0.4)
-    max_boost = 0.28  # Market weight can increase from 22% up to ~50%
+    max_boost = 0.43  # Market weight can increase from 22% up to ~65%
     boost = boost_factor * max_boost
 
     effective = dict(weights)
@@ -759,7 +1176,8 @@ def _apply_market_floor(
     when most factors are neutral.
 
     Only applies to runners with meaningful market presence (>5% implied).
-    Uses 70/30 blend (model-heavy) to preserve model signal.
+    Uses 60/40 blend (model-heavy) to preserve model signal while
+    anchoring closer to market for strong favourites.
     Re-normalizes after adjustments to maintain probabilities summing to 1.0.
     """
     adjusted = dict(win_probs)
@@ -769,9 +1187,9 @@ def _apply_market_floor(
         mkt = market_implied.get(rid, 0)
         if mkt > 0.05:  # Only for runners with real market presence
             ratio = adjusted[rid] / mkt if mkt > 0 else 1.0
-            if ratio < 0.35:
-                # Blend 70/30 model/market to preserve model signal
-                adjusted[rid] = adjusted[rid] * 0.7 + mkt * 0.3
+            if ratio < 0.50:
+                # Blend 60/40 model/market — anchors toward market for favourites
+                adjusted[rid] = adjusted[rid] * 0.6 + mkt * 0.4
                 needs_renorm = True
 
     if needs_renorm:
@@ -906,13 +1324,15 @@ def _deep_learning_factor(
 
 
 def _get_dist_bucket(distance: int) -> str:
-    """Map distance to bucket matching deep learning patterns."""
+    """Map distance to bucket matching deep learning and context patterns."""
     if distance <= 1100:
         return "sprint"
-    elif distance <= 1300:
+    elif distance <= 1399:
         return "short"
-    elif distance <= 1800:
+    elif distance <= 1799:
         return "middle"
+    elif distance <= 2199:
+        return "classic"
     else:
         return "staying"
 
@@ -1139,13 +1559,57 @@ def parse_stats_string(stats_str: Any) -> Optional[StatsRecord]:
     Handles multiple formats:
       "5: 2-1-0" → StatsRecord(starts=5, wins=2, seconds=1, thirds=0)
       "5-2-1-0"  → StatsRecord(starts=5, wins=2, seconds=1, thirds=0)
+      '{"starts": 5, "wins": 2, ...}' → StatsRecord (PF JSON format)
+      dict with starts/wins keys → StatsRecord (direct dict input)
     """
-    if not stats_str or not isinstance(stats_str, str):
+    if not stats_str:
+        return None
+
+    # Handle dict passed directly (from internal callers)
+    if isinstance(stats_str, dict):
+        starts = stats_str.get("starts", 0) or 0
+        if starts > 0:
+            return StatsRecord(
+                starts=int(starts),
+                wins=int(stats_str.get("wins", 0) or 0),
+                seconds=int(stats_str.get("seconds", 0) or 0),
+                thirds=int(stats_str.get("thirds", 0) or 0),
+            )
+        # Also handle "firsts" key (PF uses firsts, not wins in some records)
+        firsts = stats_str.get("firsts", 0) or 0
+        starts = stats_str.get("Starts", stats_str.get("starts", 0)) or 0
+        if starts and int(starts) > 0:
+            return StatsRecord(
+                starts=int(starts),
+                wins=int(firsts),
+                seconds=int(stats_str.get("seconds", stats_str.get("Seconds", 0)) or 0),
+                thirds=int(stats_str.get("thirds", stats_str.get("Thirds", 0)) or 0),
+            )
+        return None
+
+    if not isinstance(stats_str, str):
         return None
 
     stats_str = stats_str.strip()
     if not stats_str:
         return None
+
+    # Try JSON parse first (PF format: {"starts": 10, "wins": 2, ...})
+    if stats_str.startswith("{"):
+        try:
+            data = json.loads(stats_str)
+            if isinstance(data, dict):
+                starts = data.get("starts", data.get("Starts", 0)) or 0
+                wins = data.get("wins", data.get("firsts", data.get("Firsts", 0))) or 0
+                if int(starts) > 0:
+                    return StatsRecord(
+                        starts=int(starts),
+                        wins=int(wins),
+                        seconds=int(data.get("seconds", data.get("Seconds", 0)) or 0),
+                        thirds=int(data.get("thirds", data.get("Thirds", 0)) or 0),
+                    )
+        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
+            pass
 
     # Format: "5: 2-1-0"
     m = _STATS_COLON.search(stats_str)
@@ -1176,6 +1640,53 @@ def parse_stats_string(stats_str: Any) -> Optional[StatsRecord]:
             seconds=int(m.group(2)),
             thirds=int(m.group(3)),
         )
+
+    return None
+
+
+# ──────────────────────────────────────────────
+# Margin Parsing
+# ──────────────────────────────────────────────
+
+def _parse_margin_value(margin: Any) -> Optional[float]:
+    """Convert a margin value to lengths (float). Returns None if unparseable.
+
+    Handles numeric values, string lengths ("1.5L"), and abbreviations
+    (NK, HD, LNG, DST) from Punting Form data.
+    """
+    if margin is None:
+        return None
+    if isinstance(margin, (int, float)):
+        return float(margin) if margin >= 0 else None
+    if not isinstance(margin, str):
+        return None
+    ms = margin.strip().upper()
+    if not ms:
+        return None
+
+    # Winner (position 1) — no margin
+    if ms in ("0", "0.0", "0L", "WIN", "WON", "DH"):
+        return 0.0
+
+    # Standard abbreviations
+    _ABBREVS = {
+        "NK": 0.05, "NOSE": 0.05, "SH-NK": 0.05, "N": 0.05,
+        "HD": 0.1, "HEAD": 0.1, "SHD": 0.1,
+        "SNK": 0.2, "SHORT-NECK": 0.2,
+        "LNG": 15.0, "LONG": 15.0,
+        "DST": 25.0, "DIST": 25.0,
+    }
+    if ms in _ABBREVS:
+        return _ABBREVS[ms]
+
+    # Length format: "1.5L", "3L", "1.5", "3"
+    import re
+    m = re.match(r"^([\d.]+)\s*L?$", ms)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
 
     return None
 
@@ -1532,4 +2043,8 @@ async def load_dl_patterns_for_probability(db) -> list[dict]:
             "sample_size": r.sample_count,
             "edge": r.avg_pnl,
         })
+
+    # Populate module-level cache so sync callers can access patterns
+    set_dl_pattern_cache(patterns)
+
     return patterns

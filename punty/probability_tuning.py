@@ -603,11 +603,17 @@ async def get_tuning_history(
 
 async def get_dashboard_data(db: AsyncSession) -> dict:
     """Aggregate all dashboard data in one call."""
+    # Try 60-day window first; fall back to all-time if empty
     calibration = await calculate_calibration(db, lookback_days=60)
-    value_perf = await calculate_value_performance(db, lookback_days=60)
-    factor_perf = await analyze_factor_performance(db, lookback_days=60)
-    brier = await calculate_brier_score(db, lookback_days=60)
-    categories = await calculate_category_breakdown(db, lookback_days=60)
+    lookback = 60
+    if not calibration or all(c["count"] == 0 for c in calibration):
+        calibration = await calculate_calibration(db, lookback_days=3650)
+        lookback = 3650
+
+    value_perf = await calculate_value_performance(db, lookback_days=lookback)
+    factor_perf = await analyze_factor_performance(db, lookback_days=lookback)
+    brier = await calculate_brier_score(db, lookback_days=lookback)
+    categories = await calculate_category_breakdown(db, lookback_days=lookback)
     weight_history = await get_tuning_history(db, limit=20)
     current_weights = await _get_current_weights(db)
 

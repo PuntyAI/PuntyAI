@@ -457,9 +457,23 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
     except Exception:
         bet_type_data = {"selection": {}, "exotic": {}, "sequence": {}, "current_thresholds": {}}
 
+    # Load context profiles for the context-aware multiplier section
+    context_profiles = {}
+    try:
+        from punty.probability import _load_context_profiles
+        ctx = _load_context_profiles()
+        if ctx:
+            context_profiles = ctx
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
         "probability.html",
-        {"request": request, **data, "bet_type": bet_type_data},
+        {
+            "request": request, **data,
+            "bet_type": bet_type_data,
+            "context_profiles": context_profiles,
+        },
     )
 
 

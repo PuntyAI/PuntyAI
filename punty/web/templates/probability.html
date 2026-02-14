@@ -72,7 +72,9 @@
         {% else %}
         <div class="text-center py-12 text-gray-500">
             <p class="text-lg font-medium">Not enough data yet</p>
-            <p class="text-sm">Calibration will appear once picks are settled</p>
+            <p class="text-sm">Calibration requires settled picks with probability scores.</p>
+            <p class="text-xs text-gray-400 mt-2">Picks created after the probability engine integration will auto-populate.</p>
+            <p class="text-xs text-gray-400">{{ summary.total_settled }} settled / {{ summary.total_with_factors }} with factors</p>
         </div>
         {% endif %}
     </div>
@@ -265,6 +267,114 @@
     </div>
     {% endif %}
 
+    <!-- Context-Aware Multiplier Profiles -->
+    {% if context_profiles and context_profiles.profiles %}
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6" x-data="contextExplorer()">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Context-Aware Multipliers</h2>
+            <p class="text-xs text-gray-400">
+                Factor effectiveness varies by racing context. Built from {{ context_profiles.metadata.built_from|default(0)|int }} historical runners.
+                <span class="text-gray-500">{{ (context_profiles.profiles|length) }} profiles + {{ (context_profiles.fallbacks|default({})|length) }} fallbacks.</span>
+            </p>
+        </div>
+
+        <!-- Context Selector -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Venue Type</label>
+                <select x-model="venue" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                    <option value="">Any</option>
+                    <template x-for="v in venues" :key="v">
+                        <option :value="v" x-text="v.replace('_', ' ')"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Distance</label>
+                <select x-model="distance" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                    <option value="">Any</option>
+                    <template x-for="d in distances" :key="d">
+                        <option :value="d" x-text="distLabel(d)"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Class</label>
+                <select x-model="raceClass" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                    <option value="">Any</option>
+                    <template x-for="c in classes" :key="c">
+                        <option :value="c" x-text="c.replace('_', ' ')"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Condition</label>
+                <select x-model="condition" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                    <option value="">Any</option>
+                    <template x-for="cn in conditions" :key="cn">
+                        <option :value="cn" x-text="cn"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+
+        <!-- Active Profile Key -->
+        <div class="mb-3 flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-gray-400">Active:</span>
+            <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 text-gray-700" x-text="activeKey || 'Select a context'"></span>
+            <span x-show="fallbackUsed" class="text-xs text-amber-500 italic" x-text="'(fallback: ' + fallbackKey + ')'"></span>
+        </div>
+
+        <!-- Multiplier Heatmap -->
+        <template x-if="activeProfile">
+            <div>
+                <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4">
+                    <template x-for="factor in factorOrder" :key="factor">
+                        <div class="rounded-lg p-3 text-center border" :style="'background:' + heatColor(activeProfile[factor]) + '; border-color:' + heatBorder(activeProfile[factor])">
+                            <div class="text-xs text-gray-600 font-medium mb-1" x-text="factorLabels[factor]"></div>
+                            <div class="text-lg font-bold" :class="multClass(activeProfile[factor])" x-text="formatMult(activeProfile[factor])"></div>
+                            <div class="text-xs mt-0.5" :class="multClass(activeProfile[factor])" x-text="multDesc(activeProfile[factor])"></div>
+                        </div>
+                    </template>
+                </div>
+                <p class="text-xs text-gray-400">
+                    Multiplier &gt;1.0 = factor is <span class="text-green-600 font-medium">amplified</span> in this context.
+                    &lt;1.0 = <span class="text-red-500 font-medium">dampened</span>.
+                    1.0 = no change from default.
+                </p>
+            </div>
+        </template>
+        <template x-if="!activeProfile">
+            <div class="text-center py-8 text-gray-400">
+                <p class="text-sm">Select a racing context above to see how factor multipliers are adjusted</p>
+            </div>
+        </template>
+
+        <!-- Top Insights -->
+        <div class="mt-4 border-t pt-4" style="border-color: #e5e7eb;">
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">Notable Context Effects</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <template x-for="insight in topInsights" :key="insight.key + insight.factor">
+                    <div class="flex items-center gap-2 text-xs p-2 rounded bg-gray-50">
+                        <span class="font-mono text-gray-500 truncate" x-text="insight.key.replaceAll('|', ' / ')"></span>
+                        <span class="font-medium" :class="insight.mult > 1 ? 'text-green-600' : 'text-red-500'" x-text="factorLabels[insight.factor] + ' ' + formatMult(insight.mult)"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+    {% elif context_profiles is defined %}
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div class="mb-3">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">Context-Aware Multipliers</h2>
+        </div>
+        <div class="text-center py-12 text-gray-500">
+            <p class="text-lg font-medium">No context profiles loaded</p>
+            <p class="text-sm">Run <code class="text-xs bg-gray-100 px-1 py-0.5 rounded">python scripts/build_context_profiles.py</code> to generate profiles from historical data</p>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Bet Type Performance -->
     {% if bet_type %}
     <div class="bg-punty-card rounded-xl p-4 sm:p-6 border border-punty-border">
@@ -331,8 +441,7 @@
                     <th class="py-2 px-3 text-right text-gray-500 font-semibold">Avg Value</th>
                 </tr></thead>
                 <tbody>
-                {% for etype in ['Trifecta', 'Exacta', 'Quinella', 'First4'] %}
-                {% set d = bet_type.exotic.get(etype, {}) %}
+                {% for etype, d in bet_type.exotic|dictsort %}
                 {% if d.get('count', 0) > 0 %}
                 <tr class="border-b border-punty-border/50">
                     <td class="py-2 px-3 font-medium text-gray-200">{{ etype }}</td>
@@ -355,11 +464,13 @@
 
         <!-- Sequence Performance -->
         {% if bet_type.sequence %}
+        {% set seq_data = bet_type.sequence %}
+        {% set seq_by_type = seq_data.get('by_type', {}) if seq_data.get('by_type') else {} %}
         <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">Sequences</h3>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-punty-border">
-                    <th class="py-2 px-3 text-left text-gray-500 font-semibold">Variant</th>
+                    <th class="py-2 px-3 text-left text-gray-500 font-semibold">Type / Variant</th>
                     <th class="py-2 px-3 text-right text-gray-500 font-semibold">Count</th>
                     <th class="py-2 px-3 text-right text-gray-500 font-semibold">Hit Rate</th>
                     <th class="py-2 px-3 text-right text-gray-500 font-semibold">ROI</th>
@@ -367,11 +478,18 @@
                     <th class="py-2 px-3 text-right text-gray-500 font-semibold">Staked</th>
                 </tr></thead>
                 <tbody>
+                {% set type_labels = {'early_quaddie': 'Early Quaddie', 'quaddie': 'Quaddie', 'big6': 'Big 6'} %}
+                {% for stype in ['early_quaddie', 'quaddie', 'big6'] %}
+                {% set type_data = seq_by_type.get(stype, {}) %}
+                {% if type_data %}
+                <tr class="border-b border-punty-border">
+                    <td colspan="6" class="py-2 px-3 font-semibold text-cyan-400 text-xs uppercase tracking-wider">{{ type_labels.get(stype, stype|title) }}</td>
+                </tr>
                 {% for variant in ['skinny', 'balanced', 'wide'] %}
-                {% set d = bet_type.sequence.get(variant, {}) %}
+                {% set d = type_data.get(variant, {}) %}
                 {% if d.get('count', 0) > 0 %}
                 <tr class="border-b border-punty-border/50">
-                    <td class="py-2 px-3 font-medium text-gray-200">{{ variant|title }}</td>
+                    <td class="py-2 px-3 pl-6 font-medium text-gray-200">{{ variant|title }}</td>
                     <td class="py-2 px-3 text-right text-gray-400">{{ d.count }}</td>
                     <td class="py-2 px-3 text-right">{{ '%.1f'|format(d.hit_rate * 100) }}%</td>
                     <td class="py-2 px-3 text-right font-medium {{ 'text-green-500' if d.roi >= 0 else 'text-red-400' }}">
@@ -382,6 +500,8 @@
                     </td>
                     <td class="py-2 px-3 text-right text-gray-400">${{ '%.2f'|format(d.get('total_staked', 0)) }}</td>
                 </tr>
+                {% endif %}
+                {% endfor %}
                 {% endif %}
                 {% endfor %}
                 </tbody>
@@ -675,6 +795,143 @@
         }
     });
 })();
+{% endif %}
+
+{% if context_profiles and context_profiles.profiles %}
+function contextExplorer() {
+    var profiles = {{ context_profiles.profiles | tojson }};
+    var fallbacks = {{ context_profiles.fallbacks | default({}) | tojson }};
+
+    // Extract unique dimension values from all profile keys
+    var allKeys = Object.keys(profiles).concat(Object.keys(fallbacks));
+    var venueSet = new Set(), distSet = new Set(), classSet = new Set(), condSet = new Set();
+    allKeys.forEach(function(k) {
+        var parts = k.split('|');
+        if (parts.length >= 3) {
+            venueSet.add(parts[0]);
+            distSet.add(parts[1]);
+            classSet.add(parts[2]);
+        }
+        if (parts.length >= 4) condSet.add(parts[3]);
+    });
+
+    // Build top insights (most extreme multipliers across all profiles)
+    var insights = [];
+    Object.keys(profiles).forEach(function(key) {
+        var p = profiles[key];
+        Object.keys(p).forEach(function(f) {
+            if (Math.abs(p[f] - 1.0) > 0.5) {
+                insights.push({key: key, factor: f, mult: p[f], dist: Math.abs(p[f] - 1.0)});
+            }
+        });
+    });
+    insights.sort(function(a, b) { return b.dist - a.dist; });
+    insights = insights.slice(0, 8);
+
+    return {
+        venue: '', distance: '', raceClass: '', condition: '',
+        activeProfile: null,
+        activeKey: '',
+        fallbackUsed: false,
+        fallbackKey: '',
+        venues: Array.from(venueSet).sort(),
+        distances: ['sprint', 'short', 'middle', 'classic', 'staying'],
+        classes: ['maiden', 'restricted', 'mid_bm', 'open'],
+        conditions: Array.from(condSet).sort(),
+        topInsights: insights,
+        factorOrder: ['market', 'form', 'class_fitness', 'pace', 'barrier', 'jockey_trainer', 'movement', 'weight_carried', 'horse_profile'],
+        factorLabels: {
+            market: 'Market', form: 'Form', class_fitness: 'Class',
+            pace: 'Pace', barrier: 'Barrier', jockey_trainer: 'J/T',
+            movement: 'Movement', weight_carried: 'Weight', horse_profile: 'Profile'
+        },
+        distLabel: function(d) {
+            var labels = {sprint: 'Sprint (\u22641100m)', short: 'Short (1200-1399)', middle: 'Middle (1400-1799)', classic: 'Classic (1800-2199)', staying: 'Staying (2200+)'};
+            return labels[d] || d;
+        },
+        updateProfile: function() {
+            this.fallbackUsed = false;
+            this.fallbackKey = '';
+            if (!this.venue && !this.distance && !this.raceClass && !this.condition) {
+                this.activeProfile = null;
+                this.activeKey = '';
+                return;
+            }
+            // Build lookup key
+            var parts = [this.venue, this.distance, this.raceClass, this.condition].filter(Boolean);
+            var fullKey = parts.join('|');
+            this.activeKey = fullKey;
+
+            // Try exact match in profiles
+            if (profiles[fullKey]) {
+                this.activeProfile = profiles[fullKey];
+                return;
+            }
+            // Try fallbacks
+            if (fallbacks[fullKey]) {
+                this.activeProfile = fallbacks[fullKey];
+                this.fallbackUsed = true;
+                this.fallbackKey = fullKey;
+                return;
+            }
+            // Try removing condition
+            var noCondKey = [this.venue, this.distance, this.raceClass].filter(Boolean).join('|');
+            if (profiles[noCondKey] || fallbacks[noCondKey]) {
+                this.activeProfile = profiles[noCondKey] || fallbacks[noCondKey];
+                this.fallbackUsed = true;
+                this.fallbackKey = noCondKey;
+                return;
+            }
+            // Try distance + class only
+            var distClassKey = [this.distance, this.raceClass].filter(Boolean).join('|');
+            if (profiles[distClassKey] || fallbacks[distClassKey]) {
+                this.activeProfile = profiles[distClassKey] || fallbacks[distClassKey];
+                this.fallbackUsed = true;
+                this.fallbackKey = distClassKey;
+                return;
+            }
+            this.activeProfile = null;
+        },
+        formatMult: function(v) {
+            if (v === undefined || v === null) return '-';
+            return v.toFixed(2) + 'x';
+        },
+        multClass: function(v) {
+            if (v === undefined) return 'text-gray-500';
+            if (v >= 1.5) return 'text-green-700';
+            if (v >= 1.1) return 'text-green-600';
+            if (v > 0.9) return 'text-gray-700';
+            if (v > 0.5) return 'text-red-500';
+            return 'text-red-600';
+        },
+        multDesc: function(v) {
+            if (v === undefined) return '';
+            if (v >= 2.0) return 'very strong';
+            if (v >= 1.5) return 'amplified';
+            if (v >= 1.1) return 'boosted';
+            if (v > 0.9) return 'neutral';
+            if (v > 0.5) return 'dampened';
+            return 'suppressed';
+        },
+        heatColor: function(v) {
+            if (v === undefined) return '#f9fafb';
+            if (v >= 2.0) return 'rgba(34,197,94,0.15)';
+            if (v >= 1.5) return 'rgba(34,197,94,0.10)';
+            if (v >= 1.1) return 'rgba(34,197,94,0.05)';
+            if (v > 0.9) return '#f9fafb';
+            if (v > 0.5) return 'rgba(239,68,68,0.05)';
+            return 'rgba(239,68,68,0.10)';
+        },
+        heatBorder: function(v) {
+            if (v === undefined) return '#e5e7eb';
+            if (v >= 1.5) return 'rgba(34,197,94,0.3)';
+            if (v >= 1.1) return 'rgba(34,197,94,0.15)';
+            if (v > 0.9) return '#e5e7eb';
+            if (v > 0.5) return 'rgba(239,68,68,0.15)';
+            return 'rgba(239,68,68,0.3)';
+        },
+    };
+}
 {% endif %}
 </script>
 {% endblock %}
