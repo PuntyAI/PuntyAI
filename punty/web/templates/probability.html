@@ -284,36 +284,36 @@
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Venue Type</label>
                 <select x-model="venue" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
                     <option value="">Any</option>
-                    <template x-for="v in venues" :key="v">
-                        <option :value="v" x-text="v.replace('_', ' ')"></option>
-                    </template>
+                    {% for v in ctx_venues %}
+                    <option value="{{ v }}">{{ v.replace('_', ' ') }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div>
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Distance</label>
                 <select x-model="distance" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
                     <option value="">Any</option>
-                    <template x-for="d in distances" :key="d">
-                        <option :value="d" x-text="distLabel(d)"></option>
-                    </template>
+                    {% for d in ctx_distances %}
+                    <option value="{{ d }}">{% if d == 'sprint' %}Sprint (&le;1100m){% elif d == 'short' %}Short (1200-1399){% elif d == 'middle' %}Middle (1400-1799){% elif d == 'classic' %}Classic (1800-2199){% elif d == 'staying' %}Staying (2200+){% else %}{{ d }}{% endif %}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div>
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Class</label>
                 <select x-model="raceClass" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
                     <option value="">Any</option>
-                    <template x-for="c in classes" :key="c">
-                        <option :value="c" x-text="c.replace('_', ' ')"></option>
-                    </template>
+                    {% for c in ctx_classes %}
+                    <option value="{{ c }}">{{ c.replace('_', ' ') }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div>
                 <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Condition</label>
                 <select x-model="condition" @change="updateProfile()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-400">
                     <option value="">Any</option>
-                    <template x-for="cn in conditions" :key="cn">
-                        <option :value="cn" x-text="cn"></option>
-                    </template>
+                    {% for cn in ctx_conditions %}
+                    <option value="{{ cn }}">{{ cn }}</option>
+                    {% endfor %}
                 </select>
             </div>
         </div>
@@ -326,42 +326,40 @@
         </div>
 
         <!-- Multiplier Heatmap -->
-        <template x-if="activeProfile">
-            <div>
-                <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4">
-                    <template x-for="factor in factorOrder" :key="factor">
-                        <div class="rounded-lg p-3 text-center border" :style="'background:' + heatColor(activeProfile[factor]) + '; border-color:' + heatBorder(activeProfile[factor])">
-                            <div class="text-xs text-gray-600 font-medium mb-1" x-text="factorLabels[factor]"></div>
-                            <div class="text-lg font-bold" :class="multClass(activeProfile[factor])" x-text="formatMult(activeProfile[factor])"></div>
-                            <div class="text-xs mt-0.5" :class="multClass(activeProfile[factor])" x-text="multDesc(activeProfile[factor])"></div>
-                        </div>
-                    </template>
-                </div>
-                <p class="text-xs text-gray-400">
-                    Multiplier &gt;1.0 = factor is <span class="text-green-600 font-medium">amplified</span> in this context.
-                    &lt;1.0 = <span class="text-red-500 font-medium">dampened</span>.
-                    1.0 = no change from default.
-                </p>
+        <div x-show="activeProfile" class="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4">
+            {% set factor_list = [('market', 'Market'), ('form', 'Form'), ('class_fitness', 'Class'), ('pace', 'Pace'), ('barrier', 'Barrier'), ('jockey_trainer', 'J/T'), ('movement', 'Movement'), ('weight_carried', 'Weight'), ('horse_profile', 'Profile')] %}
+            {% for fkey, flabel in factor_list %}
+            <div class="rounded-lg p-3 text-center border" :style="'background:' + heatColor(activeProfile && activeProfile.{{ fkey }}) + '; border-color:' + heatBorder(activeProfile && activeProfile.{{ fkey }})">
+                <div class="text-xs text-gray-600 font-medium mb-1">{{ flabel }}</div>
+                <div class="text-lg font-bold" :class="multClass(activeProfile && activeProfile.{{ fkey }})" x-text="formatMult(activeProfile && activeProfile.{{ fkey }})"></div>
+                <div class="text-xs mt-0.5" :class="multClass(activeProfile && activeProfile.{{ fkey }})" x-text="multDesc(activeProfile && activeProfile.{{ fkey }})"></div>
             </div>
-        </template>
-        <template x-if="!activeProfile">
-            <div class="text-center py-8 text-gray-400">
-                <p class="text-sm">Select a racing context above to see how factor multipliers are adjusted</p>
-            </div>
-        </template>
+            {% endfor %}
+        </div>
+        <p x-show="activeProfile" class="text-xs text-gray-400 mb-4">
+            Multiplier &gt;1.0 = factor is <span class="text-green-600 font-medium">amplified</span> in this context.
+            &lt;1.0 = <span class="text-red-500 font-medium">dampened</span>.
+            1.0 = no change from default.
+        </p>
+        <div x-show="!activeProfile" class="text-center py-8 text-gray-400">
+            <p class="text-sm">Select a racing context above to see how factor multipliers are adjusted</p>
+        </div>
 
-        <!-- Top Insights -->
+        <!-- Top Insights (server-rendered) -->
+        {% if ctx_insights %}
         <div class="mt-4 border-t pt-4" style="border-color: #e5e7eb;">
             <h3 class="text-sm font-semibold text-gray-600 mb-2">Notable Context Effects</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <template x-for="insight in topInsights" :key="insight.key + insight.factor">
-                    <div class="flex items-center gap-2 text-xs p-2 rounded bg-gray-50">
-                        <span class="font-mono text-gray-500 truncate" x-text="insight.key.replaceAll('|', ' / ')"></span>
-                        <span class="font-medium" :class="insight.mult > 1 ? 'text-green-600' : 'text-red-500'" x-text="factorLabels[insight.factor] + ' ' + formatMult(insight.mult)"></span>
-                    </div>
-                </template>
+                {% set fl = {'market': 'Market', 'form': 'Form', 'class_fitness': 'Class', 'pace': 'Pace', 'barrier': 'Barrier', 'jockey_trainer': 'J/T', 'movement': 'Movement', 'weight_carried': 'Weight', 'horse_profile': 'Profile'} %}
+                {% for ins in ctx_insights %}
+                <div class="flex items-center justify-between text-xs p-2 rounded bg-gray-50">
+                    <span class="font-mono text-gray-500 truncate">{{ ins.key.replace('|', ' / ') }}</span>
+                    <span class="font-medium ml-2 whitespace-nowrap {{ 'text-green-600' if ins.mult > 1 else 'text-red-500' }}">{{ fl.get(ins.factor, ins.factor) }} {{ '%.2f'|format(ins.mult) }}x</span>
+                </div>
+                {% endfor %}
             </div>
         </div>
+        {% endif %}
     </div>
     {% elif context_profiles is defined %}
     <div class="bg-white rounded-lg shadow p-4 sm:p-6">
@@ -802,53 +800,12 @@ function contextExplorer() {
     var profiles = {{ context_profiles.profiles | tojson }};
     var fallbacks = {{ context_profiles.fallbacks | default({}) | tojson }};
 
-    // Extract unique dimension values from all profile keys
-    var allKeys = Object.keys(profiles).concat(Object.keys(fallbacks));
-    var venueSet = new Set(), distSet = new Set(), classSet = new Set(), condSet = new Set();
-    allKeys.forEach(function(k) {
-        var parts = k.split('|');
-        if (parts.length >= 3) {
-            venueSet.add(parts[0]);
-            distSet.add(parts[1]);
-            classSet.add(parts[2]);
-        }
-        if (parts.length >= 4) condSet.add(parts[3]);
-    });
-
-    // Build top insights (most extreme multipliers across all profiles)
-    var insights = [];
-    Object.keys(profiles).forEach(function(key) {
-        var p = profiles[key];
-        Object.keys(p).forEach(function(f) {
-            if (Math.abs(p[f] - 1.0) > 0.5) {
-                insights.push({key: key, factor: f, mult: p[f], dist: Math.abs(p[f] - 1.0)});
-            }
-        });
-    });
-    insights.sort(function(a, b) { return b.dist - a.dist; });
-    insights = insights.slice(0, 8);
-
     return {
         venue: '', distance: '', raceClass: '', condition: '',
         activeProfile: null,
         activeKey: '',
         fallbackUsed: false,
         fallbackKey: '',
-        venues: Array.from(venueSet).sort(),
-        distances: ['sprint', 'short', 'middle', 'classic', 'staying'],
-        classes: ['maiden', 'restricted', 'mid_bm', 'open'],
-        conditions: Array.from(condSet).sort(),
-        topInsights: insights,
-        factorOrder: ['market', 'form', 'class_fitness', 'pace', 'barrier', 'jockey_trainer', 'movement', 'weight_carried', 'horse_profile'],
-        factorLabels: {
-            market: 'Market', form: 'Form', class_fitness: 'Class',
-            pace: 'Pace', barrier: 'Barrier', jockey_trainer: 'J/T',
-            movement: 'Movement', weight_carried: 'Weight', horse_profile: 'Profile'
-        },
-        distLabel: function(d) {
-            var labels = {sprint: 'Sprint (\u22641100m)', short: 'Short (1200-1399)', middle: 'Middle (1400-1799)', classic: 'Classic (1800-2199)', staying: 'Staying (2200+)'};
-            return labels[d] || d;
-        },
         updateProfile: function() {
             this.fallbackUsed = false;
             this.fallbackKey = '';
