@@ -165,18 +165,30 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
     except Exception as e:
         logger.error(f"Fields-only scrape failed for {venue}: {e}")
         errors.append(f"fields_only: {e}")
-        # Fallback to full racing.com scrape
+        # Fallback 1: Racing Australia free fields (httpx, fast)
         try:
-            from punty.scrapers.racing_com import RacingComScraper
-            scraper = RacingComScraper()
-            try:
-                data = await scraper.scrape_meeting(venue, race_date)
+            from punty.scrapers.ra_fields import scrape_ra_fields
+            data = await scrape_ra_fields(venue, race_date, meeting_id)
+            if data:
                 await _upsert_meeting_data(db, meeting, data)
-            finally:
-                await scraper.close()
-        except Exception as e2:
-            logger.error(f"racing.com fallback also failed: {e2}")
-            errors.append(f"racing.com_fallback: {e2}")
+                logger.info(f"RA fields fallback succeeded for {venue}")
+            else:
+                raise ValueError("RA fields returned no data")
+        except Exception as e_ra:
+            logger.error(f"RA fields fallback failed for {venue}: {e_ra}")
+            errors.append(f"ra_fields_fallback: {e_ra}")
+            # Fallback 2: racing.com (Playwright, slower)
+            try:
+                from punty.scrapers.racing_com import RacingComScraper
+                scraper = RacingComScraper()
+                try:
+                    data = await scraper.scrape_meeting(venue, race_date)
+                    await _upsert_meeting_data(db, meeting, data)
+                finally:
+                    await scraper.close()
+            except Exception as e2:
+                logger.error(f"racing.com fallback also failed: {e2}")
+                errors.append(f"racing.com_fallback: {e2}")
 
     # Conditions (uses session-level cache — one API call for all meetings)
     if not meeting.track_condition_locked:
@@ -259,18 +271,30 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
         except Exception as e:
             logger.error(f"Primary scrape failed: {e}")
             errors.append(f"primary: {e}")
-            # Fallback to racing.com if primary fails entirely
+            # Fallback 1: Racing Australia free fields (httpx, fast)
             try:
-                from punty.scrapers.racing_com import RacingComScraper
-                scraper = RacingComScraper()
-                try:
-                    data = await scraper.scrape_meeting(venue, race_date)
+                from punty.scrapers.ra_fields import scrape_ra_fields
+                data = await scrape_ra_fields(venue, race_date, meeting_id)
+                if data:
                     await _upsert_meeting_data(db, meeting, data)
-                finally:
-                    await scraper.close()
-            except Exception as e2:
-                logger.error(f"racing.com fallback also failed: {e2}")
-                errors.append(f"racing.com_fallback: {e2}")
+                    logger.info(f"RA fields fallback succeeded for {venue}")
+                else:
+                    raise ValueError("RA fields returned no data")
+            except Exception as e_ra:
+                logger.error(f"RA fields fallback failed for {venue}: {e_ra}")
+                errors.append(f"ra_fields_fallback: {e_ra}")
+                # Fallback 2: racing.com (Playwright, slower)
+                try:
+                    from punty.scrapers.racing_com import RacingComScraper
+                    scraper = RacingComScraper()
+                    try:
+                        data = await scraper.scrape_meeting(venue, race_date)
+                        await _upsert_meeting_data(db, meeting, data)
+                    finally:
+                        await scraper.close()
+                except Exception as e2:
+                    logger.error(f"racing.com fallback also failed: {e2}")
+                    errors.append(f"racing.com_fallback: {e2}")
 
         # Step 2: Conditions — track/weather data
         if not meeting.track_condition_locked:
@@ -398,23 +422,38 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         except Exception as e:
             logger.error(f"Primary scrape failed: {e}")
             errors.append(f"primary: {e}")
-            yield {"step": 1, "total": total_steps, "label": f"Fields failed: {e}, trying fallback...", "status": "error"}
-            # Fallback to racing.com for primary data
+            yield {"step": 1, "total": total_steps, "label": f"Fields failed: {e}, trying RA fallback...", "status": "error"}
+            # Fallback 1: Racing Australia free fields (httpx, fast)
             try:
-                from punty.scrapers.racing_com import RacingComScraper
-                scraper = RacingComScraper()
-                try:
-                    data = await scraper.scrape_meeting(venue, race_date)
+                from punty.scrapers.ra_fields import scrape_ra_fields
+                data = await scrape_ra_fields(venue, race_date, meeting_id)
+                if data:
                     race_count = len(data.get("races", []))
                     runner_count = len(data.get("runners", []))
                     await _upsert_meeting_data(db, meeting, data)
                     yield {"step": 1, "total": total_steps,
-                           "label": f"racing.com fallback — {race_count} races, {runner_count} runners", "status": "done"}
-                finally:
-                    await scraper.close()
-            except Exception as e2:
-                logger.error(f"racing.com fallback also failed: {e2}")
-                errors.append(f"racing.com_fallback: {e2}")
+                           "label": f"RA fields fallback — {race_count} races, {runner_count} runners", "status": "done"}
+                else:
+                    raise ValueError("RA fields returned no data")
+            except Exception as e_ra:
+                logger.error(f"RA fields fallback failed for {venue}: {e_ra}")
+                errors.append(f"ra_fields_fallback: {e_ra}")
+                # Fallback 2: racing.com (Playwright, slower)
+                try:
+                    from punty.scrapers.racing_com import RacingComScraper
+                    scraper = RacingComScraper()
+                    try:
+                        data = await scraper.scrape_meeting(venue, race_date)
+                        race_count = len(data.get("races", []))
+                        runner_count = len(data.get("runners", []))
+                        await _upsert_meeting_data(db, meeting, data)
+                        yield {"step": 1, "total": total_steps,
+                               "label": f"racing.com fallback — {race_count} races, {runner_count} runners", "status": "done"}
+                    finally:
+                        await scraper.close()
+                except Exception as e2:
+                    logger.error(f"racing.com fallback also failed: {e2}")
+                    errors.append(f"racing.com_fallback: {e2}")
 
         # Step 2: Conditions + weather
         yield {"step": 1, "total": total_steps, "label": "Fetching conditions/weather...", "status": "running"}
