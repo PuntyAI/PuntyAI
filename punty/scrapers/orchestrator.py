@@ -972,18 +972,24 @@ def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
 import re as _re
 
 def _normalise_jockey(name: str) -> str:
-    """Normalise jockey name for comparison: strip Ms/Mr prefix, claim weights, (late alt)."""
+    """Normalise jockey name for comparison: strip Ms/Mr prefix, claim weights, (late alt), Mc spacing."""
     s = name.strip()
     s = _re.sub(r"^(Ms|Mr)\s+", "", s, flags=_re.IGNORECASE)
-    s = _re.sub(r"\s*\(a\d*/\d+kg\)", "", s)  # claim weight e.g. (a0/53kg)
-    s = _re.sub(r"\s*\(late\s+alt\)", "", s, flags=_re.IGNORECASE)
+    s = _re.sub(r"\s*\(a[\d.]*/\d+kg\)", "", s)  # claim weight e.g. (a0/53kg), (a1.5/52kg)
+    s = _re.sub(r",?\s*\(late\s+alt\)", "", s, flags=_re.IGNORECASE)
+    s = _re.sub(r"\bMc\s+", "Mc", s)  # "Mc Dougall" → "McDougall"
     return s.strip()
+
+
+def _normalise_class(val: str) -> str:
+    """Normalise race class for comparison: uppercase, strip trailing semicolons/punctuation."""
+    return val.strip().rstrip(";").strip().upper()
 
 
 def _xcheck_equal(field: str, pf_val, ra_val) -> bool:
     """Compare PF and RA values with field-specific normalisation."""
     if field == "class_":
-        return str(pf_val).strip().upper() == str(ra_val).strip().upper()
+        return _normalise_class(str(pf_val)) == _normalise_class(str(ra_val))
     if field == "jockey":
         return _normalise_jockey(str(pf_val)) == _normalise_jockey(str(ra_val))
     return str(pf_val) == str(ra_val)

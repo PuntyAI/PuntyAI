@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date
 
-from punty.scrapers.orchestrator import _cross_check_ra_fields, _RA_AUTH_RUNNER_FIELDS, _RA_AUTH_RACE_FIELDS, _xcheck_equal, _normalise_jockey
+from punty.scrapers.orchestrator import _cross_check_ra_fields, _RA_AUTH_RUNNER_FIELDS, _RA_AUTH_RACE_FIELDS, _xcheck_equal, _normalise_jockey, _normalise_class
 
 
 def _make_meeting(venue="Newcastle", race_date=date(2026, 2, 16)):
@@ -376,12 +376,34 @@ class TestNormalisationHelpers:
     def test_normalise_jockey_combined(self):
         assert _normalise_jockey("Ms K Lee (a0/53kg)") == "K Lee"
 
+    def test_normalise_jockey_mc_spacing(self):
+        assert _normalise_jockey("Blaike Mc Dougall") == "Blaike McDougall"
+        assert _normalise_jockey("Amy Mc Lucas") == "Amy McLucas"
+
+    def test_normalise_jockey_claim_decimal(self):
+        assert _normalise_jockey("Ms Claire Ramsbotham(a1.5/52kg)") == "Claire Ramsbotham"
+
+    def test_normalise_jockey_comma_late_alt(self):
+        assert _normalise_jockey("Ms Mollie Fitzgerald(a0/52kg), (late alt)") == "Mollie Fitzgerald"
+
+    def test_normalise_class_semicolon(self):
+        assert _normalise_class("Class 1;") == "CLASS 1"
+        assert _normalise_class("Maiden;") == "MAIDEN"
+        assert _normalise_class("Benchmark 58;") == "BENCHMARK 58"
+
     def test_xcheck_equal_class_case(self):
         assert _xcheck_equal("class_", "Maiden", "MAIDEN") is True
         assert _xcheck_equal("class_", "Class 1", "CLASS 1") is True
 
+    def test_xcheck_equal_class_semicolon(self):
+        assert _xcheck_equal("class_", "Class 1;", "CLASS 1") is True
+        assert _xcheck_equal("class_", "Benchmark 58;", "BENCHMARK 58") is True
+
     def test_xcheck_equal_class_different(self):
         assert _xcheck_equal("class_", "Maiden", "CLASS 1") is False
+
+    def test_xcheck_equal_jockey_mc_spacing(self):
+        assert _xcheck_equal("jockey", "Blaike Mc Dougall", "Blaike McDougall") is True
 
     def test_xcheck_equal_barrier_exact(self):
         assert _xcheck_equal("barrier", 3, 3) is True
