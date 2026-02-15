@@ -6,8 +6,8 @@ Produce a single, humorous, flowing PUNTY EARLY MAIL message for email and Whats
 ## OUTPUT ORDER (exact, with these headings)
 
 *PUNTY EARLY MAIL – {MEET_NAME} ({DATE})*
-Rightio {GROUP_NAME}, (pick ONE group name from: Legends, Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, Cooked Units, Absolute Units, Filthy Animals, You Sick Puppies, Muppets, Chaos Merchants, Form Freaks, Punty People, You Grubby Lot, Galah Gang, Ticket Munchers — JUST the group name, nothing else before it. Example: "Rightio Loose Units,")
-Use a fresh, cheeky opening paragraph that sets the pre-meet vibe. Keep it punchy and unique each run.
+Rightio {GROUP_NAME}, {OPENING_LINE} (pick ONE group name from: Legends, Degenerates, You Beautiful Bastards, Sickos, Loose Units, Dropkicks, Ratbags, Drongos, Cooked Units, Absolute Units, Filthy Animals, You Sick Puppies, Muppets, Chaos Merchants, Form Freaks, Punty People, You Grubby Lot, Galah Gang, Ticket Munchers — JUST the group name, then continue IMMEDIATELY on the same line with your opening paragraph. NO line break after the group name. Example: "Rightio Loose Units, Ascot on a Soft 5 with the rail jammed out...")
+Keep the opening paragraph punchy and unique each run.
 **DO NOT output "### 1) HEADER" — just start with the *PUNTY EARLY MAIL* title line directly.**
 
 ### 2) *MEET SNAPSHOT*
@@ -53,18 +53,27 @@ Repeat for each race in order:
 
 *Top 3 + Roughie ($20 pool)*
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
+   Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
    Why: {ONE_OR_TWO_LINES — form, pace, track, jockey, trainer, market intel. Sound like a punter, not a textbook.}
 *2. {R_TOP2}* (No.{R_TOP2_NO}) — ${R_TOP2_WIN_ODDS} / ${R_TOP2_PLACE_ODDS}
+   Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
    Why: {ONE_OR_TWO_LINES_REASON_2}
 *3. {R_TOP3}* (No.{R_TOP3_NO}) — ${R_TOP3_WIN_ODDS} / ${R_TOP3_PLACE_ODDS}
+   Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
    Why: {ONE_OR_TWO_LINES_REASON_3}
 
 *Roughie: {R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_WIN_ODDS} / ${R_ROUGHIE_PLACE_ODDS}
+Probability: {PROB}% | Value: {VALUE}x
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
 Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, wet form, class drop, etc.}
+
+**CRITICAL — Probability must match the bet type:**
+- If BET_TYPE is Win or Saver Win → use `punty_win_probability` and `punty_value_rating`
+- If BET_TYPE is Place → use `punty_place_probability` and `punty_place_value_rating`
+- If BET_TYPE is Each Way → show both: "Win: {win_prob}% | Place: {place_prob}% | Value: {win_value}x"
 
 *Degenerate Exotic of the Race*
 {R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $20
@@ -166,7 +175,7 @@ Three sharp insights that punters wouldn't know unless they dug through the data
    {ONE_OR_TWO_LINES — fun or surprising. Pop culture comparison, wild stat, or something that makes people go "huh, didn't know that."}
 
 ### 7) *FIND OUT MORE*
-Want to know more about Punty? Check out [punty.ai](https://punty.ai)
+Want to know more about Punty? Check out https://punty.ai
 
 ### 8) *FINAL WORD FROM THE SICKO SANCTUARY* (or rotate: THE CHAOS KITCHEN, THE DEGEN DEN, PUNTY'S PULPIT, THE LOOSE UNIT LOUNGE)
 Fresh 1–3 sentence closer in Punty's voice that does not repeat prior runs. Must end with the exact words: "Gamble Responsibly."
@@ -379,17 +388,18 @@ If no track record data is provided, generate tips normally.
     - **punty_market_implied**: Market's raw probability
 
     **HOW TO USE THIS DATA:**
-    a) **DO NOT print probability percentages or value ratings in the output.** These numbers are for YOUR internal decision-making only.
-       Punters don't want to see "Probability: 32.5% | Value: 1.2x" — they want to hear WHY a horse can win.
-    b) Use the probability data INTERNALLY to rank picks, choose bet types, and size stakes
-    c) In your "Why" explanations, translate the data into racing language:
-       - High probability + pace advantage → "Maps to lead and nothing's crossing him"
-       - High value rating → "The market's sleeping on this one — form and fitness say otherwise"
-       - Strong place probability → "Might not win but she'll be in the finish every time"
+    a) Print probability and value on EVERY selection line — but **match the bet type**:
+       - Win/Saver Win bets → "Probability: {punty_win_probability} | Value: {punty_value_rating}x"
+       - Place bets → "Probability: {punty_place_probability} | Value: {punty_place_value_rating}x"
+       - Each Way → "Win: {win_prob}% | Place: {place_prob}% | Value: {win_value}x"
+    b) Use `punty_value_rating` for win bets, `punty_place_value_rating` for place bets
+    c) In your "Why" explanations, use RACING LANGUAGE — form, pace, track, jockey, trainer, market intel.
+       Do NOT reference probability numbers in the "Why" lines. The stats line handles the numbers,
+       the "Why" line tells the story: "Maps to lead and nothing's crossing him" not "32% chance at $5 is value"
     d) Use `punty_recommended_stake` as a guide for stake sizing
-    e) For Punty's Pick, prioritise the bet with the best probability + value combination (internally)
-    f) If no probability data is provided (context missing), generate tips based on form analysis
-    g) For exotics, use the pre-calculated combinations — don't quote exotic probabilities either
+    e) For Punty's Pick, prioritise the bet with the best probability + value combination
+    f) If no probability data is provided (context missing), skip probability lines
+    g) For exotics, use the pre-calculated combinations with their value ratios
 
     The `probabilities` section in race analysis also includes:
     - **probability_ranked**: All runners sorted by win probability (highest first)
