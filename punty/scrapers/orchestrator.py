@@ -54,7 +54,7 @@ def _is_more_specific(new_cond: str | None, old_cond: str | None) -> bool:
 
 # All Runner fields that come from the scraper
 RUNNER_FIELDS = [
-    "saddlecloth", "weight", "jockey", "trainer", "form", "current_odds", "opening_odds", "place_odds",
+    "saddlecloth", "barrier", "weight", "jockey", "trainer", "form", "current_odds", "opening_odds", "place_odds",
     "scratched", "comments", "horse_age", "horse_sex", "horse_colour",
     "sire", "dam", "dam_sire", "career_prize_money", "last_five",
     "days_since_last_run", "handicap_rating", "speed_value",
@@ -81,6 +81,10 @@ MEETING_FIELDS = [
     "weather_wind_speed", "weather_wind_dir", "weather_humidity", "rail_bias_comment",
     "rainfall", "irrigation", "going_stick",
 ]
+
+# Fields where Racing Australia is authoritative — always overwrite PF data
+_RA_AUTH_RUNNER_FIELDS = ["scratched", "barrier", "weight", "jockey"]
+_RA_AUTH_RACE_FIELDS = ["distance", "class_", "field_size", "start_time"]
 
 
 async def scrape_calendar(db: AsyncSession) -> list[dict]:
@@ -209,11 +213,20 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
         except Exception as e:
             logger.error(f"RA conditions failed for {venue}: {e}")
 
+    # RA Free Fields cross-check (only when PF succeeded)
+    pf_failed = any("fields_only" in e for e in errors)
+    if not pf_failed:
+        try:
+            ra_xcheck = await _cross_check_ra_fields(db, meeting, meeting_id)
+            if ra_xcheck.get("mismatches"):
+                logger.info(f"RA cross-check: {ra_xcheck['mismatches']} corrections for {venue}")
+        except Exception as e:
+            logger.warning(f"RA cross-check failed for {venue}: {e}")
+
     if owns_pf and pf_scraper:
         await pf_scraper.close()
 
     # Classify empty meetings as trials
-    pf_failed = any("fields_only" in e for e in errors)
     if not pf_failed and (not meeting.meeting_type or meeting.meeting_type == "race"):
         race_count = await db.execute(
             select(Race).where(Race.meeting_id == meeting_id).limit(1)
@@ -318,6 +331,16 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             except Exception as e:
                 logger.error(f"RA conditions failed for {venue}: {e}")
 
+        # Step 2c: RA Free Fields cross-check (only when PF succeeded)
+        pf_ok = not any("primary" in e or "fields" in e for e in errors)
+        if pf_ok:
+            try:
+                ra_xcheck = await _cross_check_ra_fields(db, meeting, meeting_id)
+                if ra_xcheck.get("mismatches"):
+                    logger.info(f"RA cross-check: {ra_xcheck['mismatches']} corrections for {venue}")
+            except Exception as e:
+                logger.warning(f"RA cross-check failed for {venue}: {e}")
+
         # Step 3: racing.com — supplementary odds + comments only
         try:
             from punty.scrapers.racing_com import RacingComScraper
@@ -390,7 +413,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     venue = meeting.venue
     race_date = meeting.date
     errors = []
-    total_steps = 4
+    total_steps = 5
 
     # Acquire scrape lock
     from punty.scrapers.playwright_base import _scrape_lock, _current_scrape
@@ -480,8 +503,39 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             errors.append(f"conditions: {e}")
             yield {"step": 2, "total": total_steps, "label": f"Conditions failed: {e}", "status": "error"}
 
-        # Step 3: racing.com — supplementary odds + comments
-        yield {"step": 2, "total": total_steps, "label": "Scraping racing.com odds + comments...", "status": "running"}
+        # Racing Australia — authoritative conditions override
+        if not meeting.track_condition_locked:
+            try:
+                from punty.scrapers.track_conditions import get_conditions_for_meeting
+                ra_cond = await get_conditions_for_meeting(venue)
+                if ra_cond:
+                    _apply_ra_conditions(meeting, ra_cond)
+            except Exception as e:
+                logger.error(f"RA conditions failed for {venue}: {e}")
+
+        # Step 3: RA Free Fields cross-check
+        pf_ok = not any("primary" in e or "fields" in e for e in errors)
+        if pf_ok:
+            yield {"step": 2, "total": total_steps, "label": "Cross-checking RA fields...", "status": "running"}
+            try:
+                ra_xcheck = await _cross_check_ra_fields(db, meeting, meeting_id)
+                n = ra_xcheck.get("mismatches", 0)
+                if n:
+                    yield {"step": 3, "total": total_steps,
+                           "label": f"RA cross-check: {n} corrections applied", "status": "done"}
+                else:
+                    yield {"step": 3, "total": total_steps,
+                           "label": "RA cross-check: data consistent", "status": "done"}
+            except Exception as e:
+                logger.warning(f"RA cross-check failed for {venue}: {e}")
+                yield {"step": 3, "total": total_steps,
+                       "label": f"RA cross-check failed: {e}", "status": "error"}
+        else:
+            yield {"step": 3, "total": total_steps,
+                   "label": "RA cross-check: skipped (PF failed)", "status": "done"}
+
+        # Step 4: racing.com — supplementary odds + comments
+        yield {"step": 3, "total": total_steps, "label": "Scraping racing.com odds + comments...", "status": "running"}
         try:
             from punty.scrapers.racing_com import RacingComScraper
             scraper = RacingComScraper()
@@ -490,14 +544,14 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 await _merge_racing_com_supplement(db, meeting_id, data)
             finally:
                 await scraper.close()
-            yield {"step": 3, "total": total_steps, "label": "racing.com odds/comments complete", "status": "done"}
+            yield {"step": 4, "total": total_steps, "label": "racing.com odds/comments complete", "status": "done"}
         except Exception as e:
             logger.error(f"racing.com supplement failed: {e}")
             errors.append(f"racing.com_supplement: {e}")
-            yield {"step": 3, "total": total_steps, "label": f"racing.com supplement failed: {e}", "status": "error"}
+            yield {"step": 4, "total": total_steps, "label": f"racing.com supplement failed: {e}", "status": "error"}
 
-        # Step 4: TAB odds (optional supplementary — racing.com is primary)
-        yield {"step": 3, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
+        # Step 5: TAB odds (optional supplementary — racing.com is primary)
+        yield {"step": 4, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
         try:
             from punty.scrapers.tab import TabScraper
             scraper = TabScraper()
@@ -506,10 +560,10 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                 await _merge_odds(db, meeting_id, data.get("runners_odds", []))
             finally:
                 await scraper.close()
-            yield {"step": 4, "total": total_steps, "label": "TAB odds complete", "status": "done"}
+            yield {"step": 5, "total": total_steps, "label": "TAB odds complete", "status": "done"}
         except Exception as e:
             logger.debug(f"TAB scrape skipped (optional): {e}")
-            yield {"step": 4, "total": total_steps, "label": "TAB odds skipped (optional)", "status": "done"}
+            yield {"step": 5, "total": total_steps, "label": "TAB odds skipped (optional)", "status": "done"}
 
         # Close scraper
         if pf_scraper:
@@ -903,6 +957,101 @@ def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
         meeting.rainfall = cond["rainfall"]
     if cond.get("irrigation") is not None:
         meeting.irrigation = cond["irrigation"]
+
+
+async def _cross_check_ra_fields(
+    db: AsyncSession, meeting: Meeting, meeting_id: str,
+) -> dict:
+    """Cross-check PF data against Racing Australia Free Fields.
+
+    RA is authoritative for: scratched, barrier, weight, jockey (runner-level)
+    and distance, class_, field_size, start_time (race-level).
+    Only overwrites RA-authoritative fields; PF keeps richer data (form, stats, odds).
+    """
+    from punty.scrapers.ra_fields import scrape_ra_fields
+
+    venue = meeting.venue
+    race_date = meeting.date
+    mismatches: list[str] = []
+
+    try:
+        ra_data = await scrape_ra_fields(venue, race_date, meeting_id)
+    except Exception as e:
+        logger.warning(f"RA cross-check failed for {venue}: {e}")
+        return {"status": "error", "error": str(e), "mismatches": 0}
+
+    if not ra_data:
+        logger.info(f"RA cross-check: no data for {venue}")
+        return {"status": "no_data", "mismatches": 0}
+
+    # --- Race-level cross-check ---
+    for ra_race in ra_data.get("races", []):
+        db_race = await db.get(Race, ra_race["id"])
+        if not db_race:
+            continue
+        for field in _RA_AUTH_RACE_FIELDS:
+            ra_val = ra_race.get(field)
+            if ra_val is None:
+                continue
+            pf_val = getattr(db_race, field, None)
+            if pf_val is not None and str(pf_val) != str(ra_val):
+                mismatches.append(f"R{db_race.race_number} {field}: PF={pf_val} RA={ra_val}")
+                logger.warning(
+                    f"PF↔RA mismatch R{db_race.race_number}: {field} "
+                    f"PF={pf_val} RA={ra_val} → using RA"
+                )
+            setattr(db_race, field, ra_val)
+
+    # --- Runner-level cross-check ---
+    for ra_runner in ra_data.get("runners", []):
+        race_id = ra_runner.get("race_id")
+        saddlecloth = ra_runner.get("saddlecloth")
+        if not (race_id and saddlecloth):
+            continue
+
+        result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.saddlecloth == saddlecloth,
+            ).limit(1)
+        )
+        db_runner = result.scalar_one_or_none()
+        if not db_runner:
+            continue
+
+        horse = db_runner.horse_name or f"#{saddlecloth}"
+
+        for field in _RA_AUTH_RUNNER_FIELDS:
+            ra_val = ra_runner.get(field)
+            if ra_val is None:
+                continue
+            pf_val = getattr(db_runner, field, None)
+
+            # Scratched: RA can scratch but never un-scratch
+            if field == "scratched":
+                if ra_val and not pf_val:
+                    mismatches.append(f"{horse}: scratched by RA")
+                    logger.warning(f"PF↔RA: {horse} not scratched in PF → scratched in RA")
+                    db_runner.scratched = True
+                continue
+
+            # Other fields: compare and overwrite with RA
+            if pf_val is not None and str(pf_val) != str(ra_val):
+                mismatches.append(f"{horse}: {field} PF={pf_val} RA={ra_val}")
+                logger.warning(
+                    f"PF↔RA mismatch {horse}: {field} PF={pf_val} RA={ra_val} → using RA"
+                )
+            setattr(db_runner, field, ra_val)
+
+    await db.flush()
+
+    n = len(mismatches)
+    if n:
+        logger.info(f"RA cross-check for {venue}: {n} mismatches corrected")
+    else:
+        logger.info(f"RA cross-check for {venue}: all data consistent")
+
+    return {"status": "ok", "mismatches": n, "details": mismatches}
 
 
 # Fields from racing.com that supplement primary data (odds, comments only)
