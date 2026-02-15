@@ -188,6 +188,15 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
             logger.error(f"Conditions failed for {venue}: {e}")
             errors.append(f"conditions: {e}")
 
+        # Racing Australia — authoritative override
+        try:
+            from punty.scrapers.track_conditions import get_conditions_for_meeting
+            ra_cond = await get_conditions_for_meeting(venue)
+            if ra_cond:
+                _apply_ra_conditions(meeting, ra_cond)
+        except Exception as e:
+            logger.error(f"RA conditions failed for {venue}: {e}")
+
     if owns_pf and pf_scraper:
         await pf_scraper.close()
 
@@ -275,6 +284,15 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             except Exception as e:
                 logger.error(f"Conditions failed: {e}")
                 errors.append(f"conditions: {e}")
+
+            # Step 2b: Racing Australia — authoritative override
+            try:
+                from punty.scrapers.track_conditions import get_conditions_for_meeting
+                ra_cond = await get_conditions_for_meeting(venue)
+                if ra_cond:
+                    _apply_ra_conditions(meeting, ra_cond)
+            except Exception as e:
+                logger.error(f"RA conditions failed for {venue}: {e}")
 
         # Step 3: racing.com — supplementary odds + comments only
         try:
@@ -825,6 +843,27 @@ def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
         meeting.irrigation = cond["irrigation"]
     if cond.get("going_stick") is not None:
         meeting.going_stick = cond["going_stick"]
+
+
+def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
+    """Apply Racing Australia conditions — authoritative source, always overwrites."""
+    new_cond = cond.get("condition")
+    if new_cond:
+        logger.info(
+            f"RA condition for {meeting.venue}: "
+            f"{meeting.track_condition!r} → {new_cond!r}"
+        )
+        meeting.track_condition = new_cond
+    if cond.get("rail"):
+        meeting.rail_position = cond["rail"]
+    if cond.get("weather"):
+        meeting.weather = cond["weather"]
+    if cond.get("penetrometer") is not None:
+        meeting.penetrometer = cond["penetrometer"]
+    if cond.get("rainfall") is not None:
+        meeting.rainfall = cond["rainfall"]
+    if cond.get("irrigation") is not None:
+        meeting.irrigation = cond["irrigation"]
 
 
 # Fields from racing.com that supplement primary data (odds, comments only)

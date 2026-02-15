@@ -1,118 +1,188 @@
-"""Track conditions scraper with multiple source fallbacks."""
+"""Racing Australia track conditions scraper.
 
+Scrapes official track conditions from racingaustralia.horse.
+This is the authoritative source for Australian track conditions.
+Uses httpx (static HTML page, no JS rendering needed).
+"""
+
+import asyncio
 import logging
 import re
 from typing import Any, Optional
 
+import httpx
 from bs4 import BeautifulSoup
-
-from punty.scrapers.playwright_base import new_page, wait_and_get_content
 
 logger = logging.getLogger(__name__)
 
-# State codes to URL parameter for racingaustralia.horse
-STATE_CODES = {
-    "VIC": "VIC",
-    "NSW": "NSW",
-    "QLD": "QLD",
-    "SA": "SA",
-    "WA": "WA",
-    "TAS": "TAS",
-    "ACT": "ACT",
-    "NT": "NT",
-}
+ALL_STATES = ["NSW", "VIC", "QLD", "SA", "WA", "TAS", "ACT", "NT"]
 
-# Venue to state mapping for sportsbetform fallback
-VENUE_TO_STATE = {
-    # VIC
-    "flemington": "VIC", "caulfield": "VIC", "moonee valley": "VIC", "sandown": "VIC",
-    "cranbourne": "VIC", "pakenham": "VIC", "mornington": "VIC", "geelong": "VIC",
-    "ballarat": "VIC", "bendigo": "VIC", "sale": "VIC", "yarra valley": "VIC",
-    "colac": "VIC", "warrnambool": "VIC", "stawell": "VIC", "hamilton": "VIC",
+_BASE_URL = (
+    "https://www.racingaustralia.horse/InteractiveForm/"
+    "TrackCondition.aspx?State={state}"
+)
+
+# Sponsor prefixes to strip when matching venue names
+_SPONSOR_PREFIXES = (
+    "sportsbet ", "ladbrokes ", "bet365 ", "picklebet park ",
+    "southside ", "tab ", "aquis ", "neds ", "aquis park ",
+    "beaumont ", "picklebet ",
+)
+
+# Venue name → state mapping (reuses pattern from deep_learning/importer.py)
+VENUE_TO_STATE: dict[str, str] = {
     # NSW
-    "randwick": "NSW", "royal randwick": "NSW", "rosehill": "NSW", "canterbury": "NSW",
-    "warwick farm": "NSW", "newcastle": "NSW", "kembla grange": "NSW", "gosford": "NSW",
-    "wyong": "NSW", "hawkesbury": "NSW", "scone": "NSW", "tamworth": "NSW",
-    "muswellbrook": "NSW", "dubbo": "NSW", "goulburn": "NSW", "albury": "NSW",
-    "wagga": "NSW", "canberra": "NSW", "queanbeyan": "NSW",
+    "randwick": "NSW", "rosehill": "NSW", "warwick farm": "NSW",
+    "canterbury": "NSW", "newcastle": "NSW", "kembla grange": "NSW",
+    "wyong": "NSW", "gosford": "NSW", "hawkesbury": "NSW",
+    "scone": "NSW", "tamworth": "NSW", "mudgee": "NSW",
+    "dubbo": "NSW", "bathurst": "NSW", "orange": "NSW",
+    "wagga": "NSW", "albury": "NSW", "canberra": "ACT",
+    "queanbeyan": "NSW", "moruya": "NSW", "nowra": "NSW",
+    "port macquarie": "NSW", "coffs harbour": "NSW", "grafton": "NSW",
+    "ballina": "NSW", "lismore": "NSW", "taree": "NSW",
+    "muswellbrook": "NSW", "cessnock": "NSW", "glen innes": "NSW",
+    "gilgandra": "NSW", "inverell": "NSW", "gundagai": "NSW",
+    "quirindi": "NSW", "coonamble": "NSW", "wellington": "NSW",
+    "cowra": "NSW", "young": "NSW", "sapphire coast": "NSW",
+    "moree": "NSW", "narromine": "NSW", "armidale": "NSW",
+    "goulburn": "NSW", "broken hill": "NSW", "tuncurry": "NSW",
+    "corowa": "NSW", "casino": "NSW", "condobolin": "NSW",
+    "canterbury park": "NSW", "rosehill gardens": "NSW",
+    # VIC
+    "flemington": "VIC", "caulfield": "VIC", "moonee valley": "VIC",
+    "sandown": "VIC", "cranbourne": "VIC", "pakenham": "VIC",
+    "mornington": "VIC", "geelong": "VIC", "ballarat": "VIC",
+    "bendigo": "VIC", "sale": "VIC", "wangaratta": "VIC",
+    "wodonga": "VIC", "hamilton": "VIC", "stawell": "VIC",
+    "werribee": "VIC", "kilmore": "VIC", "yarra glen": "VIC",
+    "stony creek": "VIC", "healesville": "VIC", "woolamai": "VIC",
+    "seymour": "VIC", "donald": "VIC", "echuca": "VIC",
+    "terang": "VIC", "warrnambool": "VIC", "merton": "VIC",
+    "kyneton": "VIC", "colac": "VIC", "swan hill": "VIC",
+    "mildura": "VIC", "tatura": "VIC", "ararat": "VIC",
+    "avoca": "VIC", "caulfield heath": "VIC", "moe": "VIC",
+    "dederang": "VIC", "yarra valley": "VIC",
     # QLD
-    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD", "sunshine coast": "QLD",
-    "ipswich": "QLD", "toowoomba": "QLD", "rockhampton": "QLD", "mackay": "QLD",
-    "cairns": "QLD", "townsville": "QLD", "beaudesert": "QLD",
+    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD",
+    "sunshine coast": "QLD", "ipswich": "QLD", "toowoomba": "QLD",
+    "rockhampton": "QLD", "mackay": "QLD", "townsville": "QLD",
+    "cairns": "QLD", "atherton": "QLD", "roma": "QLD",
+    "dalby": "QLD", "beaudesert": "QLD", "kilcoy": "QLD",
+    "bundaberg": "QLD", "gladstone": "QLD", "emerald": "QLD",
+    "cannon park": "QLD", "innisfail": "QLD", "goondiwindi": "QLD",
+    "mount isa": "QLD", "warwick": "QLD",
     # SA
-    "morphettville": "SA", "murray bridge": "SA", "gawler": "SA", "strathalbyn": "SA",
-    "mount gambier": "SA", "port lincoln": "SA", "balaklava": "SA",
+    "morphettville": "SA", "murray bridge": "SA", "gawler": "SA",
+    "oakbank": "SA", "naracoorte": "SA", "port augusta": "SA",
+    "balaklava": "SA", "clare": "SA", "strathalbyn": "SA",
+    "mount gambier": "SA", "port lincoln": "SA", "kingscote": "SA",
     # WA
-    "ascot": "WA", "belmont": "WA", "pinjarra": "WA", "bunbury": "WA",
-    "albany": "WA", "geraldton": "WA", "kalgoorlie": "WA", "northam": "WA",
+    "ascot": "WA", "belmont": "WA", "pinjarra": "WA",
+    "bunbury": "WA", "northam": "WA", "geraldton": "WA",
+    "kalgoorlie": "WA", "albany": "WA", "esperance": "WA",
+    "narrogin": "WA", "york": "WA", "lark hill": "WA",
+    "carnarvon": "WA", "broome": "WA",
     # TAS
     "hobart": "TAS", "launceston": "TAS", "devonport": "TAS",
+    "longford": "TAS", "king island": "TAS",
+    # NT
+    "fannie bay": "NT", "alice springs": "NT", "darwin": "NT",
+    "pioneer park": "NT",
 }
 
 
-async def scrape_track_conditions(state: str = "VIC") -> list[dict[str, Any]]:
+def _strip_sponsor(venue: str) -> str:
+    """Strip sponsor prefix from venue name for matching."""
+    v = venue.lower().strip()
+    for prefix in _SPONSOR_PREFIXES:
+        if v.startswith(prefix):
+            v = v[len(prefix):]
+            break
+    # Also strip trailing "park" if it's a suffix like "Cannon Park"
+    return v
+
+
+def _resolve_state(venue: str) -> str | None:
+    """Resolve a venue name to its state code."""
+    v = _strip_sponsor(venue)
+    # Direct match
+    if v in VENUE_TO_STATE:
+        return VENUE_TO_STATE[v]
+    # Partial match — check if any known venue is contained in the input
+    for key, state in VENUE_TO_STATE.items():
+        if key in v or v in key:
+            return state
+    return None
+
+
+def _match_venue(ra_venue: str, meeting_venue: str) -> bool:
+    """Check if a Racing Australia venue name matches a meeting venue."""
+    ra = _strip_sponsor(ra_venue)
+    mv = _strip_sponsor(meeting_venue)
+    if ra == mv:
+        return True
+    # One contains the other
+    if ra in mv or mv in ra:
+        return True
+    # Handle "Cannon Park" in RA matching "Ladbrokes Cannon Park" in DB
+    # by checking if the core words overlap
+    ra_words = set(ra.split())
+    mv_words = set(mv.split())
+    if ra_words and mv_words and ra_words == mv_words:
+        return True
+    return False
+
+
+async def scrape_track_conditions(state: str) -> list[dict[str, Any]]:
     """Scrape track conditions from racingaustralia.horse for a given state.
 
     Returns list of dicts with:
-        - venue: str
-        - condition: str (e.g. "Good 4", "Soft 5")
+        - venue: str (sponsor-stripped)
+        - condition: str | None (e.g. "Good 4", "Soft 5")
         - rail: str | None
         - weather: str | None
-        - penetrometer: str | None
+        - penetrometer: float | None
+        - rainfall: str | None (raw string e.g. "2mm/24hrs, 19mm/7d")
+        - irrigation: str | None (raw string)
     """
-    state_param = STATE_CODES.get(state.upper(), "V")
-    url = (
-        f"https://www.racingaustralia.horse/InteractiveForm/"
-        f"TrackCondition.aspx?State={state_param}"
-    )
-
-    logger.info(f"Scraping track conditions for {state}: {url}")
+    url = _BASE_URL.format(state=state.upper())
+    logger.info(f"Scraping RA track conditions for {state}: {url}")
     conditions: list[dict[str, Any]] = []
 
-    async with new_page() as page:
-        html = await wait_and_get_content(
-            page, url, wait_selector="table, .track-condition, .conditions"
-        )
-        soup = BeautifulSoup(html, "lxml")
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(url, follow_redirects=True)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        logger.error(f"Failed to fetch RA conditions for {state}: {e}")
+        return conditions
 
-        # Typically rendered as a table
-        tables = soup.select("table")
-        for table in tables:
-            rows = table.select("tr")
-            headers = [th.get_text(strip=True).lower() for th in rows[0].select("th, td")] if rows else []
+    soup = BeautifulSoup(html, "html.parser")
 
-            # Check for track conditions table - "meeting details" or "track condition" in headers
-            if not any(kw in " ".join(headers) for kw in ["meeting", "track", "condition", "course", "venue"]):
+    for table in soup.select("table"):
+        rows = table.select("tr")
+        if not rows:
+            continue
+        headers = [
+            th.get_text(strip=True).lower()
+            for th in rows[0].select("th, td")
+        ]
+        # Identify the track conditions table
+        header_str = " ".join(headers)
+        if "meeting" not in header_str and "track" not in header_str:
+            continue
+
+        for row in rows[1:]:
+            cells = [td.get_text(strip=True) for td in row.select("td")]
+            if len(cells) < 3:
                 continue
+            entry = _map_cells(headers, cells)
+            if entry.get("venue"):
+                conditions.append(entry)
 
-            logger.debug(f"Found track conditions table with headers: {headers}")
-
-            for row in rows[1:]:
-                cells = [td.get_text(strip=True) for td in row.select("td")]
-                if len(cells) < 2:
-                    continue
-
-                entry = _map_cells(headers, cells)
-                if entry.get("venue"):
-                    conditions.append(entry)
-                    logger.debug(f"Parsed track condition: {entry}")
-
-        # Fallback: look for non-table layout
-        if not conditions:
-            items = soup.select(".track-item, .venue-condition, .condition-row")
-            for item in items:
-                venue_tag = item.select_one(".venue, .venue-name, h3, h4")
-                cond_tag = item.select_one(".condition, .track-rating, .rating")
-                if venue_tag:
-                    conditions.append({
-                        "venue": venue_tag.get_text(strip=True),
-                        "condition": cond_tag.get_text(strip=True) if cond_tag else None,
-                        "rail": None,
-                        "weather": None,
-                        "penetrometer": None,
-                    })
-
-    logger.info(f"Found {len(conditions)} track conditions for {state}")
+    logger.info(f"RA {state}: found {len(conditions)} track conditions")
     return conditions
 
 
@@ -124,6 +194,8 @@ def _map_cells(headers: list[str], cells: list[str]) -> dict[str, Any]:
         "rail": None,
         "weather": None,
         "penetrometer": None,
+        "rainfall": None,
+        "irrigation": None,
     }
 
     for i, header in enumerate(headers):
@@ -131,134 +203,62 @@ def _map_cells(headers: list[str], cells: list[str]) -> dict[str, Any]:
             break
         val = cells[i].strip() or None
 
-        if any(kw in header for kw in ["venue", "course", "track name", "meeting"]):
-            # Handle "Sat 07-Feb Royal Randwick" format - extract venue name
+        if any(kw in header for kw in ["meeting", "venue", "course"]):
+            # Strip date prefix "Mon 16-Feb " from "Mon 16-Feb Beaumont Newcastle"
             if val and re.match(r"^\w{3}\s+\d{1,2}-\w{3}\s+", val):
-                # Strip date prefix like "Sat 07-Feb "
                 val = re.sub(r"^\w{3}\s+\d{1,2}-\w{3}\s+", "", val)
             data["venue"] = val
-        elif any(kw in header for kw in ["condition", "rating", "going"]):
-            data["condition"] = val
+        elif "condition" in header or "rating" in header or "going" in header:
+            if val and val.upper() != "N/A":
+                data["condition"] = val
         elif "rail" in header:
             data["rail"] = val
         elif "weather" in header:
             data["weather"] = val
-        elif any(kw in header for kw in ["penetrometer", "peno"]):
-            data["penetrometer"] = val
+        elif "penetrometer" in header or "peno" in header:
+            if val:
+                try:
+                    data["penetrometer"] = float(val)
+                except ValueError:
+                    pass
+        elif "rainfall" in header:
+            data["rainfall"] = val
+        elif "irrigation" in header:
+            data["irrigation"] = val
 
     return data
 
 
-async def scrape_sportsbetform_conditions() -> list[dict[str, Any]]:
-    """Scrape track conditions from sportsbetform.com.au (all states).
-
-    This is a backup source when racingaustralia.horse fails.
-    Returns list of dicts with venue, condition, rail, weather, penetrometer.
-    """
-    url = "https://www.sportsbetform.com.au/track-conditions/"
-    logger.info(f"Scraping sportsbetform track conditions: {url}")
-    conditions: list[dict[str, Any]] = []
-
-    try:
-        async with new_page(timeout=45000) as page:
-            html = await wait_and_get_content(
-                page, url, wait_selector="table, .track-table, .conditions-table"
-            )
-            soup = BeautifulSoup(html, "lxml")
-
-            # Look for tables with track condition data
-            tables = soup.select("table")
-            for table in tables:
-                rows = table.select("tr")
-                if not rows:
-                    continue
-
-                # Try to identify headers
-                first_row = rows[0]
-                headers = [th.get_text(strip=True).lower() for th in first_row.select("th, td")]
-
-                # Check if this looks like a track conditions table
-                if not any(kw in " ".join(headers) for kw in ["venue", "track", "course", "condition", "rating"]):
-                    continue
-
-                for row in rows[1:]:
-                    cells = [td.get_text(strip=True) for td in row.select("td")]
-                    if len(cells) < 2:
-                        continue
-
-                    entry = _map_cells(headers, cells)
-                    if entry.get("venue"):
-                        # Try to determine state from venue name
-                        venue_lower = entry["venue"].lower()
-                        for venue_key, state in VENUE_TO_STATE.items():
-                            if venue_key in venue_lower:
-                                entry["state"] = state
-                                break
-                        conditions.append(entry)
-
-            # Alternative: look for div-based layouts
-            if not conditions:
-                track_items = soup.select(".track-condition, .venue-row, [class*='condition']")
-                for item in track_items:
-                    venue = item.select_one(".venue, .track-name, h3, h4, td:first-child")
-                    condition = item.select_one(".condition, .rating, .track-rating")
-                    weather = item.select_one(".weather")
-                    rail = item.select_one(".rail")
-
-                    if venue:
-                        entry = {
-                            "venue": venue.get_text(strip=True),
-                            "condition": condition.get_text(strip=True) if condition else None,
-                            "rail": rail.get_text(strip=True) if rail else None,
-                            "weather": weather.get_text(strip=True) if weather else None,
-                            "penetrometer": None,
-                        }
-                        conditions.append(entry)
-
-        logger.info(f"Sportsbetform: found {len(conditions)} track conditions")
-    except Exception as e:
-        logger.error(f"Sportsbetform scrape failed: {e}")
-
-    return conditions
+async def scrape_all_track_conditions() -> list[dict[str, Any]]:
+    """Scrape track conditions for all Australian states in parallel."""
+    tasks = [scrape_track_conditions(state) for state in ALL_STATES]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    combined: list[dict[str, Any]] = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            logger.error(f"RA scrape failed for {ALL_STATES[i]}: {result}")
+        else:
+            combined.extend(result)
+    return combined
 
 
-async def get_track_condition_for_venue(venue: str, state: str = None) -> Optional[dict[str, Any]]:
-    """Get track condition for a specific venue, trying multiple sources.
+async def get_conditions_for_meeting(venue: str) -> Optional[dict[str, Any]]:
+    """Get RA track condition for a specific meeting venue.
 
-    This is a convenience function that tries:
-    1. racingaustralia.horse for the state
-    2. sportsbetform.com.au as fallback
-
+    Resolves venue → state, scrapes that state, and fuzzy-matches the venue.
     Returns dict with condition info or None if not found.
     """
-    venue_lower = venue.lower()
-
-    # Determine state if not provided
+    state = _resolve_state(venue)
     if not state:
-        for venue_key, mapped_state in VENUE_TO_STATE.items():
-            if venue_key in venue_lower:
-                state = mapped_state
-                break
+        logger.warning(f"Cannot resolve state for venue: {venue}")
+        return None
 
-    if not state:
-        state = "VIC"  # Default
-
-    # Try primary source
     conditions = await scrape_track_conditions(state)
     for cond in conditions:
-        if cond.get("venue") and cond["venue"].lower() in venue_lower:
-            return cond
-        if cond.get("venue") and venue_lower in cond["venue"].lower():
-            return cond
-
-    # Try sportsbetform fallback
-    logger.info(f"Primary source found no condition for {venue}, trying sportsbetform...")
-    fallback = await scrape_sportsbetform_conditions()
-    for cond in fallback:
-        if cond.get("venue") and cond["venue"].lower() in venue_lower:
-            return cond
-        if cond.get("venue") and venue_lower in cond["venue"].lower():
+        ra_venue = cond.get("venue", "")
+        if _match_venue(ra_venue, venue):
+            logger.info(f"RA match for '{venue}': {cond}")
             return cond
 
-    logger.warning(f"No track condition found for {venue} in any source")
+    logger.info(f"No RA track condition match for '{venue}' in {state}")
     return None
