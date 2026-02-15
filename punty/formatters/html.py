@@ -274,8 +274,22 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         if not p:
             continue
         # Skip if already has block-level HTML
-        if p.startswith(('<h', '<ul', '<ol', '<hr', '<div')):
+        if p.startswith(('<h', '<ul', '<ol', '<hr')):
             formatted_paragraphs.append(p)
+        elif p.startswith('<div'):
+            # If a <div>...</div> is followed by non-block content,
+            # split so the div stays block-level and trailing content gets <p> wrapped
+            # Find last </div> and check for trailing content
+            last_close = p.rfind('</div>')
+            if last_close >= 0:
+                after_div = p[last_close + 6:].strip()
+                div_part = p[:last_close + 6]
+                formatted_paragraphs.append(div_part)
+                if after_div:
+                    after_div = after_div.replace('\n', '<br>')
+                    formatted_paragraphs.append(f'<p>{after_div}</p>')
+            else:
+                formatted_paragraphs.append(p)
         else:
             # Convert single newlines to <br> within paragraph
             p = p.replace('\n', '<br>')

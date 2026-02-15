@@ -297,12 +297,12 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.debug(f"Retrospective clean sweep check failed for {meeting_id} R{race_number}: {e}")
 
-                # Check for missed big win celebrations
-                if (meeting_id, race_number, "celebration") not in existing_updates:
-                    try:
-                        await self._check_big_wins(db, meeting_id, race_number)
-                    except Exception as e:
-                        logger.debug(f"Retrospective big win check failed for {meeting_id} R{race_number}: {e}")
+                # Check for missed big win celebrations (selections + exotics)
+                # Always run — _check_big_wins has per-pick deduplication
+                try:
+                    await self._check_big_wins(db, meeting_id, race_number)
+                except Exception as e:
+                    logger.debug(f"Retrospective big win check failed for {meeting_id} R{race_number}: {e}")
 
             # Check for missed scratching alerts on unsettled picks
             for meeting_id in meeting_ids:
@@ -699,26 +699,52 @@ class ResultsMonitor:
         return last_tweet_id or early_mail_tweet_id
 
     async def _check_big_wins(self, db: AsyncSession, meeting_id: str, race_number: int):
-        """Check for big wins (>= 5x outlay) and post celebration replies."""
+        """Check for big wins and post celebration replies.
+
+        Triggers on:
+        - Selections: P&L >= 4x stake (i.e. 5x return)
+        - Exotics: Any hit (trifecta/exacta/quinella/first4)
+        - Any bet type: P&L >= $100 absolute
+        """
         from punty.models.pick import Pick
         from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
-        from punty.results.celebrations import compose_celebration_tweet
+        from punty.results.celebrations import compose_celebration_tweet, compose_exotic_celebration_tweet
 
+        # Check selections AND exotics with positive P&L
         result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == meeting_id,
                 Pick.race_number == race_number,
-                Pick.pick_type == "selection",
+                Pick.pick_type.in_(["selection", "exotic"]),
                 Pick.settled == True,
                 Pick.hit == True,
                 Pick.pnl > 0,
             )
         )
         for pick in result.scalars().all():
-            stake = pick.bet_stake or 1.0
-            if pick.pnl < 4 * stake:
+            stake = pick.bet_stake or pick.exotic_stake or 1.0
+            pnl = pick.pnl or 0
+
+            # Celebration triggers: 4x return for selections, OR any exotic hit, OR $100+ profit
+            is_big_selection = pick.pick_type == "selection" and pnl >= 4 * stake
+            is_exotic_hit = pick.pick_type == "exotic"
+            is_hundred_plus = pnl >= 100
+
+            if not (is_big_selection or is_exotic_hit or is_hundred_plus):
+                continue
+
+            # Check if we already posted a celebration for this pick
+            existing = await db.execute(
+                select(LiveUpdate).where(
+                    LiveUpdate.meeting_id == meeting_id,
+                    LiveUpdate.race_number == race_number,
+                    LiveUpdate.update_type == "celebration",
+                    LiveUpdate.horse_name == (pick.horse_name or pick.exotic_type or "Winner"),
+                )
+            )
+            if existing.scalar_one_or_none():
                 continue
 
             # Find the meeting's early mail
@@ -732,14 +758,34 @@ class ResultsMonitor:
             if not early_mail:
                 return
 
-            collect = stake + pick.pnl
-            tweet_text = compose_celebration_tweet(
-                horse_name=pick.horse_name or "Winner",
-                odds=pick.odds_at_tip or 0,
-                stake=stake,
-                collect=collect,
-                bet_type=pick.bet_type or "Win",
-            )
+            collect = stake + pnl
+
+            # Compose appropriate celebration tweet
+            if pick.pick_type == "exotic":
+                # Get venue for exotic celebrations
+                from punty.models.meeting import Meeting
+                meeting_result = await db.execute(
+                    select(Meeting.venue).where(Meeting.id == meeting_id)
+                )
+                venue = meeting_result.scalar_one_or_none() or ""
+                tweet_text = compose_exotic_celebration_tweet(
+                    exotic_type=pick.exotic_type or "Exotic",
+                    pnl=pnl,
+                    stake=stake,
+                    collect=collect,
+                    venue=venue,
+                    race_number=race_number,
+                )
+                log_name = pick.exotic_type or "Exotic"
+            else:
+                tweet_text = compose_celebration_tweet(
+                    horse_name=pick.horse_name or "Winner",
+                    odds=pick.odds_at_tip or 0,
+                    stake=stake,
+                    collect=collect,
+                    bet_type=pick.bet_type or "Win",
+                )
+                log_name = pick.horse_name or "Winner"
 
             # Post to Twitter (chain off last tweet in thread)
             reply_tweet_id = None
@@ -751,7 +797,7 @@ class ResultsMonitor:
                     try:
                         reply_result = await twitter.post_reply(thread_parent, tweet_text)
                         reply_tweet_id = reply_result.get("tweet_id")
-                        logger.info(f"Posted celebration reply for {pick.horse_name} ({pick.pnl:+.2f})")
+                        logger.info(f"Posted celebration reply for {log_name} ({pnl:+.2f})")
                     except Exception as e:
                         logger.warning(f"Failed to post celebration reply: {e}")
 
@@ -768,9 +814,9 @@ class ResultsMonitor:
                 parent_tweet_id=thread_parent or early_mail.twitter_id,
                 facebook_comment_id=fb_post_id,
                 parent_facebook_id=early_mail.facebook_id if early_mail else None,
-                horse_name=pick.horse_name,
+                horse_name=pick.horse_name or pick.exotic_type,
                 odds=pick.odds_at_tip,
-                pnl=pick.pnl,
+                pnl=pnl,
             )
             db.add(update)
             await db.flush()

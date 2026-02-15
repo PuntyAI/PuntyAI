@@ -169,6 +169,34 @@ def compose_clean_sweep_tweet(
     return tweet[:280]
 
 
+def compose_exotic_celebration_tweet(
+    exotic_type: str,
+    pnl: float,
+    stake: float,
+    collect: float,
+    venue: str = "",
+    race_number: int = 0,
+) -> str:
+    """Compose a celebration tweet for an exotic win (trifecta, exacta, etc.)."""
+    phrase = get_celebration(pnl)
+    collect_str = f"${collect:,.2f}"
+    stake_str = f"${stake:.0f}"
+    exotic_display = exotic_type.replace("_", " ").title()
+
+    race_info = f" R{race_number}" if race_number else ""
+    venue_info = f" {venue}" if venue else ""
+
+    tweet = (
+        f"\U0001F4A5 {phrase} {exotic_display} LANDS{venue_info}{race_info}! "
+        f"{stake_str} outlay \u2192 {collect_str} collect \U0001F4B0\U0001F4B0"
+    )
+
+    if len(tweet) > 270:
+        tweet = tweet[:267] + "..."
+
+    return tweet
+
+
 def get_all_phrases() -> dict:
     """Return all celebration phrases grouped by tier for reference."""
     return {

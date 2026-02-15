@@ -476,14 +476,14 @@
     .sel-prob { color: var(--text-secondary); position: relative; }
     .sel-prob .sel-label { color: var(--magenta); background: rgba(233, 30, 140, 0.1); }
     .prob-help { display: inline-block; width: 14px; height: 14px; line-height: 14px; text-align: center;
-        font-size: 9px; font-weight: 700; font-style: normal; border-radius: 50%; cursor: help;
+        font-size: 9px; font-weight: 700; font-style: normal; border-radius: 50%; cursor: pointer;
         color: var(--magenta); border: 1px solid var(--magenta); vertical-align: middle; margin-left: 4px; opacity: 0.6; }
     .prob-help:hover { opacity: 1; }
-    .prob-tooltip { display: none; position: absolute; bottom: 100%; left: 0; margin-bottom: 6px;
-        background: var(--card-bg); border: 1px solid rgba(233, 30, 140, 0.3); border-radius: 8px;
+    .prob-tooltip { display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+        background: #1a1a2e; border: 1px solid rgba(233, 30, 140, 0.3); border-radius: 8px;
         padding: 8px 12px; width: 260px; z-index: 50; font-size: 0.75rem; color: var(--text-secondary);
         line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-    .prob-help:hover + .prob-tooltip, .prob-tooltip:hover { display: block; }
+    .prob-tooltip.active { display: block; }
 
     /* Overview section (intro before Big 3) */
     .overview-section {
@@ -1056,7 +1056,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 exoticLine.parentNode.insertBefore(exoticTitle, exoticLine);
             }
 
-            // Add probability help tooltips
+            // Add probability help tooltips (click to toggle)
             var probSpans = body.querySelectorAll('.sel-prob');
             probSpans.forEach(function(sp) {
                 if (sp.querySelector('.prob-help')) return;
@@ -1066,8 +1066,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 var tip = document.createElement('span');
                 tip.className = 'prob-tooltip';
                 tip.innerHTML = 'Calculated by our 9-factor probability engine using market odds, form, pace, barriers, connections and more. <a href="/how-it-works#step-2" style="color:var(--magenta);text-decoration:underline;">How it works</a>';
+                help.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    // Close any other open tooltips
+                    document.querySelectorAll('.prob-tooltip.active').forEach(function(t) {
+                        if (t !== tip) t.classList.remove('active');
+                    });
+                    tip.classList.toggle('active');
+                });
                 sp.appendChild(help);
                 sp.appendChild(tip);
+            });
+            // Close tooltips when clicking elsewhere
+            document.addEventListener('click', function() {
+                document.querySelectorAll('.prob-tooltip.active').forEach(function(t) {
+                    t.classList.remove('active');
+                });
             });
         }
 
@@ -1209,18 +1223,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Winner Badges ---
     function addBadge(el, label) {
-        // Skip if this element or any ancestor already has a winner badge
-        if (el.querySelector('.win-tick')) return;
-        if (el.closest && el.closest('.win-tick, [data-badged]')) return;
-        // Skip children of already-badged containers (e.g. <p> inside .puntys-pick-block)
-        var parent = el.parentElement;
-        if (parent && parent.querySelector(':scope > .win-tick')) return;
+        // Skip if this element already has a winner badge
+        if (el.querySelector && el.querySelector('.win-tick')) return;
+        if (el.getAttribute && el.getAttribute('data-badged')) return;
         var tick = document.createElement('span');
         tick.className = 'win-tick';
         tick.innerHTML = '<span class="win-emoji">&#x1F3C6;</span> ' + label;
         tick.title = label + '!';
         el.appendChild(tick);
         el.setAttribute('data-badged', '1');
+    }
+
+    // Add badge inline next to a <strong> tag inside a multi-selection paragraph
+    function addBadgeAfterStrong(strongEl, label) {
+        if (strongEl.getAttribute('data-badged')) return;
+        var tick = document.createElement('span');
+        tick.className = 'win-tick';
+        tick.innerHTML = '<span class="win-emoji">&#x1F3C6;</span> ' + label;
+        tick.title = label + '!';
+        // Insert after the strong element's parent text run (after odds)
+        var nextNode = strongEl.nextSibling;
+        // Skip past the "(No.X) — $Y.YY" text node
+        while (nextNode && nextNode.nodeType === 3) {
+            var t = nextNode.textContent || '';
+            if (/\(No\.?\s*\d+\)/.test(t)) { nextNode = nextNode.nextSibling; continue; }
+            break;
+        }
+        if (nextNode) {
+            strongEl.parentNode.insertBefore(tick, nextNode);
+        } else {
+            strongEl.parentNode.appendChild(tick);
+        }
+        strongEl.setAttribute('data-badged', '1');
     }
 
     var hasSelections = winners && Object.keys(winners).length;
@@ -1239,29 +1273,57 @@ document.addEventListener('DOMContentLoaded', function() {
         var raceNum = parseInt((pill.textContent || '').replace(/\D/g, ''));
         if (!raceNum) return;
 
-        var bodyEls = acc.querySelectorAll('p, li, strong, .puntys-pick-block, .seq-variant-card, .exotic-title');
-        bodyEls.forEach(function(el) {
-            var text = el.textContent || '';
+        var raceWinners = hasSelections ? winners[String(raceNum)] : null;
+        var raceExotic = hasExotics ? winExotics[String(raceNum)] : null;
 
-            // Selection winners
-            if (hasSelections && winners[String(raceNum)]) {
-                if (!(el.tagName === 'P' && el.querySelector('li'))) {
-                    var scMatch = text.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
-                    if (scMatch) {
-                        var sc = parseInt(scMatch[1]);
-                        if (winners[String(raceNum)].indexOf(sc) !== -1) {
-                            addBadge(el, 'WINNER');
-                        }
+        // Selection winners: find <strong> tags with horse names, check adjacent (No.X) text
+        if (raceWinners) {
+            var strongs = acc.querySelectorAll('.race-accordion-body strong');
+            strongs.forEach(function(s) {
+                // Get the text after this strong element to find (No.X)
+                var nextText = '';
+                var sib = s.nextSibling;
+                // Collect text until we hit <br>, another element, or end
+                while (sib) {
+                    if (sib.nodeType === 3) { nextText += sib.textContent; break; }
+                    if (sib.nodeType === 1 && sib.tagName === 'BR') break;
+                    if (sib.nodeType === 1) { nextText += sib.textContent; break; }
+                    break;
+                }
+                var scMatch = nextText.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
+                if (scMatch) {
+                    var sc = parseInt(scMatch[1]);
+                    if (raceWinners.indexOf(sc) !== -1) {
+                        addBadgeAfterStrong(s, 'WINNER');
+                    }
+                }
+            });
+        }
+
+        // Exotic winners: check <p> elements AND walk text nodes in accordion body
+        if (raceExotic) {
+            var exoticRe = /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i;
+            var bodyEls = acc.querySelectorAll('.race-accordion-body p, .race-accordion-body .exotic-title');
+            bodyEls.forEach(function(el) {
+                var text = (el.textContent || '').trim();
+                if (exoticRe.test(text)) addBadge(el, 'HIT');
+            });
+            // Also check bare text nodes (exotic lines not wrapped in <p>)
+            var body = acc.querySelector('.race-accordion-body');
+            if (body) {
+                var childNodes = body.childNodes;
+                for (var cn = 0; cn < childNodes.length; cn++) {
+                    var node = childNodes[cn];
+                    if (node.nodeType === 3 && exoticRe.test((node.textContent || '').trim())) {
+                        // Wrap text node in a span and badge it
+                        var wrapper = document.createElement('span');
+                        wrapper.textContent = node.textContent;
+                        node.parentNode.replaceChild(wrapper, node);
+                        addBadge(wrapper, 'HIT');
                     }
                 }
             }
-
-            // Exotic winners
-            if (hasExotics && winExotics[String(raceNum)]) {
-                var exoticMatch = text.match(/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i);
-                if (exoticMatch) addBadge(el, 'HIT');
-            }
-        });
+        }
     });
 
     // Sequence winners (in their own sections, not inside race accordions)
