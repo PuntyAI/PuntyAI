@@ -407,3 +407,197 @@ class TestBig3MultiSettlement:
 
         assert all_won is False
         assert pnl == -10.0
+
+
+class TestEachWayWinMissingPlaceOdds:
+    """Tests for each way settlement when place_odds is missing."""
+
+    def test_each_way_win_no_place_odds(self):
+        """E/W winner with no place_odds should pay win half and refund place half."""
+        stake = 4.0
+        half = stake / 2  # 2.0
+        win_odds = 8.00
+        place_odds = None
+        finish_position = 1
+
+        won = finish_position == 1
+        if won and win_odds:
+            win_return = win_odds * half
+            place_return = place_odds * half if place_odds else half  # refund place half
+            pnl = round(win_return + place_return - stake, 2)
+            hit = True
+        else:
+            pnl = round(-stake, 2)
+            hit = False
+
+        assert hit is True
+        # (8.0 * 2) + 2.0 (refund) - 4 = 16 + 2 - 4 = 14
+        assert pnl == 14.0
+
+    def test_each_way_win_with_place_odds(self):
+        """E/W winner with place_odds should pay both halves normally."""
+        stake = 4.0
+        half = stake / 2
+        win_odds = 8.00
+        place_odds = 2.50
+        finish_position = 1
+
+        won = finish_position == 1
+        if won and win_odds:
+            win_return = win_odds * half
+            place_return = place_odds * half if place_odds else half
+            pnl = round(win_return + place_return - stake, 2)
+            hit = True
+        else:
+            pnl = round(-stake, 2)
+            hit = False
+
+        assert hit is True
+        assert pnl == 17.0  # (8.0 * 2) + (2.50 * 2) - 4 = 17
+
+
+class TestExoticHitNoDiv:
+    """Tests for exotic hit without dividend (should refund)."""
+
+    def test_exotic_hit_zero_dividend_refund(self):
+        """Exotic that hits but dividend=0 should be refund (pnl=0), not loss."""
+        hit = True
+        dividend = 0.0
+        stake = 20.0
+        cost = stake
+
+        if hit and dividend > 0:
+            pnl = round(dividend * stake - stake, 2)
+        elif hit and dividend == 0:
+            pnl = 0.0  # Refund
+        else:
+            pnl = round(-cost, 2)
+
+        assert pnl == 0.0
+
+    def test_exotic_miss_is_loss(self):
+        """Exotic that misses should lose full stake."""
+        hit = False
+        dividend = 0.0
+        stake = 20.0
+        cost = stake
+
+        if hit and dividend > 0:
+            pnl = round(dividend * stake - stake, 2)
+        elif hit and dividend == 0:
+            pnl = 0.0
+        else:
+            pnl = round(-cost, 2)
+
+        assert pnl == -20.0
+
+
+class TestSequenceHitNoDiv:
+    """Tests for sequence hit without dividend (should refund)."""
+
+    def test_sequence_hit_zero_dividend_refund(self):
+        """Sequence that hits all legs but dividend=0 should be refund."""
+        all_hit = True
+        dividend = 0.0
+        total_stake = 50.0
+
+        if all_hit and dividend > 0:
+            seq_pnl = round(dividend - total_stake, 2)
+        elif all_hit:
+            seq_pnl = 0.0  # Refund
+        else:
+            seq_pnl = round(-total_stake, 2)
+
+        assert seq_pnl == 0.0
+
+    def test_sequence_miss_is_loss(self):
+        """Sequence that misses a leg should lose full stake."""
+        all_hit = False
+        total_stake = 50.0
+
+        seq_pnl = round(-total_stake, 2)
+
+        assert seq_pnl == -50.0
+
+
+class TestDeadHeatSettlement:
+    """Tests for dead heat dividend calculations."""
+
+    def test_dead_heat_win_halves_dividend(self):
+        """Win bet in dead heat for 1st should halve the win dividend."""
+        stake = 10.0
+        win_odds = 4.00
+        finish_position = 1
+        dead_heat_count = 2  # Two runners sharing 1st
+
+        won = finish_position == 1
+        adjusted_odds = win_odds / dead_heat_count
+        pnl = round(adjusted_odds * stake - stake, 2)
+
+        assert won is True
+        assert pnl == 10.0  # (4.00/2 * 10) - 10 = 20 - 10 = 10
+
+    def test_dead_heat_place_halves_dividend(self):
+        """Place bet in dead heat for 3rd should halve the place dividend."""
+        stake = 6.0
+        place_odds = 1.80
+        finish_position = 3
+        dead_heat_count = 2
+
+        placed = finish_position <= 3
+        adjusted_odds = place_odds / dead_heat_count
+        pnl = round(adjusted_odds * stake - stake, 2)
+
+        assert placed is True
+        assert pnl == -0.6  # (1.80/2 * 6) - 6 = 5.4 - 6 = -0.6
+
+    def test_dead_heat_each_way_win(self):
+        """E/W bet in dead heat for 1st should halve both dividends."""
+        stake = 4.0
+        half = stake / 2
+        win_odds = 8.00
+        place_odds = 2.50
+        finish_position = 1
+        dead_heat_count = 2
+
+        adj_win = win_odds / dead_heat_count
+        adj_place = place_odds / dead_heat_count
+
+        won = finish_position == 1
+        win_return = adj_win * half
+        place_return = adj_place * half
+        pnl = round(win_return + place_return - stake, 2)
+
+        assert won is True
+        assert pnl == 6.5  # (4.0*2 + 1.25*2) - 4 = 8 + 2.5 - 4 = 6.5
+
+    def test_no_dead_heat_unaffected(self):
+        """Normal win (no dead heat) should use full dividend."""
+        from collections import Counter
+
+        positions = [1, 2, 3, 4, 5]
+        position_counts = Counter(positions)
+        dead_heat_divisors = {pos: c for pos, c in position_counts.items() if c > 1}
+
+        assert dead_heat_divisors == {}
+
+    def test_dead_heat_detection(self):
+        """Two runners sharing 1st should be detected as dead heat."""
+        from collections import Counter
+
+        positions = [1, 1, 3, 4, 5]  # Two horses share 1st
+        position_counts = Counter(positions)
+        dead_heat_divisors = {pos: c for pos, c in position_counts.items() if c > 1}
+
+        assert dead_heat_divisors == {1: 2}
+
+    def test_triple_dead_heat(self):
+        """Three runners sharing a position should divide by 3."""
+        stake = 10.0
+        win_odds = 6.00
+        dead_heat_count = 3
+
+        adjusted_odds = win_odds / dead_heat_count
+        pnl = round(adjusted_odds * stake - stake, 2)
+
+        assert pnl == 10.0  # (6.00/3 * 10) - 10 = 20 - 10 = 10

@@ -16,7 +16,8 @@ _BIG3_HORSE = re.compile(
     # Matches both formats:
     #   Old: 1) *HORSE* (Race 2, No.8) — $2.80
     #   New: *1 - HORSE* (Race 2, No.8) — $2.80
-    r"(?:(?P<rank_old>\d)\)\s*\*(?P<name_old>[A-Z][A-Z\s'\u2019\-]+?)\*|\*(?P<rank_new>\d)\s*[-–—]\s*(?P<name_new>[A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(Race\s*(?P<race>\d+),\s*No\.(?P<saddle>\d+)\)\s*.*?\$(?P<odds>\d+\.?\d*)",
+    # Saddlecloth accepts: No.X, No X, #X
+    r"(?:(?P<rank_old>\d)\)\s*\*(?P<name_old>[A-Z][A-Z\s'\u2019\-]+?)\*|\*(?P<rank_new>\d)\s*[-–—]\s*(?P<name_new>[A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(Race\s*(?P<race>\d+),\s*(?:No\.?\s*|#)(?P<saddle>\d+)\)\s*.*?\$(?P<odds>\d+\.?\d*)",
     re.IGNORECASE,
 )
 _BIG3_MULTI = re.compile(
@@ -32,14 +33,14 @@ _RACE_HEADER = re.compile(
 #   Old: 1. *HORSE* (No.1) — $3.50 / $1.45
 #   New: *1. HORSE* (No.1) — $3.50 / $1.45
 _SELECTION = re.compile(
-    r"(?:(\d)\.\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*(\d)\.\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
+    r"(?:(\d)\.\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*(\d)\.\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\((?:No\.?\s*|#)(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 # Matches both formats:
 #   Old: Roughie: *HORSE* (No.1) — $3.50 / $1.45
 #   New: *Roughie: HORSE* (No.1) — $3.50 / $1.45
 _ROUGHIE = re.compile(
-    r"(?:Roughie:\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*Roughie:\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(No\.(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
+    r"(?:Roughie:\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*Roughie:\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\((?:No\.?\s*|#)(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 
@@ -70,6 +71,7 @@ _VALUE_RATING = re.compile(
 #   Exacta: 1, 2, 4 — $20
 #   Exacta: 1 to win, 2, 4 for second — $20
 #   Trifecta: 1/2,4/3,5,6 — $20
+# Primary exotic pattern: with "Degenerate Exotic" header
 _EXOTIC = re.compile(
     r"\*?Degenerate\s+Exotic.*?\*?\s*\n\s*"
     r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s*\(?\s*(?:Standout|Box(?:ed)?)\s*\)?)?|"
@@ -80,6 +82,18 @@ _EXOTIC = re.compile(
     r"(?:[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)|"    # — $20 or — 2U
     r"\(\$(\d+\.?\d*)\))",                               # ($20)
     re.IGNORECASE,
+)
+# Fallback exotic pattern: no header required, matches exotic type at line start
+_EXOTIC_FALLBACK = re.compile(
+    r"^\s*"
+    r"((?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s*\(?\s*(?:Standout|Box(?:ed)?)\s*\)?)?|"
+    r"(?:Box(?:ed)?\s+)?(?:Trifecta|Exacta|Quinella|First\s*(?:Four|4))|"
+    r"Standout\s+(?:Exacta|Quinella|Trifecta|First\s*(?:Four|4))|"
+    r"Trifecta\s+Standout|First4)"
+    r":\s*(.+?)\s*"
+    r"(?:[–\-—]\s*(?:\$(\d+\.?\d*)|(\d+\.?\d*)U)|"
+    r"\(\$(\d+\.?\d*)\))",
+    re.IGNORECASE | re.MULTILINE,
 )
 _EXOTIC_RETURN = re.compile(
     r"Est\.\s*return:\s*(\d+\.?\d*)%",
@@ -101,13 +115,13 @@ _PUNTYS_PICK = re.compile(
     re.IGNORECASE,
 )
 _PUNTYS_PICK_HORSE = re.compile(
-    r"(?:^|[+])\s*(?:\*?([A-Z][A-Z\s'\u2019\-]+?)\*?\s*)?\(No\.(\d+)\)",
+    r"(?:^|[+])\s*(?:\*?([A-Z][A-Z\s'\u2019\-]+?)\*?\s*)?\((?:No\.?\s*|#)(\d+)\)",
     re.IGNORECASE,
 )
 # Extract bet type + odds per horse from Punty's Pick line:
 #   "HORSE (No.5) $1.37 Place" or "HORSE (No.5) $2.10 Win"
 _PUNTYS_PICK_BET = re.compile(
-    r"\(No\.(\d+)\)\s*\$(\d+\.?\d*)\s*(Win\s*\(Saver\)|Win|Saver\s*Win|Place|Each\s*Way|E/W)",
+    r"\((?:No\.?\s*|#)(\d+)\)\s*\$(\d+\.?\d*)\s*(Win\s*\(Saver\)|Win|Saver\s*Win|Place|Each\s*Way|E/W)",
     re.IGNORECASE,
 )
 # Exotic Punty's Pick format:
@@ -186,6 +200,26 @@ def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list
 
     # --- Sequences ---
     picks.extend(_parse_sequences(raw_content, content_id, meeting_id, _next_id))
+
+    # --- Completeness validation ---
+    # Check which race numbers appear in Race headers vs parsed picks
+    race_headers = set(int(m.group(1)) for m in _RACE_HEADER.finditer(raw_content))
+    races_with_picks = set(p["race_number"] for p in picks if p.get("pick_type") == "selection")
+    missing_races = race_headers - races_with_picks
+    if missing_races:
+        logger.warning(
+            f"Parse completeness: {meeting_id} — race headers found for "
+            f"R{sorted(missing_races)} but no selections parsed for those races"
+        )
+    races_without_exotics = set()
+    races_with_exotics = set(p["race_number"] for p in picks if p.get("pick_type") == "exotic")
+    if race_headers:
+        races_without_exotics = race_headers - races_with_exotics
+        if len(races_without_exotics) > len(race_headers) * 0.5:
+            logger.warning(
+                f"Parse completeness: {meeting_id} — {len(races_without_exotics)}/{len(race_headers)} "
+                f"races have no exotic parsed"
+            )
 
     return picks
 
@@ -434,8 +468,10 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                                     f"overrides {p.get('bet_type')} → {pp_bet_type} at ${pp_odds}"
                                 )
 
-        # Exotic
+        # Exotic — try primary pattern (with Degenerate Exotic header) then fallback
         exotic_m = _EXOTIC.search(section)
+        if not exotic_m:
+            exotic_m = _EXOTIC_FALLBACK.search(section)
         if exotic_m:
             exotic_type = _normalize_exotic_type(exotic_m.group(1))
             runners_str = exotic_m.group(2).strip()

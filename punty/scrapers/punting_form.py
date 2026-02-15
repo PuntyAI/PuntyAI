@@ -502,11 +502,16 @@ class PuntingFormScraper(BaseScraper):
                 except (ValueError, TypeError):
                     pass
 
-        # Fallback: match venue only (for venues without date-matched entries)
+        # Fallback: match venue only — but warn about potential cross-date contamination
         for cond in conditions:
             track = (cond.get("track") or "").lower().strip()
             if not track or not _venue_matches(track):
                 continue
+            md = cond.get("meetingDate") or "unknown"
+            logger.warning(
+                f"PF conditions fallback: using venue-only match for {venue} "
+                f"(condition date={md}, target date={target_date}) — may be stale"
+            )
             return self._parse_condition(cond)
 
         return None

@@ -127,6 +127,7 @@ def calculate_pre_selections(
     race_context: dict[str, Any],
     pool: float = RACE_POOL,
     selection_thresholds: dict | None = None,
+    place_context_multipliers: dict[str, float] | None = None,
 ) -> RacePreSelections:
     """Calculate deterministic pre-selections for a single race.
 
@@ -134,6 +135,9 @@ def calculate_pre_selections(
         race_context: Race dict from ContextBuilder with runners and probabilities.
         pool: Total stake pool (default $20).
         selection_thresholds: Optional tuned thresholds from bet_type_tuning.
+        place_context_multipliers: Optional dict of place context multiplier values.
+            When the average multiplier is strong (>1.15), the PLACE_MIN_PROB
+            threshold is lowered to encourage more place bets.
 
     Returns:
         RacePreSelections with ordered picks, exotic, and Punty's Pick.
@@ -144,6 +148,16 @@ def calculate_pre_selections(
     exotic_combos = probs.get("exotic_combinations", [])
 
     thresholds = _load_thresholds(selection_thresholds)
+
+    # Adjust place threshold based on place context multipliers
+    if place_context_multipliers:
+        mults = [v for v in place_context_multipliers.values() if isinstance(v, (int, float))]
+        if mults:
+            avg_place_strength = sum(mults) / len(mults)
+            if avg_place_strength > 1.15:
+                thresholds["place_min_prob"] = max(0.25, thresholds["place_min_prob"] - 0.05)
+            elif avg_place_strength < 0.85:
+                thresholds["place_min_prob"] = min(0.45, thresholds["place_min_prob"] + 0.05)
 
     # Build runner data with probability info
     candidates = _build_candidates(runners)

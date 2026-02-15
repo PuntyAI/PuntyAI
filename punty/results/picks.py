@@ -170,6 +170,17 @@ async def _settle_picks_for_race_impl(
         )
         return 0
 
+    # --- Dead heat detection ---
+    # Count runners sharing the same finish position (dead heat = count > 1)
+    from collections import Counter
+    position_counts = Counter(
+        r.finish_position for r in runners
+        if r.finish_position is not None and r.finish_position > 0
+    )
+    dead_heat_divisors = {pos: count for pos, count in position_counts.items() if count > 1}
+    if dead_heat_divisors:
+        logger.info(f"Dead heat detected in {race_id}: positions {dead_heat_divisors}")
+
     # --- Selections ---
     result = await db.execute(
         select(Pick).where(
@@ -209,6 +220,12 @@ async def _settle_picks_for_race_impl(
             win_odds = pick.odds_at_tip or runner.win_dividend
             place_odds = pick.place_odds_at_tip or runner.place_dividend
 
+            # Dead heat: divide dividends by number of runners sharing position
+            dh = dead_heat_divisors.get(runner.finish_position, 1)
+            if dh > 1:
+                win_odds = win_odds / dh if win_odds else win_odds
+                place_odds = place_odds / dh if place_odds else place_odds
+
             if bet_type in ("win", "saver_win"):
                 pick.hit = won
                 if won and win_odds:
@@ -223,8 +240,11 @@ async def _settle_picks_for_race_impl(
                     pick.pnl = round(-stake, 2)
             elif bet_type == "each_way":
                 half = stake / 2
-                if won and win_odds and place_odds:
-                    pick.pnl = round(win_odds * half + place_odds * half - stake, 2)
+                if won and win_odds:
+                    # Win half always pays at win odds; place half pays if place_odds available
+                    win_return = win_odds * half
+                    place_return = place_odds * half if place_odds else half  # refund place half if no place odds
+                    pick.pnl = round(win_return + place_return - stake, 2)
                     pick.hit = True
                 elif placed and place_odds:
                     pick.pnl = round(place_odds * half - stake, 2)
@@ -252,9 +272,11 @@ async def _settle_picks_for_race_impl(
                     pick.pp_pnl = round(pp_odds_val * stake - stake, 2) if placed and pp_odds_val else round(-stake, 2)
                 elif pp_bt == "each_way":
                     half = stake / 2
-                    if won and win_odds and pp_odds_val:
+                    if won and win_odds:
                         pick.pp_hit = True
-                        pick.pp_pnl = round(win_odds * half + pp_odds_val * half - stake, 2)
+                        win_return = win_odds * half
+                        place_return = pp_odds_val * half if pp_odds_val else half
+                        pick.pp_pnl = round(win_return + place_return - stake, 2)
                     elif placed and pp_odds_val:
                         pick.pp_hit = True
                         pick.pp_pnl = round(pp_odds_val * half - stake, 2)
@@ -561,6 +583,10 @@ async def _settle_picks_for_race_impl(
                 flexi_pct = stake / combos if combos > 0 else stake
                 return_amount = dividend * flexi_pct
                 pick.pnl = round(return_amount - stake, 2)
+            elif hit and dividend == 0:
+                # Hit but no dividend available — TAB rules: refund
+                pick.pnl = 0.0
+                logger.warning(f"Exotic pick {pick.id} hit but dividend=0 — treating as refund")
             else:
                 pick.pnl = round(-cost, 2)
             pick.hit = hit
@@ -694,9 +720,10 @@ async def _settle_picks_for_race_impl(
                     return_amount = dividend * flexi_pct
                     seq_pnl = round(return_amount - total_stake, 2)
                 else:
-                    # Hit but no dividend found — treat as loss of stake
+                    # Hit but no dividend found — TAB rules: refund
                     total_stake = pick.exotic_stake or 1.0
-                    seq_pnl = round(-total_stake, 2)
+                    seq_pnl = 0.0
+                    logger.warning(f"Sequence pick {pick.id} hit but dividend=0 — treating as refund")
         else:
             # Lost — exotic_stake stores total outlay directly
             total_stake = pick.exotic_stake or 1.0

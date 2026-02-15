@@ -480,6 +480,127 @@ async def _get_deep_learning_patterns(db: AsyncSession) -> list[dict]:
 
 
 # ──────────────────────────────────────────────
+# Venue-type & roughie analysis
+# ──────────────────────────────────────────────
+
+_METRO_VENUES = {
+    "flemington", "caulfield", "moonee valley", "sandown", "the valley",
+    "randwick", "rosehill", "royal randwick", "canterbury", "warwick farm",
+    "eagle farm", "doomben", "morphettville", "ascot", "belmont",
+}
+
+
+def _classify_venue_type(venue: str) -> str:
+    """Classify venue as metro/provincial/country."""
+    v = venue.lower().strip()
+    if v in _METRO_VENUES:
+        return "metro"
+    # Provincial if it sounds like a main regional track, otherwise country
+    # For simplicity: anything non-metro is "provincial" (covers most of our data)
+    return "provincial"
+
+
+async def _venue_type_performance(db: AsyncSession) -> list[dict[str, Any]]:
+    """Aggregate selection performance by venue type (metro/provincial)."""
+    result = await db.execute(
+        select(
+            Meeting.venue,
+            func.count(Pick.id).label("bets"),
+            func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
+            func.sum(Pick.bet_stake).label("staked"),
+            func.sum(Pick.pnl).label("pnl"),
+        )
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.bet_type.isnot(None),
+            Pick.bet_type != "exotics_only",
+        )
+        .group_by(Meeting.venue)
+    )
+
+    # Group by venue type
+    type_stats: dict[str, dict] = {}
+    for row in result.all():
+        vtype = _classify_venue_type(row.venue or "")
+        if vtype not in type_stats:
+            type_stats[vtype] = {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0}
+        s = type_stats[vtype]
+        s["bets"] += row.bets
+        s["winners"] += row.winners
+        s["staked"] += float(row.staked or 0)
+        s["pnl"] += float(row.pnl or 0)
+
+    results = []
+    for vtype, s in sorted(type_stats.items()):
+        sr = round(s["winners"] / s["bets"] * 100, 1) if s["bets"] else 0
+        roi = round(s["pnl"] / s["staked"] * 100, 1) if s["staked"] else 0
+        results.append({
+            "venue_type": vtype,
+            "bets": s["bets"],
+            "winners": s["winners"],
+            "strike_rate": sr,
+            "staked": round(s["staked"], 2),
+            "pnl": round(s["pnl"], 2),
+            "roi": roi,
+        })
+    return results
+
+
+async def _roughie_band_analysis(db: AsyncSession) -> list[dict[str, Any]]:
+    """Analyse roughie (tip_rank=4) performance by odds band."""
+    result = await db.execute(
+        select(
+            Pick.odds_at_tip,
+            Pick.bet_stake,
+            Pick.pnl,
+            Pick.hit,
+        )
+        .where(
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.tip_rank == 4,
+            Pick.odds_at_tip.isnot(None),
+        )
+    )
+
+    bands = {
+        "$8-$20": {"min": 8, "max": 20, "bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0},
+        "$20-$50": {"min": 20, "max": 50, "bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0},
+        "$50+": {"min": 50, "max": 9999, "bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0},
+    }
+
+    for row in result.all():
+        odds = float(row.odds_at_tip or 0)
+        for label, b in bands.items():
+            if b["min"] <= odds < b["max"]:
+                b["bets"] += 1
+                b["winners"] += 1 if row.hit else 0
+                b["staked"] += float(row.bet_stake or 0)
+                b["pnl"] += float(row.pnl or 0)
+                break
+
+    results = []
+    for label, b in bands.items():
+        if b["bets"] == 0:
+            continue
+        sr = round(b["winners"] / b["bets"] * 100, 1)
+        roi = round(b["pnl"] / b["staked"] * 100, 1) if b["staked"] else 0
+        action = "HUNT" if roi > 0 else "AVOID" if roi < -30 else "CAUTION"
+        results.append({
+            "band": label,
+            "bets": b["bets"],
+            "winners": b["winners"],
+            "strike_rate": sr,
+            "roi": roi,
+            "pnl": round(b["pnl"], 2),
+            "action": action,
+        })
+    return results
+
+
+# ──────────────────────────────────────────────
 # Strategy context builder (for prompt injection)
 # ──────────────────────────────────────────────
 
@@ -562,6 +683,41 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
             )
         parts.append("")
 
+    # Venue-type performance
+    try:
+        venue_perf = await _venue_type_performance(db)
+    except Exception:
+        venue_perf = []
+    if venue_perf:
+        parts.append("### Venue Type Performance")
+        for vp in venue_perf:
+            flag = "PROFITABLE" if vp["roi"] > 0 else "LOSING" if vp["roi"] < -10 else "BREAKEVEN"
+            parts.append(
+                f"- {vp['venue_type'].title()}: {vp['bets']} bets, {vp['strike_rate']}% SR, "
+                f"{_pnl_str(vp['pnl'])} P&L ({vp['roi']:+.1f}% ROI) [{flag}]"
+            )
+        parts.append("")
+
+    # Roughie odds-band analysis
+    try:
+        roughie_bands = await _roughie_band_analysis(db)
+    except Exception:
+        roughie_bands = []
+    if roughie_bands:
+        parts.append("### Roughie Odds Band Analysis (Tip Rank #4)")
+        for rb in roughie_bands:
+            parts.append(
+                f"- {rb['band']}: {rb['bets']} bets, {rb['strike_rate']}% SR, "
+                f"{rb['roi']:+.1f}% ROI [{rb['action']}]"
+            )
+        avoid_bands = [rb["band"] for rb in roughie_bands if rb["action"] == "AVOID"]
+        hunt_bands = [rb["band"] for rb in roughie_bands if rb["action"] == "HUNT"]
+        if avoid_bands:
+            parts.append(f"**AVOID roughies at {', '.join(avoid_bands)} — historically unprofitable**")
+        if hunt_bands:
+            parts.append(f"**HUNT roughies at {', '.join(hunt_bands)} — this is your sweet spot**")
+        parts.append("")
+
     # Punty's Pick performance (the highlighted best-bet per race)
     pp_stats = await aggregate_puntys_pick_performance(db)
     if pp_stats:
@@ -580,6 +736,10 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
             parts.append(
                 f"- **WARNING**: Your best-bet picks are only hitting {pp['strike_rate']}%. "
                 "The public sees this stat. You need to do BETTER."
+            )
+            parts.append(
+                "- **PP RULE**: Select ONLY runners with >25% win probability for Punty's Pick. "
+                "Avoid speculative exotics as PP. Stick to selections with genuine win chances."
             )
         if pp["roi"] < 0:
             parts.append(
