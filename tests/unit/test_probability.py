@@ -39,6 +39,7 @@ from punty.probability import (
     _parse_a2e_json,
     _a2e_to_score,
     _parse_margin_value,
+    _get_weight_change_class,
     _get_context_multipliers,
     _context_venue_type,
     _context_class_bucket,
@@ -65,6 +66,7 @@ def _make_runner(
     odds_flucs=None,
     last_five=None,
     track_dist_stats=None,
+    track_stats=None,
     distance_stats=None,
     good_track_stats=None,
     soft_track_stats=None,
@@ -105,6 +107,7 @@ def _make_runner(
         "odds_flucs": odds_flucs,
         "last_five": last_five,
         "track_dist_stats": track_dist_stats,
+        "track_stats": track_stats,
         "distance_stats": distance_stats,
         "good_track_stats": good_track_stats,
         "soft_track_stats": soft_track_stats,
@@ -2165,3 +2168,100 @@ class TestContextMultipliers:
         # All probabilities sum to 1.0
         total = sum(p.win_probability for p in probs.values())
         assert total == pytest.approx(1.0, abs=0.01)
+
+
+class TestWeightChangeFromFormHistory:
+    """Tests for _get_weight_change_class deriving weight from form_history."""
+
+    def test_weight_up_big(self):
+        runner = _make_runner(
+            weight=60.0,
+            form_history=json.dumps([{"weight": 56.0, "date": "2026-01-28"}]),
+        )
+        assert _get_weight_change_class(runner) == "weight_up_big"
+
+    def test_weight_up_small(self):
+        runner = _make_runner(
+            weight=57.0,
+            form_history=json.dumps([{"weight": 56.0, "date": "2026-01-28"}]),
+        )
+        assert _get_weight_change_class(runner) == "weight_up_small"
+
+    def test_weight_down_big(self):
+        runner = _make_runner(
+            weight=53.0,
+            form_history=json.dumps([{"weight": 56.0, "date": "2026-01-28"}]),
+        )
+        assert _get_weight_change_class(runner) == "weight_down_big"
+
+    def test_weight_down_small(self):
+        runner = _make_runner(
+            weight=55.5,
+            form_history=json.dumps([{"weight": 56.0, "date": "2026-01-28"}]),
+        )
+        assert _get_weight_change_class(runner) == "weight_down_small"
+
+    def test_weight_same(self):
+        runner = _make_runner(
+            weight=56.0,
+            form_history=json.dumps([{"weight": 56.0, "date": "2026-01-28"}]),
+        )
+        assert _get_weight_change_class(runner) == "weight_same"
+
+    def test_no_form_history(self):
+        runner = _make_runner(weight=56.0)
+        assert _get_weight_change_class(runner) == ""
+
+    def test_no_weight(self):
+        runner = _make_runner(
+            form_history=json.dumps([{"weight": 56.0}]),
+        )
+        assert _get_weight_change_class(runner) == ""
+
+    def test_empty_form_history(self):
+        runner = _make_runner(weight=56.0, form_history=json.dumps([]))
+        assert _get_weight_change_class(runner) == ""
+
+    def test_form_history_no_weight_field(self):
+        runner = _make_runner(
+            weight=56.0,
+            form_history=json.dumps([{"date": "2026-01-28", "venue": "Flemington"}]),
+        )
+        assert _get_weight_change_class(runner) == ""
+
+
+class TestTrackStatsFallback:
+    """Tests for track_stats fallback when track_dist_stats is missing."""
+
+    def test_track_stats_used_when_no_track_dist(self):
+        runner = _make_runner(
+            track_stats="10: 3-2-1",
+            last_five="12312",
+        )
+        score = _form_rating(runner, "Good 4", 0.10)
+        # Should be > neutral because track_stats shows 30% win rate
+        assert score > 0.5
+
+    def test_track_dist_preferred_over_track_stats(self):
+        runner = _make_runner(
+            track_dist_stats="8: 4-2-1",  # 50% win rate
+            track_stats="10: 1-0-0",       # 10% win rate
+            last_five="11111",
+        )
+        score_with_td = _form_rating(runner, "Good 4", 0.10)
+
+        runner2 = _make_runner(
+            track_stats="8: 4-2-1",  # Same stats but only in track_stats
+            last_five="11111",
+        )
+        score_ts_only = _form_rating(runner2, "Good 4", 0.10)
+
+        # track_dist_stats gets 1.5x weight, track_stats only 0.8x
+        # So the runner with track_dist_stats should score higher
+        assert score_with_td > score_ts_only
+
+    def test_no_track_stats_either(self):
+        runner = _make_runner(last_five="55555")
+        score = _form_rating(runner, "Good 4", 0.10)
+        # Still produces a score from last_five alone (neutral or below)
+        assert score <= 0.5

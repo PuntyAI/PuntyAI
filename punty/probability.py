@@ -656,6 +656,13 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
         td_score = _stat_to_score(td.win_rate, baseline, "track_dist_sr")
         signal_sum += td_score * 1.5  # higher weight for track+distance
         signals += 1.5
+    else:
+        # Fallback: track-only stats (65% coverage vs 40% for track+dist)
+        ts = parse_stats_string(_get(runner, "track_stats"))
+        if ts and ts.starts >= 3:
+            ts_score = _stat_to_score(ts.win_rate, baseline, "track_dist_sr")
+            signal_sum += ts_score * 0.8  # lower weight than track+dist
+            signals += 0.8
 
     # Condition-appropriate stats
     cond_stats_field = _condition_stats_field(track_condition)
@@ -1787,12 +1794,34 @@ def _get_market_direction(runner: Any) -> str:
 
 
 def _get_weight_change_class(runner: Any) -> str:
-    """Classify weight change for weight_impact pattern matching."""
+    """Classify weight change for weight_impact pattern matching.
+
+    Derives last-start weight from form_history since the Runner model
+    doesn't have a dedicated last_start_weight field.
+    """
     wt = _get(runner, "weight")
-    last_wt = _get(runner, "last_start_weight")
-    if not wt or not last_wt:
+    if not wt:
         return ""
-    diff = float(wt) - float(last_wt)
+
+    # Derive last-start weight from form_history
+    last_wt = None
+    fh_raw = _get(runner, "form_history")
+    if fh_raw:
+        try:
+            fh = json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+            if isinstance(fh, list) and fh:
+                # form_history[0] is most recent start
+                last_wt = fh[0].get("weight") if isinstance(fh[0], dict) else None
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if not last_wt:
+        return ""
+
+    try:
+        diff = float(wt) - float(last_wt)
+    except (ValueError, TypeError):
+        return ""
     if diff > 2.0:
         return "weight_up_big"
     elif diff > 0:

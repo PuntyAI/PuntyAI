@@ -203,6 +203,9 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
                 meeting.meeting_type = "trial"
                 logger.info(f"No races found for {venue} — classified as trial")
 
+    # Fill derived fields (days_since_last_run, class_stats) from form_history
+    await _fill_derived_fields(db, meeting_id)
+
     await db.commit()
 
     if errors:
@@ -301,6 +304,9 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
                 if meeting.meeting_type == "race":
                     meeting.meeting_type = "trial"
                     logger.info(f"No races found for {venue} — classified as trial")
+
+        # Fill derived fields (days_since_last_run, class_stats) from form_history
+        await _fill_derived_fields(db, meeting_id)
 
         await db.commit()
 
@@ -451,6 +457,9 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         # Close scraper
         if pf_scraper:
             await pf_scraper.close()
+
+        # Fill derived fields (days_since_last_run, class_stats) from form_history
+        await _fill_derived_fields(db, meeting_id)
 
         await db.commit()
         error_count = len(errors)
@@ -835,6 +844,96 @@ async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: 
                 setattr(runner, field, val)
 
     await db.flush()
+
+
+async def _fill_derived_fields(db: AsyncSession, meeting_id: str) -> None:
+    """Fill fields that can be derived from form_history when primary sources fail.
+
+    Derives: days_since_last_run, class_stats (from form_history JSON).
+    Called after all scraper data is merged, before commit.
+    """
+    from datetime import datetime
+    from punty.config import melb_now
+
+    result = await db.execute(
+        select(Runner).join(Race, Runner.race_id == Race.id).where(
+            Race.meeting_id == meeting_id,
+            Runner.scratched == False,
+        )
+    )
+    runners = result.scalars().all()
+    now = melb_now().replace(tzinfo=None)
+    filled = 0
+
+    for runner in runners:
+        fh_raw = runner.form_history
+        if not fh_raw:
+            continue
+
+        try:
+            fh = _json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+        except (ValueError, TypeError):
+            continue
+
+        if not isinstance(fh, list) or not fh:
+            continue
+
+        # Derive days_since_last_run from most recent form_history entry
+        if not runner.days_since_last_run:
+            latest_date = fh[0].get("date") if isinstance(fh[0], dict) else None
+            if latest_date:
+                try:
+                    last_dt = datetime.strptime(str(latest_date)[:10], "%Y-%m-%d")
+                    runner.days_since_last_run = (now - last_dt).days
+                    filled += 1
+                except (ValueError, TypeError):
+                    pass
+
+        # Derive class_stats from form_history when atThisClassStats is missing
+        if not runner.class_stats:
+            race = await db.get(Race, runner.race_id)
+            if race:
+                race_class = getattr(race, "class_", None) or ""
+                _derive_class_stats(runner, fh, race_class)
+
+    await db.flush()
+    if filled:
+        logger.info(f"Filled derived fields for {meeting_id}: {filled} days_since_last_run")
+
+
+def _derive_class_stats(runner: "Runner", form_history: list, race_class: str) -> None:
+    """Derive class_stats from form_history by matching class buckets."""
+    from punty.context.combo_form import _bucket_class, _parse_position
+
+    today_bucket = _bucket_class(race_class)
+    if not today_bucket:
+        return
+
+    starts = 0
+    wins = 0
+    seconds = 0
+    thirds = 0
+
+    for start in form_history:
+        if not isinstance(start, dict):
+            continue
+        hist_class = start.get("class", "")
+        if not hist_class:
+            continue
+        if _bucket_class(hist_class) == today_bucket:
+            starts += 1
+            pos = _parse_position(start.get("position"))
+            if pos == 1:
+                wins += 1
+            elif pos == 2:
+                seconds += 1
+            elif pos == 3:
+                thirds += 1
+
+    if starts >= 1:
+        runner.class_stats = _json.dumps({
+            "starts": starts, "wins": wins, "seconds": seconds, "thirds": thirds
+        })
 
 
 async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) -> None:

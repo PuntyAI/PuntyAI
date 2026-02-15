@@ -620,9 +620,12 @@ class RacingComScraper(BaseScraper):
         # If TAB was flagged unreliable, derive place odds from win odds
         # (TAB place odds would be equally wrong)
         if "odds_tab_raw" in odds_dict and odds_dict.get("place_odds"):
-            # Estimate place odds from corrected win odds (~1/3 of win margin)
             if current_odds and current_odds > 1.0:
                 odds_dict["place_odds"] = round(1.0 + (current_odds - 1.0) / 3, 2)
+
+        # If place_odds still missing (no TAB provider at all), estimate from win odds
+        if not odds_dict.get("place_odds") and current_odds and current_odds > 1.0:
+            odds_dict["place_odds"] = round(1.0 + (current_odds - 1.0) / 3, 2)
 
         # Sire/dam — from nested horse.sireHorseName etc.
         sire = horse.get("sireHorseName")
@@ -705,46 +708,39 @@ class RacingComScraper(BaseScraper):
         return result
 
     def _resolve_current_odds(self, odds_dict: dict, horse_name: str) -> Optional[float]:
-        """Pick the best current_odds by cross-validating providers.
+        """Pick the best current_odds using Sportsbet as primary provider.
 
-        If TAB odds differ wildly from other providers (>3x ratio), the TAB
-        data is unreliable (known issue with racing.com for WA meetings).
-        In that case, use the median of the other providers instead.
+        Sportsbet has 24% avg error vs TAB's 334% from racing.com GraphQL.
+        TAB odds from racing.com are unreliable across many venues (not just WA).
         """
+        sb = odds_dict.get("odds_sportsbet")
         tab = odds_dict.get("odds_tab")
-        others = []
-        for k in ["odds_sportsbet", "odds_bet365", "odds_ladbrokes"]:
-            v = odds_dict.get(k)
-            if v and isinstance(v, (int, float)) and v > 1.0:
-                others.append(v)
 
-        if not tab:
-            # No TAB odds — use first available
-            return others[0] if others else None
+        # Primary: Sportsbet
+        if sb and isinstance(sb, (int, float)) and sb > 1.0:
+            # Cross-validate TAB against SB and fix if wildly off
+            if tab and isinstance(tab, (int, float)) and tab > 1.0:
+                ratio = tab / sb
+                if ratio > 3.0 or ratio < 0.33:
+                    logger.warning(
+                        f"Odds mismatch for {horse_name}: TAB=${tab:.2f} vs "
+                        f"SB=${sb:.2f} (ratio={ratio:.2f}). Using SB."
+                    )
+                    odds_dict["odds_tab_raw"] = tab
+                    odds_dict["odds_tab"] = sb
+            return sb
 
-        if not others:
-            # Only TAB available — use it
+        # Fallback: TAB (only when SB unavailable)
+        if tab and isinstance(tab, (int, float)) and tab > 1.0:
             return tab
 
-        # Cross-validate: compare TAB against median of other providers
-        import statistics
-        other_median = statistics.median(others)
+        # Last resort: any other provider
+        for k in ["odds_bet365", "odds_ladbrokes"]:
+            v = odds_dict.get(k)
+            if v and isinstance(v, (int, float)) and v > 1.0:
+                return v
 
-        if other_median > 0:
-            ratio = tab / other_median
-            if ratio > 3.0 or ratio < 0.33:
-                # TAB odds are wildly different — unreliable
-                logger.warning(
-                    f"Odds mismatch for {horse_name}: TAB=${tab:.2f} vs "
-                    f"others median=${other_median:.2f} (ratio={ratio:.2f}). "
-                    f"Using median of other providers."
-                )
-                # Also fix the stored odds_tab to flag it as unreliable
-                odds_dict["odds_tab_raw"] = tab
-                odds_dict["odds_tab"] = other_median
-                return other_median
-
-        return tab
+        return None
 
     @staticmethod
     def _extract_weight_type(condition: str) -> Optional[str]:
