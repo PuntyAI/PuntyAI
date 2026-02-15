@@ -461,18 +461,30 @@ class ResultsMonitor:
             await scraper.close()
 
         # Update track condition if changed (piggybacks on status poll — no extra cost)
-        # Always accept racing.com live data (trusted source, mid-meeting updates)
+        # Only update if the base category actually changed (e.g. Soft→Good)
+        # or if the new value is more specific (e.g. Good→Good 4).
+        # Prevents flip-flop when racing.com returns "Good" but PF has "Good 4".
         if scraped_tc and scraped_tc != meeting.track_condition:
+            from punty.results.change_detection import _base_condition
+            from punty.scrapers.orchestrator import _is_more_specific
             old_tc = meeting.track_condition
-            meeting.track_condition = scraped_tc
-            await db.flush()
-            logger.warning(f"Track condition changed for {meeting.venue}: {old_tc} → {scraped_tc}")
+            old_base = _base_condition(old_tc) if old_tc else ""
+            new_base = _base_condition(scraped_tc)
+
+            # Accept if: base category changed (real upgrade/downgrade) OR new is more specific
+            if old_base != new_base or _is_more_specific(scraped_tc, old_tc or ""):
+                meeting.track_condition = scraped_tc
+                await db.flush()
+                logger.warning(f"Track condition changed for {meeting.venue}: {old_tc} → {scraped_tc}")
+            else:
+                logger.debug(f"Ignoring less-specific condition for {meeting.venue}: {old_tc} → {scraped_tc}")
+                scraped_tc = None  # Prevent alert firing below
 
             # Fire track upgrade/downgrade alert (only for genuine condition changes,
             # not just rating fluctuations like Good 4 → Good)
-            if old_tc:
-                from punty.results.change_detection import _base_condition, compose_track_alert, ChangeAlert
-                if _base_condition(old_tc) != _base_condition(scraped_tc):
+            if old_tc and scraped_tc:
+                from punty.results.change_detection import compose_track_alert, ChangeAlert
+                if old_base != new_base:
                     # Dedup: don't re-alert same transition
                     if meeting_id not in self.alerted_changes:
                         self.alerted_changes[meeting_id] = set()

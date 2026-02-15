@@ -458,10 +458,18 @@ class PuntingFormScraper(BaseScraper):
             })
         return self._conditions_cache
 
-    async def get_conditions_for_venue(self, venue: str) -> dict | None:
-        """Get conditions for a specific venue. Returns parsed dict or None."""
+    async def get_conditions_for_venue(self, venue: str, race_date=None) -> dict | None:
+        """Get conditions for a specific venue. Returns parsed dict or None.
+
+        Filters by race_date when provided to avoid matching conditions from
+        a different meeting day at the same venue.
+        """
+        from datetime import date as date_type
+        from punty.config import melb_today
+
         conditions = await self.get_conditions()
         venue_lower = venue.lower().strip()
+        target_date = race_date or melb_today()
 
         # Strip sponsor prefixes for matching
         sponsor_prefixes = [
@@ -474,14 +482,33 @@ class PuntingFormScraper(BaseScraper):
                 clean_venue = clean_venue[len(prefix):]
                 break
 
+        def _venue_matches(track: str) -> bool:
+            return track == clean_venue or track == venue_lower or track in clean_venue or clean_venue in track
+
+        # First pass: match venue + today's date (preferred)
         for cond in conditions:
             track = (cond.get("track") or "").lower().strip()
-            if not track:
+            if not track or not _venue_matches(track):
                 continue
-            if track == clean_venue or track == venue_lower:
-                return self._parse_condition(cond)
-            if track in clean_venue or clean_venue in track:
-                return self._parse_condition(cond)
+            md = cond.get("meetingDate") or ""
+            if md:
+                try:
+                    from datetime import datetime
+                    cond_date = datetime.strptime(md[:10], "%Y-%m-%d").date()
+                    if isinstance(target_date, str):
+                        target_date = datetime.strptime(target_date[:10], "%Y-%m-%d").date()
+                    if cond_date == target_date:
+                        return self._parse_condition(cond)
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback: match venue only (for venues without date-matched entries)
+        for cond in conditions:
+            track = (cond.get("track") or "").lower().strip()
+            if not track or not _venue_matches(track):
+                continue
+            return self._parse_condition(cond)
+
         return None
 
     @staticmethod

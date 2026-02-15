@@ -617,15 +617,9 @@ class RacingComScraper(BaseScraper):
         # Primary odds — cross-validate TAB against other providers
         current_odds = self._resolve_current_odds(odds_dict, horse_name)
 
-        # If TAB was flagged unreliable, derive place odds from win odds
-        # (TAB place odds would be equally wrong)
-        if "odds_tab_raw" in odds_dict and odds_dict.get("place_odds"):
-            if current_odds and current_odds > 1.0:
-                odds_dict["place_odds"] = round(1.0 + (current_odds - 1.0) / 3, 2)
-
-        # If place_odds still missing (no TAB provider at all), estimate from win odds
-        if not odds_dict.get("place_odds") and current_odds and current_odds > 1.0:
-            odds_dict["place_odds"] = round(1.0 + (current_odds - 1.0) / 3, 2)
+        # If TAB was flagged unreliable, discard its place odds too
+        if "odds_tab_raw" in odds_dict:
+            odds_dict.pop("place_odds", None)
 
         # Sire/dam — from nested horse.sireHorseName etc.
         sire = horse.get("sireHorseName")
