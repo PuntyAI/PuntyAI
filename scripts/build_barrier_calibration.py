@@ -84,7 +84,7 @@ def build_calibration(db_path: str) -> None:
             vd_baseline = vd_wins / vd_starts if vd_starts > 0 else baseline_wr
 
             for bb, stats in barrier_buckets.items():
-                if stats["starts"] >= 30:  # minimum sample
+                if stats["starts"] >= 10:  # minimum sample (lower threshold for small DBs)
                     wr = stats["wins"] / stats["starts"]
                     multiplier = wr / vd_baseline if vd_baseline > 0 else 1.0
                     calibration[venue][dist_bucket][bb] = {
@@ -111,7 +111,7 @@ def build_calibration(db_path: str) -> None:
     for venue, dists in calibration.items():
         for dist, bbs in dists.items():
             for bb, stats in bbs.items():
-                if stats["sample"] >= 50:
+                if stats["sample"] >= 10:
                     biases.append((venue, dist, bb, stats["multiplier"], stats["sample"]))
 
     biases.sort(key=lambda x: abs(x[3] - 1.0), reverse=True)

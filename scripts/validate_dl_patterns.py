@@ -38,19 +38,58 @@ _SKIP_TYPES = {
     "deep_learning_standard_times",
 }
 
-# State mapping for venues (simplified)
-_VENUE_STATE = {}
+# State mapping for venues — derived from venue names since DB has no state column
+_VENUE_STATE_MAP = {
+    # NSW
+    "randwick": "NSW", "royal randwick": "NSW", "rosehill": "NSW", "rosehill gardens": "NSW",
+    "warwick farm": "NSW", "canterbury": "NSW", "newcastle": "NSW", "kembla grange": "NSW",
+    "gosford": "NSW", "hawkesbury": "NSW", "wyong": "NSW", "scone": "NSW",
+    "tamworth": "NSW", "dubbo": "NSW", "mudgee": "NSW", "nowra": "NSW",
+    "coffs harbour": "NSW", "port macquarie": "NSW", "moree": "NSW", "grafton": "NSW",
+    "bathurst": "NSW", "orange": "NSW", "wagga": "NSW", "wagga wagga": "NSW",
+    "albury": "NSW", "queanbeyan": "NSW",
+    # VIC
+    "flemington": "VIC", "moonee valley": "VIC", "the valley": "VIC", "caulfield": "VIC",
+    "sandown": "VIC", "sandown lakeside": "VIC", "sandown hillside": "VIC",
+    "cranbourne": "VIC", "pakenham": "VIC", "mornington": "VIC", "ballarat": "VIC",
+    "bendigo": "VIC", "geelong": "VIC", "sale": "VIC", "stony creek": "VIC",
+    "wangaratta": "VIC", "kilmore": "VIC", "kyneton": "VIC", "hamilton": "VIC",
+    "ararat": "VIC", "stawell": "VIC", "bairnsdale": "VIC", "echuca": "VIC",
+    "swan hill": "VIC", "mildura": "VIC", "tatura": "VIC", "seymour": "VIC",
+    "donald": "VIC", "warrnambool": "VIC", "colac": "VIC",
+    # QLD
+    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD", "sunshine coast": "QLD",
+    "ipswich": "QLD", "toowoomba": "QLD", "rockhampton": "QLD", "cairns": "QLD",
+    "townsville": "QLD", "mackay": "QLD",
+    # SA
+    "morphettville": "SA", "morphettville parks": "SA", "murray bridge": "SA",
+    "gawler": "SA", "port augusta": "SA", "mount gambier": "SA",
+    # WA
+    "ascot": "WA", "belmont": "WA", "pinjarra": "WA", "pinjarra park": "WA",
+    "bunbury": "WA", "northam": "WA", "geraldton": "WA", "kalgoorlie": "WA",
+    # TAS
+    "hobart": "TAS", "launceston": "TAS", "devonport": "TAS",
+    # ACT
+    "canberra": "ACT", "thoroughbred park": "ACT",
+}
 
 
 def _load_venue_states(cursor: sqlite3.Cursor) -> dict[str, str]:
-    """Build venue→state mapping from meetings table."""
-    cursor.execute(
-        "SELECT DISTINCT venue, state FROM meetings WHERE state IS NOT NULL AND state != ''"
-    )
-    mapping = {}
-    for venue, state in cursor.fetchall():
-        if venue:
-            mapping[venue.lower().strip()] = state.upper().strip()
+    """Build venue→state mapping from hardcoded list + any DB data."""
+    # Start with hardcoded mappings
+    mapping = dict(_VENUE_STATE_MAP)
+
+    # Try to load from DB if state column exists
+    try:
+        cursor.execute(
+            "SELECT DISTINCT venue, state FROM meetings WHERE state IS NOT NULL AND state != ''"
+        )
+        for venue, state in cursor.fetchall():
+            if venue:
+                mapping[venue.lower().strip()] = state.upper().strip()
+    except sqlite3.OperationalError:
+        pass  # No state column — use hardcoded only
+
     return mapping
 
 

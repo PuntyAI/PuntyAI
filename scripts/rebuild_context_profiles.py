@@ -27,7 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from punty.probability import _get_dist_bucket
 
 # Minimum sample size for a profile to be valid
-MIN_PROFILE_SAMPLES = 30
+# Lower than ideal (30) because current DB has ~2K runners
+MIN_PROFILE_SAMPLES = 15
 
 # Factor data we can derive from DB columns
 # Maps factor name → (runner column, how to bucket it)
@@ -336,21 +337,29 @@ def rebuild_profiles(db_path: str) -> None:
         print(f"  Max samples: {max(all_n)}")
         print(f"  Median samples: {sorted(all_n)[len(all_n)//2]}")
 
-    # Output
+    # Output to separate file (don't overwrite Proform-derived profiles)
+    # The live profiles will only replace the originals once we have enough data
     output = {"profiles": profiles}
-    output_path = Path(__file__).parent.parent / "punty" / "data" / "context_profiles.json"
-
-    # Backup existing
-    if output_path.exists():
-        backup_path = output_path.with_suffix(".json.bak")
-        import shutil
-        shutil.copy2(output_path, backup_path)
-        print(f"\nBacked up existing profiles to {backup_path}")
+    output_path = Path(__file__).parent.parent / "punty" / "data" / "context_profiles_live.json"
 
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"Written {len(profiles)} profiles to {output_path}")
+    print(f"\nWritten {len(profiles)} profiles to {output_path}")
+
+    # Compare with existing Proform profiles
+    existing_path = Path(__file__).parent.parent / "punty" / "data" / "context_profiles.json"
+    if existing_path.exists():
+        with open(existing_path) as f:
+            existing = json.load(f)
+        existing_count = len(existing.get("profiles", {}))
+        print(f"Existing Proform profiles: {existing_count}")
+        print(f"New live profiles: {len(profiles)}")
+        if len(profiles) >= existing_count * 0.5:
+            print("Live data covers 50%+ of Proform profiles — consider switching.")
+        else:
+            print(f"Live data only covers {len(profiles)}/{existing_count} "
+                  f"({len(profiles)/max(existing_count,1)*100:.0f}%) — keep Proform profiles.")
 
 
 if __name__ == "__main__":
