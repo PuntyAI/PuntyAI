@@ -268,8 +268,8 @@
                                 {% for pick in selections|sort(attribute='tip_rank') %}
                                 {% set rank_labels = {1: 'TOP', 2: '2nd', 3: '3rd', 4: 'Roughie'} %}
                                 {% set rank_styles = {1: 'pick-top', 2: 'pick-2nd', 3: 'pick-3rd', 4: 'pick-roughie'} %}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}">
-                                    {% if pick.tip_rank == 1 %}&#9733; {% endif %}{{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}" {% if pick.is_puntys_pick %}style="outline: 2px solid #f472b6; outline-offset: 1px;"{% endif %}>
+                                    {% if pick.is_puntys_pick %}&#x1F3AF; {% elif pick.tip_rank == 1 %}&#9733; {% endif %}{{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
                                     {% set display_odds = pick.place_odds_at_tip if pick.bet_type == 'place' else pick.odds_at_tip %}
                                     {% if display_odds %}${{ "%.2f"|format(display_odds) }}{% endif %}
@@ -288,8 +288,8 @@
                                 {% endfor %}
                                 {% for pick in exotics %}
                                 {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold pick-exotic">
-                                    {{ pick.exotic_type or 'Exotic' }}: {% if runners and runners[0] is sequence and runners[0] is not string %}{% for leg in runners %}{{ leg|join(', ') }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}{{ runners|join(', ') }}{% endif %}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold pick-exotic" {% if pick.is_puntys_pick %}style="outline: 2px solid #f472b6; outline-offset: 1px;"{% endif %}>
+                                    {% if pick.is_puntys_pick %}&#x1F3AF; {% endif %}{{ pick.exotic_type or 'Exotic' }}: {% if runners and runners[0] is sequence and runners[0] is not string %}{% for leg in runners %}{{ leg|join(', ') }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}{{ runners|join(', ') }}{% endif %}
                                     {% if pick.exotic_stake %}&bull; ${{ "%.0f"|format(pick.exotic_stake) }}{% endif %}
                                     {% if pick.estimated_return_pct %}({{ "%.0f"|format(pick.estimated_return_pct) }}%){% endif %}
                                     {% if pick.settled %}
