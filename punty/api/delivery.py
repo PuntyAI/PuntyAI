@@ -312,15 +312,22 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
     # Send immediately based on platform
     if request.platform == "socials":
         # Post to both Twitter and Facebook
+        # Refresh content to ensure we have the latest status before each send
         results = {}
         from punty.delivery.twitter import TwitterDelivery
         from punty.delivery.facebook import FacebookDelivery
+
+        # Save the approved status so a Twitter failure doesn't block Facebook
+        saved_status = content.status
 
         twitter = TwitterDelivery(db)
         try:
             results["twitter"] = await twitter.send_long_post(request.content_id)
         except Exception as e:
             results["twitter"] = {"status": "error", "message": str(e)}
+            # Restore approved status so Facebook can still send
+            content.status = saved_status
+            await db.flush()
 
         fb = FacebookDelivery(db)
         try:
