@@ -92,6 +92,10 @@
                 class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
             &#x1F4CA; Generate Punt Review
         </button>
+        <button onclick="preRaceScrape()" id="prerace-btn"
+                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
+            &#x23F1; Pre-Race Refresh
+        </button>
         <button onclick="toggleMonitor()" id="monitor-btn"
                 class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
             &#x1F50D; Start Monitor
@@ -897,6 +901,46 @@ function cancelProcess(name) {
     var cancelBtn = document.getElementById(name + '-cancel');
     if (cancelBtn) cancelBtn.classList.add('hidden');
     showToast('Process cancelled', 'warning');
+}
+
+function preRaceScrape() {
+    const btn = document.getElementById('prerace-btn');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Refreshing...';
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+    fetch('/api/meets/{{ meeting.id }}/refresh-odds', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                btn.textContent = 'Refreshed!';
+                btn.classList.remove('opacity-50');
+                btn.classList.add('bg-green-100', 'text-green-700');
+                setTimeout(() => {
+                    btn.textContent = origText;
+                    btn.disabled = false;
+                    btn.classList.remove('cursor-not-allowed', 'bg-green-100', 'text-green-700');
+                    location.reload();
+                }, 1500);
+            } else {
+                btn.textContent = 'Error: ' + (data.error || 'unknown');
+                btn.classList.add('bg-red-100', 'text-red-600');
+                setTimeout(() => {
+                    btn.textContent = origText;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-100', 'text-red-600');
+                }, 3000);
+            }
+        })
+        .catch(err => {
+            btn.textContent = 'Failed';
+            setTimeout(() => {
+                btn.textContent = origText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }, 2000);
+        });
 }
 
 function startScrape() {
