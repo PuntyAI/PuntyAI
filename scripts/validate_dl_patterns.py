@@ -231,7 +231,7 @@ def validate_patterns(db_path: str) -> None:
             r.speed_map_position, r.finish_position,
             r.weight, r.current_odds,
             ra.distance, ra.class AS race_class,
-            m.venue, m.track_condition, m.state,
+            m.venue, m.track_condition,
             (SELECT COUNT(*) FROM runners r2
              WHERE r2.race_id = r.race_id AND r2.scratched = 0) as field_size
         FROM runners r
