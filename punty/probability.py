@@ -2208,10 +2208,20 @@ def calculate_exotic_combinations(
         "First4 Box": 1.5,        # Rare, extreme value only (0/50 all-time)
     }
 
+    # Minimum win probability for lead runner — prevents degenerate exotics
+    # where value is high but absolute probability is negligible.
+    # Exacta: first runner must realistically win (≥20%)
+    # Quinella: at least one runner must be a genuine contender (≥20%)
+    MIN_LEAD_PROB = 0.20
+
     results: list[ExoticCombination] = []
 
     # --- Quinella: pairs from top 4 ---
     for combo in combinations(top4, 2):
+        # At least one runner must be a genuine contender
+        if max(combo[0]["win_prob"], combo[1]["win_prob"]) < MIN_LEAD_PROB:
+            continue
+
         our_prob = _quinella_probability(
             combo[0]["win_prob"], combo[1]["win_prob"]
         )
@@ -2235,6 +2245,10 @@ def calculate_exotic_combinations(
 
     # --- Exacta: ordered pairs from top 4 ---
     for combo in permutations(top4, 2):
+        # First runner must realistically win — no degenerate roughie exactas
+        if combo[0]["win_prob"] < MIN_LEAD_PROB:
+            continue
+
         our_prob = _harville_probability([r["win_prob"] for r in combo])
         mkt_prob = _harville_probability([r["market_implied"] for r in combo])
         value = our_prob / mkt_prob if mkt_prob > 0 else 1.0

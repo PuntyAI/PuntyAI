@@ -446,8 +446,16 @@ def _select_exotic(
         if overlap_ratio < min_overlap:
             continue
 
-        # Decisive preference for selection runners (1.0 bonus)
-        score = ec.get("value", 1.0) + overlap_ratio * 1.0
+        # Blend value with probability — value alone is meaningless if the
+        # absolute probability is negligible (e.g. two roughies in an Exacta).
+        # prob_weight caps at 1.0 so strong-probability combos aren't over-boosted.
+        raw_prob = ec.get("probability", 0)
+        if isinstance(raw_prob, str):
+            raw_prob = float(raw_prob.rstrip("%")) / 100
+        prob_weight = min(raw_prob / 0.05, 1.0)  # full weight at ≥5% combined prob
+
+        # Score = value * probability_weight + overlap bonus
+        score = ec.get("value", 1.0) * prob_weight + overlap_ratio * 1.0
 
         scored.append((score, ec))
 
