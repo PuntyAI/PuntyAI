@@ -969,6 +969,26 @@ def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
             meeting.irrigation = bool(irr)
 
 
+import re as _re
+
+def _normalise_jockey(name: str) -> str:
+    """Normalise jockey name for comparison: strip Ms/Mr prefix, claim weights, (late alt)."""
+    s = name.strip()
+    s = _re.sub(r"^(Ms|Mr)\s+", "", s, flags=_re.IGNORECASE)
+    s = _re.sub(r"\s*\(a\d*/\d+kg\)", "", s)  # claim weight e.g. (a0/53kg)
+    s = _re.sub(r"\s*\(late\s+alt\)", "", s, flags=_re.IGNORECASE)
+    return s.strip()
+
+
+def _xcheck_equal(field: str, pf_val, ra_val) -> bool:
+    """Compare PF and RA values with field-specific normalisation."""
+    if field == "class_":
+        return str(pf_val).strip().upper() == str(ra_val).strip().upper()
+    if field == "jockey":
+        return _normalise_jockey(str(pf_val)) == _normalise_jockey(str(ra_val))
+    return str(pf_val) == str(ra_val)
+
+
 async def _cross_check_ra_fields(
     db: AsyncSession, meeting: Meeting, meeting_id: str,
 ) -> dict:
@@ -1004,7 +1024,7 @@ async def _cross_check_ra_fields(
             if ra_val is None:
                 continue
             pf_val = getattr(db_race, field, None)
-            if pf_val is not None and str(pf_val) != str(ra_val):
+            if pf_val is not None and not _xcheck_equal(field, pf_val, ra_val):
                 mismatches.append(f"R{db_race.race_number} {field}: PF={pf_val} RA={ra_val}")
                 logger.warning(
                     f"PF↔RA mismatch R{db_race.race_number}: {field} "
@@ -1046,7 +1066,7 @@ async def _cross_check_ra_fields(
                 continue
 
             # Other fields: compare and overwrite with RA
-            if pf_val is not None and str(pf_val) != str(ra_val):
+            if pf_val is not None and not _xcheck_equal(field, pf_val, ra_val):
                 mismatches.append(f"{horse}: {field} PF={pf_val} RA={ra_val}")
                 logger.warning(
                     f"PF↔RA mismatch {horse}: {field} PF={pf_val} RA={ra_val} → using RA"

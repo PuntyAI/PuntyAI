@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date
 
-from punty.scrapers.orchestrator import _cross_check_ra_fields, _RA_AUTH_RUNNER_FIELDS, _RA_AUTH_RACE_FIELDS
+from punty.scrapers.orchestrator import _cross_check_ra_fields, _RA_AUTH_RUNNER_FIELDS, _RA_AUTH_RACE_FIELDS, _xcheck_equal, _normalise_jockey
 
 
 def _make_meeting(venue="Newcastle", race_date=date(2026, 2, 16)):
@@ -265,3 +265,124 @@ class TestGracefulHandling:
 
         assert result["status"] == "ok"
         assert result["mismatches"] == 0
+
+    @pytest.mark.asyncio
+    async def test_class_case_not_counted_as_mismatch(self, mock_db):
+        """PF 'Maiden' vs RA 'MAIDEN' should not be a mismatch."""
+        meeting = _make_meeting()
+        meeting_id = "newcastle-2026-02-16"
+        race_id = f"{meeting_id}-r1"
+
+        db_race = _make_race(race_id, class_="Maiden")
+
+        ra_data = {
+            "meeting": {},
+            "races": [{"id": race_id, "race_number": 1, "distance": 1200, "class_": "MAIDEN", "field_size": 8, "start_time": None}],
+            "runners": [],
+        }
+
+        async def mock_get(model, id):
+            if id == race_id:
+                return db_race
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        mock_db.execute = AsyncMock()
+
+        with patch("punty.scrapers.ra_fields.scrape_ra_fields", new_callable=AsyncMock, return_value=ra_data):
+            result = await _cross_check_ra_fields(mock_db, meeting, meeting_id)
+
+        assert result["mismatches"] == 0
+        # RA value still gets written (authoritative)
+        assert db_race.class_ == "MAIDEN"
+
+    @pytest.mark.asyncio
+    async def test_jockey_prefix_suffix_not_counted(self, mock_db):
+        """PF 'R Goldsbury' vs RA 'Ms R Goldsbury' is same jockey."""
+        meeting = _make_meeting()
+        meeting_id = "newcastle-2026-02-16"
+        race_id = f"{meeting_id}-r1"
+
+        db_runner = _make_runner(race_id, 1, "FAST HORSE", jockey="R Goldsbury")
+        db_race = _make_race(race_id)
+
+        ra_data = {
+            "meeting": {},
+            "races": [{"id": race_id, "race_number": 1, "distance": 1200, "class_": "Maiden", "field_size": 8, "start_time": None}],
+            "runners": [{"race_id": race_id, "saddlecloth": 1, "barrier": 3, "weight": 57.0, "jockey": "Ms R Goldsbury", "scratched": False}],
+        }
+
+        async def mock_get(model, id):
+            if id == race_id:
+                return db_race
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = db_runner
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("punty.scrapers.ra_fields.scrape_ra_fields", new_callable=AsyncMock, return_value=ra_data):
+            result = await _cross_check_ra_fields(mock_db, meeting, meeting_id)
+
+        assert result["mismatches"] == 0
+        # RA value still gets written (more complete name)
+        assert db_runner.jockey == "Ms R Goldsbury"
+
+    @pytest.mark.asyncio
+    async def test_jockey_claim_weight_not_counted(self, mock_db):
+        """PF 'K Nishikawa' vs RA 'K Nishikawa (a0/53kg)' is same jockey."""
+        meeting = _make_meeting()
+        meeting_id = "newcastle-2026-02-16"
+        race_id = f"{meeting_id}-r1"
+
+        db_runner = _make_runner(race_id, 1, "FAST HORSE", jockey="K Nishikawa")
+        db_race = _make_race(race_id)
+
+        ra_data = {
+            "meeting": {},
+            "races": [{"id": race_id, "race_number": 1, "distance": 1200, "class_": "Maiden", "field_size": 8, "start_time": None}],
+            "runners": [{"race_id": race_id, "saddlecloth": 1, "barrier": 3, "weight": 57.0, "jockey": "K Nishikawa (a0/53kg)", "scratched": False}],
+        }
+
+        async def mock_get(model, id):
+            if id == race_id:
+                return db_race
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = db_runner
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("punty.scrapers.ra_fields.scrape_ra_fields", new_callable=AsyncMock, return_value=ra_data):
+            result = await _cross_check_ra_fields(mock_db, meeting, meeting_id)
+
+        assert result["mismatches"] == 0
+        assert db_runner.jockey == "K Nishikawa (a0/53kg)"
+
+
+class TestNormalisationHelpers:
+    """Unit tests for the normalisation helper functions."""
+
+    def test_normalise_jockey_ms_prefix(self):
+        assert _normalise_jockey("Ms R Goldsbury") == "R Goldsbury"
+
+    def test_normalise_jockey_claim_weight(self):
+        assert _normalise_jockey("K Nishikawa (a0/53kg)") == "K Nishikawa"
+
+    def test_normalise_jockey_late_alt(self):
+        assert _normalise_jockey("J Smith (late alt)") == "J Smith"
+
+    def test_normalise_jockey_combined(self):
+        assert _normalise_jockey("Ms K Lee (a0/53kg)") == "K Lee"
+
+    def test_xcheck_equal_class_case(self):
+        assert _xcheck_equal("class_", "Maiden", "MAIDEN") is True
+        assert _xcheck_equal("class_", "Class 1", "CLASS 1") is True
+
+    def test_xcheck_equal_class_different(self):
+        assert _xcheck_equal("class_", "Maiden", "CLASS 1") is False
+
+    def test_xcheck_equal_barrier_exact(self):
+        assert _xcheck_equal("barrier", 3, 3) is True
+        assert _xcheck_equal("barrier", 3, 7) is False
