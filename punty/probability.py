@@ -403,6 +403,7 @@ class RunnerProbability:
     edge: float = 0.0                  # our_prob - market_prob
     recommended_stake: float = 0.0     # quarter-Kelly from $20 pool
     factors: dict = field(default_factory=dict)  # breakdown per factor
+    matched_patterns: list = field(default_factory=list)  # DL pattern matches for AI visibility
 
 
 @dataclass
@@ -493,17 +494,22 @@ def calculate_race_probabilities(
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
             "weight_carried": _weight_factor(runner, avg_weight, race_distance, race),
             "horse_profile":  _horse_profile_factor(runner, race),
-            "deep_learning":  _deep_learning_factor(
-                runner, meeting, race_distance, track_condition,
-                field_size, dl_patterns,
-            ),
+            "deep_learning":  0.5,  # placeholder, set below
         }
+
+        dl_score, dl_matched_patterns = _deep_learning_factor(
+            runner, meeting, race_distance, track_condition,
+            field_size, dl_patterns,
+        )
+        scores["deep_learning"] = dl_score
 
         all_factor_scores[rid] = scores
         market_implied[rid] = mkt_raw  # raw market probability for value detection
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
         factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
+        if dl_matched_patterns:
+            factor_details[rid]["_matched_patterns"] = dl_matched_patterns
 
     # Step 1a: Apply context multipliers (amplify/dampen factors by racing context)
     ctx_mults = _get_context_multipliers(race, meeting)
@@ -572,6 +578,8 @@ def calculate_race_probabilities(
         odds = runner_odds.get(rid, 0.0)
         stake = _recommended_stake(win_prob, odds, pool)
 
+        fd = factor_details.get(rid, {})
+        patterns = fd.pop("_matched_patterns", [])
         results[rid] = RunnerProbability(
             win_probability=round(win_prob, 4),
             place_probability=round(place_prob, 4),
@@ -580,7 +588,8 @@ def calculate_race_probabilities(
             place_value_rating=round(place_value, 3),
             edge=round(edge, 4),
             recommended_stake=round(stake, 2),
-            factors=factor_details.get(rid, {}),
+            factors=fd,
+            matched_patterns=patterns,
         )
 
     return results
@@ -775,6 +784,15 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
         avg_cond_wr = cond_total_wins / cond_total_starts
         signal_sum += _stat_to_score(avg_cond_wr, baseline) * 0.4
         signals += 0.4
+
+    # Form trend sub-signal: improving form gets a small boost, declining penalised
+    form_trend = _get_form_trend(runner)
+    if form_trend == "improving":
+        signal_sum += 0.55  # slight positive (0.5 baseline + 0.05)
+        signals += 1.0
+    elif form_trend == "declining":
+        signal_sum += 0.45  # slight negative (0.5 baseline - 0.05)
+        signals += 1.0
 
     if signals > 0:
         score = signal_sum / signals
@@ -1475,15 +1493,17 @@ def _deep_learning_factor(
     track_condition: str,
     field_size: int,
     dl_patterns: list[dict] | None,
-) -> float:
+) -> tuple[float, list[dict]]:
     """Score based on matching deep learning patterns from historical analysis.
 
     Matches runner attributes against 844+ statistical patterns discovered
     from 280K+ historical runners. Each matching pattern's edge contributes
     to the score, weighted by confidence and capped to prevent dominance.
+
+    Returns (score, matched_patterns) tuple.
     """
     if not dl_patterns:
-        return 0.5  # neutral when no patterns available
+        return 0.5, []
 
     # Skip non-discriminative pattern types — these fire for ALL runners equally
     # in a race, so they cancel out after normalization and just add noise.
@@ -1502,6 +1522,7 @@ def _deep_learning_factor(
 
     score = 0.5
     total_adjustment = 0.0
+    matched_list = []  # Collect matched patterns for AI visibility
 
     # Pre-compute runner attributes for matching
     venue = _get(meeting, "venue") or ""
@@ -1678,13 +1699,29 @@ def _deep_learning_factor(
         if matched:
             # Cap individual pattern contribution
             capped_edge = max(-0.15, min(0.15, edge))
-            total_adjustment += capped_edge * conf_mult
+            # Weight by sample size: patterns with more data are more reliable
+            sample_size = pattern.get("sample_size", 50)
+            sample_weight = min(1.0, sample_size / 200)
+            total_adjustment += capped_edge * conf_mult * sample_weight
+
+            # Collect for AI visibility (top patterns only)
+            matched_list.append({
+                "type": p_type.replace("deep_learning_", ""),
+                "edge": edge,
+                "confidence": confidence,
+                "sample_size": sample_size,
+                "description": pattern.get("description", ""),
+            })
 
     # Cap total adjustment to prevent extreme swings
     total_adjustment = max(-0.25, min(0.25, total_adjustment))
     score += total_adjustment
 
-    return max(0.05, min(0.95, score))
+    final_score = max(0.05, min(0.95, score))
+
+    # Sort by absolute edge, keep top 3
+    matched_list.sort(key=lambda x: abs(x["edge"]), reverse=True)
+    return final_score, matched_list[:3]
 
 
 def _get_dist_bucket(distance: int) -> str:

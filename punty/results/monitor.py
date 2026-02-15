@@ -27,6 +27,92 @@ ERROR_POLL_MAX = 360
 IDLE_POLL = 600
 
 
+async def _backfill_form_history(db: AsyncSession, meeting_id: str, race_number: int) -> None:
+    """Store race result data as form history entries for future lookups.
+
+    After a race settles, save each runner's result (venue, distance, class,
+    position, margin, weight, jockey, barrier, SP) as a form_history JSON entry.
+    Next time the horse runs and form_history is scraped, these entries can be
+    merged to fill gaps in the scraper's coverage.
+    """
+    import json
+    from punty.models.meeting import Meeting, Race, Runner
+
+    race_id = f"{meeting_id}-r{race_number}"
+
+    # Get meeting + race + runners
+    meeting_result = await db.execute(
+        select(Meeting).where(Meeting.id == meeting_id)
+    )
+    meeting = meeting_result.scalar_one_or_none()
+    if not meeting:
+        return
+
+    race_result = await db.execute(
+        select(Race).where(Race.id == race_id)
+    )
+    race = race_result.scalar_one_or_none()
+    if not race:
+        return
+
+    runners_result = await db.execute(
+        select(Runner).where(
+            Runner.race_id == race_id,
+            Runner.scratched == False,
+            Runner.finish_position.isnot(None),
+            Runner.finish_position > 0,
+        )
+    )
+    runners = runners_result.scalars().all()
+    if not runners:
+        return
+
+    backfilled = 0
+    for runner in runners:
+        # Build form entry from result data
+        entry = {
+            "venue": meeting.venue,
+            "date": str(meeting.date),
+            "distance": race.distance,
+            "class": race.class_,
+            "track_condition": meeting.track_condition,
+            "position": runner.finish_position,
+            "margin": runner.result_margin,
+            "weight": runner.weight,
+            "jockey": runner.jockey,
+            "barrier": runner.barrier,
+            "sp": runner.current_odds,
+            "prize": race.prize_money,
+            "field_size": len(runners),
+            "backfilled": True,
+        }
+
+        # Merge into existing form_history if present
+        try:
+            existing = json.loads(runner.form_history) if runner.form_history else []
+        except (json.JSONDecodeError, TypeError):
+            existing = []
+
+        # Check if this race is already in form history (avoid duplicates)
+        already_has = any(
+            e.get("venue") == meeting.venue
+            and str(e.get("date", "")) == str(meeting.date)
+            and e.get("distance") == race.distance
+            for e in existing
+        )
+        if already_has:
+            continue
+
+        # Prepend (most recent first)
+        updated = [entry] + existing
+        runner.form_history = json.dumps(updated)
+        backfilled += 1
+
+    if backfilled > 0:
+        await db.commit()
+        logger.info(f"Backfilled form history for {backfilled} runners in {meeting.venue} R{race_number}")
+
+
 class ResultsMonitor:
     """Polls racing.com for completed races and triggers results generation."""
 
@@ -575,6 +661,12 @@ class ResultsMonitor:
                         await settle_picks_for_race(db, meeting_id, race_num)
                     except Exception as e:
                         logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
+
+                    # Backfill form history — store result data for future lookups
+                    try:
+                        await _backfill_form_history(db, meeting_id, race_num)
+                    except Exception as e:
+                        logger.debug(f"Form history backfill failed for {meeting.venue} R{race_num}: {e}")
 
                     # Try to scrape sectional times (may not be available yet - typically 10-15min delay)
                     try:

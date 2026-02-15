@@ -976,15 +976,17 @@ class TestDeepLearningFactor:
         """Returns 0.5 when no patterns available."""
         runner = _make_runner(speed_map_position="leader")
         meeting = _make_meeting(venue="Cranbourne")
-        score = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, None)
+        score, matched = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, None)
         assert score == 0.5
+        assert matched == []
 
     def test_neutral_empty_patterns(self):
         """Returns 0.5 when patterns list is empty."""
         runner = _make_runner(speed_map_position="leader")
         meeting = _make_meeting(venue="Cranbourne")
-        score = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, [])
+        score, matched = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, [])
         assert score == 0.5
+        assert matched == []
 
     def test_matching_pace_pattern_positive(self):
         """Matching pace pattern with positive edge raises score above 0.5."""
@@ -1001,9 +1003,11 @@ class TestDeepLearningFactor:
             },
             "confidence": "HIGH",
             "edge": 0.10,
+            "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        score, matched = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
         assert score > 0.5
+        assert len(matched) == 1
 
     def test_matching_pace_pattern_negative(self):
         """Matching pace pattern with negative edge lowers score below 0.5."""
@@ -1020,8 +1024,9 @@ class TestDeepLearningFactor:
             },
             "confidence": "HIGH",
             "edge": -0.10,
+            "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1600, "Good 4", 10, patterns)
+        score, _ = _deep_learning_factor(runner, meeting, 1600, "Good 4", 10, patterns)
         assert score < 0.5
 
     def test_non_matching_pattern_stays_neutral(self):
@@ -1039,9 +1044,11 @@ class TestDeepLearningFactor:
             },
             "confidence": "HIGH",
             "edge": 0.10,
+            "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        score, matched = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
         assert score == 0.5
+        assert matched == []
 
     def test_barrier_bias_pattern(self):
         """Barrier bias pattern matches correctly."""
@@ -1057,8 +1064,9 @@ class TestDeepLearningFactor:
             },
             "confidence": "HIGH",
             "edge": 0.08,
+            "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1600, "Good 4", 12, patterns)
+        score, _ = _deep_learning_factor(runner, meeting, 1600, "Good 4", 12, patterns)
         assert score > 0.5
 
     def test_jockey_trainer_pattern(self):
@@ -1075,8 +1083,9 @@ class TestDeepLearningFactor:
             },
             "confidence": "HIGH",
             "edge": 0.12,
+            "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1400, "Good 4", 10, patterns)
+        score, _ = _deep_learning_factor(runner, meeting, 1400, "Good 4", 10, patterns)
         assert score > 0.5
 
     def test_market_pattern(self):
@@ -1093,8 +1102,9 @@ class TestDeepLearningFactor:
             "confidence": "HIGH",
             "edge": 0.05,
         }]
-        score = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, patterns)
+        score, matched = _deep_learning_factor(runner, meeting, 1200, "Good 4", 8, patterns)
         assert score == 0.5  # skipped as non-discriminative
+        assert matched == []
 
     def test_condition_specialist_pattern(self):
         """Condition specialist pattern matches on track condition."""
@@ -1109,8 +1119,9 @@ class TestDeepLearningFactor:
             "confidence": "HIGH",
             "edge": 0.09,
         }]
-        score = _deep_learning_factor(runner, meeting, 1400, "Heavy 8", 10, patterns)
+        score, matched = _deep_learning_factor(runner, meeting, 1400, "Heavy 8", 10, patterns)
         assert score == 0.5  # condition_specialist is in _SKIP_TYPES
+        assert matched == []
 
     def test_edge_capped_per_pattern(self):
         """Individual pattern edge is capped at ±0.15."""
@@ -1127,8 +1138,9 @@ class TestDeepLearningFactor:
             },
             "confidence": "HIGH",
             "edge": 0.50,  # huge edge
+            "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        score, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
         # With cap of 0.15 per pattern × 1.0 conf = max +0.15 from 0.5 = 0.65
         assert score <= 0.65 + 0.001
 
@@ -1141,22 +1153,22 @@ class TestDeepLearningFactor:
                 "type": "deep_learning_pace",
                 "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                                "condition": "Good", "style": "leader", "confidence": "HIGH"},
-                "confidence": "HIGH", "edge": 0.15,
+                "confidence": "HIGH", "edge": 0.15, "sample_size": 200,
             },
             {
                 "type": "deep_learning_barrier_bias",
                 "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                                "barrier_bucket": "inside", "confidence": "HIGH"},
-                "confidence": "HIGH", "edge": 0.15,
+                "confidence": "HIGH", "edge": 0.15, "sample_size": 200,
             },
             {
                 "type": "deep_learning_market",
                 "conditions": {"state": "VIC", "sp_range": "$3-$5", "confidence": "HIGH"},
-                "confidence": "HIGH", "edge": 0.15,
+                "confidence": "HIGH", "edge": 0.15, "sample_size": 200,
             },
         ]
-        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, patterns)
-        # Total would be 3×0.15=0.45, but capped at 0.25, so max score = 0.75
+        score, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, patterns)
+        # Market is skipped. Pace + barrier = 2×0.15=0.30, capped at 0.25, so score = 0.75
         assert score <= 0.75 + 0.001
         assert score >= 0.70  # should be close to cap
 
@@ -1168,16 +1180,16 @@ class TestDeepLearningFactor:
             "type": "deep_learning_pace",
             "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                            "condition": "Good", "style": "leader", "confidence": "HIGH"},
-            "confidence": "HIGH", "edge": 0.08,
+            "confidence": "HIGH", "edge": 0.08, "sample_size": 200,
         }]
         double_patterns = single_pattern + [{
             "type": "deep_learning_barrier_bias",
             "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                            "barrier_bucket": "inside", "confidence": "HIGH"},
-            "confidence": "HIGH", "edge": 0.06,
+            "confidence": "HIGH", "edge": 0.06, "sample_size": 200,
         }]
-        score_single = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, single_pattern)
-        score_double = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, double_patterns)
+        score_single, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, single_pattern)
+        score_double, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 12, double_patterns)
         assert score_double > score_single
 
     def test_medium_confidence_has_lower_weight(self):
@@ -1188,16 +1200,16 @@ class TestDeepLearningFactor:
             "type": "deep_learning_pace",
             "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                            "condition": "Good", "style": "leader", "confidence": "HIGH"},
-            "confidence": "HIGH", "edge": 0.10,
+            "confidence": "HIGH", "edge": 0.10, "sample_size": 200,
         }]
         med_pattern = [{
             "type": "deep_learning_pace",
             "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                            "condition": "Good", "style": "leader", "confidence": "MEDIUM"},
-            "confidence": "MEDIUM", "edge": 0.10,
+            "confidence": "MEDIUM", "edge": 0.10, "sample_size": 200,
         }]
-        score_high = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, high_pattern)
-        score_med = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, med_pattern)
+        score_high, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, high_pattern)
+        score_med, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, med_pattern)
         # HIGH: 0.5 + 0.10×1.0 = 0.60
         # MED:  0.5 + 0.10×0.6 = 0.56
         assert score_high > score_med
@@ -1212,10 +1224,11 @@ class TestDeepLearningFactor:
             "type": "deep_learning_pace",
             "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                            "condition": "Good", "style": "leader", "confidence": "LOW"},
-            "confidence": "LOW", "edge": 0.10,
+            "confidence": "LOW", "edge": 0.10, "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        score, matched = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
         assert score == 0.5
+        assert matched == []
 
     def test_score_bounded(self):
         """Score stays within [0.05, 0.95] bounds."""
@@ -1225,9 +1238,9 @@ class TestDeepLearningFactor:
             "type": "deep_learning_pace",
             "conditions": {"venue": "Cranbourne", "dist_bucket": "sprint",
                            "condition": "Good", "style": "leader", "confidence": "HIGH"},
-            "confidence": "HIGH", "edge": -0.50,
+            "confidence": "HIGH", "edge": -0.50, "sample_size": 200,
         }]
-        score = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
+        score, _ = _deep_learning_factor(runner, meeting, 1000, "Good 4", 8, patterns)
         assert score >= 0.05
         assert score <= 0.95
 

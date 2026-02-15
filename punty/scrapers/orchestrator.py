@@ -78,7 +78,7 @@ RACE_FIELDS = [
 MEETING_FIELDS = [
     "track_condition", "weather", "rail_position",
     "penetrometer", "weather_condition", "weather_temp",
-    "weather_wind_speed", "weather_wind_dir", "rail_bias_comment",
+    "weather_wind_speed", "weather_wind_dir", "weather_humidity", "rail_bias_comment",
     "rainfall", "irrigation", "going_stick",
 ]
 
@@ -555,6 +555,26 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
                                 runner.pf_jockey_factor = float(pos["pf_jockey_factor"])
                             except (ValueError, TypeError):
                                 pass
+                        if pos.get("pf_ai_score"):
+                            try:
+                                runner.pf_ai_score = float(pos["pf_ai_score"])
+                            except (ValueError, TypeError):
+                                pass
+                        if pos.get("pf_ai_price"):
+                            try:
+                                runner.pf_ai_price = float(pos["pf_ai_price"])
+                            except (ValueError, TypeError):
+                                pass
+                        if pos.get("pf_ai_rank"):
+                            try:
+                                runner.pf_ai_rank = int(pos["pf_ai_rank"])
+                            except (ValueError, TypeError):
+                                pass
+                        if pos.get("pf_assessed_price"):
+                            try:
+                                runner.pf_assessed_price = float(pos["pf_assessed_price"])
+                            except (ValueError, TypeError):
+                                pass
         return count
 
     # PRIMARY: Try primary API first (has richer data)
@@ -797,6 +817,8 @@ def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
         meeting.weather_wind_speed = cond["wind_speed"]
     if cond.get("wind_direction"):
         meeting.weather_wind_dir = cond["wind_direction"]
+    if cond.get("humidity") is not None:
+        meeting.weather_humidity = cond["humidity"]
     if cond.get("rainfall") is not None:
         meeting.rainfall = cond["rainfall"]
     if cond.get("irrigation") is not None:

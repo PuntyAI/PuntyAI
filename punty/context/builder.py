@@ -449,6 +449,11 @@ class ContextBuilder:
                     runner_data["pf_settle"] = runner.pf_settle  # Historical avg settling position
                     runner_data["pf_map_factor"] = runner.pf_map_factor  # >1.0 = pace advantage
                     runner_data["pf_jockey_factor"] = runner.pf_jockey_factor  # Jockey effectiveness
+                    # PF AI predictions
+                    runner_data["pf_ai_score"] = runner.pf_ai_score  # 0-100 confidence
+                    runner_data["pf_ai_price"] = runner.pf_ai_price  # AI-estimated odds
+                    runner_data["pf_ai_rank"] = runner.pf_ai_rank  # AI rank in race
+                    runner_data["pf_assessed_price"] = runner.pf_assessed_price  # Fundamental value
 
             race_context["runners"].append(runner_data)
 
@@ -521,6 +526,8 @@ class ContextBuilder:
                     # Store raw values for generator rendering
                     runner_data["_win_prob_raw"] = rp.win_probability
                     runner_data["_place_prob_raw"] = rp.place_probability
+                    if rp.matched_patterns:
+                        runner_data["_matched_patterns"] = rp.matched_patterns
 
                     prob_summary[runner_data["horse_name"]] = {
                         "win_prob": rp.win_probability,

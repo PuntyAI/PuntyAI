@@ -1211,6 +1211,62 @@ class ContentGenerator:
                 for vp in value_plays:
                     parts.append(f"  - {vp['horse']}: Value {vp['value']:.2f}x (edge +{vp['edge']:.1f}%)")
 
+            # DL Pattern insights per runner (top matches only)
+            pattern_lines = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                patterns = runner.get("_matched_patterns", [])
+                if patterns:
+                    horse = runner.get("horse_name", "Unknown")
+                    for p in patterns:
+                        edge_pct = p["edge"] * 100
+                        direction = "+" if edge_pct > 0 else ""
+                        pattern_lines.append(
+                            f"- {horse}: [{p['confidence']}] {p['type'].replace('_', ' ').title()} "
+                            f"({direction}{edge_pct:.1f}% edge, n={p['sample_size']})"
+                        )
+            if pattern_lines:
+                parts.append("")
+                parts.append("**PATTERN INSIGHTS (statistical edges from historical data):**")
+                for line in pattern_lines[:15]:
+                    parts.append(line)
+
+            # PF AI value signals — highlight overlay/underlay when available
+            pf_ai_lines = []
+            for runner in race.get("runners", []):
+                if runner.get("scratched"):
+                    continue
+                ai_price = runner.get("pf_ai_price")
+                assessed = runner.get("pf_assessed_price")
+                odds = runner.get("current_odds")
+                ai_rank = runner.get("pf_ai_rank")
+                horse = runner.get("horse_name", "Unknown")
+
+                if ai_price and odds and odds > 0 and ai_price > 0:
+                    overlay = ((odds / ai_price) - 1) * 100
+                    if abs(overlay) >= 10:  # Only show 10%+ discrepancies
+                        label = "OVERLAY" if overlay > 0 else "UNDERLAY"
+                        rank_str = f", AI Rank #{ai_rank}" if ai_rank else ""
+                        pf_ai_lines.append(
+                            f"- {horse}: {label} {overlay:+.0f}% "
+                            f"(AI price ${ai_price:.2f} vs market ${odds:.2f}{rank_str})"
+                        )
+                elif assessed and odds and odds > 0 and assessed > 0:
+                    overlay = ((odds / assessed) - 1) * 100
+                    if abs(overlay) >= 10:
+                        label = "OVERLAY" if overlay > 0 else "UNDERLAY"
+                        pf_ai_lines.append(
+                            f"- {horse}: {label} {overlay:+.0f}% "
+                            f"(assessed ${assessed:.2f} vs market ${odds:.2f})"
+                        )
+
+            if pf_ai_lines:
+                parts.append("")
+                parts.append("**PF AI VALUE SIGNALS (independent model overlay/underlay):**")
+                for line in pf_ai_lines[:10]:
+                    parts.append(line)
+
             if exotic_combos:
                 parts.append("")
                 parts.append("**Pre-Calculated Exotic Combinations (value ≥ 1.2x):**")

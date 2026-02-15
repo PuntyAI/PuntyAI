@@ -183,6 +183,12 @@ class Runner(Base):
     pf_map_factor: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # >1.0 = pace advantage, <1.0 = disadvantage
     pf_jockey_factor: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Jockey effectiveness factor
 
+    # PF AI predictions
+    pf_ai_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # 0-100 confidence score
+    pf_ai_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # AI-estimated winning odds
+    pf_ai_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # AI rank in race (1-based)
+    pf_assessed_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Fundamental value price
+
     current_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     opening_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     place_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Fixed place odds
