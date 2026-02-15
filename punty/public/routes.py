@@ -226,6 +226,7 @@ async def get_winner_stats() -> dict:
         early_mail_content = early_mail_result.scalars().all()
 
         # Build list of today's tips with internal links
+        from punty.memory.assessment import _get_state_from_track as get_state_for_track
         todays_tips = []
         for content in early_mail_content:
             meeting = next((m for m in today_meetings if m.id == content.meeting_id), None)
@@ -233,6 +234,7 @@ async def get_winner_stats() -> dict:
                 todays_tips.append({
                     "venue": meeting.venue,
                     "meeting_id": meeting.id,
+                    "state": get_state_for_track(meeting.venue) or "VIC",
                 })
 
         # Strike rates per tip rank (selections only)
@@ -357,11 +359,15 @@ async def get_winner_stats() -> dict:
                 best_bet = _build_best_bet(*recent_row, is_today=False)
 
         # Punty's Picks — only selections flagged as is_puntys_pick
+        # Use pp_hit/pp_pnl when set (Punty's Pick had different bet type than main selection)
+        from sqlalchemy import literal_column
+        pp_hit_expr = func.coalesce(Pick.pp_hit, Pick.hit)
+        pp_pnl_expr = func.coalesce(Pick.pp_pnl, Pick.pnl)
         pp_result = await db.execute(
             select(
                 func.count(Pick.id),
-                func.sum(case((Pick.hit == True, 1), else_=0)),
-                func.sum(Pick.pnl),
+                func.sum(case((pp_hit_expr == True, 1), else_=0)),
+                func.sum(pp_pnl_expr),
                 func.sum(Pick.bet_stake),
             ).where(and_(
                 Pick.settled == True,

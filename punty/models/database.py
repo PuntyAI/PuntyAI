@@ -235,6 +235,11 @@ async def init_db() -> None:
             "ALTER TABLE content ADD COLUMN blog_week_start DATE",
             # Probability factor breakdown on picks
             "ALTER TABLE picks ADD COLUMN factors_json TEXT",
+            # Punty's Pick bet type override + separate settlement
+            "ALTER TABLE picks ADD COLUMN pp_bet_type VARCHAR(20)",
+            "ALTER TABLE picks ADD COLUMN pp_odds FLOAT",
+            "ALTER TABLE picks ADD COLUMN pp_hit BOOLEAN",
+            "ALTER TABLE picks ADD COLUMN pp_pnl FLOAT",
         ]:
             try:
                 await conn.execute(_text(col))

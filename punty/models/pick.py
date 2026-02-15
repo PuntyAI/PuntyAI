@@ -66,6 +66,12 @@ class Pick(Base):
 
     # Punty's Pick flag (the highlighted "best bet" recommendation per race)
     is_puntys_pick: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
+    # Punty's Pick bet type override (when PP recommends a different bet type than the main selection)
+    pp_bet_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    pp_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Punty's Pick settlement (separate from main bet when bet type differs)
+    pp_hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    pp_pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Settlement
     hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
@@ -109,6 +115,10 @@ class Pick(Base):
             "recommended_stake": self.recommended_stake,
             "factors_json": self.factors_json,
             "is_puntys_pick": self.is_puntys_pick,
+            "pp_bet_type": self.pp_bet_type,
+            "pp_odds": self.pp_odds,
+            "pp_hit": self.pp_hit,
+            "pp_pnl": self.pp_pnl,
             "hit": self.hit,
             "pnl": self.pnl,
             "settled": self.settled,

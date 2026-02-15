@@ -104,6 +104,12 @@ _PUNTYS_PICK_HORSE = re.compile(
     r"(?:^|[+])\s*(?:\*?([A-Z][A-Z\s'\u2019\-]+?)\*?\s*)?\(No\.(\d+)\)",
     re.IGNORECASE,
 )
+# Extract bet type + odds per horse from Punty's Pick line:
+#   "HORSE (No.5) $1.37 Place" or "HORSE (No.5) $2.10 Win"
+_PUNTYS_PICK_BET = re.compile(
+    r"\(No\.(\d+)\)\s*\$(\d+\.?\d*)\s*(Win\s*\(Saver\)|Win|Saver\s*Win|Place|Each\s*Way|E/W)",
+    re.IGNORECASE,
+)
 # Exotic Punty's Pick format:
 #   *Punty's Pick:* Trifecta Box [1, 5, 8, 12] — $20 (Value: 1.8x)
 _PUNTYS_PICK_EXOTIC = re.compile(
@@ -401,14 +407,32 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 })
             else:
                 # Selection Punty's Pick — mark matching selections
+                # Also extract bet type per horse (may differ from main selection)
                 puntys_saddlecloths = set()
+                pp_bet_overrides = {}  # {saddlecloth: (odds, bet_type)}
                 for hm in _PUNTYS_PICK_HORSE.finditer(pick_line):
                     puntys_saddlecloths.add(int(hm.group(2)))
+                for bm in _PUNTYS_PICK_BET.finditer(pick_line):
+                    sc = int(bm.group(1))
+                    odds = float(bm.group(2))
+                    bt = _normalize_bet_type(bm.group(3))
+                    pp_bet_overrides[sc] = (odds, bt)
                 for p in picks:
                     if (p.get("race_number") == race_num
                             and p.get("pick_type") == "selection"
                             and p.get("saddlecloth") in puntys_saddlecloths):
                         p["is_puntys_pick"] = True
+                        # Override bet type if Punty's Pick recommends differently
+                        override = pp_bet_overrides.get(p["saddlecloth"])
+                        if override:
+                            pp_odds, pp_bet_type = override
+                            if pp_bet_type != p.get("bet_type"):
+                                p["pp_bet_type"] = pp_bet_type
+                                p["pp_odds"] = pp_odds
+                                logger.info(
+                                    f"Punty's Pick R{race_num} #{p['saddlecloth']}: "
+                                    f"overrides {p.get('bet_type')} → {pp_bet_type} at ${pp_odds}"
+                                )
 
         # Exotic
         exotic_m = _EXOTIC.search(section)

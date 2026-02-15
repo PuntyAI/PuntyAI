@@ -385,6 +385,80 @@ Bet: Exotics only
         assert len(puntys) == 0
 
 
+    def test_puntys_pick_bet_type_override(self):
+        """When Punty's Pick recommends a different bet type than the main selection."""
+        content = """
+*Race 3 – Korumburra Hotel Mdn Plate*
+Race type: Maiden, 2100m
+
+*Top 3 + Roughie ($20 pool)*
+1. *ATEYATE* (No.5) — $2.10 / $1.37
+   Bet: $7 Win
+   Confidence: high
+2. *FEDORA* (No.9) — $3.90 / $1.97
+   Bet: $5.50 Place
+   Confidence: med
+3. *DR SLUMP* (No.6) — $5.50 / $2.50
+   Bet: $4.50 Place
+   Confidence: med
+Roughie: *ON THE BRINK* (No.10) — $23.00 / $8.33
+Bet: $3 Place
+
+*Punty's Pick:* ATEYATE (No.5) $1.37 Place
+I want the stayer in the frame.
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        puntys = [p for p in selections if p.get("is_puntys_pick")]
+        assert len(puntys) == 1
+        assert puntys[0]["horse_name"] == "ATEYATE"
+        assert puntys[0]["saddlecloth"] == 5
+        # Main bet type is Win
+        assert puntys[0]["bet_type"] == "win"
+        # Punty's Pick overrides to Place
+        assert puntys[0]["pp_bet_type"] == "place"
+        assert puntys[0]["pp_odds"] == 1.37
+
+    def test_puntys_pick_same_bet_type_no_override(self):
+        """When Punty's Pick uses the same bet type, no override is set."""
+        content = """
+*Race 1 – Sprint Stakes*
+
+1. *SPEEDY* (No.3) — $4.00 / $1.60
+   Bet: $10 Win
+2. *RUNNER* (No.7) — $6.00 / $2.00
+   Bet: $6 Place
+3. *THIRD* (No.1) — $8.00 / $2.50
+   Bet: $4 Each Way
+Roughie: *OUTSIDER* (No.12) — $21.00 / $5.00
+Bet: Exotics only
+
+*Punty's Pick:* SPEEDY (No.3) $4.00 Win
+Leads and controls.
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        puntys = [p for p in picks if p.get("is_puntys_pick")]
+        assert len(puntys) == 1
+        assert puntys[0]["bet_type"] == "win"
+        # No override when bet types match
+        assert puntys[0].get("pp_bet_type") is None
+        assert puntys[0].get("pp_odds") is None
+
+
 class TestParseEarlyMailIntegration:
     """Integration tests for full early mail parsing."""
 

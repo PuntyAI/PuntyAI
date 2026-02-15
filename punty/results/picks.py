@@ -240,6 +240,28 @@ async def _settle_picks_for_race_impl(
                 else:
                     pick.pnl = round(-stake, 2)
 
+            # Settle Punty's Pick shadow result if bet type differs
+            if pick.is_puntys_pick and pick.pp_bet_type and pick.pp_bet_type != bet_type:
+                pp_bt = pick.pp_bet_type.lower().replace(" ", "_")
+                pp_odds_val = pick.pp_odds or place_odds  # PP odds, fallback to place
+                if pp_bt in ("win", "saver_win"):
+                    pick.pp_hit = won
+                    pick.pp_pnl = round(win_odds * stake - stake, 2) if won and win_odds else round(-stake, 2)
+                elif pp_bt == "place":
+                    pick.pp_hit = placed
+                    pick.pp_pnl = round(pp_odds_val * stake - stake, 2) if placed and pp_odds_val else round(-stake, 2)
+                elif pp_bt == "each_way":
+                    half = stake / 2
+                    if won and win_odds and pp_odds_val:
+                        pick.pp_hit = True
+                        pick.pp_pnl = round(win_odds * half + pp_odds_val * half - stake, 2)
+                    elif placed and pp_odds_val:
+                        pick.pp_hit = True
+                        pick.pp_pnl = round(pp_odds_val * half - stake, 2)
+                    else:
+                        pick.pp_hit = False
+                        pick.pp_pnl = round(-stake, 2)
+
             pick.settled = True
             pick.settled_at = now
             settled_count += 1

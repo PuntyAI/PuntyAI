@@ -9,7 +9,7 @@
     <div class="absolute top-1/2 left-1/4 w-96 h-96 bg-punty-magenta/20 rounded-full blur-3xl -translate-y-1/2"></div>
     <div class="absolute top-1/2 right-1/4 w-96 h-96 bg-punty-cyan/10 rounded-full blur-3xl -translate-y-1/2"></div>
 
-    <div class="max-w-6xl mx-auto px-4 sm:px-8 relative">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8 relative">
         <div class="grid md:grid-cols-2 gap-12 items-center">
             <!-- Left: Content -->
             <div>
@@ -81,8 +81,8 @@
         .bb-right { width: 100%; justify-content: space-between; }
     }
 </style>
-<section id="best-bet-section" class="pt-6 pb-2">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8">
+<section id="best-bet-section" class="pt-8 pb-4">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
         {% if stats.best_bet %}
         <a id="bb-venue-link" href="/tips/{{ stats.best_bet.meeting_id }}" class="bb-card">
             <div class="bb-glow-l"></div>
@@ -138,15 +138,15 @@
 </section>
 
 <!-- Stats Section -->
-<section class="pt-6 pb-16" style="background: var(--bg-card); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <div class="grid md:grid-cols-3 gap-6 text-center">
+<section class="py-16" style="background: var(--bg-card); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <div class="grid md:grid-cols-3 gap-6 lg:gap-8 text-center">
             <!-- Meetings Today -->
-            <div class="card p-8">
+            <div class="card p-8 sm:p-10">
                 <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Meetings Today</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-3" style="color: var(--text-secondary);">Meetings Today</div>
                 <!-- Next Race Countdown -->
-                <div id="next-race-container" class="mt-4 pt-4" style="border-top: 1px solid var(--border-subtle); display: none;">
+                <div id="next-race-container" class="mt-5 pt-5" style="border-top: 1px solid var(--border-subtle); display: none;">
                     <div class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
                     <div id="next-race-venue" class="text-sm font-semibold" style="color: var(--cyan);"></div>
                     <div id="next-race-countdown" class="text-lg font-display font-bold" style="color: var(--magenta);"></div>
@@ -154,27 +154,27 @@
             </div>
 
             <!-- Today's Winners -->
-            <div class="card p-8">
+            <div class="card p-8 sm:p-10">
                 <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);" id="today-winners-label">
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-3" style="color: var(--text-secondary);" id="today-winners-label">
                     {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
                 </div>
             </div>
 
             <!-- All-Time Winners -->
-            <div class="card p-8">
+            <div class="card p-8 sm:p-10">
                 <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-secondary);">Total Winners</div>
+                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-3" style="color: var(--text-secondary);">Total Winners</div>
             </div>
         </div>
 
         <!-- Strike Rates by Pick -->
         {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8" id="strike-rates">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mt-10" id="strike-rates">
             {% for pr in stats.pick_ranks %}
             {% if pr.rank >= 1 %}
-            <div class="rounded-xl p-5 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-2xl font-display font-bold" style="color: {{ {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'}[pr.rank|string] }};">
+            <div class="rounded-xl p-6 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                <div class="text-2xl md:text-3xl font-display font-bold" style="color: {{ {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'}[pr.rank|string] }};">
                     <span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span>
                 </div>
                 <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-muted);">{{ pr.label }}</div>
@@ -186,21 +186,25 @@
         {% endif %}
 
         <!-- Stats CTA -->
-        <div class="text-center mt-8">
+        <div class="text-center mt-10">
             <a href="/stats" class="btn-secondary inline-flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 View Punty's Full Stats
             </a>
         </div>
+    </div>
+</section>
 
-        <!-- Wins Ticker -->
-        <div id="wins-ticker" class="mt-8 rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-            <div class="flex items-center px-5 py-3" style="border-bottom: 1px solid var(--border-subtle);">
+<!-- Recent Wins Ticker -->
+<section class="py-10">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <div id="wins-ticker" class="rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+            <div class="flex items-center px-6 py-3" style="border-bottom: 1px solid var(--border-subtle);">
                 <span class="text-lg mr-2" style="color: var(--magenta);">&#x1F3C6;</span>
                 <span class="font-heading font-semibold text-sm uppercase tracking-wider" style="color: var(--text-muted);">Recent Wins</span>
             </div>
             <div class="ticker-container relative overflow-hidden" style="height: 56px;">
-                <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-5 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+                <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-6 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
                     <span class="text-sm" style="color: var(--text-muted);">Loading wins...</span>
                 </div>
             </div>
@@ -253,23 +257,23 @@
 <!-- Today's Tips Section -->
 {% if stats.todays_tips %}
 <section class="py-16">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-8">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <h2 class="text-3xl font-heading font-bold text-center mb-10">
             Today's <span style="color: var(--magenta);">Early Mail</span>
         </h2>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for tip in stats.todays_tips %}
+            {% set state_abbr = (tip.state or 'VIC')|upper %}
+            {% set state_colors = {'VIC': '#1e3a8a', 'NSW': '#0c4a6e', 'QLD': '#7c2d12', 'SA': '#4c1d95', 'WA': '#064e3b', 'TAS': '#166534', 'NT': '#92400e'} %}
             <a href="/tips/{{ tip.meeting_id }}"
-               class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1">
-                <div class="flex items-center gap-5">
-                    <div class="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--gradient-sunset);">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
+               class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1 group">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: {{ state_colors.get(state_abbr, '#1e3a8a') }}; border: 1px solid rgba(255,255,255,0.1);">
+                        <span class="text-xs font-display font-bold text-white tracking-wider">{{ state_abbr }}</span>
                     </div>
-                    <div>
-                        <div class="font-heading font-bold text-lg">{{ tip.venue }}</div>
+                    <div class="min-w-0">
+                        <div class="font-heading font-bold text-lg group-hover:text-white transition-colors">{{ tip.venue }}</div>
                         <div class="text-sm" style="color: var(--cyan);">View Tips &rarr;</div>
                     </div>
                 </div>
@@ -277,7 +281,7 @@
             {% endfor %}
         </div>
 
-        <div class="text-center mt-6">
+        <div class="text-center mt-8">
             <a href="/tips" class="btn-secondary inline-flex items-center gap-2">
                 See All Tips
             </a>
@@ -288,7 +292,7 @@
 
 <!-- Video Section -->
 <section class="py-16" style="background: var(--bg-card);">
-    <div class="max-w-4xl mx-auto px-4 sm:px-8">
+    <div class="max-w-4xl mx-auto px-6 sm:px-8">
         <h2 class="text-3xl font-heading font-bold text-center mb-3">
             Meet <span style="color: var(--magenta);">Punty</span>
         </h2>
@@ -346,14 +350,14 @@
 
 <!-- How It Works Preview -->
 <section class="py-16">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-8">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <h2 class="text-3xl font-heading font-bold text-center mb-10">
             How <span style="color: var(--cyan);">Punty</span> Picks Winners
         </h2>
 
-        <div class="grid md:grid-cols-4 gap-6">
+        <div class="grid md:grid-cols-4 gap-6 lg:gap-8">
             <!-- Step 1 -->
-            <div class="card p-6 text-center">
+            <div class="card p-6 sm:p-8 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     1
                 </div>
@@ -364,7 +368,7 @@
             </div>
 
             <!-- Step 2 -->
-            <div class="card p-6 text-center">
+            <div class="card p-6 sm:p-8 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     2
                 </div>
@@ -375,7 +379,7 @@
             </div>
 
             <!-- Step 3 -->
-            <div class="card p-6 text-center">
+            <div class="card p-6 sm:p-8 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
                     3
                 </div>
@@ -388,7 +392,7 @@
             </div>
 
             <!-- Step 4 -->
-            <div class="card p-6 text-center">
+            <div class="card p-6 sm:p-8 text-center">
                 <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
                     <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -413,7 +417,7 @@
 <section class="py-20 relative overflow-hidden">
     <div class="absolute inset-0 bg-gradient-to-r from-punty-magenta/20 via-punty-purple/10 to-punty-cyan/20"></div>
 
-    <div class="max-w-4xl mx-auto px-4 sm:px-8 text-center relative">
+    <div class="max-w-4xl mx-auto px-6 sm:px-8 text-center relative">
         <img src="/static/punty-character.jpg" alt="Punty"
              class="w-24 h-24 rounded-full mx-auto mb-6 object-cover border-4" style="border-color: var(--magenta);">
 

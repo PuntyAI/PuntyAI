@@ -451,12 +451,46 @@ class ResultsMonitor:
 
         scraper = RacingComScraper()
         try:
-            statuses = await scraper.check_race_statuses(meeting.venue, meeting.date)
+            status_data = await scraper.check_race_statuses(meeting.venue, meeting.date)
+            statuses = status_data["statuses"]
+            scraped_tc = status_data.get("track_condition")
         except Exception as e:
             logger.error(f"Failed to check statuses for {meeting.venue}: {e}")
             return
         finally:
             await scraper.close()
+
+        # Update track condition if changed (piggybacks on status poll — no extra cost)
+        # Always accept racing.com live data (trusted source, mid-meeting updates)
+        if scraped_tc and scraped_tc != meeting.track_condition:
+            old_tc = meeting.track_condition
+            meeting.track_condition = scraped_tc
+            await db.flush()
+            logger.warning(f"Track condition changed for {meeting.venue}: {old_tc} → {scraped_tc}")
+
+            # Fire track upgrade/downgrade alert (only for genuine condition changes,
+            # not just rating fluctuations like Good 4 → Good)
+            if old_tc:
+                from punty.results.change_detection import _base_condition, compose_track_alert, ChangeAlert
+                if _base_condition(old_tc) != _base_condition(scraped_tc):
+                    # Dedup: don't re-alert same transition
+                    if meeting_id not in self.alerted_changes:
+                        self.alerted_changes[meeting_id] = set()
+                    dedup_key = f"track:{old_tc}->{scraped_tc}"
+                    if dedup_key not in self.alerted_changes[meeting_id]:
+                        self.alerted_changes[meeting_id].add(dedup_key)
+                        alert = ChangeAlert(
+                            change_type="track_condition",
+                            meeting_id=meeting_id,
+                            old_value=old_tc,
+                            new_value=scraped_tc,
+                            message=compose_track_alert(meeting.venue, old_tc, scraped_tc),
+                        )
+                        try:
+                            await self._post_change_alert(db, meeting, alert)
+                            logger.info(f"Track alert posted for {meeting.venue}: {old_tc} → {scraped_tc}")
+                        except Exception as e:
+                            logger.warning(f"Failed to post track alert for {meeting.venue}: {e}")
 
         # Process results FIRST — this is time-critical for live settlement
         for race_num, status in statuses.items():

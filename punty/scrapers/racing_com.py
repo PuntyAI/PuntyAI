@@ -861,47 +861,59 @@ class RacingComScraper(BaseScraper):
 
         yield {"step": total, "total": total, "label": "Speed maps complete", "status": "complete"}
 
-    async def check_race_statuses(self, venue: str, race_date: date) -> dict[int, str]:
-        """Lightweight poll — single page load to get race statuses.
+    async def check_race_statuses(self, venue: str, race_date: date) -> dict:
+        """Lightweight poll — single page load to get race statuses + track condition.
 
-        Returns {1: "Open", 2: "Paying", ...}
+        Returns {"statuses": {1: "Open", 2: "Paying", ...}, "track_condition": str | None}
         Status values: "Open", "Closed", "Interim", "Paying", "Abandoned"
         """
         meeting_url = self._build_meeting_url(venue, race_date)
         logger.info(f"Checking race statuses: {meeting_url}")
 
-        statuses: dict[int, str] = {}
+        captured_races = []
+        captured_meeting = {}
 
         async with new_page() as page:
-            captured_races = []
 
             async def capture_graphql(response):
                 if "graphql.rmdprod.racing.com" not in response.url:
                     return
-                if "getRaceNumberList_CD" not in response.url:
-                    return
                 try:
                     body = await response.text()
                     data = _json.loads(body)
+                except Exception:
+                    return
+
+                url = response.url
+                if "getRaceNumberList_CD" in url:
                     races = data.get("data", {}).get("getNoCacheRacesForMeet", [])
                     if races:
                         captured_races.extend(races)
-                except Exception:
-                    pass
+                if "getMeeting_CD" in url:
+                    gm = data.get("data", {}).get("getMeeting", {})
+                    if gm:
+                        captured_meeting.update(gm)
 
             page.on("response", capture_graphql)
             await page.goto(meeting_url, wait_until="load")
             await page.wait_for_timeout(4000)
             page.remove_listener("response", capture_graphql)
 
+        statuses: dict[int, str] = {}
         for race in captured_races:
             race_num = race.get("raceNumber")
             status = race.get("raceStatus") or race.get("status") or "Open"
             if race_num:
                 statuses[race_num] = status
 
-        logger.info(f"Race statuses for {venue}: {statuses}")
-        return statuses
+        track_condition = None
+        if captured_meeting:
+            tc = captured_meeting.get("trackCondition")
+            rail_tc = captured_meeting.get("railAndTrackCondition")
+            track_condition = tc or rail_tc
+
+        logger.info(f"Race statuses for {venue}: {statuses}" + (f" | Track: {track_condition}" if track_condition else ""))
+        return {"statuses": statuses, "track_condition": track_condition}
 
     async def check_race_fields(
         self, venue: str, race_date: date, race_numbers: list[int]
@@ -1505,7 +1517,8 @@ class RacingComScraper(BaseScraper):
 
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
         """Scrape all race results for a venue."""
-        statuses = await self.check_race_statuses(venue, race_date)
+        status_data = await self.check_race_statuses(venue, race_date)
+        statuses = status_data["statuses"]
         results = []
         for race_num, status in sorted(statuses.items()):
             if status in ("Paying", "Closed", "Interim"):

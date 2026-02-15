@@ -225,13 +225,15 @@ async def aggregate_puntys_pick_performance(
         cutoff = melb_today() - timedelta(days=window_days)
         date_filter.append(Pick.settled_at >= cutoff)
 
-    # Selection Punty's Picks
+    # Selection Punty's Picks — use pp_hit/pp_pnl when PP had different bet type
+    pp_hit_expr = func.coalesce(Pick.pp_hit, Pick.hit)
+    pp_pnl_expr = func.coalesce(Pick.pp_pnl, Pick.pnl)
     sel_q = (
         select(
             func.count(Pick.id),
-            func.sum(case((Pick.hit == True, 1), else_=0)),
+            func.sum(case((pp_hit_expr == True, 1), else_=0)),
             func.sum(Pick.bet_stake),
-            func.sum(Pick.pnl),
+            func.sum(pp_pnl_expr),
             func.avg(Pick.odds_at_tip),
         )
         .where(
