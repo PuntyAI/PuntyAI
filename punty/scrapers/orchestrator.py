@@ -843,6 +843,8 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
                     meeting.track_condition = val
                 else:
                     logger.debug(f"Skipping track condition {val!r} (existing {meeting.track_condition!r} is better)")
+            elif field == "irrigation" and isinstance(val, str):
+                meeting.irrigation = bool(val and "nil" not in val.lower() and val.strip() != "0")
             else:
                 setattr(meeting, field, val)
 
@@ -933,7 +935,11 @@ def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
     if cond.get("rainfall") is not None:
         meeting.rainfall = cond["rainfall"]
     if cond.get("irrigation") is not None:
-        meeting.irrigation = cond["irrigation"]
+        irr = cond["irrigation"]
+        if isinstance(irr, str):
+            meeting.irrigation = bool(irr and "nil" not in irr.lower() and irr.strip() != "0")
+        else:
+            meeting.irrigation = bool(irr)
     if cond.get("going_stick") is not None:
         meeting.going_stick = cond["going_stick"]
 
@@ -956,7 +962,11 @@ def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
     if cond.get("rainfall") is not None:
         meeting.rainfall = cond["rainfall"]
     if cond.get("irrigation") is not None:
-        meeting.irrigation = cond["irrigation"]
+        irr = cond["irrigation"]
+        if isinstance(irr, str):
+            meeting.irrigation = bool(irr and "nil" not in irr.lower() and irr.strip() != "0")
+        else:
+            meeting.irrigation = bool(irr)
 
 
 async def _cross_check_ra_fields(
