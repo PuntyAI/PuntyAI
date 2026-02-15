@@ -345,8 +345,8 @@ class SchedulerManager:
             # Pre-race: 150 minutes before first race
             pre_race_time = first_race_time - timedelta(minutes=150)
 
-            # Post-race: 30 minutes after last race
-            post_race_time = last_race_time + timedelta(minutes=30)
+            # Post-race: 60 minutes after last race (wrap-up generation + social delivery)
+            post_race_time = last_race_time + timedelta(minutes=60)
 
             now = melb_now().replace(tzinfo=None)
 

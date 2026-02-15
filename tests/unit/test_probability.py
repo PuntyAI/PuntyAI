@@ -217,7 +217,9 @@ class TestMarketConsensus:
             odds_ladbrokes=4.5,
         )
         median = _get_median_odds(runner)
-        assert median == 5.0  # median of [4.5, 4.8, 5.0, 5.0, 5.2]
+        # median of [4.5, 4.8, 5.0, 5.2] (current_odds excluded to avoid
+        # double-counting — it's derived from one of the providers)
+        assert median == 4.9
 
     def test_median_odds_filters_invalid(self):
         runner = _make_runner(
@@ -226,11 +228,25 @@ class TestMarketConsensus:
             odds_sportsbet=0.0,
             odds_bet365=1.0,  # excluded (must be > 1.0)
         )
+        # No valid provider odds, falls back to current_odds
         assert _get_median_odds(runner) == 5.0
 
     def test_median_odds_no_valid(self):
         runner = _make_runner()
         assert _get_median_odds(runner) is None
+
+    def test_median_odds_bad_tab_not_double_counted(self):
+        """When TAB odds are garbage (e.g. $1.20 for a $23 horse),
+        current_odds should NOT double-count the bad value."""
+        runner = _make_runner(
+            current_odds=1.20,  # Set from bad TAB value
+            odds_tab=1.20,      # Bad TAB odds
+            odds_sportsbet=23.0,
+            odds_bet365=21.0,
+        )
+        median = _get_median_odds(runner)
+        # median of [1.20, 21.0, 23.0] — current_odds excluded
+        assert median == 21.0
 
     def test_overround_calculation(self):
         runners = [

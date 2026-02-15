@@ -1056,9 +1056,14 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
                 Content.status.notin_(["rejected", "superseded"]),
             )
         )
-        if existing_wrapup.scalars().first():
+        existing_wrap = existing_wrapup.scalars().first()
+        if existing_wrap:
             logger.info(f"Wrap-up already exists for {venue} — skipping generation")
             results["steps"].append("generate_wrapup: skipped (already exists)")
+            # If wrap exists but hasn't been approved yet, try auto-approving it
+            if existing_wrap.status in ("pending_review", "draft"):
+                content_id = existing_wrap.id
+                logger.info(f"Existing wrap-up for {venue} is {existing_wrap.status} — will attempt auto-approve")
         else:
             try:
                 logger.info(f"Step 2: Generating wrap-up for {venue}...")

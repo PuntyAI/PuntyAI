@@ -229,9 +229,9 @@ async def validate_wrapup(content: Content, db: AsyncSession) -> tuple[bool, lis
         if not re.search(venue_pattern, raw, re.IGNORECASE):
             issues.append(f"Venue '{meeting.venue}' not mentioned")
 
-    # Check for Punty Ledger section
-    if not re.search(r"(?i)(punty\s*ledger|ledger)", raw):
-        issues.append("Missing Punty Ledger section")
+    # Check for scoreboard/ledger section (prompt uses "The Scoreboard")
+    if not re.search(r"(?i)(scoreboard|ledger|winners.*straight|how.?d they go)", raw):
+        issues.append("Missing Scoreboard/Ledger section")
 
     # Check for Quick Hits section
     if not re.search(r"(?i)(quick\s*hits|race.by.race)", raw):

@@ -486,7 +486,7 @@ def calculate_race_probabilities(
         scores = {
             "market":         mkt_score,
             "movement":       _market_movement_factor(runner),
-            "form":           _form_rating(runner, track_condition, baseline),
+            "form":           _form_rating(runner, track_condition, baseline, race, meeting),
             "class_fitness":  _class_factor(runner, baseline, race),
             "pace":           _pace_factor(runner, pace_scenario),
             "barrier":        _barrier_draw_factor(runner, field_size, race_distance),
@@ -610,9 +610,12 @@ def _market_consensus(runner: Any, overround: float) -> float:
 
 
 def _get_median_odds(runner: Any) -> Optional[float]:
-    """Get median odds across all available bookmakers."""
+    """Get median odds across all available bookmakers.
+
+    Uses deduplicated provider odds only (not current_odds, which is derived
+    from one of these providers and would double-count).
+    """
     sources = [
-        _get(runner, "current_odds"),
         _get(runner, "odds_tab"),
         _get(runner, "odds_sportsbet"),
         _get(runner, "odds_bet365"),
@@ -621,6 +624,10 @@ def _get_median_odds(runner: Any) -> Optional[float]:
     ]
     valid = [o for o in sources if o and isinstance(o, (int, float)) and o > 1.0]
     if not valid:
+        # Fall back to current_odds if no individual providers available
+        co = _get(runner, "current_odds")
+        if co and isinstance(co, (int, float)) and co > 1.0:
+            return co
         return None
     return statistics.median(valid)
 
@@ -629,7 +636,8 @@ def _get_median_odds(runner: Any) -> Optional[float]:
 # Factor: Form Rating
 # ──────────────────────────────────────────────
 
-def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
+def _form_rating(runner: Any, track_condition: str, baseline: float,
+                  race: Any = None, meeting: Any = None) -> float:
     """Rate recent form strength based on results and stats."""
     score = 0.5  # neutral baseline
     signals = 0
@@ -665,18 +673,79 @@ def _form_rating(runner: Any, track_condition: str, baseline: float) -> float:
         signal_sum += _stat_to_score(dist.win_rate, baseline, "distance_sr") * 0.8
         signals += 0.8
 
-    # First-up / second-up stats
+    # First-up / second-up stats (skipped if combo spacing analysis fires)
     days_since = _get(runner, "days_since_last_run")
-    if days_since and days_since > 60:
-        fu = parse_stats_string(_get(runner, "first_up_stats"))
-        if fu and fu.starts >= 2:
-            signal_sum += _stat_to_score(fu.win_rate, baseline, "first_up_sr") * 0.7
-            signals += 0.7
-    elif days_since and 21 <= days_since <= 60:
-        su = parse_stats_string(_get(runner, "second_up_stats"))
-        if su and su.starts >= 2:
-            signal_sum += _stat_to_score(su.win_rate, baseline, "second_up_sr") * 0.5
-            signals += 0.5
+    has_spacing = False
+
+    # --- Combo form signals from form_history ---
+    fh_json = _get(runner, "form_history")
+    if fh_json and (race is not None or meeting is not None):
+        try:
+            fh_parsed = json.loads(fh_json) if isinstance(fh_json, str) else fh_json
+            if fh_parsed and isinstance(fh_parsed, list):
+                from punty.context.combo_form import analyse_combo_form
+
+                combo = analyse_combo_form(
+                    form_history=fh_parsed,
+                    today_venue=_get(meeting, "venue") or _get(race, "venue") or "",
+                    today_distance=_get(race, "distance") or 1400,
+                    today_condition=track_condition or "Good",
+                    today_class=_get(race, "class_") or _get(race, "class") or "",
+                    today_jockey=_get(runner, "jockey") or "",
+                    days_since_last_run=days_since,
+                )
+
+                # Track + condition (venue+going specialist)
+                tc = combo.get("track_cond")
+                if tc and tc.starts >= 3:
+                    signal_sum += _stat_to_score(tc.win_rate, baseline, "combo_track_cond") * 1.2
+                    signals += 1.2
+
+                # Distance + condition (trip on this going)
+                dc = combo.get("dist_cond")
+                if dc and dc.starts >= 3:
+                    signal_sum += _stat_to_score(dc.win_rate, baseline, "combo_dist_cond") * 0.9
+                    signals += 0.9
+
+                # Triple: track + distance + condition (bonus, small samples)
+                tdc = combo.get("track_dist_cond")
+                if tdc and tdc.starts >= 2:
+                    signal_sum += _stat_to_score(tdc.win_rate, baseline, "combo_triple") * 0.4
+                    signals += 0.4
+
+                # Jockey on this horse (partnership)
+                jh = combo.get("jockey_horse")
+                if jh and jh.starts >= 2:
+                    signal_sum += _stat_to_score(jh.win_rate, baseline, "combo_jockey_horse") * 0.8
+                    signals += 0.8
+
+                # Class performance
+                cp = combo.get("class_perf")
+                if cp and cp.starts >= 3:
+                    signal_sum += _stat_to_score(cp.win_rate, baseline, "combo_class") * 0.7
+                    signals += 0.7
+
+                # Spacing pattern (replaces first/second-up binary)
+                spacing = combo.get("spacing")
+                if spacing is not None:
+                    signal_sum += spacing.pattern_score * 0.6
+                    signals += 0.6
+                    has_spacing = True
+        except Exception:
+            pass
+
+    # First-up / second-up fallback (only when spacing analysis didn't fire)
+    if not has_spacing:
+        if days_since and days_since > 60:
+            fu = parse_stats_string(_get(runner, "first_up_stats"))
+            if fu and fu.starts >= 2:
+                signal_sum += _stat_to_score(fu.win_rate, baseline, "first_up_sr") * 0.7
+                signals += 0.7
+        elif days_since and 21 <= days_since <= 60:
+            su = parse_stats_string(_get(runner, "second_up_stats"))
+            if su and su.starts >= 2:
+                signal_sum += _stat_to_score(su.win_rate, baseline, "second_up_sr") * 0.5
+                signals += 0.5
 
     # Career win/place percentage (Q5-Q1: 26.6% win, 18.8% place)
     career = parse_stats_string(_get(runner, "career_record"))

@@ -1364,8 +1364,10 @@ class ResultsMonitor:
         self._apply_weather_to_meeting(meeting, weather)
         await db.commit()
 
-        # Post via change alert system
+        # Post via change alert system (with DB-level dedup to survive restarts)
         from punty.results.change_detection import ChangeAlert
+        from punty.models.live_update import LiveUpdate
+
         alert = ChangeAlert(
             change_type="weather",
             meeting_id=meeting_id,
@@ -1375,10 +1377,22 @@ class ResultsMonitor:
         if meeting_id not in self.alerted_changes:
             self.alerted_changes[meeting_id] = set()
         if dedup_key not in self.alerted_changes[meeting_id]:
-            self.alerted_changes[meeting_id].add(dedup_key)
-            await self._post_change_alert(db, meeting, alert)
-            self.weather_alerts_posted[meeting_id] = self.weather_alerts_posted.get(meeting_id, 0) + 1
-            logger.info(f"Weather alert posted for {meeting.venue}: {'; '.join(changes)}")
+            # DB-level check: has this exact message already been posted today?
+            existing = await db.execute(
+                select(LiveUpdate.id).where(
+                    LiveUpdate.meeting_id == meeting_id,
+                    LiveUpdate.update_type == "weather_alert",
+                    LiveUpdate.content == message,
+                ).limit(1)
+            )
+            if existing.scalar():
+                self.alerted_changes[meeting_id].add(dedup_key)
+                logger.info(f"Weather alert already posted for {meeting.venue} (DB dedup)")
+            else:
+                self.alerted_changes[meeting_id].add(dedup_key)
+                await self._post_change_alert(db, meeting, alert)
+                self.weather_alerts_posted[meeting_id] = self.weather_alerts_posted.get(meeting_id, 0) + 1
+                logger.info(f"Weather alert posted for {meeting.venue}: {'; '.join(changes)}")
 
     @staticmethod
     def _apply_weather_to_meeting(meeting, weather: dict):
