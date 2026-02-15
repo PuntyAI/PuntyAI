@@ -175,6 +175,25 @@ class ContentGenerator:
             venue_name = venue  # For activity log
             log_generate_start(venue)
             race_count = len(context.get('races', []))
+
+            # Warn if meeting data looks incomplete
+            if race_count == 0:
+                raise ValueError(f"No races found for {venue} — cannot generate")
+            runners_with_odds = sum(
+                1 for race in context.get('races', [])
+                for runner in race.get('runners', [])
+                if runner.get('current_odds')
+            )
+            total_runners = sum(
+                len(race.get('runners', []))
+                for race in context.get('races', [])
+            )
+            if total_runners > 0 and runners_with_odds / total_runners < 0.3:
+                yield evt(
+                    f"Warning: Only {runners_with_odds}/{total_runners} runners have odds — "
+                    f"generation quality may be poor", "warning"
+                )
+
             yield evt(f"Context built — {venue}, {race_count} races", "done")
 
             # Inject tuned bet type thresholds into context

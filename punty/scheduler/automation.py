@@ -39,6 +39,89 @@ async def _delete_social_posts(content: Content, db: AsyncSession) -> None:
             logger.warning(f"Could not delete Facebook post {content.facebook_id}: {e}")
 
 
+async def validate_meeting_readiness(meeting_id: str, db: AsyncSession) -> tuple[bool, list[str]]:
+    """Validate that a meeting has enough data for generation and publishing.
+
+    Checks:
+    - Meeting has races (not empty like Hobart)
+    - Runners have odds from TAB (not blank like Kilcoy)
+    - Speed maps are populated (at least partially)
+    - Minimum active (non-scratched) runners per race
+
+    Returns: (is_ready, list_of_issues)
+    """
+    from punty.models.meeting import Runner
+
+    issues = []
+
+    # Check meeting exists
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        return False, [f"Meeting not found: {meeting_id}"]
+
+    # Check races exist
+    result = await db.execute(select(Race).where(Race.meeting_id == meeting_id))
+    races = result.scalars().all()
+
+    if not races:
+        return False, [f"No races found for {meeting.venue}"]
+
+    # Check runners have odds — load all runners and count in Python
+    # (SQLite doesn't handle complex aggregates well)
+    total_runners = 0
+    runners_with_odds = 0
+    runners_with_speedmap = 0
+    active_runners = 0
+
+    for race in races:
+        result = await db.execute(select(Runner).where(Runner.race_id == race.id))
+        runners = result.scalars().all()
+        for r in runners:
+            total_runners += 1
+            is_active = not r.scratched
+            if is_active:
+                active_runners += 1
+                if r.current_odds is not None:
+                    runners_with_odds += 1
+                if r.speed_map_position and r.speed_map_position.strip():
+                    runners_with_speedmap += 1
+
+    if active_runners == 0:
+        return False, [f"No active runners for {meeting.venue}"]
+
+    # Odds check: at least 50% of active runners should have odds
+    odds_pct = (runners_with_odds / active_runners * 100) if active_runners > 0 else 0
+    if odds_pct < 50:
+        issues.append(
+            f"Only {runners_with_odds}/{active_runners} runners ({odds_pct:.0f}%) have odds — "
+            f"TAB may not cover this venue"
+        )
+
+    # Speed map check: at least 30% coverage (some venues don't have maps)
+    speedmap_pct = (runners_with_speedmap / active_runners * 100) if active_runners > 0 else 0
+    if speedmap_pct < 30:
+        issues.append(
+            f"Only {runners_with_speedmap}/{active_runners} runners ({speedmap_pct:.0f}%) have speed maps"
+        )
+
+    # Minimum races check (at least 4 for a viable meeting)
+    if len(races) < 4:
+        issues.append(f"Only {len(races)} races — minimum 4 for a viable meeting")
+
+    is_ready = len(issues) == 0
+    if not is_ready:
+        logger.warning(
+            f"Meeting {meeting.venue} ({meeting_id}) failed readiness check: {issues}"
+        )
+    else:
+        logger.info(
+            f"Meeting {meeting.venue} passed readiness: {len(races)} races, "
+            f"{active_runners} active runners, {odds_pct:.0f}% odds, {speedmap_pct:.0f}% speed maps"
+        )
+
+    return is_ready, issues
+
+
 async def validate_early_mail(content: Content, db: AsyncSession) -> tuple[bool, list[str]]:
     """Validate early mail content before auto-approval.
 

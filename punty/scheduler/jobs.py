@@ -892,6 +892,19 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
             logger.error(f"Speed maps failed for {venue}: {e}")
             results["errors"].append(f"refresh_speed_maps: {str(e)}")
 
+        # Step 4b: Validate meeting readiness before generation
+        from punty.scheduler.automation import validate_meeting_readiness
+        is_ready, readiness_issues = await validate_meeting_readiness(meeting_id, db)
+        if not is_ready:
+            logger.warning(f"Meeting {venue} failed readiness check: {readiness_issues}")
+            log_system(f"Skipping {venue} — failed readiness: {'; '.join(readiness_issues)}", status="warning")
+            results["errors"].append(f"readiness_check: {'; '.join(readiness_issues)}")
+            results["skipped"] = True
+            results["completed_at"] = melb_now().isoformat()
+            return results
+
+        results["steps"].append("readiness_check: passed")
+
         # Step 5: Generate early mail
         content_id = None
         try:
