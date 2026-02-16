@@ -738,6 +738,9 @@ class ResultsMonitor:
         # Backfill exotic dividends from TabTouch for races missing them
         await self._backfill_tabtouch_exotics(db, meeting, statuses)
 
+        # Backfill place dividends for races where win_dividend exists but place_dividend is missing
+        await self._backfill_place_dividends(db, meeting, statuses)
+
         # Backfill sectional times for races that are missing them (10-15min delay after race)
         await self._backfill_sectionals(db, meeting, races)
 
@@ -1280,6 +1283,110 @@ class ResultsMonitor:
 
         except Exception as e:
             logger.debug(f"TabTouch exotic backfill failed for {meeting.venue}: {e}")
+
+    async def _backfill_place_dividends(self, db, meeting, statuses):
+        """Re-scrape races where placed runners are missing place dividends.
+
+        Racing.com sometimes doesn't include place dividends in the initial
+        result scrape (they may finalize slightly after win dividends). This
+        backfill re-scrapes those races and updates the missing dividends.
+        """
+        from punty.models.meeting import Runner as RunnerModel, Race
+
+        # Only check paying/closed races
+        paying_races = [rn for rn, s in statuses.items() if s in ("Paying", "Closed")]
+        if not paying_races:
+            return
+
+        # Find races with placed runners missing place_dividend
+        missing_races = []
+        for rn in paying_races:
+            race_id = f"{meeting.id}-r{rn}"
+            # Count runners that have a finish position in places but no place_dividend
+            result = await db.execute(
+                select(RunnerModel).where(
+                    RunnerModel.race_id == race_id,
+                    RunnerModel.finish_position.isnot(None),
+                    RunnerModel.finish_position <= 3,
+                    RunnerModel.finish_position > 0,
+                )
+            )
+            placed_runners = result.scalars().all()
+            if any(not r.place_dividend for r in placed_runners):
+                missing_races.append(rn)
+
+        if not missing_races:
+            return
+
+        # Rate limit: only attempt backfill once per meeting per monitor cycle
+        backfill_key = f"place_div_{meeting.id}"
+        if hasattr(self, '_place_div_attempts'):
+            attempts = self._place_div_attempts.get(backfill_key, 0)
+            if attempts >= 5:  # Stop after 5 attempts
+                return
+        else:
+            self._place_div_attempts = {}
+
+        self._place_div_attempts[backfill_key] = self._place_div_attempts.get(backfill_key, 0) + 1
+
+        logger.info(
+            f"Backfilling place dividends for {meeting.venue}: "
+            f"{len(missing_races)} race(s) missing place_dividend "
+            f"(attempt {self._place_div_attempts[backfill_key]})"
+        )
+
+        try:
+            scraper = RacingComScraper()
+            try:
+                updated = 0
+                for rn in missing_races:
+                    try:
+                        results_data = await scraper.scrape_race_result(
+                            meeting.venue, meeting.date, rn
+                        )
+                    except Exception as e:
+                        logger.debug(f"Place dividend backfill scrape failed for {meeting.venue} R{rn}: {e}")
+                        continue
+
+                    race_id = f"{meeting.id}-r{rn}"
+                    for result in results_data.get("results", []):
+                        place_div = result.get("place_dividend")
+                        if place_div is None or place_div <= 0:
+                            continue
+
+                        horse_name = result.get("horse_name", "")
+                        saddlecloth = result.get("saddlecloth")
+
+                        # Find runner by name first, then saddlecloth
+                        runner = None
+                        if horse_name:
+                            r = await db.execute(
+                                select(RunnerModel).where(
+                                    RunnerModel.race_id == race_id,
+                                    RunnerModel.horse_name == horse_name,
+                                ).limit(1)
+                            )
+                            runner = r.scalar_one_or_none()
+                        if not runner and saddlecloth is not None:
+                            r = await db.execute(
+                                select(RunnerModel).where(
+                                    RunnerModel.race_id == race_id,
+                                    RunnerModel.saddlecloth == int(saddlecloth),
+                                ).limit(1)
+                            )
+                            runner = r.scalar_one_or_none()
+
+                        if runner and not runner.place_dividend:
+                            runner.place_dividend = place_div
+                            updated += 1
+
+                if updated:
+                    await db.flush()
+                    logger.info(f"Backfilled {updated} place dividend(s) for {meeting.venue}")
+            finally:
+                await scraper.close()
+        except Exception as e:
+            logger.debug(f"Place dividend backfill failed for {meeting.venue}: {e}")
 
     # ── Pre-race change detection ──────────────────────────────────────────
 

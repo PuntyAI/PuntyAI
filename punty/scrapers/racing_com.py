@@ -1522,20 +1522,33 @@ class RacingComScraper(BaseScraper):
             if sp is not None:
                 sp = str(sp)
 
-            # Extract win/place dividends from odds array (tote providers)
-            win_div = self._parse_float(entry.get("dividendWin")) or self._parse_float(entry.get("winDividend"))
-            place_div = self._parse_float(entry.get("dividendPlace")) or self._parse_float(entry.get("placeDividend"))
-            if not win_div or not place_div:
+            # Extract win/place dividends — check multiple field names
+            # Use 'is None' not truthiness: 0.0 is falsy but means "field present, no dividend"
+            win_div = self._parse_float(entry.get("dividendWin"))
+            if win_div is None:
+                win_div = self._parse_float(entry.get("winDividend"))
+            place_div = self._parse_float(entry.get("dividendPlace"))
+            if place_div is None:
+                place_div = self._parse_float(entry.get("placeDividend"))
+
+            # Fallback: scan odds array for tote provider dividends
+            if win_div is None or place_div is None:
                 for odds_item in (entry.get("odds") or []):
                     provider = (odds_item.get("providerCode") or "").upper()
-                    # Prefer tote providers: N (NSW), V (VIC), Q (QLD), BTOTE
-                    if provider in ("N", "V", "Q", "BTOTE"):
-                        if not win_div:
+                    # Tote providers: N (NSW), V (VIC), Q (QLD), BTOTE, NSW, VIC, QLD
+                    if provider in ("N", "V", "Q", "BTOTE", "NSW", "VIC", "QLD"):
+                        if win_div is None:
                             win_div = self._parse_dollar(odds_item.get("oddsWin"))
-                        if not place_div:
+                        if place_div is None:
                             place_div = self._parse_dollar(odds_item.get("oddsPlace"))
-                        if win_div and place_div:
+                        if win_div is not None and place_div is not None:
                             break
+
+            # Filter out zero dividends (0.0 = not yet finalized, not a real payout)
+            if win_div is not None and win_div <= 0:
+                win_div = None
+            if place_div is not None and place_div <= 0:
+                place_div = None
 
             results.append({
                 "horse_name": horse_name,
