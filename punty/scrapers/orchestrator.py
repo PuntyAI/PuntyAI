@@ -1481,6 +1481,7 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
             runner.win_dividend = result["win_dividend"]
         elif result.get("starting_price") and result.get("position") in (1, 2, 3):
             # Use starting price as fallback when dividends aren't available
+            # (racing.com doesn't serve tote dividends for some NSW venues)
             try:
                 sp_val = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
                 if result["position"] == 1 and not runner.win_dividend:
@@ -1489,6 +1490,23 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
                 pass
         if result.get("place_dividend") is not None:
             runner.place_dividend = result["place_dividend"]
+        elif not runner.place_dividend and result.get("starting_price") and result.get("position") in (1, 2, 3):
+            # Estimate place dividend from SP when tote dividends unavailable
+            # Standard approximation: place_div ≈ (SP - 1) / num_places + 1
+            # This is a reasonable fallback for NSW venues where racing.com
+            # doesn't serve tote dividend data
+            try:
+                sp_val = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
+                if sp_val > 1.0:
+                    num_places = 3  # conservative default
+                    est_place = round((sp_val - 1.0) / num_places + 1.0, 2)
+                    runner.place_dividend = est_place
+                    logger.info(
+                        f"{race_id}: Estimated place_dividend for pos {result['position']} "
+                        f"from SP ${sp_val:.2f} → ${est_place:.2f}"
+                    )
+            except (ValueError, TypeError):
+                pass
         if result.get("sectional_400"):
             runner.sectional_400 = result["sectional_400"]
         if result.get("sectional_800"):
