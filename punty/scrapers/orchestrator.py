@@ -247,7 +247,20 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
     # Fill derived fields (days_since_last_run, class_stats) from form_history
     await _fill_derived_fields(db, meeting_id)
 
-    await db.commit()
+    # Commit with retry — SQLite can transiently lock when monitor writes concurrently
+    import asyncio as _aio
+    for _attempt in range(3):
+        try:
+            await db.commit()
+            break
+        except Exception as commit_err:
+            if _attempt < 2:
+                logger.warning(f"Commit attempt {_attempt + 1} failed: {commit_err}, retrying...")
+                await db.rollback()
+                await _aio.sleep(1 + _attempt)
+            else:
+                logger.error(f"Final commit failed after 3 attempts: {commit_err}")
+                errors.append(f"commit: {commit_err}")
 
     if errors:
         log_scrape_error(venue, "; ".join(errors))
@@ -589,7 +602,21 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         # Fill derived fields (days_since_last_run, class_stats) from form_history
         await _fill_derived_fields(db, meeting_id)
 
-        await db.commit()
+        # Commit with retry — SQLite can transiently lock when monitor writes concurrently
+        import asyncio as _aio
+        for _attempt in range(3):
+            try:
+                await db.commit()
+                break
+            except Exception as commit_err:
+                if _attempt < 2:
+                    logger.warning(f"Commit attempt {_attempt + 1} failed: {commit_err}, retrying...")
+                    await db.rollback()
+                    await _aio.sleep(1 + _attempt)
+                else:
+                    logger.error(f"Final commit failed after 3 attempts: {commit_err}")
+                    errors.append(f"commit: {commit_err}")
+
         error_count = len(errors)
         # Use "meeting_done" instead of "complete" to avoid bulk scrape JS thinking entire operation is done
         if error_count:
