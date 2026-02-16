@@ -242,6 +242,9 @@ class BetfairScraper:
                 if not horse_name:
                     continue
 
+                # Strip saddlecloth prefix (e.g. "1. Arties Magic" → "Arties Magic")
+                horse_name = re.sub(r"^\d+\.\s*", "", horse_name)
+
                 # Get best back price from book
                 book_runner = book_runners.get(selection_id, {})
                 price = self._get_best_back(book_runner)
