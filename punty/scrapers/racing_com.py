@@ -642,46 +642,77 @@ class RacingComScraper(BaseScraper):
                         logger.info(f"Meeting tips from {tipster_name}: bestBet/roughie/value captured")
 
         # --- 3. Per-race tipster selections from GetBetEasyMeetTipByMeetCode ---
+        # Structure: [{tipster: {tipsterName}, bestBet: {horseName, raceNumber, ...},
+        #              bestValue: {...}, nextBestTips: [{horseName, raceNumber}, ...]}]
         beteasy = payload.get("GetBetEasyMeetTipByMeetCode")
         if isinstance(beteasy, list) and beteasy:
             for tip_obj in beteasy:
                 if not isinstance(tip_obj, dict):
                     continue
+                tipster_info = tip_obj.get("tipster", {}) or {}
                 tipster_name = (
-                    tip_obj.get("tipsterName")
-                    or tip_obj.get("name")
-                    or (tip_obj.get("tipster", {}) or {}).get("tipsterName")
-                    or "Unknown"
+                    tipster_info.get("tipsterName")
+                    if isinstance(tipster_info, dict)
+                    else tip_obj.get("tipsterName") or "Unknown"
                 )
-                # Try multiple possible field names for per-race selections
-                selections = (
-                    tip_obj.get("selections")
-                    or tip_obj.get("tips")
-                    or tip_obj.get("picks")
-                    or tip_obj.get("raceTips")
-                    or []
-                )
-                if isinstance(selections, list) and selections:
-                    parsed_count = 0
-                    for sel in selections:
-                        if not isinstance(sel, dict):
+
+                parsed_count = 0
+
+                # Parse bestBet and bestValue (single pick each)
+                for pick_type in ["bestBet", "bestValue"]:
+                    pick = tip_obj.get(pick_type)
+                    if not isinstance(pick, dict):
+                        continue
+                    horse = pick.get("horseName") or pick.get("name")
+                    race_num = pick.get("raceNumber")
+                    comment = pick.get("comment") or tip_obj.get("tipComment")
+                    if horse:
+                        tip_data = {
+                            "tipster": tipster_name,
+                            "pick_type": pick_type,
+                            "horse": horse,
+                            "number": pick.get("raceEntryNumber") or pick.get("tabNumber"),
+                            "rank": pick_type,
+                            "comment": comment,
+                        }
+                        if race_num:
+                            tips_by_race.setdefault(race_num, []).append(tip_data)
+                        else:
+                            tip_data["entry_code"] = pick.get("raceEntryItemCode")
+                            tips_by_race.setdefault(0, []).append(tip_data)
+                        parsed_count += 1
+
+                # Parse nextBestTips (list of picks)
+                next_best = tip_obj.get("nextBestTips")
+                if isinstance(next_best, list):
+                    for i, pick in enumerate(next_best):
+                        if not isinstance(pick, dict):
                             continue
-                        race_num = sel.get("raceNumber")
-                        horse = sel.get("horseName") or sel.get("name")
-                        if race_num and horse:
-                            tips_by_race.setdefault(race_num, []).append({
+                        horse = pick.get("horseName") or pick.get("name")
+                        race_num = pick.get("raceNumber")
+                        if horse:
+                            tip_data = {
                                 "tipster": tipster_name,
+                                "pick_type": "nextBest",
                                 "horse": horse,
-                                "number": sel.get("raceEntryNumber") or sel.get("tabNumber") or sel.get("horseNumber"),
-                                "rank": sel.get("rank") or sel.get("position") or sel.get("order"),
-                            })
+                                "number": pick.get("raceEntryNumber") or pick.get("tabNumber"),
+                                "rank": f"nextBest_{i+1}",
+                                "comment": pick.get("comment"),
+                            }
+                            if race_num:
+                                tips_by_race.setdefault(race_num, []).append(tip_data)
+                            else:
+                                tip_data["entry_code"] = pick.get("raceEntryItemCode")
+                                tips_by_race.setdefault(0, []).append(tip_data)
                             parsed_count += 1
-                    if parsed_count:
-                        logger.info(f"BetEasy tips: {parsed_count} selections from {tipster_name}")
-                else:
-                    # Log the structure so we can parse it next time
-                    keys = list(tip_obj.keys())[:10]
-                    logger.info(f"BetEasy tip object (unparsed): tipster={tipster_name}, keys={keys}")
+
+                if parsed_count:
+                    logger.info(f"BetEasy tips: {parsed_count} selections from {tipster_name}")
+
+                # Also capture tipComment/shortComment/longComment as meeting-level context
+                tip_comment = tip_obj.get("tipComment") or tip_obj.get("longComment") or tip_obj.get("shortComment")
+                if tip_comment and not parsed_count:
+                    logger.info(f"BetEasy comment from {tipster_name}: {tip_comment[:80]}")
 
     def _build_meeting_dict(self, meeting_id: str, venue: str, race_date: date, gql: dict) -> dict:
         """Build meeting dict from getMeeting_CD GraphQL data."""
