@@ -583,10 +583,7 @@ def calculate_race_probabilities(
         if ps_total > 0:
             # Scale so probs sum to place_count (e.g. 3 for 8+ fields)
             for rid in place_sharp:
-                ctx_place = min(0.95, (place_sharp[rid] / ps_total) * place_count)
-                # Blend 70% context-weighted, 30% formula fallback for stability
-                formula_place = _place_probability(win_probs.get(rid, baseline), field_size)
-                place_probs[rid] = 0.7 * ctx_place + 0.3 * formula_place
+                place_probs[rid] = min(0.95, (place_sharp[rid] / ps_total) * place_count)
 
     results: dict[str, RunnerProbability] = {}
 
