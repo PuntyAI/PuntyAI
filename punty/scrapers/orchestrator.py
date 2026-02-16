@@ -426,7 +426,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     venue = meeting.venue
     race_date = meeting.date
     errors = []
-    total_steps = 5
+    total_steps = 4
 
     # Acquire scrape lock
     from punty.scrapers.playwright_base import _scrape_lock, _current_scrape
@@ -562,21 +562,6 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             logger.error(f"racing.com supplement failed: {e}")
             errors.append(f"racing.com_supplement: {e}")
             yield {"step": 4, "total": total_steps, "label": f"racing.com supplement failed: {e}", "status": "error"}
-
-        # Step 5: TAB odds (optional supplementary — racing.com is primary)
-        yield {"step": 4, "total": total_steps, "label": "Scraping TAB odds...", "status": "running"}
-        try:
-            from punty.scrapers.tab import TabScraper
-            scraper = TabScraper()
-            try:
-                data = await scraper.scrape_meeting(venue, race_date)
-                await _merge_odds(db, meeting_id, data.get("runners_odds", []))
-            finally:
-                await scraper.close()
-            yield {"step": 5, "total": total_steps, "label": "TAB odds complete", "status": "done"}
-        except Exception as e:
-            logger.debug(f"TAB scrape skipped (optional): {e}")
-            yield {"step": 5, "total": total_steps, "label": "TAB odds skipped (optional)", "status": "done"}
 
         # Close scraper
         if pf_scraper:

@@ -272,87 +272,69 @@ class RacingComScraper(BaseScraper):
 
                 logger.info(f"Found {race_count} races for {venue}")
 
-                # 2. Navigate to each race page to trigger GraphQL queries
-                for race_num in range(1, race_count + 1):
-                  try:
-                    # Use #/full-form hash to go directly to Full Form view
-                    # This triggers lazy loading of extended form history on scroll
-                    race_url = f"{self._build_race_url(venue, race_date, race_num)}#/full-form"
-                    logger.info(f"Scraping race {race_num}/{race_count}: {race_url}")
+                # 2. Load "All" view to capture all race entries + odds in one page
+                all_url = f"{meeting_url}#/"
+                logger.info(f"Loading All view: {all_url}")
+                await page.goto(all_url, wait_until="domcontentloaded")
 
-                    await page.goto(race_url, wait_until="domcontentloaded")
-                    # Wait for race entries to appear (more reliable than networkidle)
-                    try:
-                        await page.wait_for_selector("[class*='runner'], [class*='entry'], [class*='field']", timeout=10000)
-                    except Exception:
-                        pass
-                    await page.wait_for_timeout(3000)
+                # Wait for entries to start appearing
+                try:
+                    await page.wait_for_selector("[class*='runner'], [class*='entry'], [class*='field']", timeout=10000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(3000)
 
-                    # Dismiss cookie banner on first race
-                    if race_num == 1:
-                        try:
-                            btn = page.locator("button:has-text('Decline')").first
-                            if await btn.is_visible(timeout=1500):
-                                await btn.click()
-                        except Exception:
-                            pass
+                # Dismiss cookie banner
+                try:
+                    btn = page.locator("button:has-text('Decline')").first
+                    if await btn.is_visible(timeout=1500):
+                        await btn.click()
+                except Exception:
+                    pass
 
-                    # Scroll to trigger lazy loading of form history
-                    # First pass: scroll through page slowly
-                    for _ in range(25):
-                        await page.evaluate("window.scrollBy(0, 350)")
-                        await page.wait_for_timeout(700)
+                # Scroll through the All view to trigger lazy loading of all race entries
+                page_height = await page.evaluate("document.body.scrollHeight")
+                scroll_step = 400
+                scroll_steps = max(30, page_height // scroll_step)
+                for _ in range(scroll_steps):
+                    await page.evaluate(f"window.scrollBy(0, {scroll_step})")
+                    await page.wait_for_timeout(600)
 
-                    # Second pass: scroll back up and down again
-                    await page.evaluate("window.scrollTo(0, 0)")
+                # Second pass — scroll back up and down to catch any missed lazy loads
+                await page.evaluate("window.scrollTo(0, 0)")
+                await page.wait_for_timeout(500)
+                for _ in range(scroll_steps):
+                    await page.evaluate(f"window.scrollBy(0, {scroll_step})")
                     await page.wait_for_timeout(500)
-                    for _ in range(25):
-                        await page.evaluate("window.scrollBy(0, 350)")
-                        await page.wait_for_timeout(600)
 
-                    # Third pass: Check which horses we have form for and retry missing ones
-                    # Get list of horses we captured form for
-                    captured_horses = set(form_history_by_horse.keys())
-                    # Get horse names from race entries
-                    race_entries = race_entries_by_num.get(race_num, [])
-                    all_horses = {e.get("horseName") for e in race_entries if e.get("horseName")}
-                    missing_horses = all_horses - captured_horses
+                # Check which races we captured — do targeted per-race loads for any missing
+                missing_races = [n for n in range(1, race_count + 1) if n not in race_entries_by_num]
+                if missing_races:
+                    logger.info(f"All view missed {len(missing_races)} races: {missing_races}. Loading individually...")
+                    for race_num in missing_races:
+                        try:
+                            race_url = self._build_race_url(venue, race_date, race_num)
+                            await page.goto(race_url, wait_until="domcontentloaded")
+                            await page.wait_for_timeout(4000)
+                            # Scroll to trigger entry loading
+                            for _ in range(10):
+                                await page.evaluate("window.scrollBy(0, 400)")
+                                await page.wait_for_timeout(500)
+                        except Exception as e:
+                            logger.error(f"Race {race_num} fallback load failed: {e}")
 
-                    if missing_horses:
-                        logger.info(f"Race {race_num}: Retrying {len(missing_horses)} horses missing form: {list(missing_horses)[:5]}...")
-                        # Try to click on each missing horse's row to trigger form load
-                        for horse_name in missing_horses:
-                            try:
-                                # Try to find and click/scroll to the horse's element
-                                horse_el = page.locator(f"text='{horse_name}'").first
-                                if await horse_el.is_visible(timeout=1000):
-                                    await horse_el.scroll_into_view_if_needed()
-                                    await page.wait_for_timeout(1000)
-                                    # Try clicking to expand if needed
-                                    try:
-                                        await horse_el.click()
-                                        await page.wait_for_timeout(800)
-                                    except Exception:
-                                        pass
-                            except Exception:
-                                pass
+                captured_count = len(race_entries_by_num)
+                logger.info(f"Captured entries for {captured_count}/{race_count} races from All view")
 
-                    # Click "Tips" tab to trigger tips GraphQL query
-                    try:
-                        tips_tab = page.locator("a:has-text('Tips'), button:has-text('Tips'), [data-tab='tips'], [href*='tips']").first
-                        if await tips_tab.is_visible(timeout=2000):
-                            await tips_tab.click()
-                            await page.wait_for_timeout(2000)
-                            logger.debug(f"Race {race_num}: clicked Tips tab")
-                    except Exception:
-                        pass
-
-                    # Check if we got entries for this race
-                    if race_num not in race_entries_by_num:
-                        logger.warning(f"Race {race_num}: no entries captured after page load")
-                  except Exception as e:
-                    logger.error(f"Race {race_num} scrape failed, continuing: {e}")
-                    continue
+                # Load expert-tips page to capture all race tips in one go
+                try:
+                    tips_url = f"{meeting_url}#/expert-tips"
+                    logger.info(f"Loading expert tips page: {tips_url}")
+                    await page.goto(tips_url, wait_until="domcontentloaded")
+                    await page.wait_for_timeout(5000)
+                    logger.info(f"Expert tips page loaded, tips captured: {len(tips_by_race)} races")
+                except Exception as e:
+                    logger.warning(f"Expert tips page failed: {e}")
             finally:
                 # Always remove listener to prevent memory leaks
                 try:
