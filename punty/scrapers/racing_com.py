@@ -95,6 +95,7 @@ class RacingComScraper(BaseScraper):
         race_entries_by_num: dict[int, list] = {}
         betting_by_num: dict[int, list] = {}
         form_history_by_horse: dict[str, list] = {}  # horseCode -> list of past starts
+        tips_by_race: dict[int, list] = {}  # race_number -> list of tipster picks
 
         async with new_page() as page:
             # --- GraphQL response interceptor ---
@@ -198,6 +199,9 @@ class RacingComScraper(BaseScraper):
                         # Store temporarily keyed by first entry id; will merge later
                         betting_by_num.setdefault("_pending", []).append(entries)
 
+                # Capture tips/expert selections from any tips-related query
+                self._try_extract_tips(data, url, tips_by_race)
+
             page.on("response", capture_graphql)
 
             # Track which queries we capture for debugging
@@ -215,8 +219,17 @@ class RacingComScraper(BaseScraper):
                             captured_queries.add(qname)
                             break
                     else:
-                        # Log unknown queries
-                        captured_queries.add(response.url.split("/")[-1][:60])
+                        # Log unknown queries with data keys for discovery
+                        url_tail = response.url.split("/")[-1][:80]
+                        captured_queries.add(url_tail)
+                        try:
+                            body = await response.text()
+                            d = _json.loads(body)
+                            keys = list((d.get("data") or {}).keys())
+                            if keys:
+                                logger.info(f"Unknown GraphQL query '{url_tail}': data keys={keys}")
+                        except Exception:
+                            pass
                 await original_capture(response)
 
             page.remove_listener("response", capture_graphql)
@@ -323,6 +336,16 @@ class RacingComScraper(BaseScraper):
                             except Exception:
                                 pass
 
+                    # Click "Tips" tab to trigger tips GraphQL query
+                    try:
+                        tips_tab = page.locator("a:has-text('Tips'), button:has-text('Tips'), [data-tab='tips'], [href*='tips']").first
+                        if await tips_tab.is_visible(timeout=2000):
+                            await tips_tab.click()
+                            await page.wait_for_timeout(2000)
+                            logger.debug(f"Race {race_num}: clicked Tips tab")
+                    except Exception:
+                        pass
+
                     # Check if we got entries for this race
                     if race_num not in race_entries_by_num:
                         logger.warning(f"Race {race_num}: no entries captured after page load")
@@ -420,8 +443,16 @@ class RacingComScraper(BaseScraper):
             # Set field size (non-scratched)
             race_data["field_size"] = sum(1 for r in race_runners if not r.get("scratched"))
 
+            # Attach expert tips if captured
+            race_tips = tips_by_race.get(race_num, [])
+            if race_tips:
+                race_data["expert_tips"] = race_tips
+
             races.append(race_data)
             runners.extend(race_runners)
+
+        if tips_by_race:
+            logger.info(f"Expert tips captured for {len(tips_by_race)} races")
 
         return {"meeting": meeting_dict, "races": races, "runners": runners}
 
@@ -448,6 +479,82 @@ class RacingComScraper(BaseScraper):
                 for item in obj:
                     _find_entries(item, depth + 1)
         _find_entries(data)
+
+    def _try_extract_tips(self, data: dict, url: str, tips_by_race: dict) -> None:
+        """Scan a GraphQL response for expert tips/selections data.
+
+        Racing.com may serve tips via various query names. This method does a
+        deep scan looking for tipster/selection structures and logs discoveries.
+        """
+        payload = data.get("data", {})
+        if not payload:
+            return
+
+        def _scan_tips(obj, path="", depth=0):
+            if depth > 6:
+                return
+            if isinstance(obj, dict):
+                # Look for common tips-like structures
+                # Known patterns: "tips", "selections", "tipsters", "expertTips"
+                for key in ["tips", "tipsters", "selections", "expertTips",
+                            "raceTips", "meetTips", "formGuide", "tipsterTips",
+                            "getRaceTips", "getExpertTips", "getTips"]:
+                    val = obj.get(key)
+                    if isinstance(val, list) and val:
+                        self._parse_tips_array(val, tips_by_race, path + "." + key)
+                        return
+                for k, v in obj.items():
+                    _scan_tips(v, path + "." + k, depth + 1)
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj[:5]):
+                    _scan_tips(item, path + f"[{i}]", depth + 1)
+
+        _scan_tips(payload)
+
+    def _parse_tips_array(self, tips: list, tips_by_race: dict, path: str) -> None:
+        """Parse an array of tips objects into our tips_by_race accumulator."""
+        logger.info(f"Found tips data at {path}: {len(tips)} items")
+        for tip in tips:
+            if not isinstance(tip, dict):
+                continue
+            # Try to extract tipster name and selections
+            tipster = (tip.get("tipsterName") or tip.get("name") or
+                       tip.get("tipster") or tip.get("author") or
+                       tip.get("expertName") or "Unknown")
+            race_num = tip.get("raceNumber") or tip.get("raceNo")
+
+            # Selections might be nested
+            selections = (tip.get("selections") or tip.get("tips") or
+                          tip.get("picks") or tip.get("horses") or [])
+
+            # If tip itself has horse info (flat structure)
+            if not selections and tip.get("horseName"):
+                selections = [tip]
+
+            # Log the structure for discovery
+            if not race_num and not selections:
+                logger.info(f"Tips item keys: {list(tip.keys())}")
+                # Log first item values for discovery
+                sample = {k: str(v)[:80] for k, v in list(tip.items())[:10]}
+                logger.info(f"Tips item sample: {sample}")
+                continue
+
+            if race_num and selections:
+                parsed = []
+                for sel in selections:
+                    if isinstance(sel, dict):
+                        parsed.append({
+                            "tipster": tipster,
+                            "horse": sel.get("horseName") or sel.get("name") or sel.get("horse"),
+                            "number": sel.get("raceEntryNumber") or sel.get("number") or sel.get("saddlecloth"),
+                            "rank": sel.get("rank") or sel.get("position") or sel.get("order"),
+                        })
+                    elif isinstance(sel, str):
+                        parsed.append({"tipster": tipster, "horse": sel})
+                if parsed:
+                    tips_by_race.setdefault(race_num, []).extend(parsed)
+            elif selections:
+                logger.info(f"Tips from {tipster} (no race_num): {len(selections)} selections")
 
     def _build_meeting_dict(self, meeting_id: str, venue: str, race_date: date, gql: dict) -> dict:
         """Build meeting dict from getMeeting_CD GraphQL data."""

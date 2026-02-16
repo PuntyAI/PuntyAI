@@ -286,6 +286,14 @@ class ContextBuilder:
             "analysis": {},
         }
 
+        # Include expert tips if available (from racing.com tipsters)
+        if race.expert_tips:
+            try:
+                import json as _json
+                race_context["expert_tips"] = _json.loads(race.expert_tips)
+            except (ValueError, TypeError):
+                pass
+
         active_runners = []
         for runner in sorted(race.runners, key=lambda r: r.saddlecloth or r.barrier or 99):
             # Audit trail for malformed runner data

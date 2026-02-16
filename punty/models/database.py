@@ -240,6 +240,8 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN pp_odds FLOAT",
             "ALTER TABLE picks ADD COLUMN pp_hit BOOLEAN",
             "ALTER TABLE picks ADD COLUMN pp_pnl FLOAT",
+            # Expert tips from racing.com tipsters
+            "ALTER TABLE races ADD COLUMN expert_tips TEXT",
         ]:
             try:
                 await conn.execute(_text(col))

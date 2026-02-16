@@ -1112,9 +1112,10 @@ _SUPPLEMENT_FIELDS = [
 
 
 async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: dict) -> None:
-    """Merge racing.com odds and comments into existing runners.
+    """Merge racing.com odds, comments, and expert tips into existing data.
 
     Only updates odds and comment fields — does NOT overwrite primary runner data.
+    Also stores expert tips on Race records.
     """
     for runner_data in data.get("runners", []):
         horse_name = runner_data.get("horse_name", "")
@@ -1140,6 +1141,19 @@ async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: 
                     if not val:
                         continue
                 setattr(runner, field, val)
+
+    # Store expert tips on Race records
+    for race_data in data.get("races", []):
+        tips = race_data.get("expert_tips")
+        if tips:
+            race_id = race_data.get("id")
+            if race_id:
+                result = await db.execute(
+                    select(Race).where(Race.id == race_id).limit(1)
+                )
+                race = result.scalar_one_or_none()
+                if race:
+                    race.expert_tips = _json.dumps(tips)
 
     await db.flush()
 

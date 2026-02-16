@@ -368,6 +368,12 @@ class PuntingFormScraper(BaseScraper):
         _meetings_cache[date_str] = result
         return result
 
+    # Venue aliases: RA/DB name → PF track name (when names differ completely)
+    PF_VENUE_ALIASES = {
+        "cannon park": "cairns",
+        "ladbrokes cannon park": "cairns",
+    }
+
     async def resolve_meeting_id(self, venue: str, race_date: date) -> Optional[int]:
         """Resolve our venue name to an API integer meetingId."""
         meetings = await self.get_meetings(race_date)
@@ -383,6 +389,11 @@ class PuntingFormScraper(BaseScraper):
             if clean_venue.startswith(prefix):
                 clean_venue = clean_venue[len(prefix):]
                 break
+
+        # Check venue aliases (e.g. "cannon park" → "cairns")
+        alias = self.PF_VENUE_ALIASES.get(venue_lower) or self.PF_VENUE_ALIASES.get(clean_venue)
+        if alias:
+            clean_venue = alias
 
         for m in meetings:
             track_name = m.get("track", {}).get("name", "").lower().strip()

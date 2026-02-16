@@ -113,6 +113,7 @@ class Race(Base):
     exotic_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
     sectional_times: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: post-race sectional data
     has_sectionals: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # Whether sectionals are available
+    expert_tips: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: racing.com expert tipster selections
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
     updated_at: Mapped[datetime] = mapped_column(
@@ -150,6 +151,7 @@ class Race(Base):
             "exotic_results": self.exotic_results,
             "sectional_times": self.sectional_times,
             "has_sectionals": self.has_sectionals,
+            "expert_tips": self.expert_tips,
         }
         if include_runners:
             data["runners"] = [r.to_dict() for r in self.runners]
