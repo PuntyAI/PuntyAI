@@ -554,23 +554,28 @@ def calculate_race_probabilities(
     win_probs = _apply_market_floor(win_probs, market_implied)
 
     # Step 2c: Compute place probabilities using place context multipliers
-    # Place probs use the original (pre-win-context) factor scores with place-specific
-    # multipliers, producing contextually-adjusted place probabilities rather than
-    # deriving mechanically from win_prob × field_factor.
+    # Place context multipliers adjust factor WEIGHTS (importance) rather than
+    # scores, because the profiles encode "how predictive is this factor for place
+    # outcomes." E.g. horse_profile 2.2x for place means that factor is 2.2x more
+    # important for predicting placings than for wins. This produces meaningfully
+    # different place rankings compared to win rankings.
     place_count = 2 if field_size <= 7 else 3
     place_probs: dict[str, float] = {}
     place_ctx_mults = _get_context_multipliers(race, meeting, "place")
     if place_ctx_mults and original_factor_scores:
+        # Build place-specific weights by scaling base weights with place multipliers
+        place_w = dict(eff_w)
+        for factor, mult in place_ctx_mults.items():
+            if factor in place_w and factor != "deep_learning":
+                place_w[factor] = eff_w.get(factor, 0.0) * mult
+        # Re-normalize so weights sum to 1.0
+        pw_total = sum(place_w.values())
+        if pw_total > 0:
+            place_w = {k: v / pw_total for k, v in place_w.items()}
+
         place_raw: dict[str, float] = {}
         for rid, orig_scores in original_factor_scores.items():
-            adjusted = {}
-            for k, v in orig_scores.items():
-                if k in place_ctx_mults and k != "deep_learning":
-                    adj = 0.5 + (v - 0.5) * place_ctx_mults[k]
-                    adjusted[k] = max(0.05, min(0.95, adj))
-                else:
-                    adjusted[k] = v
-            place_raw[rid] = max(0.001, sum(eff_w.get(k, 0.0) * v for k, v in adjusted.items()))
+            place_raw[rid] = max(0.001, sum(place_w.get(k, 0.0) * v for k, v in orig_scores.items()))
 
         # Sharpen same as win to maintain consistent distribution shape
         place_sharp = {rid: p ** SHARPEN for rid, p in place_raw.items()}
@@ -578,7 +583,10 @@ def calculate_race_probabilities(
         if ps_total > 0:
             # Scale so probs sum to place_count (e.g. 3 for 8+ fields)
             for rid in place_sharp:
-                place_probs[rid] = min(0.95, (place_sharp[rid] / ps_total) * place_count)
+                ctx_place = min(0.95, (place_sharp[rid] / ps_total) * place_count)
+                # Blend 70% context-weighted, 30% formula fallback for stability
+                formula_place = _place_probability(win_probs.get(rid, baseline), field_size)
+                place_probs[rid] = 0.7 * ctx_place + 0.3 * formula_place
 
     results: dict[str, RunnerProbability] = {}
 
