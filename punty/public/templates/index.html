@@ -104,12 +104,12 @@
                 <div class="bb-right">
                     <div class="bb-stat">
                         <div class="bb-stat-label">Staked</div>
-                        <div class="bb-stat-val" id="bb-stake">${{ "%.0f"|format(stats.best_bet.stake) }}</div>
+                        <div class="bb-stat-val" id="bb-stake">${{ "%.2f"|format(stats.best_bet.stake) }}</div>
                     </div>
                     <div class="bb-arrow">&#x2192;</div>
                     <div class="bb-stat bb-returned">
                         <div class="bb-stat-label">Returned</div>
-                        <div class="bb-stat-val" id="bb-returned">${{ "%.0f"|format(stats.best_bet.returned) }}</div>
+                        <div class="bb-stat-val" id="bb-returned">${{ "%.2f"|format(stats.best_bet.returned) }}</div>
                     </div>
                     <div class="bb-roi-box">
                         <div class="bb-roi-label">ROI</div>
@@ -186,7 +186,7 @@
         {% endif %}
 
         <!-- Stats CTA -->
-        <div class="text-center mt-10">
+        <div class="text-center mt-10 pt-4">
             <a href="/stats" class="btn-secondary inline-flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 View Punty's Full Stats
@@ -196,7 +196,7 @@
 </section>
 
 <!-- Recent Wins Ticker -->
-<section class="py-10">
+<section class="pt-14 pb-10">
     <div class="max-w-6xl mx-auto px-6 sm:px-8">
         <div id="wins-ticker" class="rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
             <div class="flex items-center px-6 py-3" style="border-bottom: 1px solid var(--border-subtle);">
@@ -481,8 +481,8 @@
                                 oddsInline.textContent = '';
                             }
                         }
-                        document.getElementById('bb-stake').textContent = '$' + Math.round(data.best_bet.stake);
-                        document.getElementById('bb-returned').textContent = '$' + Math.round(data.best_bet.returned);
+                        document.getElementById('bb-stake').textContent = '$' + data.best_bet.stake.toFixed(2);
+                        document.getElementById('bb-returned').textContent = '$' + data.best_bet.returned.toFixed(2);
                         document.getElementById('bb-roi').textContent = '+' + data.best_bet.roi + '%';
                     }
                 }

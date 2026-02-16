@@ -148,6 +148,8 @@ async def _settle_picks_for_race_impl(
     runners_by_name = {r.horse_name.upper(): r for r in runners}
 
     # Determine number of paying places based on field size (TAB rules)
+    # Note: TAB determines places from original acceptors, not post-scratching field.
+    # We use active runners as a heuristic, but override with actual dividends below.
     field_size = len(active_runners)
     if field_size <= 4:
         num_places = 0  # No place betting
@@ -155,6 +157,19 @@ async def _settle_picks_for_race_impl(
         num_places = 2  # 1st and 2nd only
     else:
         num_places = 3  # 1st, 2nd, and 3rd
+
+    # Override: if TAB actually paid place dividends for 3rd (or further), expand num_places.
+    # This handles scratchings that reduce field but TAB still pays original places.
+    if num_places < 3:
+        for r in runners:
+            if r.finish_position and r.finish_position == 3 and r.place_dividend and r.place_dividend > 0:
+                num_places = 3
+                break
+    if num_places < 2:
+        for r in runners:
+            if r.finish_position and r.finish_position == 2 and r.place_dividend and r.place_dividend > 0:
+                num_places = 2
+                break
 
     # Load race for exotic results
     race_result = await db.execute(select(Race).where(Race.id == race_id))

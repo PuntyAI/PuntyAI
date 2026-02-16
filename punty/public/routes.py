@@ -300,12 +300,18 @@ async def get_winner_stats() -> dict:
                 display = "Winner"
                 bet_label = bp.pick_type or "Bet"
 
+            # Show place odds for place bets, win odds otherwise
+            if bp.bet_type == "place" and bp.place_odds_at_tip:
+                display_odds = float(bp.place_odds_at_tip)
+            else:
+                display_odds = float(bp.odds_at_tip) if bp.odds_at_tip else None
+
             return {
                 "display_name": display,
                 "venue": bm.venue,
                 "race_number": bp.race_number,
                 "bet_type": bet_label,
-                "odds": float(bp.odds_at_tip) if bp.odds_at_tip else None,
+                "odds": display_odds,
                 "stake": round(stake, 2),
                 "returned": round(returned, 2),
                 "pnl": round(pnl, 2),

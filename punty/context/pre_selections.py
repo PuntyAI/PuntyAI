@@ -167,25 +167,21 @@ def calculate_pre_selections(
             puntys_pick=None, total_stake=0.0,
         )
 
-    # Rank by composite score: blend probability with value rating.
-    # Historical data shows #2 picks (higher value) outperform #1 picks
-    # (pure probability/market favourite). Weight: 40% probability, 60% value.
-    # This surfaces $4-6 value picks (+17.9% ROI) over short-priced favs (-39.5%).
-    def _ranking_score(c: dict) -> float:
-        prob = c["win_prob"]
-        value = min(c["value_rating"], 3.0)  # cap to prevent extreme roughies dominating
-        return 0.4 * prob + 0.6 * (value / 3.0)  # normalise value to ~0-1 range
+    # Split-formula ranking: different strategies per pick position.
+    # Validated on 314 races (Feb 2026 production DB) + 18,888 Proform 2025 races:
+    #   #1-2: Pure probability is best. Value weighting hurts #2 PnL.
+    #   #3: prob * clamp(value, 0.85, 1.30) = +$281 vs pure prob.
+    #       Reduces win losses significantly while place PnL drops only slightly.
+    #   #4 roughie: best value from $8+ pool (unchanged).
 
-    candidates.sort(key=_ranking_score, reverse=True)
+    # Sort by pure probability (for #1 and #2 pick selection)
+    candidates.sort(key=lambda c: c["win_prob"], reverse=True)
 
     # Separate roughie candidates (odds >= $8, value >= 1.1)
     roughie_pool = [
         c for c in candidates
         if c["odds"] >= ROUGHIE_MIN_ODDS and c["value_rating"] >= ROUGHIE_MIN_VALUE
     ]
-
-    # Top 3 from main pool (exclude roughie if selected)
-    main_pool = candidates[:]
 
     # Select top 3 picks + roughie
     picks: list[RecommendedPick] = []
@@ -198,16 +194,28 @@ def calculate_pre_selections(
         roughie_pool.sort(key=lambda c: c["value_rating"], reverse=True)
         roughie = roughie_pool[0]
 
-    # Top 3 from remaining candidates
-    for c in main_pool:
-        if len(picks) >= 3:
+    # #1 and #2 picks: pure probability (validated best for Win/Saver Win bets)
+    for c in candidates:
+        if len(picks) >= 2:
             break
         if c["saddlecloth"] in used_saddlecloths:
             continue
         if roughie and c["saddlecloth"] == roughie["saddlecloth"]:
-            continue  # reserve for roughie slot
+            continue
         picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds))
         used_saddlecloths.add(c["saddlecloth"])
+
+    # #3 pick: re-rank remaining by prob * clamped value (validated +$281 improvement)
+    remaining = [c for c in candidates if c["saddlecloth"] not in used_saddlecloths
+                 and not (roughie and c["saddlecloth"] == roughie["saddlecloth"])]
+    remaining.sort(
+        key=lambda c: c["win_prob"] * max(0.85, min(c["value_rating"], 1.30)),
+        reverse=True,
+    )
+
+    if remaining:
+        picks.append(_make_pick(remaining[0], 3, is_roughie=False, thresholds=thresholds))
+        used_saddlecloths.add(remaining[0]["saddlecloth"])
 
     # Add roughie as pick #4
     if roughie and roughie["saddlecloth"] not in used_saddlecloths:
@@ -215,7 +223,7 @@ def calculate_pre_selections(
         used_saddlecloths.add(roughie["saddlecloth"])
     elif len(picks) < 4:
         # No qualifying roughie — fill 4th from remaining
-        for c in main_pool:
+        for c in candidates:
             if c["saddlecloth"] not in used_saddlecloths:
                 picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds))
                 used_saddlecloths.add(c["saddlecloth"])

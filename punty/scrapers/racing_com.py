@@ -48,6 +48,7 @@ class RacingComScraper(BaseScraper):
         "thomas-farms-rc-murray-bridge": "murray-bridge",
         "park kilmore": "kilmore",
         "park-kilmore": "kilmore",
+        # Note: Cannon Park (Cairns) uses "cannon-park" on racing.com, NOT "cairns"
     }
 
     def _venue_slug(self, venue: str, strip_sponsor: bool = True) -> str:
@@ -1244,6 +1245,17 @@ class RacingComScraper(BaseScraper):
             page.on("response", capture_graphql)
             await page.goto(meeting_url, wait_until="load")
             await page.wait_for_timeout(4000)
+
+            # Retry with full sponsor-prefixed slug if no data captured
+            if not captured_races:
+                full_slug = self._venue_slug(venue, strip_sponsor=False)
+                stripped_slug = self._venue_slug(venue, strip_sponsor=True)
+                if full_slug != stripped_slug:
+                    alt_url = f"{self.BASE_URL}/form/{race_date.isoformat()}/{full_slug}"
+                    logger.info(f"No statuses with stripped slug, retrying: {alt_url}")
+                    await page.goto(alt_url, wait_until="load")
+                    await page.wait_for_timeout(4000)
+
             page.remove_listener("response", capture_graphql)
 
         statuses: dict[int, str] = {}
@@ -1458,6 +1470,16 @@ class RacingComScraper(BaseScraper):
             page.on("response", capture_graphql)
             await page.goto(race_url, wait_until="load")
             await page.wait_for_timeout(5000)
+
+            # Retry with full sponsor-prefixed slug if no entries captured
+            if not entries_data:
+                full_slug = self._venue_slug(venue, strip_sponsor=False)
+                stripped_slug = self._venue_slug(venue, strip_sponsor=True)
+                if full_slug != stripped_slug:
+                    alt_url = f"{self.BASE_URL}/form/{race_date.isoformat()}/{full_slug}/race/{race_number}"
+                    logger.info(f"No result entries with stripped slug, retrying: {alt_url}")
+                    await page.goto(alt_url, wait_until="load")
+                    await page.wait_for_timeout(5000)
 
             # Try clicking Results tab
             try:
