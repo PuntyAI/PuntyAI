@@ -676,12 +676,25 @@ class RacingComScraper(BaseScraper):
 
                 parsed_count = 0
 
-                # Parse bestBet and bestValue (single pick each)
-                for pick_type in ["bestBet", "bestValue"]:
+                def _extract_horse(pick: dict) -> str | None:
+                    """Get horse name from a BetEasy pick dict.
+
+                    Horse name can be directly on the pick or nested
+                    inside raceEntryItem sub-dict.
+                    """
+                    horse = pick.get("horseName") or pick.get("name")
+                    if not horse:
+                        entry_item = pick.get("raceEntryItem")
+                        if isinstance(entry_item, dict):
+                            horse = entry_item.get("horseName") or entry_item.get("name")
+                    return horse
+
+                # Parse single-pick fields: bestBet, bestValue, bestRoughie, getOn
+                for pick_type in ["bestBet", "bestValue", "bestRoughie", "getOn"]:
                     pick = tip_obj.get(pick_type)
                     if not isinstance(pick, dict):
                         continue
-                    horse = pick.get("horseName") or pick.get("name")
+                    horse = _extract_horse(pick)
                     race_num = pick.get("raceNumber")
                     comment = pick.get("comment") or tip_obj.get("tipComment")
                     if horse:
@@ -700,13 +713,15 @@ class RacingComScraper(BaseScraper):
                             tips_by_race.setdefault(0, []).append(tip_data)
                         parsed_count += 1
 
-                # Parse nextBestTips (list of picks)
+                # Parse nextBestTips (can be a list of picks OR a single dict)
                 next_best = tip_obj.get("nextBestTips")
+                if isinstance(next_best, dict):
+                    next_best = [next_best]
                 if isinstance(next_best, list):
                     for i, pick in enumerate(next_best):
                         if not isinstance(pick, dict):
                             continue
-                        horse = pick.get("horseName") or pick.get("name")
+                        horse = _extract_horse(pick)
                         race_num = pick.get("raceNumber")
                         if horse:
                             tip_data = {
