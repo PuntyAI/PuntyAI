@@ -50,17 +50,18 @@ class RacingComScraper(BaseScraper):
         "park-kilmore": "kilmore",
     }
 
-    def _venue_slug(self, venue: str) -> str:
-        """Convert venue name to URL slug, stripping sponsor prefixes."""
+    def _venue_slug(self, venue: str, strip_sponsor: bool = True) -> str:
+        """Convert venue name to URL slug, optionally stripping sponsor prefixes."""
         slug = venue.lower().strip()
         # Strip sponsor prefixes (e.g., "Ladbrokes Geelong" -> "geelong")
-        for prefix in self.SPONSOR_PREFIXES:
-            if slug.startswith(prefix + " "):
-                slug = slug[len(prefix) + 1:]
-                break
-            if slug.startswith(prefix + "-"):
-                slug = slug[len(prefix) + 1:]
-                break
+        if strip_sponsor:
+            for prefix in self.SPONSOR_PREFIXES:
+                if slug.startswith(prefix + " "):
+                    slug = slug[len(prefix) + 1:]
+                    break
+                if slug.startswith(prefix + "-"):
+                    slug = slug[len(prefix) + 1:]
+                    break
         # Check for venue aliases
         if slug in self.VENUE_ALIASES:
             return self.VENUE_ALIASES[slug]
@@ -266,6 +267,32 @@ class RacingComScraper(BaseScraper):
                     }""")
 
                 if race_count == 0:
+                    # Retry with full sponsor-prefixed slug (e.g., "ladbrokes-cannon-park")
+                    full_slug = self._venue_slug(venue, strip_sponsor=False)
+                    stripped_slug = self._venue_slug(venue, strip_sponsor=True)
+                    if full_slug != stripped_slug:
+                        alt_url = f"{self.BASE_URL}/form/{race_date.isoformat()}/{full_slug}"
+                        logger.info(f"No races with stripped slug, retrying with full slug: {alt_url}")
+                        resp = await page.goto(alt_url, wait_until="load")
+                        if resp and resp.status != 404:
+                            await page.wait_for_timeout(3000)
+                            race_count = len(race_list_gql)
+                            if race_count == 0:
+                                race_count = await page.evaluate("""() => {
+                                    var links = document.querySelectorAll('a[href*="/race/"]');
+                                    var maxNum = 0;
+                                    for (var i = 0; i < links.length; i++) {
+                                        var m = links[i].href.match(/\\/race\\/(\\d+)$/);
+                                        if (m) { var n = parseInt(m[1]); if (n > maxNum) maxNum = n; }
+                                    }
+                                    return maxNum;
+                                }""")
+                            if race_count > 0:
+                                # Update meeting_url for subsequent navigation
+                                meeting_url = alt_url
+                                logger.info(f"Found {race_count} races with full slug {full_slug}")
+
+                if race_count == 0:
                     logger.warning(f"No races found on {meeting_url}")
                     return {"meeting": self._build_meeting_dict(meeting_id, venue, race_date, meeting_gql),
                             "races": [], "runners": []}
@@ -313,7 +340,7 @@ class RacingComScraper(BaseScraper):
                     logger.info(f"All view missed {len(missing_races)} races: {missing_races}. Loading individually...")
                     for race_num in missing_races:
                         try:
-                            race_url = self._build_race_url(venue, race_date, race_num)
+                            race_url = f"{meeting_url}/race/{race_num}"
                             await page.goto(race_url, wait_until="domcontentloaded")
                             await page.wait_for_timeout(4000)
                             # Scroll to trigger entry loading
@@ -332,9 +359,24 @@ class RacingComScraper(BaseScraper):
                     logger.info(f"Loading expert tips page: {tips_url}")
                     await page.goto(tips_url, wait_until="domcontentloaded")
                     await page.wait_for_timeout(5000)
-                    logger.info(f"Expert tips page loaded, tips captured: {len(tips_by_race)} races")
+                    race_level_tips = [k for k in tips_by_race if k != 0]
+                    logger.info(f"Expert tips page loaded, race-level tips: {len(race_level_tips)} races")
                 except Exception as e:
                     logger.warning(f"Expert tips page failed: {e}")
+
+                # Fallback: if no race-level tips from overview page, try per-race tips tabs
+                race_level_tips = [k for k in tips_by_race if k != 0]
+                if not race_level_tips:
+                    logger.info("No race-level tips from overview — falling back to per-race tips tabs")
+                    for race_num in range(1, race_count + 1):
+                        try:
+                            tips_url = f"{meeting_url}/race/{race_num}#/tips"
+                            await page.goto(tips_url, wait_until="domcontentloaded")
+                            await page.wait_for_timeout(3000)
+                        except Exception as e:
+                            logger.warning(f"Race {race_num} tips fallback failed: {e}")
+                    race_level_tips = [k for k in tips_by_race if k != 0]
+                    logger.info(f"Per-race tips fallback captured tips for {len(race_level_tips)} races")
             finally:
                 # Always remove listener to prevent memory leaks
                 try:
@@ -364,6 +406,27 @@ class RacingComScraper(BaseScraper):
                 name = entry.get("horseName", "")
                 if name:
                     betting_by_horse[name] = entry.get("oddsByProvider", [])
+
+        # Distribute unmatched meeting-level tips (key 0) to races by horse name lookup
+        unmatched_tips = tips_by_race.pop(0, [])
+        if unmatched_tips:
+            # Build horse->race_num lookup from captured entries
+            horse_to_race: dict[str, int] = {}
+            for rn, entries in race_entries_by_num.items():
+                for entry in entries:
+                    hname = entry.get("horseName", "").strip()
+                    if hname:
+                        horse_to_race[hname.lower()] = rn
+            distributed = 0
+            for tip in unmatched_tips:
+                horse = (tip.get("horse") or "").strip().lower()
+                if horse and horse in horse_to_race:
+                    race_num = horse_to_race[horse]
+                    tips_by_race.setdefault(race_num, []).append(tip)
+                    distributed += 1
+                    logger.info(f"Distributed meeting tip '{tip.get('pick_type')}' {tip.get('horse')} → R{race_num}")
+            if distributed:
+                logger.info(f"Distributed {distributed}/{len(unmatched_tips)} meeting-level tips to races")
 
         races = []
         runners = []
@@ -435,14 +498,8 @@ class RacingComScraper(BaseScraper):
             runners.extend(race_runners)
 
         if tips_by_race:
-            race_nums = [k for k in tips_by_race if k != 0]
-            logger.info(f"Expert tips captured for {len(race_nums)} races")
-
-        # Attach meeting-level tips (bestBet/roughie/value) to meeting dict
-        meeting_tips = tips_by_race.get(0, [])
-        if meeting_tips:
-            meeting_dict["expert_meeting_tips"] = meeting_tips
-            logger.info(f"Meeting-level expert tips: {len(meeting_tips)} picks")
+            race_nums = list(tips_by_race.keys())
+            logger.info(f"Expert tips captured for {len(race_nums)} races: {race_nums}")
 
         return {"meeting": meeting_dict, "races": races, "runners": runners}
 
@@ -542,15 +599,27 @@ class RacingComScraper(BaseScraper):
                         if not isinstance(pick, dict):
                             continue
                         comment = pick.get("comment")
+                        horse_name = pick.get("horseName") or pick.get("name")
+                        race_num = pick.get("raceNumber")
                         entry_code = pick.get("raceEntryItemCode")
-                        if comment and entry_code:
-                            # Store as meeting-level tip (race_num=0)
-                            tips_by_race.setdefault(0, []).append({
-                                "tipster": tipster_name,
-                                "pick_type": pick_type,
-                                "comment": comment,
-                                "entry_code": entry_code,
-                            })
+                        if not (comment or horse_name):
+                            continue
+                        tip_data = {
+                            "tipster": tipster_name,
+                            "pick_type": pick_type,
+                            "comment": comment,
+                            "horse": horse_name,
+                            "number": pick.get("raceEntryNumber") or pick.get("tabNumber"),
+                            "rank": pick_type,  # bestBet/bestRoughie/bestValue as rank
+                        }
+                        if race_num:
+                            # Attach directly to the race
+                            tips_by_race.setdefault(race_num, []).append(tip_data)
+                            logger.info(f"Meeting tip {pick_type} from {tipster_name}: {horse_name} (R{race_num})")
+                        else:
+                            # Store at meeting level if no race number
+                            tip_data["entry_code"] = entry_code
+                            tips_by_race.setdefault(0, []).append(tip_data)
 
                     # Log that we captured meeting tips
                     has_content = any(
