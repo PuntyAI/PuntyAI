@@ -1479,34 +1479,51 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
             runner.starting_price = result["starting_price"]
         if result.get("win_dividend") is not None:
             runner.win_dividend = result["win_dividend"]
-        elif result.get("starting_price") and result.get("position") in (1, 2, 3):
-            # Use starting price as fallback when dividends aren't available
+        elif result.get("position") in (1, 2, 3) and not runner.win_dividend:
+            # Fallback chain for win dividend when tote unavailable
             # (racing.com doesn't serve tote dividends for some NSW venues)
-            try:
-                sp_val = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
-                if result["position"] == 1 and not runner.win_dividend:
-                    runner.win_dividend = sp_val
-            except (ValueError, TypeError):
-                pass
+            # Priority: Betfair back odds > SP
+            fallback_win = None
+            if runner.odds_betfair and runner.odds_betfair > 1.0:
+                fallback_win = runner.odds_betfair
+            elif result.get("starting_price"):
+                try:
+                    fallback_win = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
+                except (ValueError, TypeError):
+                    pass
+            if fallback_win and fallback_win > 1.0 and result["position"] == 1:
+                runner.win_dividend = fallback_win
+                source = "Betfair" if (runner.odds_betfair and runner.odds_betfair > 1.0) else "SP"
+                logger.info(f"{race_id}: win_dividend from {source} ${fallback_win:.2f}")
+
         if result.get("place_dividend") is not None:
             runner.place_dividend = result["place_dividend"]
-        elif not runner.place_dividend and result.get("starting_price") and result.get("position") in (1, 2, 3):
-            # Estimate place dividend from SP when tote dividends unavailable
-            # Standard approximation: place_div ≈ (SP - 1) / num_places + 1
-            # This is a reasonable fallback for NSW venues where racing.com
-            # doesn't serve tote dividend data
-            try:
-                sp_val = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
-                if sp_val > 1.0:
-                    num_places = 3  # conservative default
-                    est_place = round((sp_val - 1.0) / num_places + 1.0, 2)
-                    runner.place_dividend = est_place
-                    logger.info(
-                        f"{race_id}: Estimated place_dividend for pos {result['position']} "
-                        f"from SP ${sp_val:.2f} → ${est_place:.2f}"
-                    )
-            except (ValueError, TypeError):
-                pass
+        elif not runner.place_dividend and result.get("position") in (1, 2, 3):
+            # Fallback chain for place dividend: Betfair > SP > current_odds
+            # Estimate: place_div ≈ (win_odds - 1) / num_places + 1
+            fallback_odds = None
+            source = None
+            if runner.odds_betfair and runner.odds_betfair > 1.0:
+                fallback_odds = runner.odds_betfair
+                source = "Betfair"
+            elif result.get("starting_price"):
+                try:
+                    fallback_odds = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
+                    source = "SP"
+                except (ValueError, TypeError):
+                    pass
+            if not fallback_odds and runner.current_odds and runner.current_odds > 1.0:
+                fallback_odds = runner.current_odds
+                source = "current_odds"
+
+            if fallback_odds and fallback_odds > 1.0:
+                num_places = 3  # conservative default
+                est_place = round((fallback_odds - 1.0) / num_places + 1.0, 2)
+                runner.place_dividend = est_place
+                logger.info(
+                    f"{race_id}: place_dividend from {source} ${fallback_odds:.2f} "
+                    f"→ est ${est_place:.2f} (pos {result['position']})"
+                )
         if result.get("sectional_400"):
             runner.sectional_400 = result["sectional_400"]
         if result.get("sectional_800"):
