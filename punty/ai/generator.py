@@ -1228,6 +1228,18 @@ class ContentGenerator:
                 for vp in value_plays:
                     parts.append(f"  - {vp['horse']}: Value {vp['value']:.2f}x (edge +{vp['edge']:.1f}%)")
 
+            # Place value plays — horses where place probability exceeds market
+            place_plays = [
+                r for r in prob_ranked
+                if r.get("place_value_rating", 0) and r["place_value_rating"] > 1.05
+            ]
+            if place_plays:
+                parts.append("")
+                parts.append("**PLACE VALUE PLAYS (place prob > market by 5%+):**")
+                for pp in place_plays[:5]:
+                    sc = f"No.{pp.get('saddlecloth', '?')}" if pp.get('saddlecloth') else ""
+                    parts.append(f"  - {pp['horse']} {sc}: Place Value {pp['place_value_rating']:.2f}x")
+
             # DL Pattern insights per runner (top matches only)
             pattern_lines = []
             for runner in race.get("runners", []):

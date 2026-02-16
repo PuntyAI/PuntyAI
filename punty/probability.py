@@ -511,6 +511,9 @@ def calculate_race_probabilities(
         if dl_matched_patterns:
             factor_details[rid]["_matched_patterns"] = dl_matched_patterns
 
+    # Save original factor scores before context adjustment (needed for place)
+    original_factor_scores = {rid: dict(scores) for rid, scores in all_factor_scores.items()}
+
     # Step 1a: Apply context multipliers (amplify/dampen factors by racing context)
     ctx_mults = _get_context_multipliers(race, meeting)
     if ctx_mults:
@@ -550,14 +553,41 @@ def calculate_race_probabilities(
     # Step 2b: Market floor — prevent extreme disagreement with market
     win_probs = _apply_market_floor(win_probs, market_implied)
 
+    # Step 2c: Compute place probabilities using place context multipliers
+    # Place probs use the original (pre-win-context) factor scores with place-specific
+    # multipliers, producing contextually-adjusted place probabilities rather than
+    # deriving mechanically from win_prob × field_factor.
+    place_count = 2 if field_size <= 7 else 3
+    place_probs: dict[str, float] = {}
+    place_ctx_mults = _get_context_multipliers(race, meeting, "place")
+    if place_ctx_mults and original_factor_scores:
+        place_raw: dict[str, float] = {}
+        for rid, orig_scores in original_factor_scores.items():
+            adjusted = {}
+            for k, v in orig_scores.items():
+                if k in place_ctx_mults and k != "deep_learning":
+                    adj = 0.5 + (v - 0.5) * place_ctx_mults[k]
+                    adjusted[k] = max(0.05, min(0.95, adj))
+                else:
+                    adjusted[k] = v
+            place_raw[rid] = max(0.001, sum(eff_w.get(k, 0.0) * v for k, v in adjusted.items()))
+
+        # Sharpen same as win to maintain consistent distribution shape
+        place_sharp = {rid: p ** SHARPEN for rid, p in place_raw.items()}
+        ps_total = sum(place_sharp.values())
+        if ps_total > 0:
+            # Scale so probs sum to place_count (e.g. 3 for 8+ fields)
+            for rid in place_sharp:
+                place_probs[rid] = min(0.95, (place_sharp[rid] / ps_total) * place_count)
+
     results: dict[str, RunnerProbability] = {}
 
     for runner in active:
         rid = _get(runner, "id", "")
         win_prob = win_probs.get(rid, baseline)
 
-        # Place probability
-        place_prob = _place_probability(win_prob, field_size)
+        # Place probability — use context-adjusted if available, else field-factor formula
+        place_prob = place_probs.get(rid, _place_probability(win_prob, field_size))
 
         # Value detection (win)
         mkt_prob = market_implied.get(rid, baseline)
