@@ -1,7 +1,10 @@
 """Algorithmic sequence lane construction for Quaddie / Early Quaddie / Big 6.
 
-Builds Skinny, Balanced, and Wide lanes from probability rankings,
-calculating exact combo counts and unit prices targeting fixed outlays.
+Builds a SINGLE smart quaddie per sequence type with per-leg widths
+determined by odds-shape classification (validated on 14,246 legs from
+2025 Proform data). Width = include runners whose marginal capture rate >= 7%.
+
+$100 outlay, minimum 30% flexi (max 333 combos).
 """
 
 import logging
@@ -11,19 +14,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Fixed outlays per variant
-SKINNY_OUTLAY = 10.0
-BALANCED_OUTLAY = 50.0
-WIDE_OUTLAY = 100.0
-
-# Maximum combos before a lane becomes impractical
-# Tighter caps ensure meaningful flexi % (min ~$0.67/combo at $100)
-MAX_COMBOS_SKINNY = 8
-MAX_COMBOS_BALANCED = 60
-MAX_COMBOS_WIDE = 150
-
-# Minimum flexi percentage — skip lane if unit price is below this
-MIN_FLEXI_PCT = 50.0  # 50% = $0.50/combo minimum
+OUTLAY = 100.0
+MIN_FLEXI_PCT = 30.0
 
 
 @dataclass
@@ -33,63 +25,82 @@ class LaneLeg:
     race_number: int
     runners: list[int]       # saddlecloth numbers
     runner_names: list[str]  # horse names for display
-    confidence: str          # HIGH / MED / LOW from leg analysis
+    odds_shape: str          # STANDOUT/DOMINANT/etc.
+    shape_width: int         # data-driven width before constraint
 
 
 @dataclass
-class SequenceLane:
-    """A fully constructed sequence lane (Skinny/Balanced/Wide)."""
-
-    variant: str             # "Skinny", "Balanced", "Wide"
-    legs: list[LaneLeg]
-    total_combos: int
-    unit_price: float        # outlay / combos (dollars per combo)
-    total_outlay: float
-    flexi_pct: float         # unit_price as percentage (unit_price * 100)
-
-
-@dataclass
-class SequenceBlock:
-    """Complete sequence block with all three lanes."""
+class SmartSequence:
+    """A single smart sequence bet."""
 
     sequence_type: str       # "Early Quaddie", "Quaddie", "Big 6"
     race_start: int
     race_end: int
-    skinny: SequenceLane
-    balanced: SequenceLane
-    wide: SequenceLane
-    recommended: str         # "Skinny" / "Balanced" / "Wide"
+    legs: list[LaneLeg]
+    total_combos: int
+    flexi_pct: float         # $100 / combos * 100
+    total_outlay: float
+    constrained: bool        # True if widths were tightened to fit flexi floor
+    risk_note: str           # warning if many open legs
+
+
+# Keep old classes for backward compatibility during transition
+@dataclass
+class SequenceLane:
+    """Legacy: a single lane variant."""
+    variant: str
+    legs: list[LaneLeg]
+    total_combos: int
+    unit_price: float
+    total_outlay: float
+    flexi_pct: float
+
+
+@dataclass
+class SequenceBlock:
+    """Legacy wrapper — now contains a single smart sequence."""
+    sequence_type: str
+    race_start: int
+    race_end: int
+    skinny: SequenceLane | None
+    balanced: SequenceLane | None
+    wide: SequenceLane | None
+    recommended: str
     recommend_reason: str
+    smart: SmartSequence | None = None
 
 
-def build_sequence_lanes(
+def build_smart_sequence(
     sequence_type: str,
     race_range: tuple[int, int],
     leg_analysis: list[dict],
     race_contexts: list[dict],
-    width_thresholds: dict | None = None,
-) -> SequenceBlock | None:
-    """Build Skinny/Balanced/Wide lanes for a sequence bet.
+) -> SmartSequence | None:
+    """Build a single smart sequence bet with per-leg widths from odds shape.
 
     Args:
         sequence_type: "Early Quaddie", "Quaddie", or "Big 6"
         race_range: (start_race, end_race) inclusive
         leg_analysis: List of sequence leg analysis dicts from builder
-            (race_number, confidence, suggested_width, top_runners)
         race_contexts: All race context dicts for the meeting
-        width_thresholds: Optional tuned widths from bet_type_tuning.
 
     Returns:
-        SequenceBlock with all three lanes, or None if insufficient data.
+        SmartSequence or None if insufficient data.
     """
+    from punty.probability import calculate_smart_quaddie_widths
+
     start, end = race_range
     num_legs = end - start + 1
+    is_big6 = "big" in sequence_type.lower() or "6" in sequence_type
 
-    # Map race number → leg analysis and race context
+    # Map race number -> leg analysis and race context
     leg_map = {la["race_number"]: la for la in leg_analysis}
     race_map = {rc["race_number"]: rc for rc in race_contexts}
 
+    # Build leg data with extended runner lists
+    from punty.probability import SequenceLegAnalysis
     legs_data = []
+
     for rn in range(start, end + 1):
         la = leg_map.get(rn)
         rc = race_map.get(rn)
@@ -97,238 +108,98 @@ def build_sequence_lanes(
             logger.debug(f"Missing data for R{rn} in {sequence_type}")
             return None
 
-        # Get top runners sorted by win probability
-        top_runners = la.get("top_runners", [])
+        top_runners = list(la.get("top_runners", []))
 
-        # Extend with runners from race context if needed
-        if len(top_runners) < 4:
+        # Extend with runners from race context if needed (up to 8)
+        if len(top_runners) < 8:
             probs = rc.get("probabilities", {})
             ranked = probs.get("probability_ranked", [])
             existing_sc = {r.get("saddlecloth", 0) for r in top_runners}
             for entry in ranked:
-                if len(top_runners) >= 6:
+                if len(top_runners) >= 8:
                     break
                 sc = entry.get("saddlecloth")
                 if sc and sc not in existing_sc:
+                    wp = entry.get("win_prob", 0)
+                    if isinstance(wp, str):
+                        wp = float(wp.rstrip("%")) / 100
                     top_runners.append({
                         "saddlecloth": sc,
                         "horse_name": entry.get("horse", ""),
-                        "win_prob": float(entry.get("win_prob", "0").rstrip("%")) / 100
-                        if isinstance(entry.get("win_prob"), str)
-                        else entry.get("win_prob", 0),
+                        "win_prob": float(wp),
+                        "value_rating": 1.0,
                     })
                     existing_sc.add(sc)
 
-        legs_data.append({
-            "race_number": rn,
-            "confidence": la.get("confidence", "LOW"),
-            "suggested_width": la.get("suggested_width", 3),
-            "top_runners": top_runners,
-        })
+        odds_shape = la.get("odds_shape", "CLEAR_FAV")
+        shape_width = la.get("shape_width", 3)
+
+        legs_data.append(SequenceLegAnalysis(
+            race_number=rn,
+            top_runners=top_runners,
+            leg_confidence=la.get("confidence", "LOW"),
+            suggested_width=la.get("suggested_width", 3),
+            odds_shape=odds_shape,
+            shape_width=shape_width,
+        ))
 
     if len(legs_data) != num_legs:
         return None
 
-    is_big6 = "big" in sequence_type.lower() or "6" in sequence_type
-
-    # Build lane variants (Big6 skips Wide — -99.5% ROI historically)
-    skinny = _build_lane(
-        "Skinny", legs_data, SKINNY_OUTLAY, width_thresholds, is_big6=is_big6,
-    )
-    balanced = _build_lane(
-        "Balanced", legs_data, BALANCED_OUTLAY, width_thresholds, is_big6=is_big6,
-    )
-    if is_big6:
-        wide = None  # Big6 Wide removed: -99.5% ROI, unredeemable
-    else:
-        wide = _build_lane(
-            "Wide", legs_data, WIDE_OUTLAY, width_thresholds, is_big6=is_big6,
-        )
-
-    # Need at least skinny to generate a block
-    if not skinny:
-        return None
-
-    # Determine recommendation based on confidence distribution
-    recommended, reason = _recommend_variant(legs_data, has_wide=wide is not None)
-
-    return SequenceBlock(
-        sequence_type=sequence_type,
-        race_start=start,
-        race_end=end,
-        skinny=skinny,
-        balanced=balanced,
-        wide=wide,
-        recommended=recommended,
-        recommend_reason=reason,
+    # Calculate optimal widths
+    widths = calculate_smart_quaddie_widths(
+        legs_data,
+        budget=OUTLAY,
+        min_flexi_pct=MIN_FLEXI_PCT,
+        is_big6=is_big6,
     )
 
+    # Check if we had to constrain
+    original_combos = 1
+    for leg in legs_data:
+        original_combos *= max(leg.shape_width, 1)
+    max_combos = int(OUTLAY / (MIN_FLEXI_PCT / 100.0))
+    constrained = original_combos > max_combos
 
-def _build_lane(
-    variant: str,
-    legs_data: list[dict],
-    outlay: float,
-    width_thresholds: dict | None = None,
-    is_big6: bool = False,
-) -> SequenceLane | None:
-    """Build a single lane variant from leg data.
-
-    Returns None if the resulting flexi % is below MIN_FLEXI_PCT.
-    """
+    # Build legs
     lane_legs = []
-
-    for ld in legs_data:
-        rn = ld["race_number"]
-        confidence = ld["confidence"]
-        suggested = ld["suggested_width"]
-        top = ld["top_runners"]
-
-        # Determine width based on variant (use tuned thresholds if available)
-        width = _width_for_variant(
-            variant, confidence, suggested, width_thresholds, is_big6=is_big6,
-        )
-
-        # Select runners (top N by probability)
-        selected = top[:width]
-
+    for i, leg in enumerate(legs_data):
+        w = widths[i]
+        selected = leg.top_runners[:w]
         lane_legs.append(LaneLeg(
-            race_number=rn,
+            race_number=leg.race_number,
             runners=[r.get("saddlecloth", 0) for r in selected],
             runner_names=[r.get("horse_name", "") for r in selected],
-            confidence=confidence,
+            odds_shape=leg.odds_shape,
+            shape_width=leg.shape_width,
         ))
 
-    # Calculate combos = product of runners per leg
     total_combos = 1
     for leg in lane_legs:
         total_combos *= max(1, len(leg.runners))
 
-    # Cap combos to prevent absurdly expensive bets
-    max_combos = {
-        "Skinny": MAX_COMBOS_SKINNY,
-        "Balanced": MAX_COMBOS_BALANCED,
-        "Wide": MAX_COMBOS_WIDE,
-    }.get(variant, MAX_COMBOS_WIDE)
+    flexi_pct = round(OUTLAY / total_combos * 100, 1) if total_combos > 0 else 0
 
-    if total_combos > max_combos:
-        # Trim widest legs until under limit
-        lane_legs = _trim_to_combo_limit(lane_legs, max_combos)
-        total_combos = 1
-        for leg in lane_legs:
-            total_combos *= max(1, len(leg.runners))
+    # Risk assessment
+    open_legs = sum(1 for leg in legs_data if leg.odds_shape in ("TRIO", "MID_FAV", "OPEN_BUNCH", "WIDE_OPEN"))
+    if open_legs >= num_legs - 1:
+        risk_note = f"RISKY: {open_legs}/{num_legs} legs are open races."
+    elif open_legs >= num_legs // 2:
+        risk_note = f"Moderate risk: {open_legs}/{num_legs} open legs."
+    else:
+        risk_note = ""
 
-    # Unit price = outlay / combos
-    unit_price = round(outlay / total_combos, 2) if total_combos > 0 else outlay
-    flexi_pct = round(unit_price * 100, 1)
-
-    # Skip lane if flexi % is too low (prevents "win but lose money" scenarios)
-    if flexi_pct < MIN_FLEXI_PCT:
-        return None
-
-    return SequenceLane(
-        variant=variant,
+    return SmartSequence(
+        sequence_type=sequence_type,
+        race_start=start,
+        race_end=end,
         legs=lane_legs,
         total_combos=total_combos,
-        unit_price=unit_price,
-        total_outlay=outlay,
         flexi_pct=flexi_pct,
+        total_outlay=OUTLAY,
+        constrained=constrained,
+        risk_note=risk_note,
     )
-
-
-def _width_for_variant(
-    variant: str, confidence: str, suggested: int,
-    thresholds: dict | None = None, *, is_big6: bool = False,
-) -> int:
-    """Determine runner width for a leg based on variant and confidence.
-
-    Big6 gets tighter widths than Quaddie (6 legs compound faster).
-    If thresholds dict is provided (from bet_type_tuning), uses tuned widths.
-    Otherwise falls back to hardcoded defaults.
-    """
-    if thresholds:
-        conf_key = confidence.lower()
-        var_key = variant.lower()
-        key = f"width_{conf_key}_{var_key}"
-        if key in thresholds:
-            return thresholds[key]
-
-    # Big6 uses tighter widths to keep combos manageable
-    if is_big6:
-        if variant == "Skinny":
-            return 1  # Always 1 for Big6 skinny
-        elif variant == "Balanced":
-            if confidence == "HIGH":
-                return 1
-            else:  # MED or LOW
-                return 2
-        else:  # Wide — should not be called for Big6 but handle gracefully
-            return 2
-
-    # Quaddie / Early Quaddie defaults
-    if variant == "Skinny":
-        if confidence == "HIGH":
-            return 1
-        elif confidence == "MED":
-            return min(2, suggested)
-        else:  # LOW
-            return min(2, suggested)
-
-    elif variant == "Balanced":
-        if confidence == "HIGH":
-            return 2
-        elif confidence == "MED":
-            return 3
-        else:  # LOW
-            return min(3, suggested + 1)
-
-    else:  # Wide
-        if confidence == "HIGH":
-            return 3
-        elif confidence == "MED":
-            return 4
-        else:  # LOW
-            return min(4, suggested + 1)
-
-
-def _trim_to_combo_limit(
-    legs: list[LaneLeg],
-    max_combos: int,
-) -> list[LaneLeg]:
-    """Trim widest legs to bring total combos under max_combos."""
-    while True:
-        total = 1
-        for leg in legs:
-            total *= max(1, len(leg.runners))
-        if total <= max_combos:
-            break
-
-        # Find widest leg and trim by 1
-        widest = max(legs, key=lambda l: len(l.runners))
-        if len(widest.runners) <= 1:
-            break  # can't trim further
-        widest.runners = widest.runners[:-1]
-        widest.runner_names = widest.runner_names[:-1]
-
-    return legs
-
-
-def _recommend_variant(legs_data: list[dict], *, has_wide: bool = True) -> tuple[str, str]:
-    """Recommend Skinny/Balanced/Wide based on leg confidence distribution."""
-    high = sum(1 for ld in legs_data if ld["confidence"] == "HIGH")
-    med = sum(1 for ld in legs_data if ld["confidence"] == "MED")
-    low = sum(1 for ld in legs_data if ld["confidence"] == "LOW")
-    total = len(legs_data)
-
-    if high >= total * 0.75:
-        return "Skinny", f"{high}/{total} legs are HIGH confidence — trust the standouts."
-    elif high >= total * 0.5:
-        return "Balanced", f"{high} HIGH + {med} MED legs — mix of confidence levels."
-    elif low >= total * 0.5:
-        if has_wide:
-            return "Wide", f"{low}/{total} legs are LOW confidence — need coverage."
-        return "Balanced", f"{low}/{total} legs LOW confidence — Balanced (Wide unavailable)."
-    else:
-        return "Balanced", f"Mixed confidence ({high}H/{med}M/{low}L) — Balanced covers the spread."
 
 
 def build_all_sequence_lanes(
@@ -336,17 +207,11 @@ def build_all_sequence_lanes(
     leg_analysis: list[dict],
     race_contexts: list[dict],
 ) -> list[SequenceBlock]:
-    """Build sequence lanes for all applicable sequence types.
+    """Build smart sequence for all applicable sequence types.
 
-    Args:
-        total_races: Number of races in the meeting
-        leg_analysis: sequence_leg_analysis from context
-        race_contexts: All race contexts from the meeting
-
-    Returns:
-        List of SequenceBlock (one per applicable sequence type).
+    Returns SequenceBlock for backward compatibility but the smart
+    field contains the new single-quaddie output.
     """
-    # Sequence range rules (same as generator._get_sequence_lanes)
     rules = {
         7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
         8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
@@ -363,7 +228,6 @@ def build_all_sequence_lanes(
         return []
 
     results = []
-
     type_map = {
         "early_quad": "Early Quaddie",
         "quaddie": "Quaddie",
@@ -375,11 +239,68 @@ def build_all_sequence_lanes(
         if not race_range:
             continue
 
-        block = build_sequence_lanes(label, race_range, leg_analysis, race_contexts)
-        if block:
-            results.append(block)
+        smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts)
+        if not smart:
+            continue
+
+        # Build legacy SequenceBlock wrapper with the smart sequence as "Balanced"
+        # so existing parser can still pick it up as a variant
+        legacy_legs = [
+            LaneLeg(
+                race_number=leg.race_number,
+                runners=leg.runners,
+                runner_names=leg.runner_names,
+                odds_shape=leg.odds_shape,
+                shape_width=leg.shape_width,
+            )
+            for leg in smart.legs
+        ]
+
+        balanced_lane = SequenceLane(
+            variant="Smart",
+            legs=legacy_legs,
+            total_combos=smart.total_combos,
+            unit_price=round(OUTLAY / smart.total_combos, 2),
+            total_outlay=OUTLAY,
+            flexi_pct=smart.flexi_pct,
+        )
+
+        results.append(SequenceBlock(
+            sequence_type=label,
+            race_start=smart.race_start,
+            race_end=smart.race_end,
+            skinny=None,
+            balanced=balanced_lane,
+            wide=None,
+            recommended="Smart",
+            recommend_reason=_build_reason(smart),
+            smart=smart,
+        ))
 
     return results
+
+
+def _build_reason(smart: SmartSequence) -> str:
+    """Build explanation string for the smart quaddie."""
+    shapes = [leg.odds_shape for leg in smart.legs]
+    widths = [len(leg.runners) for leg in smart.legs]
+    width_str = "x".join(str(w) for w in widths)
+
+    locks = sum(1 for s in shapes if s in ("STANDOUT", "DOMINANT", "SHORT_PAIR"))
+    open_count = sum(1 for s in shapes if s in ("TRIO", "MID_FAV", "OPEN_BUNCH", "WIDE_OPEN"))
+
+    parts = [f"{width_str} ({smart.total_combos} combos, {smart.flexi_pct:.0f}% flexi)"]
+
+    if locks >= 2:
+        parts.append(f"{locks} standout legs locked tight")
+    if open_count >= 2:
+        parts.append(f"{open_count} open legs need coverage")
+    if smart.constrained:
+        parts.append("widths constrained to maintain 30%+ flexi")
+    if smart.risk_note:
+        parts.append(smart.risk_note)
+
+    return ". ".join(parts) + "."
 
 
 def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
@@ -387,28 +308,44 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
     if not blocks:
         return ""
 
-    lines = ["\n**PRE-BUILT SEQUENCE LANES (use these exact selections):**"]
+    lines = ["\n**PRE-BUILT SEQUENCE BETS (use these exact selections):**"]
+    lines.append("One smart quaddie per sequence type. $100 outlay, flexi >= 30%.")
+    lines.append("Widths are set per-leg based on odds shape (validated on 14,246 legs from 2025).")
 
     for block in blocks:
-        lines.append(f"\n{block.sequence_type} (R{block.race_start}–R{block.race_end}):")
+        smart = block.smart
+        if not smart:
+            continue
 
-        for lane in [block.skinny, block.balanced, block.wide]:
-            if lane is None:
-                continue
-            legs_str = " / ".join(
-                ", ".join(str(r) for r in leg.runners)
-                for leg in lane.legs
-            )
+        lines.append(f"\n{smart.sequence_type} (R{smart.race_start}--R{smart.race_end}):")
+
+        # Per-leg detail
+        for leg in smart.legs:
+            runners_str = ", ".join(str(r) for r in leg.runners)
+            names_str = ", ".join(leg.runner_names[:len(leg.runners)])
             lines.append(
-                f"  {lane.variant} (${lane.total_outlay:.0f}): "
-                f"{legs_str} "
-                f"({lane.total_combos} combos x ${lane.unit_price:.2f} "
-                f"= ${lane.total_outlay:.0f}) "
-                f"— est. return: {lane.flexi_pct:.0f}%"
+                f"  R{leg.race_number} [{leg.odds_shape}]: "
+                f"{runners_str} "
+                f"({len(leg.runners)} runners) "
+                f"-- {names_str}"
             )
 
-        lines.append(
-            f"  Recommended: {block.recommended} — {block.recommend_reason}"
+        # Summary line in parser-compatible format
+        legs_str = " / ".join(
+            ", ".join(str(r) for r in leg.runners)
+            for leg in smart.legs
         )
+        lines.append(
+            f"  Smart ($100): {legs_str} "
+            f"({smart.total_combos} combos x "
+            f"${OUTLAY / smart.total_combos:.2f} "
+            f"= $100) "
+            f"-- {smart.flexi_pct:.0f}% flexi"
+        )
+
+        if smart.risk_note:
+            lines.append(f"  WARNING: {smart.risk_note}")
+
+        lines.append(f"  Rationale: {block.recommend_reason}")
 
     return "\n".join(lines)

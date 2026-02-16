@@ -106,7 +106,7 @@ _SEQ_HEADER = re.compile(
     re.IGNORECASE,
 )
 _SEQ_VARIANT = re.compile(
-    r"(Skinny|Balanced|Wide)\s*(?:\(\$[\d.]+\))?:\s*(.+)",
+    r"(Skinny|Balanced|Wide|Smart)\s*(?:\(\$[\d.]+\))?:\s*(.+)",
     re.IGNORECASE,
 )
 # --- Punty's Pick (highlighted best-bet per race) ---

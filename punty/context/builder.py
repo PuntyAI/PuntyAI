@@ -221,6 +221,8 @@ class ContextBuilder:
                     "confidence": leg.leg_confidence,
                     "suggested_width": leg.suggested_width,
                     "top_runners": leg.top_runners,
+                    "odds_shape": leg.odds_shape,
+                    "shape_width": leg.shape_width,
                 }
                 for leg in legs
             ]

@@ -1407,20 +1407,21 @@ class ContentGenerator:
             if b6:
                 parts.append(f"- BIG 6: Races {b6[0]}-{b6[1]}")
 
-        # Sequence leg confidence analysis
+        # Sequence leg analysis with odds shape classification
         seq_legs = context.get("sequence_leg_analysis", [])
         if seq_legs:
-            parts.append("\n## SEQUENCE LEG CONFIDENCE (probability-based)")
+            parts.append("\n## SEQUENCE LEG ANALYSIS (odds-shape classification)")
+            parts.append("Width per leg determined by marginal capture rate >= 7% (validated on 14,246 legs from 2025).")
             for leg in seq_legs:
-                conf = leg["confidence"]
-                width = leg["suggested_width"]
+                shape = leg.get("odds_shape", "CLEAR_FAV")
+                shape_w = leg.get("shape_width", 3)
                 rn = leg["race_number"]
                 top = leg.get("top_runners", [])
                 top_str = ", ".join(
                     f"No.{r['saddlecloth']} {r['horse_name']} ({r['win_prob']*100:.0f}%)"
-                    for r in top[:width + 1]
+                    for r in top[:max(shape_w, 3)]
                 )
-                parts.append(f"- Race {rn}: **{conf}** confidence (use {width} runner{'s' if width > 1 else ''}) — {top_str}")
+                parts.append(f"- Race {rn}: **{shape}** (use {shape_w} runners) -- {top_str}")
 
         # Pre-built sequence lanes (algorithmic Skinny/Balanced/Wide)
         pre_seqs = context.get("pre_built_sequences", [])

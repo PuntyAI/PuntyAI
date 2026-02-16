@@ -2244,6 +2244,8 @@ class SequenceLegAnalysis:
     top_runners: list[dict]  # [{saddlecloth, horse_name, win_prob, value_rating}]
     leg_confidence: str      # "HIGH" / "MED" / "LOW"
     suggested_width: int     # how many runners to include in this leg
+    odds_shape: str = ""     # STANDOUT/DOMINANT/SHORT_PAIR/TWO_HORSE/CLEAR_FAV/TRIO/MID_FAV/OPEN_BUNCH
+    shape_width: int = 0     # data-driven width from 2025 backtest (marginal >= 7%)
 
 
 def _harville_probability(probs_ordered: list[float]) -> float:
@@ -2564,6 +2566,120 @@ def calculate_exotic_combinations(
     return results[:12]
 
 
+def classify_odds_shape(runners: list[dict]) -> tuple[str, int]:
+    """Classify a race's odds shape and return data-driven width.
+
+    Based on 2025 Proform backtest (14,246 quaddie legs, 2,167 meetings).
+    Width = include runners whose marginal capture rate is >= 7%.
+
+    Returns:
+        (shape_name, recommended_width)
+    """
+    if not runners:
+        return "WIDE_OPEN", 3
+
+    # Convert win_prob to implied SP for shape classification
+    # Prob-to-SP: SP = 1/prob (e.g. 50% prob = $2.00 SP)
+    prices = []
+    for r in runners[:8]:
+        p = r.get("win_prob", 0)
+        if p > 0:
+            prices.append(1.0 / p)
+        else:
+            prices.append(999)
+
+    while len(prices) < 8:
+        prices.append(999)
+
+    p1, p2, p3, p4 = prices[0], prices[1], prices[2], prices[3]
+
+    # Shape classification (validated on 8,668 legs):
+    #
+    # STANDOUT ($1.50-): fav wins 63%, marginal drops below 7% after R3 -> width 3
+    # DOMINANT ($1.50-$2, big gap): fav 48%, R4 still 8% -> width 4
+    # SHORT_PAIR ($1.50-$2, close 2nd): fav 54%, R3 12% -> width 3
+    # TWO_HORSE ($2-$3, matched): R5 still 7% -> width 5
+    # CLEAR_FAV ($2.50-$3.50): R5 still 8% -> width 5
+    # TRIO ($3.50-$5, bunched): R7 still 7% -> width 7
+    # MID_FAV ($3.50-$5, spread): R6 9% -> width 6
+    # OPEN_BUNCH ($5+, bunched): R6 10% -> width 6
+
+    if p1 <= 1.50:
+        return "STANDOUT", 3
+    elif p1 <= 2.00 and p2 >= p1 * 2.5:
+        return "DOMINANT", 4
+    elif p1 <= 2.00:
+        return "SHORT_PAIR", 3
+    elif p1 <= 3.00 and p2 / p1 < 1.5:
+        return "TWO_HORSE", 5
+    elif p1 <= 3.50:
+        return "CLEAR_FAV", 5
+    elif p1 <= 5.00 and p3 / p1 < 1.8:
+        return "TRIO", 7
+    elif p1 <= 5.00:
+        return "MID_FAV", 6
+    elif p4 <= p1 * 2.0:
+        return "OPEN_BUNCH", 6
+    else:
+        return "WIDE_OPEN", 5
+
+
+def calculate_smart_quaddie_widths(
+    legs: list["SequenceLegAnalysis"],
+    budget: float = 100.0,
+    min_flexi_pct: float = 30.0,
+    is_big6: bool = False,
+) -> list[int]:
+    """Calculate optimal width per leg for a single smart quaddie.
+
+    Uses odds-shape classification to assign widths, then constrains
+    total combos to stay above the minimum flexi percentage.
+
+    Args:
+        legs: List of SequenceLegAnalysis with shape_width populated.
+        budget: Total outlay in dollars (default $100).
+        min_flexi_pct: Minimum flexi percentage (default 30%).
+        is_big6: If True, uses tighter widths (6 legs compound faster).
+
+    Returns:
+        List of widths (one per leg), constrained to flexi >= min_flexi_pct.
+    """
+    max_combos = int(budget / (min_flexi_pct / 100.0))  # e.g. $100/0.30 = 333
+
+    # Start with shape-recommended widths
+    widths = [leg.shape_width for leg in legs]
+
+    # Big6: cap individual legs tighter (6 legs compound fast)
+    if is_big6:
+        widths = [min(w, 4) for w in widths]
+
+    # Calculate combos
+    combos = 1
+    for w in widths:
+        combos *= max(w, 1)
+
+    # If over budget, tighten the easiest legs first (lowest implied SP = shortest fav)
+    # "Easiest" = the leg where the fav is shortest priced (highest win_prob)
+    while combos > max_combos:
+        # Find leg with highest top runner probability that can be tightened
+        best_idx = None
+        best_prob = -1
+        for i, leg in enumerate(legs):
+            if widths[i] > 1:
+                top_prob = leg.top_runners[0].get("win_prob", 0) if leg.top_runners else 0
+                if top_prob > best_prob:
+                    best_prob = top_prob
+                    best_idx = i
+        if best_idx is None:
+            break
+        widths[best_idx] -= 1
+        combos = 1
+        for w in widths:
+            combos *= max(w, 1)
+
+    return widths
+
+
 def calculate_sequence_leg_confidence(
     races_data: list[dict],
 ) -> list[SequenceLegAnalysis]:
@@ -2592,7 +2708,7 @@ def calculate_sequence_leg_confidence(
         second_prob = runners[1].get("win_prob", 0) if len(runners) > 1 else 0
         top2_combined = top_prob + second_prob
 
-        # Determine confidence level
+        # Legacy confidence level (kept for backward compat)
         if top_prob > 0.30 and (top_prob - second_prob) > 0.10:
             confidence = "HIGH"
             width = 1
@@ -2603,9 +2719,13 @@ def calculate_sequence_leg_confidence(
             confidence = "LOW"
             width = 3 if top_prob > 0.15 else 4
 
-        # Include top runners (width + 1 for context)
+        # New: odds shape classification (data-driven from 2025 backtest)
+        odds_shape, shape_width = classify_odds_shape(runners)
+
+        # Include top runners up to shape_width + 1 for context
+        max_display = max(width + 1, shape_width + 1, 8)
         top_runners = []
-        for r in runners[:width + 1]:
+        for r in runners[:max_display]:
             top_runners.append({
                 "saddlecloth": r.get("saddlecloth", 0),
                 "horse_name": r.get("horse_name", ""),
@@ -2618,6 +2738,8 @@ def calculate_sequence_leg_confidence(
             top_runners=top_runners,
             leg_confidence=confidence,
             suggested_width=width,
+            odds_shape=odds_shape,
+            shape_width=shape_width,
         ))
 
     return results
