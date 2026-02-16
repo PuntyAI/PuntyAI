@@ -219,17 +219,18 @@ class RacingComScraper(BaseScraper):
                             captured_queries.add(qname)
                             break
                     else:
-                        # Log unknown queries with data keys for discovery
+                        # Log unknown queries with data keys (once per type)
                         url_tail = response.url.split("/")[-1][:80]
-                        captured_queries.add(url_tail)
-                        try:
-                            body = await response.text()
-                            d = _json.loads(body)
-                            keys = list((d.get("data") or {}).keys())
-                            if keys:
-                                logger.info(f"Unknown GraphQL query '{url_tail}': data keys={keys}")
-                        except Exception:
-                            pass
+                        if url_tail not in captured_queries:
+                            captured_queries.add(url_tail)
+                            try:
+                                body = await response.text()
+                                d = _json.loads(body)
+                                keys = list((d.get("data") or {}).keys())
+                                if keys:
+                                    logger.info(f"Unknown GraphQL query '{url_tail}': data keys={keys}")
+                            except Exception:
+                                pass
                 await original_capture(response)
 
             page.remove_listener("response", capture_graphql)
@@ -452,7 +453,14 @@ class RacingComScraper(BaseScraper):
             runners.extend(race_runners)
 
         if tips_by_race:
-            logger.info(f"Expert tips captured for {len(tips_by_race)} races")
+            race_nums = [k for k in tips_by_race if k != 0]
+            logger.info(f"Expert tips captured for {len(race_nums)} races")
+
+        # Attach meeting-level tips (bestBet/roughie/value) to meeting dict
+        meeting_tips = tips_by_race.get(0, [])
+        if meeting_tips:
+            meeting_dict["expert_meeting_tips"] = meeting_tips
+            logger.info(f"Meeting-level expert tips: {len(meeting_tips)} picks")
 
         return {"meeting": meeting_dict, "races": races, "runners": runners}
 
@@ -481,80 +489,94 @@ class RacingComScraper(BaseScraper):
         _find_entries(data)
 
     def _try_extract_tips(self, data: dict, url: str, tips_by_race: dict) -> None:
-        """Scan a GraphQL response for expert tips/selections data.
+        """Extract expert tips from racing.com GraphQL responses.
 
-        Racing.com may serve tips via various query names. This method does a
-        deep scan looking for tipster/selection structures and logs discoveries.
+        Two known sources:
+        1. getRaceForm.raceTips[] — per-race tipster picks (race number from
+           sibling formRaceEntries)
+        2. Meet.meetTips[] — meeting-level bestBet/bestRoughie/bestValue with
+           comments (from GetRaceEntryBadges_CD)
         """
         payload = data.get("data", {})
         if not payload:
             return
 
-        def _scan_tips(obj, path="", depth=0):
-            if depth > 6:
-                return
-            if isinstance(obj, dict):
-                # Look for common tips-like structures
-                # Known patterns: "tips", "selections", "tipsters", "expertTips"
-                for key in ["tips", "tipsters", "selections", "expertTips",
-                            "raceTips", "meetTips", "formGuide", "tipsterTips",
-                            "getRaceTips", "getExpertTips", "getTips"]:
-                    val = obj.get(key)
-                    if isinstance(val, list) and val:
-                        self._parse_tips_array(val, tips_by_race, path + "." + key)
-                        return
-                for k, v in obj.items():
-                    _scan_tips(v, path + "." + k, depth + 1)
-            elif isinstance(obj, list):
-                for i, item in enumerate(obj[:5]):
-                    _scan_tips(item, path + f"[{i}]", depth + 1)
+        # --- 1. Race-level tips from getRaceForm.raceTips ---
+        race_form = payload.get("getRaceForm", {})
+        if isinstance(race_form, dict):
+            race_tips = race_form.get("raceTips", [])
+            if isinstance(race_tips, list) and race_tips:
+                # Get race number from sibling formRaceEntries
+                entries = race_form.get("formRaceEntries", [])
+                race_num = None
+                if entries and isinstance(entries, list):
+                    race_num = entries[0].get("raceNumber")
 
-        _scan_tips(payload)
+                for tip_obj in race_tips:
+                    if not isinstance(tip_obj, dict):
+                        continue
+                    tipster_info = tip_obj.get("tipster", {})
+                    if isinstance(tipster_info, dict):
+                        tipster_name = tipster_info.get("tipsterName", "Unknown")
+                    else:
+                        tipster_name = str(tipster_info) if tipster_info else "Unknown"
 
-    def _parse_tips_array(self, tips: list, tips_by_race: dict, path: str) -> None:
-        """Parse an array of tips objects into our tips_by_race accumulator."""
-        logger.info(f"Found tips data at {path}: {len(tips)} items")
-        for tip in tips:
-            if not isinstance(tip, dict):
-                continue
-            # Try to extract tipster name and selections
-            tipster = (tip.get("tipsterName") or tip.get("name") or
-                       tip.get("tipster") or tip.get("author") or
-                       tip.get("expertName") or "Unknown")
-            race_num = tip.get("raceNumber") or tip.get("raceNo")
+                    # Selections are nested arrays
+                    selections = tip_obj.get("selections", [])
+                    if isinstance(selections, list) and selections and race_num:
+                        parsed = []
+                        for i, sel in enumerate(selections):
+                            if isinstance(sel, dict):
+                                parsed.append({
+                                    "tipster": tipster_name,
+                                    "horse": sel.get("horseName") or sel.get("name"),
+                                    "number": sel.get("raceEntryNumber") or sel.get("tabNumber"),
+                                    "rank": i + 1,
+                                    "comment": sel.get("comment"),
+                                })
+                        if parsed:
+                            tips_by_race.setdefault(race_num, []).extend(parsed)
+                            logger.info(
+                                f"Race {race_num}: captured {len(parsed)} tips from {tipster_name}"
+                            )
 
-            # Selections might be nested
-            selections = (tip.get("selections") or tip.get("tips") or
-                          tip.get("picks") or tip.get("horses") or [])
+        # --- 2. Meeting-level tips from Meet.meetTips ---
+        meet = payload.get("Meet", {})
+        if isinstance(meet, dict):
+            meet_tips = meet.get("meetTips", [])
+            if isinstance(meet_tips, list) and meet_tips:
+                for tip_obj in meet_tips:
+                    if not isinstance(tip_obj, dict):
+                        continue
+                    tipster_info = tip_obj.get("tipster", {})
+                    if isinstance(tipster_info, dict):
+                        tipster_name = tipster_info.get("tipsterName", "Unknown")
+                    else:
+                        continue
 
-            # If tip itself has horse info (flat structure)
-            if not selections and tip.get("horseName"):
-                selections = [tip]
+                    # Meeting-level picks: bestBet, bestRoughie, bestValue, getOn
+                    for pick_type in ["bestBet", "bestRoughie", "bestValue", "getOn"]:
+                        pick = tip_obj.get(pick_type)
+                        if not isinstance(pick, dict):
+                            continue
+                        comment = pick.get("comment")
+                        entry_code = pick.get("raceEntryItemCode")
+                        if comment and entry_code:
+                            # Store as meeting-level tip (race_num=0)
+                            tips_by_race.setdefault(0, []).append({
+                                "tipster": tipster_name,
+                                "pick_type": pick_type,
+                                "comment": comment,
+                                "entry_code": entry_code,
+                            })
 
-            # Log the structure for discovery
-            if not race_num and not selections:
-                logger.info(f"Tips item keys: {list(tip.keys())}")
-                # Log first item values for discovery
-                sample = {k: str(v)[:80] for k, v in list(tip.items())[:10]}
-                logger.info(f"Tips item sample: {sample}")
-                continue
-
-            if race_num and selections:
-                parsed = []
-                for sel in selections:
-                    if isinstance(sel, dict):
-                        parsed.append({
-                            "tipster": tipster,
-                            "horse": sel.get("horseName") or sel.get("name") or sel.get("horse"),
-                            "number": sel.get("raceEntryNumber") or sel.get("number") or sel.get("saddlecloth"),
-                            "rank": sel.get("rank") or sel.get("position") or sel.get("order"),
-                        })
-                    elif isinstance(sel, str):
-                        parsed.append({"tipster": tipster, "horse": sel})
-                if parsed:
-                    tips_by_race.setdefault(race_num, []).extend(parsed)
-            elif selections:
-                logger.info(f"Tips from {tipster} (no race_num): {len(selections)} selections")
+                    # Log that we captured meeting tips
+                    has_content = any(
+                        isinstance(tip_obj.get(pt), dict) and tip_obj.get(pt, {}).get("comment")
+                        for pt in ["bestBet", "bestRoughie", "bestValue", "getOn"]
+                    )
+                    if has_content:
+                        logger.info(f"Meeting tips from {tipster_name}: bestBet/roughie/value captured")
 
     def _build_meeting_dict(self, meeting_id: str, venue: str, race_date: date, gql: dict) -> dict:
         """Build meeting dict from getMeeting_CD GraphQL data."""
