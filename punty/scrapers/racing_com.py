@@ -358,7 +358,11 @@ class RacingComScraper(BaseScraper):
                     tips_url = f"{meeting_url}#/expert-tips"
                     logger.info(f"Loading expert tips page: {tips_url}")
                     await page.goto(tips_url, wait_until="domcontentloaded")
-                    await page.wait_for_timeout(5000)
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=10000)
+                    except Exception:
+                        pass
+                    await page.wait_for_timeout(1000)
                     race_level_tips = [k for k in tips_by_race if k != 0]
                     logger.info(f"Expert tips page loaded, race-level tips: {len(race_level_tips)} races")
                 except Exception as e:
@@ -372,7 +376,14 @@ class RacingComScraper(BaseScraper):
                         try:
                             tips_url = f"{meeting_url}/race/{race_num}#/tips"
                             await page.goto(tips_url, wait_until="domcontentloaded")
-                            await page.wait_for_timeout(3000)
+                            # Wait for all GraphQL responses to be fully received
+                            # before navigating away — prevents Protocol errors
+                            # from response bodies being invalidated mid-read
+                            try:
+                                await page.wait_for_load_state("networkidle", timeout=10000)
+                            except Exception:
+                                pass
+                            await page.wait_for_timeout(500)
                         except Exception as e:
                             logger.warning(f"Race {race_num} tips fallback failed: {e}")
                     race_level_tips = [k for k in tips_by_race if k != 0]
