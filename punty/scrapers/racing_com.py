@@ -541,11 +541,13 @@ class RacingComScraper(BaseScraper):
     def _try_extract_tips(self, data: dict, url: str, tips_by_race: dict) -> None:
         """Extract expert tips from racing.com GraphQL responses.
 
-        Two known sources:
+        Three known sources:
         1. getRaceForm.raceTips[] — per-race tipster picks (race number from
            sibling formRaceEntries)
         2. Meet.meetTips[] — meeting-level bestBet/bestRoughie/bestValue with
            comments (from GetRaceEntryBadges_CD)
+        3. GetBetEasyMeetTipByMeetCode[] — per-race tipster selections from
+           the expert-tips/tips pages (from GetTipsters query)
         """
         payload = data.get("data", {})
         if not payload:
@@ -639,6 +641,48 @@ class RacingComScraper(BaseScraper):
                     )
                     if has_content:
                         logger.info(f"Meeting tips from {tipster_name}: bestBet/roughie/value captured")
+
+        # --- 3. Per-race tipster selections from GetBetEasyMeetTipByMeetCode ---
+        beteasy = payload.get("GetBetEasyMeetTipByMeetCode")
+        if isinstance(beteasy, list) and beteasy:
+            for tip_obj in beteasy:
+                if not isinstance(tip_obj, dict):
+                    continue
+                tipster_name = (
+                    tip_obj.get("tipsterName")
+                    or tip_obj.get("name")
+                    or (tip_obj.get("tipster", {}) or {}).get("tipsterName")
+                    or "Unknown"
+                )
+                # Try multiple possible field names for per-race selections
+                selections = (
+                    tip_obj.get("selections")
+                    or tip_obj.get("tips")
+                    or tip_obj.get("picks")
+                    or tip_obj.get("raceTips")
+                    or []
+                )
+                if isinstance(selections, list) and selections:
+                    parsed_count = 0
+                    for sel in selections:
+                        if not isinstance(sel, dict):
+                            continue
+                        race_num = sel.get("raceNumber")
+                        horse = sel.get("horseName") or sel.get("name")
+                        if race_num and horse:
+                            tips_by_race.setdefault(race_num, []).append({
+                                "tipster": tipster_name,
+                                "horse": horse,
+                                "number": sel.get("raceEntryNumber") or sel.get("tabNumber") or sel.get("horseNumber"),
+                                "rank": sel.get("rank") or sel.get("position") or sel.get("order"),
+                            })
+                            parsed_count += 1
+                    if parsed_count:
+                        logger.info(f"BetEasy tips: {parsed_count} selections from {tipster_name}")
+                else:
+                    # Log the structure so we can parse it next time
+                    keys = list(tip_obj.keys())[:10]
+                    logger.info(f"BetEasy tip object (unparsed): tipster={tipster_name}, keys={keys}")
 
     def _build_meeting_dict(self, meeting_id: str, venue: str, race_date: date, gql: dict) -> dict:
         """Build meeting dict from getMeeting_CD GraphQL data."""
