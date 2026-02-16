@@ -646,9 +646,27 @@ class RacingComScraper(BaseScraper):
         #              bestValue: {...}, nextBestTips: [{horseName, raceNumber}, ...]}]
         beteasy = payload.get("GetBetEasyMeetTipByMeetCode")
         if isinstance(beteasy, list) and beteasy:
+            logger.info(f"BetEasy raw: {len(beteasy)} tip objects")
             for tip_obj in beteasy:
                 if not isinstance(tip_obj, dict):
+                    logger.info(f"  BetEasy obj not a dict: {type(tip_obj).__name__}")
                     continue
+                # Debug: dump top-level keys and pick field types
+                logger.info(f"  BetEasy obj keys={list(tip_obj.keys())}")
+                for fld in ["bestBet", "bestValue", "nextBestTips"]:
+                    val = tip_obj.get(fld)
+                    if val is None:
+                        logger.info(f"    {fld}: None")
+                    elif isinstance(val, dict):
+                        logger.info(f"    {fld}: dict keys={list(val.keys())}")
+                    elif isinstance(val, list):
+                        first_info = ""
+                        if val and isinstance(val[0], dict):
+                            first_info = f" first_keys={list(val[0].keys())}"
+                        logger.info(f"    {fld}: list[{len(val)}]{first_info}")
+                    else:
+                        logger.info(f"    {fld}: {type(val).__name__}={str(val)[:80]}")
+
                 tipster_info = tip_obj.get("tipster", {}) or {}
                 tipster_name = (
                     tipster_info.get("tipsterName")
