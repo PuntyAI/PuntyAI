@@ -426,7 +426,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     venue = meeting.venue
     race_date = meeting.date
     errors = []
-    total_steps = 4
+    total_steps = 5
 
     # Acquire scrape lock
     from punty.scrapers.playwright_base import _scrape_lock, _current_scrape
@@ -562,6 +562,25 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             logger.error(f"racing.com supplement failed: {e}")
             errors.append(f"racing.com_supplement: {e}")
             yield {"step": 4, "total": total_steps, "label": f"racing.com supplement failed: {e}", "status": "error"}
+
+        # Step 5: Betfair exchange odds (fast API, no browser)
+        yield {"step": 5, "total": total_steps, "label": "Fetching Betfair exchange odds...", "status": "running"}
+        try:
+            from punty.scrapers.betfair import BetfairScraper
+            bf = await BetfairScraper.from_settings(db)
+            if bf:
+                bf_odds = await bf.get_odds_for_meeting(venue, race_date, meeting_id)
+                await _merge_betfair_odds(db, meeting_id, bf_odds)
+                yield {"step": 5, "total": total_steps,
+                       "label": f"Betfair odds: {len(bf_odds)} runners", "status": "done"}
+            else:
+                yield {"step": 5, "total": total_steps,
+                       "label": "Betfair: not configured, skipped", "status": "done"}
+        except Exception as e:
+            logger.warning(f"Betfair odds failed for {venue}: {e}")
+            errors.append(f"betfair: {e}")
+            yield {"step": 5, "total": total_steps,
+                   "label": f"Betfair failed: {e}", "status": "error"}
 
         # Close scraper
         if pf_scraper:
@@ -1141,6 +1160,68 @@ async def _merge_racing_com_supplement(db: AsyncSession, meeting_id: str, data: 
                     race.expert_tips = _json.dumps(tips)
 
     await db.flush()
+
+
+async def _merge_betfair_odds(db: AsyncSession, meeting_id: str, odds_data: list[dict]) -> None:
+    """Merge Betfair exchange odds into existing runner records.
+
+    Sets odds_betfair, and fills current_odds as fallback when no other provider has odds.
+    """
+    import re
+
+    def _normalize(name: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", name.strip().lower())
+
+    if not odds_data:
+        return
+
+    matched = 0
+    filled_current = 0
+
+    for item in odds_data:
+        race_id = item.get("race_id", "")
+        horse_name = item.get("horse_name", "")
+        price = item.get("odds_betfair")
+        if not (race_id and horse_name and price):
+            continue
+
+        # Try exact match first
+        result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.horse_name == horse_name,
+            ).limit(1)
+        )
+        runner = result.scalar_one_or_none()
+
+        # Fuzzy match if exact fails
+        if not runner:
+            norm_bf = _normalize(horse_name)
+            result = await db.execute(
+                select(Runner).where(Runner.race_id == race_id)
+            )
+            candidates = result.scalars().all()
+            for c in candidates:
+                if _normalize(c.horse_name) == norm_bf:
+                    runner = c
+                    break
+
+        if not runner:
+            continue
+
+        runner.odds_betfair = price
+        matched += 1
+
+        # Fill current_odds if no other provider has odds
+        if not runner.current_odds or runner.current_odds <= 1.0:
+            runner.current_odds = price
+            filled_current += 1
+
+    await db.flush()
+    logger.info(
+        f"Betfair merge: {matched}/{len(odds_data)} matched, "
+        f"{filled_current} filled current_odds"
+    )
 
 
 async def _fill_derived_fields(db: AsyncSession, meeting_id: str) -> None:

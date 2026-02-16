@@ -1043,7 +1043,7 @@ class RacingComScraper(BaseScraper):
             return tab
 
         # Last resort: any other provider
-        for k in ["odds_bet365", "odds_ladbrokes"]:
+        for k in ["odds_bet365", "odds_ladbrokes", "odds_betfair"]:
             v = odds_dict.get(k)
             if v and isinstance(v, (int, float)) and v > 1.0:
                 return v
