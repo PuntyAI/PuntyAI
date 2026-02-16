@@ -106,8 +106,10 @@ class RacingComScraper(BaseScraper):
                 try:
                     body = await response.text()
                     data = _json.loads(body)
-                except Exception as e:
-                    logger.warning(f"Failed to parse GraphQL response: {e}")
+                except Exception:
+                    # Protocol errors ("No resource with given identifier") are
+                    # expected when navigating away before response body is read.
+                    # Suppress — these are not actionable warnings.
                     return
 
                 url = response.url
@@ -376,15 +378,12 @@ class RacingComScraper(BaseScraper):
                         try:
                             tips_url = f"{meeting_url}/race/{race_num}#/tips"
                             await page.goto(tips_url, wait_until="domcontentloaded")
-                            # Wait for all GraphQL responses to be fully received
-                            # before navigating away — prevents Protocol errors
-                            # from response bodies being invalidated mid-read
-                            try:
-                                await page.wait_for_load_state("networkidle", timeout=10000)
-                            except Exception:
-                                pass
-                            await page.wait_for_timeout(500)
+                            await page.wait_for_timeout(3000)
                         except Exception as e:
+                            err_msg = str(e).lower()
+                            if "closed" in err_msg or "disposed" in err_msg:
+                                logger.warning(f"Page closed during tips fallback at R{race_num}, stopping")
+                                break
                             logger.warning(f"Race {race_num} tips fallback failed: {e}")
                     race_level_tips = [k for k in tips_by_race if k != 0]
                     logger.info(f"Per-race tips fallback captured tips for {len(race_level_tips)} races")
