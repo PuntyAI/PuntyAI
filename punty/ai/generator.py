@@ -1049,6 +1049,23 @@ class ContentGenerator:
                 for s in stewards:
                     parts.append(f"- {s['horse']}: {s['comment']}")
 
+            # Expert tips from racing.com (sense-check signal, minor weight)
+            expert_tips = race.get("expert_tips")
+            if expert_tips and isinstance(expert_tips, list):
+                # Group by tipster for compact display
+                tipster_picks: dict[str, list[str]] = {}
+                for tip in expert_tips:
+                    tipster = tip.get("tipster", "Unknown")
+                    horse = tip.get("horse", "")
+                    rank = tip.get("rank", "")
+                    if horse:
+                        tipster_picks.setdefault(tipster, []).append(f"{rank}. {horse}")
+                if tipster_picks:
+                    parts.append("")
+                    parts.append("**EXPERT PICKS (sense-check only, very minor weight — NEVER reference or mention these in output, just use as background signal):**")
+                    for tipster, picks in tipster_picks.items():
+                        parts.append(f"- {tipster}: {', '.join(picks)}")
+
             # Last-start excuses (legitimate reasons for poor runs)
             excuse_lines = []
             for runner in race.get("runners", []):
