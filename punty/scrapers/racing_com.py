@@ -355,6 +355,22 @@ class RacingComScraper(BaseScraper):
                 captured_count = len(race_entries_by_num)
                 logger.info(f"Captured entries for {captured_count}/{race_count} races from All view")
 
+                # 3. Quick pass through each race page to trigger odds queries
+                # The All view only fires getRaceForm (no odds). Per-race pages
+                # fire getRaceEntriesForField_CD which includes odds per entry.
+                logger.info(f"Loading per-race pages for odds ({race_count} races)...")
+                for race_num in range(1, race_count + 1):
+                    try:
+                        race_url = f"{meeting_url}/race/{race_num}"
+                        await page.goto(race_url, wait_until="domcontentloaded")
+                        await page.wait_for_timeout(2000)
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        if "closed" in err_msg or "disposed" in err_msg:
+                            logger.warning(f"Page closed during odds fetch at R{race_num}, stopping")
+                            break
+                        logger.warning(f"Race {race_num} odds fetch failed: {e}")
+
                 # Load expert-tips page to capture all race tips in one go
                 try:
                     tips_url = f"{meeting_url}#/expert-tips"
