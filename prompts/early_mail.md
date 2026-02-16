@@ -90,29 +90,30 @@ Each race includes a "Pre-Calculated Exotic Combinations" table with the best va
 **CONSISTENCY RULE — ALL exotic runners MUST come from your Top 3 + Roughie picks.**
 Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your Trifecta Box MUST use those runners (or a subset plus the Roughie). Do NOT include runners that aren't in your selections — it confuses punters and breaks trust. The pre-calculated exotic combinations already enforce this constraint.
 
-**Exotic type hierarchy (based on actual performance data):**
-- **Trifecta Box (3-4 runners)**: Our BEST performing exotic. Default choice. Use 3 runners from Top 3, or 4 runners (Top 3 + Roughie) when all are genuine contenders.
-- **Exacta**: Use when you have a STRONG 1-2 view. Only when top pick >30% probability with clear runner-up.
-- **Trifecta Standout**: Top pick anchored 1st, 2-3 others fill 2nd/3rd. Use when top pick is dominant (>30% prob) but minor places are open.
-- **First4** (positional/legs format): Targeted positional bet. Format: `First4: 1 / 1,2 / 1,2,3 / 3,4,5 — $20`. Each position (1st/2nd/3rd/4th) has its own runner set. Much better than boxing — targets likely finishing order.
-- **Quinella**: Use when two runners clearly stand above the rest but order uncertain. Only when value ≥ 1.4x (low dividends need higher edge).
-- **First4 Box**: RARE. Only use when 5+ runners each have >12% win probability AND value ≥ 1.5x. Historically near-zero hit rate — use sparingly.
+**Exotic type hierarchy (based on actual performance data — 314 settled exotics):**
+- **Exacta Standout (3-4 runners)**: Our BEST hit rate (19%). Use when top pick has >25% probability — anchor them 1st, add 2-3 others for 2nd place. Format: `Exacta Standout: 1 / 2,3,4 — $20`.
+- **Trifecta Box (3-4 runners)**: Most common (8.2% hit rate, -42% ROI). Default when no strong order view. Use 3 runners (6 combos) for better unit stake; 4 runners (24 combos) only when Roughie is a genuine contender.
+- **Quinella**: Use when two runners clearly stand above the rest but order uncertain. Only when value >= 1.4x.
+- **Exacta**: Straight exacta when you have a very strong 1-2 view. Higher risk but higher payout.
+- **Trifecta Standout**: Top pick anchored 1st, 2-3 others for 2nd/3rd. Use when top pick is dominant (>30% prob) but minor places wide open.
+- **First4** (positional/legs format): Format: `First4: 1 / 1,2 / 1,2,3 / 3,4,5 — $20`. Use only when you have strong views on finishing order across 4 places.
+- **First4 Box**: BANNED. 0 hits from 50 bets (-100% ROI). Do NOT use First4 Box under any circumstances.
 
 **NAMING — Use ONLY these canonical names:**
+- "Exacta Standout" (1 runner anchored 1st, 2-3 runners for 2nd. Format: `standout / others`)
 - "Exacta" (straight, 2 runners in order)
 - "Quinella" (2 runners, any order)
 - "Trifecta Box" (3-4 runners, any order in top 3)
 - "Trifecta Standout" (1 runner anchored 1st, 2-3 runners for 2nd/3rd)
 - "First4" (positional legs format: `1 / 1,2 / 1,2,3 / 3,4,5`)
-- "First4 Box" (4-5 runners, any order in top 4 — RARE)
-Do NOT use variants like "Trifecta (Boxed)", "Box Trifecta", "Exacta Standout", etc.
+Do NOT use: "First4 Box" (banned — 0% hit rate), "Trifecta (Boxed)", "Box Trifecta", etc.
 
 **Cost validation for boxed bets:**
+- Exacta Standout 1/3 runners = 3 combos × unit = $20 (best value)
+- Exacta Standout 1/2 runners = 2 combos × unit = $20
 - Trifecta Box 3 runners = 6 combos × unit = $20 (ok)
 - Trifecta Box 4 runners = 24 combos × unit = $20 (ok, but lower unit)
-- First4 positional = ~30 combos (targeted, much better than box)
-- First4 Box 4 runners = 24 combos × unit = $20 (ok but RARE)
-- First4 Box 5 runners = 120 combos (TOO EXPENSIVE at $20 — avoid)
+- First4 positional = ~30 combos (targeted, use only with strong views)
 
 **DYNAMIC THRESHOLDS:** Your context includes a "CURRENT TUNED THRESHOLDS" section with auto-adjusted optimal value thresholds for each exotic type. Use those values instead of the defaults listed above — they are learned from your actual results and updated regularly.
 
@@ -139,6 +140,14 @@ Print lanes in exact format. Use only saddlecloth numbers, separated by commas w
 CRITICAL MATHS:
 - combos = product of selections per leg (e.g. 1×2×1×2 = 4). UNIT = TOTAL_OUTLAY / combos. So Skinny with 4 combos: 4 combos × $2.50 = $10. NEVER write combos × $10 = $10 when combos > 1.
 - est. return % = the flexi percentage = (UNIT / $1) × 100. Examples: UNIT $1.00 → 100%. UNIT $3.13 → 313%. UNIT $1.23 → 123%. UNIT $0.25 → 25%. This is just the unit price expressed as a percentage. Do NOT multiply odds or make up numbers.
+
+**SEQUENCE PERFORMANCE DATA (284 settled sequences):**
+- **Quaddie Skinny ($10)**: -3.8% ROI — almost break-even. BEST value sequence bet.
+- **Quaddie Wide ($100)**: -7.1% ROI — decent, 32% hit rate but high outlay.
+- **Quaddie Balanced ($50)**: -78.6% ROI — poor value.
+- **Early Quaddie Wide ($100)**: 39% hit rate but -66% ROI (high cost drags it down).
+- **Big 6 ALL variants**: -80% to -100% ROI. All losing. Include for entertainment only.
+Favour Quaddie Skinny as the recommended variant unless confidence data strongly suggests otherwise.
 
 **USE LEG CONFIDENCE DATA:**
 Your context includes "SEQUENCE LEG CONFIDENCE" data for each race with confidence levels (HIGH/MED/LOW) and suggested runner widths based on probability analysis.
