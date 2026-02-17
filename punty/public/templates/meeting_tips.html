@@ -871,7 +871,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Rebuild content
     tipsContent.innerHTML = '';
 
-    // Split intro: overview (visible) + Big 3 (expandable accordion)
+    // Split intro: overview (visible) + Big 3 (deferred to after sequences)
+    var big3Acc = null; // Will be appended after all race/sequence sections
     var hasIntro = false;
     for (var pi = 0; pi < preRaceNodes.length; pi++) {
         if (preRaceNodes[pi].textContent && preRaceNodes[pi].textContent.trim()) { hasIntro = true; break; }
@@ -910,8 +911,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             tipsContent.appendChild(overviewDiv);
 
-            // Big 3 + Multi accordion (collapsed by default)
-            var big3Acc = document.createElement('div');
+            // Big 3 + Multi accordion (built now, appended after sequences)
+            big3Acc = document.createElement('div');
             big3Acc.className = 'race-accordion';
             big3Acc.id = 'big3-acc';
             var big3Header = document.createElement('div');
@@ -926,7 +927,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             big3Acc.appendChild(big3Header);
             big3Acc.appendChild(big3Body);
-            tipsContent.appendChild(big3Acc);
         } else {
             // No Big 3 found — show everything directly
             var overviewDiv = document.createElement('div');
@@ -1152,6 +1152,11 @@ document.addEventListener('DOMContentLoaded', function() {
         accordion.appendChild(body);
         tipsContent.appendChild(accordion);
     });
+
+    // Append Big 3 & Multi accordion after all race/sequence sections
+    if (big3Acc) {
+        tipsContent.appendChild(big3Acc);
+    }
 
     // --- Style Sequence Variant Cards ---
     function styleSequenceVariants(body) {
