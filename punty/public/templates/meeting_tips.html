@@ -272,10 +272,12 @@
     }
     .section-nav-inner {
         display: flex; gap: 0.25rem;
-        justify-content: center;
         overflow-x: auto; scrollbar-width: none;
         -ms-overflow-style: none;
         padding: 0.4rem 0 0.25rem;
+    }
+    @media (min-width: 640px) {
+        .section-nav-inner { justify-content: center; }
     }
     .section-nav-inner::-webkit-scrollbar { display: none; }
     .section-nav-item {
@@ -452,10 +454,12 @@
     .race-accordion.open .race-accordion-body { display: block; }
     .race-nav {
         display: flex; flex-wrap: nowrap; gap: 0.3rem; align-items: center;
-        justify-content: center;
         padding: 0.25rem 0 0.4rem;
         overflow-x: auto; scrollbar-width: none;
         -ms-overflow-style: none;
+    }
+    @media (min-width: 640px) {
+        .race-nav { justify-content: center; }
     }
     .race-nav::-webkit-scrollbar { display: none; }
     .race-nav-pill {
