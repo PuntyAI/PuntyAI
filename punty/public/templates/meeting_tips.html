@@ -84,7 +84,7 @@
         </div>
         {% endif %}
 
-        <!-- Section Nav -->
+        <!-- Section Nav (unified sticky header) -->
         <nav class="section-nav" id="section-nav">
             <div class="section-nav-inner">
                 {% if early_mail %}
@@ -115,6 +115,8 @@
                     Stats
                 </a>
             </div>
+            <!-- Race pills injected here by JS -->
+            <div class="race-nav" id="race-nav-row" style="display:none;"></div>
         </nav>
 
         <!-- Early Mail Section -->
@@ -266,13 +268,13 @@
         margin: 0 -1rem 0; padding: 0 1rem;
         background: rgba(10, 10, 15, 0.95);
         backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        border-bottom: none;
+        border-bottom: 1px solid var(--border-subtle);
     }
     .section-nav-inner {
         display: flex; gap: 0.25rem;
         overflow-x: auto; scrollbar-width: none;
         -ms-overflow-style: none;
-        padding: 0.375rem 0;
+        padding: 0.4rem 0 0.25rem;
     }
     .section-nav-inner::-webkit-scrollbar { display: none; }
     .section-nav-item {
@@ -300,6 +302,9 @@
     .section-nav-item.active .section-nav-dot { opacity: 1; }
     @media (min-width: 640px) {
         .section-nav { margin: 0 -2rem 0; padding: 0 2rem; }
+    }
+    .section-nav-divider {
+        height: 1px; background: rgba(255, 255, 255, 0.04); margin: 0;
     }
 
     /* Tips Content */
@@ -445,17 +450,12 @@
     .race-accordion-body { display: none; padding: 0 1.25rem 1.25rem; }
     .race-accordion.open .race-accordion-body { display: block; }
     .race-nav {
-        display: flex; flex-wrap: wrap; gap: 0.375rem; align-items: center;
-        position: sticky; top: 35px; z-index: 39;
-        margin: 0 -1rem; padding: 0.375rem 1rem;
-        background: rgba(10, 10, 15, 0.95);
-        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        border-top: 1px solid rgba(255, 255, 255, 0.04);
-        border-bottom: 1px solid var(--border-subtle);
+        display: flex; flex-wrap: nowrap; gap: 0.3rem; align-items: center;
+        padding: 0.25rem 0 0.4rem;
+        overflow-x: auto; scrollbar-width: none;
+        -ms-overflow-style: none;
     }
-    @media (min-width: 640px) {
-        .race-nav { margin: 0 -2rem; padding: 0.375rem 2rem; }
-    }
+    .race-nav::-webkit-scrollbar { display: none; }
     .race-nav-pill {
         display: inline-flex; align-items: center; justify-content: center;
         min-width: 2rem; height: 1.625rem; padding: 0 0.5rem; border-radius: 6px;
@@ -961,32 +961,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Nav pills
-    var navContainer = document.createElement('div');
-    navContainer.className = 'race-nav';
-    navContainer.id = 'section-tips';
-    var tipsLabel = document.createElement('span');
-    tipsLabel.className = 'race-nav-label';
-    tipsLabel.textContent = 'Tips';
-    navContainer.appendChild(tipsLabel);
-    sections.forEach(function(sec, idx) {
-        if (!sec.isRace) return;
-        var pill = document.createElement('button');
-        pill.className = 'race-nav-pill';
-        pill.textContent = 'R' + sec.raceNum;
-        pill.setAttribute('data-idx', idx);
-        pill.onclick = function() {
-            var acc = document.getElementById('sec-acc-' + idx);
-            if (acc) {
-                acc.classList.add('open');
-                var navH = (document.querySelector('.race-nav').offsetHeight || 0) + (document.getElementById('section-nav').offsetHeight || 0) + 8;
-                var y = acc.getBoundingClientRect().top + window.pageYOffset - navH;
-                window.scrollTo({ top: y, behavior: 'smooth' });
-            }
-        };
-        navContainer.appendChild(pill);
-    });
-    tipsContent.appendChild(navContainer);
+    // Nav pills — populate the row inside the sticky section-nav
+    var navContainer = document.getElementById('race-nav-row');
+    if (navContainer) {
+        var tipsLabel = document.createElement('span');
+        tipsLabel.className = 'race-nav-label';
+        tipsLabel.textContent = 'Tips';
+        navContainer.appendChild(tipsLabel);
+        var hasRaces = false;
+        sections.forEach(function(sec, idx) {
+            if (!sec.isRace) return;
+            hasRaces = true;
+            var pill = document.createElement('button');
+            pill.className = 'race-nav-pill';
+            pill.textContent = 'R' + sec.raceNum;
+            pill.setAttribute('data-idx', idx);
+            pill.onclick = function() {
+                var acc = document.getElementById('sec-acc-' + idx);
+                if (acc) {
+                    acc.classList.add('open');
+                    var navH = document.getElementById('section-nav').offsetHeight + 8;
+                    var y = acc.getBoundingClientRect().top + window.pageYOffset - navH;
+                    window.scrollTo({ top: y, behavior: 'smooth' });
+                }
+            };
+            navContainer.appendChild(pill);
+        });
+        if (hasRaces) navContainer.style.display = 'flex';
+    }
+    // Anchor for scroll-spy targeting
+    var tipsAnchor = document.createElement('div');
+    tipsAnchor.id = 'section-tips';
+    tipsContent.appendChild(tipsAnchor);
 
     // Race and sequence sections
     sections.forEach(function(sec, idx) {
@@ -1447,7 +1453,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var pills = document.querySelectorAll('.race-nav-pill');
         if (!pills.length) return;
         function updateRacePills() {
-            var stickyH = (document.getElementById('section-nav').offsetHeight || 0) + (document.querySelector('.race-nav').offsetHeight || 0) + 20;
+            var stickyH = (document.getElementById('section-nav').offsetHeight || 0) + 20;
             var activePill = null;
             pills.forEach(function(pill) {
                 var idx = pill.getAttribute('data-idx');
