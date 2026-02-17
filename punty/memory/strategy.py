@@ -354,10 +354,9 @@ async def get_recent_results_with_context(
 
         elif p.pick_type == "sequence":
             stype = (p.sequence_type or "sequence").replace("_", " ").title()
-            svar = (p.sequence_variant or "").title()
             stake = p.exotic_stake or 0
             lines.append(
-                f"- [{hit}] {stype} ({svar}): ${stake:.0f} stake | {pnl_str}"
+                f"- [{hit}] {stype}: ${stake:.0f} stake | {pnl_str}"
             )
 
         elif p.pick_type == "big3":

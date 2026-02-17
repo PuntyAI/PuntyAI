@@ -290,8 +290,6 @@ async def get_winner_stats() -> dict:
                 bet_label = "Exotic"
             elif bp.pick_type == "sequence":
                 display = (bp.sequence_type or "Sequence").replace("_", " ").title()
-                if bp.sequence_variant:
-                    display += f" ({bp.sequence_variant.title()})"
                 bet_label = "Sequence"
             elif bp.pick_type == "big3_multi":
                 display = "Big 3 Multi"
@@ -806,8 +804,6 @@ def _compute_pick_data(all_picks: list) -> dict:
         if pick.settled and pick.pick_type in ("sequence", "big3_multi"):
             seq_type = pick.sequence_type or pick.pick_type
             label = (pick.sequence_type or "multi").replace("_", " ").title()
-            if pick.sequence_variant:
-                label += f" ({pick.sequence_variant.title()})"
             sequence_results.append({
                 "type": seq_type,
                 "variant": pick.sequence_variant,
@@ -896,8 +892,6 @@ def _compute_pick_data(all_picks: list) -> dict:
     # Sequences
     for (st, sv), s in seq_stats.items():
         label = (st or "Sequence").replace("_", " ").title()
-        if sv:
-            label += f" ({sv.title()})"
         meeting_stats.append({
             "category": "Sequences", "type": label,
             "won": s["hits"], "total": s["total"],
@@ -1389,8 +1383,6 @@ async def get_bet_type_stats(
                 staked = float(staked or 0)
                 rate = round(hits / total * 100, 1) if total > 0 else 0
                 label = (seq_type or "Sequence").replace("_", " ").title()
-                if seq_variant:
-                    label += f" ({seq_variant.title()})"
                 seq_stats[label] = {
                     "category": "Sequences",
                     "type": label,
