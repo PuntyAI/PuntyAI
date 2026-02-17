@@ -74,11 +74,25 @@
     .bb-roi-label { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #4ade80; }
     .bb-roi-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 30px; color: #4ade80; line-height: 1.1; }
     @media (max-width: 768px) {
-        .bb-inner { padding: 20px; gap: 16px; }
-        .bb-horse { font-size: 22px; }
-        .bb-stat-val { font-size: 20px; }
-        .bb-roi-val { font-size: 24px; }
-        .bb-right { width: 100%; justify-content: space-between; }
+        .bb-inner { padding: 16px; gap: 12px; }
+        .bb-left { gap: 12px; }
+        .bb-trophy { width: 44px; height: 44px; border-radius: 10px; font-size: 22px; }
+        .bb-horse { font-size: 18px; }
+        .bb-meta { font-size: 11px; }
+        .bb-right { width: 100%; justify-content: space-between; gap: 8px; }
+        .bb-stat { padding: 0 4px; }
+        .bb-stat-val { font-size: 16px; }
+        .bb-stat-label { font-size: 9px; }
+        .bb-arrow { font-size: 16px; }
+        .bb-roi-box { padding: 8px 12px; border-radius: 10px; }
+        .bb-roi-val { font-size: 18px; }
+        .bb-roi-label { font-size: 9px; }
+    }
+    @media (max-width: 380px) {
+        .bb-inner { padding: 12px; }
+        .bb-stat-val { font-size: 14px; }
+        .bb-roi-val { font-size: 16px; }
+        .bb-roi-box { padding: 6px 8px; }
     }
 </style>
 <section id="best-bet-section" class="pt-8 pb-4">
@@ -203,8 +217,8 @@
                 <span class="text-lg mr-2" style="color: var(--magenta);">&#x1F3C6;</span>
                 <span class="font-heading font-semibold text-sm uppercase tracking-wider" style="color: var(--text-muted);">Recent Wins</span>
             </div>
-            <div class="ticker-container relative overflow-hidden" style="height: 56px;">
-                <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-6 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+            <div class="ticker-container relative overflow-hidden" style="height: 60px;">
+                <div id="ticker-content" class="ticker-scroll flex items-center gap-6 px-6 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
                     <span class="text-sm" style="color: var(--text-muted);">Loading wins...</span>
                 </div>
             </div>
@@ -216,6 +230,10 @@
     @keyframes ticker-scroll {
         0% { transform: translateX(0); }
         100% { transform: translateX(-50%); }
+    }
+    @keyframes ticker-scroll-dynamic {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(var(--ticker-shift, -50%)); }
     }
     .ticker-scroll:hover {
         animation-play-state: paused;
@@ -252,6 +270,13 @@
     }
     .win-stake { color: var(--text-muted); }
     .win-return { color: #4ade80; }
+    @media (max-width: 768px) {
+        .win-item { padding: 0.4rem 0.75rem; gap: 0.5rem; }
+        .win-celebration { font-size: 0.75rem; }
+        .win-horse { font-size: 0.85rem; }
+        .win-venue { font-size: 0.75rem; }
+        .win-amounts { font-size: 0.65rem; }
+    }
 </style>
 
 <!-- Today's Tips Section -->
@@ -499,33 +524,72 @@
                 const ticker = document.getElementById('ticker-content');
 
                 if (!data.wins || data.wins.length === 0) {
-                    ticker.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;">No wins yet today - let\'s change that!</span>';
+                    ticker.textContent = '';
+                    var emptyMsg = document.createElement('span');
+                    emptyMsg.style.cssText = 'color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;';
+                    emptyMsg.textContent = "No wins yet today - let's change that!";
+                    ticker.appendChild(emptyMsg);
                     ticker.style.animation = 'none';
                     return;
                 }
 
-                // Build ticker items - duplicate for seamless loop
-                let items = '';
-                for (let i = 0; i < 2; i++) {
+                // Build win items using safe DOM methods
+                function appendSet(container) {
                     data.wins.forEach(function(win) {
-                        items += '<div class="win-item">' +
-                            '<span class="win-celebration">' + win.celebration + '</span>' +
-                            '<span class="win-horse">' + win.display_name + '</span>' +
-                            '<span class="win-venue">' + win.venue + '</span>' +
-                            '<span class="win-amounts">' +
-                                '<span class="win-stake">$' + win.stake.toFixed(0) + '</span>' +
-                                ' → ' +
-                                '<span class="win-return">$' + win.returned.toFixed(0) + '</span>' +
-                            '</span>' +
-                        '</div>';
+                        var item = document.createElement('div');
+                        item.className = 'win-item';
+
+                        var celeb = document.createElement('span');
+                        celeb.className = 'win-celebration';
+                        celeb.textContent = win.celebration;
+                        item.appendChild(celeb);
+
+                        var horse = document.createElement('span');
+                        horse.className = 'win-horse';
+                        horse.textContent = win.display_name;
+                        item.appendChild(horse);
+
+                        var venue = document.createElement('span');
+                        venue.className = 'win-venue';
+                        venue.textContent = win.venue;
+                        item.appendChild(venue);
+
+                        var amounts = document.createElement('span');
+                        amounts.className = 'win-amounts';
+                        var stake = document.createElement('span');
+                        stake.className = 'win-stake';
+                        stake.textContent = '$' + win.stake.toFixed(0);
+                        amounts.appendChild(stake);
+                        amounts.appendChild(document.createTextNode(' \u2192 '));
+                        var ret = document.createElement('span');
+                        ret.className = 'win-return';
+                        ret.textContent = '$' + win.returned.toFixed(0);
+                        amounts.appendChild(ret);
+                        item.appendChild(amounts);
+
+                        container.appendChild(item);
                     });
                 }
-                ticker.innerHTML = items;
 
-                // Adjust animation speed based on content width
-                const totalWidth = ticker.scrollWidth / 2;
-                const speed = Math.max(8, totalWidth / 240); // ~240px per second
-                ticker.style.animation = 'ticker-scroll ' + speed + 's linear infinite';
+                // Measure one set width, then duplicate enough to fill 2x viewport
+                ticker.textContent = '';
+                appendSet(ticker);
+                var setWidth = ticker.scrollWidth;
+                var viewWidth = ticker.parentElement.offsetWidth;
+                // Need at least 2 copies; more if one set is narrower than the viewport
+                var copies = Math.max(2, Math.ceil((viewWidth * 2) / setWidth) + 1);
+                // We already have 1 set, add the rest
+                for (var c = 1; c < copies; c++) { appendSet(ticker); }
+
+                // Scroll exactly one set's worth so the loop is seamless
+                var scrollPct = (100 / copies).toFixed(4);
+                ticker.style.setProperty('--ticker-shift', '-' + scrollPct + '%');
+
+                // Speed: ~80px per second (slower, more readable)
+                var speed = Math.max(10, setWidth / 80);
+                ticker.style.animation = 'none'; // reset
+                ticker.offsetHeight; // force reflow
+                ticker.style.animation = 'ticker-scroll-dynamic ' + speed + 's linear infinite';
             } catch (e) {
                 console.error('Failed to load wins ticker:', e);
             }
