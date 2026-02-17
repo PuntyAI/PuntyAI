@@ -16,7 +16,7 @@ from punty.rate_limit import RateLimitMiddleware
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
 from punty.public.routes import router as public_router
-from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api, weather as weather_api
+from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api, weather as weather_api, analytics as analytics_api
 from punty.results.monitor import ResultsMonitor
 
 
@@ -233,6 +233,7 @@ app.include_router(delivery.router, prefix="/api/delivery", tags=["delivery"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["settings"])
 app.include_router(results_api.router, prefix="/api/results", tags=["results"])
 app.include_router(weather_api.router, prefix="/api/weather", tags=["weather"])
+app.include_router(analytics_api.router, prefix="/api/analytics", tags=["analytics"])
 
 
 @app.get("/health")

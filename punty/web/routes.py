@@ -550,6 +550,12 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
     )
 
 
+@router.get("/analytics", response_class=HTMLResponse)
+async def analytics_page(request: Request):
+    """Backtest analytics dashboard."""
+    return templates.TemplateResponse("analytics.html", {"request": request})
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Settings page for API keys, scheduler config, prompts."""

@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Backtest Analytics - PuntyAI{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="analyticsApp()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold" style="font-family: Rajdhani, sans-serif; color: var(--text-primary);">Backtest Analytics</h1>
+            <p class="text-sm" style="color: var(--text-muted);">Probability engine performance across <span x-text="meta.races?.toLocaleString() || '...'"></span> historical races</p>
+        </div>
+        <a href="/settings" class="text-sm" style="color: var(--coral);">&larr; Settings</a>
+    </div>
+
+    <!-- Loading State -->
+    <template x-if="loading">
+        <div class="text-center py-12" style="color: var(--text-muted);">Loading backtest results...</div>
+    </template>
+
+    <!-- Error State -->
+    <template x-if="error">
+        <div class="bg-punty-card rounded-xl p-6 border border-punty-border text-center">
+            <p style="color: var(--coral);" x-text="error"></p>
+            <p class="text-sm mt-2" style="color: var(--text-muted);">Run <code>python scripts/run_backtest.py</code> to generate results.</p>
+        </div>
+    </template>
+
+    <template x-if="!loading && !error">
+        <div class="space-y-6">
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div class="bg-punty-card rounded-xl p-4 border border-punty-border text-center">
+                    <div class="text-2xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"
+                         x-text="meta.races?.toLocaleString()"></div>
+                    <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Races</div>
+                </div>
+                <div class="bg-punty-card rounded-xl p-4 border border-punty-border text-center">
+                    <div class="text-2xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"
+                         x-text="meta.runners?.toLocaleString()"></div>
+                    <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Runners</div>
+                </div>
+                <div class="bg-punty-card rounded-xl p-4 border border-punty-border text-center">
+                    <div class="text-2xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"
+                         x-text="topN['1']?.win_rate + '%'"></div>
+                    <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Top Pick Win%</div>
+                </div>
+                <div class="bg-punty-card rounded-xl p-4 border border-punty-border text-center">
+                    <div class="text-2xl font-display font-black" :style="betSims.place_top1?.roi > 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                         x-text="(betSims.place_top1?.roi > 0 ? '+' : '') + betSims.place_top1?.roi + '%'"></div>
+                    <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Place Top1 ROI</div>
+                </div>
+                <div class="bg-punty-card rounded-xl p-4 border border-punty-border text-center">
+                    <div class="text-2xl font-display font-black" style="color: var(--text-secondary);"
+                         x-text="meta.date_range"></div>
+                    <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-1" style="color: var(--text-muted);">Date Range</div>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="flex gap-1 overflow-x-auto border-b" style="border-color: var(--border);">
+                <template x-for="tab in tabs" :key="tab.id">
+                    <button @click="activeTab = tab.id"
+                            :class="activeTab === tab.id ? 'border-b-2' : ''"
+                            :style="activeTab === tab.id ? 'border-color: var(--magenta); color: var(--text-primary)' : 'color: var(--text-muted)'"
+                            class="px-4 py-2 text-sm font-heading font-semibold uppercase tracking-wider whitespace-nowrap"
+                            x-text="tab.label"></button>
+                </template>
+            </div>
+
+            <!-- Calibration Tab -->
+            <div x-show="activeTab === 'calibration'" class="space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-punty-card rounded-xl p-5 border border-punty-border">
+                        <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Win Calibration</h3>
+                        <canvas id="winCalChart" height="250"></canvas>
+                    </div>
+                    <div class="bg-punty-card rounded-xl p-5 border border-punty-border">
+                        <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Place Calibration</h3>
+                        <canvas id="placeCalChart" height="250"></canvas>
+                    </div>
+                </div>
+                <!-- Calibration table -->
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Win Calibration Detail</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-1 px-2">Bin</th>
+                                <th class="text-right py-1 px-2">Runners</th>
+                                <th class="text-right py-1 px-2">Predicted</th>
+                                <th class="text-right py-1 px-2">Actual</th>
+                                <th class="text-right py-1 px-2">Diff</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[bin, data] in Object.entries(calibration.win || {})" :key="bin">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-1 px-2 font-mono text-xs" style="color: var(--text-primary);" x-text="bin"></td>
+                                    <td class="py-1 px-2 text-right" style="color: var(--text-secondary);" x-text="data.count?.toLocaleString()"></td>
+                                    <td class="py-1 px-2 text-right" style="color: var(--text-secondary);" x-text="data.predicted_rate + '%'"></td>
+                                    <td class="py-1 px-2 text-right" style="color: var(--text-secondary);" x-text="data.actual_rate + '%'"></td>
+                                    <td class="py-1 px-2 text-right font-mono"
+                                        :style="(data.actual_rate - data.predicted_rate) > 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="((data.actual_rate - data.predicted_rate) > 0 ? '+' : '') + (data.actual_rate - data.predicted_rate).toFixed(1) + 'pp'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bet Simulations Tab -->
+            <div x-show="activeTab === 'bets'" class="space-y-4">
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Bet Type Simulations ($5 flat stake)</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-2 px-2">Strategy</th>
+                                <th class="text-right py-2 px-2">Bets</th>
+                                <th class="text-right py-2 px-2">P&L</th>
+                                <th class="text-right py-2 px-2">ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[key, data] in Object.entries(betSims)" :key="key">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-2 px-2 font-mono text-xs" style="color: var(--text-primary);" x-text="key"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.bets?.toLocaleString()"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.pnl >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="'$' + data.pnl?.toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                                    <td class="py-2 px-2 text-right font-mono font-bold"
+                                        :style="data.roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.roi >= 0 ? '+' : '') + data.roi + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Odds Bands -->
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Performance by Odds Band</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-2 px-2">Odds</th>
+                                <th class="text-right py-2 px-2">Runners</th>
+                                <th class="text-right py-2 px-2">Win%</th>
+                                <th class="text-right py-2 px-2">Win ROI</th>
+                                <th class="text-right py-2 px-2">Place%</th>
+                                <th class="text-right py-2 px-2">Place ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[band, data] in Object.entries(oddsBands)" :key="band">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-2 px-2 font-mono text-xs" style="color: var(--text-primary);" x-text="band"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.count?.toLocaleString()"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.win_rate + '%'"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.win_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.win_roi >= 0 ? '+' : '') + data.win_roi + '%'"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.place_rate + '%'"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.place_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.place_roi >= 0 ? '+' : '') + data.place_roi + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Value Rating Tab -->
+            <div x-show="activeTab === 'value'" class="space-y-4">
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Value Rating Performance</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-2 px-2">VR Bin</th>
+                                <th class="text-right py-2 px-2">Runners</th>
+                                <th class="text-right py-2 px-2">Win%</th>
+                                <th class="text-right py-2 px-2">Win ROI</th>
+                                <th class="text-right py-2 px-2">Place%</th>
+                                <th class="text-right py-2 px-2">Place ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[bin, data] in Object.entries(valueBins)" :key="bin">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-2 px-2 font-mono text-xs" style="color: var(--text-primary);" x-text="bin"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.count?.toLocaleString()"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.win_rate + '%'"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.win_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.win_roi >= 0 ? '+' : '') + data.win_roi + '%'"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.place_rate + '%'"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.place_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.place_roi >= 0 ? '+' : '') + data.place_roi + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Venues Tab -->
+            <div x-show="activeTab === 'venues'" class="space-y-4">
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">
+                        Venue Performance (Top 1 pick, sorted by race count)
+                    </h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-2 px-2">Venue</th>
+                                <th class="text-right py-2 px-2">Races</th>
+                                <th class="text-right py-2 px-2">Top1 Win%</th>
+                                <th class="text-right py-2 px-2">Top3 Win%</th>
+                                <th class="text-right py-2 px-2">Win ROI</th>
+                                <th class="text-right py-2 px-2">Place ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[venue, data] in venuesSorted" :key="venue">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-1 px-2 text-xs" style="color: var(--text-primary);" x-text="venue"></td>
+                                    <td class="py-1 px-2 text-right text-xs" style="color: var(--text-secondary);" x-text="data.races"></td>
+                                    <td class="py-1 px-2 text-right text-xs" style="color: var(--text-secondary);" x-text="data.top1_win_rate + '%'"></td>
+                                    <td class="py-1 px-2 text-right text-xs" style="color: var(--text-secondary);" x-text="data.top3_win_rate + '%'"></td>
+                                    <td class="py-1 px-2 text-right font-mono text-xs"
+                                        :style="data.win_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.win_roi >= 0 ? '+' : '') + data.win_roi + '%'"></td>
+                                    <td class="py-1 px-2 text-right font-mono text-xs"
+                                        :style="data.place_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.place_roi >= 0 ? '+' : '') + data.place_roi + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Distance Tab -->
+            <div x-show="activeTab === 'distance'" class="space-y-4">
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Distance Category Performance</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-2 px-2">Distance</th>
+                                <th class="text-right py-2 px-2">Races</th>
+                                <th class="text-right py-2 px-2">Top1 Win%</th>
+                                <th class="text-right py-2 px-2">Win ROI</th>
+                                <th class="text-right py-2 px-2">Place ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[dist, data] in Object.entries(distBreakdown)" :key="dist">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-2 px-2" style="color: var(--text-primary);" x-text="dist"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.races?.toLocaleString()"></td>
+                                    <td class="py-2 px-2 text-right" style="color: var(--text-secondary);" x-text="data.top1_win_rate + '%'"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.win_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.win_roi >= 0 ? '+' : '') + data.win_roi + '%'"></td>
+                                    <td class="py-2 px-2 text-right font-mono"
+                                        :style="data.place_roi >= 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.place_roi >= 0 ? '+' : '') + data.place_roi + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Factors Tab -->
+            <div x-show="activeTab === 'factors'" class="space-y-4">
+                <div class="bg-punty-card rounded-xl p-5 border border-punty-border overflow-x-auto">
+                    <h3 class="font-heading font-semibold text-sm uppercase tracking-wider mb-3" style="color: var(--text-secondary);">Factor Sensitivity (Winner vs Loser avg score)</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="color: var(--text-muted);">
+                                <th class="text-left py-2 px-2">Factor</th>
+                                <th class="text-right py-2 px-2">Winner Avg</th>
+                                <th class="text-right py-2 px-2">Loser Avg</th>
+                                <th class="text-right py-2 px-2">Differential</th>
+                                <th class="text-right py-2 px-2">Samples</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="[factor, data] in factorsSorted" :key="factor">
+                                <tr style="border-top: 1px solid var(--border-subtle);">
+                                    <td class="py-2 px-2 font-mono text-xs" style="color: var(--text-primary);" x-text="factor"></td>
+                                    <td class="py-2 px-2 text-right font-mono text-xs" style="color: var(--text-secondary);" x-text="data.winner_avg_score?.toFixed(4)"></td>
+                                    <td class="py-2 px-2 text-right font-mono text-xs" style="color: var(--text-secondary);" x-text="data.loser_avg_score?.toFixed(4)"></td>
+                                    <td class="py-2 px-2 text-right font-mono text-xs font-bold"
+                                        :style="data.differential > 0 ? 'color: #22c55e' : 'color: #ef4444'"
+                                        x-text="(data.differential > 0 ? '+' : '') + data.differential?.toFixed(4)"></td>
+                                    <td class="py-2 px-2 text-right text-xs" style="color: var(--text-muted);" x-text="data.winner_samples?.toLocaleString()"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </template>
+</div>
+
+<script>
+function analyticsApp() {
+    return {
+        loading: true,
+        error: null,
+        data: {},
+        activeTab: 'calibration',
+        tabs: [
+            { id: 'calibration', label: 'Calibration' },
+            { id: 'bets', label: 'Bet Sims' },
+            { id: 'value', label: 'Value Rating' },
+            { id: 'venues', label: 'Venues' },
+            { id: 'distance', label: 'Distance' },
+            { id: 'factors', label: 'Factors' },
+        ],
+
+        get meta() { return this.data.meta || {} },
+        get calibration() { return this.data.calibration || {} },
+        get topN() { return this.data.top_n_accuracy || {} },
+        get betSims() { return this.data.bet_simulations || {} },
+        get valueBins() { return this.data.value_bins || {} },
+        get oddsBands() { return this.data.odds_bands || {} },
+        get distBreakdown() { return this.data.distance_breakdown || {} },
+        get venuesSorted() {
+            const venues = this.data.venue_breakdown || {};
+            return Object.entries(venues).sort((a, b) => b[1].races - a[1].races);
+        },
+        get factorsSorted() {
+            const factors = this.data.factor_sensitivity || {};
+            return Object.entries(factors).sort((a, b) => b[1].differential - a[1].differential);
+        },
+
+        async init() {
+            try {
+                const resp = await fetch('/api/analytics/backtest');
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    this.error = err.detail || 'Failed to load results';
+                    this.loading = false;
+                    return;
+                }
+                this.data = await resp.json();
+                this.loading = false;
+                this.$nextTick(() => this.renderCharts());
+            } catch (e) {
+                this.error = 'Failed to load backtest results: ' + e.message;
+                this.loading = false;
+            }
+        },
+
+        renderCharts() {
+            this.renderCalChart('winCalChart', this.calibration.win || {}, 'Win');
+            this.renderCalChart('placeCalChart', this.calibration.place || {}, 'Place');
+        },
+
+        renderCalChart(canvasId, calData, label) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const bins = Object.keys(calData).sort();
+            const predicted = bins.map(b => calData[b].predicted_rate);
+            const actual = bins.map(b => calData[b].actual_rate);
+
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: bins,
+                    datasets: [
+                        {
+                            label: 'Predicted',
+                            data: predicted,
+                            backgroundColor: 'rgba(255, 0, 128, 0.3)',
+                            borderColor: 'rgba(255, 0, 128, 0.8)',
+                            borderWidth: 1,
+                        },
+                        {
+                            label: 'Actual',
+                            data: actual,
+                            backgroundColor: 'rgba(0, 200, 255, 0.3)',
+                            borderColor: 'rgba(0, 200, 255, 0.8)',
+                            borderWidth: 1,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: label + ' Calibration: Predicted vs Actual', color: '#888' },
+                        legend: { labels: { color: '#888' } },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#666' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#666', callback: v => v + '%' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    },
+                },
+            });
+        },
+    };
+}
+</script>
+{% endblock %}
