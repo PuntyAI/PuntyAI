@@ -127,6 +127,7 @@ class ResultsMonitor:
         self.last_change_check: dict[str, datetime] = {}  # rate limit per meeting
         self.last_jockey_check: dict[str, datetime] = {}  # Playwright rate limit
         self.last_weather_check: dict[str, datetime] = {}  # WillyWeather rate limit
+        self.last_track_change: dict[str, datetime] = {}  # cooldown after track condition change
         self.task: Optional[asyncio.Task] = None
         self.last_check: Optional[datetime] = None
         self.poll_interval = POLL_MIN  # display value
@@ -557,9 +558,24 @@ class ResultsMonitor:
             old_base = _base_condition(old_tc) if old_tc else ""
             new_base = _base_condition(scraped_tc)
 
-            # Accept if: base category changed (real upgrade/downgrade) OR new is more specific
-            if old_base != new_base or _is_more_specific(scraped_tc, old_tc or ""):
+            # Cooldown: if we changed the track condition recently (within 30 min),
+            # reject base category reversals to prevent Good→Soft→Good bouncing.
+            # Only specificity upgrades (same base) bypass cooldown.
+            now = melb_now()
+            last_change = self.last_track_change.get(meeting_id)
+            cooldown_active = last_change and (now - last_change).total_seconds() < 1800
+
+            if old_base != new_base and cooldown_active:
+                logger.info(
+                    f"Track condition cooldown active for {meeting.venue}: "
+                    f"ignoring {old_tc} → {scraped_tc} (changed {int((now - last_change).total_seconds())}s ago)"
+                )
+                scraped_tc = None
+            elif old_base != new_base or _is_more_specific(scraped_tc, old_tc or ""):
+                # Accept: base category changed (real upgrade/downgrade) OR new is more specific
                 meeting.track_condition = scraped_tc
+                if old_base != new_base:
+                    self.last_track_change[meeting_id] = now
                 await db.flush()
                 logger.warning(f"Track condition changed for {meeting.venue}: {old_tc} → {scraped_tc}")
             else:

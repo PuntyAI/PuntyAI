@@ -87,12 +87,6 @@
         <!-- Section Nav -->
         <nav class="section-nav" id="section-nav">
             <div class="section-nav-inner">
-                {% if live_updates %}
-                <a href="#section-live" class="section-nav-item" data-section="section-live">
-                    <span class="section-nav-dot" style="background: var(--orange);"></span>
-                    Live
-                </a>
-                {% endif %}
                 {% if early_mail %}
                 <a href="#section-early-mail" class="section-nav-item" data-section="section-early-mail">
                     <span class="section-nav-dot" style="background: var(--magenta);"></span>
@@ -103,6 +97,12 @@
                     Tips
                 </a>
                 {% endif %}
+                {% if live_updates %}
+                <a href="#section-live" class="section-nav-item" data-section="section-live">
+                    <span class="section-nav-dot" style="background: var(--orange);"></span>
+                    Live
+                </a>
+                {% endif %}
                 {% if wrapup %}
                 <a href="#section-wrapup" class="section-nav-item" data-section="section-wrapup">
                     <span class="section-nav-dot" style="background: var(--purple);"></span>
@@ -111,58 +111,6 @@
                 {% endif %}
             </div>
         </nav>
-
-        <!-- Live Updates Section -->
-        {% if live_updates %}
-        <div class="mb-8" id="section-live">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg flex items-center justify-center live-pulse" style="background: rgba(255, 107, 53, 0.15);">
-                    <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <h2 class="text-2xl font-display font-bold">
-                    <span style="background: linear-gradient(135deg, var(--orange), var(--yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Live Updates</span>
-                </h2>
-                <span class="live-badge">LIVE</span>
-            </div>
-
-            <div class="space-y-3">
-                {% for update in live_updates %}
-                <div class="live-update-card {% if update.type == 'celebration' %}live-celebration{% else %}live-pace{% endif %}">
-                    <div class="flex items-start gap-3">
-                        <div class="live-icon flex-shrink-0">
-                            {% if update.type == 'celebration' %}
-                            <span class="text-2xl">&#x1F3C7;</span>
-                            {% else %}
-                            <span class="text-2xl">&#x1F3C1;</span>
-                            {% endif %}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            {% if update.type == 'celebration' %}
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: #4ade80;">Winner!</span>
-                                {% if update.race_number %}
-                                <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">R{{ update.race_number }}</span>
-                                {% endif %}
-                            </div>
-                            {% else %}
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: var(--cyan);">Track Read</span>
-                                <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">After R{{ update.race_number }}</span>
-                            </div>
-                            {% endif %}
-                            <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">{{ update.content }}</p>
-                            {% if update.created_at %}
-                            <div class="mt-2 text-xs" style="color: var(--text-muted);">{{ update.created_at }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
 
         <!-- Meeting Stats (expandable) -->
         {% if meeting_stats %}
@@ -204,6 +152,61 @@
             </div>
             <div class="tips-content" id="early-mail-content">
                 {{ early_mail.content | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Nuggets & Final Word (extracted from early mail by JS, rendered here) -->
+        <div id="extracted-sections"></div>
+
+        <!-- Live Updates Section (after tips, max 4 visible with scroll) -->
+        {% if live_updates %}
+        <div class="mb-8" id="section-live">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center live-pulse" style="background: rgba(255, 107, 53, 0.15);">
+                    <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-display font-bold">
+                    <span style="background: linear-gradient(135deg, var(--orange), var(--yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Live Updates</span>
+                </h2>
+                <span class="live-badge">LIVE</span>
+            </div>
+
+            <div class="live-updates-scroll space-y-3">
+                {% for update in live_updates %}
+                <div class="live-update-card {% if update.type == 'celebration' %}live-celebration{% else %}live-pace{% endif %}">
+                    <div class="flex items-start gap-3">
+                        <div class="live-icon flex-shrink-0">
+                            {% if update.type == 'celebration' %}
+                            <span class="text-2xl">&#x1F3C7;</span>
+                            {% else %}
+                            <span class="text-2xl">&#x1F3C1;</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            {% if update.type == 'celebration' %}
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: #4ade80;">Winner!</span>
+                                {% if update.race_number %}
+                                <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">R{{ update.race_number }}</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: var(--cyan);">Track Read</span>
+                                <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">After R{{ update.race_number }}</span>
+                            </div>
+                            {% endif %}
+                            <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">{{ update.content }}</p>
+                            {% if update.created_at %}
+                            <div class="mt-2 text-xs" style="color: var(--text-muted);">{{ update.created_at }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
         {% endif %}
@@ -383,6 +386,20 @@
         border: 1px solid rgba(0, 212, 255, 0.12); border-left: 3px solid var(--cyan);
     }
     .live-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+    .live-updates-scroll {
+        max-height: 420px; /* ~4 cards */
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 107, 53, 0.3) transparent;
+    }
+    .live-updates-scroll::-webkit-scrollbar { width: 6px; }
+    .live-updates-scroll::-webkit-scrollbar-track { background: transparent; }
+    .live-updates-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 107, 53, 0.3); border-radius: 3px;
+    }
+    .live-updates-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 107, 53, 0.5);
+    }
 
     /* Section Toggle (expandable sections) */
     .section-toggle {
@@ -953,25 +970,29 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // NUGGETS and FINAL WORD render as open sections, not accordions
+        // NUGGETS and FINAL WORD render as open sections OUTSIDE the tips accordion
+        // They get placed in the #extracted-sections container (between tips and live updates)
         if (!sec.isRace && /NUGGETS|FINAL\s+WORD/i.test(sec.heading.textContent)) {
-            var isNuggets = /NUGGETS/i.test(sec.heading.textContent);
-            var lineColor = isNuggets ? 'var(--cyan)' : 'var(--purple)';
-            var lineGrad = 'linear-gradient(90deg, transparent, ' + lineColor + ', transparent)';
-            var sectionDiv = document.createElement('div');
-            sectionDiv.className = 'open-section';
-            var titleDiv = document.createElement('div');
-            titleDiv.className = 'open-section-title';
-            titleDiv.innerHTML = '<div class="open-section-line" style="background:' + lineGrad + '"></div>' +
-                '<span class="open-section-label ' + (isNuggets ? 'nuggets-label' : 'final-word-label') + '">' +
-                sec.heading.textContent + '</span>' +
-                '<div class="open-section-line" style="background:' + lineGrad + '"></div>';
-            sectionDiv.appendChild(titleDiv);
-            var contentDiv = document.createElement('div');
-            contentDiv.className = 'open-section-body';
-            sec.nodes.forEach(function(n) { contentDiv.appendChild(n); });
-            sectionDiv.appendChild(contentDiv);
-            tipsContent.appendChild(sectionDiv);
+            var extractedContainer = document.getElementById('extracted-sections');
+            if (extractedContainer) {
+                var isNuggets = /NUGGETS/i.test(sec.heading.textContent);
+                var lineColor = isNuggets ? 'var(--cyan)' : 'var(--purple)';
+                var lineGrad = 'linear-gradient(90deg, transparent, ' + lineColor + ', transparent)';
+                var sectionDiv = document.createElement('div');
+                sectionDiv.className = 'open-section';
+                var titleDiv = document.createElement('div');
+                titleDiv.className = 'open-section-title';
+                titleDiv.innerHTML = '<div class="open-section-line" style="background:' + lineGrad + '"></div>' +
+                    '<span class="open-section-label ' + (isNuggets ? 'nuggets-label' : 'final-word-label') + '">' +
+                    sec.heading.textContent + '</span>' +
+                    '<div class="open-section-line" style="background:' + lineGrad + '"></div>';
+                sectionDiv.appendChild(titleDiv);
+                var contentDiv = document.createElement('div');
+                contentDiv.className = 'open-section-body';
+                sec.nodes.forEach(function(n) { contentDiv.appendChild(n); });
+                sectionDiv.appendChild(contentDiv);
+                extractedContainer.appendChild(sectionDiv);
+            }
             return;
         }
 

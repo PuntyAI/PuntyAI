@@ -16,6 +16,7 @@ from punty.results.change_detection import (
     compose_track_alert,
     compose_jockey_alert,
     compose_gear_alert,
+    compose_gear_alert_batched,
     take_snapshot,
     _normalise_condition,
     _normalise_name,
@@ -131,6 +132,17 @@ class TestHelpers:
         """Different first initials with same surname = different jockey."""
         assert _same_jockey("C. Williams", "J. Williams") is False
 
+    def test_same_jockey_apprentice_weight_suffix(self):
+        """Apprentice weight notation like (a2/52.5kg) should be stripped."""
+        assert _same_jockey("Bailey Kinninmont(a2/52.5kg)", "B.R.Kinninmont") is True
+        assert _same_jockey("Ms Sarah Field(a1.5/52.5kg)", "S.Field") is True
+        assert _same_jockey("Luke Cartwright(a3/54kg)", "L.K.Cartwright") is True
+
+    def test_same_jockey_title_prefix(self):
+        """Title prefixes like Ms/Mr should be stripped."""
+        assert _same_jockey("Ms Sarah Field", "S.Field") is True
+        assert _same_jockey("Mr John Smith", "J.Smith") is True
+
     def test_same_jockey_empty(self):
         assert _same_jockey("", "J. Smith") is False
         assert _same_jockey("J. Smith", "") is False
@@ -238,6 +250,27 @@ class TestMessageComposition:
         assert "Speedy" in msg
         assert "#3 pick" in msg
         assert "Blinkers ON" in msg
+        assert len(msg) <= 280
+
+    def test_gear_alert_batched_single(self):
+        """Single gear change in batch uses regular format."""
+        changes = [{"horse_name": "Speedy", "gear_changes": "Blinkers ON", "tip_rank": 3, "old_gear": None, "picks": []}]
+        msg = compose_gear_alert_batched(6, changes)
+        assert "GEAR CHANGE:" in msg
+        assert "Speedy" in msg
+
+    def test_gear_alert_batched_multiple(self):
+        """Multiple gear changes in same race get batched into one alert."""
+        changes = [
+            {"horse_name": "Speedy", "gear_changes": "Blinkers ON", "tip_rank": 1, "old_gear": None, "picks": []},
+            {"horse_name": "Flash", "gear_changes": "Tongue tie OFF", "tip_rank": 3, "old_gear": None, "picks": []},
+        ]
+        msg = compose_gear_alert_batched(6, changes)
+        assert "GEAR CHANGES R6:" in msg
+        assert "Speedy" in msg
+        assert "Flash" in msg
+        assert "Blinkers ON" in msg
+        assert "Tongue tie OFF" in msg
         assert len(msg) <= 280
 
     def test_messages_truncate_at_280(self):

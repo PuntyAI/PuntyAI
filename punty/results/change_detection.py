@@ -36,6 +36,8 @@ class ChangeAlert:
             return f"track:{self.old_value}->{self.new_value}"
         if self.change_type == "weather":
             return f"weather:{self.message[:60]}"
+        if self.change_type == "gear_change":
+            return f"gear_change:R{self.race_number}"
         return f"{self.change_type}:R{self.race_number}:{self.horse_name}"
 
 
@@ -225,6 +227,8 @@ async def detect_jockey_gear_changes(
     from punty.models.meeting import Runner
 
     alerts = []
+    # Collect gear changes per race for batching
+    gear_changes_by_race: dict[int, list[dict]] = {}
 
     for race_num in upcoming_race_nums:
         race_id = f"{meeting_id}-r{race_num}"
@@ -270,30 +274,40 @@ async def detect_jockey_gear_changes(
                         message=msg,
                     ))
 
-            # Check gear change
+            # Collect gear changes for batching per race
             if (
                 runner.gear_changes
                 and runner.gear_changes != prev.gear_changes
             ):
                 picks = await find_impacted_picks(db, meeting_id, race_num, horse, sc)
                 if picks:
-                    msg = compose_gear_alert(
-                        horse_name=horse,
-                        race_number=race_num,
-                        gear_changes=runner.gear_changes,
-                        tip_rank=picks[0].get("tip_rank"),
-                    )
-                    alerts.append(ChangeAlert(
-                        change_type="gear_change",
-                        meeting_id=meeting_id,
-                        race_number=race_num,
-                        horse_name=horse,
-                        saddlecloth=sc,
-                        old_value=prev.gear_changes,
-                        new_value=runner.gear_changes,
-                        impacted_picks=picks,
-                        message=msg,
-                    ))
+                    if race_num not in gear_changes_by_race:
+                        gear_changes_by_race[race_num] = []
+                    gear_changes_by_race[race_num].append({
+                        "horse_name": horse,
+                        "saddlecloth": sc,
+                        "gear_changes": runner.gear_changes,
+                        "old_gear": prev.gear_changes,
+                        "tip_rank": picks[0].get("tip_rank"),
+                        "picks": picks,
+                    })
+
+    # Compose batched gear change alerts (one per race)
+    for race_num, changes in gear_changes_by_race.items():
+        msg = compose_gear_alert_batched(race_num, changes)
+        # Use first horse's info for the alert metadata
+        first = changes[0]
+        alerts.append(ChangeAlert(
+            change_type="gear_change",
+            meeting_id=meeting_id,
+            race_number=race_num,
+            horse_name=first["horse_name"],
+            saddlecloth=first["saddlecloth"],
+            old_value=first["old_gear"],
+            new_value=first["gear_changes"],
+            impacted_picks=[p for c in changes for p in c["picks"]],
+            message=msg,
+        ))
 
     return alerts
 
@@ -303,17 +317,38 @@ def _normalise_name(name: str) -> str:
     return name.strip().replace(".", "").lower()
 
 
+def _clean_jockey_name(name: str) -> str:
+    """Strip apprentice weight, titles, and punctuation from jockey name.
+
+    Examples:
+    - "Bailey Kinninmont(a2/52.5kg)" → "bailey kinninmont"
+    - "Ms Sarah Field(a1.5/52.5kg)" → "sarah field"
+    - "L.K.Cartwright" → "l k cartwright"
+    - "C.Newitt" → "c newitt"
+    """
+    import re
+    # Strip parenthesised apprentice weight like (a2/52.5kg) or (a1.5/52.5kg)
+    name = re.sub(r"\([^)]*\)", "", name)
+    # Replace dots with spaces, normalise whitespace
+    name = name.strip().replace(".", " ").lower()
+    # Strip common title prefixes
+    name = re.sub(r"^(ms|mr|mrs|miss|dr)\s+", "", name)
+    return re.sub(r"\s+", " ", name).strip()
+
+
 def _same_jockey(name_a: str, name_b: str) -> bool:
     """Check if two jockey name strings refer to the same person.
 
-    Handles abbreviated vs full names:
-    - "Craig Newitt" vs "C.Newitt" → same (surname match + initial match)
-    - "Michael Dee" vs "M.J.Dee" → same (surname match + initial match)
-    - "Thomas Stockdale" vs "T.Stockdale" → same
+    Handles abbreviated vs full names, apprentice weights, and title prefixes:
+    - "Craig Newitt" vs "C.Newitt" → same
+    - "Michael Dee" vs "M.J.Dee" → same
+    - "Bailey Kinninmont(a2/52.5kg)" vs "B.R.Kinninmont" → same
+    - "Ms Sarah Field(a1.5/52.5kg)" vs "S.Field" → same
+    - "Luke Cartwright" vs "L.K.Cartwright" → same
     - "J. McDonald" vs "C. Williams" → different
     """
-    a = name_a.strip().replace(".", " ").lower().split()
-    b = name_b.strip().replace(".", " ").lower().split()
+    a = _clean_jockey_name(name_a).split()
+    b = _clean_jockey_name(name_b).split()
     if not a or not b:
         return False
 
@@ -321,14 +356,27 @@ def _same_jockey(name_a: str, name_b: str) -> bool:
     if a[-1] != b[-1]:
         return False
 
-    # If surnames match and either has only initials for first name, check initial match
     a_first = [p for p in a[:-1] if p]
     b_first = [p for p in b[:-1] if p]
     if not a_first or not b_first:
         return True  # Surname match with no first name to compare
 
-    # Check if the first initial matches
-    return a_first[0][0] == b_first[0][0]
+    # Determine which has fewer name parts (likely the abbreviated one)
+    short, long = (a_first, b_first) if len(a_first) <= len(b_first) else (b_first, a_first)
+
+    # First initial must match
+    if short[0][0] != long[0][0]:
+        return False
+
+    # If abbreviated side has multiple initials (e.g. "M J"), check they all match
+    # the initials of the full-name side. But only check up to what's available.
+    for i, part in enumerate(short):
+        if i >= len(long):
+            break
+        if part[0] != long[i][0]:
+            return False
+
+    return True
 
 
 # ── Pick impact analysis ──────────────────────────────────────────────────
@@ -613,10 +661,30 @@ def compose_gear_alert(
     gear_changes: str,
     tip_rank: Optional[int] = None,
 ) -> str:
-    """Compose a gear change alert."""
+    """Compose a gear change alert for a single horse."""
     rank_str = f", our #{tip_rank} pick" if tip_rank else ""
     msg = f"GEAR CHANGE: {horse_name} (R{race_number}{rank_str}) \u2014 {gear_changes}"
 
+    if len(msg) > 275:
+        msg = msg[:272] + "..."
+    return msg
+
+
+def compose_gear_alert_batched(
+    race_number: int,
+    changes: list[dict],
+) -> str:
+    """Compose a batched gear change alert for multiple horses in one race."""
+    if len(changes) == 1:
+        c = changes[0]
+        return compose_gear_alert(c["horse_name"], race_number, c["gear_changes"], c.get("tip_rank"))
+
+    parts = [f"GEAR CHANGES R{race_number}:"]
+    for c in changes:
+        rank_str = f" (#{c['tip_rank']})" if c.get("tip_rank") else ""
+        parts.append(f"{c['horse_name']}{rank_str} \u2014 {c['gear_changes']}")
+
+    msg = " ".join(parts)
     if len(msg) > 275:
         msg = msg[:272] + "..."
     return msg
