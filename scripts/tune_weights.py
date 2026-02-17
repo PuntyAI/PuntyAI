@@ -34,13 +34,12 @@ def safe_div(a, b):
 
 # Batch config — change BATCH and SEED for each overnight run
 # --- BATCH CONFIG --- change these for each overnight run
-BATCH = 1          # Batch 1 = tonight (2026-02-17), Batch 2 = tomorrow, etc.
-SEED = 42           # Different seed per batch for different race samples
+BATCH = 2          # Batch 2 = 2026-02-18
+SEED = 123          # Different seed per batch for different race samples
 SAMPLE_SIZE = 1000  # 1K races: good balance of reliability vs speed
 
-# Weight search space — each factor gets a list of values to try.
-# We normalize weights after, so absolute values don't matter — ratios do.
-SEARCH_SPACE = {
+# Win weight search space
+WIN_SEARCH_SPACE = {
     "market":        [0.25, 0.30, 0.35, 0.40, 0.45, 0.50],
     "form":          [0.15, 0.20, 0.25, 0.30, 0.35, 0.40],
     "jockey_trainer": [0.03, 0.05, 0.08, 0.10, 0.15],
@@ -52,25 +51,38 @@ SEARCH_SPACE = {
     "movement":       [0.00, 0.02],
 }
 
+# Place weight search space — different emphasis for consistency
+PLACE_SEARCH_SPACE = {
+    "market":        [0.25, 0.30, 0.35, 0.40],
+    "form":          [0.15, 0.20, 0.25, 0.30, 0.35],
+    "class_fitness":  [0.05, 0.08, 0.10, 0.15],
+    "jockey_trainer": [0.05, 0.08, 0.10, 0.15],
+    "barrier":        [0.03, 0.05, 0.08],
+    "weight_carried": [0.03, 0.05, 0.08],
+    "horse_profile":  [0.03, 0.05, 0.08],
+    "pace":           [0.00, 0.02, 0.04],
+    "movement":       [0.00, 0.02],
+}
+
 # Factors to hold fixed at 0 (deep_learning gets auto-added by probability engine)
 FIXED_ZERO = ["deep_learning"]
 
+WIN_MAX_COMBOS = 1500   # Phase 1: win weights (~5 hours)
+PLACE_MAX_COMBOS = 1500  # Phase 2: place weights (~5 hours)
 
-MAX_COMBOS = 2500  # Random sample from full grid (~10 hours with 1K race sample)
-
-def generate_weight_combos():
+def generate_weight_combos(search_space, max_combos, seed_offset=1000):
     """Generate weight combinations — random sample from the full grid."""
     import random
-    factors = list(SEARCH_SPACE.keys())
-    value_lists = [SEARCH_SPACE[f] for f in factors]
+    factors = list(search_space.keys())
+    value_lists = [search_space[f] for f in factors]
 
     # Calculate total grid size
     total_grid = 1
     for vl in value_lists:
         total_grid *= len(vl)
-    logger.info(f"Full grid has {total_grid:,} combos, sampling {min(MAX_COMBOS, total_grid):,}")
+    logger.info(f"Full grid has {total_grid:,} combos, sampling {min(max_combos, total_grid):,}")
 
-    if total_grid <= MAX_COMBOS:
+    if total_grid <= max_combos:
         # Small enough to enumerate
         all_combos = []
         for vals in product(*value_lists):
@@ -82,10 +94,10 @@ def generate_weight_combos():
         return all_combos
 
     # Random sample from the grid
-    rng = random.Random(SEED + 1000)  # Separate seed for combo selection
+    rng = random.Random(SEED + seed_offset)
     combos = []
     seen = set()
-    while len(combos) < MAX_COMBOS:
+    while len(combos) < max_combos:
         vals = tuple(rng.choice(vl) for vl in value_lists)
         if vals in seen:
             continue
@@ -98,10 +110,11 @@ def generate_weight_combos():
     return combos
 
 
-async def evaluate_weights(weights, races_data):
+async def evaluate_weights(weights, races_data, place_weights=None):
     """Evaluate a weight configuration against pre-loaded race data.
 
     Returns dict with metrics including win/place, exotics, and sequence leg hit rates.
+    place_weights: separate weights for place probability calculation.
     """
     from punty.probability import calculate_race_probabilities
 
@@ -128,7 +141,7 @@ async def evaluate_weights(weights, races_data):
 
     for meeting, race, active, winners, placers in races_data:
         try:
-            probs = calculate_race_probabilities(active, race, meeting, weights=weights)
+            probs = calculate_race_probabilities(active, race, meeting, weights=weights, place_weights=place_weights)
         except Exception:
             continue
 
@@ -195,18 +208,23 @@ async def evaluate_weights(weights, races_data):
             if top4_positions == {1, 2, 3, 4}:
                 first4_hits += 1
 
-        # Win/place P&L on top 1 pick
+        # Win P&L: bet on top 1 by win probability ranking
         top1_runner = runner_by_id.get(ranked[0][0])
         if top1_runner:
             is_winner = top1_runner.finish_position == 1
-            is_placed = top1_runner.id in placers
             win_div = top1_runner.win_dividend or 0
-            place_div = top1_runner.place_dividend or 0
 
             if is_winner and win_div > 0:
                 win_pnl += (win_div - 1) * STAKE
             else:
                 win_pnl -= STAKE
+
+        # Place P&L: bet on top 1 by PLACE probability ranking
+        place_ranked = sorted(probs.items(), key=lambda x: -x[1].place_probability)
+        place_top1_runner = runner_by_id.get(place_ranked[0][0])
+        if place_top1_runner:
+            is_placed = place_top1_runner.id in placers
+            place_div = place_top1_runner.place_dividend or 0
 
             if is_placed and place_div > 0:
                 place_pnl += (place_div - 1) * STAKE
@@ -271,6 +289,21 @@ async def evaluate_weights(weights, races_data):
     }
 
 
+def print_result(label, result, current=None):
+    """Print a result summary. If current is provided, show diffs."""
+    print(f"\n  Score: {result['score']:.6f}", end="")
+    if current:
+        print(f" ({result['score'] - current['score']:+.6f})")
+    else:
+        print()
+    print(f"  Top1: {result['top1_win_rate']}%, Top3: {result['top3_win_rate']}%")
+    print(f"  Win ROI: {result['win_roi']}%, Place ROI: {result['place_roi']}%")
+    print(f"  Exacta: {result['exacta_rate']}%, Quinella: {result['quinella_rate']}%")
+    print(f"  Trifecta: {result['trifecta_rate']}%, First4: {result['first4_rate']}%")
+    print(f"  Leg hit: top3={result['leg_skinny']}%, top4={result['leg_balanced']}%, top6={result['leg_wide']}%")
+    print(f"  Quaddie est: {result['quaddie_skinny']}/{result['quaddie_balanced']}/{result['quaddie_wide']}%")
+
+
 async def main():
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -287,7 +320,7 @@ async def main():
     )
     session_factory = async_sessionmaker(bt_engine, class_=AsyncSession, expire_on_commit=False)
 
-    # Pre-load all race data into memory to avoid repeated DB queries
+    # Pre-load all race data into memory
     logger.info("Loading race data into memory...")
     races_data = []
 
@@ -303,177 +336,202 @@ async def main():
         for race in meeting.races:
             if not race.results_status:
                 continue
-
             active = [r for r in race.runners if not r.scratched and r.finish_position and r.finish_position > 0]
             if len(active) < 3:
                 continue
-
             winners = [r for r in active if r.finish_position == 1]
             if not winners:
                 continue
-
             field_size = len(active)
             place_count = 2 if field_size <= 7 else 3
             placers = set(r.id for r in active if r.finish_position <= place_count)
-
             races_data.append((meeting, race, active, winners, placers))
 
     logger.info(f"Loaded {len(races_data)} races into memory ({time.time() - start_time:.0f}s)")
 
-    # Use a random sample for speed (full dataset would be too slow for grid search)
+    # Sample races
     import random
     random.seed(SEED)
     sample_size = min(SAMPLE_SIZE, len(races_data))
     sample = random.sample(races_data, sample_size)
 
-    # Log batch info and race IDs for reproducibility
+    # Log batch info
     sample_race_ids = sorted(set(race.id for _, race, _, _, _ in sample))
     logger.info(f"BATCH {BATCH} | seed={SEED} | {sample_size} races from {len(races_data)} total")
     batch_meta = {
-        "batch": BATCH,
-        "seed": SEED,
-        "sample_size": sample_size,
-        "total_races": len(races_data),
+        "batch": BATCH, "seed": SEED,
+        "sample_size": sample_size, "total_races": len(races_data),
         "race_ids": sample_race_ids,
     }
     with open(Path(f"data/tuner_batch{BATCH}_races.json"), "w") as f:
         json.dump(batch_meta, f, indent=2)
-    logger.info(f"Sample race IDs saved to data/tuner_batch{BATCH}_races.json")
 
-    # Generate all weight combos
-    combos = generate_weight_combos()
-    logger.info(f"Testing {len(combos)} weight combinations...")
+    # Get current defaults
+    from punty.probability import DEFAULT_WEIGHTS, DEFAULT_PLACE_WEIGHTS
+    current_win_w = dict(DEFAULT_WEIGHTS)
+    current_place_w = dict(DEFAULT_PLACE_WEIGHTS)
 
-    # Get current default weights for comparison
-    from punty.probability import DEFAULT_WEIGHTS
-    current_weights = dict(DEFAULT_WEIGHTS)
+    # ================================================================
+    # PHASE 1: Optimize WIN weights (place weights held at current)
+    # ================================================================
+    logger.info(f"\n{'='*60}")
+    logger.info("PHASE 1: Optimizing WIN weights...")
+    logger.info(f"{'='*60}")
 
-    # Evaluate current weights first
-    current_result = await evaluate_weights(current_weights, sample)
-    logger.info(f"Current weights: score={current_result['score']:.6f}, "
-                f"top1={current_result['top1_win_rate']}%, "
-                f"win_roi={current_result['win_roi']}%, "
-                f"place_roi={current_result['place_roi']}%, "
-                f"exacta={current_result['exacta_rate']}%, "
-                f"tri={current_result['trifecta_rate']}%, "
-                f"leg3/4/6={current_result['leg_skinny']}/{current_result['leg_balanced']}/{current_result['leg_wide']}%")
+    win_combos = generate_weight_combos(WIN_SEARCH_SPACE, WIN_MAX_COMBOS, seed_offset=1000)
+    logger.info(f"Testing {len(win_combos)} win weight combinations...")
 
-    # Evaluate all combos
-    best_result = current_result
-    best_idx = -1
-    results = []
+    # Baseline with current weights
+    baseline_result = await evaluate_weights(current_win_w, sample, place_weights=current_place_w)
+    logger.info(f"Baseline: score={baseline_result['score']:.6f}, "
+                f"top1={baseline_result['top1_win_rate']}%, "
+                f"win_roi={baseline_result['win_roi']}%, place_roi={baseline_result['place_roi']}%")
 
-    for i, weights in enumerate(combos):
-        result = await evaluate_weights(weights, sample)
-        if result:
-            results.append(result)
-            if result["score"] > best_result["score"]:
-                best_result = result
-                best_idx = i
-                logger.info(f"  New best at combo {i}: score={result['score']:.6f}, "
-                            f"top1={result['top1_win_rate']}%, "
-                            f"win_roi={result['win_roi']}%, "
-                            f"place_roi={result['place_roi']}%, "
-                            f"exacta={result['exacta_rate']}%, "
-                            f"tri={result['trifecta_rate']}%, "
-                            f"leg3/4/6={result['leg_skinny']}/{result['leg_balanced']}/{result['leg_wide']}%")
+    best_win_result = baseline_result
+    win_results = []
 
+    for i, weights in enumerate(win_combos):
+        r = await evaluate_weights(weights, sample, place_weights=current_place_w)
+        if r:
+            win_results.append(r)
+            if r["score"] > best_win_result["score"]:
+                best_win_result = r
+                logger.info(f"  Win best at {i}: score={r['score']:.6f}, "
+                            f"top1={r['top1_win_rate']}%, win_roi={r['win_roi']}%, "
+                            f"place_roi={r['place_roi']}%")
         if (i + 1) % 100 == 0:
-            elapsed = time.time() - start_time
-            logger.info(f"  Tested {i + 1}/{len(combos)} combos ({elapsed:.0f}s)")
+            logger.info(f"  Win phase: {i + 1}/{len(win_combos)} ({time.time() - start_time:.0f}s)")
 
-    # Sort results by score
-    results.sort(key=lambda x: -x["score"])
+    win_results.sort(key=lambda x: -x["score"])
+    best_win_weights = best_win_result["weights"]
+    phase1_time = time.time() - start_time
 
-    # Save results
+    logger.info(f"\nPhase 1 complete: {len(win_combos)} combos in {phase1_time:.0f}s")
+    logger.info(f"Best win weights: {best_win_weights}")
+
+    # ================================================================
+    # PHASE 2: Optimize PLACE weights (win weights held at best from phase 1)
+    # ================================================================
+    phase2_start = time.time()
+    logger.info(f"\n{'='*60}")
+    logger.info("PHASE 2: Optimizing PLACE weights...")
+    logger.info(f"{'='*60}")
+
+    place_combos = generate_weight_combos(PLACE_SEARCH_SPACE, PLACE_MAX_COMBOS, seed_offset=2000)
+    logger.info(f"Testing {len(place_combos)} place weight combinations...")
+
+    # Baseline: best win weights + current place weights
+    place_baseline = await evaluate_weights(best_win_weights, sample, place_weights=current_place_w)
+    logger.info(f"Place baseline (current place weights): "
+                f"place_roi={place_baseline['place_roi']}%")
+
+    best_place_result = place_baseline
+    place_results = []
+
+    for i, pw in enumerate(place_combos):
+        r = await evaluate_weights(best_win_weights, sample, place_weights=pw)
+        if r:
+            # For place phase, optimize primarily on place_roi
+            r["_place_score"] = r["place_roi"]
+            r["place_weights"] = pw
+            place_results.append(r)
+            if r["place_roi"] > best_place_result.get("place_roi", -999):
+                best_place_result = r
+                logger.info(f"  Place best at {i}: place_roi={r['place_roi']}%, "
+                            f"win_roi={r['win_roi']}%, top1={r['top1_win_rate']}%")
+        if (i + 1) % 100 == 0:
+            logger.info(f"  Place phase: {i + 1}/{len(place_combos)} ({time.time() - phase2_start:.0f}s)")
+
+    place_results.sort(key=lambda x: -x.get("_place_score", -999))
+    best_place_weights = best_place_result.get("place_weights", current_place_w)
+    total_time = time.time() - start_time
+
+    # ================================================================
+    # Save combined results
+    # ================================================================
     output = {
         "meta": {
-            "total_combos": len(combos),
-            "sample_size": sample_size,
-            "total_races": len(races_data),
-            "elapsed_seconds": round(time.time() - start_time, 1),
+            "batch": BATCH, "seed": SEED,
+            "win_combos": len(win_combos), "place_combos": len(place_combos),
+            "sample_size": sample_size, "total_races": len(races_data),
+            "elapsed_seconds": round(total_time, 1),
         },
-        "current": current_result,
-        "best": best_result,
-        "improvement": {
-            "top1_win_rate": round(best_result["top1_win_rate"] - current_result["top1_win_rate"], 2),
-            "top3_win_rate": round(best_result["top3_win_rate"] - current_result["top3_win_rate"], 2),
-            "win_roi": round(best_result["win_roi"] - current_result["win_roi"], 2),
-            "place_roi": round(best_result["place_roi"] - current_result["place_roi"], 2),
-            "exacta_rate": round(best_result["exacta_rate"] - current_result["exacta_rate"], 2),
-            "quinella_rate": round(best_result["quinella_rate"] - current_result["quinella_rate"], 2),
-            "trifecta_rate": round(best_result["trifecta_rate"] - current_result["trifecta_rate"], 2),
-            "first4_rate": round(best_result["first4_rate"] - current_result["first4_rate"], 2),
-            "leg_skinny": round(best_result["leg_skinny"] - current_result["leg_skinny"], 2),
-            "leg_balanced": round(best_result["leg_balanced"] - current_result["leg_balanced"], 2),
-            "leg_wide": round(best_result["leg_wide"] - current_result["leg_wide"], 2),
-            "quaddie_skinny": round(best_result["quaddie_skinny"] - current_result["quaddie_skinny"], 2),
-            "quaddie_balanced": round(best_result["quaddie_balanced"] - current_result["quaddie_balanced"], 2),
-            "quaddie_wide": round(best_result["quaddie_wide"] - current_result["quaddie_wide"], 2),
-            "score": round(best_result["score"] - current_result["score"], 6),
+        "baseline": baseline_result,
+        "best_win": {
+            "weights": best_win_weights,
+            "result": best_win_result,
         },
-        "top_10": results[:10],
+        "best_place": {
+            "weights": best_place_weights,
+            "result": best_place_result,
+        },
+        "win_top_10": win_results[:10],
+        "place_top_10": [{k: v for k, v in r.items() if k != "_place_score"} for r in place_results[:10]],
     }
 
     output_path = get_output_path()
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2)
-
     logger.info(f"\nResults saved to {output_path}")
 
+    # ================================================================
     # Print summary
+    # ================================================================
     print(f"\n{'='*70}")
-    print(f"WEIGHT OPTIMIZATION RESULTS")
+    print(f"WEIGHT OPTIMIZATION RESULTS - BATCH {BATCH}")
     print(f"{'='*70}")
-    print(f"Tested {len(combos)} combos on {sample_size} race sample")
-    print(f"Elapsed: {time.time() - start_time:.0f}s")
+    print(f"Win combos: {len(win_combos)}, Place combos: {len(place_combos)}")
+    print(f"Sample: {sample_size} races, Elapsed: {total_time:.0f}s")
 
     print(f"\n{'='*70}")
-    print(f"CURRENT WEIGHTS")
+    print(f"CURRENT WIN WEIGHTS")
     print(f"{'='*70}")
-    for k, v in sorted(current_weights.items()):
+    for k, v in sorted(current_win_w.items()):
         print(f"  {k:<20} {v:.4f}")
-    print(f"\n  Score: {current_result['score']:.6f}")
-    print(f"  Top1: {current_result['top1_win_rate']}%, Top3: {current_result['top3_win_rate']}%")
-    print(f"  Win ROI: {current_result['win_roi']}%, Place ROI: {current_result['place_roi']}%")
-    print(f"  Exacta: {current_result['exacta_rate']}%, Quinella: {current_result['quinella_rate']}%")
-    print(f"  Trifecta: {current_result['trifecta_rate']}%, First4: {current_result['first4_rate']}%")
-    print(f"  Leg hit rates: Skinny(top3)={current_result['leg_skinny']}%, Balanced(top4)={current_result['leg_balanced']}%, Wide(top6)={current_result['leg_wide']}%")
-    print(f"  Quaddie est: Skinny={current_result['quaddie_skinny']}%, Balanced={current_result['quaddie_balanced']}%, Wide={current_result['quaddie_wide']}%")
+    print_result("current", baseline_result)
 
     print(f"\n{'='*70}")
-    print(f"BEST WEIGHTS")
+    print(f"BEST WIN WEIGHTS (Phase 1)")
     print(f"{'='*70}")
-    for k, v in sorted(best_result["weights"].items()):
-        curr = current_weights.get(k, 0)
+    for k, v in sorted(best_win_weights.items()):
+        curr = current_win_w.get(k, 0)
         diff = v - curr
-        print(f"  {k:<20} {v:.4f}  (was {curr:.4f}, {diff:>+.4f})")
-    print(f"\n  Score: {best_result['score']:.6f} ({output['improvement']['score']:+.6f})")
-    print(f"  Top1: {best_result['top1_win_rate']}% ({output['improvement']['top1_win_rate']:+.2f}pp)")
-    print(f"  Top3: {best_result['top3_win_rate']}% ({output['improvement']['top3_win_rate']:+.2f}pp)")
-    print(f"  Win ROI: {best_result['win_roi']}% ({output['improvement']['win_roi']:+.2f}pp)")
-    print(f"  Place ROI: {best_result['place_roi']}% ({output['improvement']['place_roi']:+.2f}pp)")
-    print(f"  Exacta: {best_result['exacta_rate']}% ({output['improvement']['exacta_rate']:+.2f}pp)")
-    print(f"  Quinella: {best_result['quinella_rate']}% ({output['improvement']['quinella_rate']:+.2f}pp)")
-    print(f"  Trifecta: {best_result['trifecta_rate']}% ({output['improvement']['trifecta_rate']:+.2f}pp)")
-    print(f"  First4: {best_result['first4_rate']}% ({output['improvement']['first4_rate']:+.2f}pp)")
-    print(f"  Leg hit: Skinny={best_result['leg_skinny']}% ({output['improvement']['leg_skinny']:+.2f}pp), "
-          f"Balanced={best_result['leg_balanced']}% ({output['improvement']['leg_balanced']:+.2f}pp), "
-          f"Wide={best_result['leg_wide']}% ({output['improvement']['leg_wide']:+.2f}pp)")
-    print(f"  Quaddie est: Skinny={best_result['quaddie_skinny']}%, "
-          f"Balanced={best_result['quaddie_balanced']}%, Wide={best_result['quaddie_wide']}%")
+        if abs(diff) > 0.001 or v > 0.001:
+            print(f"  {k:<20} {v:.4f}  (was {curr:.4f}, {diff:>+.4f})")
+    print_result("best_win", best_win_result, baseline_result)
 
     print(f"\n{'='*70}")
-    print(f"TOP 5 CONFIGURATIONS")
+    print(f"CURRENT PLACE WEIGHTS")
     print(f"{'='*70}")
-    for i, r in enumerate(results[:5]):
-        print(f"\n  #{i+1}: score={r['score']:.6f}, top1={r['top1_win_rate']}%, "
-              f"win_roi={r['win_roi']}%, place_roi={r['place_roi']}%")
-        print(f"       exacta={r['exacta_rate']}%, quinella={r['quinella_rate']}%, "
-              f"tri={r['trifecta_rate']}%, f4={r['first4_rate']}%")
-        print(f"       leg3={r['leg_skinny']}%, leg4={r['leg_balanced']}%, leg6={r['leg_wide']}%, "
-              f"quad_est={r['quaddie_skinny']}/{r['quaddie_balanced']}/{r['quaddie_wide']}%")
+    for k, v in sorted(current_place_w.items()):
+        print(f"  {k:<20} {v:.4f}")
+
+    print(f"\n{'='*70}")
+    print(f"BEST PLACE WEIGHTS (Phase 2)")
+    print(f"{'='*70}")
+    for k, v in sorted(best_place_weights.items()):
+        curr = current_place_w.get(k, 0)
+        diff = v - curr
+        if abs(diff) > 0.001 or v > 0.001:
+            print(f"  {k:<20} {v:.4f}  (was {curr:.4f}, {diff:>+.4f})")
+    print(f"\n  Place ROI: {best_place_result['place_roi']}% (was {baseline_result['place_roi']}%)")
+
+    print(f"\n{'='*70}")
+    print(f"TOP 5 WIN CONFIGS")
+    print(f"{'='*70}")
+    for i, r in enumerate(win_results[:5]):
+        print(f"\n  #{i+1}: top1={r['top1_win_rate']}%, win_roi={r['win_roi']}%, place_roi={r['place_roi']}%")
         for k, v in sorted(r["weights"].items()):
+            if v > 0.001:
+                print(f"    {k}: {v:.4f}")
+
+    print(f"\n{'='*70}")
+    print(f"TOP 5 PLACE CONFIGS")
+    print(f"{'='*70}")
+    for i, r in enumerate(place_results[:5]):
+        print(f"\n  #{i+1}: place_roi={r['place_roi']}%, win_roi={r['win_roi']}%, top1={r['top1_win_rate']}%")
+        pw = r.get("place_weights") or r.get("weights", {})
+        for k, v in sorted(pw.items()):
             if v > 0.001:
                 print(f"    {k}: {v:.4f}")
 

@@ -372,6 +372,26 @@ DEFAULT_WEIGHTS = {
     "pace": 0.00,
 }  # sums to 1.0 — form dominant, market secondary
 
+# Place-specific weights (must sum to 1.0)
+# Place bets reward consistency over peak performance:
+# - class_fitness higher: proven class horses place reliably
+# - jockey_trainer higher: top jockeys consistently place
+# - barrier higher: inside draw = more consistent top-3 finishes
+# - form lower: recent form predicts winners better than placers
+# Will be optimized via tune_weights.py batch 2+
+DEFAULT_PLACE_WEIGHTS = {
+    "market": 0.35,
+    "form": 0.25,
+    "class_fitness": 0.10,
+    "jockey_trainer": 0.10,
+    "barrier": 0.06,
+    "weight_carried": 0.05,
+    "horse_profile": 0.05,
+    "pace": 0.02,
+    "movement": 0.02,
+    "deep_learning": 0.00,
+}  # sums to 1.0 — balanced for consistency, less form-dependent
+
 # Legacy aliases
 WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
 WEIGHT_FORM = DEFAULT_WEIGHTS["form"]
@@ -434,6 +454,7 @@ def calculate_race_probabilities(
     meeting: Any,
     pool: float = DEFAULT_POOL,
     weights: dict[str, float] | None = None,
+    place_weights: dict[str, float] | None = None,
     dl_patterns: list[dict] | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
@@ -443,7 +464,8 @@ def calculate_race_probabilities(
         race: Race ORM object (or dict)
         meeting: Meeting ORM object (or dict)
         pool: Total stake pool per race (default $20)
-        weights: Custom factor weights (key → 0.0-1.0). Defaults to DEFAULT_WEIGHTS.
+        weights: Custom win factor weights (key → 0.0-1.0). Defaults to DEFAULT_WEIGHTS.
+        place_weights: Custom place factor weights. Defaults to DEFAULT_PLACE_WEIGHTS.
         dl_patterns: Deep learning patterns from PatternInsight table.
 
     Returns:
@@ -553,21 +575,24 @@ def calculate_race_probabilities(
     # Step 2b: Market floor — prevent extreme disagreement with market
     win_probs = _apply_market_floor(win_probs, market_implied)
 
-    # Step 2c: Compute place probabilities using place context multipliers
-    # Place context multipliers adjust factor WEIGHTS (importance) rather than
-    # scores, because the profiles encode "how predictive is this factor for place
-    # outcomes." E.g. horse_profile 2.2x for place means that factor is 2.2x more
-    # important for predicting placings than for wins. This produces meaningfully
-    # different place rankings compared to win rankings.
+    # Step 2c: Compute place probabilities using separate place weights
+    # Place bets reward consistency (top 2-3 finish) not just winning.
+    # Different factors matter: class fitness, jockey consistency, barrier draw
+    # are more important; raw form is less important.
     place_count = 2 if field_size <= 7 else 3
     place_probs: dict[str, float] = {}
-    place_ctx_mults = _get_context_multipliers(race, meeting, "place")
-    if place_ctx_mults and original_factor_scores:
-        # Build place-specific weights by scaling base weights with place multipliers
-        place_w = dict(eff_w)
-        for factor, mult in place_ctx_mults.items():
-            if factor in place_w and factor != "deep_learning":
-                place_w[factor] = eff_w.get(factor, 0.0) * mult
+    if original_factor_scores:
+        # Start with place-specific base weights
+        pw = place_weights if place_weights else DEFAULT_PLACE_WEIGHTS
+        place_w = dict(pw)
+
+        # Apply context profile multipliers on top if available
+        place_ctx_mults = _get_context_multipliers(race, meeting, "place")
+        if place_ctx_mults:
+            for factor, mult in place_ctx_mults.items():
+                if factor in place_w and factor != "deep_learning":
+                    place_w[factor] = place_w.get(factor, 0.0) * mult
+
         # Re-normalize so weights sum to 1.0
         pw_total = sum(place_w.values())
         if pw_total > 0:
