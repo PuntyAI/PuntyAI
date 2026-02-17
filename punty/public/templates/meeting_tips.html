@@ -444,7 +444,17 @@
     .race-accordion.open .accordion-chevron { transform: rotate(180deg); }
     .race-accordion-body { display: none; padding: 0 1.25rem 1.25rem; }
     .race-accordion.open .race-accordion-body { display: block; }
-    .race-nav { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .race-nav {
+        display: flex; flex-wrap: wrap; gap: 0.5rem;
+        position: sticky; top: 41px; z-index: 39;
+        margin: 0 -1rem; padding: 0.5rem 1rem 0.5rem;
+        background: rgba(10, 10, 15, 0.95);
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    @media (min-width: 640px) {
+        .race-nav { margin: 0 -2rem; padding: 0.5rem 2rem 0.5rem; }
+    }
     .race-nav-pill {
         display: inline-flex; align-items: center; justify-content: center;
         min-width: 2.5rem; padding: 0.25rem 0.75rem; border-radius: 9999px;
@@ -454,6 +464,12 @@
     }
     .race-nav-pill:hover, .race-nav-pill.active {
         background: var(--gradient-sunset); color: white; border-color: transparent;
+    }
+    .race-nav-label {
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.8rem;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--text-muted); padding: 0.25rem 0.25rem 0.25rem 0;
+        display: flex; align-items: center;
     }
     .race-pill {
         display: inline-flex; align-items: center; justify-content: center;
@@ -945,6 +961,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var navContainer = document.createElement('div');
     navContainer.className = 'race-nav';
     navContainer.id = 'section-tips';
+    var tipsLabel = document.createElement('span');
+    tipsLabel.className = 'race-nav-label';
+    tipsLabel.textContent = 'Tips';
+    navContainer.appendChild(tipsLabel);
     sections.forEach(function(sec, idx) {
         if (!sec.isRace) return;
         var pill = document.createElement('button');
@@ -955,7 +975,9 @@ document.addEventListener('DOMContentLoaded', function() {
             var acc = document.getElementById('sec-acc-' + idx);
             if (acc) {
                 acc.classList.add('open');
-                acc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                var navH = (document.querySelector('.race-nav').offsetHeight || 0) + (document.getElementById('section-nav').offsetHeight || 0) + 8;
+                var y = acc.getBoundingClientRect().top + window.pageYOffset - navH;
+                window.scrollTo({ top: y, behavior: 'smooth' });
             }
         };
         navContainer.appendChild(pill);
@@ -1414,6 +1436,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         window.addEventListener('scroll', updateActive, { passive: true });
         updateActive();
+    })();
+
+    // --- Race pill scroll spy ---
+    (function() {
+        var pills = document.querySelectorAll('.race-nav-pill');
+        if (!pills.length) return;
+        function updateRacePills() {
+            var stickyH = (document.getElementById('section-nav').offsetHeight || 0) + (document.querySelector('.race-nav').offsetHeight || 0) + 20;
+            var activePill = null;
+            pills.forEach(function(pill) {
+                var idx = pill.getAttribute('data-idx');
+                var acc = document.getElementById('sec-acc-' + idx);
+                if (acc && acc.getBoundingClientRect().top <= stickyH) {
+                    activePill = pill;
+                }
+            });
+            pills.forEach(function(p) { p.classList.remove('active'); });
+            if (activePill) activePill.classList.add('active');
+        }
+        window.addEventListener('scroll', updateRacePills, { passive: true });
+        updateRacePills();
     })();
 
     // Live countdown updater (every 30s)
