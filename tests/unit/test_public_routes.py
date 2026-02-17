@@ -16,9 +16,9 @@ from punty.models.content import Content
 async def sample_meeting(db_session: AsyncSession) -> Meeting:
     """Create a sample meeting for testing."""
     meeting = Meeting(
-        id="test-venue-2026-02-07",
+        id="test-venue-2026-02-17",
         venue="Test Venue",
-        date=date(2026, 2, 7),
+        date=date(2026, 2, 17),
         track_condition="Good 4",
         weather="Fine",
         selected=True,
@@ -40,7 +40,7 @@ async def sample_races(db_session: AsyncSession, sample_meeting: Meeting) -> lis
             name=f"Test Race {i}",
             distance=1200,
             results_status="Paying" if i < 3 else "Open",
-            start_time=datetime(2026, 2, 7, 12 + i, 0, 0),
+            start_time=datetime(2026, 2, 17, 12 + i, 0, 0),
         )
         races.append(race)
         db_session.add(race)
@@ -78,7 +78,7 @@ async def sample_content_for_picks(db_session: AsyncSession, sample_meeting: Mee
         content_type="early_mail",
         status="sent",
         raw_content="Test content for picks",
-        created_at=datetime(2026, 2, 7, 8, 0, 0),
+        created_at=datetime(2026, 2, 17, 8, 0, 0),
     )
     db_session.add(content)
     await db_session.commit()
@@ -112,8 +112,8 @@ async def sample_picks(
             pnl=pnl,
             bet_stake=stake,
             settled=True,
-            settled_at=datetime(2026, 2, 7, 14, 0, 0),
-            created_at=datetime(2026, 2, 7, 10, 0, 0),
+            settled_at=datetime(2026, 2, 17, 14, 0, 0),
+            created_at=datetime(2026, 2, 17, 10, 0, 0),
         )
         picks.append(pick)
         db_session.add(pick)
@@ -130,8 +130,8 @@ async def sample_picks(
         pnl=80.0,
         exotic_stake=20.0,
         settled=True,
-        settled_at=datetime(2026, 2, 7, 14, 0, 0),
-        created_at=datetime(2026, 2, 7, 10, 0, 0),
+        settled_at=datetime(2026, 2, 17, 14, 0, 0),
+        created_at=datetime(2026, 2, 17, 10, 0, 0),
     )
     picks.append(exotic)
     db_session.add(exotic)
@@ -147,8 +147,8 @@ async def sample_picks(
         pnl=-50.0,
         exotic_stake=50.0,
         settled=True,
-        settled_at=datetime(2026, 2, 7, 14, 0, 0),
-        created_at=datetime(2026, 2, 7, 10, 0, 0),
+        settled_at=datetime(2026, 2, 17, 14, 0, 0),
+        created_at=datetime(2026, 2, 17, 10, 0, 0),
     )
     picks.append(sequence)
     db_session.add(sequence)
@@ -166,7 +166,7 @@ async def sample_content(db_session: AsyncSession, sample_meeting: Meeting) -> C
         content_type="early_mail",
         status="sent",
         raw_content="Test early mail content",
-        created_at=datetime(2026, 2, 7, 8, 0, 0),
+        created_at=datetime(2026, 2, 17, 8, 0, 0),
     )
     db_session.add(content)
     await db_session.commit()
@@ -188,7 +188,7 @@ class TestGetWinnerStats:
             mock_session.return_value.__aenter__.return_value = db_session
 
             # Patch melb_today to return our test date
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 7)):
+            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         # Should count: 3 winning selections + 1 winning exotic = 4 winners
@@ -205,7 +205,7 @@ class TestGetWinnerStats:
         with patch("punty.public.routes.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 7)):
+            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         # Same as today since all picks are from today
@@ -221,7 +221,7 @@ class TestGetWinnerStats:
         with patch("punty.public.routes.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 7)):
+            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         # Selection returns: (10+25) + (6+5) + (5+15) = 35 + 11 + 20 = 66
@@ -238,7 +238,7 @@ class TestGetWinnerStats:
         with patch("punty.public.routes.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 7)):
+            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         assert stats["today_winners"] == 0
@@ -278,7 +278,7 @@ class TestGetTipsCalendar:
             content_type="early_mail",
             status="pending_review",  # Not sent!
             raw_content="Draft content",
-            created_at=datetime(2026, 2, 7, 8, 0, 0),
+            created_at=datetime(2026, 2, 17, 8, 0, 0),
         )
         db_session.add(draft_content)
         await db_session.commit()
@@ -295,12 +295,13 @@ class TestGetTipsCalendar:
         """Verify pagination returns correct pages."""
         from punty.public.routes import get_tips_calendar
 
-        # Create multiple meetings with sent content
+        # Create multiple meetings with sent content (dates >= TIPS_START_DATE)
         for i in range(5):
+            day = 17 + i
             meeting = Meeting(
-                id=f"venue-{i}-2026-02-0{i+1}",
+                id=f"venue-{i}-2026-02-{day}",
                 venue=f"Venue {i}",
-                date=date(2026, 2, i + 1),
+                date=date(2026, 2, day),
                 selected=True,
             )
             db_session.add(meeting)
@@ -311,7 +312,7 @@ class TestGetTipsCalendar:
                 content_type="early_mail",
                 status="sent",
                 raw_content=f"Content {i}",
-                created_at=datetime(2026, 2, i + 1, 8, 0, 0),
+                created_at=datetime(2026, 2, day, 8, 0, 0),
             )
             db_session.add(content)
 
@@ -346,7 +347,7 @@ class TestGetMeetingTips:
             content_type="early_mail",
             status="sent",
             raw_content="Early mail content",
-            created_at=datetime(2026, 2, 7, 8, 0, 0),
+            created_at=datetime(2026, 2, 17, 8, 0, 0),
         )
         db_session.add(early_mail)
 
@@ -357,7 +358,7 @@ class TestGetMeetingTips:
             content_type="meeting_wrapup",
             status="sent",
             raw_content="Wrap-up content",
-            created_at=datetime(2026, 2, 7, 18, 0, 0),
+            created_at=datetime(2026, 2, 17, 18, 0, 0),
         )
         db_session.add(wrapup)
         await db_session.commit()
@@ -397,9 +398,9 @@ class TestGetNextRace:
         with patch("punty.public.routes.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 7)):
+            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
                 with patch("punty.public.routes.melb_now") as mock_now:
-                    mock_now.return_value = datetime(2026, 2, 7, 10, 0, 0)
+                    mock_now.return_value = datetime(2026, 2, 17, 10, 0, 0)
                     result = await get_next_race()
 
         assert result["has_next"] == False

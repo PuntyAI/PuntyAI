@@ -640,15 +640,18 @@ async def get_tips_calendar(
 
     async with async_session() as db:
         # Build shared filter conditions
+        # Hard floor: never show tips before 2026-02-17 (pre-audit data removed)
+        TIPS_START_DATE = date(2026, 2, 17)
+        effective_from = max(date_from, TIPS_START_DATE) if date_from else TIPS_START_DATE
+
         filters = [
             Content.content_type == "early_mail",
             Content.status.in_(["approved", "sent"]),
             Meeting.date.isnot(None),
+            Meeting.date >= effective_from,
         ]
         if venue:
             filters.append(Meeting.venue.ilike(f"%{venue}%"))
-        if date_from:
-            filters.append(Meeting.date >= date_from)
         if date_to:
             filters.append(Meeting.date <= date_to)
 
@@ -1196,7 +1199,8 @@ async def get_bet_type_stats(
         return s.replace("%", "\\%").replace("_", "\\_")
 
     # Build filter condition lists by table
-    meeting_conds = []
+    # Hard floor: exclude pre-audit data
+    meeting_conds = [Meeting.date >= date(2026, 2, 17)]
     if venue:
         meeting_conds.append(Meeting.venue.ilike(f"%{_esc(venue)}%"))
     if state:
@@ -1581,6 +1585,7 @@ async def sitemap_tips():
                 and_(
                     Content.content_type == "early_mail",
                     Content.status.in_(["approved", "sent"]),
+                    Meeting.date >= date(2026, 2, 17),
                 )
             ).order_by(Meeting.date.desc()).limit(500)
         )
