@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Literal
 
-from openai import AsyncOpenAI, RateLimitError
+from openai import AsyncOpenAI, RateLimitError, APITimeoutError
 
 from punty.config import settings
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Retry settings for rate limits
 MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
+API_TIMEOUT = 300  # 5 minutes — GPT-5.2 with reasoning can be slow
 
 # Reasoning effort levels for GPT-5.2 Responses API
 ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
@@ -109,14 +110,17 @@ class AIClient:
                 # Use Responses API for GPT-5.2 with reasoning
                 if self.model.startswith("gpt-5"):
                     logger.info(f"Using {self.model} with reasoning_effort={self.reasoning_effort}")
-                    response = await self.client.responses.create(
-                        model=self.model,
-                        input=[
-                            {"role": "developer", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        reasoning={"effort": self.reasoning_effort},
-                        max_output_tokens=max_tokens,
+                    response = await asyncio.wait_for(
+                        self.client.responses.create(
+                            model=self.model,
+                            input=[
+                                {"role": "developer", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            reasoning={"effort": self.reasoning_effort},
+                            max_output_tokens=max_tokens,
+                        ),
+                        timeout=API_TIMEOUT,
                     )
                     try:
                         content = response.output_text
@@ -127,14 +131,17 @@ class AIClient:
                 else:
                     # Fallback to Chat Completions for older models
                     logger.info(f"Using {self.model} (Chat Completions)")
-                    response = await self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        temperature=temperature,
-                        max_tokens=max_tokens,
+                    response = await asyncio.wait_for(
+                        self.client.chat.completions.create(
+                            model=self.model,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                        ),
+                        timeout=API_TIMEOUT,
                     )
                     try:
                         content = response.choices[0].message.content
@@ -152,6 +159,19 @@ class AIClient:
                     )
                 logger.info(f"Generated {len(content)} chars with {self.model}{usage_str}")
                 return content
+
+            except (asyncio.TimeoutError, APITimeoutError) as e:
+                last_error = e
+                logger.error(
+                    f"OpenAI API timeout after {API_TIMEOUT}s "
+                    f"(attempt {attempt + 1}/{MAX_RETRIES + 1}, model={self.model})"
+                )
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(5)
+                else:
+                    raise Exception(
+                        f"OpenAI API timed out after {API_TIMEOUT}s on all {MAX_RETRIES + 1} attempts"
+                    )
 
             except RateLimitError as e:
                 last_error = e
