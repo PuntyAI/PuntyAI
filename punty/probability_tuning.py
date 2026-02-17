@@ -45,7 +45,7 @@ VALUE_BUCKETS = [
 
 # Tuning constraints
 MIN_WEIGHT = 0.00   # Allow zeroed dead factors
-MAX_WEIGHT = 0.45   # Allow calibrated market weight (40%)
+MAX_WEIGHT = 0.55   # Allow optimized form weight (50%)
 SMOOTHING = 0.70    # 70% old weight, 30% optimal
 MIN_CHANGE_THRESHOLD = 0.005  # Only save if any factor changes by >0.5%
 COOLDOWN_HOURS = 24  # Minimum hours between tuning runs

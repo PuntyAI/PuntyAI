@@ -24,39 +24,73 @@ os.environ["PUNTY_DB_PATH"] = "data/backtest.db"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-OUTPUT_PATH = Path("data/optimal_weights.json")
+def get_output_path():
+    return Path(f"data/optimal_weights_batch{BATCH}.json")
 
 
 def safe_div(a, b):
     return a / b if b else 0
 
 
+# Batch config — change BATCH and SEED for each overnight run
+# --- BATCH CONFIG --- change these for each overnight run
+BATCH = 1          # Batch 1 = tonight (2026-02-17), Batch 2 = tomorrow, etc.
+SEED = 42           # Different seed per batch for different race samples
+SAMPLE_SIZE = 1000  # 1K races: good balance of reliability vs speed
+
 # Weight search space — each factor gets a list of values to try.
 # We normalize weights after, so absolute values don't matter — ratios do.
 SEARCH_SPACE = {
-    "market":        [0.30, 0.40, 0.50],
-    "form":          [0.20, 0.30, 0.40],
-    "jockey_trainer": [0.05, 0.08, 0.12],
-    "horse_profile":  [0.02, 0.05],
-    "class_fitness":  [0.02, 0.04],
-    "weight_carried": [0.02, 0.04],
-    "barrier":        [0.01, 0.03],
-    "pace":           [0.01, 0.02],
-    "movement":       [0.00, 0.03],
+    "market":        [0.25, 0.30, 0.35, 0.40, 0.45, 0.50],
+    "form":          [0.15, 0.20, 0.25, 0.30, 0.35, 0.40],
+    "jockey_trainer": [0.03, 0.05, 0.08, 0.10, 0.15],
+    "horse_profile":  [0.02, 0.04, 0.06, 0.08],
+    "class_fitness":  [0.02, 0.04, 0.06],
+    "weight_carried": [0.02, 0.04, 0.06],
+    "barrier":        [0.01, 0.02, 0.03],
+    "pace":           [0.00, 0.01, 0.02],
+    "movement":       [0.00, 0.02],
 }
 
 # Factors to hold fixed at 0 (deep_learning gets auto-added by probability engine)
 FIXED_ZERO = ["deep_learning"]
 
 
+MAX_COMBOS = 2500  # Random sample from full grid (~10 hours with 1K race sample)
+
 def generate_weight_combos():
-    """Generate all weight combinations from the search space."""
+    """Generate weight combinations — random sample from the full grid."""
+    import random
     factors = list(SEARCH_SPACE.keys())
     value_lists = [SEARCH_SPACE[f] for f in factors]
+
+    # Calculate total grid size
+    total_grid = 1
+    for vl in value_lists:
+        total_grid *= len(vl)
+    logger.info(f"Full grid has {total_grid:,} combos, sampling {min(MAX_COMBOS, total_grid):,}")
+
+    if total_grid <= MAX_COMBOS:
+        # Small enough to enumerate
+        all_combos = []
+        for vals in product(*value_lists):
+            weights = dict(zip(factors, vals))
+            total = sum(weights.values())
+            if total > 0:
+                weights = {k: round(v / total, 4) for k, v in weights.items()}
+            all_combos.append(weights)
+        return all_combos
+
+    # Random sample from the grid
+    rng = random.Random(SEED + 1000)  # Separate seed for combo selection
     combos = []
-    for vals in product(*value_lists):
+    seen = set()
+    while len(combos) < MAX_COMBOS:
+        vals = tuple(rng.choice(vl) for vl in value_lists)
+        if vals in seen:
+            continue
+        seen.add(vals)
         weights = dict(zip(factors, vals))
-        # Normalize to sum to 1.0
         total = sum(weights.values())
         if total > 0:
             weights = {k: round(v / total, 4) for k, v in weights.items()}
@@ -67,7 +101,7 @@ def generate_weight_combos():
 async def evaluate_weights(weights, races_data):
     """Evaluate a weight configuration against pre-loaded race data.
 
-    Returns dict with metrics: top1_win_rate, top3_win_rate, win_roi, place_roi, score.
+    Returns dict with metrics including win/place, exotics, and sequence leg hit rates.
     """
     from punty.probability import calculate_race_probabilities
 
@@ -77,6 +111,20 @@ async def evaluate_weights(weights, races_data):
     win_pnl = 0.0
     place_pnl = 0.0
     total_races = 0
+
+    # Exotic counters
+    exacta_hits = 0
+    quinella_hits = 0
+    trifecta_hits = 0
+    first4_hits = 0
+    exacta_eligible = 0  # races with 2+ ranked runners
+    trifecta_eligible = 0  # races with 3+ ranked runners
+    first4_eligible = 0  # races with 4+ ranked runners
+
+    # Sequence leg hit rates: did winner fall in our top N?
+    leg_hits_top3 = 0   # skinny quaddie (~3 per leg)
+    leg_hits_top4 = 0   # balanced quaddie (~4 per leg)
+    leg_hits_top6 = 0   # wide quaddie (~6 per leg)
 
     for meeting, race, active, winners, placers in races_data:
         try:
@@ -90,18 +138,65 @@ async def evaluate_weights(weights, races_data):
         total_races += 1
         ranked = sorted(probs.items(), key=lambda x: -x[1].win_probability)
 
+        # Build runner lookup by id
+        runner_by_id = {r.id: r for r in active}
+
         # Top 1 accuracy
         winner_id = winners[0].id
-        if ranked[0][0] == winner_id:
+        top1_won = ranked[0][0] == winner_id
+        if top1_won:
             top1_wins += 1
+
+        # Sequence leg hit rates (did winner fall in our top N ranked?)
+        top3_ids = set(rid for rid, _ in ranked[:3])
+        top4_ids = set(rid for rid, _ in ranked[:4])
+        top6_ids = set(rid for rid, _ in ranked[:6])
+        if winner_id in top3_ids:
+            leg_hits_top3 += 1
+        if winner_id in top4_ids:
+            leg_hits_top4 += 1
+        if winner_id in top6_ids:
+            leg_hits_top6 += 1
 
         # Top 3 accuracy
         top3_ids = set(rid for rid, _ in ranked[:3])
         if winner_id in top3_ids:
             top3_wins += 1
 
+        # --- Exotic metrics ---
+        # Get actual finish positions for our top-ranked runners
+        def get_pos(runner_id):
+            r = runner_by_id.get(runner_id)
+            return r.finish_position if r else 999
+
+        # Exacta: our top 2 finish 1st-2nd in exact order
+        if len(ranked) >= 2:
+            exacta_eligible += 1
+            r1_pos = get_pos(ranked[0][0])
+            r2_pos = get_pos(ranked[1][0])
+            if r1_pos == 1 and r2_pos == 2:
+                exacta_hits += 1
+
+            # Quinella: our top 2 finish in top 2 (any order)
+            if {r1_pos, r2_pos} == {1, 2}:
+                quinella_hits += 1
+
+        # Trifecta: our top 3 fill the top 3 placings (any order)
+        if len(ranked) >= 3:
+            trifecta_eligible += 1
+            top3_positions = {get_pos(ranked[j][0]) for j in range(3)}
+            if top3_positions == {1, 2, 3}:
+                trifecta_hits += 1
+
+        # First4: our top 4 fill the top 4 placings (any order)
+        if len(ranked) >= 4:
+            first4_eligible += 1
+            top4_positions = {get_pos(ranked[j][0]) for j in range(4)}
+            if top4_positions == {1, 2, 3, 4}:
+                first4_hits += 1
+
         # Win/place P&L on top 1 pick
-        top1_runner = next((r for r in active if r.id == ranked[0][0]), None)
+        top1_runner = runner_by_id.get(ranked[0][0])
         if top1_runner:
             is_winner = top1_runner.finish_position == 1
             is_placed = top1_runner.id in placers
@@ -126,8 +221,34 @@ async def evaluate_weights(weights, races_data):
     win_roi = safe_div(win_pnl, total_races * STAKE)
     place_roi = safe_div(place_pnl, total_races * STAKE)
 
-    # Combined score: balance accuracy and profitability
-    score = (0.3 * top1_rate) + (0.2 * top3_rate) + (0.25 * (win_roi + 1)) + (0.25 * (place_roi + 1))
+    exacta_rate = safe_div(exacta_hits, exacta_eligible)
+    quinella_rate = safe_div(quinella_hits, exacta_eligible)
+    trifecta_rate = safe_div(trifecta_hits, trifecta_eligible)
+    first4_rate = safe_div(first4_hits, first4_eligible)
+
+    # Sequence per-leg hit rates
+    leg_rate_skinny = safe_div(leg_hits_top3, total_races)    # top 3 per leg
+    leg_rate_balanced = safe_div(leg_hits_top4, total_races)  # top 4 per leg
+    leg_rate_wide = safe_div(leg_hits_top6, total_races)      # top 6 per leg
+
+    # Estimated quaddie hit rate = leg_rate ^ 4 (independent legs)
+    quaddie_skinny = leg_rate_skinny ** 4
+    quaddie_balanced = leg_rate_balanced ** 4
+    quaddie_wide = leg_rate_wide ** 4
+
+    # Combined score: balance accuracy, profitability, and exotic hit rates
+    score = (
+        0.20 * top1_rate
+        + 0.10 * top3_rate
+        + 0.20 * (win_roi + 1)
+        + 0.20 * (place_roi + 1)
+        + 0.05 * quinella_rate
+        + 0.05 * trifecta_rate
+        + 0.05 * first4_rate
+        + 0.05 * leg_rate_skinny
+        + 0.05 * leg_rate_balanced
+        + 0.05 * leg_rate_wide
+    )
 
     return {
         "weights": weights,
@@ -136,6 +257,16 @@ async def evaluate_weights(weights, races_data):
         "top3_win_rate": round(top3_rate * 100, 2),
         "win_roi": round(win_roi * 100, 2),
         "place_roi": round(place_roi * 100, 2),
+        "exacta_rate": round(exacta_rate * 100, 2),
+        "quinella_rate": round(quinella_rate * 100, 2),
+        "trifecta_rate": round(trifecta_rate * 100, 2),
+        "first4_rate": round(first4_rate * 100, 2),
+        "leg_skinny": round(leg_rate_skinny * 100, 2),
+        "leg_balanced": round(leg_rate_balanced * 100, 2),
+        "leg_wide": round(leg_rate_wide * 100, 2),
+        "quaddie_skinny": round(quaddie_skinny * 100, 2),
+        "quaddie_balanced": round(quaddie_balanced * 100, 2),
+        "quaddie_wide": round(quaddie_wide * 100, 2),
         "score": round(score, 6),
     }
 
@@ -191,10 +322,23 @@ async def main():
 
     # Use a random sample for speed (full dataset would be too slow for grid search)
     import random
-    random.seed(42)
-    sample_size = min(3000, len(races_data))
+    random.seed(SEED)
+    sample_size = min(SAMPLE_SIZE, len(races_data))
     sample = random.sample(races_data, sample_size)
-    logger.info(f"Using {sample_size} race sample for tuning")
+
+    # Log batch info and race IDs for reproducibility
+    sample_race_ids = sorted(set(race.id for _, race, _, _, _ in sample))
+    logger.info(f"BATCH {BATCH} | seed={SEED} | {sample_size} races from {len(races_data)} total")
+    batch_meta = {
+        "batch": BATCH,
+        "seed": SEED,
+        "sample_size": sample_size,
+        "total_races": len(races_data),
+        "race_ids": sample_race_ids,
+    }
+    with open(Path(f"data/tuner_batch{BATCH}_races.json"), "w") as f:
+        json.dump(batch_meta, f, indent=2)
+    logger.info(f"Sample race IDs saved to data/tuner_batch{BATCH}_races.json")
 
     # Generate all weight combos
     combos = generate_weight_combos()
@@ -209,7 +353,10 @@ async def main():
     logger.info(f"Current weights: score={current_result['score']:.6f}, "
                 f"top1={current_result['top1_win_rate']}%, "
                 f"win_roi={current_result['win_roi']}%, "
-                f"place_roi={current_result['place_roi']}%")
+                f"place_roi={current_result['place_roi']}%, "
+                f"exacta={current_result['exacta_rate']}%, "
+                f"tri={current_result['trifecta_rate']}%, "
+                f"leg3/4/6={current_result['leg_skinny']}/{current_result['leg_balanced']}/{current_result['leg_wide']}%")
 
     # Evaluate all combos
     best_result = current_result
@@ -226,7 +373,10 @@ async def main():
                 logger.info(f"  New best at combo {i}: score={result['score']:.6f}, "
                             f"top1={result['top1_win_rate']}%, "
                             f"win_roi={result['win_roi']}%, "
-                            f"place_roi={result['place_roi']}%")
+                            f"place_roi={result['place_roi']}%, "
+                            f"exacta={result['exacta_rate']}%, "
+                            f"tri={result['trifecta_rate']}%, "
+                            f"leg3/4/6={result['leg_skinny']}/{result['leg_balanced']}/{result['leg_wide']}%")
 
         if (i + 1) % 100 == 0:
             elapsed = time.time() - start_time
@@ -250,15 +400,26 @@ async def main():
             "top3_win_rate": round(best_result["top3_win_rate"] - current_result["top3_win_rate"], 2),
             "win_roi": round(best_result["win_roi"] - current_result["win_roi"], 2),
             "place_roi": round(best_result["place_roi"] - current_result["place_roi"], 2),
+            "exacta_rate": round(best_result["exacta_rate"] - current_result["exacta_rate"], 2),
+            "quinella_rate": round(best_result["quinella_rate"] - current_result["quinella_rate"], 2),
+            "trifecta_rate": round(best_result["trifecta_rate"] - current_result["trifecta_rate"], 2),
+            "first4_rate": round(best_result["first4_rate"] - current_result["first4_rate"], 2),
+            "leg_skinny": round(best_result["leg_skinny"] - current_result["leg_skinny"], 2),
+            "leg_balanced": round(best_result["leg_balanced"] - current_result["leg_balanced"], 2),
+            "leg_wide": round(best_result["leg_wide"] - current_result["leg_wide"], 2),
+            "quaddie_skinny": round(best_result["quaddie_skinny"] - current_result["quaddie_skinny"], 2),
+            "quaddie_balanced": round(best_result["quaddie_balanced"] - current_result["quaddie_balanced"], 2),
+            "quaddie_wide": round(best_result["quaddie_wide"] - current_result["quaddie_wide"], 2),
             "score": round(best_result["score"] - current_result["score"], 6),
         },
         "top_10": results[:10],
     }
 
-    with open(OUTPUT_PATH, "w") as f:
+    output_path = get_output_path()
+    with open(output_path, "w") as f:
         json.dump(output, f, indent=2)
 
-    logger.info(f"\nResults saved to {OUTPUT_PATH}")
+    logger.info(f"\nResults saved to {output_path}")
 
     # Print summary
     print(f"\n{'='*70}")
@@ -275,6 +436,10 @@ async def main():
     print(f"\n  Score: {current_result['score']:.6f}")
     print(f"  Top1: {current_result['top1_win_rate']}%, Top3: {current_result['top3_win_rate']}%")
     print(f"  Win ROI: {current_result['win_roi']}%, Place ROI: {current_result['place_roi']}%")
+    print(f"  Exacta: {current_result['exacta_rate']}%, Quinella: {current_result['quinella_rate']}%")
+    print(f"  Trifecta: {current_result['trifecta_rate']}%, First4: {current_result['first4_rate']}%")
+    print(f"  Leg hit rates: Skinny(top3)={current_result['leg_skinny']}%, Balanced(top4)={current_result['leg_balanced']}%, Wide(top6)={current_result['leg_wide']}%")
+    print(f"  Quaddie est: Skinny={current_result['quaddie_skinny']}%, Balanced={current_result['quaddie_balanced']}%, Wide={current_result['quaddie_wide']}%")
 
     print(f"\n{'='*70}")
     print(f"BEST WEIGHTS")
@@ -288,6 +453,15 @@ async def main():
     print(f"  Top3: {best_result['top3_win_rate']}% ({output['improvement']['top3_win_rate']:+.2f}pp)")
     print(f"  Win ROI: {best_result['win_roi']}% ({output['improvement']['win_roi']:+.2f}pp)")
     print(f"  Place ROI: {best_result['place_roi']}% ({output['improvement']['place_roi']:+.2f}pp)")
+    print(f"  Exacta: {best_result['exacta_rate']}% ({output['improvement']['exacta_rate']:+.2f}pp)")
+    print(f"  Quinella: {best_result['quinella_rate']}% ({output['improvement']['quinella_rate']:+.2f}pp)")
+    print(f"  Trifecta: {best_result['trifecta_rate']}% ({output['improvement']['trifecta_rate']:+.2f}pp)")
+    print(f"  First4: {best_result['first4_rate']}% ({output['improvement']['first4_rate']:+.2f}pp)")
+    print(f"  Leg hit: Skinny={best_result['leg_skinny']}% ({output['improvement']['leg_skinny']:+.2f}pp), "
+          f"Balanced={best_result['leg_balanced']}% ({output['improvement']['leg_balanced']:+.2f}pp), "
+          f"Wide={best_result['leg_wide']}% ({output['improvement']['leg_wide']:+.2f}pp)")
+    print(f"  Quaddie est: Skinny={best_result['quaddie_skinny']}%, "
+          f"Balanced={best_result['quaddie_balanced']}%, Wide={best_result['quaddie_wide']}%")
 
     print(f"\n{'='*70}")
     print(f"TOP 5 CONFIGURATIONS")
@@ -295,6 +469,10 @@ async def main():
     for i, r in enumerate(results[:5]):
         print(f"\n  #{i+1}: score={r['score']:.6f}, top1={r['top1_win_rate']}%, "
               f"win_roi={r['win_roi']}%, place_roi={r['place_roi']}%")
+        print(f"       exacta={r['exacta_rate']}%, quinella={r['quinella_rate']}%, "
+              f"tri={r['trifecta_rate']}%, f4={r['first4_rate']}%")
+        print(f"       leg3={r['leg_skinny']}%, leg4={r['leg_balanced']}%, leg6={r['leg_wide']}%, "
+              f"quad_est={r['quaddie_skinny']}/{r['quaddie_balanced']}/{r['quaddie_wide']}%")
         for k, v in sorted(r["weights"].items()):
             if v > 0.001:
                 print(f"    {k}: {v:.4f}")

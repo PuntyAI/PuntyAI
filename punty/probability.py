@@ -357,20 +357,20 @@ FACTOR_REGISTRY = {
 }
 
 # Default weights (must sum to 1.0)
-# Calibrated from 190K+ historical runners via scripts/run_calibration.py
-# Previous hand-tuned weights: market=0.22, form=0.15, pace=0.11, jt=0.11, barrier=0.09, dl=0.10, movement=0.07, class=0.05, weight=0.05, profile=0.05
+# Optimized via grid search: 2,500 combos x 1,000 races (batch 1, 2026-02-17)
+# Previous calibrated: market=0.40, form=0.32, dl=0.08, jt=0.07, wc=0.04, hp=0.03, cf=0.03, barrier=0.02, pace=0.01
 DEFAULT_WEIGHTS = {
-    "market": 0.40,
-    "form": 0.32,
-    "deep_learning": 0.08,
-    "jockey_trainer": 0.07,
-    "weight_carried": 0.04,
-    "horse_profile": 0.03,
+    "form": 0.50,
+    "market": 0.32,
+    "weight_carried": 0.05,
+    "jockey_trainer": 0.04,
+    "barrier": 0.03,
     "class_fitness": 0.03,
-    "barrier": 0.02,
+    "horse_profile": 0.03,
+    "deep_learning": 0.00,
     "movement": 0.00,
-    "pace": 0.01,
-}  # sums to 1.0 — movement zeroed (100% neutral), pace near-zero (anti-predictive)
+    "pace": 0.00,
+}  # sums to 1.0 — form dominant, market secondary
 
 # Legacy aliases
 WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
