@@ -92,10 +92,6 @@
                     <span class="section-nav-dot" style="background: var(--magenta);"></span>
                     Early Mail
                 </a>
-                <a href="#section-tips" class="section-nav-item" data-section="section-tips">
-                    <span class="section-nav-dot" style="background: var(--cyan);"></span>
-                    Tips
-                </a>
                 {% endif %}
                 {% if live_updates %}
                 <a href="#section-live" class="section-nav-item" data-section="section-live">
@@ -973,6 +969,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var tipsLabel = document.createElement('span');
         tipsLabel.className = 'race-nav-label';
         tipsLabel.textContent = 'Tips';
+        tipsLabel.style.cursor = 'pointer';
+        tipsLabel.onclick = function() {
+            var first = document.getElementById('sec-acc-' + document.querySelector('.race-nav-pill').getAttribute('data-idx'));
+            if (first) {
+                first.classList.add('open');
+                var navH = document.getElementById('section-nav').offsetHeight + 8;
+                var y = first.getBoundingClientRect().top + window.pageYOffset - navH;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+            }
+        };
         navContainer.appendChild(tipsLabel);
         var hasRaces = false;
         sections.forEach(function(sec, idx) {
