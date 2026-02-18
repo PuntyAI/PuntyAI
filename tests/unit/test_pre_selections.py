@@ -130,9 +130,16 @@ class TestDetermineBetType:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_each_way_in_sweet_spot(self):
+    def test_top_pick_win_in_sweet_spot(self):
+        """$4-$6 with good prob/value should be Win (edge: +60.8% ROI)."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 6.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+
+    def test_top_pick_each_way_outside_win_sweet_spot(self):
+        """$8 odds with moderate prob should get Each Way (outside $4-$6 sweet spot)."""
+        c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
+             "value_rating": 0.95, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Each Way"
 
     def test_top_pick_each_way_odds_too_low(self):

@@ -149,14 +149,15 @@ def calculate_pre_selections(
 
     thresholds = _load_thresholds(selection_thresholds)
 
-    # Adjust place threshold based on place context multipliers
+    # Adjust place threshold based on place context multipliers.
+    # Only tighten (raise threshold) when context is weak — never loosen.
+    # Lowering the place threshold was systematically pushing favourites to Place
+    # even when Win would be more profitable (costing ~$64/day in missed profit).
     if place_context_multipliers:
         mults = [v for v in place_context_multipliers.values() if isinstance(v, (int, float))]
         if mults:
             avg_place_strength = sum(mults) / len(mults)
-            if avg_place_strength > 1.15:
-                thresholds["place_min_prob"] = max(0.25, thresholds["place_min_prob"] - 0.05)
-            elif avg_place_strength < 0.85:
+            if avg_place_strength < 0.85:
                 thresholds["place_min_prob"] = min(0.45, thresholds["place_min_prob"] + 0.05)
 
     # Build runner data with probability info
@@ -295,7 +296,15 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
 
 
 def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None) -> str:
-    """Determine optimal bet type for a runner based on probability profile."""
+    """Determine optimal bet type for a runner based on probability profile.
+
+    Edge-aware logic validated on historical performance data:
+    - Win sweet spot $4-$6: +60.8% ROI — strongly prefer Win
+    - Short-priced favs <$2 on Win: -38.9% ROI — prefer Place
+    - $2-$4 Win: moderate, use for top picks only
+    - Roughie $10-$20: +53% ROI sweet spot
+    - Roughie $50+: -100% ROI — avoid Win entirely
+    """
     t = thresholds or _load_thresholds()
     win_prob = c["win_prob"]
     place_prob = c["place_prob"]
@@ -303,13 +312,35 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     value = c["value_rating"]
     place_value = c["place_value_rating"]
 
-    # Roughie: usually Place (safer) unless strong value
-    if is_roughie:
-        if win_prob >= t["win_min_prob"] and value >= 1.20:
-            return "Win"  # strong roughie value
-        if place_prob >= t["place_min_prob"]:
+    # --- Edge-aware odds-band rules (apply to all ranks) ---
+
+    # Short-priced favourites (<$2): Place is almost always better (-38.9% Win ROI)
+    if odds < 2.0 and not is_roughie:
+        if place_prob >= 0.50:
             return "Place"
-        return "Place"  # default roughie to Place
+        # Only Win if extraordinary value (shouldn't happen at short prices)
+        if win_prob >= 0.45 and value >= 1.15:
+            return "Win"
+        return "Place"
+
+    # Win sweet spot ($4-$6): +60.8% ROI — strongly prefer Win for any rank
+    if 4.0 <= odds <= 6.0 and win_prob >= t["win_min_prob"] and value >= 0.95:
+        if rank <= 2:
+            return "Win" if rank == 1 else "Saver Win"
+        # Even rank 3 gets Win in the sweet spot if value is there
+        if value >= 1.05:
+            return "Saver Win"
+
+    # --- Roughie logic ---
+    if is_roughie:
+        # $10-$20 sweet spot: +53% ROI — upgrade to Win if value is there
+        if 10.0 <= odds <= 20.0 and win_prob >= t["win_min_prob"] and value >= 1.15:
+            return "Win"
+        if win_prob >= t["win_min_prob"] and value >= 1.25:
+            return "Win"  # strong roughie value at any odds
+        return "Place"
+
+    # --- Standard rank-based logic (for $2-$4 and $6+ non-roughie) ---
 
     # Top pick (#1): prefer Win or Each Way
     if rank == 1:
@@ -326,8 +357,11 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             return "Place"
         return "Win"  # fallback — at least try
 
-    # Second pick (#2): Win if strong, Saver Win, or Place
+    # Second pick (#2): Win/Saver if strong, else Place
     if rank == 2:
+        # $2-$4 with good probability — Saver Win (favourites that our model rates well)
+        if 2.0 <= odds <= 4.0 and win_prob >= 0.20 and value >= 0.95:
+            return "Saver Win"
         if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
             return "Saver Win"
         if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
@@ -337,7 +371,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             return "Place"
         return "Place"
 
-    # Third pick (#3): Place-focused
+    # Third pick (#3): Place-focused, but Win if in sweet spot (handled above)
     if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
         return "Place"
     if win_prob >= t["win_min_prob"] and value >= 1.10:
@@ -407,12 +441,42 @@ def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
 
 
 def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
-    """Allocate stakes from pool based on Kelly recommendations and rank."""
+    """Allocate stakes from pool using edge-weighted sizing.
+
+    Instead of static rank weights, scale allocation by expected return
+    so more capital flows to high-edge bets. Historical edges:
+    - Win $4-$6: +60.8% ROI → deserves larger stake
+    - Place (any rank): +13.8% ROI → solid base
+    - Roughie $10-$20: +53% ROI → bump up from default 15%
+    """
     if not picks:
         return
 
     # Base allocation weights by rank
     rank_weights = {1: 0.35, 2: 0.28, 3: 0.22, 4: 0.15}
+
+    # Edge-aware multipliers on top of rank weights
+    for pick in picks:
+        base = rank_weights.get(pick.rank, 0.15)
+
+        # Win sweet spot $4-$6 bonus (our best edge at +60.8% ROI)
+        if pick.bet_type in ("Win", "Saver Win") and 4.0 <= pick.odds <= 6.0:
+            base *= 1.25  # 25% stake boost in sweet spot
+
+        # Roughie $10-$20 bonus (+53% ROI sweet spot)
+        if pick.is_roughie and 10.0 <= pick.odds <= 20.0:
+            base *= 1.20  # 20% stake boost
+
+        # Positive expected return bonus — tilt more to profitable bets
+        if pick.expected_return > 0.10:
+            base *= 1.15  # 15% bonus for strong +EV
+
+        # Short-priced Place penalty — these are safe but low-returning
+        if pick.bet_type == "Place" and pick.odds < 2.5:
+            base *= 0.85  # reduce stake on low-odds Place
+
+        rank_weights[pick.rank] = base
+
     total_weight = sum(rank_weights.get(p.rank, 0.15) for p in picks)
 
     for pick in picks:

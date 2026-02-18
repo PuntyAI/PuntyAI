@@ -2720,12 +2720,16 @@ def calculate_smart_quaddie_widths(
 
     # If over budget, tighten the easiest legs first (lowest implied SP = shortest fav)
     # "Easiest" = the leg where the fav is shortest priced (highest win_prob)
+    # MINIMUM WIDTH = 2: Even standout favourites win only ~63%. Single-selection
+    # legs are catastrophic single points of failure (validated on 14,246 legs
+    # from 2025: "ALWAYS need at least width=2 in any leg for safety").
+    MIN_LEG_WIDTH = 2
     while combos > max_combos:
         # Find leg with highest top runner probability that can be tightened
         best_idx = None
         best_prob = -1
         for i, leg in enumerate(legs):
-            if widths[i] > 1:
+            if widths[i] > MIN_LEG_WIDTH:
                 top_prob = leg.top_runners[0].get("win_prob", 0) if leg.top_runners else 0
                 if top_prob > best_prob:
                     best_prob = top_prob
