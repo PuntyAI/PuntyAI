@@ -171,24 +171,12 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
-    # Prevent Jockeys/Stables from becoming section headings — keep as inline bold
-    # (matching the style of Track/Rail/Tempo Profile labels in Meet Snapshot)
-    content = re.sub(
-        r'^\*{1,2}(Jockeys\s+to\s+follow:?)\*{1,2}\s*$',
-        r'JOCKEYS_LABEL_PLACEHOLDER',
-        content, flags=re.MULTILINE | re.IGNORECASE,
-    )
-    content = re.sub(
-        r'^\*{1,2}(Stables\s+to\s+respect:?)\*{1,2}\s*$',
-        r'STABLES_LABEL_PLACEHOLDER',
-        content, flags=re.MULTILINE | re.IGNORECASE,
-    )
-
     # Convert standalone bold lines to section headings (wrap-ups, reviews)
     # Matches lines that are entirely *Bold Text* with 2+ words starting uppercase
+    # Excludes Jockeys/Stables lines — those stay as inline bold labels
     content = re.sub(
-        r'^\*{1,2}([A-Z][^*\n]*\s[^*\n]{2,})\*{1,2}\s*$',
-        r'## \1', content, flags=re.MULTILINE,
+        r'^\*{1,2}(?!Jockeys\s+to\s+follow|Stables\s+to\s+respect)([A-Z][^*\n]*\s[^*\n]{2,})\*{1,2}\s*$',
+        r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # Convert headers (### *TEXT* or ### 1) TEXT)
@@ -225,10 +213,6 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     # Convert _italic_ to <em>
     content = re.sub(r'_([^_\n]+)_', r'<em>\1</em>', content)
-
-    # Restore Jockeys/Stables labels as inline bold (same style as Tempo Profile)
-    content = content.replace('JOCKEYS_LABEL_PLACEHOLDER', '<strong>Jockeys to follow:</strong>')
-    content = content.replace('STABLES_LABEL_PLACEHOLDER', '<strong>Stables to respect:</strong>')
 
     # Convert --- or === horizontal rules
     content = re.sub(r'^[-=]{3,}$', '<hr class="tips-divider">', content, flags=re.MULTILINE)
@@ -319,6 +303,14 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     content = re.sub(
         "(<strong>Punty['\u2018\u2019]?s\\s+Pick:?</strong>)",
         r'<span class="puntys-pick">\1</span>',
+        content,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove top spacing on Jockeys/Stables paragraphs (keep tight with Tempo Profile)
+    content = re.sub(
+        r'<p>(<strong>(?:Jockeys to follow|Stables to respect):?</strong>)',
+        r'<p style="margin-top:0.15rem">\1',
         content,
         flags=re.IGNORECASE,
     )
