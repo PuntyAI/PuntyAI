@@ -145,7 +145,7 @@ async def get_winner_stats(today: bool = False) -> dict:
     from punty.models.meeting import Race
 
     async with async_session() as db:
-        today = melb_today()
+        today_date = melb_today()
 
         # Today's winners (all pick types that hit)
         today_result = await db.execute(
@@ -155,7 +155,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                 and_(
                     Pick.hit == True,
                     Pick.settled == True,
-                    Meeting.date == today,
+                    Meeting.date == today_date,
                 )
             )
         )
@@ -165,7 +165,7 @@ async def get_winner_stats(today: bool = False) -> dict:
         today_meetings_result = await db.execute(
             select(Meeting).where(
                 and_(
-                    Meeting.date == today,
+                    Meeting.date == today_date,
                     Meeting.selected == True,
                 )
             )
@@ -247,7 +247,7 @@ async def get_winner_stats(today: bool = False) -> dict:
             Pick.bet_type != "exotics_only",
         ]
         if today:
-            rank_conds.append(Meeting.date == melb_today())
+            rank_conds.append(Meeting.date == today_date)
         for rank in [1, 2, 3, 4]:
             q = select(
                 func.count(Pick.id),
@@ -332,7 +332,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Pick.settled == True,
                         Pick.hit == True,
                         Pick.pnl > 0,
-                        Meeting.date == today,
+                        Meeting.date == today_date,
                     )
                 )
                 .order_by(Pick.pnl.desc())
@@ -345,7 +345,7 @@ async def get_winner_stats(today: bool = False) -> dict:
         # Fallback: most recent winning bet from last 7 days
         if not best_bet:
             from datetime import timedelta
-            recent_cutoff = today - timedelta(days=7)
+            recent_cutoff = today_date - timedelta(days=7)
             recent_result = await db.execute(
                 select(Pick, Meeting)
                 .join(Meeting, Pick.meeting_id == Meeting.id)
@@ -355,7 +355,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Pick.hit == True,
                         Pick.pnl > 0,
                         Meeting.date >= recent_cutoff,
-                        Meeting.date < today,
+                        Meeting.date < today_date,
                     )
                 )
                 .order_by(Pick.pnl.desc())
@@ -377,7 +377,7 @@ async def get_winner_stats(today: bool = False) -> dict:
             Pick.bet_type != "exotics_only",
         ]
         if today:
-            pp_conds.append(Meeting.date == melb_today())
+            pp_conds.append(Meeting.date == today_date)
         pp_q = select(
             func.count(Pick.id),
             func.sum(case((pp_hit_expr == True, 1), else_=0)),
