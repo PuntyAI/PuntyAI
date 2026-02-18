@@ -323,11 +323,14 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             return "Win"
         return "Place"
 
-    # Win sweet spot ($4-$6): +60.8% ROI — strongly prefer Win for any rank
+    # Win sweet spot ($4-$6): +60.8% ROI — prefer Win for top pick
     if 4.0 <= odds <= 6.0 and win_prob >= t["win_min_prob"] and value >= 0.95:
-        if rank <= 2:
-            return "Win" if rank == 1 else "Saver Win"
-        # Even rank 3 gets Win in the sweet spot if value is there
+        if rank == 1:
+            return "Win"
+        # Rank 2: Each Way for upside + place protection (most #2 picks place, not win)
+        if rank == 2:
+            return "Each Way"
+        # Rank 3 gets Win only with strong value
         if value >= 1.05:
             return "Saver Win"
 
@@ -357,12 +360,10 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             return "Place"
         return "Win"  # fallback — at least try
 
-    # Second pick (#2): Win/Saver if strong, else Place
+    # Second pick (#2): Place-focused — most #2 picks place, not win
     if rank == 2:
-        # $2-$4 with good probability — Saver Win (favourites that our model rates well)
-        if 2.0 <= odds <= 4.0 and win_prob >= 0.20 and value >= 0.95:
-            return "Saver Win"
-        if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
+        # Only upgrade to Saver Win with very strong win signal
+        if win_prob >= 0.25 and value >= 1.10:
             return "Saver Win"
         if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
                 and win_prob >= t["each_way_min_prob"] and value >= 1.0):
@@ -511,21 +512,21 @@ def _select_exotic(
     """Select the best exotic bet, enforcing consistency with selections.
 
     Overlap rules: ALL exotic runners MUST be from our selections.
-    Historical data (314 settled exotics):
-    - 0-1 overlap: 0% hit rate, -100% ROI
-    - 3+ overlap: 15% hit rate, -51% ROI (best)
-    - Non-selection runners: 5.9% win rate vs 17.3% for selections
-    Keeping exotics within selections is critical.
 
-    Type preferences (based on actual performance):
-    - Exacta Standout: 19% hit rate (best)
-    - Trifecta Box: 8.2% hit rate (default)
-    - First4 Box: 0% hit rate (banned)
+    Type preferences (validated on 65 settled exotics):
+    - Exacta / Exacta Standout: 22.2% hit rate, +0.2% ROI — BEST
+    - Trifecta Standout: ~16% hit rate when #1 wins
+    - Trifecta Box: 4.5% hit rate, -19.2% ROI — avoid
+    - Quinella: 0/3 hits — avoid
+    - First4 Box: 0% hit rate — banned
+
+    Strategy: Anchor on #1 pick (39% win rate). Exacta Standout
+    leverages this directly with fewer combos and higher hit rate.
     """
     if not exotic_combos:
         return None
 
-    # Score exotics: value ratio + strong bonus for using our selected runners
+    # Score exotics: heavily favour formats that anchor on #1 pick
     scored = []
     for ec in exotic_combos:
         runners = set(ec.get("runners", []))
@@ -533,27 +534,34 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
 
-        # ALL exotic runners must be from selections (validated: 0% hit rate otherwise)
+        # ALL exotic runners must be from selections
         if overlap_ratio < 1.0:
             continue
 
-        # Ban First4 Box (0/50 hits historically)
         exotic_type = ec.get("type", "").lower()
-        if "first4" in exotic_type and "box" in exotic_type:
-            continue
 
-        # Blend value with probability — value alone is meaningless if the
-        # absolute probability is negligible (e.g. two roughies in an Exacta).
-        # prob_weight caps at 1.0 so strong-probability combos aren't over-boosted.
+        # Ban underperforming types
+        if "first4" in exotic_type and "box" in exotic_type:
+            continue  # 0% hit rate historically
+        if "quinella" in exotic_type:
+            continue  # 0/3, no edge over exacta
+
+        # Blend value with probability
         raw_prob = ec.get("probability", 0)
         if isinstance(raw_prob, str):
             raw_prob = float(raw_prob.rstrip("%")) / 100
-        prob_weight = min(raw_prob / 0.05, 1.0)  # full weight at ≥5% combined prob
+        prob_weight = min(raw_prob / 0.05, 1.0)
 
-        # Type bonus: Exacta Standout has 19% hit rate (best), Trifecta Box 8.2%
+        # Type bonuses based on validated performance data
         type_bonus = 0.0
-        if "exacta" in exotic_type and "standout" in exotic_type:
-            type_bonus = 0.5  # strong preference for best-performing type
+        if "exacta" in exotic_type:
+            type_bonus = 1.5  # 22.2% hit rate, all exotic wins were exactas
+            if "standout" in exotic_type:
+                type_bonus = 2.0  # standout format is ideal (anchored on #1)
+        elif "trifecta" in exotic_type and "standout" in exotic_type:
+            type_bonus = 0.8  # 15.8% hit rate when #1 wins
+        elif "trifecta" in exotic_type and "box" in exotic_type:
+            type_bonus = -0.5  # 4.5% hit rate, -19.2% ROI — penalise
 
         # Score = value * probability_weight + overlap bonus + type bonus
         score = ec.get("value", 1.0) * prob_weight + overlap_ratio * 1.0 + type_bonus

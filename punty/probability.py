@@ -2463,6 +2463,39 @@ def calculate_exotic_combinations(
                 format="flat",
             ))
 
+    # --- Exacta Standout: #1 pick anchored 1st, others for 2nd ---
+    # Validated: 22.2% hit rate, all exotic wins when #1 won were exactas.
+    # Standout format = fewer combos, higher unit stake, better returns.
+    if len(top4) >= 2:
+        standout = top4[0]
+        if standout["win_prob"] >= MIN_LEAD_PROB:
+            others = top4[1:4]
+            # Probability: standout wins AND any of others finishes 2nd
+            our_prob = 0.0
+            mkt_prob = 0.0
+            for other in others:
+                our_prob += _harville_probability(
+                    [standout["win_prob"], other["win_prob"]]
+                )
+                mkt_prob += _harville_probability(
+                    [standout["market_implied"], other["market_implied"]]
+                )
+            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+            num_combos = len(others)
+
+            if value >= VALUE_THRESHOLDS.get("Exacta", 1.2):
+                results.append(ExoticCombination(
+                    exotic_type="Exacta Standout",
+                    runners=[standout["saddlecloth"]] + [r["saddlecloth"] for r in others],
+                    runner_names=[standout.get("horse_name", "")] + [r.get("horse_name", "") for r in others],
+                    estimated_probability=round(our_prob, 6),
+                    market_probability=round(mkt_prob, 6),
+                    value_ratio=round(value, 3),
+                    cost=stake,
+                    num_combos=num_combos,
+                    format="standout",
+                ))
+
     # --- Trifecta Box: 3 runners from top 4 ---
     for combo in combinations(top4, 3):
         our_probs = [r["win_prob"] for r in combo]

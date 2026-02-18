@@ -149,9 +149,16 @@ class TestDetermineBetType:
         result = _determine_bet_type(c, rank=1, is_roughie=False)
         assert result == "Win"  # odds below $4, so Win not E/W
 
-    def test_second_pick_saver_win(self):
+    def test_second_pick_each_way_in_sweet_spot(self):
+        """Rank 2 in $4-$6 sweet spot gets Each Way (upside + place protection)."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Each Way"
+
+    def test_second_pick_saver_win_strong_signal(self):
+        """Rank 2 outside sweet spot only gets Saver Win with very strong signal."""
+        c = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.0,
+             "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Saver Win"
 
     def test_second_pick_place_when_no_value(self):
@@ -264,7 +271,7 @@ class TestSelectExotic:
 
     def test_parses_string_probability(self):
         combos = [
-            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": "12.5%", "value": 1.50, "combos": 1, "format": "flat"},
         ]
         result = _select_exotic(combos, {1, 2})
@@ -517,9 +524,9 @@ class TestCalculatePreSelections:
         ]
         ctx = _race_context(runners)
         ctx["probabilities"]["exotic_combinations"] = [
-            {"type": "Quinella", "runners": [1, 2],
+            {"type": "Exacta Standout", "runners": [1, 2],
              "runner_names": ["A", "B"],
-             "probability": "15.0%", "value": 2.0, "combos": 1, "format": "flat"},
+             "probability": "15.0%", "value": 2.0, "combos": 1, "format": "standout"},
         ]
         result = calculate_pre_selections(ctx)
         # Selection EV is low (0.20*5 - 1 = 0, 0.18*6 - 1 = 0.08)
@@ -558,14 +565,14 @@ class TestFormatPreSelections:
         ]
         ctx = _race_context(runners)
         ctx["probabilities"]["exotic_combinations"] = [
-            {"type": "Quinella", "runners": [1, 2],
+            {"type": "Exacta Standout", "runners": [1, 2],
              "runner_names": ["A", "B"],
-             "probability": "20.0%", "value": 1.50, "combos": 1, "format": "flat"},
+             "probability": "20.0%", "value": 1.50, "combos": 1, "format": "standout"},
         ]
         result = calculate_pre_selections(ctx)
         formatted = format_pre_selections(result)
         assert "Exotic:" in formatted
-        assert "Quinella" in formatted
+        assert "Exacta Standout" in formatted
 
     def test_notes_in_output(self):
         runners = [
