@@ -325,26 +325,51 @@ def _clean_jockey_name(name: str) -> str:
     - "Ms Sarah Field(a1.5/52.5kg)" → "sarah field"
     - "L.K.Cartwright" → "l k cartwright"
     - "C.Newitt" → "c newitt"
+    - "Jace McMurray(a2/53kg), (late alt)" → "jace mcmurray"
     """
     import re
-    # Strip parenthesised apprentice weight like (a2/52.5kg) or (a1.5/52.5kg)
+    # Strip parenthesised content (claim weights, late alt, etc.)
     name = re.sub(r"\([^)]*\)", "", name)
-    # Replace dots with spaces, normalise whitespace
-    name = name.strip().replace(".", " ").lower()
+    # Replace dots and commas with spaces, normalise whitespace
+    name = name.strip().replace(".", " ").replace(",", " ").lower()
     # Strip common title prefixes
     name = re.sub(r"^(ms|mr|mrs|miss|dr)\s+", "", name)
     return re.sub(r"\s+", " ", name).strip()
 
 
+_SURNAME_PREFIXES = frozenset({"du", "de", "van", "von", "le", "la", "di", "el", "del", "den", "der", "dos", "das", "al"})
+
+
+def _split_name_parts(parts: list[str]) -> tuple[list[str], list[str]]:
+    """Split cleaned name tokens into (given_names, surname_parts).
+
+    Handles multi-word surnames like "Du Plessis", "Van Der Westhuizen".
+    """
+    if len(parts) <= 1:
+        return [], parts
+
+    # Walk backwards from second-to-last to find where surname prefixes start
+    surname_start = len(parts) - 1
+    for i in range(len(parts) - 2, 0, -1):  # never consume first token
+        if parts[i] in _SURNAME_PREFIXES:
+            surname_start = i
+        else:
+            break
+
+    return parts[:surname_start], parts[surname_start:]
+
+
 def _same_jockey(name_a: str, name_b: str) -> bool:
     """Check if two jockey name strings refer to the same person.
 
-    Handles abbreviated vs full names, apprentice weights, and title prefixes:
+    Handles abbreviated vs full names, apprentice weights, title prefixes,
+    and multi-word surnames (Du Plessis, Van Der Westhuizen, etc.):
     - "Craig Newitt" vs "C.Newitt" → same
     - "Michael Dee" vs "M.J.Dee" → same
     - "Bailey Kinninmont(a2/52.5kg)" vs "B.R.Kinninmont" → same
     - "Ms Sarah Field(a1.5/52.5kg)" vs "S.Field" → same
     - "Luke Cartwright" vs "L.K.Cartwright" → same
+    - "Mark Du Plessis" vs "M.R.du Plessis" → same
     - "J. McDonald" vs "C. Williams" → different
     """
     a = _clean_jockey_name(name_a).split()
@@ -352,12 +377,13 @@ def _same_jockey(name_a: str, name_b: str) -> bool:
     if not a or not b:
         return False
 
-    # Surnames must match (last token)
-    if a[-1] != b[-1]:
+    a_first, a_surname = _split_name_parts(a)
+    b_first, b_surname = _split_name_parts(b)
+
+    # Surnames must match
+    if a_surname != b_surname:
         return False
 
-    a_first = [p for p in a[:-1] if p]
-    b_first = [p for p in b[:-1] if p]
     if not a_first or not b_first:
         return True  # Surname match with no first name to compare
 
