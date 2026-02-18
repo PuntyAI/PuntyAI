@@ -492,6 +492,22 @@
         text-transform: uppercase; letter-spacing: 0.05em;
     }
 
+    /* Punty's Punts section header */
+    .punts-section-header {
+        display: flex; align-items: center; gap: 0.75rem;
+        margin: 1.5rem 0 1rem; padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .punts-avatar {
+        width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+        border: 2px solid rgba(233, 30, 140, 0.4);
+    }
+    .punts-title {
+        font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 700;
+        letter-spacing: 0.05em;
+        background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
     /* Punty's Pick Block (highlighted at bottom of race) */
     .puntys-pick-block {
         margin-top: 1rem; padding: 0.875rem 1rem; border-radius: 10px;
@@ -499,12 +515,16 @@
         background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(255, 107, 53, 0.06));
     }
     .puntys-pick-block p { margin-bottom: 0.25rem; }
-    .puntys-pick-block::before {
-        content: "PUNTY'S PICK";
-        display: block; margin-bottom: 0.4rem;
+    .puntys-pick-header {
+        display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem;
+    }
+    .puntys-pick-header img {
+        width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
+        border: 1.5px solid rgba(233, 30, 140, 0.4);
+    }
+    .puntys-pick-header span {
         font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700;
-        letter-spacing: 0.08em;
-        color: var(--magenta);
+        letter-spacing: 0.08em; color: var(--magenta);
     }
 
     /* Selection metadata labels */
@@ -1013,6 +1033,20 @@ document.addEventListener('DOMContentLoaded', function() {
     tipsAnchor.id = 'section-tips';
     tipsContent.appendChild(tipsAnchor);
 
+    // "Punty's Punts" section heading above race cards
+    var puntsHeader = document.createElement('div');
+    puntsHeader.className = 'punts-section-header';
+    var puntsImg = document.createElement('img');
+    puntsImg.src = '/static/punty-character.jpg';
+    puntsImg.alt = 'Punty';
+    puntsImg.className = 'punts-avatar';
+    var puntsTitle = document.createElement('h2');
+    puntsTitle.className = 'punts-title';
+    puntsTitle.textContent = "Punty's Punts";
+    puntsHeader.appendChild(puntsImg);
+    puntsHeader.appendChild(puntsTitle);
+    tipsContent.appendChild(puntsHeader);
+
     // Race and sequence sections
     sections.forEach(function(sec, idx) {
         // "SEQUENCE LANES" becomes a styled section divider, not an accordion
@@ -1108,6 +1142,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 var pickWrap = document.createElement('div');
                 pickWrap.className = 'puntys-pick-block';
+                var pickHdr = document.createElement('div');
+                pickHdr.className = 'puntys-pick-header';
+                var pickImg = document.createElement('img');
+                pickImg.src = '/static/punty-character.jpg';
+                pickImg.alt = 'Punty';
+                var pickLbl = document.createElement('span');
+                pickLbl.textContent = "PUNTY'S PICK";
+                pickHdr.appendChild(pickImg);
+                pickHdr.appendChild(pickLbl);
+                pickWrap.appendChild(pickHdr);
                 pickNodes.forEach(function(n) { pickWrap.appendChild(n); });
                 body.appendChild(pickWrap);
             }
