@@ -140,7 +140,7 @@ async def get_recent_wins_public(limit: int = 15) -> dict:
         return {"wins": wins}
 
 
-async def get_winner_stats() -> dict:
+async def get_winner_stats(today: bool = False) -> dict:
     """Get winner statistics for today and all-time."""
     from punty.models.meeting import Race
 
@@ -241,20 +241,23 @@ async def get_winner_stats() -> dict:
         from sqlalchemy import case
         pick_ranks = []
         labels = {1: "Top Pick", 2: "2nd Pick", 3: "3rd Pick", 4: "Roughie"}
+        rank_conds = [
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.bet_type != "exotics_only",
+        ]
+        if today:
+            rank_conds.append(Meeting.date == melb_today())
         for rank in [1, 2, 3, 4]:
-            sr_result = await db.execute(
-                select(
-                    func.count(Pick.id),
-                    func.sum(case((Pick.hit == True, 1), else_=0)),
-                    func.sum(Pick.pnl),
-                    func.sum(Pick.bet_stake),
-                ).where(and_(
-                    Pick.settled == True,
-                    Pick.pick_type == "selection",
-                    Pick.tip_rank == rank,
-                    Pick.bet_type != "exotics_only",
-                ))
-            )
+            q = select(
+                func.count(Pick.id),
+                func.sum(case((Pick.hit == True, 1), else_=0)),
+                func.sum(Pick.pnl),
+                func.sum(Pick.bet_stake),
+            ).where(and_(*rank_conds, Pick.tip_rank == rank))
+            if today:
+                q = q.join(Meeting, Pick.meeting_id == Meeting.id)
+            sr_result = await db.execute(q)
             row = sr_result.one()
             total = row[0] or 0
             hits = int(row[1] or 0)
@@ -367,19 +370,23 @@ async def get_winner_stats() -> dict:
         from sqlalchemy import literal_column
         pp_hit_expr = func.coalesce(Pick.pp_hit, Pick.hit)
         pp_pnl_expr = func.coalesce(Pick.pp_pnl, Pick.pnl)
-        pp_result = await db.execute(
-            select(
-                func.count(Pick.id),
-                func.sum(case((pp_hit_expr == True, 1), else_=0)),
-                func.sum(pp_pnl_expr),
-                func.sum(Pick.bet_stake),
-            ).where(and_(
-                Pick.settled == True,
-                Pick.pick_type == "selection",
-                Pick.is_puntys_pick == True,
-                Pick.bet_type != "exotics_only",
-            ))
-        )
+        pp_conds = [
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.is_puntys_pick == True,
+            Pick.bet_type != "exotics_only",
+        ]
+        if today:
+            pp_conds.append(Meeting.date == melb_today())
+        pp_q = select(
+            func.count(Pick.id),
+            func.sum(case((pp_hit_expr == True, 1), else_=0)),
+            func.sum(pp_pnl_expr),
+            func.sum(Pick.bet_stake),
+        ).where(and_(*pp_conds))
+        if today:
+            pp_q = pp_q.join(Meeting, Pick.meeting_id == Meeting.id)
+        pp_result = await db.execute(pp_q)
         pp_row = pp_result.one()
         pp_total = pp_row[0] or 0
         pp_hits = int(pp_row[1] or 0)

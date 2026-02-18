@@ -167,7 +167,7 @@
                 <div class="text-[10px] mt-0.5" style="color: var(--text-muted);" id="tr-count-4"></div>
                 <div class="text-[10px] font-heading font-semibold mt-0.5" id="tr-roi-4"></div>
             </div>
-            <p class="text-center text-[10px] mt-2 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &amp; ROI &mdash; All Time</p>
+            <p id="rank-time-label" class="text-center text-[10px] mt-2 font-heading uppercase tracking-wider" style="color: var(--text-muted);">Strike Rate &amp; ROI &mdash; All Time</p>
         </div>
 
         <!-- Today / All Time Toggle -->
@@ -608,6 +608,7 @@
         // Collapse filters after applying
         if (filtersOpen) { window.toggleFilters(); }
         fetchStats();
+        loadTipRankStats();
     };
 
     window.clearFilters = function() {
@@ -620,6 +621,7 @@
         updateChips();
         history.replaceState(null, '', '/stats');
         fetchStats();
+        loadTipRankStats();
     };
 
     window.setTimeRange = function(range) {
@@ -631,6 +633,7 @@
             document.getElementById('f-date-to').value = '';
         }
         fetchStats();
+        loadTipRankStats();
     };
 
     function updateToggleUI() {
@@ -757,9 +760,19 @@
         }
     });
 
-    // Load tip rank strike rates (same data as homepage)
+    // Load tip rank strike rates — uses same filters/time range as main stats
     function loadTipRankStats() {
-        fetch('/api/public/stats')
+        var fp = getFilterParams();
+        var url = '/api/public/stats';
+        if (fp.params.toString()) url += '?' + fp.params.toString();
+
+        // Update the label under the rank cards
+        var labelEl = document.getElementById('rank-time-label');
+        if (labelEl) {
+            labelEl.textContent = 'Strike Rate & ROI \u2014 ' + (timeRange === 'today' ? 'Today' : 'All Time');
+        }
+
+        fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 (data.pick_ranks || []).forEach(function(pr) {

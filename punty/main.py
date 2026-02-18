@@ -243,10 +243,10 @@ async def health_check():
 
 
 @app.get("/api/public/stats")
-async def public_stats():
+async def public_stats(today: bool = False):
     """Get public stats for homepage."""
     from punty.public.routes import get_winner_stats
-    return await get_winner_stats()
+    return await get_winner_stats(today=today)
 
 
 @app.get("/api/public/wins")

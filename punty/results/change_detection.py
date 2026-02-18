@@ -340,36 +340,18 @@ def _clean_jockey_name(name: str) -> str:
 _SURNAME_PREFIXES = frozenset({"du", "de", "van", "von", "le", "la", "di", "el", "del", "den", "der", "dos", "das", "al"})
 
 
-def _split_name_parts(parts: list[str]) -> tuple[list[str], list[str]]:
-    """Split cleaned name tokens into (given_names, surname_parts).
-
-    Handles multi-word surnames like "Du Plessis", "Van Der Westhuizen".
-    """
-    if len(parts) <= 1:
-        return [], parts
-
-    # Walk backwards from second-to-last to find where surname prefixes start
-    surname_start = len(parts) - 1
-    for i in range(len(parts) - 2, 0, -1):  # never consume first token
-        if parts[i] in _SURNAME_PREFIXES:
-            surname_start = i
-        else:
-            break
-
-    return parts[:surname_start], parts[surname_start:]
-
-
 def _same_jockey(name_a: str, name_b: str) -> bool:
     """Check if two jockey name strings refer to the same person.
 
     Handles abbreviated vs full names, apprentice weights, title prefixes,
-    and multi-word surnames (Du Plessis, Van Der Westhuizen, etc.):
+    and surname prefixes (Du Plessis, Le Boeuf, Van Der Westhuizen, etc.):
     - "Craig Newitt" vs "C.Newitt" → same
     - "Michael Dee" vs "M.J.Dee" → same
     - "Bailey Kinninmont(a2/52.5kg)" vs "B.R.Kinninmont" → same
     - "Ms Sarah Field(a1.5/52.5kg)" vs "S.Field" → same
     - "Luke Cartwright" vs "L.K.Cartwright" → same
     - "Mark Du Plessis" vs "M.R.du Plessis" → same
+    - "Valentin Le Boeuf" vs "V.L.Boeuf" → same
     - "J. McDonald" vs "C. Williams" → different
     """
     a = _clean_jockey_name(name_a).split()
@@ -377,25 +359,35 @@ def _same_jockey(name_a: str, name_b: str) -> bool:
     if not a or not b:
         return False
 
-    a_first, a_surname = _split_name_parts(a)
-    b_first, b_surname = _split_name_parts(b)
-
-    # Surnames must match
-    if a_surname != b_surname:
+    # Core surname = last token (always the actual family name)
+    if a[-1] != b[-1]:
         return False
+
+    # Given names = everything before last token, excluding surname prefixes.
+    # Also strip single-char initials immediately before the surname if they
+    # match a prefix initial (handles "V.L.Boeuf" where "L" = "Le").
+    # Only strip from the last position to avoid eating real first-name initials.
+    prefix_initials = {p[0] for p in _SURNAME_PREFIXES}
+    a_given = list(a[:-1])
+    b_given = list(b[:-1])
+    # Strip full surname prefixes from anywhere
+    a_first = [p for p in a_given if p not in _SURNAME_PREFIXES]
+    b_first = [p for p in b_given if p not in _SURNAME_PREFIXES]
+    # Strip trailing single-char prefix initial (right before surname)
+    if a_first and len(a_first[-1]) == 1 and a_first[-1] in prefix_initials:
+        a_first = a_first[:-1]
+    if b_first and len(b_first[-1]) == 1 and b_first[-1] in prefix_initials:
+        b_first = b_first[:-1]
 
     if not a_first or not b_first:
-        return True  # Surname match with no first name to compare
-
-    # Determine which has fewer name parts (likely the abbreviated one)
-    short, long = (a_first, b_first) if len(a_first) <= len(b_first) else (b_first, a_first)
+        return True  # Surname match with no given name to compare
 
     # First initial must match
-    if short[0][0] != long[0][0]:
+    if a_first[0][0] != b_first[0][0]:
         return False
 
-    # If abbreviated side has multiple initials (e.g. "M J"), check they all match
-    # the initials of the full-name side. But only check up to what's available.
+    # If abbreviated side has multiple initials, check they all match
+    short, long = (a_first, b_first) if len(a_first) <= len(b_first) else (b_first, a_first)
     for i, part in enumerate(short):
         if i >= len(long):
             break
