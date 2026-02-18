@@ -171,15 +171,16 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
-    # Convert Jockeys/Stables headings to inline bold labels (not full section headings)
+    # Prevent Jockeys/Stables from becoming section headings — keep as inline bold
+    # (matching the style of Track/Rail/Tempo Profile labels in Meet Snapshot)
     content = re.sub(
         r'^\*{1,2}(Jockeys\s+to\s+follow:?)\*{1,2}\s*$',
-        r'<strong class="snapshot-label">\1</strong>',
+        r'JOCKEYS_LABEL_PLACEHOLDER',
         content, flags=re.MULTILINE | re.IGNORECASE,
     )
     content = re.sub(
         r'^\*{1,2}(Stables\s+to\s+respect:?)\*{1,2}\s*$',
-        r'<strong class="snapshot-label">\1</strong>',
+        r'STABLES_LABEL_PLACEHOLDER',
         content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
@@ -224,6 +225,10 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     # Convert _italic_ to <em>
     content = re.sub(r'_([^_\n]+)_', r'<em>\1</em>', content)
+
+    # Restore Jockeys/Stables labels as inline bold (same style as Tempo Profile)
+    content = content.replace('JOCKEYS_LABEL_PLACEHOLDER', '<strong>Jockeys to follow:</strong>')
+    content = content.replace('STABLES_LABEL_PLACEHOLDER', '<strong>Stables to respect:</strong>')
 
     # Convert --- or === horizontal rules
     content = re.sub(r'^[-=]{3,}$', '<hr class="tips-divider">', content, flags=re.MULTILINE)
