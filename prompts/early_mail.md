@@ -76,7 +76,7 @@ Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, we
 - If BET_TYPE is Each Way → show both: "Win: {win_prob}% | Place: {place_prob}% | Value: {win_value}x"
 
 *Degenerate Exotic of the Race*
-{R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $20
+{R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $15
 Why: {R_EXOTIC_REASON — explain the race shape that makes this exotic live. Pace, form, class.}
 
 **EXOTIC SELECTION — USE PRE-CALCULATED DATA:**
@@ -109,10 +109,10 @@ Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your 
 Do NOT use: "First4 Box" (banned — 0% hit rate), "Trifecta (Boxed)", "Box Trifecta", etc.
 
 **Cost validation for boxed bets:**
-- Exacta Standout 1/3 runners = 3 combos × unit = $20 (best value)
-- Exacta Standout 1/2 runners = 2 combos × unit = $20
-- Trifecta Box 3 runners = 6 combos × unit = $20 (ok)
-- Trifecta Box 4 runners = 24 combos × unit = $20 (ok, but lower unit)
+- Exacta Standout 1/3 runners = 3 combos × unit = $15 (best value)
+- Exacta Standout 1/2 runners = 2 combos × unit = $15
+- Trifecta Box 3 runners = 6 combos × unit = $15 (ok)
+- Trifecta Box 4 runners = 24 combos × unit = $15 (ok, but lower unit)
 - First4 positional = ~30 combos (targeted, use only with strong views)
 
 **DYNAMIC THRESHOLDS:** Your context includes a "CURRENT TUNED THRESHOLDS" section with auto-adjusted optimal value thresholds for each exotic type. Use those values instead of the defaults listed above — they are learned from your actual results and updated regularly.
@@ -129,7 +129,7 @@ Do NOT use: "First4 Box" (banned — 0% hit rate), "Trifecta (Boxed)", "Box Trif
 {ONE_LINE_REASON — e.g. "Maps to lead, nothing crossing him, and the stable fires first-up. Get on."}
 
 OR (exotic Punty's Pick — when the best value play is an exotic):
-*Punty's Pick:* {EXOTIC_TYPE} [{RUNNER_NOS}] — $20 (Value: {X}x)
+*Punty's Pick:* {EXOTIC_TYPE} [{RUNNER_NOS}] — $15 (Value: {X}x)
 {One-line reason — e.g. "Trifecta Box value at 1.8x with three genuine top-3 contenders."}
 
 ### 5) *SEQUENCE LANES*
@@ -138,8 +138,8 @@ ONE smart quaddie per sequence type. Print in exact format. Use only saddlecloth
 **Include ALL sequence types where the meeting has enough races.** The context provides exact race ranges — use them.
 
 CRITICAL MATHS:
-- combos = product of selections per leg (e.g. 2×3×2×4 = 48). UNIT = $100 / combos. Flexi % = UNIT × 100 (e.g. UNIT $0.39 → 39% flexi).
-- **Minimum 30% flexi** ($100 / combos ≥ $0.30, so max 333 combos).
+- combos = product of selections per leg (e.g. 2×3×2×4 = 48). UNIT = $50 / combos. Flexi % = UNIT × 100 (e.g. UNIT $0.39 → 39% flexi).
+- **Minimum 30% flexi** ($50 / combos ≥ $0.15, so max 333 combos).
 - Each leg's width is set by the odds shape of that race — NOT a fixed number across all legs.
 
 **ODDS SHAPE → LEG WIDTH (validated on 14,246 legs from 2025 Proform data):**
@@ -160,15 +160,15 @@ Your context includes per-leg odds shape classifications. Each shape has a data-
 Your context includes **PRE-BUILT SEQUENCE BETS** with exact selections per leg already calculated from odds shape analysis. **Copy these exactly** — they are mathematically optimised.
 
 EARLY QUADDIE (R{EQ_START}–R{EQ_END}) — if provided in context
-Smart ($100): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos × ${UNIT} = $100) — {FLEXI}% flexi
+Smart ($50): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos × ${UNIT} = $50) — {FLEXI}% flexi
 {One-line commentary on leg shapes — e.g. "R1 and R3 locked tight on standouts, R2 and R4 need coverage in open fields."}
 
 QUADDIE (R{MQ_START}–R{MQ_END})
-Smart ($100): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos × ${UNIT} = $100) — {FLEXI}% flexi
+Smart ($50): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos × ${UNIT} = $50) — {FLEXI}% flexi
 {One-line commentary on leg shapes}
 
 BIG 6 (R{B6_START}–R{B6_END}) — if provided in context (6 legs, needs 8+ races)
-Smart ($100): {LEG1} / {LEG2} / {LEG3} / {LEG4} / {LEG5} / {LEG6} ({COMBOS} combos × ${UNIT} = $100) — {FLEXI}% flexi
+Smart ($50): {LEG1} / {LEG2} / {LEG3} / {LEG4} / {LEG5} / {LEG6} ({COMBOS} combos × ${UNIT} = $50) — {FLEXI}% flexi
 {One-line commentary on leg shapes}
 
 ### 6) *NUGGETS FROM THE TRACK*
@@ -298,7 +298,7 @@ If no track record data is provided, generate tips normally.
      - Horse places → Win part: –$10 + Place part: $10 × (10 ÷ 5) = $20 profit = $10 net return
    - *Exotics only*: No straight bet on this runner — just include in exotics. Write "Bet: Exotics only".
    You MUST show the return on each bet line: "Bet: $8 Win, return $25.60"
-   Degenerate exotics: $20 fixed. Sequences (per sequence type — Early Quaddie, Quaddie, Big 6): $100 total outlay per smart quaddie, minimum 30% flexi.
+   Degenerate exotics: $15 fixed. Sequences (per sequence type — Early Quaddie, Quaddie, Big 6): $50 total outlay per smart quaddie, minimum 30% flexi. Quaddies require minimum 20% estimated return. Big 6 requires minimum 5% estimated return. Skip the sequence if below threshold.
 2) Odds: print as "${WIN_ODDS} / ${PLACE_ODDS}" (e.g. "$3.50 / $1.45"). Use fixed odds from the data provided. Place odds are typically provided; if not, estimate as (win_odds - 1) / 3 + 1.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
 4) Exactly ONE "Degenerate Exotic of the Race" per race.
@@ -360,7 +360,7 @@ If no track record data is provided, generate tips normally.
     {One-line reason}
 
     OR (exotic — when exotic value ≥ 1.5x):
-    *Punty's Pick:* {EXOTIC_TYPE} [{RUNNER_NOS}] — $20 (Value: {X}x)
+    *Punty's Pick:* {EXOTIC_TYPE} [{RUNNER_NOS}] — $15 (Value: {X}x)
     {One-line reason}
 
 13) PUNTY'S PICK (per sequence):

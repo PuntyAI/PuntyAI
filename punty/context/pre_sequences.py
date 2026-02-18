@@ -4,7 +4,7 @@ Builds a SINGLE smart quaddie per sequence type with per-leg widths
 determined by odds-shape classification (validated on 14,246 legs from
 2025 Proform data). Width = include runners whose marginal capture rate >= 7%.
 
-$100 outlay, minimum 30% flexi (max 333 combos).
+$50 outlay, minimum 30% flexi (max 166 combos).
 """
 
 import logging
@@ -14,8 +14,15 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-OUTLAY = 100.0
+OUTLAY = 50.0
 MIN_FLEXI_PCT = 30.0
+
+# Minimum estimated return % thresholds — skip sequences below these
+MIN_RETURN_PCT = {
+    "early_quaddie": 20.0,
+    "quaddie": 20.0,
+    "big6": 5.0,
+}
 
 
 @dataclass
@@ -42,6 +49,7 @@ class SmartSequence:
     total_outlay: float
     constrained: bool        # True if widths were tightened to fit flexi floor
     risk_note: str           # warning if many open legs
+    estimated_return_pct: float = 0.0  # estimated return % based on leg capture probs
 
 
 # Keep old classes for backward compatibility during transition
@@ -189,6 +197,45 @@ def build_smart_sequence(
     else:
         risk_note = ""
 
+    # Calculate estimated return % from leg capture probabilities
+    # Each leg's capture prob = sum of win_probs for selected runners
+    # Sequence hit prob = product of leg captures
+    # Estimated return = hit_prob * average_dividend / outlay * 100
+    leg_captures = []
+    for i, leg in enumerate(lane_legs):
+        selected_sc = set(leg.runners)
+        cap = 0.0
+        for r in legs_data[i].top_runners:
+            if r.get("saddlecloth", 0) in selected_sc:
+                wp = r.get("win_prob", 0)
+                if isinstance(wp, str):
+                    wp = float(str(wp).rstrip("%")) / 100
+                cap += float(wp)
+        leg_captures.append(min(cap, 1.0))
+
+    hit_prob = 1.0
+    for cap in leg_captures:
+        hit_prob *= cap
+
+    # Estimated return: if it hits, payout ~ outlay / hit_prob (fair odds)
+    # But actual pools pay less due to takeout (~15%), so discount
+    pool_takeout = 0.85
+    est_return_pct = round(hit_prob * (1.0 / hit_prob * pool_takeout) * 100, 1) if hit_prob > 0 else 0.0
+    # Simpler: est_return_pct ≈ pool_takeout * 100 = 85% for fair-value bets
+    # More useful: use leg capture probs to estimate edge
+    # If our captures are better than random, return > 100%
+    # Use: est_return = (hit_prob * average_pool_payout) / outlay * 100
+    # average_pool_payout ≈ outlay / (random_hit_prob) * pool_takeout
+    random_hit = 1.0
+    for leg in lane_legs:
+        # Random prob = width / field_size (approx from legs_data)
+        field = max(len(legs_data[lane_legs.index(leg)].top_runners), len(leg.runners))
+        random_hit *= len(leg.runners) / max(field, 1)
+    if random_hit > 0 and hit_prob > 0:
+        est_return_pct = round((hit_prob / random_hit) * pool_takeout * 100, 1)
+    else:
+        est_return_pct = 0.0
+
     return SmartSequence(
         sequence_type=sequence_type,
         race_start=start,
@@ -199,6 +246,7 @@ def build_smart_sequence(
         total_outlay=OUTLAY,
         constrained=constrained,
         risk_note=risk_note,
+        estimated_return_pct=est_return_pct,
     )
 
 
@@ -241,6 +289,15 @@ def build_all_sequence_lanes(
 
         smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts)
         if not smart:
+            continue
+
+        # Check minimum estimated return threshold
+        min_ret = MIN_RETURN_PCT.get(key, 0.0)
+        if min_ret > 0 and smart.estimated_return_pct < min_ret:
+            logger.info(
+                f"Skipping {label}: est. return {smart.estimated_return_pct:.1f}% "
+                f"< minimum {min_ret:.0f}%"
+            )
             continue
 
         # Build legacy SequenceBlock wrapper with the smart sequence as "Balanced"
@@ -309,7 +366,7 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
         return ""
 
     lines = ["\n**PRE-BUILT SEQUENCE BETS (use these exact selections):**"]
-    lines.append("One smart quaddie per sequence type. $100 outlay, flexi >= 30%.")
+    lines.append(f"One smart quaddie per sequence type. ${OUTLAY:.0f} outlay, flexi >= {MIN_FLEXI_PCT:.0f}%.")
     lines.append("Widths are set per-leg based on odds shape (validated on 14,246 legs from 2025).")
 
     for block in blocks:
@@ -336,11 +393,12 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
             for leg in smart.legs
         )
         lines.append(
-            f"  Smart ($100): {legs_str} "
+            f"  Smart (${OUTLAY:.0f}): {legs_str} "
             f"({smart.total_combos} combos x "
             f"${OUTLAY / smart.total_combos:.2f} "
-            f"= $100) "
+            f"= ${OUTLAY:.0f}) "
             f"-- {smart.flexi_pct:.0f}% flexi"
+            f" -- est. return: {smart.estimated_return_pct:.0f}%"
         )
 
         if smart.risk_note:

@@ -533,7 +533,7 @@ def _calculate_puntys_pick(
     # Check if exotic beats selections
     if exotic and exotic.value_ratio >= EXOTIC_PUNTYS_PICK_VALUE:
         # Compare exotic EV to selection EV
-        # Exotic EV proxy: (value_ratio - 1) * probability * 20
+        # Exotic EV proxy: (value_ratio - 1) * probability * 15
         exotic_edge = exotic.value_ratio - 1.0
         sel_edge = best_sel.expected_return
 
