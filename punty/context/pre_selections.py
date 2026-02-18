@@ -557,7 +557,7 @@ def _calculate_puntys_pick(
         horse_name=best_sel.horse_name,
         bet_type=best_sel.bet_type,
         stake=best_sel.stake,
-        odds=best_sel.odds,
+        odds=best_sel.place_odds if best_sel.bet_type == "Place" and best_sel.place_odds else best_sel.odds,
         expected_value=best_sel.expected_return,
         reason=_pick_reason(best_sel),
     )
@@ -575,7 +575,7 @@ def _calculate_puntys_pick(
             pp.secondary_horse = s.horse_name
             pp.secondary_bet_type = s.bet_type
             pp.secondary_stake = s.stake
-            pp.secondary_odds = s.odds
+            pp.secondary_odds = s.place_odds if s.bet_type == "Place" and s.place_odds else s.odds
 
     return pp
 
