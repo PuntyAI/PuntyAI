@@ -543,8 +543,6 @@ def _select_exotic(
         # Ban underperforming types
         if "first4" in exotic_type and "box" in exotic_type:
             continue  # 0% hit rate historically
-        if "quinella" in exotic_type:
-            continue  # 0/3, no edge over exacta
 
         # Blend value with probability
         raw_prob = ec.get("probability", 0)
@@ -558,6 +556,8 @@ def _select_exotic(
             type_bonus = 1.5  # 22.2% hit rate, all exotic wins were exactas
             if "standout" in exotic_type:
                 type_bonus = 2.0  # standout format is ideal (anchored on #1)
+        elif "quinella" in exotic_type:
+            type_bonus = 0.5  # broader coverage when no strong order view
         elif "trifecta" in exotic_type and "standout" in exotic_type:
             type_bonus = 0.8  # 15.8% hit rate when #1 wins
         elif "trifecta" in exotic_type and "box" in exotic_type:
