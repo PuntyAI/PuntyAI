@@ -22,34 +22,36 @@ def _normalise_track(cond: str | None) -> str:
 
 
 def _is_more_specific(new_cond: str | None, old_cond: str | None) -> bool:
-    """Return True if new condition is more specific (has rating number) than old.
+    """Return True if new condition is strictly more specific than old.
 
-    Never overwrites a rated condition (e.g. "Good 4") with a different
-    base category (e.g. "Soft 5") — protects against stale PF data
-    overriding accurate TAB/Racing.com conditions.
+    "More specific" means: new has a rating number and old doesn't
+    (e.g. "Good" → "Good 4"), with matching base category.
+
+    Returns False for:
+    - Same normalised value ("Good 4" vs "Good 4")
+    - Less specific ("Good 4" → "Good")
+    - Different base category ("Good 4" → "Soft 5")
+    - Neither has rating ("Good" vs "Good")
     """
     import re
     if not new_cond:
         return False
     if not old_cond:
         return True
+    # Same normalised value — not more specific
+    norm_new = re.sub(r"\s+", " ", new_cond.strip().lower())
+    norm_old = re.sub(r"\s+", " ", old_cond.strip().lower())
+    if norm_new == norm_old:
+        return False
     new_has_rating = bool(re.search(r"\d", new_cond))
     old_has_rating = bool(re.search(r"\d", old_cond))
-    # New has rating, old doesn't → more specific
+    # New has rating, old doesn't → more specific (if same base)
     if new_has_rating and not old_has_rating:
-        return True
-    # Old has rating, new doesn't → keep old
-    if not new_has_rating and old_has_rating:
-        return False
-    # Both have ratings — only update if same base category
-    # (don't let "Soft 5" overwrite "Good 4")
-    if new_has_rating and old_has_rating:
         new_base = new_cond.strip().split()[0].lower()
         old_base = old_cond.strip().split()[0].lower()
-        if new_base != old_base:
-            return False
-    # Same base or neither has rating — newer is preferred
-    return True
+        return new_base == old_base
+    # All other cases: not more specific
+    return False
 
 
 # All Runner fields that come from the scraper
