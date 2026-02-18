@@ -312,67 +312,91 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     value = c["value_rating"]
     place_value = c["place_value_rating"]
 
-    # --- Edge-aware odds-band rules (apply to all ranks) ---
+    # --- Edge-aware odds-band rules (validated on all settled bets) ---
+    #
+    # Win ROI by band: <$2 = -38.9%, $2.40-$3 = +21.3%, $3-$4 = -30.8%,
+    #   $4-$5 = +144.8%, $5-$6 = -100%, $6+ = -42%
+    # Place ROI by band: <$2 = +24%, $2-$4 = +20%, $4-$6 = +35%, $6-$10 = -0.3%
+    # EW collect rate: $2.40-$3 = 94%, $3-$4 = 62%
 
-    # Short-priced favourites (<$2): Place is almost always better (-38.9% Win ROI)
-    if odds < 2.0 and not is_roughie:
+    # Short-priced favourites (<$2.40): Place only
+    # Win loses money below $2.40. Place grinds profit at 71-100% hit rate.
+    if odds < 2.40 and not is_roughie:
         if place_prob >= 0.50:
             return "Place"
-        # Only Win if extraordinary value (shouldn't happen at short prices)
         if win_prob >= 0.45 and value >= 1.15:
-            return "Win"
+            return "Win"  # extraordinary value only
         return "Place"
 
-    # Win sweet spot ($4-$6): +60.8% ROI — prefer Win for top pick
-    if 4.0 <= odds <= 6.0 and win_prob >= t["win_min_prob"] and value >= 0.95:
-        if rank == 1:
+    # $2.40-$3.00: Win sweet spot #1 (+21.3% ROI, 47% win rate)
+    # #2 gets Each Way (94% collect rate at these odds)
+    if 2.40 <= odds < 3.0 and win_prob >= t["win_min_prob"]:
+        if rank == 1 and value >= 0.95:
             return "Win"
-        # Rank 2: Each Way for upside + place protection (most #2 picks place, not win)
         if rank == 2:
             return "Each Way"
-        # Rank 3 gets Win only with strong value
+
+    # $3.00-$4.00: Dead zone for Win (-30.8% ROI)
+    # #1 gets Each Way (62% collect rate), #2 gets Place
+    if 3.0 <= odds < 4.0 and not is_roughie:
+        if rank == 1:
+            if win_prob >= 0.25 and value >= 1.10:
+                return "Win"  # only with strong conviction
+            if win_prob >= t["each_way_min_prob"]:
+                return "Each Way"
+            return "Place"
+        if rank == 2:
+            if win_prob >= 0.25 and value >= 1.10:
+                return "Each Way"
+            return "Place"
+        return "Place"
+
+    # $4.00-$5.00: THE profit engine (+144.8% ROI, 54% win rate)
+    # #1 must be Win. #2 gets Each Way for upside + place protection.
+    if 4.0 <= odds < 5.0 and win_prob >= t["win_min_prob"] and value >= 0.95:
+        if rank == 1:
+            return "Win"
+        if rank == 2:
+            return "Each Way"
         if value >= 1.05:
             return "Saver Win"
 
+    # $5.00-$6.00: Mixed — Win data is thin (0/6), lean Each Way
+    if 5.0 <= odds <= 6.0 and win_prob >= t["win_min_prob"]:
+        if rank == 1:
+            if value >= 1.05:
+                return "Win"  # only with clear value edge
+            return "Each Way"
+        if rank == 2:
+            return "Each Way"
+
     # --- Roughie logic ---
     if is_roughie:
-        # $10-$20 sweet spot: +53% ROI — upgrade to Win if value is there
         if 10.0 <= odds <= 20.0 and win_prob >= t["win_min_prob"] and value >= 1.15:
             return "Win"
         if win_prob >= t["win_min_prob"] and value >= 1.25:
-            return "Win"  # strong roughie value at any odds
+            return "Win"
         return "Place"
 
-    # --- Standard rank-based logic (for $2-$4 and $6+ non-roughie) ---
-
-    # Top pick (#1): prefer Win or Each Way
+    # --- $6+ non-roughie: Place territory ---
     if rank == 1:
         if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
-            # Each Way if in the sweet spot
             if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
                     and t["each_way_min_prob"] <= win_prob <= t["each_way_max_prob"]):
                 return "Each Way"
-            return "Win"
-        if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
-                and win_prob >= t["each_way_min_prob"]):
-            return "Each Way"
+            return "Place"  # $6+ Win is -42% ROI, prefer Place
         if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
-        return "Win"  # fallback — at least try
+        return "Place"
 
-    # Second pick (#2): Place-focused — most #2 picks place, not win
     if rank == 2:
-        # Only upgrade to Saver Win with very strong win signal
         if win_prob >= 0.25 and value >= 1.10:
-            return "Saver Win"
-        if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
-                and win_prob >= t["each_way_min_prob"] and value >= 1.0):
             return "Each Way"
         if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
         return "Place"
 
-    # Third pick (#3): Place-focused, but Win if in sweet spot (handled above)
+    # Third pick (#3): Place-focused
     if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
         return "Place"
     if win_prob >= t["win_min_prob"] and value >= 1.10:

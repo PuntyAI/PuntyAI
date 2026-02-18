@@ -155,11 +155,11 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Each Way"
 
-    def test_second_pick_saver_win_strong_signal(self):
-        """Rank 2 outside sweet spot only gets Saver Win with very strong signal."""
+    def test_second_pick_each_way_strong_signal_dead_zone(self):
+        """Rank 2 in $3-$4 dead zone gets Each Way with strong signal."""
         c = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.0,
              "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Saver Win"
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Each Way"
 
     def test_second_pick_place_when_no_value(self):
         c = {"win_prob": 0.12, "place_prob": 0.45, "odds": 8.0,
