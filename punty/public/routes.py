@@ -1066,6 +1066,35 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                     "meetings": meetings_count,
                 }
 
+        # Other meetings on the same day (for venue switcher)
+        same_day_meetings = []
+        if meeting.date:
+            same_day_result = await db.execute(
+                select(Meeting).where(
+                    and_(
+                        Meeting.date == meeting.date,
+                        Meeting.selected == True,
+                        Meeting.id != meeting.id,
+                    )
+                ).order_by(Meeting.venue)
+            )
+            # Only include meetings that have approved/sent early mail
+            for m in same_day_result.scalars().all():
+                em_check = await db.execute(
+                    select(Content.id).where(
+                        and_(
+                            Content.meeting_id == m.id,
+                            Content.content_type == "early_mail",
+                            Content.status.in_(["approved", "sent"]),
+                        )
+                    ).limit(1)
+                )
+                if em_check.scalar_one_or_none() is not None:
+                    same_day_meetings.append({
+                        "id": m.id,
+                        "venue": m.venue,
+                    })
+
         # Generate seed from meeting date for consistent rotation
         seed = hash(meeting.id) if meeting.id else 0
 
@@ -1097,6 +1126,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             "venue_stats": venue_stats,
             "races": races_data,
             "meeting_stats": pick_data["meeting_stats"],
+            "same_day_meetings": same_day_meetings,
         }
 
 
@@ -1499,6 +1529,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "venue_stats": data.get("venue_stats"),
             "races": data.get("races", []),
             "meeting_stats": data.get("meeting_stats", []),
+            "same_day_meetings": data.get("same_day_meetings", []),
             "meta_title": meta_title,
             "meta_description": meta_desc,
         }
