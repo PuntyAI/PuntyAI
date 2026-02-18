@@ -33,7 +33,10 @@ class ChangeAlert:
     def dedup_key(self) -> str:
         """Unique key to prevent duplicate alerts."""
         if self.change_type == "track_condition":
-            return f"track:{self.old_value}->{self.new_value}"
+            # Use sorted pair so Good->Soft and Soft->Good share the same key
+            # (prevents oscillation from producing duplicate alerts)
+            pair = sorted([self.old_value or "", self.new_value or ""])
+            return f"track:{pair[0]}->{pair[1]}"
         if self.change_type == "weather":
             return f"weather:{self.message[:60]}"
         if self.change_type == "gear_change":

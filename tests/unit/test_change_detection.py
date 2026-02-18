@@ -178,7 +178,18 @@ class TestHelpers:
         alert = ChangeAlert(
             change_type="track_condition", meeting_id="m", old_value="Good 4", new_value="Soft 5"
         )
+        # Sorted pair so Good→Soft and Soft→Good share the same dedup key
         assert alert.dedup_key == "track:Good 4->Soft 5"
+
+    def test_dedup_key_track_oscillation(self):
+        """Good→Soft and Soft→Good should produce the same dedup key (prevent flip-flop alerts)."""
+        alert_a = ChangeAlert(
+            change_type="track_condition", meeting_id="m", old_value="Good", new_value="Soft 5"
+        )
+        alert_b = ChangeAlert(
+            change_type="track_condition", meeting_id="m", old_value="Soft 5", new_value="Good"
+        )
+        assert alert_a.dedup_key == alert_b.dedup_key
 
 
 # ── Unit tests: message composition ─────────────────────────────────────────

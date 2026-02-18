@@ -590,7 +590,8 @@ class ResultsMonitor:
                     # Dedup: don't re-alert same transition
                     if meeting_id not in self.alerted_changes:
                         self.alerted_changes[meeting_id] = set()
-                    dedup_key = f"track:{old_tc}->{scraped_tc}"
+                    pair = sorted([old_tc or "", scraped_tc or ""])
+                    dedup_key = f"track:{pair[0]}->{pair[1]}"
                     if dedup_key not in self.alerted_changes[meeting_id]:
                         self.alerted_changes[meeting_id].add(dedup_key)
                         alert = ChangeAlert(
@@ -1493,9 +1494,14 @@ class ResultsMonitor:
                 logger.warning(f"Jockey/gear check failed for {meeting.venue}: {e}", exc_info=True)
 
         # Detect track condition change (AFTER both TAB + racing.com updates)
-        track_alert = await detect_track_condition_change(db, meeting_id, snapshot)
-        if track_alert:
-            alerts.append(track_alert)
+        # Skip if cooldown is active (prevents Good→Soft→Good bouncing)
+        last_tc_change = self.last_track_change.get(meeting_id)
+        tc_cooldown = last_tc_change and (now - last_tc_change).total_seconds() < 1800
+        if not tc_cooldown:
+            track_alert = await detect_track_condition_change(db, meeting_id, snapshot)
+            if track_alert:
+                alerts.append(track_alert)
+                self.last_track_change[meeting_id] = now
 
         if alerts:
             logger.info(f"Change detection for {meeting.venue}: {len(alerts)} alerts — {[a.change_type for a in alerts]}")
