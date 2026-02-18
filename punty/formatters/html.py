@@ -312,7 +312,7 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Highlight "Punty's Pick:" lines with special styling
     # Match various apostrophe forms and optional colon
     content = re.sub(
-        r"(<strong>Punty['\u2019]?s\s+Pick:?</strong>)",
+        "(<strong>Punty['\u2018\u2019]?s\\s+Pick:?</strong>)",
         r'<span class="puntys-pick">\1</span>',
         content,
         flags=re.IGNORECASE,
