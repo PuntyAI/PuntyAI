@@ -14,11 +14,15 @@ import logging
 import re
 from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from bs4 import BeautifulSoup, Tag
 
 from punty.scrapers.track_conditions import _resolve_state
+
+# RA displays all times in AEST (UTC+10), regardless of venue or DST.
+_AEST = ZoneInfo("Australia/Brisbane")  # Brisbane = AEST always, no DST
 
 logger = logging.getLogger(__name__)
 
@@ -212,11 +216,17 @@ def _parse_ra_html(
         race_name_raw = race_match.group(3).strip()
         race_id = f"{meeting_id}-r{race_num}"
 
-        # Parse start time
+        # Parse start time — RA shows all times in AEST (UTC+10).
+        # Convert to Melbourne local time (AEDT in summer) for consistency.
         start_time = None
         try:
+            from punty.config import MELB_TZ
             t = datetime.strptime(time_str.upper().replace(" ", ""), "%I:%M%p")
-            start_time = datetime(race_date.year, race_date.month, race_date.day, t.hour, t.minute)
+            aest_dt = datetime(
+                race_date.year, race_date.month, race_date.day, t.hour, t.minute,
+                tzinfo=_AEST,
+            )
+            start_time = aest_dt.astimezone(MELB_TZ).replace(tzinfo=None)
         except ValueError:
             pass
 
