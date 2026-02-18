@@ -1459,9 +1459,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var raceExotic = hasExotics ? winExotics[String(raceNum)] : null;
 
         // Selection winners: find <strong> tags with horse names, check adjacent (No.X) text
+        // Only match in selection lines (numbered picks, Roughie, Punty's Pick) — skip narrative paragraphs
         if (raceWinners) {
             var strongs = acc.querySelectorAll('.race-accordion-body strong');
             strongs.forEach(function(s) {
+                // Skip if inside a narrative paragraph (Punty read, Map & tempo, Race type, Why:)
+                var parentP = s.closest('p');
+                if (parentP) {
+                    var pText = parentP.textContent.trim();
+                    if (/^(Punty\s*read|Map\s*&\s*tempo|Race\s*type|Why)\s*:/i.test(pText)) return;
+                }
                 // Get the text after this strong element to find (No.X)
                 var nextText = '';
                 var sib = s.nextSibling;
@@ -1480,6 +1487,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             });
+        }
+
+        // Punty's Pick winner: check if the pick horse won
+        if (raceWinners) {
+            var pickBlock = acc.querySelector('.puntys-pick-block');
+            if (pickBlock) {
+                var pickText = pickBlock.textContent || '';
+                var pickScMatch = pickText.match(/\(No\.?\s*(\d+)\)/);
+                if (pickScMatch) {
+                    var pickSc = parseInt(pickScMatch[1]);
+                    if (raceWinners.indexOf(pickSc) !== -1) {
+                        addBadge(pickBlock, 'WINNER');
+                    }
+                }
+            }
         }
 
         // Exotic winners: check <p> elements AND walk text nodes in accordion body
