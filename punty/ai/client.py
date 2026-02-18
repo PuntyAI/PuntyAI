@@ -50,7 +50,7 @@ class AIClient:
         self,
         model: str = "gpt-5.2",
         api_key: Optional[str] = None,
-        reasoning_effort: ReasoningEffort = "high",
+        reasoning_effort: ReasoningEffort = "medium",
     ):
         self.model = model
         self._api_key = api_key
