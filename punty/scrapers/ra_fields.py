@@ -21,8 +21,18 @@ from bs4 import BeautifulSoup, Tag
 
 from punty.scrapers.track_conditions import _resolve_state
 
-# RA displays all times in AEST (UTC+10), regardless of venue or DST.
-_AEST = ZoneInfo("Australia/Brisbane")  # Brisbane = AEST always, no DST
+# RA displays times in the venue's local timezone.
+# Map state → timezone for conversion to Melbourne time.
+_STATE_TZ: dict[str, ZoneInfo] = {
+    "VIC": ZoneInfo("Australia/Melbourne"),
+    "NSW": ZoneInfo("Australia/Sydney"),
+    "ACT": ZoneInfo("Australia/Sydney"),
+    "QLD": ZoneInfo("Australia/Brisbane"),     # UTC+10, no DST
+    "SA":  ZoneInfo("Australia/Adelaide"),      # UTC+10:30 in summer (ACDT)
+    "WA":  ZoneInfo("Australia/Perth"),         # UTC+8, no DST
+    "TAS": ZoneInfo("Australia/Hobart"),
+    "NT":  ZoneInfo("Australia/Darwin"),        # UTC+9:30, no DST
+}
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +121,7 @@ async def scrape_ra_fields(
                 resp.raise_for_status()
                 html = resp.text
                 if "raceNum" in html:
-                    return _parse_ra_html(html, meeting_id, venue, race_date)
+                    return _parse_ra_html(html, meeting_id, venue, race_date, state)
             except Exception as e:
                 logger.debug(f"RA fields attempt failed for {attempt_venue}: {e}")
 
@@ -129,7 +139,7 @@ async def scrape_ra_fields(
                 resp.raise_for_status()
                 html = resp.text
                 if "raceNum" in html:
-                    return _parse_ra_html(html, meeting_id, venue, race_date)
+                    return _parse_ra_html(html, meeting_id, venue, race_date, state)
             except Exception as e:
                 logger.error(f"RA fields retry failed for {ra_venue}: {e}")
 
@@ -142,6 +152,7 @@ def _parse_ra_html(
     meeting_id: str,
     venue: str,
     race_date: date,
+    state: str = "VIC",
 ) -> dict[str, Any] | None:
     """Parse RA Free Fields HTML into the standard scraper data format.
 
@@ -216,17 +227,18 @@ def _parse_ra_html(
         race_name_raw = race_match.group(3).strip()
         race_id = f"{meeting_id}-r{race_num}"
 
-        # Parse start time — RA shows all times in AEST (UTC+10).
-        # Convert to Melbourne local time (AEDT in summer) for consistency.
+        # Parse start time — RA shows times in the venue's local timezone.
+        # Convert to Melbourne local time (AEDT/AEST) for consistency.
         start_time = None
         try:
             from punty.config import MELB_TZ
+            venue_tz = _STATE_TZ.get(state, MELB_TZ)
             t = datetime.strptime(time_str.upper().replace(" ", ""), "%I:%M%p")
-            aest_dt = datetime(
+            local_dt = datetime(
                 race_date.year, race_date.month, race_date.day, t.hour, t.minute,
-                tzinfo=_AEST,
+                tzinfo=venue_tz,
             )
-            start_time = aest_dt.astimezone(MELB_TZ).replace(tzinfo=None)
+            start_time = local_dt.astimezone(MELB_TZ).replace(tzinfo=None)
         except ValueError:
             pass
 
