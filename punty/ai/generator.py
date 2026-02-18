@@ -1441,6 +1441,12 @@ class ContentGenerator:
             from punty.context.pre_sequences import format_sequence_lanes
             parts.append(format_sequence_lanes(pre_seqs))
 
+        # Pre-calculated Big 3 Multi recommendation
+        pre_big3 = context.get("pre_big3")
+        if pre_big3:
+            from punty.context.pre_big3 import format_pre_big3
+            parts.append(format_pre_big3(pre_big3))
+
         # Tuned bet type thresholds (dynamic, not hardcoded)
         try:
             from punty.bet_type_tuning import DEFAULT_EXOTIC_THRESHOLDS

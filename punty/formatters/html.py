@@ -171,6 +171,18 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         r'## \1', content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
+    # Convert Jockeys/Stables headings to inline bold labels (not full section headings)
+    content = re.sub(
+        r'^\*{1,2}(Jockeys\s+to\s+follow:?)\*{1,2}\s*$',
+        r'<strong class="snapshot-label">\1</strong>',
+        content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+    content = re.sub(
+        r'^\*{1,2}(Stables\s+to\s+respect:?)\*{1,2}\s*$',
+        r'<strong class="snapshot-label">\1</strong>',
+        content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+
     # Convert standalone bold lines to section headings (wrap-ups, reviews)
     # Matches lines that are entirely *Bold Text* with 2+ words starting uppercase
     content = re.sub(

@@ -176,6 +176,13 @@ class ContextBuilder:
         except Exception as e:
             logger.debug(f"Pre-sequence lane construction failed: {e}")
 
+        # Pre-calculate Big 3 Multi recommendation
+        try:
+            from punty.context.pre_big3 import calculate_pre_big3
+            context["pre_big3"] = calculate_pre_big3(context["races"])
+        except Exception as e:
+            logger.debug(f"Pre-Big3 calculation failed: {e}")
+
         return context
 
     def _calculate_sequence_legs(self, races: list[dict]) -> list[dict]:

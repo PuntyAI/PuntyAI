@@ -333,6 +333,14 @@
     .tips-content .tips-list li { margin-bottom: 0.5rem; }
     .tips-content .tips-divider { border: none; border-top: 1px solid var(--border-subtle); margin: 1.5rem 0; }
     .tips-content em { font-style: italic; color: var(--text-muted); }
+    .tips-content .snapshot-label {
+        color: var(--cyan);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
 
     /* Win Badge */
     .win-tick {
@@ -499,6 +507,18 @@
         background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(255, 107, 53, 0.06));
     }
     .puntys-pick-block p { margin-bottom: 0.25rem; }
+    .puntys-pick-header {
+        display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;
+    }
+    .puntys-pick-avatar {
+        width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+        border: 2px solid rgba(233, 30, 140, 0.4);
+    }
+    .puntys-pick-title {
+        font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
 
     /* Selection metadata labels */
     .sel-label {
@@ -1101,6 +1121,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 var pickWrap = document.createElement('div');
                 pickWrap.className = 'puntys-pick-block';
+                // Add Punty avatar + heading
+                var pickHeader = document.createElement('div');
+                pickHeader.className = 'puntys-pick-header';
+                var avatarImg = document.createElement('img');
+                avatarImg.src = '/static/punty-character.jpg';
+                avatarImg.alt = 'Punty';
+                avatarImg.className = 'puntys-pick-avatar';
+                var titleSpan = document.createElement('span');
+                titleSpan.className = 'puntys-pick-title';
+                titleSpan.textContent = "Punty's Pick";
+                pickHeader.appendChild(avatarImg);
+                pickHeader.appendChild(titleSpan);
+                pickWrap.appendChild(pickHeader);
                 pickNodes.forEach(function(n) { pickWrap.appendChild(n); });
                 body.appendChild(pickWrap);
             }

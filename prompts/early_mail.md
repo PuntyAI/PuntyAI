@@ -35,13 +35,14 @@ Use SPECIFIC trainer names from the data. NEVER use generic descriptions like "t
 
 ### 3) *PUNTY'S BIG 3 + MULTI*
 These are the three bets the day leans on.
+**USE THE PRE-CALCULATED BIG 3 RECOMMENDATION** from the data context below. The combination is mathematically optimised to maximise expected value (probability × odds × pool takeout). Use the exact horses unless you have strong racing-specific reason to override (e.g. late scratching, gear change, drastic track condition shift). If you override, explain why.
 *1 - {HORSE_A}* (Race {RACE_A}, No.{NO_A}) — ${ODDS_A}
    Why: {ONE_LINE_REASON_A}
 *2 - {HORSE_B}* (Race {RACE_B}, No.{NO_B}) — ${ODDS_B}
    Why: {ONE_LINE_REASON_B}
 *3 - {HORSE_C}* (Race {RACE_C}, No.{NO_C}) — ${ODDS_C}
    Why: {ONE_LINE_REASON_C}
-Multi (all three to win): 10U × ~{MULTI_ODDS} = ~{MULTI_RETURN_U}U collect
+Multi (all three to win): $10 × ~{MULTI_ODDS} = ~${MULTI_RETURN} collect
 
 ### 4) *RACE-BY-RACE*
 Repeat for each race in order:
