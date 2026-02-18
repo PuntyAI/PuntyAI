@@ -116,6 +116,14 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     # Remove the title line if it starts with *PUNTY EARLY MAIL*
     content = re.sub(r'^\*PUNTY EARLY MAIL[^*]*\*\s*\n*', '', content, flags=re.IGNORECASE)
 
+    # Collapse paragraph breaks before Jockeys/Stables so they stay in the
+    # same <p> block as Tempo Profile (just a <br>, no new paragraph)
+    content = re.sub(
+        r'\n\n+(\*{1,2}(?:Jockeys\s+to\s+follow|Stables\s+to\s+respect))',
+        r'\n\1',
+        content, flags=re.IGNORECASE,
+    )
+
     # Pre-process: convert bold/italic heading patterns to markdown # headers
     # before the generic bold/italic conversion runs.
 
@@ -300,17 +308,10 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     # Highlight "Punty's Pick:" lines with special styling
     # Match various apostrophe forms and optional colon
+    # Wrap in puntys-pick span AND inject visible heading directly in HTML
     content = re.sub(
         "(<strong>Punty['\u2018\u2019]?s\\s+Pick:?</strong>)",
         r'<span class="puntys-pick">\1</span>',
-        content,
-        flags=re.IGNORECASE,
-    )
-
-    # Remove top spacing on Jockeys/Stables paragraphs (keep tight with Tempo Profile)
-    content = re.sub(
-        r'<p>(<strong>(?:Jockeys to follow|Stables to respect):?</strong>)',
-        r'<p style="margin-top:0.15rem">\1',
         content,
         flags=re.IGNORECASE,
     )
