@@ -357,40 +357,37 @@ FACTOR_REGISTRY = {
 }
 
 # Default weights (must sum to 1.0)
-# Optimized via grid search: 2,500 combos x 1,000 races (batch 1, 2026-02-17)
-# Previous calibrated: market=0.40, form=0.32, dl=0.08, jt=0.07, wc=0.04, hp=0.03, cf=0.03, barrier=0.02, pace=0.01
+# Averaged from batch 1 (seed=42) + batch 2 (seed=123), each 1500 combos x 1000 races
+# Batch 1: form=0.51, market=0.32, wc=0.05, jt=0.04, cf=0.03, hp=0.03, barrier=0.03
+# Batch 2: form=0.48, market=0.30, wc=0.05, jt=0.04, cf=0.05, hp=0.05, barrier=0.01, movement=0.02
 DEFAULT_WEIGHTS = {
     "form": 0.50,
-    "market": 0.32,
+    "market": 0.30,
     "weight_carried": 0.05,
+    "horse_profile": 0.04,
+    "class_fitness": 0.04,
     "jockey_trainer": 0.04,
-    "barrier": 0.03,
-    "class_fitness": 0.03,
-    "horse_profile": 0.03,
-    "deep_learning": 0.00,
-    "movement": 0.00,
+    "barrier": 0.02,
+    "movement": 0.01,
     "pace": 0.00,
+    "deep_learning": 0.00,
 }  # sums to 1.0 — form dominant, market secondary
 
-# Place-specific weights (must sum to 1.0)
-# Place bets reward consistency over peak performance:
-# - class_fitness higher: proven class horses place reliably
-# - jockey_trainer higher: top jockeys consistently place
-# - barrier higher: inside draw = more consistent top-3 finishes
-# - form lower: recent form predicts winners better than placers
-# Will be optimized via tune_weights.py batch 2+
+# Place-specific weights — optimized via batch 2 grid search (1500 combos x 1000 races)
+# Key insight: form is much more important for place than previously assumed (0.38 vs 0.25)
+# Market less dominant for place (0.27 vs 0.35) — market prices win probability, not place
 DEFAULT_PLACE_WEIGHTS = {
-    "market": 0.35,
-    "form": 0.25,
-    "class_fitness": 0.10,
-    "jockey_trainer": 0.10,
-    "barrier": 0.06,
+    "form": 0.38,
+    "market": 0.27,
+    "class_fitness": 0.09,
+    "jockey_trainer": 0.09,
+    "barrier": 0.05,
     "weight_carried": 0.05,
     "horse_profile": 0.05,
     "pace": 0.02,
-    "movement": 0.02,
+    "movement": 0.00,
     "deep_learning": 0.00,
-}  # sums to 1.0 — balanced for consistency, less form-dependent
+}  # sums to 1.0 — form dominant for place too, per batch 2 optimization
 
 # Legacy aliases
 WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
