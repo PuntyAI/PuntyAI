@@ -667,6 +667,21 @@
     .seq-result-loss .seq-result-pnl { color: #f87171; }
     .seq-result-push .seq-result-pnl { color: #facc15; }
 
+    /* Flexi badge on exotic lines */
+    .flexi-badge {
+        display: inline-block;
+        margin-left: 0.5rem;
+        padding: 1px 8px;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.75rem; font-weight: 700;
+        color: var(--yellow);
+        background: rgba(250, 204, 21, 0.1);
+        border: 1px solid rgba(250, 204, 21, 0.3);
+        border-radius: 4px;
+        vertical-align: middle;
+        letter-spacing: 0.03em;
+    }
+
     /* Exotic title */
     .exotic-title {
         display: block;
@@ -1165,6 +1180,57 @@ document.addEventListener('DOMContentLoaded', function() {
             if (exoticTitle && exoticLine && exoticTitle !== exoticLine) {
                 // Move title immediately before exotic line
                 exoticLine.parentNode.insertBefore(exoticTitle, exoticLine);
+            }
+
+            // Append flexi % to exotic lines
+            var exoticParas = body.querySelectorAll('p');
+            for (var ep = 0; ep < exoticParas.length; ep++) {
+                var eTxt = exoticParas[ep].textContent.trim();
+                var exRe = /^(Trifecta\s+Box|Trifecta\s+Standout|Exacta\s+Standout|Exacta|Quinella|First\s*(?:Four|4))\s*:\s*(.+?)\s*[—–\-]\s*\$(\d+(?:\.\d+)?)/i;
+                var exM = exRe.exec(eTxt);
+                if (exM && !exoticParas[ep].querySelector('.flexi-badge')) {
+                    var exType = exM[1].toLowerCase().replace(/\s+/g, ' ');
+                    var exRunners = exM[2];
+                    var exStake = parseFloat(exM[3]);
+                    var combos = 0;
+                    if (exRunners.indexOf('/') !== -1) {
+                        // Standout/positional: legs separated by /
+                        var legs = exRunners.split('/').map(function(l) {
+                            return (l.match(/\d+/g) || []).length;
+                        });
+                        if (exType.indexOf('exacta') !== -1) {
+                            // Exacta standout: anchor × others
+                            combos = legs.length >= 2 ? legs[1] : 1;
+                        } else if (exType.indexOf('trifecta') !== -1) {
+                            // Trifecta standout: anchor × others_2nd × (others_3rd - 1)
+                            var others = legs.length >= 2 ? legs[1] : 1;
+                            combos = others * (others - 1);
+                        } else {
+                            // First4 positional: product of all legs
+                            combos = 1;
+                            for (var lx = 0; lx < legs.length; lx++) combos *= legs[lx];
+                        }
+                    } else {
+                        // Box: flat list of runners
+                        var nR = (exRunners.match(/\d+/g) || []).length;
+                        if (exType.indexOf('trifecta') !== -1) {
+                            combos = nR * (nR - 1) * (nR - 2); // nPr(n,3)
+                        } else if (exType.indexOf('exacta') !== -1) {
+                            combos = nR * (nR - 1); // nPr(n,2)
+                        } else if (exType.indexOf('quinella') !== -1) {
+                            combos = nR * (nR - 1) / 2; // nCr(n,2)
+                        } else if (exType.indexOf('first') !== -1) {
+                            combos = nR * (nR - 1) * (nR - 2) * (nR - 3); // nPr(n,4)
+                        }
+                    }
+                    if (combos > 0) {
+                        var flexiPct = Math.round((exStake / combos) * 100);
+                        var badge = document.createElement('span');
+                        badge.className = 'flexi-badge';
+                        badge.textContent = combos + ' combos \u2014 ' + flexiPct + '% flexi';
+                        exoticParas[ep].appendChild(badge);
+                    }
+                }
             }
 
             // Add probability help tooltips (click to toggle)

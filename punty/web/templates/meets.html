@@ -3,6 +3,23 @@
 {% block title %}Race Meetings - PuntyAI{% endblock %}
 
 {% block content %}
+<style>
+    .pipeline-dot {
+        width: 10px; height: 10px; border-radius: 50%;
+        background: #374151; border: 2px solid #4b5563;
+        flex-shrink: 0;
+    }
+    .pipeline-dot.pipeline-active {
+        background: #10b981; border-color: #34d399;
+        box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+    }
+    .pipeline-line {
+        width: 12px; height: 2px; background: #4b5563; flex-shrink: 0;
+    }
+    .pipeline-line.pipeline-line-active {
+        background: #10b981;
+    }
+</style>
 <div class="space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
@@ -111,6 +128,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Track</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Weather</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Races</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pipeline</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                 </thead>
@@ -171,6 +189,22 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {{ meeting.races|length if meeting.races else 0 }}
                         </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% set pipe = pipeline_status.get(meeting.id, {"step": "scraped", "num": 1}) %}
+                            <div class="flex items-center gap-1">
+                                {% set steps = [("scraped", "Scraped"), ("generated", "Generated"), ("approved", "Approved"), ("sent", "Sent")] %}
+                                {% for key, label in steps %}
+                                {% set idx = loop.index %}
+                                {% if idx <= pipe.num %}
+                                <span class="pipeline-dot pipeline-active" title="{{ label }}"></span>
+                                {% else %}
+                                <span class="pipeline-dot" title="{{ label }}"></span>
+                                {% endif %}
+                                {% if not loop.last %}<span class="pipeline-line {% if idx < pipe.num %}pipeline-line-active{% endif %}"></span>{% endif %}
+                                {% endfor %}
+                                <span class="ml-1.5 text-xs font-medium {% if pipe.num >= 4 %}text-green-500{% elif pipe.num >= 3 %}text-blue-400{% elif pipe.num >= 2 %}text-yellow-400{% else %}text-gray-500{% endif %}">{{ pipe.step|capitalize }}</span>
+                            </div>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                             <a href="/meets/{{ meeting.id }}" class="text-punty-coral hover:underline">View</a>
                             <button onclick="withLoading(this, () => scrapeFull('{{ meeting.id }}'))" class="text-blue-600 hover:underline">Scrape</button>
@@ -179,7 +213,7 @@
                     </tr>
                     {% else %}
                     <tr id="empty-row">
-                        <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                        <td colspan="8" class="px-6 py-8 text-center text-gray-500">
                             <p class="text-4xl mb-2">&#x1F3C7;</p>
                             <p>No meetings yet</p>
                             <p class="text-sm">Click "Refresh Calendar" to scrape today's meetings</p>
@@ -208,6 +242,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Track</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Races</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pipeline</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
@@ -234,6 +269,22 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {{ meeting.races|length if meeting.races else 0 }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% set pipe = pipeline_status.get(meeting.id, {"step": "scraped", "num": 1}) %}
+                            <div class="flex items-center gap-1">
+                                {% set steps = [("scraped", "Scraped"), ("generated", "Generated"), ("approved", "Approved"), ("sent", "Sent")] %}
+                                {% for key, label in steps %}
+                                {% set idx = loop.index %}
+                                {% if idx <= pipe.num %}
+                                <span class="pipeline-dot pipeline-active" title="{{ label }}"></span>
+                                {% else %}
+                                <span class="pipeline-dot" title="{{ label }}"></span>
+                                {% endif %}
+                                {% if not loop.last %}<span class="pipeline-line {% if idx < pipe.num %}pipeline-line-active{% endif %}"></span>{% endif %}
+                                {% endfor %}
+                                <span class="ml-1.5 text-xs font-medium {% if pipe.num >= 4 %}text-green-500{% elif pipe.num >= 3 %}text-blue-400{% elif pipe.num >= 2 %}text-yellow-400{% else %}text-gray-500{% endif %}">{{ pipe.step|capitalize }}</span>
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm">
                             {% set progress = meeting_progress.get(meeting.id, {}) %}

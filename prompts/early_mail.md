@@ -78,7 +78,17 @@ Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, we
 
 *Degenerate Exotic of the Race*
 {R_EXOTIC_TYPE}: {R_EXOTIC_RUNNERS} — $15
+{COMBOS} combos — {FLEXI_PCT}% flexi
 Why: {R_EXOTIC_REASON — explain the race shape that makes this exotic live. Pace, form, class.}
+
+**FLEXI CALCULATION (include on every exotic line):**
+After the exotic line, add a line showing combos and flexi %. Calculate: flexi % = ($stake / combos) × 100.
+- Trifecta Box 3 runners = 6 combos → $15/6 = 250% flexi
+- Trifecta Box 4 runners = 24 combos → $15/24 = 63% flexi
+- Exacta Standout 1/3 = 3 combos → $15/3 = 500% flexi
+- Exacta Standout 1/2 = 2 combos → $15/2 = 750% flexi
+- Quinella 2 runners = 1 combo → $15/1 = 1500% flexi
+- Trifecta Standout 1/3 = 6 combos → $15/6 = 250% flexi
 
 **EXOTIC SELECTION — USE PRE-CALCULATED DATA:**
 Each race includes a "Pre-Calculated Exotic Combinations" table with the best value exotic combinations already computed using the Harville probability model. Use this data directly — do NOT calculate exotic probabilities manually.

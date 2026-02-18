@@ -238,6 +238,40 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
         else:
             meeting_progress[meeting.id] = {"status": "in_progress", "label": f"{total_races} to go"}
 
+    # Pipeline status: query early_mail content for each meeting
+    meeting_ids = [m.id for m in all_meetings]
+    pipeline_status: dict[str, dict] = {}
+    if meeting_ids:
+        content_result = await db.execute(
+            select(Content.meeting_id, Content.status, Content.sent_to_twitter, Content.sent_to_facebook)
+            .where(
+                Content.meeting_id.in_(meeting_ids),
+                Content.content_type == "early_mail",
+                Content.status != ContentStatus.SUPERSEDED,
+            )
+            .order_by(Content.created_at.desc())
+        )
+        content_rows = content_result.all()
+        # Keep only latest content per meeting
+        content_by_meeting = {}
+        for row in content_rows:
+            if row.meeting_id not in content_by_meeting:
+                content_by_meeting[row.meeting_id] = row
+
+        for mid in meeting_ids:
+            row = content_by_meeting.get(mid)
+            if not row:
+                # Has races = scraped, no content yet
+                pipeline_status[mid] = {"step": "scraped", "num": 1}
+            elif row.status in (ContentStatus.DRAFT, ContentStatus.PENDING_REVIEW, ContentStatus.REGENERATING):
+                pipeline_status[mid] = {"step": "generated", "num": 2}
+            elif row.status == ContentStatus.APPROVED:
+                pipeline_status[mid] = {"step": "approved", "num": 3}
+            elif row.status == ContentStatus.SENT or row.sent_to_twitter or row.sent_to_facebook:
+                pipeline_status[mid] = {"step": "sent", "num": 4}
+            else:
+                pipeline_status[mid] = {"step": "scraped", "num": 1}
+
     return templates.TemplateResponse(
         "meets.html",
         {
@@ -245,6 +279,7 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
             "meetings": todays_meetings,
             "past_meetings": past_meetings,
             "meeting_progress": meeting_progress,
+            "pipeline_status": pipeline_status,
             "page": page,
             "total_pages": total_pages,
             "total_past": total_past,
