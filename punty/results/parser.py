@@ -111,7 +111,7 @@ _SEQ_VARIANT = re.compile(
 )
 # --- Punty's Pick (highlighted best-bet per race) ---
 _PUNTYS_PICK = re.compile(
-    r"\*?Punty'?s\s+Pick:?\*?\s*(.+)",
+    r"\*?Punty['\u2019]?s\s+Pick:?\*?\s*(.+)",
     re.IGNORECASE,
 )
 _PUNTYS_PICK_HORSE = re.compile(
