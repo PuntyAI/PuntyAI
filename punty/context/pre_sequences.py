@@ -14,12 +14,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-OUTLAY = 50.0
+BASE_OUTLAY = 50.0  # baseline, scaled $30-$60 by edge strength
+MIN_OUTLAY = 30.0
+MAX_OUTLAY = 60.0
 MIN_FLEXI_PCT = 30.0
 
-# Main quaddie: 0/12 hits, -$750, -100% ROI. Early quaddie: 5/14, 35.7%.
-# Suppress main quaddie until evidence shows it can be profitable.
-ENABLE_MAIN_QUADDIE = False
+# Main quaddie re-enabled with wider legs and edge-based construction.
+ENABLE_MAIN_QUADDIE = True
 
 # Minimum estimated return % thresholds — skip sequences below these
 MIN_RETURN_PCT = {
@@ -135,11 +136,18 @@ def build_smart_sequence(
                     wp = entry.get("win_prob", 0)
                     if isinstance(wp, str):
                         wp = float(wp.rstrip("%")) / 100
+                    # Try to get value_rating from runner context
+                    vr = 1.0
+                    for ctx_r in rc.get("runners", []):
+                        if ctx_r.get("saddlecloth") == sc:
+                            vr = ctx_r.get("punty_value_rating", 1.0)
+                            break
                     top_runners.append({
                         "saddlecloth": sc,
                         "horse_name": entry.get("horse", ""),
                         "win_prob": float(wp),
-                        "value_rating": 1.0,
+                        "value_rating": vr,
+                        "edge": 0,
                     })
                     existing_sc.add(sc)
 
@@ -158,10 +166,26 @@ def build_smart_sequence(
     if len(legs_data) != num_legs:
         return None
 
+    # Dynamic outlay: scale $30-$60 based on average edge across legs.
+    # More positive edge = stronger overlay = spend more.
+    # avg_edge of +0.05 (5% overlay avg) → max outlay $60
+    # avg_edge of 0.0 (no overlay) → min outlay $30
+    all_edges = []
+    for leg in legs_data:
+        for r in leg.top_runners[:3]:  # top 3 runners per leg
+            e = r.get("edge", 0)
+            if e > 0:
+                all_edges.append(e)
+    avg_positive_edge = sum(all_edges) / len(all_edges) if all_edges else 0
+    # Scale: 0 edge → $30, 0.05+ edge → $60
+    edge_ratio = min(avg_positive_edge / 0.05, 1.0)
+    outlay = round(MIN_OUTLAY + edge_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
+    outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
+
     # Calculate optimal widths
     widths = calculate_smart_quaddie_widths(
         legs_data,
-        budget=OUTLAY,
+        budget=outlay,
         min_flexi_pct=MIN_FLEXI_PCT,
         is_big6=is_big6,
     )
@@ -170,14 +194,38 @@ def build_smart_sequence(
     original_combos = 1
     for leg in legs_data:
         original_combos *= max(leg.shape_width, 1)
-    max_combos = int(OUTLAY / (MIN_FLEXI_PCT / 100.0))
+    max_combos = int(outlay / (MIN_FLEXI_PCT / 100.0))
     constrained = original_combos > max_combos
 
-    # Build legs
+    # Build legs — value-aware runner selection.
+    # Within the allocated width, prefer runners with positive edge.
+    # If a runner just outside the cut has value_rating > 1.15 and the
+    # runner at the boundary has value_rating < 0.85, swap them in.
     lane_legs = []
     for i, leg in enumerate(legs_data):
         w = widths[i]
-        selected = leg.top_runners[:w]
+        candidates = list(leg.top_runners)  # already sorted by composite score
+        selected = candidates[:w]
+
+        # Value swap: check if runner at position w has better value than
+        # the worst-value runner in selected
+        if w < len(candidates):
+            for extra_idx in range(w, min(w + 2, len(candidates))):
+                extra = candidates[extra_idx]
+                extra_vr = extra.get("value_rating", 1.0)
+                if extra_vr < 1.15:
+                    continue  # only swap in genuine overlays
+                # Find worst-value runner in selected (skip position 0 — always keep the top pick)
+                worst_idx = None
+                worst_vr = 999
+                for j in range(1, len(selected)):
+                    vr = selected[j].get("value_rating", 1.0)
+                    if vr < worst_vr:
+                        worst_vr = vr
+                        worst_idx = j
+                if worst_idx is not None and worst_vr < 0.90 and extra_vr > worst_vr + 0.25:
+                    selected[worst_idx] = extra
+
         lane_legs.append(LaneLeg(
             race_number=leg.race_number,
             runners=[r.get("saddlecloth", 0) for r in selected],
@@ -190,7 +238,7 @@ def build_smart_sequence(
     for leg in lane_legs:
         total_combos *= max(1, len(leg.runners))
 
-    flexi_pct = round(OUTLAY / total_combos * 100, 1) if total_combos > 0 else 0
+    flexi_pct = round(outlay / total_combos * 100, 1) if total_combos > 0 else 0
 
     # Risk assessment
     open_legs = sum(1 for leg in legs_data if leg.odds_shape in ("TRIO", "MID_FAV", "OPEN_BUNCH", "WIDE_OPEN"))
@@ -247,7 +295,7 @@ def build_smart_sequence(
         legs=lane_legs,
         total_combos=total_combos,
         flexi_pct=flexi_pct,
-        total_outlay=OUTLAY,
+        total_outlay=outlay,
         constrained=constrained,
         risk_note=risk_note,
         estimated_return_pct=est_return_pct,
@@ -326,8 +374,8 @@ def build_all_sequence_lanes(
             variant="Smart",
             legs=legacy_legs,
             total_combos=smart.total_combos,
-            unit_price=round(OUTLAY / smart.total_combos, 2),
-            total_outlay=OUTLAY,
+            unit_price=round(smart.total_outlay / smart.total_combos, 2),
+            total_outlay=smart.total_outlay,
             flexi_pct=smart.flexi_pct,
         )
 
@@ -375,7 +423,7 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
         return ""
 
     lines = ["\n**PRE-BUILT SEQUENCE BETS (use these exact selections):**"]
-    lines.append(f"One smart quaddie per sequence type. ${OUTLAY:.0f} outlay, flexi >= {MIN_FLEXI_PCT:.0f}%.")
+    lines.append(f"One smart quaddie per sequence type. ${MIN_OUTLAY:.0f}-${MAX_OUTLAY:.0f} outlay (edge-scaled), flexi >= {MIN_FLEXI_PCT:.0f}%.")
     lines.append("Widths are set per-leg based on odds shape (validated on 14,246 legs from 2025).")
 
     for block in blocks:
@@ -402,10 +450,10 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
             for leg in smart.legs
         )
         lines.append(
-            f"  Smart (${OUTLAY:.0f}): {legs_str} "
+            f"  Smart (${smart.total_outlay:.0f}): {legs_str} "
             f"({smart.total_combos} combos x "
-            f"${OUTLAY / smart.total_combos:.2f} "
-            f"= ${OUTLAY:.0f}) "
+            f"${smart.total_outlay / smart.total_combos:.2f} "
+            f"= ${smart.total_outlay:.0f}) "
             f"-- {smart.flexi_pct:.0f}% flexi"
             f" -- est. return: {smart.estimated_return_pct:.0f}%"
         )

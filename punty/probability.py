@@ -2856,6 +2856,7 @@ def calculate_sequence_leg_confidence(
     results = []
 
     for race in races_data:
+        # Sort by win_prob first for odds-shape classification
         runners = sorted(
             race.get("runners", []),
             key=lambda r: r.get("win_prob", 0),
@@ -2879,8 +2880,23 @@ def calculate_sequence_leg_confidence(
             confidence = "LOW"
             width = 3 if top_prob > 0.15 else 4
 
-        # New: odds shape classification (data-driven from 2025 backtest)
+        # Odds shape classification (data-driven from 2025 backtest)
         odds_shape, shape_width = classify_odds_shape(runners)
+
+        # Re-sort by composite score: blend probability with value/edge.
+        # A runner with 15% win_prob and 1.4 value_rating (positive overlay)
+        # should rank above a 17% runner with 0.8 value_rating (negative edge).
+        # Formula: win_prob * (0.7 + 0.3 * min(value_rating, 2.0))
+        # - value_rating 1.0 (fair) → score = win_prob * 1.0 (no change)
+        # - value_rating 1.5 (overlay) → score = win_prob * 1.15 (15% boost)
+        # - value_rating 0.7 (under-lay) → score = win_prob * 0.91 (9% penalty)
+        runners = sorted(
+            runners,
+            key=lambda r: r.get("win_prob", 0) * (
+                0.7 + 0.3 * min(r.get("value_rating", 1.0), 2.0)
+            ),
+            reverse=True,
+        )
 
         # Include top runners up to shape_width + 1 for context
         max_display = max(width + 1, shape_width + 1, 8)
@@ -2891,6 +2907,7 @@ def calculate_sequence_leg_confidence(
                 "horse_name": r.get("horse_name", ""),
                 "win_prob": round(r.get("win_prob", 0), 4),
                 "value_rating": round(r.get("value_rating", 1.0), 3),
+                "edge": round(r.get("edge", 0), 4),
             })
 
         results.append(SequenceLegAnalysis(

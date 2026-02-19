@@ -3,7 +3,8 @@
 import pytest
 
 from punty.context.pre_sequences import (
-    OUTLAY,
+    MIN_OUTLAY,
+    MAX_OUTLAY,
     MIN_FLEXI_PCT,
     LaneLeg,
     SmartSequence,
@@ -87,7 +88,7 @@ class TestBuildSmartSequence:
         assert result.race_start == 5
         assert result.race_end == 8
         assert len(result.legs) == 4
-        assert result.total_outlay == OUTLAY
+        assert MIN_OUTLAY <= result.total_outlay <= MAX_OUTLAY
 
     def test_big6_has_6_legs(self):
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
@@ -123,7 +124,7 @@ class TestBuildSmartSequence:
 
         result = build_smart_sequence("Quaddie", (5, 8), leg_analysis, race_contexts)
         assert result is not None
-        expected_flexi = round(OUTLAY / result.total_combos * 100, 1)
+        expected_flexi = round(result.total_outlay / result.total_combos * 100, 1)
         assert result.flexi_pct == expected_flexi
 
     def test_standout_shape_uses_3_runners(self):
@@ -160,7 +161,7 @@ class TestBuildSmartSequence:
 
     def test_flexi_floor_maintained(self):
         """Total combos should not exceed max for 30% flexi floor."""
-        max_combos = int(OUTLAY / (MIN_FLEXI_PCT / 100.0))  # 333
+        max_combos = int(MAX_OUTLAY / (MIN_FLEXI_PCT / 100.0))  # max possible
         # Use wide shapes that want lots of runners
         leg_analysis = [
             _leg_analysis(r, odds_shape="TRIO", shape_width=7)
@@ -218,27 +219,25 @@ class TestBuildSmartSequence:
 
 class TestBuildAllSequenceLanes:
     def test_8_race_meeting(self):
-        """8-race meeting should produce Early Quaddie and Big 6 (main Quaddie suppressed)."""
+        """8-race meeting should produce Early Quaddie, Quaddie, and Big 6."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 9)]
         race_contexts = [_race_ctx(r) for r in range(1, 9)]
 
         results = build_all_sequence_lanes(8, leg_analysis, race_contexts)
         types = {r.sequence_type for r in results}
         assert "Early Quaddie" in types
-        # Main Quaddie is suppressed (0/12, -100% ROI)
-        assert "Quaddie" not in types
+        assert "Quaddie" in types
         assert "Big 6" in types
 
     def test_7_race_meeting_no_big6(self):
-        """7-race meeting should NOT have Big 6 or main Quaddie."""
+        """7-race meeting should NOT have Big 6."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 8)]
         race_contexts = [_race_ctx(r) for r in range(1, 8)]
 
         results = build_all_sequence_lanes(7, leg_analysis, race_contexts)
         types = {r.sequence_type for r in results}
         assert "Big 6" not in types
-        # Main Quaddie is suppressed
-        assert "Quaddie" not in types
+        assert "Quaddie" in types
         assert "Early Quaddie" in types
 
     def test_empty_analysis(self):
@@ -264,7 +263,7 @@ class TestBuildAllSequenceLanes:
         for block in results:
             assert block.balanced is not None
             assert block.balanced.variant == "Smart"
-            assert block.balanced.total_outlay == OUTLAY
+            assert MIN_OUTLAY <= block.balanced.total_outlay <= MAX_OUTLAY
 
 
 # ──────────────────────────────────────────────

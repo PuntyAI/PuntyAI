@@ -210,6 +210,7 @@ class ContextBuilder:
                                 "horse_name": horse_name,
                                 "win_prob": r.get("_win_prob_raw", 0),
                                 "value_rating": r.get("punty_value_rating", 1.0),
+                                "edge": r.get("_edge_raw", 0),
                             })
                             break
 
@@ -543,6 +544,7 @@ class ContextBuilder:
                     # Store raw values for generator rendering
                     runner_data["_win_prob_raw"] = rp.win_probability
                     runner_data["_place_prob_raw"] = rp.place_probability
+                    runner_data["_edge_raw"] = rp.edge
                     if rp.matched_patterns:
                         runner_data["_matched_patterns"] = rp.matched_patterns
 
