@@ -547,6 +547,70 @@ class ResultsMonitor:
         finally:
             await scraper.close()
 
+        # ── Abandonment detection ───────────────────────────────────────
+        # If ALL races are "Abandoned", post alert, void picks, deselect meeting.
+        if statuses and all(s == "Abandoned" for s in statuses.values()):
+            dedup = self.alerted_changes.get(meeting_id, set())
+            if "abandonment" not in dedup:
+                logger.warning(f"Meeting ABANDONED: {meeting.venue} ({meeting_id})")
+                from punty.results.change_detection import compose_abandonment_alert, ChangeAlert
+                alert = ChangeAlert(
+                    change_type="abandonment",
+                    meeting_id=meeting_id,
+                    message=compose_abandonment_alert(meeting.venue),
+                )
+                try:
+                    await self._post_change_alert(db, meeting, alert)
+                except Exception as e:
+                    logger.warning(f"Failed to post abandonment alert for {meeting.venue}: {e}")
+                if meeting_id not in self.alerted_changes:
+                    self.alerted_changes[meeting_id] = set()
+                self.alerted_changes[meeting_id].add("abandonment")
+
+                # Void all unsettled picks (abandoned = no win, no loss)
+                from punty.results.picks import void_picks_for_meeting
+                try:
+                    await void_picks_for_meeting(db, meeting_id)
+                except Exception as e:
+                    logger.warning(f"Failed to void picks for {meeting.venue}: {e}")
+
+                # Delete orphan track alert tweets (Good→Heavy looks stupid if abandoned)
+                try:
+                    from punty.models.live_update import LiveUpdate
+                    from punty.delivery.twitter import TwitterDelivery
+                    track_updates = await db.execute(
+                        select(LiveUpdate).where(
+                            LiveUpdate.meeting_id == meeting_id,
+                            LiveUpdate.update_type == "track_alert",
+                        )
+                    )
+                    twitter = TwitterDelivery(db)
+                    if await twitter.is_configured():
+                        for update in track_updates.scalars():
+                            try:
+                                await twitter.delete_tweet(update.tweet_id)
+                                logger.info(f"Deleted orphan track tweet {update.tweet_id} for abandoned {meeting.venue}")
+                            except Exception as e:
+                                logger.debug(f"Could not delete track tweet {update.tweet_id}: {e}")
+                except Exception as e:
+                    logger.debug(f"Track tweet cleanup failed for {meeting.venue}: {e}")
+
+                # Deselect meeting to stop further monitoring
+                meeting.selected = False
+                await db.flush()
+                await db.commit()
+
+            return  # Skip all further processing for abandoned meetings
+
+        # Suppress track condition alerts when >50% races abandoned (meeting winding down)
+        abandoned_count = sum(1 for s in statuses.values() if s == "Abandoned")
+        if statuses and abandoned_count > len(statuses) / 2:
+            logger.info(
+                f"Suppressing track alerts for {meeting.venue}: "
+                f"{abandoned_count}/{len(statuses)} races abandoned"
+            )
+            scraped_tc = None
+
         # Update track condition if changed (piggybacks on status poll — no extra cost)
         # Only update if the base category actually changed (e.g. Soft→Good)
         # or if the new value is more specific (e.g. Good→Good 4).

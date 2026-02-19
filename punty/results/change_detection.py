@@ -32,6 +32,8 @@ class ChangeAlert:
     @property
     def dedup_key(self) -> str:
         """Unique key to prevent duplicate alerts."""
+        if self.change_type == "abandonment":
+            return "abandonment"
         if self.change_type == "track_condition":
             # Use sorted pair so Good->Soft and Soft->Good share the same key
             # (prevents oscillation from producing duplicate alerts)
@@ -716,3 +718,24 @@ def _extract_track_number(condition: str) -> Optional[int]:
     import re
     m = re.search(r"(\d+)", condition)
     return int(m.group(1)) if m else None
+
+
+# ── Abandonment alert ────────────────────────────────────────────────────
+
+_ABANDONMENT_PHRASES = [
+    "All bets void. Back to the couch.",
+    "All bets refunded. That's the game.",
+    "All bets void. Nature wins again.",
+    "Pack it up. All bets refunded.",
+    "That's racing. All bets void.",
+    "All bets off. Better luck next meeting.",
+]
+
+
+def compose_abandonment_alert(venue: str) -> str:
+    """Compose an abandonment alert message (under 280 chars)."""
+    phrase = random.choice(_ABANDONMENT_PHRASES)
+    msg = f"ABANDONED: {venue} meeting called off. {phrase}"
+    if len(msg) > 275:
+        msg = msg[:272] + "..."
+    return msg

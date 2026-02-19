@@ -90,6 +90,32 @@ async def store_picks_from_content(
     return len(pick_dicts)
 
 
+async def void_picks_for_meeting(db: AsyncSession, meeting_id: str) -> int:
+    """Void all unsettled picks for an abandoned meeting. Returns count voided.
+
+    Abandoned = no win, no loss. Sets pnl=0, hit=False, settled=True.
+    """
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.settled == False,
+        )
+    )
+    picks = result.scalars().all()
+    now = melb_now_naive()
+    count = 0
+    for pick in picks:
+        pick.settled = True
+        pick.hit = False
+        pick.pnl = 0.0
+        pick.settled_at = now
+        count += 1
+    if count:
+        await db.flush()
+        logger.info(f"Voided {count} picks for abandoned meeting {meeting_id}")
+    return count
+
+
 async def settle_picks_for_race(
     db: AsyncSession, meeting_id: str, race_number: int
 ) -> int:
@@ -231,29 +257,25 @@ async def _settle_picks_for_race_impl(
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= num_places
 
-            # Use fixed odds from tip time, fall back to tote dividends for backwards compatibility
+            # Use fixed odds from tip time, fall back to tote dividends
             win_odds = pick.odds_at_tip or runner.win_dividend
             place_odds = pick.place_odds_at_tip or runner.place_dividend
 
-            # Odds sanity guard: if tip-time odds are wildly different from actual
-            # tote dividends, the tip-time odds are likely garbage (e.g. Kingscote/King Island).
-            # Prefer tote dividends when ratio exceeds 10x.
+            # Settlement uses the LOWER of fixed odds vs tote dividend.
+            # Fixed place odds can be much higher than tote (e.g. $6.00 fixed vs $1.40 tote).
+            # Using the lower value prevents inflated P&L on place bets.
             if win_odds and runner.win_dividend and runner.win_dividend > 0:
-                ratio = win_odds / runner.win_dividend
-                if ratio > 10 or ratio < 0.1:
-                    logger.warning(
-                        f"Odds sanity guard: {pick.horse_name} R{pick.race_number} "
-                        f"win odds_at_tip={win_odds:.2f} vs dividend={runner.win_dividend:.2f} "
-                        f"(ratio={ratio:.1f}x). Using tote dividend."
+                if win_odds > runner.win_dividend:
+                    logger.info(
+                        f"Using lower tote win dividend for {pick.horse_name} R{pick.race_number}: "
+                        f"fixed={win_odds:.2f} > tote={runner.win_dividend:.2f}"
                     )
                     win_odds = runner.win_dividend
             if place_odds and runner.place_dividend and runner.place_dividend > 0:
-                ratio = place_odds / runner.place_dividend
-                if ratio > 10 or ratio < 0.1:
-                    logger.warning(
-                        f"Odds sanity guard: {pick.horse_name} R{pick.race_number} "
-                        f"place odds_at_tip={place_odds:.2f} vs dividend={runner.place_dividend:.2f} "
-                        f"(ratio={ratio:.1f}x). Using tote dividend."
+                if place_odds > runner.place_dividend:
+                    logger.info(
+                        f"Using lower tote place dividend for {pick.horse_name} R{pick.race_number}: "
+                        f"fixed={place_odds:.2f} > tote={runner.place_dividend:.2f}"
                     )
                     place_odds = runner.place_dividend
 

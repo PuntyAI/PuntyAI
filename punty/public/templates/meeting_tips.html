@@ -1569,6 +1569,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Smooth scroll on click
         navItems.forEach(function(item) {
             item.addEventListener('click', function(e) {
+                if (!item.dataset.section) return; // Let normal links (e.g. /stats) navigate
                 e.preventDefault();
                 var target = document.getElementById(item.dataset.section);
                 if (target) {
