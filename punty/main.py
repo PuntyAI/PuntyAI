@@ -242,6 +242,32 @@ async def health_check():
     return {"status": "healthy", "version": "0.1.0"}
 
 
+@app.post("/api/webhook/trigger-morning-scrape")
+async def trigger_morning_scrape(request: Request):
+    """Internal webhook to trigger morning scrape. Localhost only."""
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Localhost only")
+    import asyncio
+    from punty.scheduler.jobs import daily_morning_scrape
+    asyncio.create_task(daily_morning_scrape())
+    return {"status": "triggered", "message": "Morning scrape started in background"}
+
+
+@app.post("/api/webhook/trigger-calendar-scrape")
+async def trigger_calendar_scrape(request: Request):
+    """Internal webhook to trigger calendar scrape. Localhost only."""
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Localhost only")
+    import asyncio
+    from punty.scheduler.jobs import daily_calendar_scrape
+    asyncio.create_task(daily_calendar_scrape())
+    return {"status": "triggered", "message": "Calendar scrape started in background"}
+
+
 @app.get("/api/public/stats")
 async def public_stats(today: bool = False):
     """Get public stats for homepage."""
