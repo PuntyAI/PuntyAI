@@ -1329,7 +1329,12 @@ class ResultsMonitor:
                 )
             )
             placed_runners = result.scalars().all()
-            if any(not r.place_dividend for r in placed_runners):
+            # Backfill if any placed runner is missing place_dividend or has
+            # a suspiciously high value (>$50 is very rare for place dividends)
+            if any(
+                not r.place_dividend or r.place_dividend > 50
+                for r in placed_runners
+            ):
                 missing_races.append(rn)
 
         if not missing_races:
@@ -1393,9 +1398,12 @@ class ResultsMonitor:
                             )
                             runner = r.scalar_one_or_none()
 
-                        if runner and not runner.place_dividend:
-                            runner.place_dividend = place_div
-                            updated += 1
+                        if runner:
+                            # Always overwrite — existing value may be a garbage
+                            # estimate from formula approximation
+                            if runner.place_dividend != place_div:
+                                runner.place_dividend = place_div
+                                updated += 1
 
                 if updated:
                     await db.flush()

@@ -118,8 +118,9 @@ async def daily_calendar_scrape() -> dict:
                 results["retry_scheduled"] = True
 
             # Create Meeting records for any new meetings found
+            from punty.venues import venue_slug
             for m in meetings_data:
-                meeting_id = f"{m['venue'].lower().replace(' ', '-')}-{today.isoformat()}"
+                meeting_id = f"{venue_slug(m['venue'])}-{today.isoformat()}"
                 existing = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
                 if not existing.scalar_one_or_none():
                     new_meeting = Meeting(
@@ -356,20 +357,63 @@ async def daily_morning_scrape() -> dict:
         finally:
             await pf_scraper.close()
 
-        # Step 1b: Deselect meetings with no races (abandoned/cancelled after scrape)
+        # Step 1b: Quality gate — deselect meetings with poor data quality
+        from punty.models.meeting import Runner
         try:
             for meeting in meetings:
                 if meeting.venue not in results["meetings_scraped"]:
                     continue
+
+                # Check 1: No races at all (abandoned/cancelled)
                 race_result = await db.execute(
-                    select(Race).where(Race.meeting_id == meeting.id).limit(1)
+                    select(Race).where(Race.meeting_id == meeting.id)
                 )
-                if not race_result.scalar_one_or_none():
+                races = race_result.scalars().all()
+                if not races:
                     meeting.selected = False
                     logger.info(f"Deselected {meeting.venue} — no races found after morning scrape")
+                    continue
+
+                # Check 2: Too few races (< 4 = picnic/novelty meeting)
+                if len(races) < 4:
+                    meeting.selected = False
+                    logger.info(
+                        f"Deselected {meeting.venue} — only {len(races)} races "
+                        f"(minimum 4 for quality gate)"
+                    )
+                    continue
+
+                # Check 3: Low odds coverage (< 50% runners with odds)
+                total_runners = 0
+                runners_with_odds = 0
+                for race in races:
+                    runner_result = await db.execute(
+                        select(Runner).where(
+                            Runner.race_id == race.id,
+                            Runner.scratched != True,
+                        )
+                    )
+                    race_runners = runner_result.scalars().all()
+                    total_runners += len(race_runners)
+                    runners_with_odds += sum(
+                        1 for r in race_runners
+                        if r.current_odds and r.current_odds > 1.0
+                    )
+
+                if total_runners > 0:
+                    coverage = runners_with_odds / total_runners
+                    if coverage < 0.5:
+                        meeting.selected = False
+                        logger.warning(
+                            f"Deselected {meeting.venue} — odds coverage "
+                            f"{coverage:.0%} ({runners_with_odds}/{total_runners} runners). "
+                            f"No bookmaker coverage for this venue."
+                        )
+                        continue
+
             await db.commit()
         except Exception as e:
-            logger.error(f"Abandoned check failed: {e}")
+            logger.error(f"Quality gate check failed: {e}")
 
         # Step 2: Speed maps for each meeting (still selected)
         result = await db.execute(

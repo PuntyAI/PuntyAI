@@ -34,42 +34,13 @@ class RacingComScraper(BaseScraper):
 
     BASE_URL = "https://www.racing.com"
 
-    # Common sponsor prefixes to strip from venue names
-    SPONSOR_PREFIXES = [
-        "ladbrokes", "tab", "bet365", "sportsbet", "neds", "pointsbet",
-        "unibet", "betfair", "palmerbet", "bluebet", "topsport",
-    ]
-
-    # Venue name aliases - map calendar names to racing.com URL slugs
-    VENUE_ALIASES = {
-        "sandown lakeside": "sandown",
-        "sandown-lakeside": "sandown",
-        "thomas farms rc murray bridge": "murray-bridge",
-        "thomas-farms-rc-murray-bridge": "murray-bridge",
-        "park kilmore": "kilmore",
-        "park-kilmore": "kilmore",
-        # Note: Cannon Park (Cairns) uses "cannon-park" on racing.com, NOT "cairns"
-    }
-
     def _venue_slug(self, venue: str, strip_sponsor: bool = True) -> str:
         """Convert venue name to URL slug, optionally stripping sponsor prefixes."""
-        slug = venue.lower().strip()
-        # Strip sponsor prefixes (e.g., "Ladbrokes Geelong" -> "geelong")
+        from punty.venues import normalize_venue, venue_slug as _vs
         if strip_sponsor:
-            for prefix in self.SPONSOR_PREFIXES:
-                if slug.startswith(prefix + " "):
-                    slug = slug[len(prefix) + 1:]
-                    break
-                if slug.startswith(prefix + "-"):
-                    slug = slug[len(prefix) + 1:]
-                    break
-        # Check for venue aliases
-        if slug in self.VENUE_ALIASES:
-            return self.VENUE_ALIASES[slug]
-        slug_dashed = slug.replace(" ", "-")
-        if slug_dashed in self.VENUE_ALIASES:
-            return self.VENUE_ALIASES[slug_dashed]
-        return slug_dashed
+            return _vs(venue)
+        # No sponsor stripping — just lowercase + dash
+        return venue.lower().strip().replace(" ", "-")
 
     def _build_meeting_url(self, venue: str, race_date: date) -> str:
         slug = self._venue_slug(venue)
@@ -1016,14 +987,26 @@ class RacingComScraper(BaseScraper):
                 result["odds_flucs"] = _json.dumps(flucs_data)
         return result
 
+    # TAB maximum payout odds ceiling — any odds above this are garbage data
+    MAX_VALID_ODDS = 501.0
+
     def _resolve_current_odds(self, odds_dict: dict, horse_name: str) -> Optional[float]:
         """Pick the best current_odds using Sportsbet as primary provider.
 
         Sportsbet has 24% avg error vs TAB's 334% from racing.com GraphQL.
         TAB odds from racing.com are unreliable across many venues (not just WA).
+        Rejects any odds above MAX_VALID_ODDS ($501) as garbage data.
         """
         sb = odds_dict.get("odds_sportsbet")
         tab = odds_dict.get("odds_tab")
+
+        # Reject garbage odds above TAB ceiling
+        if sb and isinstance(sb, (int, float)) and sb > self.MAX_VALID_ODDS:
+            logger.warning(f"Rejecting garbage SB odds for {horse_name}: ${sb:.2f}")
+            sb = None
+        if tab and isinstance(tab, (int, float)) and tab > self.MAX_VALID_ODDS:
+            logger.warning(f"Rejecting garbage TAB odds for {horse_name}: ${tab:.2f}")
+            tab = None
 
         # Primary: Sportsbet
         if sb and isinstance(sb, (int, float)) and sb > 1.0:
@@ -1043,10 +1026,10 @@ class RacingComScraper(BaseScraper):
         if tab and isinstance(tab, (int, float)) and tab > 1.0:
             return tab
 
-        # Last resort: any other provider
+        # Last resort: any other provider (also capped)
         for k in ["odds_bet365", "odds_ladbrokes", "odds_betfair"]:
             v = odds_dict.get(k)
-            if v and isinstance(v, (int, float)) and v > 1.0:
+            if v and isinstance(v, (int, float)) and 1.0 < v <= self.MAX_VALID_ODDS:
                 return v
 
         return None

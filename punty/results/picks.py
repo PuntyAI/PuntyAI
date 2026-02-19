@@ -235,6 +235,28 @@ async def _settle_picks_for_race_impl(
             win_odds = pick.odds_at_tip or runner.win_dividend
             place_odds = pick.place_odds_at_tip or runner.place_dividend
 
+            # Odds sanity guard: if tip-time odds are wildly different from actual
+            # tote dividends, the tip-time odds are likely garbage (e.g. Kingscote/King Island).
+            # Prefer tote dividends when ratio exceeds 10x.
+            if win_odds and runner.win_dividend and runner.win_dividend > 0:
+                ratio = win_odds / runner.win_dividend
+                if ratio > 10 or ratio < 0.1:
+                    logger.warning(
+                        f"Odds sanity guard: {pick.horse_name} R{pick.race_number} "
+                        f"win odds_at_tip={win_odds:.2f} vs dividend={runner.win_dividend:.2f} "
+                        f"(ratio={ratio:.1f}x). Using tote dividend."
+                    )
+                    win_odds = runner.win_dividend
+            if place_odds and runner.place_dividend and runner.place_dividend > 0:
+                ratio = place_odds / runner.place_dividend
+                if ratio > 10 or ratio < 0.1:
+                    logger.warning(
+                        f"Odds sanity guard: {pick.horse_name} R{pick.race_number} "
+                        f"place odds_at_tip={place_odds:.2f} vs dividend={runner.place_dividend:.2f} "
+                        f"(ratio={ratio:.1f}x). Using tote dividend."
+                    )
+                    place_odds = runner.place_dividend
+
             # Dead heat: divide dividends by number of runners sharing position
             dh = dead_heat_divisors.get(runner.finish_position, 1)
             if dh > 1:

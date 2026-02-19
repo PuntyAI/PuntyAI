@@ -45,21 +45,10 @@ class SpacingResult:
 # Bucketing helpers
 # ──────────────────────────────────────────────
 
-_VENUE_ALIASES: dict[str, str] = {
-    "the valley": "moonee_valley",
-    "moonee valley": "moonee_valley",
-    "royal randwick": "randwick",
-    "randwick": "randwick",
-    "pinjarra park": "pinjarra",
-}
-
-
 def _normalise_venue(venue: str) -> str:
-    """Normalise venue name for matching."""
-    if not venue:
-        return ""
-    v = venue.lower().strip()
-    return _VENUE_ALIASES.get(v, v.replace(" ", "_").replace("'", ""))
+    """Normalise venue name for matching (underscore-separated for profile keys)."""
+    from punty.venues import normalize_venue
+    return normalize_venue(venue).replace(" ", "_").replace("'", "")
 
 
 def _bucket_condition(track_str: str) -> str:

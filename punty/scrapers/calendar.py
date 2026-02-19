@@ -1,39 +1,110 @@
-"""Scrape racing.com/calendar for meetings on a specific date."""
+"""Calendar scraper — discovers today's meetings via PuntingForm API.
+
+Primary: PuntingForm get_meetings() API (fast, accurate venue names).
+Fallback: racing.com Playwright scrape (if PF fails).
+"""
 
 import logging
-from datetime import date, timedelta
-
-from punty.config import melb_today
+from datetime import date
 from typing import Any
 
-from punty.scrapers.playwright_base import new_page
+from punty.config import melb_today
+from punty.venues import normalize_venue, guess_state
 
 logger = logging.getLogger(__name__)
 
-CALENDAR_URL = "https://www.racing.com/calendar"
-
-
-
 
 async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]:
-    """Scrape racing.com calendar page for meetings on a specific date.
+    """Get meetings for a date using PuntingForm API, with racing.com fallback.
 
-    Uses Playwright to render the JS-heavy Next.js calendar page, finds the
-    column matching the requested date by checking the displayed day number
-    (not relying on CSS "today" class which uses racing.com's server timezone),
-    then extracts meeting data.
-
-    Returns a list of dicts with: venue, state, num_races, race_type, status, date.
+    Returns a list of dicts with: venue, state, num_races, race_type, status, date, meeting_type.
     """
     race_date = race_date or melb_today()
-    logger.info(f"Scraping calendar for {race_date}: {CALENDAR_URL}")
+
+    # Primary: PuntingForm API
+    try:
+        meetings = await _scrape_calendar_pf(race_date)
+        if meetings:
+            # Validate any unknown venues via AI
+            from punty.venues_validator import validate_calendar_venues
+            meetings = await validate_calendar_venues(meetings)
+            logger.info(f"PF calendar: {len(meetings)} meetings for {race_date}")
+            return meetings
+        logger.warning(f"PF calendar returned 0 meetings for {race_date}, trying racing.com")
+    except Exception as e:
+        logger.warning(f"PF calendar failed: {e}, falling back to racing.com")
+
+    # Fallback: racing.com Playwright
+    try:
+        meetings = await _scrape_calendar_racing_com(race_date)
+        logger.info(f"Racing.com calendar fallback: {len(meetings)} meetings for {race_date}")
+        return meetings
+    except Exception as e:
+        logger.error(f"Racing.com calendar also failed: {e}")
+        return []
+
+
+async def _scrape_calendar_pf(race_date: date) -> list[dict[str, Any]]:
+    """Scrape calendar via PuntingForm get_meetings() API."""
+    from punty.scrapers.punting_form import PuntingFormScraper
+
+    scraper = PuntingFormScraper()
+    try:
+        pf_meetings = await scraper.get_meetings(race_date)
+    finally:
+        await scraper.close()
+
+    meetings: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for m in pf_meetings:
+        track = m.get("track", {})
+        venue_raw = track.get("name", "")
+        if not venue_raw:
+            continue
+
+        # Skip barrier trials
+        if m.get("isBarrierTrial"):
+            logger.debug(f"Skipping barrier trial: {venue_raw}")
+            continue
+
+        venue = normalize_venue(venue_raw)
+        if not venue:
+            continue
+
+        # Deduplicate
+        key = venue.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+
+        state = track.get("state", "") or guess_state(venue)
+
+        meetings.append({
+            "venue": venue_raw,  # Keep original case for display
+            "state": state,
+            "num_races": 0,
+            "race_type": "Thoroughbred",
+            "status": "",
+            "date": race_date,
+            "meeting_type": "race",
+        })
+
+    return meetings
+
+
+async def _scrape_calendar_racing_com(race_date: date) -> list[dict[str, Any]]:
+    """Fallback: scrape racing.com/calendar via Playwright."""
+    from punty.scrapers.playwright_base import new_page
+
+    CALENDAR_URL = "https://www.racing.com/calendar"
+    logger.info(f"Scraping racing.com calendar for {race_date}")
 
     meetings: list[dict[str, Any]] = []
 
     async with new_page() as page:
         await page.goto(CALENDAR_URL, wait_until="load")
 
-        # Wait for the calendar grid to render
         try:
             await page.locator(".calendar__grid-item-container").first.wait_for(timeout=15000)
         except Exception:
@@ -41,10 +112,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
             return meetings
 
         # Dismiss cookie banner
-        for sel in [
-            "button:has-text('Accept')",
-            "button:has-text('Decline')",
-        ]:
+        for sel in ["button:has-text('Accept')", "button:has-text('Decline')"]:
             try:
                 btn = page.locator(sel).first
                 if await btn.is_visible(timeout=1500):
@@ -52,69 +120,40 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
             except Exception:
                 pass
 
-        # Find the container matching our target date
-        # The calendar shows a week, with day numbers in .calendar__grid-item-day
         containers = page.locator(".calendar__grid-item-container")
         container_count = await containers.count()
-
         target_day = race_date.day
         target_container = None
         target_container_index = 0
-        found_date_info = None
-
-        logger.debug(f"Looking for day {target_day} in {container_count} containers")
 
         for ci in range(container_count):
             c = containers.nth(ci)
-            # Each container has a day element with the date number
             day_elem = c.locator(".calendar__grid-item-day").first
             try:
                 day_text = (await day_elem.text_content(timeout=2000) or "").strip()
-                # Day text is usually just the number (e.g., "3" for Feb 3)
-                # Sometimes it might have additional text
                 day_num = None
                 for part in day_text.split():
                     if part.isdigit():
                         day_num = int(part)
                         break
-
                 if day_num is not None and day_num == target_day:
-                    # Verify this is the right month by checking we're in the right range
-                    # The calendar typically shows ~7 days, so if our target is within
-                    # a reasonable range of today, we're good
                     target_container = c
                     target_container_index = ci
-                    found_date_info = f"day {day_num}"
-                    logger.info(f"Found target date column: {found_date_info}")
                     break
-            except Exception as e:
-                logger.debug(f"Error reading day from container {ci}: {e}")
+            except Exception:
                 continue
 
-        # If we couldn't find by day number, try the --today class as fallback
-        # but only if the requested date IS actually today
+        # Fallback to --today CSS class
         if target_container is None and race_date == melb_today():
-            logger.info("Falling back to CSS --today class for today's date")
             for ci in range(container_count):
                 c = containers.nth(ci)
-                today_inside = c.locator(".calendar__grid-item-day--today")
-                if await today_inside.count() > 0:
+                if await c.locator(".calendar__grid-item-day--today").count() > 0:
                     target_container = c
                     target_container_index = ci
-                    found_date_info = "CSS --today class"
                     break
 
         if target_container is None:
-            logger.warning(f"Could not locate column for {race_date} (day {target_day}) among {container_count} grid items")
-            # Log what days we did find for debugging
-            try:
-                for ci in range(min(container_count, 7)):
-                    c = containers.nth(ci)
-                    day_elem = c.locator(".calendar__grid-item-day").first
-                    day_text = (await day_elem.text_content() or "").strip()
-                    logger.debug(f"  Container {ci}: day text = '{day_text}'")
-            except Exception:
-                pass
+            logger.warning(f"Could not locate column for {race_date}")
             return meetings
 
         # Click "Show more" if present
@@ -126,59 +165,35 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
         except Exception:
             pass
 
-        # Extract meetings, detecting races vs trials/jumpouts
-        # The abbr element contains a code: F = Full form (race), W = Working (trial/jumpout)
         meetings_data = await page.evaluate("""(containerIndex) => {
             const containers = document.querySelectorAll('.calendar__grid-item-container');
             const container = containers[containerIndex];
             if (!container) return [];
-
             const results = [];
             const btns = container.querySelectorAll('.calendar__grid-item-btn');
-
             btns.forEach(btn => {
                 const span = btn.querySelector('span');
                 const venue = span?.textContent?.trim() || '';
                 if (!venue) return;
-
                 const right = btn.querySelector('.calendar__grid-item-right');
                 let state = '';
                 if (right) {
                     state = (right.textContent || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
                 }
-
                 const abbr = btn.querySelector('abbr');
                 const status = abbr?.getAttribute('title') || '';
-                // The abbr text content indicates type: F = race, W = trial/jumpout
                 const abbrCode = abbr?.textContent?.trim().toUpperCase() || 'F';
                 const isTrialOrJumpout = abbrCode === 'W';
-
-                results.push({
-                    venue: venue,
-                    state: state,
-                    status: status,
-                    abbrCode: abbrCode,
-                    isTrialOrJumpout: isTrialOrJumpout
-                });
+                results.push({ venue, state, status, abbrCode, isTrialOrJumpout });
             });
-
             return results;
         }""", target_container_index)
-
-        # Log what we found
-        races = [m for m in meetings_data if not m.get("isTrialOrJumpout")]
-        trials = [m for m in meetings_data if m.get("isTrialOrJumpout")]
-        logger.info(f"Found {len(meetings_data)} meetings: {len(races)} races, {len(trials)} trials")
-        for m in trials:
-            logger.info(f"  Trial detected: {m.get('venue')} (code={m.get('abbrCode')})")
 
         for m in meetings_data:
             venue = m.get("venue", "")
             if not venue:
                 continue
-
             meeting_type = "trial" if m.get("isTrialOrJumpout") else "race"
-
             meetings.append({
                 "venue": venue,
                 "state": m.get("state", ""),
@@ -189,7 +204,7 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
                 "meeting_type": meeting_type,
             })
 
-    # Deduplicate by venue
+    # Deduplicate
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
     for m in meetings:
@@ -197,7 +212,5 @@ async def scrape_calendar(race_date: date | None = None) -> list[dict[str, Any]]
         if key not in seen:
             seen.add(key)
             unique.append(m)
-    meetings = unique
 
-    logger.info(f"Found {len(meetings)} meetings for {race_date}")
-    return meetings
+    return unique

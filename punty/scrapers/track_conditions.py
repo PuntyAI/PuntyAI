@@ -22,74 +22,15 @@ _BASE_URL = (
     "TrackCondition.aspx?State={state}"
 )
 
-# Sponsor prefixes to strip when matching venue names
-_SPONSOR_PREFIXES = (
-    "sportsbet ", "ladbrokes ", "bet365 ", "picklebet park ",
-    "southside ", "tab ", "aquis ", "neds ", "aquis park ",
-    "beaumont ", "picklebet ",
-)
+from punty.venues import SPONSOR_PREFIXES as _SPONSOR_PREFIXES_LIST
 
-# Venue name → state mapping (reuses pattern from deep_learning/importer.py)
-VENUE_TO_STATE: dict[str, str] = {
-    # NSW
-    "randwick": "NSW", "rosehill": "NSW", "warwick farm": "NSW",
-    "canterbury": "NSW", "newcastle": "NSW", "kembla grange": "NSW",
-    "wyong": "NSW", "gosford": "NSW", "hawkesbury": "NSW",
-    "scone": "NSW", "tamworth": "NSW", "mudgee": "NSW",
-    "dubbo": "NSW", "bathurst": "NSW", "orange": "NSW",
-    "wagga": "NSW", "albury": "NSW", "canberra": "ACT",
-    "queanbeyan": "NSW", "moruya": "NSW", "nowra": "NSW",
-    "port macquarie": "NSW", "coffs harbour": "NSW", "grafton": "NSW",
-    "ballina": "NSW", "lismore": "NSW", "taree": "NSW",
-    "muswellbrook": "NSW", "cessnock": "NSW", "glen innes": "NSW",
-    "gilgandra": "NSW", "inverell": "NSW", "gundagai": "NSW",
-    "quirindi": "NSW", "coonamble": "NSW", "wellington": "NSW",
-    "cowra": "NSW", "young": "NSW", "sapphire coast": "NSW",
-    "moree": "NSW", "narromine": "NSW", "armidale": "NSW",
-    "goulburn": "NSW", "broken hill": "NSW", "tuncurry": "NSW",
-    "corowa": "NSW", "casino": "NSW", "condobolin": "NSW",
-    "canterbury park": "NSW", "rosehill gardens": "NSW",
-    # VIC
-    "flemington": "VIC", "caulfield": "VIC", "moonee valley": "VIC",
-    "sandown": "VIC", "cranbourne": "VIC", "pakenham": "VIC",
-    "mornington": "VIC", "geelong": "VIC", "ballarat": "VIC",
-    "bendigo": "VIC", "sale": "VIC", "wangaratta": "VIC",
-    "wodonga": "VIC", "hamilton": "VIC", "stawell": "VIC",
-    "werribee": "VIC", "kilmore": "VIC", "yarra glen": "VIC",
-    "stony creek": "VIC", "healesville": "VIC", "woolamai": "VIC",
-    "seymour": "VIC", "donald": "VIC", "echuca": "VIC",
-    "terang": "VIC", "warrnambool": "VIC", "merton": "VIC",
-    "kyneton": "VIC", "colac": "VIC", "swan hill": "VIC",
-    "mildura": "VIC", "tatura": "VIC", "ararat": "VIC",
-    "avoca": "VIC", "caulfield heath": "VIC", "moe": "VIC",
-    "dederang": "VIC", "yarra valley": "VIC",
-    # QLD
-    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD",
-    "sunshine coast": "QLD", "ipswich": "QLD", "toowoomba": "QLD",
-    "rockhampton": "QLD", "mackay": "QLD", "townsville": "QLD",
-    "cairns": "QLD", "atherton": "QLD", "roma": "QLD",
-    "dalby": "QLD", "beaudesert": "QLD", "kilcoy": "QLD",
-    "bundaberg": "QLD", "gladstone": "QLD", "emerald": "QLD",
-    "cannon park": "QLD", "innisfail": "QLD", "goondiwindi": "QLD",
-    "mount isa": "QLD", "warwick": "QLD",
-    # SA
-    "morphettville": "SA", "murray bridge": "SA", "gawler": "SA",
-    "oakbank": "SA", "naracoorte": "SA", "port augusta": "SA",
-    "balaklava": "SA", "clare": "SA", "strathalbyn": "SA",
-    "mount gambier": "SA", "port lincoln": "SA", "kingscote": "SA",
-    # WA
-    "ascot": "WA", "belmont": "WA", "pinjarra": "WA",
-    "bunbury": "WA", "northam": "WA", "geraldton": "WA",
-    "kalgoorlie": "WA", "albany": "WA", "esperance": "WA",
-    "narrogin": "WA", "york": "WA", "lark hill": "WA",
-    "carnarvon": "WA", "broome": "WA",
-    # TAS
-    "hobart": "TAS", "launceston": "TAS", "devonport": "TAS",
-    "longford": "TAS", "king island": "TAS",
-    # NT
-    "fannie bay": "NT", "alice springs": "NT", "darwin": "NT",
-    "pioneer park": "NT",
-}
+# Sponsor prefixes to strip when matching venue names (tuple with trailing space)
+_SPONSOR_PREFIXES = tuple(p + " " for p in _SPONSOR_PREFIXES_LIST)
+
+from punty.venues import get_all_venues
+
+# Venue name → state mapping (from centralised venues registry)
+VENUE_TO_STATE: dict[str, str] = get_all_venues()
 
 
 def _strip_sponsor(venue: str) -> str:

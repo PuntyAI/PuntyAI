@@ -16,37 +16,10 @@ class TabScraper(BaseScraper):
     BASE_URL = "https://www.tab.com.au"
     API_URL = "https://api.tab.com.au/v1"
 
-    SPONSOR_PREFIXES = [
-        "ladbrokes", "tab", "bet365", "sportsbet", "neds", "pointsbet",
-        "unibet", "betfair", "palmerbet", "bluebet", "topsport", "aquis",
-        "picklebet",
-    ]
-
-    VENUE_ALIASES = {
-        "park kilmore": "kilmore",
-        "park-kilmore": "kilmore",
-        "sandown lakeside": "sandown",
-        "sandown-lakeside": "sandown",
-        "thomas farms rc murray bridge": "murray-bridge",
-        "thomas-farms-rc-murray-bridge": "murray-bridge",
-    }
-
     def _venue_slug(self, venue: str) -> str:
         """Convert venue name to TAB URL slug, stripping sponsor prefixes."""
-        slug = venue.lower().strip()
-        for prefix in self.SPONSOR_PREFIXES:
-            if slug.startswith(prefix + " "):
-                slug = slug[len(prefix) + 1:]
-                break
-            if slug.startswith(prefix + "-"):
-                slug = slug[len(prefix) + 1:]
-                break
-        if slug in self.VENUE_ALIASES:
-            return self.VENUE_ALIASES[slug]
-        slug_dashed = slug.replace(" ", "-")
-        if slug_dashed in self.VENUE_ALIASES:
-            return self.VENUE_ALIASES[slug_dashed]
-        return slug_dashed
+        from punty.venues import venue_slug as _vs
+        return _vs(venue)
 
     async def scrape_meeting(self, venue: str, race_date: date) -> dict[str, Any]:
         """Scrape odds data from TAB for a meeting.
