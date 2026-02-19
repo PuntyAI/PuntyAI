@@ -310,6 +310,57 @@ def _calibrated_score(signal_name: str, raw_value: float,
     return scores[-1] if scores else fallback
 
 
+_OUTPUT_CALIBRATION: dict | None = None
+
+
+def _get_output_calibration() -> dict | None:
+    """Get output-level isotonic calibration curve from calibrated_params.json.
+
+    Returns dict with 'bins' and 'calibrated' lists, or None if not available.
+    """
+    global _OUTPUT_CALIBRATION
+    if _OUTPUT_CALIBRATION is not None:
+        return _OUTPUT_CALIBRATION if _OUTPUT_CALIBRATION else None
+    cal = _load_calibration()
+    if cal and "output_calibration" in cal:
+        _OUTPUT_CALIBRATION = cal["output_calibration"]
+        return _OUTPUT_CALIBRATION
+    _OUTPUT_CALIBRATION = {}  # empty dict = "checked but not found"
+    return None
+
+
+def _apply_output_calibration(
+    win_probs: dict[str, float],
+    curve: dict,
+) -> dict[str, float]:
+    """Apply isotonic output calibration to win probabilities.
+
+    Interpolates each probability through the empirical calibration curve
+    and renormalizes to maintain sum = 1.0.
+    """
+    bins = curve.get("bins", [])
+    calibrated = curve.get("calibrated", [])
+    if not bins or not calibrated or len(bins) < 2:
+        return win_probs
+
+    def _interpolate(p: float) -> float:
+        if p <= bins[0]:
+            return calibrated[0]
+        if p >= bins[-1]:
+            return calibrated[-1]
+        for i in range(len(bins) - 1):
+            if p < bins[i + 1]:
+                t = (p - bins[i]) / (bins[i + 1] - bins[i]) if bins[i + 1] > bins[i] else 0
+                return calibrated[i] + t * (calibrated[min(i + 1, len(calibrated) - 1)] - calibrated[i])
+        return calibrated[-1]
+
+    adjusted = {rid: max(0.001, _interpolate(p)) for rid, p in win_probs.items()}
+    total = sum(adjusted.values())
+    if total > 0:
+        adjusted = {rid: p / total for rid, p in adjusted.items()}
+    return adjusted
+
+
 def _get_calibrated_weights() -> dict[str, float] | None:
     """Get optimal factor weights from calibration, or None to use defaults."""
     cal = _load_calibration()
@@ -560,14 +611,19 @@ def calculate_race_probabilities(
     for rid in raw_scores:
         win_probs[rid] = raw_scores[rid] / total if total > 0 else baseline
 
-    # Step 2a: Sharpen distribution to fix favorite-longshot bias
-    # Model undershoots strong picks (predicts 22% when actual is 31%).
-    # Power > 1 concentrates probability on favorites, reducing longshot overestimate.
-    SHARPEN = 1.45
-    sharpened = {rid: p ** SHARPEN for rid, p in win_probs.items()}
-    sharp_total = sum(sharpened.values())
-    if sharp_total > 0:
-        win_probs = {rid: p / sharp_total for rid, p in sharpened.items()}
+    # Sharpening exponent — used for both win (fallback) and place probs
+    SHARPEN = 1.25
+
+    # Step 2a: Output calibration or sharpening fallback
+    output_cal = _get_output_calibration()
+    if output_cal:
+        win_probs = _apply_output_calibration(win_probs, output_cal)
+    else:
+        # Fallback: mild power sharpening (reduced from 1.45 to 1.25)
+        sharpened = {rid: p ** SHARPEN for rid, p in win_probs.items()}
+        sharp_total = sum(sharpened.values())
+        if sharp_total > 0:
+            win_probs = {rid: p / sharp_total for rid, p in sharpened.items()}
 
     # Step 2b: Market floor — prevent extreme disagreement with market
     win_probs = _apply_market_floor(win_probs, market_implied)
@@ -858,7 +914,12 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
 
 
 def _score_last_five(last_five: str) -> float:
-    """Score a last_five string (e.g. '12x34') with recency weighting."""
+    """Score a last_five string (e.g. '12x34') with recency weighting.
+
+    Output is rescaled to [0.10, 0.90] to match calibrated sub-signal space.
+    Raw scoring produces ~[0.35, 0.78] which distorts form factor averages
+    when mixed with calibrated signals on [0.05, 0.95].
+    """
     score = 0.5
     # Filter to digit/x characters only
     positions = [c for c in last_five.strip() if c.isdigit() or c.lower() == "x"]
@@ -876,6 +937,8 @@ def _score_last_five(last_five: str) -> float:
         elif pos.isdigit() and int(pos) >= 7:
             score -= 0.03 * weight
 
+    # Rescale from observed [0.35, 0.78] to [0.10, 0.90]
+    score = 0.10 + (score - 0.35) * (0.80 / 0.43)
     return max(0.05, min(0.95, score))
 
 
@@ -1526,9 +1589,11 @@ def _apply_market_floor(
         mkt = market_implied.get(rid, 0)
         if mkt > 0.05:  # Only for runners with real market presence
             ratio = adjusted[rid] / mkt if mkt > 0 else 1.0
-            if ratio < 0.50:
-                # Blend 60/40 model/market — anchors toward market for favourites
-                adjusted[rid] = adjusted[rid] * 0.6 + mkt * 0.4
+            if ratio < 0.60:
+                # Smooth ramp: blend increases as model diverges from market
+                # At ratio=0.60 → no blend, ratio=0.0 → full 40% market blend
+                blend_alpha = min(0.4, max(0.0, (0.60 - ratio) / 0.75))
+                adjusted[rid] = adjusted[rid] * (1 - blend_alpha) + mkt * blend_alpha
                 needs_renorm = True
 
     if needs_renorm:

@@ -46,6 +46,16 @@ from punty.probability import (
     set_dl_pattern_cache,
     get_dl_pattern_cache,
 )
+import punty.probability as _prob_module
+
+
+@pytest.fixture(autouse=True)
+def _reset_output_calibration():
+    """Reset output calibration singleton so tests don't depend on local data files."""
+    old = _prob_module._OUTPUT_CALIBRATION
+    _prob_module._OUTPUT_CALIBRATION = {}  # empty dict = "checked, not found" → skip calibration
+    yield
+    _prob_module._OUTPUT_CALIBRATION = old
 
 
 # ──────────────────────────────────────────────
@@ -1443,8 +1453,17 @@ class TestCalculateWithDLPatterns:
                            "condition": "Good", "style": "leader", "confidence": "HIGH"},
             "confidence": "HIGH", "edge": 0.10,
         }]
+        # Use weights that include DL (default weights have deep_learning=0.00)
+        dl_weights = {
+            "form": 0.45, "market": 0.30, "weight_carried": 0.04,
+            "horse_profile": 0.03, "class_fitness": 0.03, "jockey_trainer": 0.03,
+            "barrier": 0.02, "movement": 0.00, "pace": 0.00, "deep_learning": 0.10,
+        }
         results_with_dl = calculate_race_probabilities(
-            runners, race, meeting, dl_patterns=dl_patterns,
+            runners, race, meeting, dl_patterns=dl_patterns, weights=dl_weights,
+        )
+        results_no_dl = calculate_race_probabilities(
+            runners, race, meeting, weights=dl_weights,
         )
 
         # r1 (leader) should get a boost, r2 (midfield) shouldn't
