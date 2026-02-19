@@ -1412,8 +1412,9 @@ class ContentGenerator:
             eq = sequences.get("early_quad")
             if eq:
                 parts.append(f"- EARLY QUADDIE: Races {eq[0]}-{eq[1]}")
+            from punty.context.pre_sequences import ENABLE_MAIN_QUADDIE
             q = sequences.get("quaddie")
-            if q:
+            if q and ENABLE_MAIN_QUADDIE:
                 parts.append(f"- QUADDIE (main): Races {q[0]}-{q[1]}")
             b6 = sequences.get("big6")
             if b6:

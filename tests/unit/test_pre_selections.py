@@ -518,9 +518,10 @@ class TestCalculatePreSelections:
 
     def test_puntys_pick_exotic_when_high_value(self):
         """Exotic should become Punty's Pick when value >= 1.5x."""
+        # Anchor odds must be <= $3.50 for exotic filter to pass
         runners = [
-            _runner(1, "A", 5.0, win_prob=0.20, value=1.05),
-            _runner(2, "B", 6.0, win_prob=0.18, value=1.02),
+            _runner(1, "A", 3.00, win_prob=0.35, value=1.05),
+            _runner(2, "B", 4.50, win_prob=0.22, value=1.02),
         ]
         ctx = _race_context(runners)
         ctx["probabilities"]["exotic_combinations"] = [
@@ -529,7 +530,6 @@ class TestCalculatePreSelections:
              "probability": "15.0%", "value": 2.0, "combos": 1, "format": "standout"},
         ]
         result = calculate_pre_selections(ctx)
-        # Selection EV is low (0.20*5 - 1 = 0, 0.18*6 - 1 = 0.08)
         # Exotic value is 2.0x which is > 1.5x threshold
         if result.puntys_pick:
             # The exotic edge (2.0 - 1.0 = 1.0) should beat selection edge

@@ -2801,8 +2801,10 @@ def calculate_smart_quaddie_widths(
     """
     max_combos = int(budget / (min_flexi_pct / 100.0))  # e.g. $100/0.30 = 333
 
-    # Start with shape-recommended widths
-    widths = [leg.shape_width for leg in legs]
+    # Start with shape-recommended widths, enforcing minimum of 2
+    # Single-runner legs have 30.4% hit rate vs 64-77% for wider legs
+    MIN_LEG_WIDTH = 2
+    widths = [max(leg.shape_width, MIN_LEG_WIDTH) for leg in legs]
 
     # Big6: cap individual legs tighter (6 legs compound fast)
     if is_big6:
@@ -2818,7 +2820,6 @@ def calculate_smart_quaddie_widths(
     # MINIMUM WIDTH = 2: Even standout favourites win only ~63%. Single-selection
     # legs are catastrophic single points of failure (validated on 14,246 legs
     # from 2025: "ALWAYS need at least width=2 in any leg for safety").
-    MIN_LEG_WIDTH = 2
     while combos > max_combos:
         # Find leg with highest top runner probability that can be tightened
         best_idx = None

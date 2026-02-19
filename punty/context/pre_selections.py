@@ -236,8 +236,13 @@ def calculate_pre_selections(
     # Allocate stakes from pool
     _allocate_stakes(picks, pool)
 
-    # Select recommended exotic
-    exotic = _select_exotic(exotic_combos, used_saddlecloths)
+    # Select recommended exotic (with field size and anchor odds filters)
+    field_size = sum(1 for r in runners if not r.get("scratched"))
+    anchor_odds = picks[0].odds if picks else 0.0
+    exotic = _select_exotic(
+        exotic_combos, used_saddlecloths,
+        field_size=field_size, anchor_odds=anchor_odds,
+    )
 
     # Calculate Punty's Pick
     puntys_pick = _calculate_puntys_pick(picks, exotic)
@@ -532,6 +537,8 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
 def _select_exotic(
     exotic_combos: list[dict],
     selection_saddlecloths: set[int],
+    field_size: int = 0,
+    anchor_odds: float = 0.0,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet, enforcing consistency with selections.
 
@@ -548,6 +555,17 @@ def _select_exotic(
     leverages this directly with fewer combos and higher hit rate.
     """
     if not exotic_combos:
+        return None
+
+    # Anchor odds filter: $2-$3 anchor = +128% ROI, $4-$5 = -81% ROI
+    # Only take exotics when the top pick is short enough to anchor reliably
+    ANCHOR_MAX_ODDS = 3.50
+    if anchor_odds > ANCHOR_MAX_ODDS:
+        return None
+
+    # Large field filter: 0% hit rate in 13+ runner fields (-100% ROI on 16 bets)
+    LARGE_FIELD_THRESHOLD = 13
+    if field_size >= LARGE_FIELD_THRESHOLD:
         return None
 
     # Score exotics: heavily favour formats that anchor on #1 pick

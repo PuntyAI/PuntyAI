@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 OUTLAY = 50.0
 MIN_FLEXI_PCT = 30.0
 
+# Main quaddie: 0/12 hits, -$750, -100% ROI. Early quaddie: 5/14, 35.7%.
+# Suppress main quaddie until evidence shows it can be profitable.
+ENABLE_MAIN_QUADDIE = False
+
 # Minimum estimated return % thresholds — skip sequences below these
 MIN_RETURN_PCT = {
     "early_quaddie": 20.0,
@@ -285,6 +289,11 @@ def build_all_sequence_lanes(
     for key, label in type_map.items():
         race_range = sequences.get(key)
         if not race_range:
+            continue
+
+        # Skip main quaddie if disabled (0/12, -100% ROI)
+        if key == "quaddie" and not ENABLE_MAIN_QUADDIE:
+            logger.info("Main Quaddie suppressed (ENABLE_MAIN_QUADDIE=False)")
             continue
 
         smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts)

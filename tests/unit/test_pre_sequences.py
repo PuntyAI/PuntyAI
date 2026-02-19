@@ -218,25 +218,28 @@ class TestBuildSmartSequence:
 
 class TestBuildAllSequenceLanes:
     def test_8_race_meeting(self):
-        """8-race meeting should produce Early Quaddie, Quaddie, and Big 6."""
+        """8-race meeting should produce Early Quaddie and Big 6 (main Quaddie suppressed)."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 9)]
         race_contexts = [_race_ctx(r) for r in range(1, 9)]
 
         results = build_all_sequence_lanes(8, leg_analysis, race_contexts)
         types = {r.sequence_type for r in results}
         assert "Early Quaddie" in types
-        assert "Quaddie" in types
+        # Main Quaddie is suppressed (0/12, -100% ROI)
+        assert "Quaddie" not in types
         assert "Big 6" in types
 
     def test_7_race_meeting_no_big6(self):
-        """7-race meeting should NOT have Big 6."""
+        """7-race meeting should NOT have Big 6 or main Quaddie."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 8)]
         race_contexts = [_race_ctx(r) for r in range(1, 8)]
 
         results = build_all_sequence_lanes(7, leg_analysis, race_contexts)
         types = {r.sequence_type for r in results}
         assert "Big 6" not in types
-        assert "Quaddie" in types
+        # Main Quaddie is suppressed
+        assert "Quaddie" not in types
+        assert "Early Quaddie" in types
 
     def test_empty_analysis(self):
         results = build_all_sequence_lanes(8, [], [])
@@ -270,8 +273,9 @@ class TestBuildAllSequenceLanes:
 
 class TestFormatSequenceLanes:
     def test_basic_format(self):
-        leg_analysis = [_leg_analysis(r) for r in range(5, 9)]
-        race_contexts = [_race_ctx(r) for r in range(5, 9)]
+        # Use races 1-4 (early quaddie range) since main quaddie is suppressed
+        leg_analysis = [_leg_analysis(r) for r in range(1, 5)]
+        race_contexts = [_race_ctx(r) for r in range(1, 5)]
 
         results = build_all_sequence_lanes(8, leg_analysis, race_contexts)
         formatted = format_sequence_lanes(results)
@@ -285,8 +289,8 @@ class TestFormatSequenceLanes:
         assert format_sequence_lanes([]) == ""
 
     def test_contains_saddlecloth_numbers(self):
-        leg_analysis = [_leg_analysis(r) for r in range(5, 9)]
-        race_contexts = [_race_ctx(r) for r in range(5, 9)]
+        leg_analysis = [_leg_analysis(r) for r in range(1, 5)]
+        race_contexts = [_race_ctx(r) for r in range(1, 5)]
 
         results = build_all_sequence_lanes(8, leg_analysis, race_contexts)
         formatted = format_sequence_lanes(results)
@@ -295,12 +299,12 @@ class TestFormatSequenceLanes:
     def test_contains_odds_shape(self):
         """Format should show odds shape per leg."""
         leg_analysis = [
-            _leg_analysis(5, odds_shape="STANDOUT", shape_width=3),
-            _leg_analysis(6, odds_shape="CLEAR_FAV", shape_width=5),
-            _leg_analysis(7, odds_shape="TRIO", shape_width=7),
-            _leg_analysis(8, odds_shape="DOMINANT", shape_width=4),
+            _leg_analysis(1, odds_shape="STANDOUT", shape_width=3),
+            _leg_analysis(2, odds_shape="CLEAR_FAV", shape_width=5),
+            _leg_analysis(3, odds_shape="TRIO", shape_width=7),
+            _leg_analysis(4, odds_shape="DOMINANT", shape_width=4),
         ]
-        race_contexts = [_race_ctx(r) for r in range(5, 9)]
+        race_contexts = [_race_ctx(r) for r in range(1, 5)]
 
         results = build_all_sequence_lanes(8, leg_analysis, race_contexts)
         formatted = format_sequence_lanes(results)
@@ -313,9 +317,9 @@ class TestFormatSequenceLanes:
         """Risk warning should appear in formatted output."""
         leg_analysis = [
             _leg_analysis(r, odds_shape="OPEN_BUNCH", shape_width=6)
-            for r in range(5, 9)
+            for r in range(1, 5)
         ]
-        race_contexts = [_race_ctx(r) for r in range(5, 9)]
+        race_contexts = [_race_ctx(r) for r in range(1, 5)]
 
         results = build_all_sequence_lanes(8, leg_analysis, race_contexts)
         formatted = format_sequence_lanes(results)
