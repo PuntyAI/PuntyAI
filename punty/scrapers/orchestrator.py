@@ -377,6 +377,18 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             logger.error(f"racing.com supplement failed: {e}")
             errors.append(f"racing.com_supplement: {e}")
 
+        # Step 4: Betfair exchange odds (fast API, no browser — fills current_odds gaps)
+        try:
+            from punty.scrapers.betfair import BetfairScraper
+            bf = await BetfairScraper.from_settings(db)
+            if bf:
+                bf_odds = await bf.get_odds_for_meeting(venue, race_date, meeting_id)
+                await _merge_betfair_odds(db, meeting_id, bf_odds)
+                logger.info(f"Betfair odds merged: {len(bf_odds)} runners for {venue}")
+        except Exception as e:
+            logger.warning(f"Betfair odds failed for {venue}: {e}")
+            errors.append(f"betfair: {e}")
+
         # Close PF scraper only if we own it
         if owns_pf and pf_scraper:
             await pf_scraper.close()

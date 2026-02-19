@@ -397,7 +397,8 @@ async def daily_morning_scrape() -> dict:
                     total_runners += len(race_runners)
                     runners_with_odds += sum(
                         1 for r in race_runners
-                        if r.current_odds and r.current_odds > 1.0
+                        if (r.current_odds and r.current_odds > 1.0)
+                        or (r.odds_betfair and r.odds_betfair > 1.0)
                     )
 
                 if total_runners > 0:
