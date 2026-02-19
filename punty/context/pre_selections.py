@@ -574,18 +574,18 @@ def _select_exotic(
             raw_prob = float(raw_prob.rstrip("%")) / 100
         prob_weight = min(raw_prob / 0.05, 1.0)
 
-        # Type bonuses based on validated performance data
+        # Type bonuses based on validated performance (100 settled exotics)
         type_bonus = 0.0
         if "exacta" in exotic_type:
-            type_bonus = 1.5  # 22.2% hit rate, all exotic wins were exactas
+            type_bonus = 1.5  # all 8 exotic wins were exacta standouts
             if "standout" in exotic_type:
-                type_bonus = 2.0  # standout format is ideal (anchored on #1)
+                type_bonus = 2.5  # 15.7% SR, avg +$78.63 per win
         elif "quinella" in exotic_type:
             type_bonus = 0.5  # broader coverage when no strong order view
         elif "trifecta" in exotic_type and "standout" in exotic_type:
-            type_bonus = 0.8  # 15.8% hit rate when #1 wins
+            type_bonus = -2.0  # 0 wins — killed, use trifecta box instead
         elif "trifecta" in exotic_type and "box" in exotic_type:
-            type_bonus = -0.5  # 4.5% hit rate, -19.2% ROI — penalise
+            type_bonus = 0.3  # 2 wins from 46, but one paid +$557
 
         # Score = value * probability_weight + overlap bonus + type bonus
         score = ec.get("value", 1.0) * prob_weight + overlap_ratio * 1.0 + type_bonus

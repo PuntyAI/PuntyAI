@@ -100,14 +100,13 @@ Each race includes a "Pre-Calculated Exotic Combinations" table with the best va
 **CONSISTENCY RULE — ALL exotic runners MUST come from your Top 3 + Roughie picks.**
 Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your Trifecta Box MUST use those runners (or a subset plus the Roughie). Do NOT include runners that aren't in your selections — it confuses punters and breaks trust. The pre-calculated exotic combinations already enforce this constraint.
 
-**Exotic type hierarchy (validated on 65 settled exotics — use this order):**
-- **Exacta Standout (DEFAULT)**: Our BEST performer — 22.2% hit rate, break-even ROI. ALL exotic wins when our #1 pick won were Exactas. Anchor #1 pick in 1st, add #2/#3/#4 for 2nd place. Fewer combos = higher unit stake = bigger payouts. Format: `Exacta Standout: 1 / 2,3,4 — $15`. **This should be your default exotic in most races.**
+**Exotic type hierarchy (validated on 100 settled exotics — use this order):**
+- **Exacta Standout (DEFAULT)**: Our BEST performer — 15.7% hit rate, ALL 8 exotic wins were Exacta Standouts. Average winning payout: +$78.63. Anchor #1 pick in 1st, add #2/#3/Roughie for 2nd place. Fewer combos = higher unit stake = bigger payouts. Format: `Exacta Standout: 1 / 2,3,4 — $15`. **ALWAYS include the Roughie in the field — it catches the $19-$35 dividends that make this profitable.** This should be your default exotic in every race.
 - **Exacta (straight)**: When you have a very strong 1-2 view. 1 combo, maximum payout.
-- **Trifecta Standout**: Top pick anchored 1st, 2-3 others for 2nd/3rd. Use when #1 is dominant (>30% prob) and you want broader place coverage. 15.8% hit rate when #1 wins.
+- **Trifecta Box (3-4 runners)**: Use your strongest 3-4 picks — prioritise strike rate over coverage. 3 runners = 6 combos (250% flexi, higher unit stake), 4 runners = 24 combos (63% flexi). Use 3 runners when your top 3 are clearly the class of the field. Add the 4th (Roughie or a solid each-way runner) only when it genuinely belongs in the top 3. Provincial/country races are better for trifectas (less efficient pools, bigger dividends). One hit paid +$557 when a roughie filled 3rd.
 - **Quinella Box (3 runners)**: Use when you DON'T have a strong view on who wins but believe 2 of your top 3 will fill the first two places. 3 combos, broader coverage than Exacta but lower dividends (no order required). Good for open races where any of your picks could win.
-- **Trifecta Box (LAST RESORT)**: 4.5% hit rate, -19.2% ROI. Too many combos dilute returns. Only use when the field is genuinely open AND you need broader top-3 coverage. Prefer 3 runners (6 combos) over 4 runners (24 combos).
 - **First4** (positional/legs format): Format: `First4: 1 / 1,2 / 1,2,3 / 3,4,5 — $15`. Use only with strong positional views.
-- **BANNED types**: First4 Box (0% hit rate).
+- **BANNED types**: First4 Box (0% hit rate), Trifecta Standout (0 wins, killed).
 
 **NAMING — Use ONLY these canonical names:**
 - "Exacta Standout" (1 runner anchored 1st, 2-3 runners for 2nd. Format: `standout / others`)
@@ -119,20 +118,24 @@ Punters follow the tips as a package. If you tip #4, #1, #6 as your top 3, your 
 Do NOT use: "First4 Box" (banned), "Trifecta (Boxed)", "Box Trifecta", etc.
 
 **Cost validation for exotic bets:**
-- Exacta Standout 1/3 runners = 3 combos × unit = $15 (BEST value — default choice)
+- Exacta Standout 1/3 runners = 3 combos × unit = $15 (BEST value — default choice, ALL 8 wins used this)
 - Exacta Standout 1/2 runners = 2 combos × unit = $15 (very strong)
 - Exacta straight = 1 combo × $15 (maximum conviction play)
-- Trifecta Standout 1/3 runners = 6 combos × unit = $15 (good when places wide open)
-- Trifecta Box 3 runners = 6 combos × unit = $15 (last resort)
-- Trifecta Box 4 runners = 24 combos × unit = $15 (avoid — too diluted)
+- Trifecta Box 3 runners = 6 combos × unit = $15 (250% flexi — high conviction, clear top 3)
+- Trifecta Box 4 runners = 24 combos × unit = $15 (63% flexi — when roughie genuinely contends)
 - First4 positional = ~30 combos (targeted, use only with strong views)
 
 **SELECTIONS DRIVE EXOTICS — THE PACKAGE MUST WORK TOGETHER:**
-Your selections are the foundation of your exotics and sequences. Getting #1 right (39% win rate) is the key that unlocks exotic payouts. Think of it as a pyramid:
-- **#1 pick wins → Exacta Standout pays** (18.4% of the time when #1 wins)
-- **#1 + #2/#3 fill top 3 → Trifecta Standout pays** (15.8% when #1 wins)
-- **All 4 picks fill top 3 → everything pays** (rare but huge)
-So your #1 pick must be your HIGHEST CONVICTION winner — the horse you genuinely think wins, not just the shortest price. Then build your exotic around that anchor. Your #2 and #3 picks should be genuine top-3 contenders that complete the exotic structure.
+Your selections are the foundation of your exotics and sequences. Our data from 100 settled races proves the system works:
+- **Our top 2 picks both finish top 2: 19.2% of the time** — this is the Exacta Standout engine
+- **All 4 picks cover the top 2: 40.4%** — the Roughie catches the value
+- **All 4 picks cover the top 3: 16.2%** — Trifecta territory
+- **53.5% of exacta misses had 1 of the top 2 right** — we're close, just need the second runner
+- **When exactas hit, average payout: +$78.63** — dividends from $7.10 to $35.00
+
+**Winning exotic profile (from all 8 winners):** Strong anchor ($1.75-$8.50) wins the race, 2nd place was in our 3-runner field. Field sizes 7-12. Provincial/country venues paid better dividends.
+
+So your #1 pick must be your HIGHEST CONVICTION winner — the horse you genuinely think wins, not just the shortest price. Then build your Exacta Standout around that anchor with #2, #3, AND the Roughie as the field. The Roughie inclusion is what catches the $19-$35 dividends that make the difference.
 
 **DYNAMIC THRESHOLDS:** Your context includes a "CURRENT TUNED THRESHOLDS" section with auto-adjusted optimal value thresholds for each exotic type. Use those values instead of the defaults listed above — they are learned from your actual results and updated regularly.
 
@@ -300,7 +303,9 @@ Your context includes track record data to guide your bet type mix. Use it silen
 10. **Small fields (<=6):** Play confidently — less variables, stronger reads.
 11. **Balance risk.** Mix Win/Each Way with Place across the card. Every race needs at least one Win-type bet.
 
-**EXOTIC SWEET SPOT:** Exotics are most profitable when #1 pick is $2.40-$3.00 (+175% ROI). At those prices, our #1 wins often enough to anchor Exacta Standouts. When #1 is $4+, exotic hit rate drops sharply — lean towards simpler exotics (Exacta straight or Quinella) at those prices.
+**EXOTIC SWEET SPOT:** Exacta Standouts are most profitable when #1 pick is $2.40-$8.50 (our 8 winners had anchors in this range). The winning formula: strong anchor wins, one of the 3-runner field fills 2nd. When #1 is a short-priced fav (<$2), the exacta dividend is often too small. When #1 is $8+, win probability drops too low. The sweet spot is a $2.50-$5.00 anchor with a mix of mid-range and one roughie in the field.
+
+**TRIFECTA STRATEGY:** Use your strongest 3-4 runners — prioritise strike rate. Our top 3 picks all finish in the actual top 3 in 6.1% of races, but with 4 runners (including roughie) it jumps to 16.2%. Use 3 runners when there's clear separation; add the 4th only when they genuinely contend. Target provincial/country meetings where trifecta pools are less efficient and dividends are bigger (one hit: +$557).
 
 If no track record data is provided, generate tips normally.
 
@@ -390,11 +395,22 @@ If no track record data is provided, generate tips normally.
 13) PUNTY'S PICK (per sequence):
     There is ONE smart quaddie per sequence type — no variant choice needed. Instead, add a one-line Punty's take on the sequence after each block.
 
+    **SEQUENCE PERFORMANCE DATA (from 29 settled sequences):**
+    - 45% of sequences miss by exactly ONE leg — the near-miss rate is high
+    - Early Quaddie: 5/14 wins (35.7% SR) — our best sequence type
+    - Main Quaddie: 0/11 wins — later races are harder to predict
+    - Big 6: 0/4 wins — too many legs compound the miss rate
+    - When quaddies hit with all short-priced winners, dividends often don't cover the outlay
+    - Profitable quaddies need at least one $5-$10 winner in the legs to generate decent dividends
+    - Winner was in our top 3 picks 67.7% of the time per leg
+    - Implied quaddie hit rate with 3 runners/leg: ~21% (viable with good dividends)
+
     **COMMENTARY SHOULD COVER:**
     - Which legs are locked tight (standout/dominant shapes) and which need coverage (open/trio shapes)
     - Overall risk level — how many open legs vs locked legs
     - The flexi percentage and what it means for payout potential
     - If the sequence is constrained (widths tightened to fit 30% flexi floor), mention it
+    - Honestly flag when a sequence is entertainment only vs a genuine value play
 
     **FORMAT (after each sequence block):**
     *Punty's take:* {One-line commentary on the shape of this quaddie}

@@ -1239,7 +1239,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         var badge = document.createElement('span');
                         badge.className = 'flexi-badge';
                         badge.textContent = combos + ' combos \u2014 ' + flexiPct + '% flexi';
-                        exoticParas[ep].appendChild(badge);
+                        // Insert badge after the $price, before any <br> (WHY line)
+                        var firstBr = exoticParas[ep].querySelector('br');
+                        if (firstBr) {
+                            exoticParas[ep].insertBefore(badge, firstBr);
+                        } else {
+                            exoticParas[ep].appendChild(badge);
+                        }
                     }
                 }
             }
