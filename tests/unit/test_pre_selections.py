@@ -552,7 +552,7 @@ class TestFormatPreSelections:
         result = calculate_pre_selections(ctx)
         formatted = format_pre_selections(result)
 
-        assert "RECOMMENDED SELECTIONS" in formatted
+        assert "LOCKED SELECTIONS" in formatted
         assert "Race 1" in formatted
         assert "Punty's Pick" in formatted
         assert "Total stake" in formatted

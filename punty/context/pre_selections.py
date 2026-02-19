@@ -726,7 +726,7 @@ def _generate_notes(
 
 def format_pre_selections(pre_sel: RacePreSelections) -> str:
     """Format pre-selections for injection into AI prompt context."""
-    lines = [f"\n**RECOMMENDED SELECTIONS (Race {pre_sel.race_number}):**"]
+    lines = [f"\n**LOCKED SELECTIONS (Race {pre_sel.race_number}) — DO NOT REORDER:**"]
 
     for pick in pre_sel.picks:
         rank_label = "Roughie" if pick.is_roughie else f"Pick #{pick.rank}"
