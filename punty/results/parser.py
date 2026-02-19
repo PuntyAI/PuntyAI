@@ -325,6 +325,13 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             saddle = m.group(5)
             win_odds = float(m.group(6))
             place_odds = float(m.group(7)) if m.group(7) else None
+            # Sanity: place odds must be less than win odds
+            if place_odds and win_odds and place_odds > win_odds:
+                logger.warning(
+                    f"AI hallucinated place odds: {name.strip()} win=${win_odds} place=${place_odds}. "
+                    f"Estimating place as (win-1)/3+1 = ${round((win_odds - 1) / 3 + 1, 2)}"
+                )
+                place_odds = round((win_odds - 1) / 3 + 1, 2)
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,
@@ -375,6 +382,13 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             roughie_saddle = roughie_m.group(3)
             win_odds = float(roughie_m.group(4))
             place_odds = float(roughie_m.group(5)) if roughie_m.group(5) else None
+            # Sanity: place odds must be less than win odds
+            if place_odds and win_odds and place_odds > win_odds:
+                logger.warning(
+                    f"AI hallucinated place odds: {roughie_name.strip()} win=${win_odds} place=${place_odds}. "
+                    f"Estimating place as (win-1)/3+1 = ${round((win_odds - 1) / 3 + 1, 2)}"
+                )
+                place_odds = round((win_odds - 1) / 3 + 1, 2)
             picks.append({
                 "id": next_id(),
                 "content_id": content_id,

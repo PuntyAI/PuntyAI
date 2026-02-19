@@ -261,21 +261,40 @@ async def _settle_picks_for_race_impl(
             win_odds = pick.odds_at_tip or runner.win_dividend
             place_odds = pick.place_odds_at_tip or runner.place_dividend
 
-            # Settlement uses the LOWER of fixed odds vs tote dividend.
-            # Fixed place odds can be much higher than tote (e.g. $6.00 fixed vs $1.40 tote).
-            # Using the lower value prevents inflated P&L on place bets.
+            # Sanity: place odds should NEVER exceed win odds (impossible in real markets).
+            # If they do, the place odds are likely garbage (e.g. win $2.70 / place $6.00).
+            # Fall back to estimated place from win: (win - 1) / 3 + 1
+            if win_odds and place_odds and place_odds > win_odds:
+                estimated_place = round((win_odds - 1) / 3 + 1, 2)
+                logger.warning(
+                    f"Place odds > win odds for {pick.horse_name} R{pick.race_number}: "
+                    f"win=${win_odds:.2f} place=${place_odds:.2f}. "
+                    f"Using tote place={runner.place_dividend} or estimate=${estimated_place:.2f}"
+                )
+                # Prefer tote dividend if available, otherwise estimate from win odds
+                if runner.place_dividend and runner.place_dividend > 0:
+                    place_odds = runner.place_dividend
+                else:
+                    place_odds = estimated_place
+
+            # Extreme ratio guard: if tip-time odds are wildly different from tote
+            # (>10x), the tip-time odds are likely garbage (e.g. Kingscote/King Island).
             if win_odds and runner.win_dividend and runner.win_dividend > 0:
-                if win_odds > runner.win_dividend:
-                    logger.info(
-                        f"Using lower tote win dividend for {pick.horse_name} R{pick.race_number}: "
-                        f"fixed={win_odds:.2f} > tote={runner.win_dividend:.2f}"
+                ratio = win_odds / runner.win_dividend
+                if ratio > 10 or ratio < 0.1:
+                    logger.warning(
+                        f"Odds sanity guard: {pick.horse_name} R{pick.race_number} "
+                        f"win fixed={win_odds:.2f} vs tote={runner.win_dividend:.2f} "
+                        f"(ratio={ratio:.1f}x). Using tote dividend."
                     )
                     win_odds = runner.win_dividend
             if place_odds and runner.place_dividend and runner.place_dividend > 0:
-                if place_odds > runner.place_dividend:
-                    logger.info(
-                        f"Using lower tote place dividend for {pick.horse_name} R{pick.race_number}: "
-                        f"fixed={place_odds:.2f} > tote={runner.place_dividend:.2f}"
+                ratio = place_odds / runner.place_dividend
+                if ratio > 10 or ratio < 0.1:
+                    logger.warning(
+                        f"Odds sanity guard: {pick.horse_name} R{pick.race_number} "
+                        f"place fixed={place_odds:.2f} vs tote={runner.place_dividend:.2f} "
+                        f"(ratio={ratio:.1f}x). Using tote dividend."
                     )
                     place_odds = runner.place_dividend
 
@@ -995,11 +1014,6 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         .where(
             Pick.settled == True,
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
-            # Exclude losing sequences - only include if not a sequence OR if sequence that hit
-            or_(
-                Pick.pick_type != "sequence",
-                and_(Pick.pick_type == "sequence", Pick.hit == True)
-            ),
         )
     )
     rows = result.all()
