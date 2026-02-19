@@ -1240,11 +1240,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         badge.className = 'flexi-badge';
                         badge.textContent = combos + ' combos \u2014 ' + flexiPct + '% flexi';
                         exoticParas[ep].appendChild(badge);
-                        // Remove the separate "N combos — X% flexi" text line if AI wrote it
-                        var nextP = exoticParas[ep].nextElementSibling;
-                        if (nextP && /^\d+\s+combos?\s*[—–\-]/i.test(nextP.textContent.trim())) {
-                            nextP.remove();
-                        }
                     }
                 }
             }

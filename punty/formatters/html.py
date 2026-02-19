@@ -242,6 +242,12 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     content = re.sub(r'(?:^[0-9]+[.)]\s+.+$\n?)+', convert_numbered, content, flags=re.MULTILINE)
 
+    # Remove "N combos — X% flexi" lines (JS badge replaces this info)
+    content = re.sub(
+        r'^\s*\d+\s+combos?\s*[—–\-]\s*\d+%\s*flexi\s*$',
+        '', content, flags=re.MULTILINE | re.IGNORECASE,
+    )
+
     # Style selection metadata lines (before paragraph wrapping)
     content = re.sub(
         r'^\s*Bet:\s*(.+)$',
