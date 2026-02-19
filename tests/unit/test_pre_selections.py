@@ -269,6 +269,24 @@ class TestSelectExotic:
     def test_returns_none_when_empty(self):
         assert _select_exotic([], {1, 2}) is None
 
+    def test_metro_venue_returns_none(self):
+        """Metro venues should skip exotics (-70% ROI)."""
+        combos = [
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": "12.5%", "value": 1.50, "combos": 1, "format": "flat"},
+        ]
+        assert _select_exotic(combos, {1, 2}, venue_type="metro_vic") is None
+        assert _select_exotic(combos, {1, 2}, venue_type="metro_nsw") is None
+
+    def test_provincial_venue_allowed(self):
+        """Provincial venues should allow exotics."""
+        combos = [
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": "12.5%", "value": 1.50, "combos": 1, "format": "flat"},
+        ]
+        result = _select_exotic(combos, {1, 2}, venue_type="provincial")
+        assert result is not None
+
     def test_parses_string_probability(self):
         combos = [
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],

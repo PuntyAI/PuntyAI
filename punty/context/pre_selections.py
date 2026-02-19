@@ -128,6 +128,7 @@ def calculate_pre_selections(
     pool: float = RACE_POOL,
     selection_thresholds: dict | None = None,
     place_context_multipliers: dict[str, float] | None = None,
+    venue_type: str = "",
 ) -> RacePreSelections:
     """Calculate deterministic pre-selections for a single race.
 
@@ -242,6 +243,7 @@ def calculate_pre_selections(
     exotic = _select_exotic(
         exotic_combos, used_saddlecloths,
         field_size=field_size, anchor_odds=anchor_odds,
+        venue_type=venue_type,
     )
 
     # Calculate Punty's Pick
@@ -539,6 +541,7 @@ def _select_exotic(
     selection_saddlecloths: set[int],
     field_size: int = 0,
     anchor_odds: float = 0.0,
+    venue_type: str = "",
 ) -> RecommendedExotic | None:
     """Select the best exotic bet, enforcing consistency with selections.
 
@@ -566,6 +569,10 @@ def _select_exotic(
     # Large field filter: 0% hit rate in 13+ runner fields (-100% ROI on 16 bets)
     LARGE_FIELD_THRESHOLD = 13
     if field_size >= LARGE_FIELD_THRESHOLD:
+        return None
+
+    # Metro venue filter: metro exotics -70% ROI vs provincial breakeven
+    if venue_type.startswith("metro"):
         return None
 
     # Score exotics: heavily favour formats that anchor on #1 pick

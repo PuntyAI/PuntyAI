@@ -488,9 +488,15 @@ class ContextBuilder:
         # Pre-calculate deterministic selections (bet types, stakes, Punty's Pick)
         try:
             from punty.context.pre_selections import calculate_pre_selections
+            from punty.probability import _context_venue_type
+            from punty.venues import guess_state
+            _venue = race.meeting.venue if race.meeting else ""
+            _state = guess_state(_venue)
+            _vtype = _context_venue_type(_venue, _state)
             pre_sel = calculate_pre_selections(
                 race_context,
                 place_context_multipliers=race_context.get("probabilities", {}).get("context_multipliers_place"),
+                venue_type=_vtype,
             )
             race_context["pre_selections"] = pre_sel
         except Exception as e:

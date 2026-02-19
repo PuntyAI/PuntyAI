@@ -116,6 +116,35 @@ async def void_picks_for_meeting(db: AsyncSession, meeting_id: str) -> int:
     return count
 
 
+async def void_picks_for_race(db: AsyncSession, meeting_id: str, race_number: int) -> int:
+    """Void unsettled picks for a single abandoned race. Returns count voided.
+
+    Abandoned = no win, no loss. Sets pnl=0, hit=False, settled=True.
+    Only voids selection and exotic picks for this race (not sequences/big3 which span races).
+    """
+    result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == meeting_id,
+            Pick.race_number == race_number,
+            Pick.settled == False,
+            Pick.pick_type.in_(["selection", "exotic"]),
+        )
+    )
+    picks = result.scalars().all()
+    now = melb_now_naive()
+    count = 0
+    for pick in picks:
+        pick.settled = True
+        pick.hit = False
+        pick.pnl = 0.0
+        pick.settled_at = now
+        count += 1
+    if count:
+        await db.flush()
+        logger.info(f"Voided {count} picks for abandoned race {meeting_id} R{race_number}")
+    return count
+
+
 async def settle_picks_for_race(
     db: AsyncSession, meeting_id: str, race_number: int
 ) -> int:

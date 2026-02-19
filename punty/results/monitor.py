@@ -214,7 +214,7 @@ class ResultsMonitor:
             incomplete_result = await db.execute(
                 select(Race).where(
                     Race.meeting_id.in_(meeting_ids),
-                    Race.results_status.notin_(["Paying", "Closed", "Final"])
+                    Race.results_status.notin_(["Paying", "Closed", "Final", "Abandoned"])
                 ).limit(1)
             )
             has_incomplete = incomplete_result.scalar_one_or_none() is not None
@@ -670,6 +670,17 @@ class ResultsMonitor:
                             logger.info(f"Track alert posted for {meeting.venue}: {old_tc} → {scraped_tc}")
                         except Exception as e:
                             logger.warning(f"Failed to post track alert for {meeting.venue}: {e}")
+
+        # Void picks for individually abandoned races (partial abandonment)
+        for race_num, status in statuses.items():
+            if status == "Abandoned" and race_num not in self.processed_races[meeting_id]:
+                logger.info(f"Race abandoned: {meeting.venue} R{race_num}")
+                from punty.results.picks import void_picks_for_race
+                try:
+                    await void_picks_for_race(db, meeting_id, race_num)
+                except Exception as e:
+                    logger.warning(f"Failed to void picks for {meeting.venue} R{race_num}: {e}")
+                self.processed_races[meeting_id].add(race_num)
 
         # Process results FIRST — this is time-critical for live settlement
         for race_num, status in statuses.items():

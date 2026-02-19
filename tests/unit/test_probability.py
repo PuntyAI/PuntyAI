@@ -2385,3 +2385,85 @@ class TestTrackStatsFallback:
         score = _form_rating(runner, "Good 4", 0.10)
         # Still produces a score from last_five alone (neutral or below)
         assert score <= 0.5
+
+
+class TestDistanceSpecificWeights:
+    """Tests for distance-specific factor weight profiles."""
+
+    def test_sprint_distance_different_from_default(self):
+        from punty.probability import DISTANCE_WEIGHT_OVERRIDES, DEFAULT_WEIGHTS
+        sprint_w = DISTANCE_WEIGHT_OVERRIDES["sprint"]
+        # Sprint barrier weight > default
+        assert sprint_w["barrier"] > DEFAULT_WEIGHTS["barrier"]
+        # Sprint pace weight > default
+        assert sprint_w["pace"] > DEFAULT_WEIGHTS["pace"]
+
+    def test_staying_distance_different_from_default(self):
+        from punty.probability import DISTANCE_WEIGHT_OVERRIDES, DEFAULT_WEIGHTS
+        staying_w = DISTANCE_WEIGHT_OVERRIDES["staying"]
+        # Staying form weight > default
+        assert staying_w["form"] > DEFAULT_WEIGHTS["form"]
+        # Staying barrier negligible
+        assert staying_w["barrier"] == 0.0
+        # Staying weight_carried > default
+        assert staying_w["weight_carried"] > DEFAULT_WEIGHTS["weight_carried"]
+
+    def test_all_overrides_sum_to_one(self):
+        from punty.probability import DISTANCE_WEIGHT_OVERRIDES
+        for bucket, weights in DISTANCE_WEIGHT_OVERRIDES.items():
+            total = sum(weights.values())
+            assert total == pytest.approx(1.0, abs=0.01), f"{bucket} weights sum to {total}"
+
+    def test_distance_affects_probabilities(self):
+        """Sprint vs staying race should produce different probabilities for same runners."""
+        runners = [
+            _make_runner(id="r1", current_odds=3.0, last_five="12312", barrier=1),
+            _make_runner(id="r2", current_odds=5.0, last_five="45678", barrier=12),
+        ]
+        sprint_race = _make_race(distance=1000, field_size=2)
+        staying_race = _make_race(distance=2400, field_size=2)
+        meeting = _make_meeting()
+
+        sprint_results = calculate_race_probabilities(runners, sprint_race, meeting)
+        staying_results = calculate_race_probabilities(runners, staying_race, meeting)
+
+        # Runner with barrier 12 should be more penalised in sprints than staying
+        sprint_gap = sprint_results["r1"].win_probability - sprint_results["r2"].win_probability
+        staying_gap = staying_results["r1"].win_probability - staying_results["r2"].win_probability
+        # Can't guarantee direction without knowing full factor scores, but they should differ
+        assert sprint_results["r1"].win_probability != pytest.approx(
+            staying_results["r1"].win_probability, abs=0.001
+        )
+
+
+class TestPlaceValueRating:
+    """Tests for PVR using place market consensus."""
+
+    def test_pvr_uses_place_odds_when_available(self):
+        """PVR should use actual place odds, not formula approximation."""
+        runners = [
+            _make_runner(id="r1", current_odds=3.0, place_odds=1.50, last_five="11111"),
+            _make_runner(id="r2", current_odds=5.0, place_odds=2.00, last_five="33333"),
+            _make_runner(id="r3", current_odds=8.0, place_odds=2.50, last_five="55555"),
+        ]
+        race = _make_race(field_size=3)
+        meeting = _make_meeting()
+
+        results = calculate_race_probabilities(runners, race, meeting)
+        # All runners should have a place_value_rating
+        for rid in ["r1", "r2", "r3"]:
+            assert results[rid].place_value_rating > 0
+
+    def test_pvr_monotonic_with_place_odds(self):
+        """PVR should be monotonic — stronger place probability = higher PVR."""
+        runners = [
+            _make_runner(id="fav", current_odds=2.0, place_odds=1.30, last_five="11111"),
+            _make_runner(id="mid", current_odds=4.0, place_odds=1.80, last_five="32451"),
+            _make_runner(id="long", current_odds=8.0, place_odds=2.80, last_five="65879"),
+        ]
+        race = _make_race(field_size=3)
+        meeting = _make_meeting()
+
+        results = calculate_race_probabilities(runners, race, meeting)
+        # Favourite with best place odds should have highest PVR (model rates it higher)
+        assert results["fav"].place_value_rating >= results["mid"].place_value_rating

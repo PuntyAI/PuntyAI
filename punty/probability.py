@@ -424,6 +424,33 @@ DEFAULT_WEIGHTS = {
     "deep_learning": 0.00,
 }  # sums to 1.0 — form dominant, market secondary
 
+# Distance-specific weight adjustments (deltas from DEFAULT_WEIGHTS)
+# Sprints: barrier and pace matter more, form slightly less
+# Staying: form dominates, barrier barely matters, weight carried more important
+DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
+    "sprint": {  # ≤1100m
+        "form": 0.45, "market": 0.30, "barrier": 0.06, "pace": 0.04,
+        "weight_carried": 0.04, "horse_profile": 0.04, "class_fitness": 0.03,
+        "jockey_trainer": 0.04, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "short": {  # 1101-1399m
+        "form": 0.48, "market": 0.30, "barrier": 0.04, "pace": 0.02,
+        "weight_carried": 0.05, "horse_profile": 0.04, "class_fitness": 0.03,
+        "jockey_trainer": 0.04, "movement": 0.00, "deep_learning": 0.00,
+    },
+    # "middle" uses DEFAULT_WEIGHTS (no override needed)
+    "classic": {  # 1800-2199m
+        "form": 0.52, "market": 0.28, "weight_carried": 0.07, "barrier": 0.01,
+        "horse_profile": 0.04, "class_fitness": 0.04, "jockey_trainer": 0.04,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "staying": {  # 2200m+
+        "form": 0.55, "market": 0.25, "weight_carried": 0.08, "barrier": 0.00,
+        "horse_profile": 0.04, "class_fitness": 0.04, "jockey_trainer": 0.04,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    },
+}
+
 # Place-specific weights — optimized via batch 2 grid search (1500 combos x 1000 races)
 # Key insight: form is much more important for place than previously assumed (0.38 vs 0.25)
 # Market less dominant for place (0.27 vs 0.35) — market prices win probability, not place
@@ -527,11 +554,21 @@ def calculate_race_probabilities(
     if dl_patterns is None:
         dl_patterns = get_dl_pattern_cache()
 
-    w = weights if weights else (_get_calibrated_weights() or DEFAULT_WEIGHTS)
     field_size = len(active)
     baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
     track_condition = _get(meeting, "track_condition") or _get(race, "track_condition") or ""
     race_distance = _get(race, "distance") or 1400
+
+    # Distance-specific weight selection
+    if weights:
+        w = weights
+    else:
+        cal = _get_calibrated_weights()
+        if cal:
+            w = cal
+        else:
+            dist_bucket = _get_dist_bucket(race_distance)
+            w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
 
     # Determine pace scenario from race analysis or speed map positions
     pace_scenario = _determine_pace_scenario(active)
@@ -665,6 +702,20 @@ def calculate_race_probabilities(
 
     results: dict[str, RunnerProbability] = {}
 
+    # Build place market consensus from actual place odds (overround-stripped)
+    place_market_implied: dict[str, float] = {}
+    place_raw_probs = {}
+    for runner in active:
+        rid = _get(runner, "id", "")
+        po = _get(runner, "place_odds", None)
+        if po and po > 1.0:
+            place_raw_probs[rid] = 1.0 / po
+    if place_raw_probs:
+        place_overround = sum(place_raw_probs.values())
+        if place_overround > 0:
+            for rid, p in place_raw_probs.items():
+                place_market_implied[rid] = p / place_overround * place_count
+
     for runner in active:
         rid = _get(runner, "id", "")
         win_prob = win_probs.get(rid, baseline)
@@ -677,13 +728,12 @@ def calculate_race_probabilities(
         value = win_prob / mkt_prob if mkt_prob > 0 else 1.0
         edge = win_prob - mkt_prob
 
-        # Place value detection — use place odds if available
-        place_odds = _get(runner, "place_odds", None)
-        if place_odds and place_odds > 1.0:
-            market_implied_place = 1.0 / place_odds
-            place_value = place_prob / market_implied_place if market_implied_place > 0 else 1.0
+        # Place value detection — use place market consensus when available
+        mkt_place_prob = place_market_implied.get(rid)
+        if mkt_place_prob and mkt_place_prob > 0:
+            place_value = place_prob / mkt_place_prob
         else:
-            # Approximate: place market implied ≈ place_probability from market consensus
+            # Fallback: derive from win market probability
             mkt_place = _place_probability(mkt_prob, field_size)
             place_value = place_prob / mkt_place if mkt_place > 0 else 1.0
 
