@@ -242,6 +242,21 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     content = re.sub(r'(?:^[0-9]+[.)]\s+.+$\n?)+', convert_numbered, content, flags=re.MULTILINE)
 
+    # Fix impossible place > win odds (AI hallucination) — estimate place as (win-1)/3+1
+    def _fix_place_odds(m):
+        prefix = m.group(1)
+        win = float(m.group(2))
+        place = float(m.group(3))
+        if place > win:
+            corrected = round((win - 1) / 3 + 1, 2)
+            return f"{prefix}${m.group(2)} / ${corrected:.2f}"
+        return m.group(0)
+
+    content = re.sub(
+        r'(—\s*)\$(\d+\.?\d*)\s*/\s*\$(\d+\.?\d*)',
+        _fix_place_odds, content,
+    )
+
     # Remove "N combos — X% flexi" lines (JS badge replaces this info)
     content = re.sub(
         r'^\s*\d+\s+combos?\s*[—–\-]\s*\d+%\s*flexi\s*$',
