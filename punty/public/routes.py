@@ -101,6 +101,7 @@ async def get_recent_wins_public(limit: int = 15) -> dict:
                     Pick.settled == True,
                     Pick.hit == True,
                     Pick.pnl > 0,  # Only profitable wins
+                    Meeting.selected == True,  # Exclude deselected meetings
                 )
             )
             .order_by(Pick.settled_at.desc())
@@ -333,6 +334,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Pick.hit == True,
                         Pick.pnl > 0,
                         Meeting.date == today_date,
+                        Meeting.selected == True,
                     )
                 )
                 .order_by(Pick.pnl.desc())
@@ -356,6 +358,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Pick.pnl > 0,
                         Meeting.date >= recent_cutoff,
                         Meeting.date < today_date,
+                        Meeting.selected == True,
                     )
                 )
                 .order_by(Pick.pnl.desc())
