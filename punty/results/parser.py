@@ -106,7 +106,7 @@ _SEQ_HEADER = re.compile(
     re.IGNORECASE,
 )
 _SEQ_VARIANT = re.compile(
-    r"(Skinny|Balanced|Wide|Smart)\s*(?:\(\$[\d.]+\))?:\s*(.+)",
+    r"(Skinny|Balanced|Wide|Smart|Ticket\s*[ABC])\s*(?:\(\$[\d.]+\))?:\s*(.+)",
     re.IGNORECASE,
 )
 # --- Punty's Pick (highlighted best-bet per race) ---
@@ -580,7 +580,7 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
         block = seq_text[block_start:block_end]
 
         for vm in _SEQ_VARIANT.finditer(block):
-            variant = vm.group(1).strip().lower()
+            variant = vm.group(1).strip().lower().replace(" ", "_")
             legs_raw = vm.group(2).strip()
 
             # Parse costing info if present

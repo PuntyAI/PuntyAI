@@ -285,6 +285,29 @@ Skinny ($10): 1 / 2 / 3 / 4 / 5 / 6 (1 combos × $10.00 = $10) — est. return: 
         assert picks[0]["sequence_type"] == "big6"
         assert picks[0]["sequence_start_race"] == 3
 
+    def test_parse_abc_tickets(self):
+        """ABC ticket variants should be parsed as ticket_a, ticket_b, ticket_c."""
+        content = """
+EARLY QUADDIE (R1–R4)
+Ticket A ($15): 1, 2 / 3, 4 / 5, 6 / 2, 7 (16 combos x $0.94 = $15) — est. return: 94%
+Ticket B ($9): 1, 2, 3 / 3, 4, 5 / 5, 6, 7 / 2, 7, 8 (81 combos x $0.11 = $9) — est. return: 11%
+Ticket C ($6): 1, 2, 3, 4 / 3, 4, 5, 6 / 5, 6, 7, 8 / 2, 7, 8, 1 (256 combos x $0.02 = $6) — est. return: 2%
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_sequences(content, "test-content", "test-meeting", next_id)
+
+        assert len(picks) == 3
+        variants = {p["sequence_variant"] for p in picks}
+        assert variants == {"ticket_a", "ticket_b", "ticket_c"}
+        for p in picks:
+            assert p["sequence_type"] == "early_quaddie"
+            assert p["sequence_start_race"] == 1
+
 
 class TestPuntysPick:
     """Tests for Punty's Pick detection."""
