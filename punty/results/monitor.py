@@ -913,6 +913,28 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.error(f"Failed to generate wrap-up for {meeting.venue}: {e}")
 
+    async def _get_posted_early_mail(self, db: AsyncSession, meeting_id: str):
+        """Find the early mail with a social media post for threading live updates.
+
+        Prefers the newest early mail that has been posted (has twitter_id or facebook_id).
+        When a new early mail supersedes the old one but hasn't been sent yet,
+        falls back to the superseded one so live updates still thread correctly
+        instead of being silently dropped.
+        """
+        from punty.models.content import Content
+        result = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting_id,
+                Content.content_type == "early_mail",
+            ).order_by(Content.created_at.desc())
+        )
+        all_early_mails = result.scalars().all()
+        for em in all_early_mails:
+            if em.twitter_id or em.facebook_id:
+                return em
+        # No posted early mail at all
+        return all_early_mails[0] if all_early_mails else None
+
     async def _get_thread_parent(self, db: AsyncSession, meeting_id: str, early_mail_tweet_id: str) -> str:
         """Get the last tweet ID in the thread chain for this meeting.
 
@@ -940,7 +962,6 @@ class ResultsMonitor:
         - Any bet type: P&L >= $100 absolute
         """
         from punty.models.pick import Pick
-        from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
         from punty.results.celebrations import compose_celebration_tweet, compose_exotic_celebration_tweet
@@ -980,14 +1001,8 @@ class ResultsMonitor:
             if existing.scalar_one_or_none():
                 continue
 
-            # Find the meeting's early mail
-            em_result = await db.execute(
-                select(Content).where(
-                    Content.meeting_id == meeting_id,
-                    Content.content_type == "early_mail",
-                ).order_by(Content.created_at.desc())
-            )
-            early_mail = em_result.scalars().first()
+            # Find the meeting's early mail (falls back to superseded if new one not yet posted)
+            early_mail = await self._get_posted_early_mail(db, meeting_id)
             if not early_mail:
                 return
 
@@ -1103,14 +1118,8 @@ class ResultsMonitor:
 
         logger.info(f"CLEAN SWEEP! {meeting.venue} R{race_number} — all {len(selections)} selections hit!")
 
-        # Find early mail for threading
-        em_result = await db.execute(
-            select(Content).where(
-                Content.meeting_id == meeting.id,
-                Content.content_type == "early_mail",
-            ).order_by(Content.created_at.desc())
-        )
-        early_mail = em_result.scalars().first()
+        # Find early mail for threading (falls back to superseded if new one not yet posted)
+        early_mail = await self._get_posted_early_mail(db, meeting.id)
         if not early_mail:
             return
 
@@ -1179,14 +1188,8 @@ class ResultsMonitor:
         if not bias_result.bias_detected and posted_count > 0:
             return
 
-        # Find the meeting's early mail
-        em_result = await db.execute(
-            select(Content).where(
-                Content.meeting_id == meeting_id,
-                Content.content_type == "early_mail",
-            ).order_by(Content.created_at.desc())
-        )
-        early_mail = em_result.scalars().first()
+        # Find the meeting's early mail (falls back to superseded if new one not yet posted)
+        early_mail = await self._get_posted_early_mail(db, meeting_id)
         if not early_mail:
             return
         if not early_mail.twitter_id and not early_mail.facebook_id:
@@ -1728,18 +1731,11 @@ class ResultsMonitor:
 
     async def _post_change_alert(self, db: AsyncSession, meeting, alert):
         """Post a change detection alert to Twitter."""
-        from punty.models.content import Content
         from punty.models.live_update import LiveUpdate
         from punty.delivery.twitter import TwitterDelivery
 
         # Find the meeting's early mail for reply threading
-        em_result = await db.execute(
-            select(Content).where(
-                Content.meeting_id == meeting.id,
-                Content.content_type == "early_mail",
-            ).order_by(Content.created_at.desc())
-        )
-        early_mail = em_result.scalars().first()
+        early_mail = await self._get_posted_early_mail(db, meeting.id)
         if not early_mail:
             logger.info(f"No early mail for {meeting.venue} — skipping change alert")
             return
