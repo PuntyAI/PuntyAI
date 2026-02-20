@@ -1,0 +1,689 @@
+{
+  "ascot": {
+    "sprint": {
+      "outside": {
+        "multiplier": 0.923,
+        "win_rate": 0.1538,
+        "sample": 13
+      },
+      "middle": {
+        "multiplier": 1.8,
+        "win_rate": 0.3,
+        "sample": 10
+      }
+    },
+    "short": {
+      "outside": {
+        "multiplier": 0.583,
+        "win_rate": 0.0833,
+        "sample": 12
+      }
+    },
+    "middle": {
+      "inside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 13
+      },
+      "middle": {
+        "multiplier": 2.304,
+        "win_rate": 0.2143,
+        "sample": 14
+      },
+      "outside": {
+        "multiplier": 0.672,
+        "win_rate": 0.0625,
+        "sample": 16
+      }
+    }
+  },
+  "caulfield": {
+    "sprint": {
+      "inside": {
+        "multiplier": 1.85,
+        "win_rate": 0.2,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 0.578,
+        "win_rate": 0.0625,
+        "sample": 16
+      },
+      "middle": {
+        "multiplier": 0.841,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    },
+    "middle": {
+      "middle": {
+        "multiplier": 0.808,
+        "win_rate": 0.0769,
+        "sample": 13
+      },
+      "inside": {
+        "multiplier": 0.875,
+        "win_rate": 0.0833,
+        "sample": 12
+      },
+      "outside": {
+        "multiplier": 1.235,
+        "win_rate": 0.1176,
+        "sample": 17
+      }
+    }
+  },
+  "doomben": {
+    "short": {
+      "middle": {
+        "multiplier": 1.39,
+        "win_rate": 0.2941,
+        "sample": 17
+      },
+      "inside": {
+        "multiplier": 0.338,
+        "win_rate": 0.0714,
+        "sample": 14
+      },
+      "outside": {
+        "multiplier": 1.126,
+        "win_rate": 0.2381,
+        "sample": 21
+      }
+    },
+    "middle": {
+      "outside": {
+        "multiplier": 0.833,
+        "win_rate": 0.1667,
+        "sample": 12
+      }
+    }
+  },
+  "morphettville": {
+    "sprint": {
+      "middle": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 12
+      },
+      "outside": {
+        "multiplier": 1.341,
+        "win_rate": 0.1765,
+        "sample": 17
+      }
+    }
+  },
+  "royal randwick": {
+    "middle": {
+      "outside": {
+        "multiplier": 1.389,
+        "win_rate": 0.1667,
+        "sample": 18
+      },
+      "inside": {
+        "multiplier": 0.595,
+        "win_rate": 0.0714,
+        "sample": 14
+      },
+      "middle": {
+        "multiplier": 0.926,
+        "win_rate": 0.1111,
+        "sample": 18
+      }
+    },
+    "short": {
+      "middle": {
+        "multiplier": 1.232,
+        "win_rate": 0.1429,
+        "sample": 21
+      },
+      "outside": {
+        "multiplier": 0.924,
+        "win_rate": 0.1071,
+        "sample": 28
+      },
+      "inside": {
+        "multiplier": 0.863,
+        "win_rate": 0.1,
+        "sample": 20
+      }
+    },
+    "sprint": {
+      "middle": {
+        "multiplier": 1.971,
+        "win_rate": 0.2143,
+        "sample": 14
+      },
+      "outside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 21
+      },
+      "inside": {
+        "multiplier": 1.673,
+        "win_rate": 0.1818,
+        "sample": 11
+      }
+    }
+  },
+  "bet365 yarra valley": {
+    "classic": {
+      "outside": {
+        "multiplier": 0.955,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    }
+  },
+  "ararat": {
+    "sprint": {
+      "outside": {
+        "multiplier": 1.091,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    }
+  },
+  "nowra": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.533,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    }
+  },
+  "port macquarie": {
+    "short": {
+      "outside": {
+        "multiplier": 1.41,
+        "win_rate": 0.12,
+        "sample": 25
+      },
+      "middle": {
+        "multiplier": 0.904,
+        "win_rate": 0.0769,
+        "sample": 13
+      }
+    }
+  },
+  "sunshine coast": {
+    "sprint": {
+      "outside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 11
+      }
+    }
+  },
+  "sportsbet-wangaratta": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.553,
+        "win_rate": 0.0526,
+        "sample": 19
+      },
+      "inside": {
+        "multiplier": 2.864,
+        "win_rate": 0.2727,
+        "sample": 11
+      },
+      "middle": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 12
+      }
+    }
+  },
+  "caulfield heath": {
+    "short": {
+      "outside": {
+        "multiplier": 0.545,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    },
+    "middle": {
+      "middle": {
+        "multiplier": 1.0,
+        "win_rate": 0.1176,
+        "sample": 17
+      },
+      "outside": {
+        "multiplier": 1.214,
+        "win_rate": 0.1429,
+        "sample": 21
+      },
+      "inside": {
+        "multiplier": 0.654,
+        "win_rate": 0.0769,
+        "sample": 13
+      }
+    }
+  },
+  "wyong": {
+    "sprint": {
+      "outside": {
+        "multiplier": 0.958,
+        "win_rate": 0.1667,
+        "sample": 12
+      }
+    }
+  },
+  "gatton": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.667,
+        "win_rate": 0.0769,
+        "sample": 26
+      },
+      "middle": {
+        "multiplier": 2.167,
+        "win_rate": 0.25,
+        "sample": 12
+      },
+      "inside": {
+        "multiplier": 0.619,
+        "win_rate": 0.0714,
+        "sample": 14
+      }
+    }
+  },
+  "gosford": {
+    "sprint": {
+      "outside": {
+        "multiplier": 1.364,
+        "win_rate": 0.2727,
+        "sample": 11
+      }
+    }
+  },
+  "southside pakenham": {
+    "middle": {
+      "outside": {
+        "multiplier": 1.008,
+        "win_rate": 0.1765,
+        "sample": 17
+      },
+      "middle": {
+        "multiplier": 1.143,
+        "win_rate": 0.2,
+        "sample": 10
+      },
+      "inside": {
+        "multiplier": 0.879,
+        "win_rate": 0.1538,
+        "sample": 13
+      }
+    }
+  },
+  "ipswich": {
+    "sprint": {
+      "outside": {
+        "multiplier": 0.589,
+        "win_rate": 0.125,
+        "sample": 16
+      },
+      "middle": {
+        "multiplier": 1.414,
+        "win_rate": 0.3,
+        "sample": 10
+      }
+    },
+    "short": {
+      "outside": {
+        "multiplier": 1.625,
+        "win_rate": 0.25,
+        "sample": 12
+      }
+    }
+  },
+  "bunbury": {
+    "middle": {
+      "inside": {
+        "multiplier": 1.033,
+        "win_rate": 0.2,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 0.431,
+        "win_rate": 0.0833,
+        "sample": 12
+      }
+    }
+  },
+  "bet365 park kilmore": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.567,
+        "win_rate": 0.0667,
+        "sample": 15
+      },
+      "inside": {
+        "multiplier": 1.7,
+        "win_rate": 0.2,
+        "sample": 10
+      }
+    },
+    "short": {
+      "middle": {
+        "multiplier": 1.35,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    }
+  },
+  "tamworth": {
+    "sprint": {
+      "outside": {
+        "multiplier": 1.273,
+        "win_rate": 0.1818,
+        "sample": 11
+      }
+    },
+    "middle": {
+      "outside": {
+        "multiplier": 1.515,
+        "win_rate": 0.1818,
+        "sample": 11
+      }
+    }
+  },
+  "taree": {
+    "short": {
+      "outside": {
+        "multiplier": 1.136,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    }
+  },
+  "mackay": {
+    "short": {
+      "outside": {
+        "multiplier": 2.2,
+        "win_rate": 0.3,
+        "sample": 10
+      }
+    }
+  },
+  "flemington": {
+    "middle": {
+      "inside": {
+        "multiplier": 0.825,
+        "win_rate": 0.1,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 1.904,
+        "win_rate": 0.2308,
+        "sample": 13
+      },
+      "middle": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 10
+      }
+    }
+  },
+  "pinjarra park": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.923,
+        "win_rate": 0.1538,
+        "sample": 13
+      }
+    }
+  },
+  "eagle farm": {
+    "classic": {
+      "outside": {
+        "multiplier": 1.182,
+        "win_rate": 0.1818,
+        "sample": 11
+      }
+    },
+    "short": {
+      "outside": {
+        "multiplier": 1.417,
+        "win_rate": 0.1667,
+        "sample": 12
+      },
+      "inside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 11
+      },
+      "middle": {
+        "multiplier": 1.545,
+        "win_rate": 0.1818,
+        "sample": 11
+      }
+    },
+    "middle": {
+      "inside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 12
+      },
+      "outside": {
+        "multiplier": 1.818,
+        "win_rate": 0.3636,
+        "sample": 11
+      }
+    }
+  },
+  "morphettville parks": {
+    "sprint": {
+      "outside": {
+        "multiplier": 0.762,
+        "win_rate": 0.0714,
+        "sample": 14
+      },
+      "middle": {
+        "multiplier": 2.133,
+        "win_rate": 0.2,
+        "sample": 10
+      }
+    }
+  },
+  "stony creek": {
+    "sprint": {
+      "outside": {
+        "multiplier": 1.576,
+        "win_rate": 0.1818,
+        "sample": 11
+      }
+    }
+  },
+  "coffs harbour": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.422,
+        "win_rate": 0.0625,
+        "sample": 16
+      }
+    },
+    "sprint": {
+      "outside": {
+        "multiplier": 0.639,
+        "win_rate": 0.0833,
+        "sample": 12
+      }
+    }
+  },
+  "beaumont newcastle": {
+    "short": {
+      "inside": {
+        "multiplier": 1.424,
+        "win_rate": 0.1818,
+        "sample": 11
+      },
+      "outside": {
+        "multiplier": 0.341,
+        "win_rate": 0.0435,
+        "sample": 23
+      },
+      "middle": {
+        "multiplier": 1.808,
+        "win_rate": 0.2308,
+        "sample": 13
+      }
+    }
+  },
+  "ladbrokes cannon park": {
+    "short": {
+      "outside": {
+        "multiplier": 1.364,
+        "win_rate": 0.1818,
+        "sample": 11
+      },
+      "middle": {
+        "multiplier": 0.682,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    }
+  },
+  "picklebet park werribee": {
+    "middle": {
+      "inside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 1.062,
+        "win_rate": 0.125,
+        "sample": 16
+      }
+    },
+    "sprint": {
+      "middle": {
+        "multiplier": 0.967,
+        "win_rate": 0.1,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 11
+      }
+    }
+  },
+  "kembla grange": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.484,
+        "win_rate": 0.0625,
+        "sample": 16
+      }
+    }
+  },
+  "queanbeyan": {
+    "middle": {
+      "middle": {
+        "multiplier": 1.067,
+        "win_rate": 0.1,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 14
+      }
+    }
+  },
+  "strathalbyn": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.694,
+        "win_rate": 0.0833,
+        "sample": 12
+      }
+    },
+    "short": {
+      "outside": {
+        "multiplier": 0.833,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    }
+  },
+  "grafton": {
+    "short": {
+      "outside": {
+        "multiplier": 1.15,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    }
+  },
+  "hawkesbury": {
+    "short": {
+      "outside": {
+        "multiplier": 0.8,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    }
+  },
+  "kingscote": {
+    "short": {
+      "outside": {
+        "multiplier": 0.758,
+        "win_rate": 0.0909,
+        "sample": 11
+      }
+    }
+  },
+  "canberra": {
+    "short": {
+      "middle": {
+        "multiplier": 0.967,
+        "win_rate": 0.1,
+        "sample": 10
+      },
+      "outside": {
+        "multiplier": 0.967,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    }
+  },
+  "bet365 seymour": {
+    "middle": {
+      "outside": {
+        "multiplier": 0.733,
+        "win_rate": 0.1,
+        "sample": 10
+      }
+    },
+    "short": {
+      "outside": {
+        "multiplier": 0.795,
+        "win_rate": 0.0769,
+        "sample": 13
+      }
+    }
+  },
+  "bet365 terang": {
+    "middle": {
+      "outside": {
+        "multiplier": 1.4,
+        "win_rate": 0.1333,
+        "sample": 15
+      },
+      "inside": {
+        "multiplier": 1.615,
+        "win_rate": 0.1538,
+        "sample": 13
+      },
+      "middle": {
+        "multiplier": 0.0,
+        "win_rate": 0.0,
+        "sample": 14
+      }
+    }
+  }
+}

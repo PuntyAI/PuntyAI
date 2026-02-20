@@ -237,6 +237,9 @@ def calculate_pre_selections(
     # Ensure at least one Win/Each Way/Saver Win bet (mandatory rule)
     _ensure_win_bet(picks)
 
+    # Cap win-exposed bets to avoid spreading win risk across too many horses
+    win_capped = _cap_win_exposure(picks)
+
     # Allocate stakes from pool
     _allocate_stakes(picks, pool)
 
@@ -252,7 +255,8 @@ def calculate_pre_selections(
     puntys_pick = _calculate_puntys_pick(picks, exotic)
 
     total_stake = sum(p.stake for p in picks)
-    notes = _generate_notes(picks, exotic, candidates, field_size=field_size)
+    notes = _generate_notes(picks, exotic, candidates, field_size=field_size,
+                            win_capped=win_capped)
 
     return RacePreSelections(
         race_number=race_number,
@@ -519,6 +523,37 @@ def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
     picks[0].expected_return = round(
         picks[0].win_prob * picks[0].odds - 1, 2,
     )
+
+
+MAX_WIN_EXPOSED = 2  # Max bets with win exposure (Win/EW/Saver Win) per race
+
+
+def _cap_win_exposure(picks: list[RecommendedPick]) -> int:
+    """Cap win-exposed bets at MAX_WIN_EXPOSED per race.
+
+    With 4 picks all needing different horses to win, you lose ~50% of the time.
+    Capping at 2 win-exposed bets and pushing picks 3-4 to Place improves
+    overall race ROI by covering place scenarios instead of spreading win risk.
+
+    Returns:
+        Number of picks downgraded to Place.
+    """
+    _WIN_TYPES = {"Win", "Saver Win", "Each Way"}
+    win_exposed = [p for p in picks if p.bet_type in _WIN_TYPES]
+    if len(win_exposed) <= MAX_WIN_EXPOSED:
+        return 0
+
+    # Keep win exposure on highest-ranked picks, downgrade the rest to Place
+    # Sort by rank so we keep the best picks' bet types
+    win_exposed.sort(key=lambda p: p.rank)
+    downgraded = 0
+    for pick in win_exposed[MAX_WIN_EXPOSED:]:
+        pick.bet_type = "Place"
+        # Recalculate expected return for Place
+        place_odds = pick.place_odds if pick.place_odds else _estimate_place_odds(pick.odds)
+        pick.expected_return = round(pick.place_prob * place_odds - 1, 2)
+        downgraded += 1
+    return downgraded
 
 
 def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
@@ -789,9 +824,17 @@ def _generate_notes(
     exotic: RecommendedExotic | None,
     candidates: list[dict],
     field_size: int = 12,
+    win_capped: int = 0,
 ) -> list[str]:
     """Generate advisory notes about the selections."""
     notes = []
+
+    # Win exposure cap triggered
+    if win_capped > 0:
+        notes.append(
+            f"Win exposure capped — {win_capped} pick(s) moved to Place "
+            f"to protect race ROI (max {MAX_WIN_EXPOSED} win-exposed bets)."
+        )
 
     # Small field warnings
     if field_size <= 4:

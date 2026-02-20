@@ -594,7 +594,7 @@ def calculate_race_probabilities(
             "form":           _form_rating(runner, track_condition, baseline, race, meeting),
             "class_fitness":  _class_factor(runner, baseline, race),
             "pace":           _pace_factor(runner, pace_scenario),
-            "barrier":        _barrier_draw_factor(runner, field_size, race_distance),
+            "barrier":        _barrier_draw_factor(runner, field_size, race_distance, venue=_get(meeting, "venue", "")),
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
             "weight_carried": _weight_factor(runner, avg_weight, race_distance, race),
             "horse_profile":  _horse_profile_factor(runner, race),
@@ -1248,7 +1248,23 @@ def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
 # Factor: Barrier Draw
 # ──────────────────────────────────────────────
 
-def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400) -> float:
+_BARRIER_CALIBRATION: dict | None = None
+
+
+def _load_barrier_calibration() -> dict:
+    """Load venue-specific barrier calibration data (lazy singleton)."""
+    global _BARRIER_CALIBRATION
+    if _BARRIER_CALIBRATION is None:
+        cal_path = Path(__file__).parent / "data" / "barrier_calibration.json"
+        if cal_path.exists():
+            with open(cal_path) as f:
+                _BARRIER_CALIBRATION = json.load(f)
+        else:
+            _BARRIER_CALIBRATION = {}
+    return _BARRIER_CALIBRATION
+
+
+def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, venue: str = "") -> float:
     """Score based on barrier position relative to field size and distance.
 
     Inside barriers get a slight boost; wide gates are penalized more at
@@ -1260,6 +1276,21 @@ def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400) -> 
         return score
 
     barrier = int(barrier)
+
+    # Venue-specific calibration lookup — if we have data, use it
+    if venue:
+        cal = _load_barrier_calibration()
+        venue_key = venue.lower().strip()
+        dist_bucket = _get_dist_bucket(distance)
+        barrier_bucket = _get_barrier_bucket(barrier, field_size)
+        if (venue_key in cal
+                and dist_bucket in cal[venue_key]
+                and barrier_bucket in cal[venue_key][dist_bucket]):
+            entry = cal[venue_key][dist_bucket][barrier_bucket]
+            mult = max(0.3, min(2.5, entry["multiplier"]))
+            # Convert multiplier to 0-1 score: 1.0 = neutral (0.5)
+            cal_score = 0.5 + (mult - 1.0) * 0.15
+            return max(0.05, min(0.95, cal_score))
 
     # Relative position (0.0 = rail, 1.0 = widest)
     if field_size <= 1:

@@ -54,6 +54,15 @@ class ContextBuilder:
         except Exception as e:
             logger.debug(f"Failed to load DL patterns: {e}")
 
+        # Load tuned bet type thresholds (once for all races)
+        self._sel_thresholds = None
+        try:
+            from punty.bet_type_tuning import load_bet_thresholds
+            _tuned = await load_bet_thresholds(self.db)
+            self._sel_thresholds = _tuned.get("selection")
+        except Exception:
+            logger.debug("Failed to load tuned thresholds, using defaults")
+
         result = await self.db.execute(
             select(Meeting)
             .where(Meeting.id == meeting_id)
@@ -493,8 +502,10 @@ class ContextBuilder:
             _venue = race.meeting.venue if race.meeting else ""
             _state = guess_state(_venue)
             _vtype = _context_venue_type(_venue, _state)
+
             pre_sel = calculate_pre_selections(
                 race_context,
+                selection_thresholds=getattr(self, "_sel_thresholds", None),
                 place_context_multipliers=race_context.get("probabilities", {}).get("context_multipliers_place"),
                 venue_type=_vtype,
             )

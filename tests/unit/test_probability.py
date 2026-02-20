@@ -19,6 +19,7 @@ from punty.probability import (
     _market_movement_factor,
     _class_factor,
     _barrier_draw_factor,
+    _load_barrier_calibration,
     _jockey_trainer_factor,
     _weight_factor,
     _horse_profile_factor,
@@ -869,6 +870,50 @@ class TestBarrierDrawFactor:
             runner = _make_runner(barrier=b)
             score = _barrier_draw_factor(runner, field_size=20, distance=1200)
             assert 0.05 <= score <= 0.95
+
+    def test_venue_calibration_lookup(self, monkeypatch):
+        """When calibration data exists for venue, use venue-specific multiplier."""
+        cal_data = {
+            "randwick": {
+                "sprint": {
+                    "outside": {"multiplier": 0.5, "win_rate": 0.05, "sample": 50},
+                }
+            }
+        }
+        import punty.probability as prob
+        monkeypatch.setattr(prob, "_BARRIER_CALIBRATION", cal_data)
+        runner = _make_runner(barrier=12)  # outside in 12-runner field
+        score = _barrier_draw_factor(runner, field_size=12, distance=1100, venue="Randwick")
+        # multiplier 0.5 → score = 0.5 + (0.5 - 1.0) * 0.15 = 0.425
+        assert score == pytest.approx(0.425, abs=0.01)
+        # Reset global
+        monkeypatch.setattr(prob, "_BARRIER_CALIBRATION", None)
+
+    def test_venue_calibration_fallback(self, monkeypatch):
+        """Unknown venue falls through to generic logic."""
+        import punty.probability as prob
+        monkeypatch.setattr(prob, "_BARRIER_CALIBRATION", {})
+        runner = _make_runner(barrier=1)
+        score = _barrier_draw_factor(runner, field_size=12, distance=1200, venue="NowhereVille")
+        assert score > 0.5, "Generic logic: inside barrier advantage"
+        monkeypatch.setattr(prob, "_BARRIER_CALIBRATION", None)
+
+    def test_venue_calibration_strong_advantage(self, monkeypatch):
+        """High multiplier (e.g. 2.0) should score well above neutral."""
+        cal_data = {
+            "caulfield": {
+                "sprint": {
+                    "inside": {"multiplier": 2.0, "win_rate": 0.30, "sample": 40},
+                }
+            }
+        }
+        import punty.probability as prob
+        monkeypatch.setattr(prob, "_BARRIER_CALIBRATION", cal_data)
+        runner = _make_runner(barrier=1)
+        score = _barrier_draw_factor(runner, field_size=12, distance=1100, venue="Caulfield")
+        # multiplier 2.0 → score = 0.5 + (2.0 - 1.0) * 0.15 = 0.65
+        assert score == pytest.approx(0.65, abs=0.01)
+        monkeypatch.setattr(prob, "_BARRIER_CALIBRATION", None)
 
 
 # ──────────────────────────────────────────────

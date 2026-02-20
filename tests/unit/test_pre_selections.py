@@ -19,6 +19,7 @@ from punty.context.pre_selections import (
     _allocate_stakes,
     _build_candidates,
     _calculate_puntys_pick,
+    _cap_win_exposure,
     _determine_bet_type,
     _ensure_win_bet,
     _estimate_place_odds,
@@ -211,6 +212,67 @@ class TestEnsureWinBet:
         ]
         _ensure_win_bet(picks)
         assert picks[0].bet_type == "Each Way"  # unchanged
+
+
+# ──────────────────────────────────────────────
+# Tests: _cap_win_exposure
+# ──────────────────────────────────────────────
+
+class TestCapWinExposure:
+    def test_downgrades_third_and_fourth_when_four_win_exposed(self):
+        """Canterbury R1 scenario: 2 EW + 2 Win → should cap at 2 win-exposed."""
+        picks = [
+            RecommendedPick(1, 9, "Farfetched", "Each Way", 3.5, 3.90, 1.97, 0.213, 0.351, 0.43, 0.90, 0.15),
+            RecommendedPick(2, 8, "Rach", "Each Way", 2.5, 4.60, 2.20, 0.184, 0.233, 0.67, 0.85, 0.10),
+            RecommendedPick(3, 3, "Farindira", "Win", 5.0, 8.50, 3.50, 0.159, 0.30, 1.23, 1.05, 0.35),
+            RecommendedPick(4, 5, "Mister Martini", "Win", 3.5, 23.0, 8.33, 0.071, 0.15, 1.74, 1.10, 0.63, is_roughie=True),
+        ]
+        _cap_win_exposure(picks)
+        # Picks 1-2 keep their EW bets, picks 3-4 downgraded to Place
+        assert picks[0].bet_type == "Each Way"
+        assert picks[1].bet_type == "Each Way"
+        assert picks[2].bet_type == "Place"
+        assert picks[3].bet_type == "Place"
+
+    def test_no_change_when_two_or_fewer_win_exposed(self):
+        """2 win-exposed + 2 Place = fine, no changes."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 7, 4.0, 2.0, 0.25, 0.50, 1.1, 1.0, 0.50),
+            RecommendedPick(2, 2, "B", "Each Way", 5, 5.0, 2.5, 0.20, 0.45, 1.0, 1.0, 0.30),
+            RecommendedPick(3, 3, "C", "Place", 5, 6.0, 3.0, 0.15, 0.40, 0.9, 1.0, 0.20),
+            RecommendedPick(4, 4, "D", "Place", 3, 10.0, 4.0, 0.08, 0.25, 1.5, 1.1, 0.10, is_roughie=True),
+        ]
+        _cap_win_exposure(picks)
+        assert picks[0].bet_type == "Win"
+        assert picks[1].bet_type == "Each Way"
+        assert picks[2].bet_type == "Place"
+        assert picks[3].bet_type == "Place"
+
+    def test_three_win_exposed_caps_to_two(self):
+        """3 Win bets → third gets downgraded to Place."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 7, 4.0, 2.0, 0.30, 0.55, 1.1, 1.0, 0.50),
+            RecommendedPick(2, 2, "B", "Win", 5, 5.0, 2.5, 0.22, 0.45, 1.0, 1.0, 0.30),
+            RecommendedPick(3, 3, "C", "Saver Win", 5, 6.0, 3.0, 0.18, 0.40, 1.2, 1.0, 0.25),
+            RecommendedPick(4, 4, "D", "Place", 3, 10.0, 4.0, 0.10, 0.30, 1.5, 1.1, 0.10),
+        ]
+        _cap_win_exposure(picks)
+        assert picks[0].bet_type == "Win"
+        assert picks[1].bet_type == "Win"
+        assert picks[2].bet_type == "Place"
+        assert picks[3].bet_type == "Place"
+
+    def test_expected_return_recalculated_on_downgrade(self):
+        """When downgrading to Place, expected_return should reflect place odds."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 7, 4.0, 2.0, 0.30, 0.55, 1.1, 1.0, 0.50),
+            RecommendedPick(2, 2, "B", "Each Way", 5, 5.0, 2.5, 0.22, 0.45, 1.0, 1.0, 0.30),
+            RecommendedPick(3, 3, "C", "Win", 5, 8.0, 3.5, 0.15, 0.35, 1.2, 1.0, 0.20),
+        ]
+        _cap_win_exposure(picks)
+        assert picks[2].bet_type == "Place"
+        # Expected return = place_prob * place_odds - 1 = 0.35 * 3.5 - 1 = 0.225
+        assert picks[2].expected_return == pytest.approx(0.22, abs=0.01)
 
 
 # ──────────────────────────────────────────────
