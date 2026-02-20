@@ -78,10 +78,14 @@ class FacebookDelivery:
         meeting = meeting_result.scalar_one_or_none()
         venue = meeting.venue if meeting else None
 
-        # Format content
+        # Format content (truncate early mails for social — full content on website)
         formatted = content.facebook_formatted
         if not formatted:
-            formatted = format_facebook(content.raw_content, content.content_type, venue)
+            raw = content.raw_content
+            if content.content_type == "early_mail":
+                from punty.formatters.truncate import truncate_for_socials
+                raw = truncate_for_socials(raw, venue=venue or "", meeting_id=content.meeting_id)
+            formatted = format_facebook(raw, content.content_type, venue)
             content.facebook_formatted = formatted
 
         # Post to Facebook Graph API with retry

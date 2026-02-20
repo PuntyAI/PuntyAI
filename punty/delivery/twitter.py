@@ -362,6 +362,11 @@ class TwitterDelivery:
     def _format_long_post(self, raw_content: str, content_type: str, venue: str) -> str:
         """Format content for a single long-form X post."""
         from punty.formatters.twitter import TwitterFormatter
+        from punty.formatters.truncate import truncate_for_socials
+
+        # Truncate early mails to R1-R2 with teaser + CTA to punty.ai
+        if content_type == "early_mail":
+            raw_content = truncate_for_socials(raw_content, venue=venue)
 
         # Content already has its own title line — just add emoji prefix
         header = "🏇 "
