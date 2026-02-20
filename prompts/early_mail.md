@@ -154,41 +154,32 @@ OR (exotic Punty's Pick — when the best value play is an exotic):
 *Punty's Pick:* {EXOTIC_TYPE} [{RUNNER_NOS}] — $15 (Value: {X}x)
 {One-line reason — e.g. "Trifecta Box value at 1.8x with three genuine top-3 contenders."}
 
-### 5) *SEQUENCE LANES — ABC MULTI-TICKET STRUCTURE*
-THREE tickets per sequence type (A/B/C). Print ALL three in exact format. Use only saddlecloth numbers, separated by commas within legs, and use " / " to separate legs.
+### 5) *SEQUENCE LANES — SINGLE OPTIMISED TICKET*
+ONE ticket per sequence type. Use only saddlecloth numbers, separated by commas within legs, and use " / " to separate legs.
 
 **Include ALL sequence types where the meeting has enough races.** The context provides exact race ranges — use them.
 
-**THE THREE TICKETS:**
-- **Ticket A (Banker Press)**: 50% of budget. Tight 2 runners/leg. Highest flexi %. Concentrated on strongest overlays.
-- **Ticket B (Value Spread)**: 30% of budget. Shape-driven widths with value swaps. Standard play.
-- **Ticket C (Chaos Saver)**: 20% of budget. Same as B but wider on chaos legs (TRIO/MID_FAV/OPEN_BUNCH/WIDE_OPEN). Low flexi, big dividend play.
+**TICKET SIZING:**
+- Outlay scales $30-$60 based on race chaos: banker-heavy meetings = low outlay (tight, fewer combos, bigger payout per hit). Chaos-heavy meetings = high outlay (wide, more combos, higher hit rate).
+- Minimum 30% flexi.
 
 CRITICAL MATHS:
-- combos = product of selections per leg (e.g. 2×3×2×4 = 48). UNIT = budget / combos. Flexi % = UNIT × 100.
-- **Ticket A & B minimum 30% flexi**. **Ticket C minimum 10% flexi** (intentionally low — small stake, big dividend).
-- Total outlay is $30-$60 scaled by edge strength across all 3 tickets.
+- combos = product of selections per leg (e.g. 2×3×2×4 = 48). UNIT = outlay / combos. Flexi % = UNIT × 100.
 
-**USE THE PRE-BUILT ABC SEQUENCES FROM CONTEXT:**
-Your context includes **PRE-BUILT SEQUENCE BETS (ABC multi-ticket structure)** with exact selections per leg already calculated from odds shape analysis. **Copy these exactly** — they are mathematically optimised.
+**USE THE PRE-BUILT SEQUENCES FROM CONTEXT:**
+Your context includes **PRE-BUILT SEQUENCE BETS** with exact selections per leg already calculated from odds shape analysis. **Copy these exactly** — they are mathematically optimised.
 
 EARLY QUADDIE (R{EQ_START}–R{EQ_END}) — if provided in context
-Ticket A (${A_BUDGET}): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${A_BUDGET}) — {FLEXI}% flexi
-Ticket B (${B_BUDGET}): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${B_BUDGET}) — {FLEXI}% flexi
-Ticket C (${C_BUDGET}): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${C_BUDGET}) — {FLEXI}% flexi
-{One-line commentary on leg shapes — e.g. "A locks the two standout legs tight. C expands R2 and R4 for the chaos saver."}
+Smart: {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${TOTAL}) — {FLEXI}% flexi
+{One-line commentary on leg shapes and risk level}
 
 QUADDIE (R{MQ_START}–R{MQ_END})
-Ticket A (${A_BUDGET}): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${A_BUDGET}) — {FLEXI}% flexi
-Ticket B (${B_BUDGET}): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${B_BUDGET}) — {FLEXI}% flexi
-Ticket C (${C_BUDGET}): {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${C_BUDGET}) — {FLEXI}% flexi
-{One-line commentary on leg shapes}
+Smart: {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${TOTAL}) — {FLEXI}% flexi
+{One-line commentary on leg shapes and risk level}
 
 BIG 6 (R{B6_START}–R{B6_END}) — if provided in context (6 legs, needs 8+ races)
-Ticket A (${A_BUDGET}): {LEGS} ({COMBOS} combos x ${UNIT} = ${A_BUDGET}) — {FLEXI}% flexi
-Ticket B (${B_BUDGET}): {LEGS} ({COMBOS} combos x ${UNIT} = ${B_BUDGET}) — {FLEXI}% flexi
-Ticket C (${C_BUDGET}): {LEGS} ({COMBOS} combos x ${UNIT} = ${C_BUDGET}) — {FLEXI}% flexi
-{One-line commentary on leg shapes}
+Smart: {LEGS} ({COMBOS} combos x ${UNIT} = ${TOTAL}) — {FLEXI}% flexi
+{One-line commentary on leg shapes and risk level}
 
 ### 6) *NUGGETS FROM THE TRACK*
 Three sharp insights that punters wouldn't know unless they dug through the data. Think hidden patterns, trainer angles, track quirks, or spicy market moves. Mix genuine intel with Punty's personality — one fact, one cheeky observation, one wildcard.
@@ -324,7 +315,7 @@ If no track record data is provided, generate tips normally.
      - Horse places → Win part: –$10 + Place part: $10 × (10 ÷ 5) = $20 profit = $10 net return
    - *Exotics only*: No straight bet on this runner — just include in exotics. Write "Bet: Exotics only".
    You MUST show the return on each bet line: "Bet: $8 Win, return $25.60"
-   Degenerate exotics: $15 fixed. Sequences (per sequence type — Early Quaddie, Quaddie, Big 6): THREE tickets (A/B/C) per sequence, $30-$60 total outlay (edge-scaled). A=50% Banker Press, B=30% Value Spread, C=20% Chaos Saver. Tickets A&B: min 30% flexi. Ticket C: min 10% flexi. Quaddies require minimum 20% estimated return. Big 6 requires minimum 5% estimated return. Skip the sequence if below threshold.
+   Degenerate exotics: $15 fixed. Sequences (per sequence type — Early Quaddie, Quaddie, Big 6): ONE optimised ticket per sequence, $30-$60 outlay scaled by chaos ratio (banker-heavy = $30, chaos-heavy = $60). Minimum 30% flexi. Quaddies require minimum 20% estimated return. Big 6 requires minimum 5% estimated return. Skip the sequence if below threshold.
 2) Odds: print as "${WIN_ODDS} / ${PLACE_ODDS}" (e.g. "$3.50 / $1.45"). Use fixed odds from the data provided. Place odds are typically provided; if not, estimate as (win_odds - 1) / 3 + 1.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
 4) Exactly ONE "Degenerate Exotic of the Race" per race.
@@ -390,7 +381,7 @@ If no track record data is provided, generate tips normally.
     {One-line reason}
 
 13) PUNTY'S PICK (per sequence):
-    There are THREE tickets (A/B/C) per sequence type. Copy all three exactly from context. Add a one-line Punty's take after each sequence block explaining the chaos/banker leg strategy.
+    There is ONE optimised ticket per sequence type. Copy it exactly from context. Add a one-line Punty's take after each sequence block commenting on the risk level and leg shapes.
 
     **SEQUENCE PERFORMANCE DATA (from 29 settled sequences):**
     - 45% of sequences miss by exactly ONE leg — the near-miss rate is high

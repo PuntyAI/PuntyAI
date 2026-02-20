@@ -1,12 +1,11 @@
-"""ABC multi-ticket sequence construction for Quaddie / Early Quaddie / Big 6.
+"""Single optimised sequence construction for Quaddie / Early Quaddie / Big 6.
 
-Builds THREE tickets (A/B/C) per sequence type with per-leg widths
-determined by odds-shape classification (validated on 14,246 legs from
-2025 Proform data). Width = include runners whose marginal capture rate >= 7%.
+Builds ONE ticket per sequence type with per-leg widths determined by
+odds-shape classification (validated on 14,246 legs from 2025 Proform data).
 
-Ticket A (Banker Press): 50% budget, 2 runners/leg, highest flexi
-Ticket B (Value Spread): 30% budget, shape-driven widths, value swaps
-Ticket C (Chaos Saver):  20% budget, wider on chaos legs, low flexi big dividend
+Outlay scales $30-$60 based on chaos ratio:
+- Tight (banker-heavy) → low outlay, fewer combos, higher payout per hit
+- Wide (chaos-heavy) → high outlay, more combos, higher hit rate
 """
 
 import logging
@@ -16,7 +15,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-BASE_OUTLAY = 50.0  # baseline, scaled $30-$60 by edge strength
+BASE_OUTLAY = 50.0
 MIN_OUTLAY = 30.0
 MAX_OUTLAY = 60.0
 MIN_FLEXI_PCT = 30.0
@@ -31,17 +30,11 @@ MIN_RETURN_PCT = {
     "big6": 5.0,
 }
 
-# ABC ticket budget split percentages
-TICKET_A_PCT = 0.50   # Banker Press: concentrated on strongest overlays
-TICKET_B_PCT = 0.30   # Value Spread: shape-driven widths, value swaps
-TICKET_C_PCT = 0.20   # Chaos Saver: wide on chaos legs, longshot value
-
 # Odds shapes classified as chaos / dividend-decider legs
 CHAOS_SHAPES = {"TRIO", "MID_FAV", "OPEN_BUNCH", "WIDE_OPEN"}
 
-# Chaos leg expansion for Ticket C
-CHAOS_EXTRA_RUNNERS = 2
-TICKET_C_MIN_FLEXI_PCT = 10.0  # relaxed — intentionally low flexi for big dividend
+# Banker shapes — tight, predictable
+BANKER_SHAPES = {"STANDOUT", "DOMINANT", "SHORT_PAIR"}
 
 
 @dataclass
@@ -68,31 +61,9 @@ class SmartSequence:
     total_outlay: float
     constrained: bool        # True if widths were tightened to fit flexi floor
     risk_note: str           # warning if many open legs
-    estimated_return_pct: float = 0.0  # estimated return % based on leg capture probs
-
-
-@dataclass
-class ABCTicket:
-    """A single ticket within the ABC multi-ticket structure."""
-    ticket_label: str        # "A", "B", "C"
-    legs: list[LaneLeg]
-    total_combos: int
-    flexi_pct: float
-    total_outlay: float
-    description: str         # "Banker Press" / "Value Spread" / "Chaos Saver"
-
-
-@dataclass
-class ABCSequence:
-    """Three-ticket ABC structure for a single sequence type."""
-    sequence_type: str
-    race_start: int
-    race_end: int
-    tickets: list[ABCTicket]  # [A, B, C]
-    total_outlay: float       # sum across all 3 tickets
-    risk_note: str
-    estimated_return_pct: float
-    chaos_legs: list[int]     # race numbers of chaos/dividend-decider legs
+    estimated_return_pct: float = 0.0
+    hit_probability: float = 0.0     # probability all legs hit
+    chaos_ratio: float = 0.0         # fraction of legs that are chaos shapes
 
 
 # Keep old classes for backward compatibility during transition
@@ -109,7 +80,7 @@ class SequenceLane:
 
 @dataclass
 class SequenceBlock:
-    """Legacy wrapper — now contains ABC sequence."""
+    """Wrapper for sequence data."""
     sequence_type: str
     race_start: int
     race_end: int
@@ -119,7 +90,6 @@ class SequenceBlock:
     recommended: str
     recommend_reason: str
     smart: SmartSequence | None = None
-    abc: ABCSequence | None = None
 
 
 # ──────────────────────────────────────────────
@@ -197,16 +167,12 @@ def _prepare_legs_data(
     if len(legs_data) != num_legs:
         return None
 
-    # Dynamic outlay: scale $30-$60 based on average edge
-    all_edges = []
-    for leg in legs_data:
-        for r in leg.top_runners[:3]:
-            e = r.get("edge", 0)
-            if e > 0:
-                all_edges.append(e)
-    avg_positive_edge = sum(all_edges) / len(all_edges) if all_edges else 0
-    edge_ratio = min(avg_positive_edge / 0.05, 1.0)
-    outlay = round(MIN_OUTLAY + edge_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
+    # Dynamic outlay: scale $30-$60 based on chaos ratio
+    # More chaos legs → wider ticket → need more budget
+    # More banker legs → tighter ticket → less budget needed
+    chaos_count = sum(1 for leg in legs_data if leg.odds_shape in CHAOS_SHAPES)
+    chaos_ratio = chaos_count / num_legs
+    outlay = round(MIN_OUTLAY + chaos_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
     outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
 
     return (legs_data, outlay, is_big6)
@@ -259,8 +225,11 @@ def _calc_combos(lane_legs: list[LaneLeg]) -> int:
     return combos
 
 
-def _calc_estimated_return(lane_legs: list[LaneLeg], legs_data: list) -> float:
-    """Calculate estimated return % from leg capture probabilities."""
+def _calc_estimated_return(lane_legs: list[LaneLeg], legs_data: list) -> tuple[float, float]:
+    """Calculate estimated return % and hit probability from leg capture probabilities.
+
+    Returns (estimated_return_pct, hit_probability).
+    """
     leg_captures = []
     for i, leg in enumerate(lane_legs):
         selected_sc = set(leg.runners)
@@ -284,8 +253,11 @@ def _calc_estimated_return(lane_legs: list[LaneLeg], legs_data: list) -> float:
         random_hit *= len(leg.runners) / max(field, 1)
 
     if random_hit > 0 and hit_prob > 0:
-        return round((hit_prob / random_hit) * pool_takeout * 100, 1)
-    return 0.0
+        est_return = round((hit_prob / random_hit) * pool_takeout * 100, 1)
+    else:
+        est_return = 0.0
+
+    return (est_return, round(hit_prob * 100, 1))
 
 
 def _risk_note(legs_data: list) -> str:
@@ -300,158 +272,7 @@ def _risk_note(legs_data: list) -> str:
 
 
 # ──────────────────────────────────────────────
-# ABC Ticket Builder
-# ──────────────────────────────────────────────
-
-def build_abc_tickets(
-    sequence_type: str,
-    race_range: tuple[int, int],
-    leg_analysis: list[dict],
-    race_contexts: list[dict],
-) -> ABCSequence | None:
-    """Build 3-ticket ABC quaddie structure for a sequence type.
-
-    Ticket A (Banker Press): 2 runners/leg, highest flexi, concentrated on overlays
-    Ticket B (Value Spread): shape-driven widths, value swaps, standard play
-    Ticket C (Chaos Saver): B widths + expanded chaos legs, low flexi, big dividend
-    """
-    from punty.probability import calculate_smart_quaddie_widths
-
-    prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
-    if not prep:
-        return None
-    legs_data, total_outlay, is_big6 = prep
-
-    # Identify chaos legs
-    chaos_legs = [
-        leg.race_number for leg in legs_data
-        if leg.odds_shape in CHAOS_SHAPES
-    ]
-
-    # Budget split
-    budget_a = round(total_outlay * TICKET_A_PCT)
-    budget_b = round(total_outlay * TICKET_B_PCT)
-    budget_c = total_outlay - budget_a - budget_b  # remainder to avoid rounding loss
-
-    MIN_LEG_WIDTH = 2
-
-    # ── Ticket A: Banker Press ──
-    # Fixed width of 2 per leg, top 2 runners by composite score
-    widths_a = [MIN_LEG_WIDTH] * len(legs_data)
-    legs_a = []
-    for i, leg in enumerate(legs_data):
-        selected = _select_runners_for_leg(leg, widths_a[i], value_swap=False)
-        legs_a.append(_make_lane_leg(leg, selected))
-
-    combos_a = _calc_combos(legs_a)
-    flexi_a = round(budget_a / combos_a * 100, 1) if combos_a > 0 else 0
-
-    ticket_a = ABCTicket(
-        ticket_label="A",
-        legs=legs_a,
-        total_combos=combos_a,
-        flexi_pct=flexi_a,
-        total_outlay=budget_a,
-        description="Banker Press",
-    )
-
-    # ── Ticket B: Value Spread ──
-    # Shape-driven widths with value swaps (same as old smart quaddie)
-    widths_b = calculate_smart_quaddie_widths(
-        legs_data, budget=budget_b, min_flexi_pct=MIN_FLEXI_PCT, is_big6=is_big6,
-    )
-    legs_b = []
-    for i, leg in enumerate(legs_data):
-        selected = _select_runners_for_leg(leg, widths_b[i], value_swap=True)
-        legs_b.append(_make_lane_leg(leg, selected))
-
-    combos_b = _calc_combos(legs_b)
-    flexi_b = round(budget_b / combos_b * 100, 1) if combos_b > 0 else 0
-
-    ticket_b = ABCTicket(
-        ticket_label="B",
-        legs=legs_b,
-        total_combos=combos_b,
-        flexi_pct=flexi_b,
-        total_outlay=budget_b,
-        description="Value Spread",
-    )
-
-    # ── Ticket C: Chaos Saver ──
-    # Start with B's widths, expand chaos legs by +CHAOS_EXTRA_RUNNERS
-    widths_c = list(widths_b)
-    for i, leg in enumerate(legs_data):
-        if leg.odds_shape in CHAOS_SHAPES:
-            max_available = len(leg.top_runners)
-            widths_c[i] = min(widths_c[i] + CHAOS_EXTRA_RUNNERS, max_available)
-
-    # Constrain to budget_c with relaxed flexi floor
-    max_combos_c = int(budget_c / (TICKET_C_MIN_FLEXI_PCT / 100.0)) if budget_c > 0 else 1
-
-    combos_c = 1
-    for w in widths_c:
-        combos_c *= max(w, 1)
-
-    # If over budget, tighten NON-chaos legs first (preserve chaos width)
-    while combos_c > max_combos_c:
-        best_idx = None
-        best_prob = -1
-        for i, leg in enumerate(legs_data):
-            if widths_c[i] > MIN_LEG_WIDTH and leg.odds_shape not in CHAOS_SHAPES:
-                top_prob = leg.top_runners[0].get("win_prob", 0) if leg.top_runners else 0
-                if top_prob > best_prob:
-                    best_prob = top_prob
-                    best_idx = i
-        # If no non-chaos legs to tighten, tighten chaos legs
-        if best_idx is None:
-            for i, leg in enumerate(legs_data):
-                if widths_c[i] > MIN_LEG_WIDTH:
-                    top_prob = leg.top_runners[0].get("win_prob", 0) if leg.top_runners else 0
-                    if top_prob > best_prob:
-                        best_prob = top_prob
-                        best_idx = i
-        if best_idx is None:
-            break
-        widths_c[best_idx] -= 1
-        combos_c = 1
-        for w in widths_c:
-            combos_c *= max(w, 1)
-
-    legs_c = []
-    for i, leg in enumerate(legs_data):
-        selected = _select_runners_for_leg(leg, widths_c[i], value_swap=True)
-        legs_c.append(_make_lane_leg(leg, selected))
-
-    combos_c = _calc_combos(legs_c)
-    flexi_c = round(budget_c / combos_c * 100, 1) if combos_c > 0 else 0
-
-    ticket_c = ABCTicket(
-        ticket_label="C",
-        legs=legs_c,
-        total_combos=combos_c,
-        flexi_pct=flexi_c,
-        total_outlay=budget_c,
-        description="Chaos Saver",
-    )
-
-    # Estimated return from Ticket B (the standard play)
-    est_return = _calc_estimated_return(legs_b, legs_data)
-    risk = _risk_note(legs_data)
-
-    return ABCSequence(
-        sequence_type=sequence_type,
-        race_start=race_range[0],
-        race_end=race_range[1],
-        tickets=[ticket_a, ticket_b, ticket_c],
-        total_outlay=total_outlay,
-        risk_note=risk,
-        estimated_return_pct=est_return,
-        chaos_legs=chaos_legs,
-    )
-
-
-# ──────────────────────────────────────────────
-# Legacy: build_smart_sequence (kept for backward compat)
+# Smart Sequence Builder (single optimised ticket)
 # ──────────────────────────────────────────────
 
 def build_smart_sequence(
@@ -460,7 +281,13 @@ def build_smart_sequence(
     leg_analysis: list[dict],
     race_contexts: list[dict],
 ) -> SmartSequence | None:
-    """Build a single smart sequence bet (legacy, used by tests)."""
+    """Build a single optimised sequence bet.
+
+    Uses shape-driven widths constrained to a 30% flexi floor.
+    Outlay scales $30-$60 based on chaos ratio:
+    - Banker-heavy → $30 (tight, fewer combos, bigger payout per hit)
+    - Chaos-heavy → $60 (wide, more combos, higher hit rate)
+    """
     from punty.probability import calculate_smart_quaddie_widths
 
     prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
@@ -486,7 +313,11 @@ def build_smart_sequence(
     total_combos = _calc_combos(lane_legs)
     flexi_pct = round(outlay / total_combos * 100, 1) if total_combos > 0 else 0
     risk = _risk_note(legs_data)
-    est_return = _calc_estimated_return(lane_legs, legs_data)
+    est_return, hit_prob = _calc_estimated_return(lane_legs, legs_data)
+
+    num_legs = race_range[1] - race_range[0] + 1
+    chaos_count = sum(1 for leg in legs_data if leg.odds_shape in CHAOS_SHAPES)
+    chaos_ratio = round(chaos_count / num_legs, 2)
 
     return SmartSequence(
         sequence_type=sequence_type,
@@ -499,6 +330,8 @@ def build_smart_sequence(
         constrained=constrained,
         risk_note=risk,
         estimated_return_pct=est_return,
+        hit_probability=hit_prob,
+        chaos_ratio=chaos_ratio,
     )
 
 
@@ -511,10 +344,9 @@ def build_all_sequence_lanes(
     leg_analysis: list[dict],
     race_contexts: list[dict],
 ) -> list[SequenceBlock]:
-    """Build ABC ticket sequences for all applicable sequence types.
+    """Build single optimised sequence for each applicable sequence type.
 
-    Returns SequenceBlock for backward compatibility with abc field
-    containing the new 3-ticket structure.
+    Returns SequenceBlock with smart field containing the optimised ticket.
     """
     rules = {
         7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
@@ -547,57 +379,58 @@ def build_all_sequence_lanes(
             logger.info("Main Quaddie suppressed (ENABLE_MAIN_QUADDIE=False)")
             continue
 
-        abc = build_abc_tickets(label, race_range, leg_analysis, race_contexts)
-        if not abc:
+        smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts)
+        if not smart:
             continue
 
         # Check minimum estimated return threshold
         min_ret = MIN_RETURN_PCT.get(key, 0.0)
-        if min_ret > 0 and abc.estimated_return_pct < min_ret:
+        if min_ret > 0 and smart.estimated_return_pct < min_ret:
             logger.info(
-                f"Skipping {label}: est. return {abc.estimated_return_pct:.1f}% "
+                f"Skipping {label}: est. return {smart.estimated_return_pct:.1f}% "
                 f"< minimum {min_ret:.0f}%"
             )
             continue
 
-        # Build legacy SequenceLane from Ticket B for backward compat
-        ticket_b = abc.tickets[1]  # Value Spread
+        # Build legacy SequenceLane for backward compat
         balanced_lane = SequenceLane(
             variant="Smart",
-            legs=ticket_b.legs,
-            total_combos=ticket_b.total_combos,
-            unit_price=round(ticket_b.total_outlay / ticket_b.total_combos, 2),
-            total_outlay=ticket_b.total_outlay,
-            flexi_pct=ticket_b.flexi_pct,
+            legs=smart.legs,
+            total_combos=smart.total_combos,
+            unit_price=round(smart.total_outlay / smart.total_combos, 2),
+            total_outlay=smart.total_outlay,
+            flexi_pct=smart.flexi_pct,
         )
 
         results.append(SequenceBlock(
             sequence_type=label,
-            race_start=abc.race_start,
-            race_end=abc.race_end,
+            race_start=smart.race_start,
+            race_end=smart.race_end,
             skinny=None,
             balanced=balanced_lane,
             wide=None,
-            recommended="ABC",
-            recommend_reason=_build_reason_abc(abc),
-            smart=None,
-            abc=abc,
+            recommended="Smart",
+            recommend_reason=_build_reason(smart),
+            smart=smart,
         ))
 
     return results
 
 
-def _build_reason_abc(abc: ABCSequence) -> str:
-    """Build explanation string for ABC sequence."""
-    ticket_b = abc.tickets[1]
-    widths = [len(leg.runners) for leg in ticket_b.legs]
+def _build_reason(smart: SmartSequence) -> str:
+    """Build explanation string for smart sequence."""
+    widths = [len(leg.runners) for leg in smart.legs]
     width_str = "x".join(str(w) for w in widths)
 
-    parts = [f"B={width_str} ({ticket_b.total_combos} combos)"]
+    parts = [f"{width_str} ({smart.total_combos} combos)"]
+    parts.append(f"Hit prob {smart.hit_probability:.0f}%")
+    parts.append(f"Est return {smart.estimated_return_pct:.0f}%")
 
-    if abc.chaos_legs:
-        parts.append(f"{len(abc.chaos_legs)} chaos legs expanded in C")
-    parts.append(f"${abc.total_outlay:.0f} total across A/B/C")
+    if smart.chaos_ratio >= 0.5:
+        chaos_count = int(smart.chaos_ratio * len(smart.legs))
+        parts.append(f"{chaos_count}/{len(smart.legs)} chaos legs → wide & higher outlay")
+    elif smart.chaos_ratio == 0:
+        parts.append("All banker legs → tight & low outlay")
 
     return ". ".join(parts) + "."
 
@@ -611,51 +444,58 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
     if not blocks:
         return ""
 
-    lines = ["\n**PRE-BUILT SEQUENCE BETS (ABC multi-ticket structure):**"]
+    lines = ["\n**PRE-BUILT SEQUENCE BETS (single optimised ticket per type):**"]
     lines.append(
-        f"Three tickets per sequence: "
-        f"A (Banker Press, {TICKET_A_PCT*100:.0f}%), "
-        f"B (Value Spread, {TICKET_B_PCT*100:.0f}%), "
-        f"C (Chaos Saver, {TICKET_C_PCT*100:.0f}%). "
-        f"${MIN_OUTLAY:.0f}-${MAX_OUTLAY:.0f} total outlay (edge-scaled)."
+        f"One ticket per sequence. "
+        f"Outlay ${MIN_OUTLAY:.0f}-${MAX_OUTLAY:.0f} scaled by chaos ratio "
+        f"(banker-heavy = low outlay, chaos-heavy = high outlay). "
+        f"Minimum {MIN_FLEXI_PCT:.0f}% flexi."
     )
 
     for block in blocks:
-        abc = block.abc
-        if not abc:
+        smart = block.smart
+        if not smart:
             continue
 
-        lines.append(f"\n{abc.sequence_type} (R{abc.race_start}--R{abc.race_end}):")
+        lines.append(f"\n{smart.sequence_type} (R{smart.race_start}--R{smart.race_end}):")
 
-        # Per-leg detail using Ticket B as reference
-        ticket_b = abc.tickets[1]
-        for leg in ticket_b.legs:
+        # Per-leg detail with shape and runners
+        for leg in smart.legs:
             runners_str = ", ".join(str(r) for r in leg.runners)
             names_str = ", ".join(leg.runner_names[:len(leg.runners)])
-            chaos_marker = " [CHAOS]" if leg.race_number in abc.chaos_legs else ""
+            chaos_marker = " [CHAOS]" if leg.odds_shape in CHAOS_SHAPES else ""
+            banker_marker = " [BANKER]" if leg.odds_shape in BANKER_SHAPES else ""
             lines.append(
-                f"  R{leg.race_number} [{leg.odds_shape}]{chaos_marker}: "
+                f"  R{leg.race_number} [{leg.odds_shape}]{chaos_marker}{banker_marker}: "
                 f"{runners_str} "
                 f"({len(leg.runners)} runners) "
                 f"-- {names_str}"
             )
 
-        # Three ticket lines in parser-compatible format
-        for ticket in abc.tickets:
-            legs_str = " / ".join(
-                ", ".join(str(r) for r in leg.runners)
-                for leg in ticket.legs
-            )
-            lines.append(
-                f"  Ticket {ticket.ticket_label} (${ticket.total_outlay:.0f}): {legs_str} "
-                f"({ticket.total_combos} combos x "
-                f"${ticket.total_outlay / ticket.total_combos:.2f} "
-                f"= ${ticket.total_outlay:.0f}) "
-                f"-- {ticket.flexi_pct:.0f}% flexi"
-            )
+        # Single ticket line in parser-compatible format
+        legs_str = " / ".join(
+            ", ".join(str(r) for r in leg.runners)
+            for leg in smart.legs
+        )
+        unit_price = smart.total_outlay / smart.total_combos if smart.total_combos > 0 else 0
+        lines.append(
+            f"  Smart: {legs_str} "
+            f"({smart.total_combos} combos x "
+            f"${unit_price:.2f} "
+            f"= ${smart.total_outlay:.0f}) "
+            f"-- {smart.flexi_pct:.0f}% flexi"
+        )
 
-        if abc.risk_note:
-            lines.append(f"  WARNING: {abc.risk_note}")
+        # Metrics line
+        lines.append(
+            f"  Metrics: Hit prob {smart.hit_probability:.0f}% | "
+            f"Est return {smart.estimated_return_pct:.0f}% | "
+            f"Chaos ratio {smart.chaos_ratio:.0%} | "
+            f"Risk: {'HIGH' if 'RISKY' in smart.risk_note else 'MODERATE' if smart.risk_note else 'LOW'}"
+        )
+
+        if smart.risk_note:
+            lines.append(f"  WARNING: {smart.risk_note}")
 
         lines.append(f"  Rationale: {block.recommend_reason}")
 
