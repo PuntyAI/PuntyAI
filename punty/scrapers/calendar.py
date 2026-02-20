@@ -48,7 +48,10 @@ async def _scrape_calendar_pf(race_date: date) -> list[dict[str, Any]]:
     """Scrape calendar via PuntingForm get_meetings() API."""
     from punty.scrapers.punting_form import PuntingFormScraper
 
-    scraper = PuntingFormScraper()
+    from punty.models.database import async_session
+
+    async with async_session() as db:
+        scraper = await PuntingFormScraper.from_settings(db)
     try:
         pf_meetings = await scraper.get_meetings(race_date)
     finally:
@@ -182,9 +185,7 @@ async def _scrape_calendar_racing_com(race_date: date) -> list[dict[str, Any]]:
                 }
                 const abbr = btn.querySelector('abbr');
                 const status = abbr?.getAttribute('title') || '';
-                const abbrCode = abbr?.textContent?.trim().toUpperCase() || 'F';
-                const isTrialOrJumpout = abbrCode === 'W';
-                results.push({ venue, state, status, abbrCode, isTrialOrJumpout });
+                results.push({ venue, state, status });
             });
             return results;
         }""", target_container_index)
@@ -193,7 +194,6 @@ async def _scrape_calendar_racing_com(race_date: date) -> list[dict[str, Any]]:
             venue = m.get("venue", "")
             if not venue:
                 continue
-            meeting_type = "trial" if m.get("isTrialOrJumpout") else "race"
             meetings.append({
                 "venue": venue,
                 "state": m.get("state", ""),
@@ -201,7 +201,7 @@ async def _scrape_calendar_racing_com(race_date: date) -> list[dict[str, Any]]:
                 "race_type": "Thoroughbred",
                 "status": m.get("status", ""),
                 "date": race_date,
-                "meeting_type": meeting_type,
+                "meeting_type": "race",
             })
 
     # Deduplicate

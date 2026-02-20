@@ -107,9 +107,6 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
         if existing:
             if not existing.source:
                 existing.source = "racing.com/calendar"
-            # Update meeting_type if calendar detected it as trial/jumpout
-            if m.get("meeting_type") in ("trial", "jumpout"):
-                existing.meeting_type = m["meeting_type"]
             results.append(existing.to_dict())
             continue
 
@@ -229,23 +226,15 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
     if owns_pf and pf_scraper:
         await pf_scraper.close()
 
-    # Classify empty meetings as trials; reclassify back if PF says it's not a trial
+    # Reclassify trial→race if scrape found actual races (calendar may have been wrong)
     if not pf_failed:
         race_count = await db.execute(
             select(Race).where(Race.meeting_id == meeting_id).limit(1)
         )
         has_races = race_count.scalar_one_or_none() is not None
-        if not has_races and (not meeting.meeting_type or meeting.meeting_type == "race"):
-            meeting.meeting_type = _classify_meeting_type(venue)
-            if meeting.meeting_type == "race":
-                meeting.meeting_type = "trial"
-                logger.info(f"No races found for {venue} — classified as trial")
-        elif has_races and meeting.meeting_type == "trial":
-            # Only reclassify if PF explicitly says it's not a barrier trial
-            is_pf_trial = await _check_pf_trial(pf_scraper, venue, race_date)
-            if not is_pf_trial:
-                meeting.meeting_type = "race"
-                logger.info(f"Races found for {venue} and PF says not a trial — reclassified to race")
+        if has_races and meeting.meeting_type == "trial":
+            meeting.meeting_type = "race"
+            logger.info(f"Races found for {venue} — reclassified from trial to race")
 
     # Fill derived fields (days_since_last_run, class_stats) from form_history
     await _fill_derived_fields(db, meeting_id)
@@ -393,23 +382,16 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
         if owns_pf and pf_scraper:
             await pf_scraper.close()
 
-        # Classify empty meetings as trials; reclassify back if PF says not a trial
+        # Reclassify trial→race if scrape found actual races (calendar may have been wrong)
         pf_failed = any("primary" in e for e in errors)
         if not pf_failed:
             race_count = await db.execute(
                 select(Race).where(Race.meeting_id == meeting_id).limit(1)
             )
             has_races = race_count.scalar_one_or_none() is not None
-            if not has_races and (not meeting.meeting_type or meeting.meeting_type == "race"):
-                meeting.meeting_type = _classify_meeting_type(venue)
-                if meeting.meeting_type == "race":
-                    meeting.meeting_type = "trial"
-                    logger.info(f"No races found for {venue} — classified as trial")
-            elif has_races and meeting.meeting_type == "trial":
-                is_pf_trial = await _check_pf_trial(pf_scraper, venue, race_date)
-                if not is_pf_trial:
-                    meeting.meeting_type = "race"
-                    logger.info(f"Races found for {venue} and PF says not a trial — reclassified to race")
+            if has_races and meeting.meeting_type == "trial":
+                meeting.meeting_type = "race"
+                logger.info(f"Races found for {venue} — reclassified from trial to race")
 
         # Fill derived fields (days_since_last_run, class_stats) from form_history
         await _fill_derived_fields(db, meeting_id)
