@@ -2972,6 +2972,7 @@ def calculate_sequence_leg_confidence(
                 "win_prob": round(r.get("win_prob", 0), 4),
                 "value_rating": round(r.get("value_rating", 1.0), 3),
                 "edge": round(r.get("edge", 0), 4),
+                "current_odds": r.get("current_odds"),
             })
 
         results.append(SequenceLegAnalysis(

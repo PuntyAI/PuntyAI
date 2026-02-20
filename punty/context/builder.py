@@ -220,6 +220,7 @@ class ContextBuilder:
                                 "win_prob": r.get("_win_prob_raw", 0),
                                 "value_rating": r.get("punty_value_rating", 1.0),
                                 "edge": r.get("_edge_raw", 0),
+                                "current_odds": r.get("current_odds"),
                             })
                             break
 

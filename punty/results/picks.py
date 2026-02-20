@@ -309,9 +309,10 @@ async def _settle_picks_for_race_impl(
                     )
                     placed = False
 
-            # Use fixed odds from tip time, fall back to tote dividends
-            win_odds = pick.odds_at_tip or runner.win_dividend
-            place_odds = pick.place_odds_at_tip or runner.place_dividend
+            # Prefer actual tote dividends (ground truth) when available.
+            # Fall back to tip-time odds only when tote is missing (some NSW venues).
+            win_odds = runner.win_dividend or pick.odds_at_tip
+            place_odds = runner.place_dividend or pick.place_odds_at_tip
 
             # Sanity: place odds should NEVER exceed win odds (impossible in real markets).
             # If they do, the place odds are likely garbage (e.g. win $2.70 / place $6.00).

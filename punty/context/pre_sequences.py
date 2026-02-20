@@ -1,11 +1,10 @@
 """Single optimised sequence construction for Quaddie / Early Quaddie / Big 6.
 
-Builds ONE ticket per sequence type with per-leg widths determined by
-odds-shape classification (validated on 14,246 legs from 2025 Proform data).
+Builds ONE ticket per sequence type using edge-driven overlay-only selection.
+Legs classified as anchor (single) / chaos (wide) / normal based on
+probability distribution and favourite odds.
 
-Outlay scales $30-$60 based on chaos ratio:
-- Tight (banker-heavy) → low outlay, fewer combos, higher payout per hit
-- Wide (chaos-heavy) → high outlay, more combos, higher hit rate
+Outlay range $40-$60, budget-optimised to trim/add runners by edge.
 """
 
 import logging
@@ -16,7 +15,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 BASE_OUTLAY = 50.0
-MIN_OUTLAY = 30.0
+MIN_OUTLAY = 40.0
 MAX_OUTLAY = 60.0
 MIN_FLEXI_PCT = 30.0
 
@@ -140,16 +139,21 @@ def _prepare_legs_data(
                     if isinstance(wp, str):
                         wp = float(wp.rstrip("%")) / 100
                     vr = 1.0
+                    odds = None
+                    edge = 0
                     for ctx_r in rc.get("runners", []):
                         if ctx_r.get("saddlecloth") == sc:
                             vr = ctx_r.get("punty_value_rating", 1.0)
+                            odds = ctx_r.get("current_odds")
+                            edge = ctx_r.get("_edge_raw", 0)
                             break
                     top_runners.append({
                         "saddlecloth": sc,
                         "horse_name": entry.get("horse", ""),
                         "win_prob": float(wp),
                         "value_rating": vr,
-                        "edge": 0,
+                        "edge": edge,
+                        "current_odds": odds,
                     })
                     existing_sc.add(sc)
 
@@ -179,10 +183,10 @@ def _prepare_legs_data(
     if len(legs_data) != num_legs:
         return None
 
-    # Dynamic outlay: scale $30-$60 based on chaos ratio
+    # Dynamic outlay: scale $40-$60 based on chaos ratio
     # More chaos legs → wider ticket → need more budget
     # More banker legs → tighter ticket → less budget needed
-    chaos_count = sum(1 for leg in legs_data if leg.odds_shape in CHAOS_SHAPES)
+    chaos_count = sum(1 for leg in legs_data if _is_chaos_leg(leg))
     chaos_ratio = chaos_count / num_legs
     outlay = round(MIN_OUTLAY + chaos_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
     outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
@@ -290,6 +294,280 @@ def _risk_note(legs_data: list) -> str:
 
 
 # ──────────────────────────────────────────────
+# Leg classification helpers
+# ──────────────────────────────────────────────
+
+def _get_fav_odds(leg) -> float:
+    """Get favourite odds for a leg (lowest odds among top runners)."""
+    best = 999.0
+    for r in leg.top_runners:
+        odds = r.get("current_odds")
+        if odds and float(odds) > 1.0:
+            best = min(best, float(odds))
+    # Fallback: derive from win prob
+    if best >= 999.0:
+        top_wp = max((float(r.get("win_prob", 0)) for r in leg.top_runners), default=0)
+        if top_wp > 0:
+            best = 1.0 / top_wp
+    return best
+
+
+def _is_chaos_leg(leg) -> bool:
+    """True if ANY: field_size>=14, fav_odds>=5.0, p_top1<=0.22, (p_top1-p_top3)<=0.06."""
+    field_size = getattr(leg, "_field_size", len(leg.top_runners))
+    if field_size >= 14:
+        return True
+
+    fav_odds = _get_fav_odds(leg)
+    if fav_odds >= 5.0:
+        return True
+
+    probs = sorted(
+        (float(r.get("win_prob", 0)) for r in leg.top_runners),
+        reverse=True,
+    )
+    p_top1 = probs[0] if probs else 0
+    p_top3 = probs[2] if len(probs) > 2 else 0
+
+    if p_top1 <= 0.22:
+        return True
+    if len(probs) >= 3 and (p_top1 - p_top3) <= 0.06:
+        return True
+
+    return False
+
+
+def _is_anchor_leg(leg) -> bool:
+    """True if ALL: p_top1>=0.30, fav_odds<=4.0, gap>=0.10, NOT chaos."""
+    if _is_chaos_leg(leg):
+        return False
+
+    probs = sorted(
+        (float(r.get("win_prob", 0)) for r in leg.top_runners),
+        reverse=True,
+    )
+    p_top1 = probs[0] if probs else 0
+    p_top2 = probs[1] if len(probs) > 1 else 0
+
+    if p_top1 < 0.30:
+        return False
+    if (p_top1 - p_top2) < 0.10:
+        return False
+
+    fav_odds = _get_fav_odds(leg)
+    if fav_odds > 4.0:
+        return False
+
+    return True
+
+
+# ──────────────────────────────────────────────
+# Core optimiser: edge-driven selection
+# ──────────────────────────────────────────────
+
+def _optimiser_select(
+    legs_data: list,
+    budget: float,
+    is_big6: bool = False,
+) -> list[list[dict]] | None:
+    """Edge-driven overlay-only selection for sequence legs.
+
+    Returns list of selected runner dicts per leg, or None to PASS.
+    """
+    num_legs = len(legs_data)
+
+    # Step 1: Build overlay pools per leg
+    overlay_pools = []
+    leg_types = []  # "anchor", "chaos", "normal"
+
+    for leg in legs_data:
+        runners = list(leg.top_runners)
+        # Sort by edge descending
+        pool = sorted(runners, key=lambda r: float(r.get("edge", 0)), reverse=True)
+        # Filter to overlays (edge > 0)
+        overlays = [r for r in pool if float(r.get("edge", 0)) > 0]
+        # Allow ONE neutral runner (edge >= -0.01) if no overlays
+        if not overlays:
+            neutrals = [r for r in pool if float(r.get("edge", 0)) >= -0.01]
+            if neutrals:
+                overlays = [neutrals[0]]
+            else:
+                # Take best available runner as fallback
+                overlays = pool[:1] if pool else []
+
+        overlay_pools.append(overlays)
+
+        # Classify leg
+        if _is_anchor_leg(leg):
+            leg_types.append("anchor")
+        elif _is_chaos_leg(leg):
+            leg_types.append("chaos")
+        else:
+            leg_types.append("normal")
+
+    # Step 2: Viability check — need at least one anchor OR one strong runner
+    has_anchor = "anchor" in leg_types
+    has_strong = any(
+        float(r.get("win_prob", 0)) >= 0.32
+        for leg in legs_data
+        for r in leg.top_runners[:1]  # top runner only
+    )
+    if not has_anchor and not has_strong:
+        logger.info("PASS: no anchor leg and no strong runner (>=32%)")
+        return None
+
+    # Step 3: Set initial targets per leg type
+    targets = []
+    for i, lt in enumerate(leg_types):
+        field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+        if lt == "anchor":
+            targets.append(1)
+        elif lt == "chaos":
+            targets.append(min(5, len(overlay_pools[i])))
+        else:
+            targets.append(min(3, len(overlay_pools[i])))
+
+    # Step 4: Apply field-size caps
+    for i in range(num_legs):
+        field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+        if field_size <= 10:
+            targets[i] = min(targets[i], 3)
+        elif field_size <= 13:
+            targets[i] = min(targets[i], 4)
+        elif field_size <= 16:
+            targets[i] = min(targets[i], 6)
+        # Never >= 50% of field
+        max_half = max(1, field_size // 2 - 1) if field_size > 2 else 1
+        targets[i] = min(targets[i], max_half)
+        # Ensure at least 1
+        targets[i] = max(targets[i], 1)
+
+    # Big6 tighter caps
+    if is_big6:
+        for i in range(num_legs):
+            targets[i] = min(targets[i], 3)
+
+    # Step 5: Populate from overlay pools
+    selected = []
+    for i in range(num_legs):
+        pool = overlay_pools[i]
+        sel = pool[:targets[i]]
+        # If we don't have enough overlays, pad from top runners by win prob
+        if len(sel) < targets[i]:
+            existing_sc = {r.get("saddlecloth") for r in sel}
+            for r in legs_data[i].top_runners:
+                if len(sel) >= targets[i]:
+                    break
+                if r.get("saddlecloth") not in existing_sc:
+                    sel.append(r)
+                    existing_sc.add(r.get("saddlecloth"))
+        selected.append(sel)
+
+    # Step 6: Budget optimisation loop
+    def _total_combos():
+        c = 1
+        for s in selected:
+            c *= max(1, len(s))
+        return c
+
+    budget_hi = budget
+    budget_lo = budget * 0.85
+    budget_floor = budget * 0.70
+
+    # Trim phase: remove worst-edge runner from widest non-anchor leg if over budget
+    for _ in range(20):
+        combos = _total_combos()
+        cost = combos * (MIN_FLEXI_PCT / 100.0)
+        if cost <= budget_hi:
+            break
+        # Find widest non-anchor leg
+        widest_idx = -1
+        widest_len = 0
+        for i in range(num_legs):
+            if leg_types[i] == "anchor":
+                continue
+            if len(selected[i]) > widest_len and len(selected[i]) > 1:
+                widest_len = len(selected[i])
+                widest_idx = i
+        if widest_idx < 0:
+            break
+        # Remove runner with worst edge
+        worst_j = min(
+            range(len(selected[widest_idx])),
+            key=lambda j: float(selected[widest_idx][j].get("edge", 0)),
+        )
+        selected[widest_idx].pop(worst_j)
+
+    # Add phase: add next-best overlay if under budget
+    for _ in range(20):
+        combos = _total_combos()
+        cost = combos * (MIN_FLEXI_PCT / 100.0)
+        if cost >= budget_lo:
+            break
+        # Find best candidate to add
+        best_add = None
+        best_edge = -999
+        best_leg_idx = -1
+        for i in range(num_legs):
+            if leg_types[i] == "anchor":
+                continue
+            field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+            # Respect field-size caps
+            max_sel = 6
+            if field_size <= 10:
+                max_sel = 3
+            elif field_size <= 13:
+                max_sel = 4
+            max_half = max(1, field_size // 2 - 1) if field_size > 2 else 1
+            max_sel = min(max_sel, max_half)
+            if is_big6:
+                max_sel = min(max_sel, 3)
+            if len(selected[i]) >= max_sel:
+                continue
+            existing_sc = {r.get("saddlecloth") for r in selected[i]}
+            for r in overlay_pools[i]:
+                if r.get("saddlecloth") not in existing_sc:
+                    edge = float(r.get("edge", 0))
+                    if edge > best_edge:
+                        best_edge = edge
+                        best_add = r
+                        best_leg_idx = i
+                    break  # pools are sorted, first non-selected is best
+        if best_add is None or best_edge <= 0:
+            break
+        # Check adding wouldn't exceed budget
+        new_combos = _total_combos() // max(1, len(selected[best_leg_idx])) * (len(selected[best_leg_idx]) + 1)
+        new_cost = new_combos * (MIN_FLEXI_PCT / 100.0)
+        if new_cost > budget_hi:
+            break
+        selected[best_leg_idx].append(best_add)
+
+    # Step 7: Sanity checks
+    # At least one single leg
+    has_single = any(len(s) == 1 for s in selected)
+    if not has_single:
+        # Find leg with highest top-runner win prob and trim to 1
+        best_leg = max(
+            range(num_legs),
+            key=lambda i: float(selected[i][0].get("win_prob", 0)) if selected[i] else 0,
+        )
+        selected[best_leg] = selected[best_leg][:1]
+
+    # Max one chaos leg >5 selections
+    wide_chaos = [i for i in range(num_legs) if leg_types[i] == "chaos" and len(selected[i]) > 5]
+    if len(wide_chaos) > 1:
+        # Keep only the one with best top-runner edge, trim others to 5
+        wide_chaos.sort(
+            key=lambda i: float(selected[i][0].get("edge", 0)) if selected[i] else 0,
+            reverse=True,
+        )
+        for idx in wide_chaos[1:]:
+            selected[idx] = selected[idx][:5]
+
+    return selected
+
+
+# ──────────────────────────────────────────────
 # Smart Sequence Builder (single optimised ticket)
 # ──────────────────────────────────────────────
 
@@ -299,34 +577,28 @@ def build_smart_sequence(
     leg_analysis: list[dict],
     race_contexts: list[dict],
 ) -> SmartSequence | None:
-    """Build a single optimised sequence bet.
+    """Build a single optimised sequence bet using edge-driven overlay selection.
 
-    Uses shape-driven widths constrained to a 30% flexi floor.
-    Outlay scales $30-$60 based on chaos ratio:
-    - Banker-heavy → $30 (tight, fewer combos, bigger payout per hit)
-    - Chaos-heavy → $60 (wide, more combos, higher hit rate)
+    Legs classified as anchor (single) / chaos (wide) / normal.
+    Outlay $40-$60, budget-optimised by trimming/adding runners by edge.
     """
-    from punty.probability import calculate_smart_quaddie_widths
-
     prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
     if not prep:
         return None
     legs_data, outlay, is_big6 = prep
 
-    widths = calculate_smart_quaddie_widths(
-        legs_data, budget=outlay, min_flexi_pct=MIN_FLEXI_PCT, is_big6=is_big6,
-    )
+    # Clamp outlay to $40-60
+    outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
 
-    original_combos = 1
-    for leg in legs_data:
-        original_combos *= max(leg.shape_width, 1)
-    max_combos = int(outlay / (MIN_FLEXI_PCT / 100.0))
-    constrained = original_combos > max_combos
+    # Run optimiser
+    optimised = _optimiser_select(legs_data, budget=outlay, is_big6=is_big6)
+    if optimised is None:
+        logger.info(f"Optimiser returned PASS for {sequence_type}")
+        return None
 
     lane_legs = []
     for i, leg in enumerate(legs_data):
-        selected = _select_runners_for_leg(leg, widths[i], value_swap=True)
-        lane_legs.append(_make_lane_leg(leg, selected))
+        lane_legs.append(_make_lane_leg(leg, optimised[i]))
 
     total_combos = _calc_combos(lane_legs)
     flexi_pct = round(outlay / total_combos * 100, 1) if total_combos > 0 else 0
@@ -334,7 +606,7 @@ def build_smart_sequence(
     est_return, hit_prob = _calc_estimated_return(lane_legs, legs_data)
 
     num_legs = race_range[1] - race_range[0] + 1
-    chaos_count = sum(1 for leg in legs_data if leg.odds_shape in CHAOS_SHAPES)
+    chaos_count = sum(1 for leg in legs_data if _is_chaos_leg(leg))
     chaos_ratio = round(chaos_count / num_legs, 2)
 
     return SmartSequence(
@@ -345,7 +617,7 @@ def build_smart_sequence(
         total_combos=total_combos,
         flexi_pct=flexi_pct,
         total_outlay=outlay,
-        constrained=constrained,
+        constrained=False,
         risk_note=risk,
         estimated_return_pct=est_return,
         hit_probability=hit_prob,
@@ -477,14 +749,20 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
 
         lines.append(f"\n{smart.sequence_type} (R{smart.race_start}--R{smart.race_end}):")
 
-        # Per-leg detail with shape and runners
+        # Per-leg detail with classification and runners
         for leg in smart.legs:
             runners_str = ", ".join(str(r) for r in leg.runners)
             names_str = ", ".join(leg.runner_names[:len(leg.runners)])
-            chaos_marker = " [CHAOS]" if leg.odds_shape in CHAOS_SHAPES else ""
-            banker_marker = " [BANKER]" if leg.odds_shape in BANKER_SHAPES else ""
+            if len(leg.runners) == 1:
+                type_marker = " [ANCHOR]"
+            elif len(leg.runners) >= 5:
+                type_marker = " [CHAOS]"
+            elif leg.odds_shape in BANKER_SHAPES:
+                type_marker = " [BANKER]"
+            else:
+                type_marker = ""
             lines.append(
-                f"  R{leg.race_number} [{leg.odds_shape}]{chaos_marker}{banker_marker}: "
+                f"  R{leg.race_number} [{leg.odds_shape}]{type_marker}: "
                 f"{runners_str} "
                 f"({len(leg.runners)} runners) "
                 f"-- {names_str}"

@@ -113,7 +113,7 @@ def compose_celebration_tweet(
     elif bet_display == "Each Way":
         bet_display = "E/W"
 
-    tweet = f"\U0001F3C7 {phrase} {horse_name} salutes at {odds_str}! {stake_str} {bet_display} \u2192 {collect_str} collect \U0001F4B0"
+    tweet = f"\U0001F3C7 {phrase} {horse_name} salutes at {odds_str}! {stake_str} on {bet_display} \u2192 {collect_str} collect \U0001F4B0"
 
     if len(tweet) > 270:
         tweet = tweet[:267] + "..."
