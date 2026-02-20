@@ -55,7 +55,8 @@
                 How <span style="color: var(--cyan);">Punty</span> Works
             </h1>
             <p class="text-xl" style="color: var(--text-secondary);">
-                From morning tips to live race-day updates (spoiler: it's actually quite methodical)
+                A 9-factor probability engine, race classification, and EV-based bet selection.
+                Here's the full breakdown.
             </p>
         </div>
 
@@ -126,9 +127,9 @@
                     <div class="w-full">
                         <h3 class="text-2xl font-heading font-bold mb-2">Probability Engine</h3>
                         <p class="mb-6" style="color: var(--text-secondary);">
-                            Every runner gets a calculated win and place probability using a
-                            multi-factor model. Not guesswork. Not vibes.
-                            Actual maths combining nine weighted signals across five categories:
+                            Every runner gets a calculated win and place probability. Win odds come from
+                            a 9-factor weighted model. Place odds use a Harville conditional probability
+                            model blended with market data. Not guesswork — actual maths across five categories:
                         </p>
 
                         <!-- Category Descriptions -->
@@ -206,9 +207,11 @@
                         3
                     </div>
                     <div>
-                        <h3 class="text-2xl font-heading font-bold mb-4">Selection Output</h3>
+                        <h3 class="text-2xl font-heading font-bold mb-4">Race Classification & Selections</h3>
                         <p class="mb-4" style="color: var(--text-secondary);">
-                            For each race, Punty outputs a structured selection set:
+                            Every race is classified before selections are made — dominant edge, place leverage,
+                            compressed value, or open handicap. The classification determines which bet types
+                            make sense and how stakes are allocated. For each race, Punty outputs:
                         </p>
                         <div class="space-y-3">
                             <div class="flex items-center gap-3">
@@ -317,10 +320,9 @@
                             you're getting the real picture, not some curated highlight reel.
                         </p>
                         <p style="color: var(--text-secondary);">
-                            Want to see the numbers yourself?
-                            <a href="/stats" class="font-semibold hover:text-white transition-colors" style="color: var(--cyan);">Check Punty's Stats page</a>
-                            &mdash; filter by venue, distance, track condition, jockey, trainer, and more to see exactly
-                            how each bet type performs. Full transparency, no hiding.
+                            Want to see the numbers yourself? Check our
+                            <a href="/tips" class="font-semibold hover:text-white transition-colors" style="color: var(--cyan);">daily tips</a>
+                            &mdash; every winner gets a badge, every result is tracked. Full transparency, no hiding.
                         </p>
                     </div>
                 </div>
@@ -395,7 +397,8 @@
             <div class="card p-6 mt-6">
                 <h4 class="font-heading font-bold text-lg mb-3" style="color: var(--yellow);">Punty's Bet Types</h4>
                 <p class="text-sm mb-4" style="color: var(--text-secondary);">
-                    For each selection, Punty assigns a bet type based on how confident he is and what offers the best value.
+                    Bet types are chosen by expected value, not habit. A dominant favourite gets a straight Win bet.
+                    A horse with a strong place edge gets Place only. Each Way only when both win and place EV are positive.
                     Here's what each one means:
                 </p>
                 <div class="grid sm:grid-cols-2 gap-3">
@@ -423,17 +426,16 @@
             </div>
 
             <div class="card p-6 mt-6" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(0, 212, 255, 0.06));">
-                <h4 class="font-heading font-bold text-lg mb-3" style="color: var(--orange);">Check the Stats First</h4>
+                <h4 class="font-heading font-bold text-lg mb-3" style="color: var(--orange);">Track the Results</h4>
                 <p class="text-sm mb-4" style="color: var(--text-secondary);">
-                    Before you back a bet type, check how it's been performing.
-                    Punty's Place bets might be flying at Flemington but struggling at Randwick.
-                    The <a href="/stats" class="font-semibold hover:text-white transition-colors" style="color: var(--cyan);">Stats page</a>
-                    lets you filter by track, distance, conditions, jockey, trainer, and more &mdash;
-                    use it to make smarter decisions about which picks to follow.
+                    Every tip page shows settled results with winner badges.
+                    Before you back a bet type, see how it's been performing at each venue.
+                    Punty's Place bets might be flying at Flemington but need discipline at Randwick
+                    &mdash; use the results to make smarter decisions about which picks to follow.
                 </p>
-                <a href="/stats" class="btn-secondary inline-flex items-center gap-2 text-sm" style="padding: 0.5rem 1.25rem;">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                    View Punty's Stats
+                <a href="/tips" class="btn-secondary inline-flex items-center gap-2 text-sm" style="padding: 0.5rem 1.25rem;">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    See Today's Tips
                 </a>
             </div>
 

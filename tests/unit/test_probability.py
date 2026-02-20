@@ -25,6 +25,7 @@ from punty.probability import (
     _horse_profile_factor,
     _average_weight,
     _place_probability,
+    _harville_place_probability,
     _recommended_stake,
     _determine_pace_scenario,
     _condition_stats_field,
@@ -495,6 +496,54 @@ class TestPlaceProbability:
     def test_capped_at_95(self):
         prob = _place_probability(0.50, 5)
         assert prob == 0.95
+
+
+class TestHarvillePlaceProbability:
+    """Tests for Harville-model place probability."""
+
+    def test_favourite_has_highest_place_prob(self):
+        """The highest win-prob runner should have highest place prob."""
+        probs = {"a": 0.35, "b": 0.25, "c": 0.20, "d": 0.10, "e": 0.10}
+        p_a = _harville_place_probability("a", probs, place_count=3)
+        p_d = _harville_place_probability("d", probs, place_count=3)
+        assert p_a > p_d
+
+    def test_place_probs_bounded(self):
+        """Place probabilities should be between 0 and 0.95."""
+        probs = {"a": 0.40, "b": 0.30, "c": 0.15, "d": 0.10, "e": 0.05}
+        for rid in probs:
+            p = _harville_place_probability(rid, probs, place_count=3)
+            assert 0 <= p <= 0.95
+
+    def test_two_places(self):
+        """With place_count=2, should be p(1st) + p(2nd) only."""
+        probs = {"a": 0.40, "b": 0.30, "c": 0.20, "d": 0.10}
+        p3 = _harville_place_probability("a", probs, place_count=3)
+        p2 = _harville_place_probability("a", probs, place_count=2)
+        assert p2 <= p3  # 2 places should be <= 3 places
+
+    def test_strong_favourite_high_place_prob(self):
+        """A strong favourite should have very high place probability."""
+        probs = {"fav": 0.50, "b": 0.20, "c": 0.15, "d": 0.10, "e": 0.05}
+        p = _harville_place_probability("fav", probs, place_count=3)
+        assert p > 0.80  # should be very likely to place
+
+    def test_zero_prob_runner_returns_zero(self):
+        """Runner with 0 win probability has 0 place probability."""
+        probs = {"a": 0.40, "b": 0.30, "zero": 0.0}
+        p = _harville_place_probability("zero", probs, place_count=3)
+        assert p == 0.0
+
+    def test_top_n_approximation(self):
+        """Result with top_n=8 should be reasonable for a realistic field."""
+        # Realistic racing distribution
+        probs = {"fav": 0.30, "r2": 0.18, "r3": 0.12, "r4": 0.10,
+                 "r5": 0.08, "r6": 0.07, "r7": 0.05, "r8": 0.04,
+                 "r9": 0.03, "r10": 0.03}
+        p_full = _harville_place_probability("fav", probs, place_count=3, top_n=10)
+        p_approx = _harville_place_probability("fav", probs, place_count=3, top_n=8)
+        # Default top_n=8 should be close to full for top runners
+        assert abs(p_full - p_approx) < 0.05
 
 
 # ──────────────────────────────────────────────

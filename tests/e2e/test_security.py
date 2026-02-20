@@ -13,7 +13,7 @@ class TestXSS:
             "window.__xss_fired = false;"
             "window.alert = function() { window.__xss_fired = true; };"
         )
-        public_page.goto("/public/stats?venue=<script>alert(1)</script>")
+        public_page.goto("/public/tips?venue=<script>alert(1)</script>")
         public_page.wait_for_load_state("networkidle")
         fired = public_page.evaluate("window.__xss_fired")
         assert not fired, "XSS payload executed via alert()"

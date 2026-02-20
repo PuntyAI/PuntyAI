@@ -1536,9 +1536,13 @@ async def get_recent_wins(db: AsyncSession, limit: int = 20) -> list[dict]:
 
         wins.append({
             "id": pick.id,
+            "meeting_id": meeting.id,
             "venue": meeting.venue,
+            "date": meeting.date.isoformat() if meeting.date else None,
+            "race_number": pick.race_number,
             "display_name": display_name,
             "pick_type": pick.pick_type,
+            "bet_type": pick.bet_type,
             "stake": round(stake, 2),
             "returned": round(returned, 2),
             "pnl": round(pick.pnl, 2),

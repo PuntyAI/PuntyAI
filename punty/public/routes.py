@@ -1520,10 +1520,11 @@ async def get_bet_type_stats(
         return stats
 
 
-@router.get("/stats", response_class=HTMLResponse)
+@router.get("/stats")
 async def stats_page(request: Request):
-    """Public stats page with filterable performance data."""
-    return templates.TemplateResponse("stats.html", {"request": request})
+    """Redirect to tips — stats page hidden for now."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/tips", status_code=301)
 
 
 @router.get("/tips/{meeting_id}", response_class=HTMLResponse)
@@ -1593,7 +1594,6 @@ async def sitemap_static():
     pages = [
         ("https://punty.ai/", "1.0", "daily"),
         ("https://punty.ai/tips", "0.9", "daily"),
-        ("https://punty.ai/stats", "0.8", "daily"),
         ("https://punty.ai/blog", "0.8", "daily"),
         ("https://punty.ai/how-it-works", "0.7", "monthly"),
         ("https://punty.ai/calculator", "0.7", "monthly"),

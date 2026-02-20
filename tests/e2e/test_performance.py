@@ -50,11 +50,11 @@ class TestPageLoadPerformance:
         elapsed_ms = (time.monotonic() - start) * 1000
         assert elapsed_ms < 3000, f"Admin dashboard took {elapsed_ms:.0f}ms"
 
-    def test_stats_page_under_3s(self, public_page):
+    def test_tips_page_under_3s(self, public_page):
         start = time.monotonic()
-        public_page.goto("/public/stats", wait_until="domcontentloaded")
+        public_page.goto("/public/tips", wait_until="domcontentloaded")
         elapsed_ms = (time.monotonic() - start) * 1000
-        assert elapsed_ms < 3000, f"Stats page took {elapsed_ms:.0f}ms"
+        assert elapsed_ms < 3000, f"Tips page took {elapsed_ms:.0f}ms"
 
 
 class TestConcurrentRequests:

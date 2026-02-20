@@ -2,31 +2,468 @@
 
 {% block title %}PuntyAI - AI Horse Racing Tips That Don't Suck{% endblock %}
 
-{% block content %}
-<!-- Hero Section -->
-<section class="relative overflow-hidden py-16 md:py-24">
-    <!-- Background glow effects -->
-    <div class="absolute top-1/2 left-1/4 w-96 h-96 bg-punty-magenta/20 rounded-full blur-3xl -translate-y-1/2"></div>
-    <div class="absolute top-1/2 right-1/4 w-96 h-96 bg-punty-cyan/10 rounded-full blur-3xl -translate-y-1/2"></div>
+{% block head %}
+<style>
+    /* ── Hero ── */
+    .hero {
+        position: relative;
+        min-height: min(90vh, 720px);
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+    }
+    .hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(ellipse 80% 60% at 20% 50%, rgba(233,30,140,0.12) 0%, transparent 70%),
+            radial-gradient(ellipse 60% 50% at 80% 40%, rgba(0,212,255,0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    /* Subtle grid overlay */
+    .hero::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+        background-size: 60px 60px;
+        pointer-events: none;
+        mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+        -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+    }
+    .hero-character {
+        position: relative;
+        width: 100%;
+        max-width: 420px;
+        border-radius: 24px;
+        overflow: hidden;
+    }
+    .hero-character img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 24px;
+        filter: drop-shadow(0 0 60px rgba(233,30,140,0.25));
+    }
+    .hero-character::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 24px;
+        border: 1px solid rgba(233,30,140,0.2);
+        pointer-events: none;
+    }
+    @media (max-width: 767px) {
+        .hero { min-height: auto; padding-top: 2rem; padding-bottom: 2rem; }
+        .hero-character { max-width: 240px; margin: 0 auto 2rem; }
+    }
 
-    <div class="max-w-6xl mx-auto px-6 sm:px-8 relative">
-        <div class="grid md:grid-cols-2 gap-12 items-center">
-            <!-- Left: Content -->
-            <div>
-                <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 leading-tight">
-                    AI Racing Tips That
-                    <span class="block" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Don't Fuck Around</span>
+    /* ── Tag line accent ── */
+    .hero-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--magenta);
+        margin-bottom: 1.5rem;
+    }
+    .hero-tag::before {
+        content: '';
+        width: 32px;
+        height: 2px;
+        background: var(--gradient-sunset);
+        border-radius: 1px;
+    }
+
+    /* ── Quote ── */
+    .punty-quote-v2 {
+        position: relative;
+        padding: 1.5rem 1.75rem;
+        background: rgba(233,30,140,0.04);
+        border-left: 3px solid var(--magenta);
+        border-radius: 0 12px 12px 0;
+        margin-bottom: 2.5rem;
+    }
+    .punty-quote-v2 p {
+        font-size: 1.05rem;
+        line-height: 1.65;
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+
+    /* ── Live Stats Bar ── */
+    .stats-bar {
+        background: var(--bg-card);
+        border-top: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
+        position: relative;
+    }
+    .stats-bar::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: var(--gradient-header);
+        opacity: 0.4;
+    }
+    .stat-item {
+        text-align: center;
+        padding: 1.5rem 1rem;
+        position: relative;
+    }
+    .stat-item + .stat-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 20%;
+        height: 60%;
+        width: 1px;
+        background: var(--border-subtle);
+    }
+    .stat-val {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 2rem;
+        font-weight: 800;
+        background: var(--gradient-sunset);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1.1;
+    }
+    .stat-label {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text-muted);
+        margin-top: 0.375rem;
+    }
+    @media (max-width: 767px) {
+        .stat-val { font-size: 1.5rem; }
+        .stat-item { padding: 1rem 0.5rem; }
+    }
+
+    /* ── Strike Rate Pills ── */
+    .sr-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.625rem 1rem;
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        transition: border-color 0.2s;
+    }
+    .sr-pill:hover { border-color: rgba(255,255,255,0.15); }
+    .sr-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .sr-pill-rate {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #fff;
+    }
+    .sr-pill-label {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+    }
+    .sr-pill-detail {
+        margin-left: auto;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Best Bet Card ── */
+    .bb-card {
+        display: block;
+        position: relative;
+        overflow: hidden;
+        border-radius: 16px;
+        text-decoration: none;
+        color: inherit;
+        background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0a1628 100%);
+        border: 1px solid rgba(255,0,128,0.25);
+        transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .bb-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255,0,128,0.5);
+        box-shadow: 0 8px 40px rgba(233,30,140,0.15);
+    }
+    .bb-glow-l { position: absolute; top: -80px; left: -80px; width: 200px; height: 200px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(255,0,128,0.2), transparent 70%); pointer-events: none; }
+    .bb-glow-r { position: absolute; bottom: -80px; right: -80px; width: 200px; height: 200px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(0,212,255,0.15), transparent 70%); pointer-events: none; }
+    .bb-inner { position: relative; padding: 1.5rem 1.75rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }
+    .bb-left { display: flex; align-items: center; gap: 1rem; }
+    .bb-trophy { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: var(--gradient-sunset); box-shadow: 0 0 20px rgba(255,0,128,0.3); flex-shrink: 0; }
+    .bb-label { font-family: 'Orbitron', sans-serif; font-size: 0.55rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--magenta); }
+    .bb-horse { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.5rem; line-height: 1.1; color: #fff; }
+    .bb-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+    .bb-meta-sep { margin: 0 6px; color: rgba(255,255,255,0.12); }
+    .bb-right { display: flex; align-items: center; gap: 1rem; }
+    .bb-stat { text-align: center; padding: 0 0.5rem; }
+    .bb-stat-label { font-family: 'Rajdhani', sans-serif; font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .bb-stat-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.25rem; color: #fff; }
+    .bb-arrow { font-size: 1.25rem; color: var(--magenta); }
+    .bb-returned .bb-stat-val { color: #4ade80; }
+    .bb-roi-box { text-align: center; padding: 0.625rem 1rem; border-radius: 10px; background: linear-gradient(135deg, rgba(74,222,128,0.15), rgba(74,222,128,0.04)); border: 1px solid rgba(74,222,128,0.25); }
+    .bb-roi-label { font-family: 'Rajdhani', sans-serif; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #4ade80; }
+    .bb-roi-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.5rem; color: #4ade80; line-height: 1.1; }
+    @media (max-width: 768px) {
+        .bb-inner { padding: 1rem; gap: 0.75rem; }
+        .bb-left { gap: 0.75rem; }
+        .bb-trophy { width: 40px; height: 40px; border-radius: 10px; font-size: 20px; }
+        .bb-horse { font-size: 1.15rem; }
+        .bb-meta { font-size: 0.7rem; }
+        .bb-right { width: 100%; justify-content: space-between; gap: 0.5rem; }
+        .bb-stat { padding: 0; }
+        .bb-stat-val { font-size: 1rem; }
+        .bb-arrow { font-size: 1rem; }
+        .bb-roi-box { padding: 0.5rem 0.625rem; }
+        .bb-roi-val { font-size: 1.15rem; }
+    }
+
+    /* ── Ticker ── */
+    @keyframes ticker-scroll {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+    }
+    @keyframes ticker-scroll-dynamic {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(var(--ticker-shift, -50%)); }
+    }
+    .ticker-scroll:hover { animation-play-state: paused; }
+    .ticker-bar {
+        background: var(--bg-card-alt);
+        border-top: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .win-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255,255,255,0.025);
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .win-celebration {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.85rem;
+        background: var(--gradient-sunset);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .win-horse { color: #fff; font-weight: 600; font-size: 0.9rem; }
+    .win-venue { color: var(--text-muted); font-size: 0.8rem; }
+    .win-amounts { font-family: 'Orbitron', sans-serif; font-size: 0.7rem; }
+    .win-stake { color: var(--text-muted); }
+    .win-return { color: #4ade80; }
+
+    /* ── Today's Tips Grid ── */
+    .tip-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.125rem 1.25rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.2s;
+    }
+    .tip-card:hover {
+        border-color: rgba(233,30,140,0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .tip-state {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    .tip-state span {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.55rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: #fff;
+    }
+    .tip-venue {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--text-primary);
+    }
+    .tip-arrow {
+        margin-left: auto;
+        color: var(--text-muted);
+        transition: color 0.2s, transform 0.2s;
+    }
+    .tip-card:hover .tip-arrow {
+        color: var(--magenta);
+        transform: translateX(3px);
+    }
+
+    /* ── How It Works Steps ── */
+    .step-card {
+        position: relative;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        padding: 2rem 1.75rem;
+        transition: border-color 0.2s;
+    }
+    .step-card:hover { border-color: rgba(255,255,255,0.12); }
+    .step-num {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 800;
+        color: #fff;
+        background: var(--gradient-sunset);
+        margin-bottom: 1.25rem;
+    }
+    .step-title {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 0.75rem;
+    }
+    .step-desc {
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: var(--text-secondary);
+    }
+
+    /* ── Video Section ── */
+    .video-wrap {
+        position: relative;
+        max-width: 340px;
+        aspect-ratio: 9/16;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(0,212,255,0.15);
+        box-shadow: 0 0 40px rgba(0,212,255,0.1);
+        background: #0a0a0f;
+    }
+
+    /* ── CTA Section ── */
+    .cta-section {
+        position: relative;
+        overflow: hidden;
+    }
+    .cta-section::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(ellipse 50% 80% at 30% 50%, rgba(233,30,140,0.08), transparent),
+            radial-gradient(ellipse 50% 80% at 70% 50%, rgba(0,212,255,0.06), transparent);
+        pointer-events: none;
+    }
+
+    /* ── Section spacing ── */
+    .section-pad { padding: 5rem 0; }
+    .section-pad-lg { padding: 6rem 0; }
+    @media (max-width: 767px) {
+        .section-pad { padding: 3rem 0; }
+        .section-pad-lg { padding: 3.5rem 0; }
+    }
+
+    /* ── Section titles ── */
+    .section-label {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 0.75rem;
+    }
+    .section-title {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #fff;
+        line-height: 1.15;
+    }
+    @media (min-width: 768px) {
+        .section-title { font-size: 2.5rem; }
+    }
+
+    /* ── Next Race in stats bar ── */
+    .next-race-inline {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+    .next-race-inline .venue { color: var(--cyan); }
+    .next-race-inline .time {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--magenta);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<section class="hero">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8 w-full relative" style="z-index: 1;">
+        <div class="flex flex-col-reverse md:flex-row items-center gap-8 md:gap-16">
+            <!-- Content -->
+            <div class="flex-1 text-center md:text-left">
+                <div class="hero-tag justify-center md:justify-start">
+                    AI-Powered Racing Analysis
+                </div>
+
+                <h1 class="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-6 leading-tight">
+                    Racing Tips That
+                    <span class="block" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Don't Fuck Around</span>
                 </h1>
 
-                <div class="punty-quote mb-8">
-                    <p class="text-lg italic" style="color: var(--text-secondary);">
-                        "I'm Punty. I crunch the form, read the track, and find the bloody winners.
-                        No tipster bullshit, no 'best bets' that cost you your rent money.
-                        Just honest picks backed by AI smarts."
+                <div class="punty-quote-v2">
+                    <p>
+                        "I run every horse through a 9-factor probability engine, classify
+                        every race, and only bet when the maths says there's an edge.
+                        No tipster bullshit. Just data, discipline, and the occasional roughie that makes your day."
                     </p>
                 </div>
 
-                <div class="flex flex-wrap gap-4">
+                <div class="flex flex-wrap gap-4 justify-center md:justify-start">
                     <a href="/tips" class="btn-primary inline-flex items-center gap-2">
                         See Today's Tips
                     </a>
@@ -36,67 +473,67 @@
                 </div>
             </div>
 
-            <!-- Right: Punty Character -->
-            <div class="relative flex justify-center">
-                <img src="/static/punty-character.jpg" alt="Punty the Racing Analyst"
-                     class="w-72 md:w-96 rounded-2xl glow-magenta animate-pulse-glow">
+            <!-- Character -->
+            <div class="flex-shrink-0">
+                <div class="hero-character">
+                    <img src="/static/punty-character.jpg" alt="Punty the Racing Analyst">
+                </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Today's Best Bet -->
-<style>
-    .bb-card {
-        display: block; position: relative; overflow: hidden;
-        border-radius: 16px; text-decoration: none; color: inherit;
-        background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0a1628 100%);
-        border: 2px solid rgba(255,0,128,0.35);
-        transition: transform 0.2s, border-color 0.2s;
-    }
-    .bb-card:hover { transform: translateY(-2px); border-color: rgba(255,0,128,0.6); }
-    .bb-glow-l { position: absolute; top: -80px; left: -80px; width: 240px; height: 240px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(255,0,128,0.3), transparent 70%); pointer-events: none; }
-    .bb-glow-r { position: absolute; bottom: -80px; right: -80px; width: 240px; height: 240px; border-radius: 50%; filter: blur(60px); background: radial-gradient(circle, rgba(0,212,255,0.2), transparent 70%); pointer-events: none; }
-    .bb-inner { position: relative; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-    .bb-left { display: flex; align-items: center; gap: 16px; }
-    .bb-trophy { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--gradient-sunset); box-shadow: 0 0 24px rgba(255,0,128,0.4); flex-shrink: 0; }
-    .bb-label { font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: var(--magenta); }
-    .bb-horse { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 28px; line-height: 1.1; color: #fff; }
-    .bb-meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
-    .bb-meta-sep { margin: 0 6px; color: rgba(255,255,255,0.15); }
-    .bb-right { display: flex; align-items: center; gap: 16px; }
-    .bb-stat { text-align: center; padding: 0 12px; }
-    .bb-stat-label { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
-    .bb-stat-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 24px; color: #fff; }
-    .bb-arrow { font-size: 22px; color: var(--magenta); }
-    .bb-returned .bb-stat-val { color: #4ade80; }
-    .bb-roi-box { text-align: center; padding: 12px 20px; border-radius: 14px; background: linear-gradient(135deg, rgba(74,222,128,0.18), rgba(74,222,128,0.05)); border: 1px solid rgba(74,222,128,0.35); box-shadow: 0 0 20px rgba(74,222,128,0.12); }
-    .bb-roi-label { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #4ade80; }
-    .bb-roi-val { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 30px; color: #4ade80; line-height: 1.1; }
-    @media (max-width: 768px) {
-        .bb-inner { padding: 16px; gap: 12px; }
-        .bb-left { gap: 12px; }
-        .bb-trophy { width: 44px; height: 44px; border-radius: 10px; font-size: 22px; }
-        .bb-horse { font-size: 18px; }
-        .bb-meta { font-size: 11px; }
-        .bb-right { width: 100%; justify-content: space-between; gap: 8px; }
-        .bb-stat { padding: 0 4px; }
-        .bb-stat-val { font-size: 16px; }
-        .bb-stat-label { font-size: 9px; }
-        .bb-arrow { font-size: 16px; }
-        .bb-roi-box { padding: 8px 12px; border-radius: 10px; }
-        .bb-roi-val { font-size: 18px; }
-        .bb-roi-label { font-size: 9px; }
-    }
-    @media (max-width: 380px) {
-        .bb-inner { padding: 12px; }
-        .bb-stat-val { font-size: 14px; }
-        .bb-roi-val { font-size: 16px; }
-        .bb-roi-box { padding: 6px 8px; }
-    }
-</style>
-<section id="best-bet-section" class="pt-8 pb-4">
+<!-- ═══════════════════ LIVE STATS BAR ═══════════════════ -->
+<section class="stats-bar">
     <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <div class="grid grid-cols-3 md:grid-cols-3">
+            <!-- Meetings Today -->
+            <div class="stat-item">
+                <div class="stat-val" id="meetings-today">{{ stats.meetings_today }}</div>
+                <div class="stat-label">Meetings Today</div>
+                <div id="next-race-container" class="next-race-inline" style="display: none;">
+                    <span class="venue" id="next-race-venue"></span>
+                    <span class="time" id="next-race-countdown"></span>
+                </div>
+            </div>
+            <!-- Today's Winners -->
+            <div class="stat-item">
+                <div class="stat-val" id="today-winners">{{ stats.today_winners }}</div>
+                <div class="stat-label" id="today-winners-label">
+                    {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
+                </div>
+            </div>
+            <!-- All-Time Winners -->
+            <div class="stat-item">
+                <div class="stat-val" id="alltime-winners">{{ stats.alltime_winners }}</div>
+                <div class="stat-label">Total Winners</div>
+            </div>
+        </div>
+
+        <!-- Strike Rates — compact pill row -->
+        {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pb-5 pt-2" id="strike-rates">
+            {% for pr in stats.pick_ranks %}
+            {% if pr.rank >= 1 %}
+            {% set rank_colors = {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'} %}
+            <div class="sr-pill">
+                <div class="sr-dot" style="background: {{ rank_colors[pr.rank|string] }};"></div>
+                <div>
+                    <div class="sr-pill-rate"><span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span></div>
+                    <div class="sr-pill-label">{{ pr.label }}</div>
+                </div>
+                <div class="sr-pill-detail"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- ═══════════════════ BEST BET ═══════════════════ -->
+<section class="section-pad" style="padding-bottom: 2rem;">
+    <div class="max-w-5xl mx-auto px-6 sm:px-8">
         {% if stats.best_bet %}
         <a id="bb-venue-link" href="/tips/{{ stats.best_bet.meeting_id }}" class="bb-card">
             <div class="bb-glow-l"></div>
@@ -141,7 +578,7 @@
                     <div class="bb-trophy" style="opacity: 0.5;">&#x1F3C6;</div>
                     <div>
                         <div class="bb-label">Today's Best Bet</div>
-                        <div class="bb-horse" style="font-size: 22px; opacity: 0.6;">Awaiting Results</div>
+                        <div class="bb-horse" style="font-size: 1.25rem; opacity: 0.6;">Awaiting Results</div>
                         <div class="bb-meta">Punty's picks are locked in — first winner takes the crown</div>
                     </div>
                 </div>
@@ -151,156 +588,45 @@
     </div>
 </section>
 
-<!-- Stats Section -->
-<section class="py-16" style="background: var(--bg-card); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
-    <div class="max-w-6xl mx-auto px-6 sm:px-8">
-        <div class="grid md:grid-cols-3 gap-6 lg:gap-8 text-center">
-            <!-- Meetings Today -->
-            <div class="card p-8 sm:p-10">
-                <div class="stat-number" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-3" style="color: var(--text-secondary);">Meetings Today</div>
-                <!-- Next Race Countdown -->
-                <div id="next-race-container" class="mt-5 pt-5" style="border-top: 1px solid var(--border-subtle); display: none;">
-                    <div class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
-                    <div id="next-race-venue" class="text-sm font-semibold" style="color: var(--cyan);"></div>
-                    <div id="next-race-countdown" class="text-lg font-display font-bold" style="color: var(--magenta);"></div>
-                </div>
-            </div>
-
-            <!-- Today's Winners -->
-            <div class="card p-8 sm:p-10">
-                <div class="stat-number" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-3" style="color: var(--text-secondary);" id="today-winners-label">
-                    {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
-                </div>
-            </div>
-
-            <!-- All-Time Winners -->
-            <div class="card p-8 sm:p-10">
-                <div class="stat-number" id="alltime-winners">{{ stats.alltime_winners }}</div>
-                <div class="text-base font-heading font-semibold uppercase tracking-wider mt-3" style="color: var(--text-secondary);">Total Winners</div>
-            </div>
+<!-- ═══════════════════ RECENT WINS TICKER ═══════════════════ -->
+<section class="ticker-bar">
+    <div class="flex items-center max-w-6xl mx-auto px-6 sm:px-8">
+        <div class="flex-shrink-0 pr-4 py-3" style="border-right: 1px solid var(--border-subtle);">
+            <span class="font-heading font-bold text-xs uppercase tracking-widest" style="color: var(--text-muted);">Recent Wins</span>
         </div>
-
-        <!-- Strike Rates by Pick -->
-        {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mt-10" id="strike-rates">
-            {% for pr in stats.pick_ranks %}
-            {% if pr.rank >= 1 %}
-            <div class="rounded-xl p-6 text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-2xl md:text-3xl font-display font-bold" style="color: {{ {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'}[pr.rank|string] }};">
-                    <span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span>
-                </div>
-                <div class="text-xs font-heading font-semibold uppercase tracking-wider mt-2" style="color: var(--text-muted);">{{ pr.label }}</div>
-                <div class="text-xs mt-1" style="color: var(--text-muted);"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
-            </div>
-            {% endif %}
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Stats CTA -->
-        <div class="text-center mt-10 pt-4">
-            <a href="/stats" class="btn-secondary inline-flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                View Punty's Full Stats
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- Recent Wins Ticker -->
-<section class="pt-14 pb-10">
-    <div class="max-w-6xl mx-auto px-6 sm:px-8">
-        <div id="wins-ticker" class="rounded-xl overflow-hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-            <div class="flex items-center px-6 py-3" style="border-bottom: 1px solid var(--border-subtle);">
-                <span class="text-lg mr-2" style="color: var(--magenta);">&#x1F3C6;</span>
-                <span class="font-heading font-semibold text-sm uppercase tracking-wider" style="color: var(--text-muted);">Recent Wins</span>
-            </div>
-            <div class="ticker-container relative overflow-hidden" style="height: 60px;">
-                <div id="ticker-content" class="ticker-scroll flex items-center gap-6 px-6 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
-                    <span class="text-sm" style="color: var(--text-muted);">Loading wins...</span>
-                </div>
+        <div class="ticker-container relative overflow-hidden flex-1" style="height: 52px;">
+            <div id="ticker-content" class="ticker-scroll flex items-center gap-5 px-4 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+                <span class="text-sm" style="color: var(--text-muted);">Loading wins...</span>
             </div>
         </div>
     </div>
 </section>
 
-<style>
-    @keyframes ticker-scroll {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(-50%); }
-    }
-    @keyframes ticker-scroll-dynamic {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(var(--ticker-shift, -50%)); }
-    }
-    .ticker-scroll:hover {
-        animation-play-state: paused;
-    }
-    .win-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.625rem 1.25rem;
-        background: rgba(255,255,255,0.03);
-        border-radius: 10px;
-        border: 1px solid rgba(255,255,255,0.06);
-    }
-    .win-celebration {
-        font-family: 'Rajdhani', sans-serif;
-        font-weight: 700;
-        font-size: 0.9rem;
-        background: var(--gradient-sunset);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    .win-horse {
-        color: #fff;
-        font-weight: 600;
-    }
-    .win-venue {
-        color: var(--text-muted);
-        font-size: 0.85rem;
-    }
-    .win-amounts {
-        font-family: 'Orbitron', sans-serif;
-        font-size: 0.75rem;
-    }
-    .win-stake { color: var(--text-muted); }
-    .win-return { color: #4ade80; }
-    @media (max-width: 768px) {
-        .win-item { padding: 0.4rem 0.75rem; gap: 0.5rem; }
-        .win-celebration { font-size: 0.75rem; }
-        .win-horse { font-size: 0.85rem; }
-        .win-venue { font-size: 0.75rem; }
-        .win-amounts { font-size: 0.65rem; }
-    }
-</style>
-
-<!-- Today's Tips Section -->
+<!-- ═══════════════════ TODAY'S TIPS ═══════════════════ -->
 {% if stats.todays_tips %}
-<section class="py-16">
+<section class="section-pad">
     <div class="max-w-6xl mx-auto px-6 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-10">
-            Today's <span style="color: var(--magenta);">Early Mail</span>
-        </h2>
+        <div class="text-center mb-10">
+            <div class="section-label">Today's Races</div>
+            <div class="section-title">
+                Today's <span style="color: var(--magenta);">Early Mail</span>
+            </div>
+        </div>
 
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {% for tip in stats.todays_tips %}
             {% set state_abbr = (tip.state or 'VIC')|upper %}
             {% set state_colors = {'VIC': '#1e3a8a', 'NSW': '#0c4a6e', 'QLD': '#7c2d12', 'SA': '#4c1d95', 'WA': '#064e3b', 'TAS': '#166534', 'NT': '#92400e'} %}
-            <a href="/tips/{{ tip.meeting_id }}"
-               class="card p-6 hover:border-punty-magenta transition-all hover:-translate-y-1 group">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: {{ state_colors.get(state_abbr, '#1e3a8a') }}; border: 1px solid rgba(255,255,255,0.1);">
-                        <span class="text-xs font-display font-bold text-white tracking-wider">{{ state_abbr }}</span>
-                    </div>
-                    <div class="min-w-0">
-                        <div class="font-heading font-bold text-lg group-hover:text-white transition-colors">{{ tip.venue }}</div>
-                        <div class="text-sm" style="color: var(--cyan);">View Tips &rarr;</div>
-                    </div>
+            <a href="/tips/{{ tip.meeting_id }}" class="tip-card">
+                <div class="tip-state" style="background: {{ state_colors.get(state_abbr, '#1e3a8a') }};">
+                    <span>{{ state_abbr }}</span>
+                </div>
+                <div class="min-w-0">
+                    <div class="tip-venue">{{ tip.venue }}</div>
+                    <div class="text-xs" style="color: var(--cyan);">View Tips</div>
+                </div>
+                <div class="tip-arrow">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </div>
             </a>
             {% endfor %}
@@ -315,43 +641,126 @@
 </section>
 {% endif %}
 
-<!-- Video Section -->
-<section class="py-16" style="background: var(--bg-card);">
-    <div class="max-w-4xl mx-auto px-6 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-3">
-            Meet <span style="color: var(--magenta);">Punty</span>
-        </h2>
-        <p class="text-center mb-6" style="color: var(--text-secondary);">
-            Watch how Punty analyses the form and finds the winners
-        </p>
+<!-- ═══════════════════ HOW IT WORKS ═══════════════════ -->
+<section class="section-pad-lg" style="background: var(--bg-card); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <div class="text-center mb-12">
+            <div class="section-label">The Process</div>
+            <div class="section-title">
+                How <span style="color: var(--cyan);">Punty</span> Picks Winners
+            </div>
+        </div>
 
-        <!-- Intro Video with custom play button -->
-        <div class="relative rounded-xl overflow-hidden glow-cyan mx-auto" style="max-width: 360px; aspect-ratio: 9/16; background: #0a0a0f;" id="video-container">
-            <video
-                id="punty-video"
-                class="absolute inset-0 w-full h-full object-contain"
-                playsinline
-                poster="/static/punty-character.jpg">
-                <source src="/static/punty-intro.mp4" type="video/mp4">
-                <track kind="captions" src="/static/punty-intro-captions.vtt" srclang="en" label="English">
-                Your browser does not support the video tag.
-            </video>
-            <!-- Custom play button overlay -->
-            <div id="play-overlay" class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/30 hover:bg-black/20 transition-colors">
-                <div class="w-20 h-20 rounded-full flex items-center justify-center" style="background: var(--magenta);">
-                    <svg class="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M8 5v14l11-7z"/>
-                    </svg>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+            <div class="step-card">
+                <div class="step-num">1</div>
+                <div class="step-title">Crunch The Form</div>
+                <p class="step-desc">
+                    Every runner scored across 9 weighted factors — form, market, barriers, jockeys, trainers, track conditions, and more.
+                </p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">2</div>
+                <div class="step-title">Classify The Race</div>
+                <p class="step-desc">
+                    Each race classified by type — dominant edge, place leverage, open handicap — to determine the right betting approach.
+                </p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">3</div>
+                <div class="step-title">Find The Edge</div>
+                <p class="step-desc">
+                    Win and place probabilities compared to market odds. Only bet when there's a genuine edge — not a hunch.
+                    <a href="/how-it-works#step-2" class="font-semibold" style="color: var(--cyan);">Learn more</a>
+                </p>
+            </div>
+            <div class="step-card">
+                <div class="step-num" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                 </div>
+                <div class="step-title">Bet Smart</div>
+                <p class="step-desc">
+                    The right bet type for each race — Win, Place, or Each Way — chosen by expected value, not gut feel. Live updates all day.
+                </p>
+            </div>
+        </div>
+
+        <div class="text-center mt-10">
+            <a href="/how-it-works" class="btn-primary">
+                Learn More
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════ VIDEO ═══════════════════ -->
+<section class="section-pad">
+    <div class="max-w-4xl mx-auto px-6 sm:px-8">
+        <div class="flex flex-col md:flex-row items-center gap-10 md:gap-16">
+            <!-- Video -->
+            <div class="flex-shrink-0 mx-auto md:mx-0">
+                <div class="video-wrap" id="video-container">
+                    <video id="punty-video" class="absolute inset-0 w-full h-full object-contain" playsinline poster="/static/punty-character.jpg">
+                        <source src="/static/punty-intro.mp4" type="video/mp4">
+                        <track kind="captions" src="/static/punty-intro-captions.vtt" srclang="en" label="English">
+                    </video>
+                    <div id="play-overlay" class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/30 hover:bg-black/20 transition-colors">
+                        <div class="w-16 h-16 rounded-full flex items-center justify-center" style="background: var(--magenta); box-shadow: 0 0 30px rgba(233,30,140,0.4);">
+                            <svg class="w-8 h-8 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Text -->
+            <div class="text-center md:text-left">
+                <div class="section-label">Meet The Analyst</div>
+                <div class="section-title mb-4">
+                    Meet <span style="color: var(--magenta);">Punty</span>
+                </div>
+                <p class="text-base leading-relaxed mb-6" style="color: var(--text-secondary);">
+                    Watch how Punty classifies races, finds the edge, and picks the right bet type.
+                    He's irreverent, he's data-driven, and he doesn't sugarcoat a bad day.
+                </p>
+                <a href="/how-it-works" class="btn-secondary inline-flex items-center gap-2 text-sm">
+                    See The Full Process
+                </a>
             </div>
         </div>
     </div>
 </section>
 
+<!-- ═══════════════════ CTA ═══════════════════ -->
+<section class="cta-section section-pad-lg" style="border-top: 1px solid var(--border-subtle);">
+    <div class="max-w-3xl mx-auto px-6 sm:px-8 text-center relative" style="z-index: 1;">
+        <div class="section-label mb-3">Get Started</div>
+        <h2 class="section-title mb-5" style="font-size: 2.25rem;">
+            Ready to Stop Losing Your Arse?
+        </h2>
+        <p class="text-lg mb-8 max-w-xl mx-auto" style="color: var(--text-secondary);">
+            Free daily tips powered by a probability engine that classifies every race and only bets on genuine edges.
+            No signup, no paywalls. Just transparent picks with the maths to back them up.
+        </p>
+
+        <div class="flex flex-wrap gap-4 justify-center">
+            <a href="/tips" class="btn-primary inline-flex items-center gap-2 text-lg">
+                Browse Tips
+            </a>
+            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-secondary inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                Follow @PuntyAI
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<!-- Video player -->
 <script>
 (function() {
-    const video = document.getElementById('punty-video');
-    const overlay = document.getElementById('play-overlay');
+    var video = document.getElementById('punty-video');
+    var overlay = document.getElementById('play-overlay');
 
     overlay.addEventListener('click', function() {
         overlay.style.display = 'none';
@@ -373,107 +782,12 @@
 })();
 </script>
 
-<!-- How It Works Preview -->
-<section class="py-16">
-    <div class="max-w-6xl mx-auto px-6 sm:px-8">
-        <h2 class="text-3xl font-heading font-bold text-center mb-10">
-            How <span style="color: var(--cyan);">Punty</span> Picks Winners
-        </h2>
-
-        <div class="grid md:grid-cols-4 gap-6 lg:gap-8">
-            <!-- Step 1 -->
-            <div class="card p-6 sm:p-8 text-center">
-                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
-                    1
-                </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Crunch The Form</h3>
-                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
-                    AI analyses thousands of data points - form, track conditions, barriers, jockeys, trainers, and more.
-                </p>
-            </div>
-
-            <!-- Step 2 -->
-            <div class="card p-6 sm:p-8 text-center">
-                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
-                    2
-                </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Read The Track</h3>
-                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
-                    Speed maps, rail positions, weather conditions - all factored in to find where the winners will come from.
-                </p>
-            </div>
-
-            <!-- Step 3 -->
-            <div class="card p-6 sm:p-8 text-center">
-                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: var(--gradient-sunset);">
-                    3
-                </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Find The Value</h3>
-                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
-                    A 9-factor probability model calculates every runner's true win chance.
-                    When our number beats the market — that's a value bet.
-                    <a href="/how-it-works#step-2" class="font-semibold" style="color: var(--cyan);">See how it works</a>
-                </p>
-            </div>
-
-            <!-- Step 4 -->
-            <div class="card p-6 sm:p-8 text-center">
-                <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center text-2xl font-display font-bold" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
-                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <h3 class="font-heading font-bold text-xl mb-3">Live Updates</h3>
-                <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">
-                    Punty watches every race live. Win celebrations, pace analysis, and real-time track reads throughout the day.
-                </p>
-            </div>
-        </div>
-
-        <div class="text-center mt-8">
-            <a href="/how-it-works" class="btn-primary">
-                Learn More
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- CTA Section -->
-<section class="py-20 relative overflow-hidden">
-    <div class="absolute inset-0 bg-gradient-to-r from-punty-magenta/20 via-punty-purple/10 to-punty-cyan/20"></div>
-
-    <div class="max-w-4xl mx-auto px-6 sm:px-8 text-center relative">
-        <img src="/static/punty-character.jpg" alt="Punty"
-             class="w-24 h-24 rounded-full mx-auto mb-6 object-cover border-4" style="border-color: var(--magenta);">
-
-        <h2 class="text-3xl md:text-4xl font-heading font-bold mb-4">
-            Ready to Stop Losing Your Arse?
-        </h2>
-        <p class="text-lg mb-6" style="color: var(--text-secondary);">
-            Free daily tips and live race-day updates.
-            No signup bullshit, no paywalls (yet). Just solid picks.
-        </p>
-
-        <div class="flex flex-wrap gap-4 justify-center">
-            <a href="/tips" class="btn-primary inline-flex items-center gap-2 text-lg">
-                Browse Tips
-            </a>
-            <a href="https://x.com/PuntyAI/" target="_blank" class="btn-secondary inline-flex items-center gap-2">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                Follow @PuntyAI
-            </a>
-        </div>
-    </div>
-</section>
-{% endblock %}
-
-{% block scripts %}
 <script>
     // Refresh stats every 60 seconds
     setInterval(function() {
         fetch('/api/public/stats')
-            .then(r => r.json())
-            .then(data => {
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
                 document.getElementById('today-winners').textContent = data.today_winners;
                 document.getElementById('today-winners-label').textContent = data.all_races_complete ? "Today's Winners" : 'Today So Far';
                 document.getElementById('alltime-winners').textContent = data.alltime_winners;
@@ -498,10 +812,16 @@
                         var link = document.getElementById('bb-venue-link');
                         if (link) link.href = '/tips/' + data.best_bet.meeting_id;
                         document.getElementById('bb-type').textContent = data.best_bet.bet_type;
+                        // Update odds separator — safe: only static markup, no user content
                         var oddsInline = document.getElementById('bb-odds-inline');
                         if (oddsInline) {
                             if (data.best_bet.odds) {
-                                oddsInline.innerHTML = '<span class="bb-meta-sep">|</span>$' + data.best_bet.odds.toFixed(2);
+                                oddsInline.textContent = '';
+                                var sep = document.createElement('span');
+                                sep.className = 'bb-meta-sep';
+                                sep.textContent = '|';
+                                oddsInline.appendChild(sep);
+                                oddsInline.appendChild(document.createTextNode('$' + data.best_bet.odds.toFixed(2)));
                             } else {
                                 oddsInline.textContent = '';
                             }
@@ -512,106 +832,102 @@
                     }
                 }
             })
-            .catch(() => {});
+            .catch(function() {});
     }, 60000);
 
     // Wins Ticker
     (function() {
-        async function loadWinsTicker() {
-            try {
-                const resp = await fetch('/api/public/wins?limit=10');
-                const data = await resp.json();
-                const ticker = document.getElementById('ticker-content');
+        function loadWinsTicker() {
+            fetch('/api/public/wins?limit=10')
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    var ticker = document.getElementById('ticker-content');
 
-                if (!data.wins || data.wins.length === 0) {
+                    if (!data.wins || data.wins.length === 0) {
+                        ticker.textContent = '';
+                        var emptyMsg = document.createElement('span');
+                        emptyMsg.style.cssText = 'color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;';
+                        emptyMsg.textContent = "No wins yet today - let's change that!";
+                        ticker.appendChild(emptyMsg);
+                        ticker.style.animation = 'none';
+                        return;
+                    }
+
+                    // Build win items using safe DOM methods
+                    function appendSet(container) {
+                        data.wins.forEach(function(win) {
+                            var item = document.createElement('div');
+                            item.className = 'win-item';
+
+                            var celeb = document.createElement('span');
+                            celeb.className = 'win-celebration';
+                            celeb.textContent = win.celebration;
+                            item.appendChild(celeb);
+
+                            var horse = document.createElement('span');
+                            horse.className = 'win-horse';
+                            horse.textContent = win.display_name;
+                            item.appendChild(horse);
+
+                            var venue = document.createElement('span');
+                            venue.className = 'win-venue';
+                            venue.textContent = win.venue;
+                            item.appendChild(venue);
+
+                            var amounts = document.createElement('span');
+                            amounts.className = 'win-amounts';
+                            var stake = document.createElement('span');
+                            stake.className = 'win-stake';
+                            stake.textContent = '$' + win.stake.toFixed(0);
+                            amounts.appendChild(stake);
+                            amounts.appendChild(document.createTextNode(' \u2192 '));
+                            var ret = document.createElement('span');
+                            ret.className = 'win-return';
+                            ret.textContent = '$' + win.returned.toFixed(0);
+                            amounts.appendChild(ret);
+                            item.appendChild(amounts);
+
+                            container.appendChild(item);
+                        });
+                    }
+
+                    // Measure one set width, then duplicate enough to fill 2x viewport
                     ticker.textContent = '';
-                    var emptyMsg = document.createElement('span');
-                    emptyMsg.style.cssText = 'color: var(--text-muted); font-size: 0.9rem; padding: 0 1rem;';
-                    emptyMsg.textContent = "No wins yet today - let's change that!";
-                    ticker.appendChild(emptyMsg);
+                    appendSet(ticker);
+                    var setWidth = ticker.scrollWidth;
+                    var viewWidth = ticker.parentElement.offsetWidth;
+                    var copies = Math.max(2, Math.ceil((viewWidth * 2) / setWidth) + 1);
+                    for (var c = 1; c < copies; c++) { appendSet(ticker); }
+
+                    var scrollPct = (100 / copies).toFixed(4);
+                    ticker.style.setProperty('--ticker-shift', '-' + scrollPct + '%');
+
+                    var speed = Math.max(10, setWidth / 80);
                     ticker.style.animation = 'none';
-                    return;
-                }
-
-                // Build win items using safe DOM methods
-                function appendSet(container) {
-                    data.wins.forEach(function(win) {
-                        var item = document.createElement('div');
-                        item.className = 'win-item';
-
-                        var celeb = document.createElement('span');
-                        celeb.className = 'win-celebration';
-                        celeb.textContent = win.celebration;
-                        item.appendChild(celeb);
-
-                        var horse = document.createElement('span');
-                        horse.className = 'win-horse';
-                        horse.textContent = win.display_name;
-                        item.appendChild(horse);
-
-                        var venue = document.createElement('span');
-                        venue.className = 'win-venue';
-                        venue.textContent = win.venue;
-                        item.appendChild(venue);
-
-                        var amounts = document.createElement('span');
-                        amounts.className = 'win-amounts';
-                        var stake = document.createElement('span');
-                        stake.className = 'win-stake';
-                        stake.textContent = '$' + win.stake.toFixed(0);
-                        amounts.appendChild(stake);
-                        amounts.appendChild(document.createTextNode(' \u2192 '));
-                        var ret = document.createElement('span');
-                        ret.className = 'win-return';
-                        ret.textContent = '$' + win.returned.toFixed(0);
-                        amounts.appendChild(ret);
-                        item.appendChild(amounts);
-
-                        container.appendChild(item);
-                    });
-                }
-
-                // Measure one set width, then duplicate enough to fill 2x viewport
-                ticker.textContent = '';
-                appendSet(ticker);
-                var setWidth = ticker.scrollWidth;
-                var viewWidth = ticker.parentElement.offsetWidth;
-                // Need at least 2 copies; more if one set is narrower than the viewport
-                var copies = Math.max(2, Math.ceil((viewWidth * 2) / setWidth) + 1);
-                // We already have 1 set, add the rest
-                for (var c = 1; c < copies; c++) { appendSet(ticker); }
-
-                // Scroll exactly one set's worth so the loop is seamless
-                var scrollPct = (100 / copies).toFixed(4);
-                ticker.style.setProperty('--ticker-shift', '-' + scrollPct + '%');
-
-                // Speed: ~80px per second (slower, more readable)
-                var speed = Math.max(10, setWidth / 80);
-                ticker.style.animation = 'none'; // reset
-                ticker.offsetHeight; // force reflow
-                ticker.style.animation = 'ticker-scroll-dynamic ' + speed + 's linear infinite';
-            } catch (e) {
-                console.error('Failed to load wins ticker:', e);
-            }
+                    ticker.offsetHeight;
+                    ticker.style.animation = 'ticker-scroll-dynamic ' + speed + 's linear infinite';
+                })
+                .catch(function(e) {
+                    console.error('Failed to load wins ticker:', e);
+                });
         }
 
         loadWinsTicker();
-        // Refresh ticker every 60 seconds
         setInterval(loadWinsTicker, 60000);
     })();
 
     // Next Race Countdown
     (function() {
-        let nextRaceTime = null;
-        let nextRaceVenue = '';
-        let nextRaceNum = 0;
+        var nextRaceTime = null;
+        var nextRaceVenue = '';
+        var nextRaceNum = 0;
 
         function formatCountdown(ms) {
             if (ms <= 0) return 'NOW!';
-            const totalSeconds = Math.floor(ms / 1000);
-            const hours = Math.floor(totalSeconds / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
+            var totalSeconds = Math.floor(ms / 1000);
+            var hours = Math.floor(totalSeconds / 3600);
+            var minutes = Math.floor((totalSeconds % 3600) / 60);
+            var seconds = totalSeconds % 60;
 
             if (hours > 0) {
                 return hours + 'h ' + minutes + 'm';
@@ -623,52 +939,49 @@
         }
 
         function updateCountdown() {
-            const container = document.getElementById('next-race-container');
-            const venueEl = document.getElementById('next-race-venue');
-            const countdownEl = document.getElementById('next-race-countdown');
+            var container = document.getElementById('next-race-container');
+            var venueEl = document.getElementById('next-race-venue');
+            var countdownEl = document.getElementById('next-race-countdown');
 
             if (!nextRaceTime) {
                 container.style.display = 'none';
                 return;
             }
 
-            const now = new Date();
-            const diff = nextRaceTime - now;
+            var now = new Date();
+            var diff = nextRaceTime - now;
 
             if (diff <= -60000) {
-                // Race started over a minute ago, fetch new data
                 loadNextRace();
                 return;
             }
 
             container.style.display = 'block';
-            venueEl.textContent = nextRaceVenue + ' R' + nextRaceNum;
+            venueEl.textContent = nextRaceVenue + ' R' + nextRaceNum + ' ';
             countdownEl.textContent = formatCountdown(diff);
         }
 
-        async function loadNextRace() {
-            try {
-                const resp = await fetch('/api/public/next-race');
-                const data = await resp.json();
-
-                if (data.has_next) {
-                    nextRaceTime = new Date(data.start_time_iso);
-                    nextRaceVenue = data.venue;
-                    nextRaceNum = data.race_number;
-                    updateCountdown();
-                } else {
-                    nextRaceTime = null;
-                    document.getElementById('next-race-container').style.display = 'none';
-                }
-            } catch (e) {
-                console.error('Failed to load next race:', e);
-            }
+        function loadNextRace() {
+            fetch('/api/public/next-race')
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    if (data.has_next) {
+                        nextRaceTime = new Date(data.start_time_iso);
+                        nextRaceVenue = data.venue;
+                        nextRaceNum = data.race_number;
+                        updateCountdown();
+                    } else {
+                        nextRaceTime = null;
+                        document.getElementById('next-race-container').style.display = 'none';
+                    }
+                })
+                .catch(function(e) {
+                    console.error('Failed to load next race:', e);
+                });
         }
 
         loadNextRace();
-        // Update countdown every second
         setInterval(updateCountdown, 1000);
-        // Refresh race data every 2 minutes
         setInterval(loadNextRace, 120000);
     })();
 </script>

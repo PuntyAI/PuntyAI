@@ -509,6 +509,8 @@ class ContextBuilder:
                 selection_thresholds=getattr(self, "_sel_thresholds", None),
                 place_context_multipliers=race_context.get("probabilities", {}).get("context_multipliers_place"),
                 venue_type=_vtype,
+                meeting_hit_count=getattr(self, "_meeting_hit_count", None),
+                meeting_race_count=getattr(self, "_meeting_race_count", None),
             )
             race_context["pre_selections"] = pre_sel
         except Exception as e:

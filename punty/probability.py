@@ -715,11 +715,27 @@ def calculate_race_probabilities(
             for rid, p in place_raw_probs.items():
                 place_market_implied[rid] = p / place_overround * place_count
 
+    # Harville blending: enhance factor-weighted place probs with Harville model
+    # 70% factor-weighted + 30% Harville, then anchor to market when available
+    if win_probs:
+        for rid_h in list(win_probs.keys()):
+            wp_h = win_probs.get(rid_h, baseline)
+            harville_p = _harville_place_probability(rid_h, win_probs, place_count)
+            factor_p = place_probs.get(rid_h, _place_probability(wp_h, field_size))
+            blended = 0.70 * factor_p + 0.30 * harville_p
+
+            # Anchor to market when real place_odds available
+            mkt_p = place_market_implied.get(rid_h)
+            if mkt_p and mkt_p > 0:
+                blended = 0.50 * blended + 0.50 * mkt_p
+
+            place_probs[rid_h] = min(0.95, blended)
+
     for runner in active:
         rid = _get(runner, "id", "")
         win_prob = win_probs.get(rid, baseline)
 
-        # Place probability — use context-adjusted if available, else field-factor formula
+        # Place probability — use Harville-blended if available, else field-factor formula
         place_prob = place_probs.get(rid, _place_probability(win_prob, field_size))
 
         # Value detection (win)
@@ -2182,6 +2198,76 @@ def _place_probability(win_prob: float, field_size: int) -> float:
         factor = 3.2
 
     return min(0.95, win_prob * factor)
+
+
+def _harville_place_probability(
+    target_rid: str,
+    win_probs: dict[str, float],
+    place_count: int = 3,
+    top_n: int = 8,
+) -> float:
+    """Calculate place probability using the Harville model.
+
+    Uses conditional probabilities to compute the chance of finishing
+    in the top ``place_count`` positions (typically 2 or 3).
+
+    For efficiency, only considers the top-N runners by win probability
+    when computing the conditional 2nd/3rd-place sums.
+
+    Args:
+        target_rid: Runner ID to compute place prob for.
+        win_probs: Dict of {runner_id: win_probability} for all runners.
+        place_count: Number of places paid (2 or 3).
+        top_n: Max runners to include in conditional calculations.
+
+    Returns:
+        Place probability for the target runner (0.0-1.0).
+    """
+    p_i = win_probs.get(target_rid, 0)
+    if p_i <= 0:
+        return 0.0
+
+    # Select top-N runners by probability (include target if not in top-N)
+    sorted_runners = sorted(win_probs.items(), key=lambda x: x[1], reverse=True)
+    top_rids = {rid for rid, _ in sorted_runners[:top_n]}
+    top_rids.add(target_rid)
+    subset = {rid: p for rid, p in win_probs.items() if rid in top_rids and p > 0}
+
+    # p(1st) = win_prob
+    p_first = p_i
+
+    # p(2nd) = sum over j!=i: p(j wins) * p(i wins | j removed)
+    p_second = 0.0
+    for rid_j, p_j in subset.items():
+        if rid_j == target_rid or p_j <= 0:
+            continue
+        remainder = 1.0 - p_j
+        if remainder <= 0:
+            continue
+        p_second += p_j * (p_i / remainder)
+
+    if place_count <= 2:
+        return min(0.95, p_first + p_second)
+
+    # p(3rd) = sum over (j, k) pairs: p(j 1st) * p(k 2nd|j) * p(i 3rd|j,k)
+    p_third = 0.0
+    for rid_j, p_j in subset.items():
+        if rid_j == target_rid or p_j <= 0:
+            continue
+        rem_j = 1.0 - p_j
+        if rem_j <= 0:
+            continue
+        for rid_k, p_k in subset.items():
+            if rid_k == target_rid or rid_k == rid_j or p_k <= 0:
+                continue
+            p_k_given_j = p_k / rem_j
+            rem_jk = rem_j - p_k
+            if rem_jk <= 0:
+                continue
+            p_i_given_jk = p_i / rem_jk
+            p_third += p_j * p_k_given_j * p_i_given_jk
+
+    return min(0.95, p_first + p_second + p_third)
 
 
 # ──────────────────────────────────────────────

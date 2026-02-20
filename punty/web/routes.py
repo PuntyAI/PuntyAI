@@ -114,15 +114,17 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     monitor = getattr(request.app.state, "results_monitor", None)
     monitor_status = monitor.status() if monitor else {"running": False}
 
-    # Get performance summary for today + all-time cumulative P&L
+    # Get performance summary for today + all-time cumulative P&L + recent wins
     performance = None
     cumulative_pnl = []
     all_time_stats = {"today_winners": 0, "total_winners": 0, "collected": 0}
+    recent_wins = []
     try:
-        from punty.results.picks import get_performance_summary, get_cumulative_pnl, get_all_time_stats
+        from punty.results.picks import get_performance_summary, get_cumulative_pnl, get_all_time_stats, get_recent_wins
         performance = await get_performance_summary(db, today)
         cumulative_pnl = await get_cumulative_pnl(db)
         all_time_stats = await get_all_time_stats(db)
+        recent_wins = await get_recent_wins(db, limit=30)
     except Exception:
         pass
 
@@ -163,6 +165,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "cumulative_pnl": cumulative_pnl,
             "all_time_stats": all_time_stats,
             "token_stats": token_stats,
+            "recent_wins": recent_wins,
         },
     )
 

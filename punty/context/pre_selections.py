@@ -115,6 +115,7 @@ class RacePreSelections:
     puntys_pick: PuntysPick | None
     total_stake: float          # sum of pick stakes (should be <= $20)
     notes: list[str] = field(default_factory=list)
+    classification: Any = None  # RaceClassification from bet_optimizer
 
 
 def calculate_pre_selections(
@@ -123,8 +124,13 @@ def calculate_pre_selections(
     selection_thresholds: dict | None = None,
     place_context_multipliers: dict[str, float] | None = None,
     venue_type: str = "",
+    meeting_hit_count: int | None = None,
+    meeting_race_count: int | None = None,
 ) -> RacePreSelections:
     """Calculate deterministic pre-selections for a single race.
+
+    Uses the race-level bet optimizer to classify races and determine
+    bet types based on EV, edge, odds movement, and venue confidence.
 
     Args:
         race_context: Race dict from ContextBuilder with runners and probabilities.
@@ -133,10 +139,15 @@ def calculate_pre_selections(
         place_context_multipliers: Optional dict of place context multiplier values.
             When the average multiplier is weak (<0.85), PLACE_MIN_PROB is raised
             to require higher place probability (tighter threshold, fewer Place bets).
+        venue_type: Venue tier (metro_vic, provincial, country, etc.)
+        meeting_hit_count: Running count of winning selections at this meeting.
+        meeting_race_count: How many races processed so far at this meeting.
 
     Returns:
         RacePreSelections with ordered picks, exotic, and Punty's Pick.
     """
+    from punty.context.bet_optimizer import optimize_race
+
     race_number = race_context.get("race_number", 0)
     runners = race_context.get("runners", [])
     probs = race_context.get("probabilities", {})
@@ -146,8 +157,6 @@ def calculate_pre_selections(
 
     # Adjust place threshold based on place context multipliers.
     # Only tighten (raise threshold) when context is weak — never loosen.
-    # Lowering the place threshold was systematically pushing favourites to Place
-    # even when Win would be more profitable (costing ~$64/day in missed profit).
     if place_context_multipliers:
         mults = [v for v in place_context_multipliers.values() if isinstance(v, (int, float))]
         if mults:
@@ -158,13 +167,34 @@ def calculate_pre_selections(
     # Compute field size (active runners) for bet type and exotic decisions
     field_size = sum(1 for r in runners if not r.get("scratched"))
 
+    # Run race-level optimizer for classification and bet type recommendations
+    optimization = optimize_race(
+        race_context, pool=pool, venue_type=venue_type,
+        meeting_hit_count=meeting_hit_count,
+        meeting_race_count=meeting_race_count,
+    )
+    classification = optimization.classification
+
+    # Handle No Bet — 2yo maiden first starters with zero form
+    if classification.no_bet:
+        return RacePreSelections(
+            race_number=race_number, picks=[], exotic=None,
+            puntys_pick=None, total_stake=0.0,
+            notes=["NO BET — 2yo maiden first starters, zero form data"],
+            classification=classification,
+        )
+
     # Build runner data with probability info
     candidates = _build_candidates(runners)
     if not candidates:
         return RacePreSelections(
             race_number=race_number, picks=[], exotic=None,
             puntys_pick=None, total_stake=0.0,
+            classification=classification,
         )
+
+    # Build lookup from optimizer recommendations: saddlecloth -> BetRecommendation
+    rec_lookup = {r.saddlecloth: r for r in optimization.recommendations}
 
     # Split-formula ranking: different strategies per pick position.
     # Validated on 314 races (Feb 2026 production DB) + 18,888 Proform 2025 races:
@@ -201,7 +231,10 @@ def calculate_pre_selections(
             continue
         if roughie and c["saddlecloth"] == roughie["saddlecloth"]:
             continue
-        picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds, field_size=field_size))
+        picks.append(_make_pick_from_optimizer(
+            c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
+            thresholds=thresholds, field_size=field_size,
+        ))
         used_saddlecloths.add(c["saddlecloth"])
 
     # #3 pick: re-rank remaining by prob * clamped value (validated +$281 improvement)
@@ -213,29 +246,45 @@ def calculate_pre_selections(
     )
 
     if remaining:
-        picks.append(_make_pick(remaining[0], 3, is_roughie=False, thresholds=thresholds, field_size=field_size))
+        picks.append(_make_pick_from_optimizer(
+            remaining[0], 3, is_roughie=False, rec_lookup=rec_lookup,
+            thresholds=thresholds, field_size=field_size,
+        ))
         used_saddlecloths.add(remaining[0]["saddlecloth"])
 
     # Add roughie as pick #4
     if roughie and roughie["saddlecloth"] not in used_saddlecloths:
-        picks.append(_make_pick(roughie, 4, is_roughie=True, thresholds=thresholds, field_size=field_size))
+        picks.append(_make_pick_from_optimizer(
+            roughie, 4, is_roughie=True, rec_lookup=rec_lookup,
+            thresholds=thresholds, field_size=field_size,
+        ))
         used_saddlecloths.add(roughie["saddlecloth"])
     elif len(picks) < 4:
         # No qualifying roughie — fill 4th from remaining
         for c in candidates:
             if c["saddlecloth"] not in used_saddlecloths:
-                picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds, field_size=field_size))
+                picks.append(_make_pick_from_optimizer(
+                    c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
+                    thresholds=thresholds, field_size=field_size,
+                ))
                 used_saddlecloths.add(c["saddlecloth"])
                 break
 
     # Ensure at least one Win/Each Way/Saver Win bet (mandatory rule)
-    _ensure_win_bet(picks)
+    # Skip for PLACE_LEVERAGE — this classification can go all-Place
+    if classification.race_type != "PLACE_LEVERAGE":
+        _ensure_win_bet(picks)
 
     # Cap win-exposed bets to avoid spreading win risk across too many horses
     win_capped = _cap_win_exposure(picks)
 
     # Allocate stakes from pool
-    _allocate_stakes(picks, pool)
+    if classification.watch_only:
+        # Watch Only: zero all stakes
+        for p in picks:
+            p.stake = 0.0
+    else:
+        _allocate_stakes(picks, pool)
 
     # Select recommended exotic
     anchor_odds = picks[0].odds if picks else 0.0
@@ -252,6 +301,12 @@ def calculate_pre_selections(
     notes = _generate_notes(picks, exotic, candidates, field_size=field_size,
                             win_capped=win_capped)
 
+    # Add classification note
+    if classification.watch_only:
+        notes.insert(0, f"WATCH ONLY — {classification.reasoning}")
+    elif classification.race_type != "COMPRESSED_VALUE":
+        notes.insert(0, f"Race type: {classification.race_type} — {classification.reasoning}")
+
     return RacePreSelections(
         race_number=race_number,
         picks=picks,
@@ -259,6 +314,7 @@ def calculate_pre_selections(
         puntys_pick=puntys_pick,
         total_stake=round(total_stake, 2),
         notes=notes,
+        classification=classification,
     )
 
 
@@ -459,8 +515,47 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
 
 def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12) -> RecommendedPick:
-    """Create a RecommendedPick from candidate data."""
+    """Create a RecommendedPick from candidate data (legacy path)."""
     bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
+    expected_return = _expected_return(c, bet_type)
+
+    return RecommendedPick(
+        rank=rank,
+        saddlecloth=c["saddlecloth"],
+        horse_name=c["horse_name"],
+        bet_type=bet_type,
+        stake=0.0,  # allocated later
+        odds=c["odds"],
+        place_odds=c.get("place_odds"),
+        win_prob=c["win_prob"],
+        place_prob=c["place_prob"],
+        value_rating=c["value_rating"],
+        place_value_rating=c["place_value_rating"],
+        expected_return=round(expected_return, 2),
+        is_roughie=is_roughie,
+    )
+
+
+def _make_pick_from_optimizer(
+    c: dict,
+    rank: int,
+    is_roughie: bool,
+    rec_lookup: dict,
+    thresholds: dict | None = None,
+    field_size: int = 12,
+) -> RecommendedPick:
+    """Create a RecommendedPick using optimizer recommendation when available.
+
+    Falls back to legacy _determine_bet_type if no optimizer recommendation
+    exists for this saddlecloth (shouldn't happen in practice).
+    """
+    rec = rec_lookup.get(c["saddlecloth"])
+    if rec:
+        bet_type = rec.bet_type
+    else:
+        # Fallback to legacy
+        bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
+
     expected_return = _expected_return(c, bet_type)
 
     return RecommendedPick(
@@ -869,7 +964,27 @@ def _generate_notes(
 
 def format_pre_selections(pre_sel: RacePreSelections) -> str:
     """Format pre-selections for injection into AI prompt context."""
-    lines = [f"\n**LOCKED SELECTIONS (Race {pre_sel.race_number}) — DO NOT REORDER:**"]
+    # Classification-aware header
+    cls = pre_sel.classification
+    if cls and cls.no_bet:
+        lines = [f"\n**NO BET (Race {pre_sel.race_number}) — 2yo maiden first starters, zero form:**"]
+        if pre_sel.notes:
+            for note in pre_sel.notes:
+                lines.append(f"  NOTE: {note}")
+        return "\n".join(lines)
+
+    if cls and cls.watch_only:
+        lines = [
+            f"\n**WATCH ONLY (Race {pre_sel.race_number}) — {cls.race_type}:**",
+            f"  {cls.reasoning}",
+        ]
+    elif cls and cls.race_type != "COMPRESSED_VALUE":
+        lines = [
+            f"\n**LOCKED SELECTIONS (Race {pre_sel.race_number}) — {cls.race_type}:**",
+            f"  Race type: {cls.race_type} ({cls.confidence:.0%}) — {cls.reasoning}",
+        ]
+    else:
+        lines = [f"\n**LOCKED SELECTIONS (Race {pre_sel.race_number}) — DO NOT REORDER:**"]
 
     for pick in pre_sel.picks:
         rank_label = "Roughie" if pick.is_roughie else f"Pick #{pick.rank}"

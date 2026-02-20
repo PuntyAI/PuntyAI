@@ -14,10 +14,10 @@ class TestMobilePublicPages:
         viewport_width = mobile_public_page.evaluate("window.innerWidth")
         assert body_width <= viewport_width + 5  # 5px tolerance
 
-    def test_stats_page_renders(self, mobile_public_page):
+    def test_stats_redirects_to_tips(self, mobile_public_page):
         resp = mobile_public_page.goto("/public/stats")
-        assert resp.status == 200
-        mobile_public_page.wait_for_load_state("domcontentloaded")
+        assert resp.status == 200  # follows redirect
+        assert "/tips" in mobile_public_page.url
 
     def test_tips_page_renders(self, mobile_public_page):
         resp = mobile_public_page.goto("/public/tips")
@@ -43,10 +43,11 @@ class TestTabletPages:
         resp = tablet_page.goto("/")
         assert resp.status == 200
 
-    def test_public_stats_renders(self, tablet_page):
-        # Tablet doesn't have public host header, use /public prefix
+    def test_public_stats_redirects(self, tablet_page):
+        # Stats page redirects to tips
         resp = tablet_page.goto("/public/stats")
-        assert resp.status == 200
+        assert resp.status == 200  # follows redirect
+        assert "/tips" in tablet_page.url
 
 
 class TestDesktopPages:

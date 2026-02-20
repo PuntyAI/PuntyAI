@@ -5,7 +5,7 @@ import pytest
 pytestmark = [pytest.mark.e2e]
 
 # Public pages are mounted at /public prefix in the app router.
-# The hostname routing middleware rewrites / -> /public, /stats -> /public/stats
+# The hostname routing middleware rewrites / -> /public, /tips -> /public/tips
 # etc. on the public domain. In tests we access /public/* directly.
 
 
@@ -28,18 +28,12 @@ class TestHomepage:
 
 
 class TestStatsPage:
-    def test_loads_200(self, public_page):
+    def test_redirects_to_tips(self, public_page):
+        """Stats page is hidden — should redirect to tips."""
         resp = public_page.goto("/public/stats")
+        # Playwright follows redirects, so we end up on tips with 200
         assert resp.status == 200
-
-    def test_has_content(self, public_page):
-        public_page.goto("/public/stats")
-        public_page.wait_for_load_state("networkidle")
-        # Stats are loaded by JS; wait for content to appear
-        public_page.wait_for_timeout(1500)
-        body = public_page.locator("body").inner_text()
-        # Page should at least have the shell/header text
-        assert len(body.strip()) > 0
+        assert "/tips" in public_page.url
 
 
 class TestTipsPage:
