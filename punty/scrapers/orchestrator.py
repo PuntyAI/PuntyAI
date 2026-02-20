@@ -867,6 +867,16 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             finally:
                 await pf.close()
 
+        # Racing Australia — authoritative conditions override (same as full scrape)
+        if not meeting.track_condition_locked:
+            try:
+                from punty.scrapers.track_conditions import get_conditions_for_meeting
+                ra_cond = await get_conditions_for_meeting(meeting.venue)
+                if ra_cond:
+                    _apply_ra_conditions(meeting, ra_cond)
+            except Exception as e:
+                logger.warning(f"RA conditions failed during refresh for {meeting.venue}: {e}")
+
         await db.commit()
         return {"meeting_id": meeting_id, "status": "ok"}
     except Exception as e:
