@@ -34,8 +34,9 @@ VENUE_ALIASES = {
     "ladbrokes cannon park": "cairns",
     # PF-specific aliases
     "beaumont newcastle": "newcastle",
-    # Southside = Pakenham synthetic track
+    # Southside = synthetic track at same venue
     "southside pakenham": "pakenham",
+    "southside cranbourne": "cranbourne",
 }
 
 # Complete Australian racetracks by state (from racingaustralia.horse)
