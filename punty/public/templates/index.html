@@ -57,7 +57,7 @@
         pointer-events: none;
     }
     @media (max-width: 767px) {
-        .hero { min-height: auto; padding-top: 2rem; padding-bottom: 2rem; }
+        .hero { min-height: auto; padding-top: 2rem; padding-bottom: 3rem; }
         .hero-character { max-width: 240px; margin: 0 auto 2rem; }
     }
 
@@ -116,14 +116,15 @@
         font-style: italic;
     }
 
-    /* ── Live Stats Bar ── */
-    .stats-bar {
+    /* ── Compact Stats Strip ── */
+    .stats-strip {
         background: var(--bg-card);
         border-top: 1px solid var(--border-subtle);
         border-bottom: 1px solid var(--border-subtle);
         position: relative;
+        padding: 0.875rem 0;
     }
-    .stats-bar::before {
+    .stats-strip::before {
         content: '';
         position: absolute;
         top: 0; left: 0; right: 0;
@@ -131,75 +132,111 @@
         background: var(--gradient-header);
         opacity: 0.4;
     }
-    .stat-item {
-        text-align: center;
-        padding: 1.5rem 1rem;
-        position: relative;
+    .stats-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
     }
-    .stat-item + .stat-item::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 20%;
-        height: 60%;
-        width: 1px;
-        background: var(--border-subtle);
+    .stat-chip {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.875rem;
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
     }
-    .stat-val {
+    .stat-chip-val {
         font-family: 'Orbitron', sans-serif;
-        font-size: 2rem;
+        font-size: 1rem;
         font-weight: 800;
         background: var(--gradient-sunset);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        line-height: 1.1;
     }
-    .stat-label {
+    .stat-chip-label {
         font-family: 'Rajdhani', sans-serif;
         font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--text-muted);
-        margin-top: 0.375rem;
-    }
-    @media (max-width: 767px) {
-        .stat-val { font-size: 1.5rem; }
-        .stat-item { padding: 1rem 0.5rem; }
-    }
-
-    /* ── Strike Rate Cards ── */
-    .sr-card {
-        text-align: center;
-        padding: 1rem 0.75rem;
-        background: var(--bg-card-alt);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-    }
-    .sr-card-rate {
-        font-family: 'Orbitron', sans-serif;
-        font-size: 1.5rem;
-        font-weight: 800;
-        line-height: 1.1;
-    }
-    .sr-card-label {
-        font-family: 'Rajdhani', sans-serif;
-        font-size: 0.7rem;
-        font-weight: 700;
+        font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: var(--text-muted);
-        margin-top: 0.375rem;
     }
-    .sr-card-detail {
+    /* divider dot between stat chips */
+    .stat-dot {
+        width: 3px; height: 3px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        opacity: 0.4;
+    }
+    /* Strike rate inline pills */
+    .sr-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.625rem;
+        margin-top: 0.625rem;
+        flex-wrap: wrap;
+    }
+    .sr-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .sr-pill-rate {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+    .sr-pill-label {
+        font-family: 'Rajdhani', sans-serif;
         font-size: 0.65rem;
+        font-weight: 600;
         color: var(--text-muted);
-        margin-top: 0.125rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
-    @media (max-width: 767px) {
-        .sr-card-rate { font-size: 1.15rem; }
-        .sr-card { padding: 0.75rem 0.5rem; }
+    .sr-pill-detail {
+        font-size: 0.6rem;
+        color: var(--text-muted);
+        opacity: 0.7;
+    }
+    /* next-race chip */
+    .next-race-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        background: rgba(233,30,140,0.08);
+        border: 1px solid rgba(233,30,140,0.2);
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.2s, border-color 0.2s;
+        cursor: pointer;
+    }
+    .next-race-chip:hover {
+        background: rgba(233,30,140,0.15);
+        border-color: rgba(233,30,140,0.35);
+    }
+    .next-race-chip .venue {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--cyan);
+    }
+    .next-race-chip .time {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: var(--magenta);
     }
 
     /* ── Best Bet Card ── */
@@ -476,21 +513,6 @@
         .section-title { font-size: 2.5rem; }
     }
 
-    /* ── Next Race in stats bar ── */
-    .next-race-inline {
-        font-family: 'Rajdhani', sans-serif;
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-top: 0.25rem;
-    }
-    .next-race-inline .venue { color: var(--cyan); }
-    .next-race-inline .time {
-        font-family: 'Orbitron', sans-serif;
-        font-size: 0.7rem;
-        font-weight: 700;
-        color: var(--magenta);
-    }
 </style>
 {% endblock %}
 
@@ -538,43 +560,41 @@
     </div>
 </section>
 
-<!-- ═══════════════════ LIVE STATS BAR ═══════════════════ -->
-<section class="stats-bar">
-    <div class="max-w-6xl mx-auto px-6 sm:px-8">
-        <div class="grid grid-cols-3 md:grid-cols-3">
-            <!-- Meetings Today -->
-            <div class="stat-item">
-                <div class="stat-val" id="meetings-today">{{ stats.meetings_today }}</div>
-                <div class="stat-label">Meetings Today</div>
-                <div id="next-race-container" class="next-race-inline" style="display: none;">
-                    <span class="venue" id="next-race-venue"></span>
-                    <span class="time" id="next-race-countdown"></span>
-                </div>
+<!-- ═══════════════════ LIVE STATS STRIP ═══════════════════ -->
+<section class="stats-strip">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8">
+        <div class="stats-row">
+            <div class="stat-chip">
+                <span class="stat-chip-val" id="meetings-today">{{ stats.meetings_today }}</span>
+                <span class="stat-chip-label">Meetings</span>
             </div>
-            <!-- Today's Winners -->
-            <div class="stat-item">
-                <div class="stat-val" id="today-winners">{{ stats.today_winners }}</div>
-                <div class="stat-label" id="today-winners-label">
-                    {% if stats.all_races_complete %}Today's Winners{% else %}Today So Far{% endif %}
-                </div>
+            <div class="stat-dot"></div>
+            <div class="stat-chip">
+                <span class="stat-chip-val" id="today-winners">{{ stats.today_winners }}</span>
+                <span class="stat-chip-label" id="today-winners-label">{% if stats.all_races_complete %}Winners{% else %}So Far{% endif %}</span>
             </div>
-            <!-- All-Time Winners -->
-            <div class="stat-item">
-                <div class="stat-val" id="alltime-winners">{{ stats.alltime_winners }}</div>
-                <div class="stat-label">Total Winners</div>
+            <div class="stat-dot"></div>
+            <div class="stat-chip">
+                <span class="stat-chip-val" id="alltime-winners">{{ stats.alltime_winners }}</span>
+                <span class="stat-chip-label">All-Time</span>
             </div>
+            <!-- Next Race (clickable) -->
+            <a id="next-race-container" class="next-race-chip" href="/tips" style="display: none;">
+                <span class="venue" id="next-race-venue"></span>
+                <span class="time" id="next-race-countdown"></span>
+            </a>
         </div>
 
-        <!-- Strike Rates -->
+        <!-- Strike Rates — compact pills -->
         {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
-        <div class="grid grid-cols-4 gap-3 pb-5 pt-3" id="strike-rates">
+        <div class="sr-row" id="strike-rates">
             {% for pr in stats.pick_ranks %}
             {% if pr.rank >= 1 %}
             {% set rank_colors = {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'} %}
-            <div class="sr-card">
-                <div class="sr-card-rate" style="color: {{ rank_colors[pr.rank|string] }};"><span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span></div>
-                <div class="sr-card-label">{{ pr.label }}</div>
-                <div class="sr-card-detail"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
+            <div class="sr-pill">
+                <span class="sr-pill-rate" style="color: {{ rank_colors[pr.rank|string] }};"><span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span></span>
+                <span class="sr-pill-label">{{ pr.label }}</span>
+                <span class="sr-pill-detail">(<span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span>)</span>
             </div>
             {% endif %}
             {% endfor %}
@@ -842,7 +862,7 @@
                 document.getElementById('today-winners-label').textContent = data.all_races_complete ? "Today's Winners" : 'Today So Far';
                 document.getElementById('alltime-winners').textContent = data.alltime_winners;
                 document.getElementById('meetings-today').textContent = data.meetings_today;
-                // Update strike rates
+                // Update strike rate pills
                 if (data.pick_ranks) {
                     data.pick_ranks.forEach(function(pr) {
                         var rateEl = document.querySelector('.sr-rate[data-rank="' + pr.rank + '"]');
@@ -1006,7 +1026,7 @@
                 return;
             }
 
-            container.style.display = 'block';
+            container.style.display = 'inline-flex';
             venueEl.textContent = nextRaceVenue + ' R' + nextRaceNum + ' ';
             countdownEl.textContent = formatCountdown(diff);
         }
@@ -1019,6 +1039,11 @@
                         nextRaceTime = new Date(data.start_time_iso);
                         nextRaceVenue = data.venue;
                         nextRaceNum = data.race_number;
+                        // Update link to point to meeting tips
+                        var container = document.getElementById('next-race-container');
+                        if (data.meeting_id) {
+                            container.href = '/tips/' + data.meeting_id;
+                        }
                         updateCountdown();
                     } else {
                         nextRaceTime = null;

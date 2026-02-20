@@ -80,6 +80,7 @@ async def get_next_race() -> dict:
         return {
             "has_next": True,
             "venue": meeting.venue if meeting else "Unknown",
+            "meeting_id": next_race.meeting_id,
             "race_number": next_race.race_number,
             "race_name": next_race.name,
             "start_time_iso": start_time_aware.isoformat(),
