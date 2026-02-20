@@ -899,11 +899,31 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
         else:
             ret = 0
 
+        # Build bet description with correct return for bet type
+        if pick.bet_type == "Each Way":
+            half = pick.stake / 2
+            po = pick.place_odds or _estimate_place_odds(pick.odds)
+            bet_desc = (
+                f"${pick.stake:.2f} Each Way "
+                f"(=${half:.2f}W + ${half:.2f}P), "
+                f"return ${round(pick.stake * pick.odds, 2):.2f} (wins) / "
+                f"${round(pick.stake * po, 2):.2f} (places)"
+            )
+        elif pick.bet_type == "Place":
+            po = pick.place_odds or _estimate_place_odds(pick.odds)
+            bet_desc = f"${pick.stake:.2f} Place, return ${ret:.2f}"
+        else:
+            bet_desc = f"${pick.stake:.2f} {pick.bet_type}, return ${ret:.2f}"
+
         lines.append(
             f"  {rank_label}: {pick.horse_name} (No.{pick.saddlecloth}) "
-            f"— ${pick.odds:.2f} | {pick.bet_type} ${pick.stake:.2f} "
-            f"| Prob: {prob_label} | Value: {value_label} "
-            f"| Return: ${ret:.2f}"
+            f"— ${pick.odds:.2f} / ${(pick.place_odds or _estimate_place_odds(pick.odds)):.2f}"
+        )
+        lines.append(
+            f"    STATS: {prob_label} | Value: {value_label}"
+        )
+        lines.append(
+            f"    BET: {bet_desc}"
         )
 
     if pre_sel.exotic:

@@ -439,12 +439,14 @@ If no track record data is provided, generate tips normally.
        runner. Pick #2 is second-highest. This ordering is calculated by a 10-factor probability
        model and MUST be preserved exactly. The model's ordering is more accurate than subjective
        "conviction" — backtest data proves this conclusively.
-    b) **Bet types and stakes are LOCKED.** The model allocates stakes via Kelly criterion and
-       chooses bet types based on probability thresholds. Use them exactly as given.
+    b) **Bet types, stakes, probabilities, values, and returns are ALL LOCKED.** Use the STATS and
+       BET lines from the locked selection VERBATIM. Do NOT re-compute probability, value, or return
+       from the runner data — the locked selection already has the correct numbers for the bet type
+       (e.g. Place bets show place probability and place value, not win values).
     c) **Do NOT change Punty's Pick.** The model picks Punty's Pick by expected value.
-    d) **Your ONLY job is the ANALYSIS and WRITING.** Pick order, bet types, and stakes are decided
-       by the model. Focus on writing compelling, entertaining explanations for WHY each pick is
-       chosen, referencing the data provided (pace, form, market movement, etc.).
+    d) **Your ONLY job is the ANALYSIS and WRITING.** Pick order, bet types, stakes, probabilities,
+       values, and returns are all decided by the model. Focus on writing compelling, entertaining
+       explanations for WHY each pick is chosen, referencing the data provided.
     e) **Output each pick in the EXACT order given** (Pick #1 first, then #2, #3, Roughie).
        NEVER swap positions. If you think a lower-ranked pick "should" be #1, you are wrong —
        the model has already considered all factors including form, pace, barrier, market, class,
