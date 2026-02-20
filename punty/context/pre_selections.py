@@ -161,6 +161,9 @@ def calculate_pre_selections(
             if avg_place_strength < 0.85:
                 thresholds["place_min_prob"] = min(0.45, thresholds["place_min_prob"] + 0.05)
 
+    # Compute field size (active runners) for bet type and exotic decisions
+    field_size = sum(1 for r in runners if not r.get("scratched"))
+
     # Build runner data with probability info
     candidates = _build_candidates(runners)
     if not candidates:
@@ -204,7 +207,7 @@ def calculate_pre_selections(
             continue
         if roughie and c["saddlecloth"] == roughie["saddlecloth"]:
             continue
-        picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds))
+        picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds, field_size=field_size))
         used_saddlecloths.add(c["saddlecloth"])
 
     # #3 pick: re-rank remaining by prob * clamped value (validated +$281 improvement)
@@ -216,18 +219,18 @@ def calculate_pre_selections(
     )
 
     if remaining:
-        picks.append(_make_pick(remaining[0], 3, is_roughie=False, thresholds=thresholds))
+        picks.append(_make_pick(remaining[0], 3, is_roughie=False, thresholds=thresholds, field_size=field_size))
         used_saddlecloths.add(remaining[0]["saddlecloth"])
 
     # Add roughie as pick #4
     if roughie and roughie["saddlecloth"] not in used_saddlecloths:
-        picks.append(_make_pick(roughie, 4, is_roughie=True, thresholds=thresholds))
+        picks.append(_make_pick(roughie, 4, is_roughie=True, thresholds=thresholds, field_size=field_size))
         used_saddlecloths.add(roughie["saddlecloth"])
     elif len(picks) < 4:
         # No qualifying roughie — fill 4th from remaining
         for c in candidates:
             if c["saddlecloth"] not in used_saddlecloths:
-                picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds))
+                picks.append(_make_pick(c, len(picks) + 1, is_roughie=False, thresholds=thresholds, field_size=field_size))
                 used_saddlecloths.add(c["saddlecloth"])
                 break
 
@@ -237,8 +240,7 @@ def calculate_pre_selections(
     # Allocate stakes from pool
     _allocate_stakes(picks, pool)
 
-    # Select recommended exotic (with field size and anchor odds filters)
-    field_size = sum(1 for r in runners if not r.get("scratched"))
+    # Select recommended exotic
     anchor_odds = picks[0].odds if picks else 0.0
     exotic = _select_exotic(
         exotic_combos, used_saddlecloths,
@@ -250,7 +252,7 @@ def calculate_pre_selections(
     puntys_pick = _calculate_puntys_pick(picks, exotic)
 
     total_stake = sum(p.stake for p in picks)
-    notes = _generate_notes(picks, exotic, candidates)
+    notes = _generate_notes(picks, exotic, candidates, field_size=field_size)
 
     return RacePreSelections(
         race_number=race_number,
@@ -302,7 +304,7 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
     return candidates
 
 
-def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None) -> str:
+def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12) -> str:
     """Determine optimal bet type for a runner based on probability profile.
 
     Edge-aware logic validated on historical performance data:
@@ -318,6 +320,27 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     odds = c["odds"]
     value = c["value_rating"]
     place_value = c["place_value_rating"]
+
+    # Field size affects place payouts:
+    # ≤4 runners: no place betting, ≤7 runners: only 2 places paid
+    # Prefer Win/Each Way over Place in small fields
+    num_places = 0 if field_size <= 4 else (2 if field_size <= 7 else 3)
+
+    if num_places == 0:
+        # No place betting available — everything must be Win/Saver Win
+        return "Win"
+
+    if num_places == 2:
+        # Only 2 places paid — Place is much harder to collect.
+        # Prefer Win or Each Way over straight Place.
+        if rank <= 2 and win_prob >= 0.25:
+            return "Win"
+        if rank <= 2:
+            return "Each Way"
+        # Lower ranks: only Place if very high place probability
+        if place_prob >= 0.55 and place_value >= 1.0:
+            return "Place"
+        return "Win"  # default to Win in small fields
 
     # --- Edge-aware odds-band rules (validated on all settled bets) ---
     #
@@ -424,9 +447,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     return "Place"
 
 
-def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None) -> RecommendedPick:
+def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12) -> RecommendedPick:
     """Create a RecommendedPick from candidate data."""
-    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds)
+    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
     expected_return = _expected_return(c, bet_type)
 
     return RecommendedPick(
@@ -719,9 +742,16 @@ def _generate_notes(
     picks: list[RecommendedPick],
     exotic: RecommendedExotic | None,
     candidates: list[dict],
+    field_size: int = 12,
 ) -> list[str]:
     """Generate advisory notes about the selections."""
     notes = []
+
+    # Small field warnings
+    if field_size <= 4:
+        notes.append(f"Small field ({field_size} runners) — no place betting available. Win bets only.")
+    elif field_size <= 7:
+        notes.append(f"Small field ({field_size} runners) — only 2 places paid. Win/Each Way preferred.")
 
     # Flag if no clear value in this race
     if picks and all(p.value_rating < 1.05 for p in picks):

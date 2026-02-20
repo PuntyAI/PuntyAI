@@ -1497,30 +1497,46 @@ async def upsert_race_results(db: AsyncSession, meeting_id: str, race_number: in
         if result.get("place_dividend") is not None:
             runner.place_dividend = result["place_dividend"]
         elif not runner.place_dividend and result.get("position") in (1, 2, 3):
-            # Fallback chain for place dividend: Betfair > SP > current_odds
-            # Estimate: place_div ≈ (win_odds - 1) / num_places + 1
-            fallback_odds = None
-            source = None
-            if runner.odds_betfair and runner.odds_betfair > 1.0:
-                fallback_odds = runner.odds_betfair
-                source = "Betfair"
-            elif result.get("starting_price"):
-                try:
-                    fallback_odds = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
-                    source = "SP"
-                except (ValueError, TypeError):
-                    pass
-            if not fallback_odds and runner.current_odds and runner.current_odds > 1.0:
-                fallback_odds = runner.current_odds
-                source = "current_odds"
+            # Determine paying places from field size (TAB rules)
+            # Count runners with positions in this result set
+            active_count = sum(
+                1 for r in results_data.get("results", [])
+                if r.get("position") is not None
+            )
+            paying_places = 2 if active_count <= 7 else 3
+            if active_count <= 4:
+                paying_places = 0
 
-            if fallback_odds and fallback_odds > 1.0:
-                num_places = 3  # conservative default
-                est_place = round((fallback_odds - 1.0) / num_places + 1.0, 2)
-                runner.place_dividend = est_place
+            # Only estimate place dividend if this position actually pays
+            if result["position"] <= paying_places:
+                # Fallback chain for place dividend: Betfair > SP > current_odds
+                # Estimate: place_div ≈ (win_odds - 1) / paying_places + 1
+                fallback_odds = None
+                source = None
+                if runner.odds_betfair and runner.odds_betfair > 1.0:
+                    fallback_odds = runner.odds_betfair
+                    source = "Betfair"
+                elif result.get("starting_price"):
+                    try:
+                        fallback_odds = float(str(result["starting_price"]).replace("$", "").replace(",", ""))
+                        source = "SP"
+                    except (ValueError, TypeError):
+                        pass
+                if not fallback_odds and runner.current_odds and runner.current_odds > 1.0:
+                    fallback_odds = runner.current_odds
+                    source = "current_odds"
+
+                if fallback_odds and fallback_odds > 1.0:
+                    est_place = round((fallback_odds - 1.0) / paying_places + 1.0, 2)
+                    runner.place_dividend = est_place
+                    logger.info(
+                        f"{race_id}: place_dividend from {source} ${fallback_odds:.2f} "
+                        f"→ est ${est_place:.2f} (pos {result['position']})"
+                    )
+            else:
                 logger.info(
-                    f"{race_id}: place_dividend from {source} ${fallback_odds:.2f} "
-                    f"→ est ${est_place:.2f} (pos {result['position']})"
+                    f"{race_id}: No place dividend for pos {result['position']} "
+                    f"({active_count}-runner field, {paying_places} places paid)"
                 )
         if result.get("sectional_400"):
             runner.sectional_400 = result["sectional_400"]

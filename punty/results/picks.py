@@ -202,33 +202,31 @@ async def _settle_picks_for_race_impl(
     runners_by_saddlecloth = {r.saddlecloth: r for r in runners if r.saddlecloth}
     runners_by_name = {r.horse_name.upper(): r for r in runners}
 
-    # Determine number of paying places based on field size (TAB rules)
-    # Note: TAB determines places from original acceptors, not post-scratching field.
-    # We use active runners as a heuristic, but override with actual dividends below.
-    field_size = len(active_runners)
-    if field_size <= 4:
+    # Load race for field_size and exotic results
+    race_result = await db.execute(select(Race).where(Race.id == race_id))
+    race = race_result.scalar_one_or_none()
+
+    # Determine number of paying places based on field size (TAB NTD rules):
+    # - 8+ starters at final scratching time → 3 places paid
+    # - 5-7 starters → 2 places paid (No Third Dividend / NTD)
+    # - ≤4 starters → no place betting
+    # Key: if 8+ at final scratchings but late scratches reduce to 5-7, 3 places STILL apply.
+    # race.field_size = original field count from scrape time (before late scratchings).
+    # len(active_runners) = post-late-scratching count (runners with results).
+    original_field = (race.field_size if race and race.field_size else None) or len(active_runners)
+    post_scratch_field = len(active_runners)
+
+    # Use the HIGHER of original field and post-scratch field for num_places.
+    # If original field was 8+ but late scratches reduced to 5-7, TAB still pays 3 places.
+    effective_field = max(original_field, post_scratch_field)
+    if effective_field <= 4:
         num_places = 0  # No place betting
-    elif field_size <= 7:
-        num_places = 2  # 1st and 2nd only
+    elif effective_field <= 7:
+        num_places = 2  # NTD — 1st and 2nd only
     else:
         num_places = 3  # 1st, 2nd, and 3rd
 
-    # Override: if TAB actually paid place dividends for 3rd (or further), expand num_places.
-    # This handles scratchings that reduce field but TAB still pays original places.
-    if num_places < 3:
-        for r in runners:
-            if r.finish_position and r.finish_position == 3 and r.place_dividend and r.place_dividend > 0:
-                num_places = 3
-                break
-    if num_places < 2:
-        for r in runners:
-            if r.finish_position and r.finish_position == 2 and r.place_dividend and r.place_dividend > 0:
-                num_places = 2
-                break
-
-    # Load race for exotic results
-    race_result = await db.execute(select(Race).where(Race.id == race_id))
-    race = race_result.scalar_one_or_none()
+    field_size = post_scratch_field  # for logging
 
     # Check if results are actually populated (not just status flipped)
     race_final = race and race.results_status in ("Paying", "Closed")
@@ -285,6 +283,17 @@ async def _settle_picks_for_race_impl(
             stake = pick.bet_stake or 1.0
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= num_places
+
+            # No Third Dividend: if runner finished 3rd but has no place dividend,
+            # TAB didn't pay a 3rd place (small field). Treat as NOT placed.
+            if placed and not won and runner.finish_position == 3:
+                actual_div = runner.place_dividend
+                if not actual_div or actual_div <= 0:
+                    logger.info(
+                        f"No third dividend for {pick.horse_name} R{pick.race_number} "
+                        f"(3rd in {field_size}-runner field). Treating as loss."
+                    )
+                    placed = False
 
             # Use fixed odds from tip time, fall back to tote dividends
             win_odds = pick.odds_at_tip or runner.win_dividend

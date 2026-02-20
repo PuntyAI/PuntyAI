@@ -1250,9 +1250,13 @@ class RacingComScraper(BaseScraper):
 
         track_condition = None
         if captured_meeting:
-            tc = captured_meeting.get("trackCondition")
-            rail_tc = captured_meeting.get("railAndTrackCondition")
-            track_condition = tc or rail_tc
+            tc = captured_meeting.get("trackCondition", "")
+            tr = captured_meeting.get("trackRating", "")
+            # Combine condition + rating for consistency with initial scrape format
+            track_condition = f"{tc} {tr}".strip() if tc else None
+            if not track_condition:
+                rail_tc = captured_meeting.get("railAndTrackCondition")
+                track_condition = rail_tc
 
         logger.info(f"Race statuses for {venue}: {statuses}" + (f" | Track: {track_condition}" if track_condition else ""))
         return {"statuses": statuses, "track_condition": track_condition}
@@ -1358,9 +1362,12 @@ class RacingComScraper(BaseScraper):
 
             # Parse meeting track condition
             if captured_meeting:
-                tc = captured_meeting.get("trackCondition")
-                rail_tc = captured_meeting.get("railAndTrackCondition")
-                meeting_tc = tc or rail_tc
+                tc = captured_meeting.get("trackCondition", "")
+                tr = captured_meeting.get("trackRating", "")
+                meeting_tc = f"{tc} {tr}".strip() if tc else None
+                if not meeting_tc:
+                    rail_tc = captured_meeting.get("railAndTrackCondition")
+                    meeting_tc = rail_tc
 
             # Build results per race
             for race_num in race_numbers:
