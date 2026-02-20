@@ -120,13 +120,15 @@ class MemoryStore:
         top_k: int = 5,
         min_similarity: float = 0.7,
         only_settled: bool = True,
+        query_embedding: list[float] | None = None,
     ) -> list[dict[str, Any]]:
         """Find similar past situations for learning.
 
         Returns memories with outcomes that can inform the current prediction.
         """
-        # Generate embedding for current context
-        query_embedding = await self.embedding_service.embed_context(race_context, runner)
+        # Generate embedding for current context (skip if pre-computed)
+        if query_embedding is None:
+            query_embedding = await self.embedding_service.embed_context(race_context, runner)
         if not query_embedding:
             # Fall back to rule-based matching
             return await self._find_similar_by_rules(race_context, runner, top_k)
@@ -293,6 +295,7 @@ class MemoryStore:
         race_context: dict[str, Any],
         runner: dict[str, Any],
         max_memories: int = 3,
+        query_embedding: list[float] | None = None,
     ) -> str:
         """Build a learning context string for inclusion in AI prompts.
 
@@ -304,7 +307,8 @@ class MemoryStore:
 
         # Find similar past situations
         similar = await self.find_similar_situations(
-            race_context, runner, top_k=max_memories, min_similarity=0.65
+            race_context, runner, top_k=max_memories, min_similarity=0.65,
+            query_embedding=query_embedding,
         )
 
         if similar:

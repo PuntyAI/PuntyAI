@@ -103,27 +103,47 @@ class EmbeddingService:
 
     async def get_embedding(self, text: str) -> list[float] | None:
         """Get embedding for text using OpenAI's embedding model with retry."""
+        results = await self.get_embeddings_batch([text])
+        return results[0] if results else None
+
+    async def get_embeddings_batch(self, texts: list[str]) -> list[list[float] | None]:
+        """Get embeddings for multiple texts in one API call.
+
+        OpenAI's embedding API accepts a list of inputs, returning all
+        embeddings in a single round-trip. Much faster than sequential calls.
+
+        Returns list of embeddings (same order as input texts).
+        None for any text that failed.
+        """
+        if not texts:
+            return []
+
         client = await self._get_client()
         if not client:
-            return None
+            return [None] * len(texts)
 
+        # OpenAI batch limit is ~2048 inputs; we'll never hit that
         last_error = None
         for attempt in range(MAX_RETRIES):
             try:
                 response = await client.embeddings.create(
                     model="text-embedding-3-small",
-                    input=text,
+                    input=texts,
                 )
-                return response.data[0].embedding
+                # Response data is sorted by index
+                results: list[list[float] | None] = [None] * len(texts)
+                for item in response.data:
+                    results[item.index] = item.embedding
+                return results
             except Exception as e:
                 last_error = e
                 if attempt < MAX_RETRIES - 1:
-                    delay = RETRY_BASE_DELAY * (2 ** attempt)  # Exponential backoff
-                    logger.warning(f"Embedding attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(f"Batch embedding attempt {attempt + 1} failed, retrying in {delay}s: {e}")
                     await asyncio.sleep(delay)
 
-        logger.error(f"Failed to get embedding after {MAX_RETRIES} attempts: {last_error}")
-        return None
+        logger.error(f"Failed to get batch embeddings after {MAX_RETRIES} attempts: {last_error}")
+        return [None] * len(texts)
 
     async def embed_context(
         self, context: dict[str, Any], runner: dict[str, Any]

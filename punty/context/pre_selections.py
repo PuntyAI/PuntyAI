@@ -326,13 +326,26 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     # Place ROI by band: <$2 = +24%, $2-$4 = +20%, $4-$6 = +35%, $6-$10 = -0.3%
     # EW collect rate: $2.40-$3 = 94%, $3-$4 = 62%
 
-    # Short-priced favourites (<$2.40): Place only
-    # Win loses money below $2.40. Place grinds profit at 71-100% hit rate.
+    # Very short-priced favourites (<$1.80): Win or skip
+    # Place odds ≈ $1.10-$1.25 — a Place bet here is more worthless than Win.
+    # Small Win bet if value is there; otherwise minimal stake Win.
+    # Does NOT affect exotics or sequences — only the selection bet.
+    if odds < 1.80 and not is_roughie:
+        return "Win"  # flagged for minimal stake in _allocate_stakes
+
+    # Short-priced favourites ($1.80-$2.00): Win preferred over Place
+    # At these odds, Place returns are meagre. Win at least pays full dividend.
+    if odds < 2.00 and not is_roughie:
+        if win_prob >= 0.35 and value >= 1.00:
+            return "Win"
+        return "Win"  # still Win — Place at $1.80 is ~$1.25, not worth it
+
+    # $2.00-$2.40: Win is viable with value edge
     if odds < 2.40 and not is_roughie:
-        if place_prob >= 0.50:
-            return "Place"
-        if win_prob >= 0.45 and value >= 1.15:
-            return "Win"  # extraordinary value only
+        if rank <= 2 and win_prob >= 0.35 and value >= 1.05:
+            return "Win"  # solid value overlay — don't force Place
+        if rank == 1 and win_prob >= 0.30 and value >= 1.00:
+            return "Each Way"  # protect with EW instead of straight Place
         return "Place"
 
     # $2.40-$3.00: Win sweet spot #1 (+21.3% ROI, 47% win rate)
@@ -503,9 +516,14 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         if pick.expected_return > 0.10:
             base *= 1.15  # 15% bonus for strong +EV
 
+        # Very short-priced Win (<$1.80): minimal stake — odds-on favs
+        # Still included so AI can reference them, but don't burn budget
+        if pick.odds < 1.80 and not pick.is_roughie:
+            base *= 0.25  # near-minimum stake
+
         # Short-priced Place penalty — these are safe but low-returning
-        if pick.bet_type == "Place" and pick.odds < 2.5:
-            base *= 0.85  # reduce stake on low-odds Place
+        elif pick.bet_type == "Place" and pick.odds < 2.5:
+            base *= 0.75  # reduce stake on low-odds Place
 
         rank_weights[pick.rank] = base
 

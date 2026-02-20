@@ -12,15 +12,45 @@ logger = logging.getLogger(__name__)
 # Module-level singleton for browser reuse
 _browser: Optional[Browser] = None
 _playwright = None
+_shutdown_task: Optional[asyncio.Task] = None
+
+# Auto-shutdown after 5 minutes of inactivity (saves ~370MB RAM)
+BROWSER_IDLE_TIMEOUT = 300  # seconds
 
 # Lock to prevent concurrent scrapes (resource-intensive)
 _scrape_lock = asyncio.Lock()
 _current_scrape: Optional[str] = None  # Track what's being scraped
 
 
+def _cancel_shutdown_timer() -> None:
+    """Cancel pending auto-shutdown if any."""
+    global _shutdown_task
+    if _shutdown_task is not None and not _shutdown_task.done():
+        _shutdown_task.cancel()
+        _shutdown_task = None
+
+
+def _schedule_shutdown_timer() -> None:
+    """Schedule browser auto-shutdown after idle timeout."""
+    global _shutdown_task
+    _cancel_shutdown_timer()
+
+    async def _auto_shutdown():
+        await asyncio.sleep(BROWSER_IDLE_TIMEOUT)
+        if _browser is not None and not _scrape_lock.locked():
+            logger.info(f"Browser idle for {BROWSER_IDLE_TIMEOUT}s, auto-closing to free memory")
+            await close_browser()
+
+    try:
+        _shutdown_task = asyncio.get_event_loop().create_task(_auto_shutdown())
+    except RuntimeError:
+        pass  # No event loop (e.g. during testing)
+
+
 async def get_browser() -> Browser:
-    """Get or launch the shared Chromium browser instance."""
+    """Get or launch the shared Chromium browser instance (lazy-start)."""
     global _browser, _playwright
+    _cancel_shutdown_timer()
     if _browser is None or not _browser.is_connected():
         _playwright = await async_playwright().start()
         _browser = await _playwright.chromium.launch(
@@ -34,6 +64,7 @@ async def get_browser() -> Browser:
 async def close_browser() -> None:
     """Close the shared browser instance."""
     global _browser, _playwright
+    _cancel_shutdown_timer()
     if _browser is not None:
         await _browser.close()
         _browser = None
@@ -92,6 +123,7 @@ async def new_page(timeout: float = 30000):
         yield page
     finally:
         await context.close()
+        _schedule_shutdown_timer()
 
 
 async def retry_with_backoff(coro_fn, max_attempts: int = 3, base_delay: float = 5.0, multiplier: float = 3.0):

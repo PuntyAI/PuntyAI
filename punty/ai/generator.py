@@ -339,14 +339,20 @@ class ContentGenerator:
 
         Finds similar past situations and includes insights about what worked/didn't.
         Uses both individual race_memories AND structured race_assessments.
+
+        Batches all embedding API calls (2 batch calls instead of 30+ sequential).
         """
         try:
             from punty.memory.store import MemoryStore
             from punty.memory.embeddings import EmbeddingService
-            from punty.memory.assessment import retrieve_assessment_context, build_rag_context_from_assessments
+            from punty.memory.assessment import (
+                retrieve_assessment_context, build_rag_context_from_assessments,
+                build_assessment_query_text,
+            )
             from punty.models.settings import get_api_key
 
-            memory_store = MemoryStore(self.db, EmbeddingService())
+            embedding_service = EmbeddingService()
+            memory_store = MemoryStore(self.db, embedding_service)
             stats = await memory_store.get_stats()
 
             learning_parts = []
@@ -367,11 +373,13 @@ class ContentGenerator:
             # Get API key for embedding-based retrieval
             api_key = await get_api_key(self.db, "openai_api_key")
 
-            # First, retrieve track-level learnings from race assessments
             races = context.get("races", [])
-            assessment_learnings = []
-            seen_assessments = set()
             weather = meeting.get("weather_condition") or meeting.get("weather")
+
+            # ── Batch 1: Pre-compute assessment query embeddings ──
+            # Collect all query texts for races, then batch embed
+            race_meta = []  # [(distance, class, age, sex, weight, field_size), ...]
+            assessment_query_texts = []
 
             for race in races:
                 distance = race.get("distance") or 1200
@@ -380,7 +388,6 @@ class ContentGenerator:
                 weight_type = race.get("weight_type")
                 field_size = race.get("field_size")
 
-                # Derive sex restriction from race name
                 race_name = race.get("name", "")
                 sex_restriction = None
                 race_name_lower = race_name.lower()
@@ -389,6 +396,26 @@ class ContentGenerator:
                 elif "colts" in race_name_lower or "geldings" in race_name_lower:
                     sex_restriction = "C&G"
 
+                race_meta.append((distance, race_class, age_restriction, sex_restriction, weight_type, field_size))
+                assessment_query_texts.append(
+                    build_assessment_query_text(
+                        track, distance, race_class, going,
+                        age_restriction=age_restriction,
+                        sex_restriction=sex_restriction,
+                        weight_type=weight_type,
+                        weather=weather,
+                    )
+                )
+
+            # Single batch API call for all assessment embeddings
+            assessment_embeddings = await embedding_service.get_embeddings_batch(assessment_query_texts)
+
+            # Now retrieve assessments using pre-computed embeddings
+            assessment_learnings = []
+            seen_assessments = set()
+
+            for i, race in enumerate(races):
+                distance, race_class, age_restriction, sex_restriction, weight_type, field_size = race_meta[i]
                 assessments = await retrieve_assessment_context(
                     self.db, track, distance, going, race_class,
                     api_key=api_key, max_results=2,
@@ -397,10 +424,10 @@ class ContentGenerator:
                     weight_type=weight_type,
                     field_size=field_size,
                     weather=weather,
+                    query_embedding=assessment_embeddings[i],
                 )
 
                 for a in assessments:
-                    # Deduplicate by key learnings
                     learning_key = a.get("key_learnings", "")
                     if learning_key and learning_key not in seen_assessments:
                         seen_assessments.add(learning_key)
@@ -421,8 +448,11 @@ class ContentGenerator:
                     "",
                 ]
 
-                # For each race, find similar past situations for runners
-                has_runner_content = False
+                # ── Batch 2: Pre-compute runner context embeddings ──
+                # Collect all runner texts, batch embed, then distribute
+                runner_jobs = []  # [(race_idx, runner_idx, race_context, runner_data), ...]
+                runner_texts = []
+
                 for race in races:
                     race_context = {
                         "track_condition": going,
@@ -430,8 +460,7 @@ class ContentGenerator:
                         "class": race.get("class"),
                     }
 
-                    runners = race.get("runners", [])[:3]  # Top 3 by odds
-                    for runner in runners:
+                    for runner in race.get("runners", [])[:3]:
                         if runner.get("scratched"):
                             continue
 
@@ -444,15 +473,26 @@ class ContentGenerator:
                             "pf_map_factor": runner.get("pf_map_factor"),
                         }
 
-                        learning = await memory_store.build_learning_context(
-                            race_context, runner_data, max_memories=2
+                        runner_jobs.append((race, runner, race_context, runner_data))
+                        runner_texts.append(
+                            embedding_service.build_context_text(race_context, runner_data)
                         )
 
-                        if learning:
-                            runner_learning_parts.append(f"**R{race['race_number']} {runner.get('horse_name')}:**")
-                            runner_learning_parts.append(learning)
-                            runner_learning_parts.append("")
-                            has_runner_content = True
+                # Single batch API call for all runner embeddings
+                runner_embeddings = await embedding_service.get_embeddings_batch(runner_texts)
+
+                has_runner_content = False
+                for j, (race, runner, race_context, runner_data) in enumerate(runner_jobs):
+                    learning = await memory_store.build_learning_context(
+                        race_context, runner_data, max_memories=2,
+                        query_embedding=runner_embeddings[j],
+                    )
+
+                    if learning:
+                        runner_learning_parts.append(f"**R{race['race_number']} {runner.get('horse_name')}:**")
+                        runner_learning_parts.append(learning)
+                        runner_learning_parts.append("")
+                        has_runner_content = True
 
                 if has_runner_content:
                     learning_parts.extend(runner_learning_parts)

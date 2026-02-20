@@ -56,6 +56,35 @@ TRACK_STATE_MAP = {
 }
 
 
+def build_assessment_query_text(
+    track: str,
+    distance: int,
+    race_class: str,
+    going: str,
+    age_restriction: Optional[str] = None,
+    sex_restriction: Optional[str] = None,
+    weight_type: Optional[str] = None,
+    weather: Optional[str] = None,
+) -> str:
+    """Build the query text used for assessment embedding lookup.
+
+    Exposed so callers can pre-compute embeddings in batch.
+    """
+    state = _get_state_from_track(track)
+    query_parts = [track, f"{distance}m", race_class, going]
+    if age_restriction:
+        query_parts.append(age_restriction)
+    if sex_restriction:
+        query_parts.append(sex_restriction)
+    if weight_type:
+        query_parts.append(weight_type)
+    if weather:
+        query_parts.append(weather)
+    if state:
+        query_parts.append(state)
+    return " ".join(filter(None, query_parts))
+
+
 def _get_state_from_track(track: str) -> Optional[str]:
     """Derive state from track name."""
     if not track:
@@ -741,6 +770,7 @@ async def retrieve_assessment_context(
     weight_type: Optional[str] = None,
     field_size: Optional[int] = None,
     weather: Optional[str] = None,
+    query_embedding: Optional[list[float]] = None,
 ) -> list[dict[str, Any]]:
     """Retrieve relevant past assessments for RAG context.
 
@@ -842,8 +872,7 @@ async def retrieve_assessment_context(
         query_parts.append(state)
     query_text = " ".join(filter(None, query_parts))
 
-    query_embedding = None
-    if api_key:
+    if query_embedding is None and api_key:
         try:
             embedding_service = EmbeddingService(api_key=api_key)
             query_embedding = await embedding_service.get_embedding(query_text)
