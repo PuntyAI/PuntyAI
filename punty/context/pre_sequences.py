@@ -46,6 +46,7 @@ class LaneLeg:
     runner_names: list[str]  # horse names for display
     odds_shape: str          # STANDOUT/DOMINANT/etc.
     shape_width: int         # data-driven width before constraint
+    field_size: int = 8      # actual number of non-scratched runners
 
 
 @dataclass
@@ -155,6 +156,15 @@ def _prepare_legs_data(
         odds_shape = la.get("odds_shape", "CLEAR_FAV")
         shape_width = la.get("shape_width", 3)
 
+        # Count actual non-scratched runners for accurate return estimates
+        all_runners = rc.get("runners", [])
+        actual_field = sum(
+            1 for r in all_runners
+            if not r.get("scratched") and r.get("saddlecloth")
+        )
+        if actual_field < 2:
+            actual_field = max(len(top_runners), 8)
+
         legs_data.append(SequenceLegAnalysis(
             race_number=rn,
             top_runners=top_runners,
@@ -163,6 +173,8 @@ def _prepare_legs_data(
             odds_shape=odds_shape,
             shape_width=shape_width,
         ))
+        # Stash field size on the leg for use in return estimates
+        legs_data[-1]._field_size = actual_field
 
     if len(legs_data) != num_legs:
         return None
@@ -191,7 +203,8 @@ def _select_runners_for_leg(leg, width: int, value_swap: bool = True) -> list[di
         for extra_idx in range(width, min(width + 2, len(candidates))):
             extra = candidates[extra_idx]
             extra_vr = extra.get("value_rating", 1.0)
-            if extra_vr < 1.15:
+            extra_wp = float(extra.get("win_prob", 0))
+            if extra_vr < 1.20:
                 continue
             worst_idx = None
             worst_vr = 999
@@ -200,8 +213,11 @@ def _select_runners_for_leg(leg, width: int, value_swap: bool = True) -> list[di
                 if vr < worst_vr:
                     worst_vr = vr
                     worst_idx = j
-            if worst_idx is not None and worst_vr < 0.90 and extra_vr > worst_vr + 0.25:
-                selected[worst_idx] = extra
+            if worst_idx is not None and worst_vr < 0.85:
+                worst_wp = float(selected[worst_idx].get("win_prob", 0))
+                # Only swap if replacement has reasonable win probability (>60% of displaced)
+                if extra_vr > worst_vr + 0.30 and extra_wp > worst_wp * 0.6:
+                    selected[worst_idx] = extra
 
     return selected
 
@@ -214,6 +230,7 @@ def _make_lane_leg(leg, selected: list[dict]) -> LaneLeg:
         runner_names=[r.get("horse_name", "") for r in selected],
         odds_shape=leg.odds_shape,
         shape_width=leg.shape_width,
+        field_size=getattr(leg, "_field_size", 8),
     )
 
 
@@ -249,7 +266,8 @@ def _calc_estimated_return(lane_legs: list[LaneLeg], legs_data: list) -> tuple[f
     pool_takeout = 0.85
     random_hit = 1.0
     for i, leg in enumerate(lane_legs):
-        field = max(len(legs_data[i].top_runners), len(leg.runners))
+        # Use actual field size (not capped top_runners) for accurate random baseline
+        field = max(leg.field_size, len(leg.runners))
         random_hit *= len(leg.runners) / max(field, 1)
 
     if random_hit > 0 and hit_prob > 0:
