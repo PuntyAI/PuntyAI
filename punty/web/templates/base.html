@@ -257,7 +257,7 @@
                         Review
                         <span id="review-badge" class="ml-1 bg-punty-magenta/20 text-punty-mbright text-xs px-2 py-0.5 rounded-full"
                               hx-get="/api/content/review-count"
-                              hx-trigger="every 30s"
+                              hx-trigger="every 60s [document.visibilityState==='visible']"
                               hx-swap="innerHTML">
                             {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
                         </span>
@@ -292,7 +292,7 @@
             <a href="/review" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">
                 Review
                 <span class="ml-1 bg-punty-magenta/20 text-punty-mbright text-xs px-2 py-0.5 rounded-full"
-                      hx-get="/api/content/review-count" hx-trigger="every 30s" hx-swap="innerHTML">
+                      hx-get="/api/content/review-count" hx-trigger="every 60s [document.visibilityState==='visible']" hx-swap="innerHTML">
                     {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
                 </span>
             </a>
