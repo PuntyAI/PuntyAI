@@ -376,7 +376,35 @@ class SchedulerManager:
                 })
                 logger.info(f"Scheduled pre-race job for {meeting.venue} at {pre_race_time.strftime('%H:%M')}")
             else:
-                logger.info(f"Pre-race time already passed for {meeting.venue}")
+                # Pre-race time passed — check if content was already generated.
+                # If not (e.g. restart killed the original job), run it now as catch-up.
+                from punty.models.content import Content
+                content_result = await db.execute(
+                    select(Content).where(
+                        Content.meeting_id == meeting_id,
+                        Content.content_type == "early_mail",
+                        Content.status.notin_(["rejected", "superseded"]),
+                    )
+                )
+                existing_content = content_result.scalars().first()
+
+                if existing_content:
+                    logger.info(f"Pre-race time passed for {meeting.venue} — content already exists, skipping")
+                else:
+                    # Only catch up if the last race hasn't finished yet
+                    if last_race_time > now:
+                        logger.warning(
+                            f"Pre-race time passed for {meeting.venue} but NO content exists — "
+                            f"running catch-up pre-race job NOW"
+                        )
+                        import asyncio
+                        asyncio.create_task(meeting_pre_race_job(meeting_id))
+                        scheduled["jobs"].append({
+                            "type": "pre_race",
+                            "time": "catch-up",
+                        })
+                    else:
+                        logger.info(f"Pre-race time passed for {meeting.venue} — meeting already finished, skipping")
 
             # Schedule post-race job if still in the future
             if post_race_time > now:
@@ -395,7 +423,30 @@ class SchedulerManager:
                 })
                 logger.info(f"Scheduled post-race job for {meeting.venue} at {post_race_time.strftime('%H:%M')}")
             else:
-                logger.info(f"Post-race time already passed for {meeting.venue}")
+                # Post-race time passed — check if wrap-up was generated
+                from punty.models.content import Content
+                wrapup_result = await db.execute(
+                    select(Content).where(
+                        Content.meeting_id == meeting_id,
+                        Content.content_type == "meeting_wrapup",
+                        Content.status.notin_(["rejected", "superseded"]),
+                    )
+                )
+                existing_wrapup = wrapup_result.scalars().first()
+
+                if existing_wrapup:
+                    logger.info(f"Post-race time passed for {meeting.venue} — wrapup already exists, skipping")
+                else:
+                    logger.warning(
+                        f"Post-race time passed for {meeting.venue} but NO wrapup exists — "
+                        f"running catch-up post-race job NOW"
+                    )
+                    import asyncio
+                    asyncio.create_task(meeting_post_race_job(meeting_id))
+                    scheduled["jobs"].append({
+                        "type": "post_race",
+                        "time": "catch-up",
+                    })
 
             return scheduled
 
