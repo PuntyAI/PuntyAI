@@ -137,8 +137,8 @@ def calculate_pre_selections(
         pool: Total stake pool (default $20).
         selection_thresholds: Optional tuned thresholds from bet_type_tuning.
         place_context_multipliers: Optional dict of place context multiplier values.
-            When the average multiplier is strong (>1.15), the PLACE_MIN_PROB
-            threshold is lowered to encourage more place bets.
+            When the average multiplier is weak (<0.85), PLACE_MIN_PROB is raised
+            to require higher place probability (tighter threshold, fewer Place bets).
 
     Returns:
         RacePreSelections with ordered picks, exotic, and Punty's Pick.
@@ -557,6 +557,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         # Still included so AI can reference them, but don't burn budget
         if pick.odds < 1.80 and not pick.is_roughie:
             base *= 0.25  # near-minimum stake
+
+        # Short-priced Win ($1.80-$2.00): reduced stake — -38.9% ROI historically
+        elif pick.odds < 2.00 and pick.bet_type in ("Win", "Saver Win") and not pick.is_roughie:
+            base *= 0.50  # half stake — poor Win ROI at these odds
 
         # Short-priced Place penalty — these are safe but low-returning
         elif pick.bet_type == "Place" and pick.odds < 2.5:

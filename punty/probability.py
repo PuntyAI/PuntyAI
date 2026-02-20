@@ -369,13 +369,9 @@ def _get_calibrated_weights() -> dict[str, float] | None:
     weights = cal.get("weights")
     if not weights:
         return None
-    # Calibration doesn't include deep_learning — add it with residual weight
-    if "deep_learning" not in weights:
-        # Give DL the average of the smaller factor weights
-        non_market_form = {k: v for k, v in weights.items()
-                          if k not in ("market", "form")}
-        dl_weight = sum(non_market_form.values()) / max(len(non_market_form), 1) * 0.8
-        weights["deep_learning"] = round(dl_weight, 4)
+    # Grid search showed deep_learning=0.00 is optimal — force it to zero
+    # regardless of what calibration file contains
+    weights["deep_learning"] = 0.0
     # Normalise to sum to 1.0
     total = sum(weights.values())
     if total > 0:
@@ -408,18 +404,19 @@ FACTOR_REGISTRY = {
 }
 
 # Default weights (must sum to 1.0)
-# Averaged from batch 1 (seed=42) + batch 2 (seed=123), each 1500 combos x 1000 races
-# Batch 1: form=0.51, market=0.32, wc=0.05, jt=0.04, cf=0.03, hp=0.03, barrier=0.03
-# Batch 2: form=0.48, market=0.30, wc=0.05, jt=0.04, cf=0.05, hp=0.05, barrier=0.01, movement=0.02
+# Grid search optimal from batch 1 (seed=42, 2500 combos x 1000 races):
+#   form=0.5128, market=0.3205, wc=0.0513, jt=0.0385, barrier=0.0256,
+#   hp=0.0256, cf=0.0256, pace=0.00, movement=0.00
+# Rounded to clean values that sum to 1.0
 DEFAULT_WEIGHTS = {
-    "form": 0.50,
-    "market": 0.30,
+    "form": 0.51,
+    "market": 0.32,
     "weight_carried": 0.05,
-    "horse_profile": 0.04,
-    "class_fitness": 0.04,
     "jockey_trainer": 0.04,
-    "barrier": 0.02,
-    "movement": 0.01,
+    "barrier": 0.03,
+    "horse_profile": 0.025,
+    "class_fitness": 0.025,
+    "movement": 0.00,
     "pace": 0.00,
     "deep_learning": 0.00,
 }  # sums to 1.0 — form dominant, market secondary
@@ -676,21 +673,23 @@ def calculate_race_probabilities(
         pw = place_weights if place_weights else DEFAULT_PLACE_WEIGHTS
         place_w = dict(pw)
 
-        # Apply context profile multipliers on top if available
+        # Apply context profile multipliers to scores (same formula as win path)
+        # Stretch scores around 0.5 neutral point — consistent with win application
         place_ctx_mults = _get_context_multipliers(race, meeting, "place")
-        if place_ctx_mults:
-            for factor, mult in place_ctx_mults.items():
-                if factor in place_w and factor != "deep_learning":
-                    place_w[factor] = place_w.get(factor, 0.0) * mult
-
-        # Re-normalize so weights sum to 1.0
-        pw_total = sum(place_w.values())
-        if pw_total > 0:
-            place_w = {k: v / pw_total for k, v in place_w.items()}
+        place_adjusted_scores = {}
+        for rid, orig_scores in original_factor_scores.items():
+            adjusted = dict(orig_scores)
+            if place_ctx_mults:
+                for factor, mult in place_ctx_mults.items():
+                    if factor in adjusted and factor != "deep_learning":
+                        original = adjusted[factor]
+                        adjusted[factor] = max(0.05, min(0.95,
+                            0.5 + (original - 0.5) * mult))
+            place_adjusted_scores[rid] = adjusted
 
         place_raw: dict[str, float] = {}
-        for rid, orig_scores in original_factor_scores.items():
-            place_raw[rid] = max(0.001, sum(place_w.get(k, 0.0) * v for k, v in orig_scores.items()))
+        for rid, adj_scores in place_adjusted_scores.items():
+            place_raw[rid] = max(0.001, sum(place_w.get(k, 0.0) * v for k, v in adj_scores.items()))
 
         # Sharpen same as win to maintain consistent distribution shape
         place_sharp = {rid: p ** SHARPEN for rid, p in place_raw.items()}
@@ -987,8 +986,9 @@ def _score_last_five(last_five: str) -> float:
         elif pos.isdigit() and int(pos) >= 7:
             score -= 0.03 * weight
 
-    # Rescale from observed [0.35, 0.78] to [0.10, 0.90]
-    score = 0.10 + (score - 0.35) * (0.80 / 0.43)
+    # Rescale from theoretical [0.395, 0.78] to [0.10, 0.90]
+    # Worst: 5 × >=7th = 0.5 - 0.03*3.5 = 0.395; Best: 5 wins = 0.5 + 0.08*3.5 = 0.78
+    score = 0.10 + (score - 0.395) * (0.80 / 0.385)
     return max(0.05, min(0.95, score))
 
 
@@ -1600,7 +1600,7 @@ def _boost_market_weight(
     # Boost market weight proportionally to how little info we have
     # neutral_ratio 0.4 → no boost, 0.8+ → full boost
     boost_factor = min(1.0, (neutral_ratio - 0.4) / 0.4)
-    max_boost = 0.43  # Market weight can increase from 22% up to ~65%
+    max_boost = 0.43  # Market weight can increase from ~32% up to ~75%
     boost = boost_factor * max_boost
 
     effective = dict(weights)
@@ -1750,13 +1750,6 @@ def _deep_learning_factor(
                 and (not state or conds.get("state") == state)
             )
 
-        elif p_type == "deep_learning_track_dist_cond":
-            matched = (
-                _venue_matches(conds.get("venue", ""), venue)
-                and conds.get("dist_bucket") == dist_bucket
-                and _condition_matches(conds.get("condition", ""), condition)
-            )
-
         elif p_type == "deep_learning_acceleration" and move_type:
             matched = (
                 _venue_matches(conds.get("venue", ""), venue)
@@ -1770,11 +1763,6 @@ def _deep_learning_factor(
                 _venue_matches(conds.get("venue", ""), venue)
                 and conds.get("dist_bucket") == dist_bucket
                 and _condition_matches(conds.get("condition", ""), condition)
-            )
-
-        elif p_type == "deep_learning_condition_specialist":
-            matched = _condition_matches(
-                conds.get("condition", ""), condition
             )
 
         elif p_type == "deep_learning_market" and state:
@@ -1857,15 +1845,6 @@ def _deep_learning_factor(
                 _venue_matches(pattern_venue, venue)
                 and conds.get("dist_bucket") == dist_bucket
                 and width == runner_width
-            )
-
-        elif p_type == "deep_learning_seasonal" and state:
-            # Match seasonal patterns
-            import datetime
-            month = conds.get("month")
-            matched = (
-                conds.get("state") == state
-                and month == datetime.date.today().month
             )
 
         if matched:

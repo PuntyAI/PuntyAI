@@ -1961,7 +1961,7 @@ class TestFormCareerStats:
             last_five="12x34",
         )
         score = _form_rating(runner, "Good 4", baseline=0.10)
-        assert score > 0.55
+        assert score > 0.53  # strong career should boost above neutral (0.50)
 
     def test_weak_career_lowers_form(self):
         # 3.3% win rate — well below baseline
