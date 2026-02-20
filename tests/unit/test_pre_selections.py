@@ -326,6 +326,65 @@ class TestSelectExotic:
 
 
 # ──────────────────────────────────────────────
+# Tests: Tight cluster exotic boost
+# ──────────────────────────────────────────────
+
+class TestTightClusterExoticBoost:
+    def test_tight_cluster_boosts_box_over_exacta(self):
+        """When top 3 picks are within 5%, Trifecta Box should beat Exacta."""
+        # Picks at 28%, 25%, 23% — very tight cluster (5% spread)
+        picks = [
+            RecommendedPick(1, 1, "Alpha", "Win", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
+            RecommendedPick(2, 2, "Beta", "Win", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
+            RecommendedPick(3, 3, "Gamma", "Win", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
+        ]
+        combos = [
+            # Exacta has slightly higher base EV
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.12, "value": 1.4, "combos": 1, "format": "flat"},
+            # Trifecta Box has slightly lower base EV but should win with cluster boost
+            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+             "probability": 0.10, "value": 1.35, "combos": 6, "format": "boxed"},
+        ]
+        result = _select_exotic(combos, {1, 2, 3}, picks=picks)
+        assert result is not None
+        assert result.exotic_type == "Trifecta Box"
+
+    def test_no_boost_when_spread_wide(self):
+        """No cluster boost when picks are spread (>8%)."""
+        picks = [
+            RecommendedPick(1, 1, "Alpha", "Win", 7, 2.00, 1.2, 0.35, 0.70, 1.05, 1.0, 0.10),
+            RecommendedPick(2, 2, "Beta", "Win", 5, 5.00, 2.0, 0.20, 0.50, 1.02, 1.0, 0.01),
+            RecommendedPick(3, 3, "Gamma", "Place", 3, 10.0, 3.5, 0.10, 0.35, 0.90, 1.0, -0.1),
+        ]
+        combos = [
+            # Exacta has higher base EV and should win without cluster boost
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.12, "value": 1.5, "combos": 1, "format": "flat"},
+            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+             "probability": 0.08, "value": 1.3, "combos": 6, "format": "boxed"},
+        ]
+        result = _select_exotic(combos, {1, 2, 3}, picks=picks)
+        assert result is not None
+        assert result.exotic_type == "Exacta"
+
+    def test_quinella_not_penalised_in_cluster(self):
+        """Quinella is unordered — should not get directional penalty."""
+        picks = [
+            RecommendedPick(1, 1, "Alpha", "Win", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
+            RecommendedPick(2, 2, "Beta", "Win", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
+            RecommendedPick(3, 3, "Gamma", "Win", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
+        ]
+        combos = [
+            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.20, "value": 1.3, "combos": 1, "format": "flat"},
+        ]
+        result = _select_exotic(combos, {1, 2, 3}, picks=picks)
+        assert result is not None
+        assert result.exotic_type == "Quinella"
+
+
+# ──────────────────────────────────────────────
 # Tests: _calculate_puntys_pick
 # ──────────────────────────────────────────────
 

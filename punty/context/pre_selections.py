@@ -245,7 +245,7 @@ def calculate_pre_selections(
     exotic = _select_exotic(
         exotic_combos, used_saddlecloths,
         field_size=field_size, anchor_odds=anchor_odds,
-        venue_type=venue_type,
+        venue_type=venue_type, picks=picks,
     )
 
     # Calculate Punty's Pick
@@ -601,6 +601,7 @@ def _select_exotic(
     field_size: int = 0,
     anchor_odds: float = 0.0,
     venue_type: str = "",
+    picks: list[RecommendedPick] | None = None,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet based on probability × value (EV).
 
@@ -608,10 +609,27 @@ def _select_exotic(
     Trifecta Box, Trifecta Standout, First4, First4 Box.
     The Harville model probabilities and value ratios drive the selection.
 
+    When top picks are tightly clustered in probability, box exotics get
+    a scoring boost (any ordering is equally likely, so covering all
+    orderings de-risks the bet).
+
     Overlap rules: ALL exotic runners MUST be from our selections.
     """
     if not exotic_combos:
         return None
+
+    # --- Tight cluster detection ---
+    # When top 3 non-roughie picks are within 8% win probability,
+    # box exotics become much more attractive (any order equally likely).
+    cluster_boost = 1.0
+    if picks:
+        top_probs = [p.win_prob for p in picks if not p.is_roughie][:3]
+        if len(top_probs) >= 3:
+            spread = max(top_probs) - min(top_probs)
+            if spread <= 0.05:
+                cluster_boost = 1.5   # very tight — strongly prefer boxes
+            elif spread <= 0.08:
+                cluster_boost = 1.25  # tight — moderate box preference
 
     # Score all combos by expected value: probability × value_ratio
     # Higher EV = better mix of probability and payout
@@ -644,6 +662,16 @@ def _select_exotic(
         efficiency_bonus = max(0, (1 - combos / 24)) * 0.1 * ev_score
 
         score = ev_score + efficiency_bonus
+
+        # Tight cluster boost: prefer box exotics when picks are bunched
+        if cluster_boost > 1.0:
+            ec_format = ec.get("format", "")
+            ec_type = ec.get("type", "")
+            if ec_format == "boxed":
+                score *= cluster_boost
+            elif ec_format in ("flat", "standout") and ec_type != "Quinella":
+                # Quinella is inherently unordered (a "box" of 2) — no penalty
+                score *= 0.85  # slight penalty for directional in tight fields
 
         scored.append((score, ec))
 
@@ -784,6 +812,17 @@ def _generate_notes(
     # Flag wide-open race
     if candidates and candidates[0]["win_prob"] < 0.15:
         notes.append("Wide-open race — no runner above 15% probability.")
+
+    # Flag tight cluster (box exotic territory)
+    top_probs = [p.win_prob for p in picks if not p.is_roughie][:3]
+    if len(top_probs) >= 3:
+        spread = max(top_probs) - min(top_probs)
+        if spread <= 0.08:
+            probs_str = "/".join(f"{p*100:.0f}%" for p in top_probs)
+            notes.append(
+                f"Tight top 3 ({probs_str}, {spread*100:.0f}% spread) "
+                f"— box exotic preferred over directional."
+            )
 
     return notes
 
