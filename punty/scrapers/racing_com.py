@@ -34,11 +34,17 @@ class RacingComScraper(BaseScraper):
 
     BASE_URL = "https://www.racing.com"
 
+    # Racing.com uses different slugs for some venues
+    _SLUG_OVERRIDES = {
+        "yarra-glen": "yarra-valley",
+    }
+
     def _venue_slug(self, venue: str, strip_sponsor: bool = True) -> str:
         """Convert venue name to URL slug, optionally stripping sponsor prefixes."""
         from punty.venues import normalize_venue, venue_slug as _vs
         if strip_sponsor:
-            return _vs(venue)
+            slug = _vs(venue)
+            return self._SLUG_OVERRIDES.get(slug, slug)
         # No sponsor stripping — just lowercase + dash
         return venue.lower().strip().replace(" ", "-")
 

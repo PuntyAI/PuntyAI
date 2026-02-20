@@ -362,6 +362,37 @@ def _is_anchor_leg(leg) -> bool:
 
 
 # ──────────────────────────────────────────────
+# EV proxy calculation (from strategy spec)
+# ──────────────────────────────────────────────
+
+def _calc_ev_proxy(selected: list[list[dict]], legs_data: list) -> float:
+    """Calculate EV proxy = ticket_hit_prob × payout_proxy.
+
+    ticket_hit_prob = product of (sum of p_true_win for selected runners) per leg
+    payout_proxy = product of (average market_win_odds of selected runners) per leg
+    """
+    hit_prob = 1.0
+    payout = 1.0
+    for i, sel in enumerate(selected):
+        if not sel:
+            return 0.0
+        leg_prob = sum(float(r.get("win_prob", 0)) for r in sel)
+        leg_prob = min(leg_prob, 1.0)
+        hit_prob *= leg_prob
+
+        odds_vals = [float(r.get("current_odds", 0)) for r in sel if float(r.get("current_odds", 0)) > 1.0]
+        if odds_vals:
+            avg_odds = sum(odds_vals) / len(odds_vals)
+        else:
+            # Derive from win prob as fallback
+            avg_prob = sum(float(r.get("win_prob", 0)) for r in sel) / len(sel)
+            avg_odds = (1.0 / avg_prob) if avg_prob > 0 else 10.0
+        payout *= avg_odds
+
+    return hit_prob * payout
+
+
+# ──────────────────────────────────────────────
 # Core optimiser: edge-driven selection
 # ──────────────────────────────────────────────
 
@@ -382,20 +413,18 @@ def _optimiser_select(
 
     for leg in legs_data:
         runners = list(leg.top_runners)
-        # Sort by edge descending
-        pool = sorted(runners, key=lambda r: float(r.get("edge", 0)), reverse=True)
+        # Sort by edge descending, tie-break by win_prob descending
+        pool = sorted(
+            runners,
+            key=lambda r: (float(r.get("edge", 0)), float(r.get("win_prob", 0))),
+            reverse=True,
+        )
         # Filter to overlays (edge > 0)
         overlays = [r for r in pool if float(r.get("edge", 0)) > 0]
-        # Allow ONE neutral runner (edge >= -0.01) if no overlays
-        if not overlays:
-            neutrals = [r for r in pool if float(r.get("edge", 0)) >= -0.01]
-            if neutrals:
-                overlays = [neutrals[0]]
-            else:
-                # Take best available runner as fallback
-                overlays = pool[:1] if pool else []
-
-        overlay_pools.append(overlays)
+        # Allow up to ONE neutral runner per leg (edge >= -0.01) if needed
+        neutrals = [r for r in pool if -0.01 <= float(r.get("edge", 0)) <= 0]
+        # Attach neutrals separately — used only when overlays can't fill min width
+        overlay_pools.append({"overlays": overlays, "neutrals": neutrals[:1]})
 
         # Classify leg
         if _is_anchor_leg(leg):
@@ -420,12 +449,17 @@ def _optimiser_select(
     targets = []
     for i, lt in enumerate(leg_types):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+        pool_depth = len(overlay_pools[i]["overlays"]) + len(overlay_pools[i]["neutrals"])
         if lt == "anchor":
-            targets.append(1)
+            targets.append(2)  # Min 2-wide even for anchors (single legs = 30% SR vs 64%+ wider)
         elif lt == "chaos":
-            targets.append(min(5, len(overlay_pools[i])))
+            targets.append(min(5, pool_depth))
         else:
-            targets.append(min(3, len(overlay_pools[i])))
+            # Normal: 2-4 based on field size and overlay depth
+            if field_size >= 12:
+                targets.append(min(4, pool_depth))
+            else:
+                targets.append(min(3, pool_depth))
 
     # Step 4: Apply field-size caps
     for i in range(num_legs):
@@ -439,24 +473,39 @@ def _optimiser_select(
         # Never >= 50% of field
         max_half = max(1, field_size // 2 - 1) if field_size > 2 else 1
         targets[i] = min(targets[i], max_half)
-        # Ensure at least 1
-        targets[i] = max(targets[i], 1)
+        # Ensure at least 2 (min 2-wide rule from backtest)
+        targets[i] = max(targets[i], 2)
 
     # Big6 tighter caps
     if is_big6:
         for i in range(num_legs):
             targets[i] = min(targets[i], 3)
 
-    # Step 5: Populate from overlay pools
+    # Step 5: Populate from overlay pools (overlays first, then ONE neutral max)
     selected = []
     for i in range(num_legs):
-        pool = overlay_pools[i]
-        sel = pool[:targets[i]]
-        # If we don't have enough overlays, pad from top runners by win prob
-        if len(sel) < targets[i]:
+        overlays = overlay_pools[i]["overlays"]
+        neutrals = overlay_pools[i]["neutrals"]
+        sel = overlays[:targets[i]]
+        # If overlays can't fill target, allow ONE neutral runner (edge >= -0.01)
+        if len(sel) < targets[i] and neutrals:
             existing_sc = {r.get("saddlecloth") for r in sel}
-            for r in legs_data[i].top_runners:
+            for r in neutrals:
                 if len(sel) >= targets[i]:
+                    break
+                if r.get("saddlecloth") not in existing_sc:
+                    sel.append(r)
+                    existing_sc.add(r.get("saddlecloth"))
+        # If still under min 2, pad with best win_prob runner (last resort)
+        if len(sel) < 2:
+            existing_sc = {r.get("saddlecloth") for r in sel}
+            by_prob = sorted(
+                legs_data[i].top_runners,
+                key=lambda r: float(r.get("win_prob", 0)),
+                reverse=True,
+            )
+            for r in by_prob:
+                if len(sel) >= 2:
                     break
                 if r.get("saddlecloth") not in existing_sc:
                     sel.append(r)
@@ -474,43 +523,44 @@ def _optimiser_select(
     budget_lo = budget * 0.85
     budget_floor = budget * 0.70
 
-    # Trim phase: remove worst-edge runner from widest non-anchor leg if over budget
+    # Trim phase: remove runner causing smallest EV_proxy drop, respecting min 2-wide
     for _ in range(20):
         combos = _total_combos()
         cost = combos * (MIN_FLEXI_PCT / 100.0)
         if cost <= budget_hi:
             break
-        # Find widest non-anchor leg
-        widest_idx = -1
-        widest_len = 0
+        current_ev = _calc_ev_proxy(selected, legs_data)
+        best_trim_leg = -1
+        best_trim_j = -1
+        best_ev_loss = 999
         for i in range(num_legs):
-            if leg_types[i] == "anchor":
+            if len(selected[i]) <= 2:  # Never trim below min 2-wide
                 continue
-            if len(selected[i]) > widest_len and len(selected[i]) > 1:
-                widest_len = len(selected[i])
-                widest_idx = i
-        if widest_idx < 0:
+            for j in range(len(selected[i])):
+                test = [list(s) for s in selected]
+                test[i].pop(j)
+                new_ev = _calc_ev_proxy(test, legs_data)
+                ev_loss = current_ev - new_ev
+                if ev_loss < best_ev_loss:
+                    best_ev_loss = ev_loss
+                    best_trim_leg = i
+                    best_trim_j = j
+        if best_trim_leg < 0:
             break
-        # Remove runner with worst edge
-        worst_j = min(
-            range(len(selected[widest_idx])),
-            key=lambda j: float(selected[widest_idx][j].get("edge", 0)),
-        )
-        selected[widest_idx].pop(worst_j)
+        selected[best_trim_leg].pop(best_trim_j)
 
-    # Add phase: add next-best overlay if under budget
+    # Add phase: add overlays that give best EV_proxy increase per combo cost
     for _ in range(20):
         combos = _total_combos()
         cost = combos * (MIN_FLEXI_PCT / 100.0)
         if cost >= budget_lo:
             break
-        # Find best candidate to add
+        # Find best candidate to add (overlays only, by EV impact)
         best_add = None
-        best_edge = -999
+        best_ev_gain = -999
         best_leg_idx = -1
+        current_ev = _calc_ev_proxy(selected, legs_data)
         for i in range(num_legs):
-            if leg_types[i] == "anchor":
-                continue
             field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
             # Respect field-size caps
             max_sel = 6
@@ -525,15 +575,24 @@ def _optimiser_select(
             if len(selected[i]) >= max_sel:
                 continue
             existing_sc = {r.get("saddlecloth") for r in selected[i]}
-            for r in overlay_pools[i]:
+            for r in overlay_pools[i]["overlays"]:
                 if r.get("saddlecloth") not in existing_sc:
                     edge = float(r.get("edge", 0))
-                    if edge > best_edge:
-                        best_edge = edge
+                    if edge <= 0:
+                        break  # sorted by edge desc, no more overlays
+                    # Estimate EV gain from adding this runner
+                    test_selected = [list(s) for s in selected]
+                    test_selected[i].append(r)
+                    new_ev = _calc_ev_proxy(test_selected, legs_data)
+                    new_combos = _total_combos() // max(1, len(selected[i])) * (len(selected[i]) + 1)
+                    combo_cost_delta = (new_combos - combos) * (MIN_FLEXI_PCT / 100.0)
+                    ev_per_cost = (new_ev - current_ev) / max(combo_cost_delta, 0.01)
+                    if ev_per_cost > best_ev_gain:
+                        best_ev_gain = ev_per_cost
                         best_add = r
                         best_leg_idx = i
                     break  # pools are sorted, first non-selected is best
-        if best_add is None or best_edge <= 0:
+        if best_add is None:
             break
         # Check adding wouldn't exceed budget
         new_combos = _total_combos() // max(1, len(selected[best_leg_idx])) * (len(selected[best_leg_idx]) + 1)
@@ -543,15 +602,15 @@ def _optimiser_select(
         selected[best_leg_idx].append(best_add)
 
     # Step 7: Sanity checks
-    # At least one single leg
-    has_single = any(len(s) == 1 for s in selected)
-    if not has_single:
-        # Find leg with highest top-runner win prob and trim to 1
-        best_leg = max(
-            range(num_legs),
-            key=lambda i: float(selected[i][0].get("win_prob", 0)) if selected[i] else 0,
-        )
-        selected[best_leg] = selected[best_leg][:1]
+    # Enforce minimum 2 runners per leg (single legs = 30% SR vs 64%+ wider)
+    for i in range(num_legs):
+        if len(selected[i]) < 2:
+            existing_sc = {r.get("saddlecloth") for r in selected[i]}
+            # Add next best runner from top_runners
+            for r in legs_data[i].top_runners:
+                if r.get("saddlecloth") not in existing_sc:
+                    selected[i].append(r)
+                    break
 
     # Max one chaos leg >5 selections
     wide_chaos = [i for i in range(num_legs) if leg_types[i] == "chaos" and len(selected[i]) > 5]
@@ -753,7 +812,7 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
         for leg in smart.legs:
             runners_str = ", ".join(str(r) for r in leg.runners)
             names_str = ", ".join(leg.runner_names[:len(leg.runners)])
-            if len(leg.runners) == 1:
+            if len(leg.runners) <= 2 and leg.odds_shape in BANKER_SHAPES:
                 type_marker = " [ANCHOR]"
             elif len(leg.runners) >= 5:
                 type_marker = " [CHAOS]"

@@ -225,8 +225,8 @@ class TestOptimiser:
         result = _optimiser_select(legs, budget=50.0)
         assert result is None
 
-    def test_anchor_leg_singled(self):
-        """Anchor leg should get 1 runner."""
+    def test_anchor_leg_min_2_wide(self):
+        """Anchor leg should get minimum 2 runners (not singled)."""
         specs = [
             (0.40, 0.10, 8, "STANDOUT"),   # anchor
             (0.25, 0.05, 10, "CLEAR_FAV"),  # normal
@@ -236,7 +236,7 @@ class TestOptimiser:
         legs = self._make_legs(specs)
         result = _optimiser_select(legs, budget=50.0)
         assert result is not None
-        assert len(result[0]) == 1  # anchor singled
+        assert len(result[0]) >= 2  # min 2-wide even for anchors
 
     def test_overlay_only_selection(self):
         """Prefer runners with positive edge."""
@@ -304,8 +304,8 @@ class TestOptimiser:
         cost = combos * (MIN_FLEXI_PCT / 100.0)
         assert cost <= MAX_OUTLAY, f"Cost {cost} exceeds MAX_OUTLAY {MAX_OUTLAY}"
 
-    def test_at_least_one_single(self):
-        """At least one leg has 1 selection."""
+    def test_all_legs_min_2_wide(self):
+        """Every leg must have at least 2 selections."""
         specs = [
             (0.35, 0.08, 10, "STANDOUT"),
             (0.25, 0.05, 10, "CLEAR_FAV"),
@@ -315,8 +315,8 @@ class TestOptimiser:
         legs = self._make_legs(specs)
         result = _optimiser_select(legs, budget=50.0)
         assert result is not None
-        widths = [len(sel) for sel in result]
-        assert 1 in widths, f"No single leg found: {widths}"
+        for i, sel in enumerate(result):
+            assert len(sel) >= 2, f"Leg {i} has {len(sel)} runners, min is 2"
 
 
 # ──────────────────────────────────────────────

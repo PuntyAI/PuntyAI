@@ -59,9 +59,13 @@ def _resolve_state(venue: str) -> str | None:
 
 def _match_venue(ra_venue: str, meeting_venue: str) -> bool:
     """Check if a Racing Australia venue name matches a meeting venue."""
+    from punty.venues import normalize_venue
     ra = _strip_sponsor(ra_venue)
     mv = _strip_sponsor(meeting_venue)
     if ra == mv:
+        return True
+    # Check via venue alias normalization (e.g., "yarra valley" → "yarra glen")
+    if normalize_venue(ra) == normalize_venue(mv):
         return True
     # One contains the other
     if ra in mv or mv in ra:

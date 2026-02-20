@@ -37,6 +37,9 @@ VENUE_ALIASES = {
     # Southside = synthetic track at same venue
     "southside pakenham": "pakenham",
     "southside cranbourne": "cranbourne",
+    # Yarra Glen = Yarra Valley Racing Club (same track, different names across sources)
+    "yarra valley": "yarra glen",
+    "yarra-valley": "yarra glen",
 }
 
 # Complete Australian racetracks by state (from racingaustralia.horse)
