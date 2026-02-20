@@ -519,6 +519,7 @@ class ContextBuilder:
                 meeting_ctx["track_condition"] = (
                     race.meeting.track_condition or race.track_condition
                 )
+                meeting_ctx["venue"] = race.meeting.venue
 
             probs = calculate_race_probabilities(
                 active_runners, race, meeting_ctx,

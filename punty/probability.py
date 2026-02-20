@@ -1368,7 +1368,7 @@ def _a2e_to_score(a2e_data: dict, baseline: float) -> float:
             signals += 0.1 if adj != 0 else 0
 
     if signals > 0:
-        score += adjustments / signals * signals  # preserve signal weighting
+        score += adjustments / signals  # weighted average of adjustments
 
     return max(0.05, min(0.95, score))
 
@@ -2158,14 +2158,18 @@ def _place_probability(win_prob: float, field_size: int) -> float:
     - Fields <= 7: places 1-2
     - Fields 8+: places 1-3
     """
-    if field_size <= 5:
+    if field_size <= 4:
+        # No place betting — but still return an estimate for EV calcs
+        factor = 1.5
+    elif field_size <= 7:
+        # NTD: only 2 places paid — factor should be lower
         factor = 2.0
-    elif field_size <= 8:
-        factor = 2.5
     elif field_size <= 12:
-        factor = 3.0
+        # Standard 3 places
+        factor = 2.8
     else:
-        factor = 3.3
+        # Large fields — more runners to beat but 3 places
+        factor = 3.2
 
     return min(0.95, win_prob * factor)
 

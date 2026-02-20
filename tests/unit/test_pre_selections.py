@@ -344,10 +344,11 @@ class TestCalculatePuntysPick:
         picks = [
             RecommendedPick(1, 1, "Alpha", "Win", 8, 3.5, 1.5, 0.30, 0.60, 1.05, 1.0, 0.05),
         ]
+        # Exotic with genuinely high EV: 0.40 * 3.5 - 1 = 0.40 vs sel EV 0.05
         exotic = RecommendedExotic(
             exotic_type="Trifecta Box", runners=[1, 2, 3],
-            runner_names=["A", "B", "C"], probability=0.085,
-            value_ratio=2.0, num_combos=6, format="boxed",
+            runner_names=["A", "B", "C"], probability=0.40,
+            value_ratio=3.5, num_combos=6, format="boxed",
         )
         pp = _calculate_puntys_pick(picks, exotic)
         assert pp is not None
@@ -563,22 +564,22 @@ class TestCalculatePreSelections:
         assert result.exotic.exotic_type == "Trifecta Box"
 
     def test_puntys_pick_exotic_when_high_value(self):
-        """Exotic should become Punty's Pick when value >= 1.5x."""
+        """Exotic should become Punty's Pick when value >= 1.5x and EV > selection."""
         # Anchor odds must be <= $3.50 for exotic filter to pass
         runners = [
             _runner(1, "A", 3.00, win_prob=0.35, value=1.05),
             _runner(2, "B", 4.50, win_prob=0.22, value=1.02),
         ]
         ctx = _race_context(runners)
+        # Exotic EV: 0.50 * 3.0 - 1 = 0.50, sel EV: 0.35 * 3.0 - 1 = 0.05
+        # Exotic clearly beats selection by > 1.2x
         ctx["probabilities"]["exotic_combinations"] = [
             {"type": "Exacta Standout", "runners": [1, 2],
              "runner_names": ["A", "B"],
-             "probability": "15.0%", "value": 2.0, "combos": 1, "format": "standout"},
+             "probability": "50.0%", "value": 3.0, "combos": 1, "format": "standout"},
         ]
         result = calculate_pre_selections(ctx)
-        # Exotic value is 2.0x which is > 1.5x threshold
         if result.puntys_pick:
-            # The exotic edge (2.0 - 1.0 = 1.0) should beat selection edge
             assert result.puntys_pick.pick_type == "exotic"
 
 

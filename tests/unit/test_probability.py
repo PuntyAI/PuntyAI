@@ -485,11 +485,11 @@ class TestPlaceProbability:
 
     def test_medium_field(self):
         prob = _place_probability(0.20, 10)
-        assert prob == pytest.approx(0.60)
+        assert prob == pytest.approx(0.20 * 2.8)  # 8-12 runner fields: factor 2.8
 
     def test_large_field(self):
         prob = _place_probability(0.15, 14)
-        assert prob == pytest.approx(0.15 * 3.3)
+        assert prob == pytest.approx(0.15 * 3.2)  # 13+ runner fields: factor 3.2
 
     def test_capped_at_95(self):
         prob = _place_probability(0.50, 5)

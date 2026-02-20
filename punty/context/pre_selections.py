@@ -357,11 +357,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
         return "Win"  # flagged for minimal stake in _allocate_stakes
 
     # Short-priced favourites ($1.80-$2.00): Win preferred over Place
-    # At these odds, Place returns are meagre. Win at least pays full dividend.
+    # At these odds, Place returns ~$1.25 — not worth it.
     if odds < 2.00 and not is_roughie:
-        if win_prob >= 0.35 and value >= 1.00:
-            return "Win"
-        return "Win"  # still Win — Place at $1.80 is ~$1.25, not worth it
+        return "Win"
 
     # $2.00-$2.40: Win is viable with value edge
     if odds < 2.40 and not is_roughie:
@@ -373,11 +371,16 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     # $2.40-$3.00: Win sweet spot #1 (+21.3% ROI, 47% win rate)
     # #2 gets Each Way (94% collect rate at these odds)
-    if 2.40 <= odds < 3.0 and win_prob >= t["win_min_prob"]:
-        if rank == 1 and value >= 0.95:
-            return "Win"
-        if rank == 2:
+    if 2.40 <= odds < 3.0:
+        if win_prob >= t["win_min_prob"]:
+            if rank == 1 and value >= 0.95:
+                return "Win"
+            if rank == 2:
+                return "Each Way"
+        # Low-prob fallback: still competitive odds, Each Way or Place
+        if rank <= 2:
             return "Each Way"
+        return "Place"
 
     # $3.00-$4.00: Dead zone for Win (-30.8% ROI)
     # #1 gets Each Way (62% collect rate), #2 gets Place
@@ -396,22 +399,32 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     # $4.00-$5.00: THE profit engine (+144.8% ROI, 54% win rate)
     # #1 must be Win. #2 gets Each Way for upside + place protection.
-    if 4.0 <= odds < 5.0 and win_prob >= t["win_min_prob"] and value >= 0.95:
-        if rank == 1:
-            return "Win"
-        if rank == 2:
+    if 4.0 <= odds < 5.0:
+        if win_prob >= t["win_min_prob"] and value >= 0.95:
+            if rank == 1:
+                return "Win"
+            if rank == 2:
+                return "Each Way"
+            if value >= 1.05:
+                return "Saver Win"
+        # Low-prob fallback: good odds range, still worth Each Way/Place
+        if rank <= 2 and place_prob >= t["place_min_prob"]:
             return "Each Way"
-        if value >= 1.05:
-            return "Saver Win"
+        return "Place"
 
     # $5.00-$6.00: Mixed — Win data is thin (0/6), lean Each Way
-    if 5.0 <= odds <= 6.0 and win_prob >= t["win_min_prob"]:
-        if rank == 1:
-            if value >= 1.05:
-                return "Win"  # only with clear value edge
-            return "Each Way"
-        if rank == 2:
-            return "Each Way"
+    if 5.0 <= odds <= 6.0:
+        if win_prob >= t["win_min_prob"]:
+            if rank == 1:
+                if value >= 1.05:
+                    return "Win"  # only with clear value edge
+                return "Each Way"
+            if rank == 2:
+                return "Each Way"
+        # Low-prob fallback
+        if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
+            return "Place"
+        return "Place"
 
     # --- Roughie logic ---
     if is_roughie:
@@ -521,11 +534,12 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         return
 
     # Base allocation weights by rank
-    rank_weights = {1: 0.35, 2: 0.28, 3: 0.22, 4: 0.15}
+    base_rank_weights = {1: 0.35, 2: 0.28, 3: 0.22, 4: 0.15}
 
-    # Edge-aware multipliers on top of rank weights
+    # Edge-aware multipliers on top of rank weights — per pick, not shared dict
+    pick_weights: list[float] = []
     for pick in picks:
-        base = rank_weights.get(pick.rank, 0.15)
+        base = base_rank_weights.get(pick.rank, 0.15)
 
         # Win sweet spot $4-$6 bonus (our best edge at +60.8% ROI)
         if pick.bet_type in ("Win", "Saver Win") and 4.0 <= pick.odds <= 6.0:
@@ -548,12 +562,12 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         elif pick.bet_type == "Place" and pick.odds < 2.5:
             base *= 0.75  # reduce stake on low-odds Place
 
-        rank_weights[pick.rank] = base
+        pick_weights.append(base)
 
-    total_weight = sum(rank_weights.get(p.rank, 0.15) for p in picks)
+    total_weight = sum(pick_weights)
 
-    for pick in picks:
-        weight = rank_weights.get(pick.rank, 0.15)
+    for i, pick in enumerate(picks):
+        weight = pick_weights[i]
         raw_stake = pool * (weight / total_weight)
 
         # Each Way costs double (half win + half place)
@@ -667,18 +681,18 @@ def _calculate_puntys_pick(
 
     # Check if exotic beats selections
     if exotic and exotic.value_ratio >= EXOTIC_PUNTYS_PICK_VALUE:
-        # Compare exotic EV to selection EV
-        # Exotic EV proxy: (value_ratio - 1) * probability * 15
-        exotic_edge = exotic.value_ratio - 1.0
-        sel_edge = best_sel.expected_return
+        # Compare exotic EV to selection EV using consistent metric:
+        # Both as expected return per $1 (prob * payout - 1)
+        exotic_ev = exotic.probability * exotic.value_ratio - 1.0  # expected return per $1
+        sel_ev = best_sel.expected_return  # also expected return per $1
 
-        if exotic_edge > sel_edge * 1.2:  # exotic must be clearly better
+        if exotic_ev > sel_ev * 1.2:  # exotic must be clearly better
             return PuntysPick(
                 pick_type="exotic",
                 exotic_type=exotic.exotic_type,
                 exotic_runners=exotic.runners,
                 exotic_value=exotic.value_ratio,
-                expected_value=exotic_edge,
+                expected_value=exotic_ev,
                 reason=(
                     f"{exotic.exotic_type} at {exotic.value_ratio:.1f}x value "
                     f"— the model loves this combination."

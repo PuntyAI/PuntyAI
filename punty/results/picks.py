@@ -349,14 +349,35 @@ async def _settle_picks_for_race_impl(
                 else:
                     pick.pnl = round(-stake, 2)
             elif bet_type == "place":
-                pick.hit = placed
-                if placed and place_odds:
+                if num_places == 0:
+                    # No place betting in ≤4 runner fields — void (refund)
+                    pick.hit = False
+                    pick.pnl = 0.0
+                    logger.info(
+                        f"Voiding Place bet for {pick.horse_name} R{pick.race_number} "
+                        f"— no place betting in {field_size}-runner field"
+                    )
+                elif placed and place_odds:
+                    pick.hit = True
                     pick.pnl = round(place_odds * stake - stake, 2)
                 else:
+                    pick.hit = False
                     pick.pnl = round(-stake, 2)
             elif bet_type == "each_way":
                 half = stake / 2
-                if won and win_odds:
+                if num_places == 0:
+                    # No place betting — EW becomes Win only, place half refunded
+                    if won and win_odds:
+                        pick.pnl = round(win_odds * half - half, 2)  # win half pays, place half refunded ($0)
+                        pick.hit = True
+                    else:
+                        pick.pnl = round(-half, 2)  # only lose win half, place half refunded
+                        pick.hit = False
+                    logger.info(
+                        f"EW bet for {pick.horse_name} R{pick.race_number} "
+                        f"— place half voided in {field_size}-runner field"
+                    )
+                elif won and win_odds:
                     # Win half always pays at win odds; place half pays if place_odds available
                     win_return = win_odds * half
                     place_return = place_odds * half if place_odds else half  # refund place half if no place odds
