@@ -447,6 +447,33 @@ class TestTightClusterExoticBoost:
 
 
 # ──────────────────────────────────────────────
+# Tests: top-pick exotic bonus
+# ──────────────────────────────────────────────
+
+class TestExoticTopPickBonus:
+    def test_prefers_combo_with_top_pick(self):
+        """Exotic with pick #1 should beat similar-EV exotic without top pick."""
+        picks = [
+            RecommendedPick(1, 2, "Alpha", "Win", 5, 3.0, 1.5, 0.25, 0.50, 1.1, 1.0, 0.3),
+            RecommendedPick(2, 4, "Beta", "Place", 5, 5.0, 2.0, 0.20, 0.40, 1.0, 0.9, 0.1),
+            RecommendedPick(3, 1, "Gamma", "Place", 5, 6.0, 2.5, 0.15, 0.35, 0.9, 0.8, 0.0),
+            RecommendedPick(4, 3, "Delta", "Place", 5, 9.0, 3.0, 0.10, 0.25, 0.7, 0.6, -0.1, is_roughie=True),
+        ]
+        combos = [
+            # combo with picks #3+#4 (no top-2 pick) — marginally higher base EV
+            {"type": "Quinella", "runners": [1, 3], "runner_names": ["Gamma", "Delta"],
+             "probability": 0.08, "value": 2.0, "combos": 1, "format": "flat"},
+            # combo with pick #1 included — lower raw EV but top pick bonus
+            {"type": "Quinella", "runners": [2, 4], "runner_names": ["Alpha", "Beta"],
+             "probability": 0.07, "value": 2.0, "combos": 1, "format": "flat"},
+        ]
+        result = _select_exotic(combos, {2, 4, 1, 3}, picks=picks)
+        assert result is not None
+        # Should prefer the combo with pick #1 (saddlecloth 2) due to top-pick bonus
+        assert 2 in result.runners
+
+
+# ──────────────────────────────────────────────
 # Tests: _calculate_puntys_pick
 # ──────────────────────────────────────────────
 

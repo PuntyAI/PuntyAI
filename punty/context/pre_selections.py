@@ -660,6 +660,12 @@ def _select_exotic(
             elif spread <= 0.08:
                 cluster_boost = 1.25  # tight — moderate box preference
 
+    # Build rank map: saddlecloth → tip_rank (1=best, 4=roughie)
+    rank_map: dict[int, int] = {}
+    if picks:
+        for p in picks:
+            rank_map[p.saddlecloth] = p.rank
+
     # Score all combos by expected value: probability × value_ratio
     # Higher EV = better mix of probability and payout
     scored = []
@@ -691,6 +697,18 @@ def _select_exotic(
         efficiency_bonus = max(0, (1 - combos / 24)) * 0.1 * ev_score
 
         score = ev_score + efficiency_bonus
+
+        # Top-pick bonus: exotics should anchor on our best selections.
+        # Combos with pick #1 get a 30% boost, pick #2 gets 15%.
+        # This prevents the exotic from skipping our strongest horse
+        # in favour of a roughie-heavy combo with marginally higher raw EV.
+        if rank_map:
+            runner_ranks = [rank_map.get(r, 99) for r in runners]
+            best_rank = min(runner_ranks)
+            if best_rank == 1:
+                score *= 1.30
+            elif best_rank == 2:
+                score *= 1.15
 
         # Tight cluster boost: prefer box exotics when picks are bunched
         if cluster_boost > 1.0:
