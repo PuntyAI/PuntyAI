@@ -103,12 +103,6 @@ class PuntysPick:
     exotic_type: str | None = None
     exotic_runners: list[int] = field(default_factory=list)
     exotic_value: float = 0.0
-    # Optional secondary bet:
-    secondary_saddlecloth: int | None = None
-    secondary_horse: str | None = None
-    secondary_bet_type: str | None = None
-    secondary_stake: float | None = None
-    secondary_odds: float | None = None
 
 
 @dataclass
@@ -778,21 +772,6 @@ def _calculate_puntys_pick(
         reason=_pick_reason(best_sel),
     )
 
-    # Add secondary bet if there's a clear #2
-    if len(picks) >= 2:
-        second = sorted(
-            [p for p in picks if p.saddlecloth != best_sel.saddlecloth],
-            key=lambda p: p.expected_return,
-            reverse=True,
-        )
-        if second and second[0].expected_return > 0:
-            s = second[0]
-            pp.secondary_saddlecloth = s.saddlecloth
-            pp.secondary_horse = s.horse_name
-            pp.secondary_bet_type = s.bet_type
-            pp.secondary_stake = s.stake
-            pp.secondary_odds = s.place_odds if s.bet_type == "Place" and s.place_odds else s.odds
-
     return pp
 
 
@@ -945,16 +924,10 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
                 f"— $20 (Value: {pp.exotic_value:.1f}x) | {pp.reason}"
             )
         else:
-            line = (
+            lines.append(
                 f"  Punty's Pick: {pp.horse_name} (No.{pp.saddlecloth}) "
-                f"${pp.odds:.2f} {pp.bet_type}"
+                f"${pp.odds:.2f} {pp.bet_type} | {pp.reason}"
             )
-            if pp.secondary_horse:
-                line += (
-                    f" + {pp.secondary_horse} (No.{pp.secondary_saddlecloth}) "
-                    f"${pp.secondary_odds:.2f} {pp.secondary_bet_type}"
-                )
-            lines.append(f"  {line} | {pp.reason}")
 
     if pre_sel.notes:
         for note in pre_sel.notes:

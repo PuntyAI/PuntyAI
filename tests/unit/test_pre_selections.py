@@ -489,22 +489,15 @@ class TestCalculatePuntysPick:
         assert pp is not None
         assert pp.pick_type == "selection"  # exotic value below 1.5x
 
-    def test_secondary_bet_added(self):
+    def test_single_horse_only(self):
+        """Punty's Pick should always be a single horse, no secondary."""
         picks = [
             RecommendedPick(1, 1, "Alpha", "Win", 8, 3.5, 1.5, 0.30, 0.60, 1.15, 1.05, 0.5),
             RecommendedPick(2, 2, "Beta", "Place", 5, 5.0, 2.0, 0.20, 0.50, 1.10, 1.05, 0.1),
         ]
         pp = _calculate_puntys_pick(picks, None)
-        assert pp.secondary_horse == "Beta"
-        assert pp.secondary_bet_type == "Place"
-
-    def test_no_secondary_when_negative_ev(self):
-        picks = [
-            RecommendedPick(1, 1, "Alpha", "Win", 8, 3.5, 1.5, 0.30, 0.60, 1.15, 1.05, 0.5),
-            RecommendedPick(2, 2, "Beta", "Place", 5, 5.0, 2.0, 0.10, 0.30, 0.90, 0.85, -0.3),
-        ]
-        pp = _calculate_puntys_pick(picks, None)
-        assert pp.secondary_horse is None
+        assert pp.horse_name == "Alpha"
+        assert not hasattr(pp, "secondary_horse")
 
     def test_empty_picks_returns_none(self):
         assert _calculate_puntys_pick([], None) is None
