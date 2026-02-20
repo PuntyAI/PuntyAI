@@ -543,39 +543,19 @@ def _select_exotic(
     anchor_odds: float = 0.0,
     venue_type: str = "",
 ) -> RecommendedExotic | None:
-    """Select the best exotic bet, enforcing consistency with selections.
+    """Select the best exotic bet based on probability × value (EV).
+
+    All exotic types compete on equal footing — Quinella, Exacta,
+    Trifecta Box, Trifecta Standout, First4, First4 Box.
+    The Harville model probabilities and value ratios drive the selection.
 
     Overlap rules: ALL exotic runners MUST be from our selections.
-
-    Type preferences (validated on 65 settled exotics):
-    - Exacta / Exacta Standout: 22.2% hit rate, +0.2% ROI — BEST
-    - Trifecta Standout: ~16% hit rate when #1 wins
-    - Trifecta Box: 4.5% hit rate, -19.2% ROI — avoid
-    - Quinella: 0/3 hits — avoid
-    - First4 Box: 0% hit rate — banned
-
-    Strategy: Anchor on #1 pick (39% win rate). Exacta Standout
-    leverages this directly with fewer combos and higher hit rate.
     """
     if not exotic_combos:
         return None
 
-    # Anchor odds filter: $2-$3 anchor = +128% ROI, $4-$5 = -81% ROI
-    # Only take exotics when the top pick is short enough to anchor reliably
-    ANCHOR_MAX_ODDS = 3.50
-    if anchor_odds > ANCHOR_MAX_ODDS:
-        return None
-
-    # Large field filter: 0% hit rate in 13+ runner fields (-100% ROI on 16 bets)
-    LARGE_FIELD_THRESHOLD = 13
-    if field_size >= LARGE_FIELD_THRESHOLD:
-        return None
-
-    # Metro venue filter: metro exotics -70% ROI vs provincial breakeven
-    if venue_type.startswith("metro"):
-        return None
-
-    # Score exotics: heavily favour formats that anchor on #1 pick
+    # Score all combos by expected value: probability × value_ratio
+    # Higher EV = better mix of probability and payout
     scored = []
     for ec in exotic_combos:
         runners = set(ec.get("runners", []))
@@ -587,33 +567,24 @@ def _select_exotic(
         if overlap_ratio < 1.0:
             continue
 
-        exotic_type = ec.get("type", "").lower()
-
-        # Ban underperforming types
-        if "first4" in exotic_type and "box" in exotic_type:
-            continue  # 0% hit rate historically
-
-        # Blend value with probability
+        # Parse probability
         raw_prob = ec.get("probability", 0)
         if isinstance(raw_prob, str):
             raw_prob = float(raw_prob.rstrip("%")) / 100
-        prob_weight = min(raw_prob / 0.05, 1.0)
 
-        # Type bonuses based on validated performance (100 settled exotics)
-        type_bonus = 0.0
-        if "exacta" in exotic_type:
-            type_bonus = 1.5  # all 8 exotic wins were exacta standouts
-            if "standout" in exotic_type:
-                type_bonus = 2.5  # 15.7% SR, avg +$78.63 per win
-        elif "quinella" in exotic_type:
-            type_bonus = 0.5  # broader coverage when no strong order view
-        elif "trifecta" in exotic_type and "standout" in exotic_type:
-            type_bonus = -2.0  # 0 wins — killed, use trifecta box instead
-        elif "trifecta" in exotic_type and "box" in exotic_type:
-            type_bonus = 0.3  # 2 wins from 46, but one paid +$557
+        value = ec.get("value", 1.0)
 
-        # Score = value * probability_weight + overlap bonus + type bonus
-        score = ec.get("value", 1.0) * prob_weight + overlap_ratio * 1.0 + type_bonus
+        # EV score: probability × value_ratio
+        # This naturally favours combos where both probability AND value are good
+        # A 10% prob × 2.0 value (EV 0.20) beats 5% prob × 3.0 value (EV 0.15)
+        ev_score = raw_prob * value
+
+        # Small combo efficiency bonus: fewer combos = higher unit stake = bigger payout
+        # Normalise: 1 combo = +10%, 24 combos = +0%
+        combos = max(1, ec.get("combos", 1))
+        efficiency_bonus = max(0, (1 - combos / 24)) * 0.1 * ev_score
+
+        score = ev_score + efficiency_bonus
 
         scored.append((score, ec))
 
@@ -623,13 +594,15 @@ def _select_exotic(
         return None
 
     best = scored[0][1]
+    best_prob = best.get("probability", 0)
+    if isinstance(best_prob, str):
+        best_prob = float(best_prob.rstrip("%")) / 100
+
     return RecommendedExotic(
         exotic_type=best.get("type", ""),
         runners=best.get("runners", []),
         runner_names=best.get("runner_names", []),
-        probability=float(best.get("probability", "0").rstrip("%")) / 100
-        if isinstance(best.get("probability"), str)
-        else best.get("probability", 0),
+        probability=best_prob,
         value_ratio=best.get("value", 1.0),
         num_combos=best.get("combos", 1),
         format=best.get("format", "boxed"),

@@ -269,14 +269,14 @@ class TestSelectExotic:
     def test_returns_none_when_empty(self):
         assert _select_exotic([], {1, 2}) is None
 
-    def test_metro_venue_returns_none(self):
-        """Metro venues should skip exotics (-70% ROI)."""
+    def test_metro_venue_allowed(self):
+        """Metro venues should allow exotics (no venue filter)."""
         combos = [
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": "12.5%", "value": 1.50, "combos": 1, "format": "flat"},
         ]
-        assert _select_exotic(combos, {1, 2}, venue_type="metro_vic") is None
-        assert _select_exotic(combos, {1, 2}, venue_type="metro_nsw") is None
+        result = _select_exotic(combos, {1, 2}, venue_type="metro_vic")
+        assert result is not None
 
     def test_provincial_venue_allowed(self):
         """Provincial venues should allow exotics."""
@@ -295,6 +295,34 @@ class TestSelectExotic:
         result = _select_exotic(combos, {1, 2})
         assert result is not None
         assert abs(result.probability - 0.125) < 0.001
+
+    def test_ev_scoring_picks_best_type(self):
+        """Higher EV (prob × value) wins regardless of exotic type."""
+        combos = [
+            # Exacta: 10% prob × 1.3 value = 0.13 EV
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.10, "value": 1.3, "combos": 1, "format": "flat"},
+            # Trifecta Box: 8% prob × 2.0 value = 0.16 EV (higher)
+            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+             "probability": 0.08, "value": 2.0, "combos": 6, "format": "boxed"},
+        ]
+        result = _select_exotic(combos, {1, 2, 3})
+        assert result is not None
+        assert result.exotic_type == "Trifecta Box"
+
+    def test_all_types_can_win(self):
+        """Every exotic type can be selected when it has the best EV."""
+        for etype, fmt in [
+            ("Quinella", "flat"), ("Exacta Standout", "standout"),
+            ("Trifecta Box", "boxed"), ("First4", "legs"), ("First4 Box", "boxed"),
+        ]:
+            combos = [
+                {"type": etype, "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+                 "probability": 0.15, "value": 2.0, "combos": 3, "format": fmt},
+            ]
+            result = _select_exotic(combos, {1, 2, 3})
+            assert result is not None, f"{etype} should be selectable"
+            assert result.exotic_type == etype
 
 
 # ──────────────────────────────────────────────
