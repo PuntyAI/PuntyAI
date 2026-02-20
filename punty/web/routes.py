@@ -322,10 +322,19 @@ async def meeting_detail(
     )
     content_items = result.scalars().all()
 
-    # Load picks for this meeting, grouped by race number
-    pick_result = await db.execute(
-        select(Pick).where(Pick.meeting_id == meeting_id).order_by(Pick.tip_rank)
-    )
+    # Load picks only from active content (exclude superseded/rejected)
+    active_ids = [c.id for c in content_items if c.status not in ("superseded", "rejected")]
+    if active_ids:
+        pick_result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.content_id.in_(active_ids),
+            ).order_by(Pick.tip_rank)
+        )
+    else:
+        pick_result = await db.execute(
+            select(Pick).where(Pick.meeting_id == meeting_id).order_by(Pick.tip_rank)
+        )
     all_picks = pick_result.scalars().all()
     picks_by_race = {}
     meeting_picks = []  # big3_multi, sequences

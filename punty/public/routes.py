@@ -92,6 +92,11 @@ async def get_recent_wins_public(limit: int = 15) -> dict:
     from punty.results.celebrations import get_celebration
 
     async with async_session() as db:
+        # Subquery: content IDs that are NOT superseded/rejected
+        active_content = select(Content.id).where(
+            Content.status.notin_(["superseded", "rejected"])
+        ).scalar_subquery()
+
         # Get recent settled wins, ordered by settled_at descending
         result = await db.execute(
             select(Pick, Meeting)
@@ -102,6 +107,7 @@ async def get_recent_wins_public(limit: int = 15) -> dict:
                     Pick.hit == True,
                     Pick.pnl > 0,  # Only profitable wins
                     Meeting.selected == True,  # Exclude deselected meetings
+                    Pick.content_id.in_(active_content),
                 )
             )
             .order_by(Pick.settled_at.desc())
@@ -148,6 +154,11 @@ async def get_winner_stats(today: bool = False) -> dict:
     async with async_session() as db:
         today_date = melb_today()
 
+        # Exclude picks from superseded/rejected content
+        active_content = select(Content.id).where(
+            Content.status.notin_(["superseded", "rejected"])
+        ).scalar_subquery()
+
         # Today's winners (all pick types that hit)
         today_result = await db.execute(
             select(func.count(Pick.id))
@@ -157,6 +168,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                     Pick.hit == True,
                     Pick.settled == True,
                     Meeting.date == today_date,
+                    Pick.content_id.in_(active_content),
                 )
             )
         )
@@ -194,6 +206,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                 and_(
                     Pick.hit == True,
                     Pick.settled == True,
+                    Pick.content_id.in_(active_content),
                 )
             )
         )
@@ -335,6 +348,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Pick.pnl > 0,
                         Meeting.date == today_date,
                         Meeting.selected == True,
+                        Pick.content_id.in_(active_content),
                     )
                 )
                 .order_by(Pick.pnl.desc())
@@ -359,6 +373,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Meeting.date >= recent_cutoff,
                         Meeting.date < today_date,
                         Meeting.selected == True,
+                        Pick.content_id.in_(active_content),
                     )
                 )
                 .order_by(Pick.pnl.desc())
@@ -960,10 +975,19 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         if not early_mail and not wrapup:
             return None
 
-        # Load ALL picks for this meeting in one query — compute everything in Python
-        picks_result = await db.execute(
-            select(Pick).where(Pick.meeting_id == meeting_id)
-        )
+        # Load picks only from active (approved/sent) content — exclude superseded/rejected
+        active_content_ids = [c.id for c in all_content]
+        if active_content_ids:
+            picks_result = await db.execute(
+                select(Pick).where(
+                    Pick.meeting_id == meeting_id,
+                    Pick.content_id.in_(active_content_ids),
+                )
+            )
+        else:
+            picks_result = await db.execute(
+                select(Pick).where(Pick.meeting_id == meeting_id)
+            )
         all_picks = picks_result.scalars().all()
         pick_data = _compute_pick_data(all_picks)
 

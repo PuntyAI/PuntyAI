@@ -28,6 +28,20 @@ async def store_picks_from_content(
     # Delete existing picks for this content
     await db.execute(delete(Pick).where(Pick.content_id == content_id))
 
+    # Also delete picks from superseded/rejected content for the same meeting
+    # This catches orphan picks from manual approvals or bypassed workflows
+    from punty.models.content import Content, ContentStatus
+    stale_ids_result = await db.execute(
+        select(Content.id).where(
+            Content.meeting_id == meeting_id,
+            Content.content_type == "early_mail",
+            Content.status.in_([ContentStatus.SUPERSEDED.value, ContentStatus.REJECTED.value]),
+        )
+    )
+    stale_ids = stale_ids_result.scalars().all()
+    if stale_ids:
+        await db.execute(delete(Pick).where(Pick.content_id.in_(stale_ids)))
+
     pick_dicts = parse_early_mail(raw_content, content_id, meeting_id)
     if not pick_dicts:
         logger.warning(f"No picks parsed from content {content_id} — flagging for review")
