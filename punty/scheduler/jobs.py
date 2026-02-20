@@ -913,9 +913,9 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     # Update track condition if changed
                     tc = field_data.get("meeting", {}).get("track_condition")
                     if tc and not meeting.track_condition_locked:
-                        from punty.scrapers.orchestrator import _is_more_specific, _normalise_track
+                        from punty.scrapers.orchestrator import _should_update_condition, _normalise_track
                         if _normalise_track(tc) != _normalise_track(meeting.track_condition or ""):
-                            if _is_more_specific(tc, meeting.track_condition):
+                            if _should_update_condition(tc, meeting.track_condition):
                                 logger.info(f"Track condition update: {meeting.track_condition!r} → {tc!r}")
                                 meeting.track_condition = tc
 

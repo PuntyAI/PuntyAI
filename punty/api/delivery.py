@@ -298,9 +298,9 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
 
-    if content.status != ContentStatus.APPROVED.value:
+    if content.status not in (ContentStatus.APPROVED.value, ContentStatus.SENT.value):
         raise HTTPException(
-            status_code=400, detail="Content must be approved before sending"
+            status_code=400, detail="Content must be approved (or already sent) before sending"
         )
 
     if request.schedule_at:

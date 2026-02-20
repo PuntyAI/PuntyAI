@@ -617,7 +617,7 @@ class ResultsMonitor:
         # Prevents flip-flop when racing.com returns "Good" but PF has "Good 4".
         if scraped_tc and scraped_tc != meeting.track_condition:
             from punty.results.change_detection import _base_condition
-            from punty.scrapers.orchestrator import _is_more_specific
+            from punty.scrapers.orchestrator import _should_update_condition
             old_tc = meeting.track_condition
             old_base = _base_condition(old_tc) if old_tc else ""
             new_base = _base_condition(scraped_tc)
@@ -635,7 +635,7 @@ class ResultsMonitor:
                     f"ignoring {old_tc} → {scraped_tc} (changed {int((now - last_change).total_seconds())}s ago)"
                 )
                 scraped_tc = None
-            elif old_base != new_base or _is_more_specific(scraped_tc, old_tc or ""):
+            elif _should_update_condition(scraped_tc, old_tc or ""):
                 # Accept: base category changed (real upgrade/downgrade) OR new is more specific
                 meeting.track_condition = scraped_tc
                 if old_base != new_base:
@@ -1823,9 +1823,9 @@ class ResultsMonitor:
         tc = field_data.get("meeting", {}).get("track_condition")
         if tc:
             from punty.models.meeting import Meeting
-            from punty.scrapers.orchestrator import _is_more_specific
+            from punty.scrapers.orchestrator import _should_update_condition
             meeting = await db.get(Meeting, meeting_id)
-            if meeting and _is_more_specific(tc, meeting.track_condition or ""):
+            if meeting and _should_update_condition(tc, meeting.track_condition or ""):
                 meeting.track_condition = tc
 
         await db.flush()

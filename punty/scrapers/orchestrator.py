@@ -22,37 +22,42 @@ def _normalise_track(cond: str | None) -> str:
     return re.sub(r"\s+", " ", cond.strip().lower().replace("(", "").replace(")", ""))
 
 
-def _is_more_specific(new_cond: str | None, old_cond: str | None) -> bool:
-    """Return True if new condition is strictly more specific than old.
+def _should_update_condition(new_cond: str | None, old_cond: str | None) -> bool:
+    """Return True if track condition should be updated.
 
-    "More specific" means: new has a rating number and old doesn't
-    (e.g. "Good" → "Good 4"), with matching base category.
+    Allows all updates EXCEPT losing specificity within the same base category
+    (e.g. blocks "Good 4" → "Good", but allows "Soft 5" → "Good 4").
+
+    Returns True for:
+    - No existing condition (old is None/empty)
+    - Different base category ("Soft 5" → "Good 4") — real condition change
+    - More specific ("Good" → "Good 4")
+    - Same specificity, different rating ("Good 3" → "Good 4")
 
     Returns False for:
+    - New is None/empty
     - Same normalised value ("Good 4" vs "Good 4")
-    - Less specific ("Good 4" → "Good")
-    - Different base category ("Good 4" → "Soft 5")
-    - Neither has rating ("Good" vs "Good")
+    - Less specific within same base ("Good 4" → "Good")
     """
     import re
     if not new_cond:
         return False
     if not old_cond:
         return True
-    # Same normalised value — not more specific
+    # Same normalised value — no update needed
     norm_new = re.sub(r"\s+", " ", new_cond.strip().lower())
     norm_old = re.sub(r"\s+", " ", old_cond.strip().lower())
     if norm_new == norm_old:
         return False
+    # Only block: same base category, old has rating, new doesn't
     new_has_rating = bool(re.search(r"\d", new_cond))
     old_has_rating = bool(re.search(r"\d", old_cond))
-    # New has rating, old doesn't → more specific (if same base)
-    if new_has_rating and not old_has_rating:
+    if not new_has_rating and old_has_rating:
         new_base = new_cond.strip().split()[0].lower()
         old_base = old_cond.strip().split()[0].lower()
-        return new_base == old_base
-    # All other cases: not more specific
-    return False
+        if new_base == old_base:
+            return False  # "Good 4" → "Good" blocked
+    return True
 
 
 # All Runner fields that come from the scraper
@@ -880,7 +885,7 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
         val = m.get(field)
         if val is not None:
             if field == "track_condition" and meeting.track_condition:
-                if _is_more_specific(val, meeting.track_condition):
+                if _should_update_condition(val, meeting.track_condition):
                     logger.info(f"Track condition update via upsert: {meeting.track_condition!r} → {val!r}")
                     meeting.track_condition = val
                 else:
@@ -961,7 +966,7 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
 def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
     """Apply conditions data to a Meeting object."""
     new_cond = cond.get("condition")
-    if new_cond and _is_more_specific(new_cond, meeting.track_condition):
+    if new_cond and _should_update_condition(new_cond, meeting.track_condition):
         logger.info(f"Condition for {meeting.venue}: {meeting.track_condition!r} → {new_cond!r}")
         meeting.track_condition = new_cond
     meeting.rail_position = cond.get("rail") or meeting.rail_position
