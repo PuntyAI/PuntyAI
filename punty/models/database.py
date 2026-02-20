@@ -3,6 +3,7 @@
 import logging
 from typing import AsyncGenerator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -21,8 +22,18 @@ class Base(DeclarativeBase):
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    connect_args={"timeout": 30},
+    connect_args={"timeout": 60},
+    pool_pre_ping=True,
 )
+
+
+# Set busy_timeout and WAL on EVERY new connection (not just init_db)
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragmas(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=60000")
+    cursor.close()
 
 # Session factory
 async_session = async_sessionmaker(
