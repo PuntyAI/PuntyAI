@@ -82,14 +82,32 @@
         border-radius: 1px;
     }
 
-    /* ── Quote ── */
+    /* ── Quote — speech bubble style ── */
     .punty-quote-v2 {
         position: relative;
         padding: 1.5rem 1.75rem;
-        background: rgba(233,30,140,0.04);
-        border-left: 3px solid var(--magenta);
-        border-radius: 0 12px 12px 0;
+        background: var(--bg-card);
+        border: 2px solid var(--magenta);
+        border-radius: 14px;
         margin-bottom: 2.5rem;
+    }
+    .punty-quote-v2::before {
+        content: '';
+        position: absolute;
+        bottom: -12px;
+        left: 30px;
+        border: 12px solid transparent;
+        border-top-color: var(--magenta);
+        border-bottom: 0;
+    }
+    .punty-quote-v2::after {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        left: 32px;
+        border: 10px solid transparent;
+        border-top-color: var(--bg-card);
+        border-bottom: 0;
     }
     .punty-quote-v2 p {
         font-size: 1.05rem;
@@ -151,42 +169,37 @@
         .stat-item { padding: 1rem 0.5rem; }
     }
 
-    /* ── Strike Rate Pills ── */
-    .sr-pill {
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        padding: 0.625rem 1rem;
+    /* ── Strike Rate Cards ── */
+    .sr-card {
+        text-align: center;
+        padding: 1rem 0.75rem;
         background: var(--bg-card-alt);
         border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        transition: border-color 0.2s;
+        border-radius: 12px;
     }
-    .sr-pill:hover { border-color: rgba(255,255,255,0.15); }
-    .sr-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-    .sr-pill-rate {
+    .sr-card-rate {
         font-family: 'Orbitron', sans-serif;
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #fff;
+        font-size: 1.5rem;
+        font-weight: 800;
+        line-height: 1.1;
     }
-    .sr-pill-label {
+    .sr-card-label {
         font-family: 'Rajdhani', sans-serif;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-    }
-    .sr-pill-detail {
-        margin-left: auto;
         font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
         color: var(--text-muted);
+        margin-top: 0.375rem;
+    }
+    .sr-card-detail {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        margin-top: 0.125rem;
+    }
+    @media (max-width: 767px) {
+        .sr-card-rate { font-size: 1.15rem; }
+        .sr-card { padding: 0.75rem 0.5rem; }
     }
 
     /* ── Best Bet Card ── */
@@ -282,32 +295,34 @@
         display: flex;
         align-items: center;
         gap: 1rem;
-        padding: 1.125rem 1.25rem;
+        padding: 1.25rem 1.5rem;
         background: var(--bg-card);
         border: 1px solid var(--border-subtle);
-        border-radius: 12px;
+        border-radius: 14px;
         text-decoration: none;
         color: inherit;
-        transition: all 0.2s;
+        transition: all 0.25s;
     }
     .tip-card:hover {
-        border-color: rgba(233,30,140,0.3);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        border-color: rgba(233,30,140,0.35);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.4), 0 0 20px rgba(233,30,140,0.06);
+        background: linear-gradient(135deg, var(--bg-card) 0%, rgba(26,10,46,0.5) 100%);
     }
     .tip-state {
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
     .tip-state span {
         font-family: 'Orbitron', sans-serif;
-        font-size: 0.55rem;
+        font-size: 0.6rem;
         font-weight: 800;
         letter-spacing: 0.1em;
         color: #fff;
@@ -315,17 +330,17 @@
     .tip-venue {
         font-family: 'Rajdhani', sans-serif;
         font-weight: 700;
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         color: var(--text-primary);
     }
     .tip-arrow {
         margin-left: auto;
         color: var(--text-muted);
-        transition: color 0.2s, transform 0.2s;
+        transition: color 0.25s, transform 0.25s;
     }
     .tip-card:hover .tip-arrow {
         color: var(--magenta);
-        transform: translateX(3px);
+        transform: translateX(4px);
     }
 
     /* ── How It Works Steps ── */
@@ -334,27 +349,32 @@
         background: var(--bg-card);
         border: 1px solid var(--border-subtle);
         border-radius: 16px;
-        padding: 2rem 1.75rem;
-        transition: border-color 0.2s;
+        padding: 2.25rem 1.5rem;
+        text-align: center;
+        transition: border-color 0.2s, transform 0.2s;
     }
-    .step-card:hover { border-color: rgba(255,255,255,0.12); }
+    .step-card:hover {
+        border-color: rgba(255,255,255,0.12);
+        transform: translateY(-3px);
+    }
     .step-num {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'Orbitron', sans-serif;
-        font-size: 0.9rem;
+        font-size: 1.25rem;
         font-weight: 800;
         color: #fff;
         background: var(--gradient-sunset);
-        margin-bottom: 1.25rem;
+        margin: 0 auto 1.25rem;
+        box-shadow: 0 4px 20px rgba(233,30,140,0.25);
     }
     .step-title {
         font-family: 'Rajdhani', sans-serif;
-        font-size: 1.35rem;
+        font-size: 1.3rem;
         font-weight: 700;
         color: #fff;
         margin-bottom: 0.75rem;
@@ -366,30 +386,65 @@
     }
 
     /* ── Video Section ── */
+    .video-section-bg {
+        position: relative;
+    }
+    .video-section-bg::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(ellipse 60% 80% at 50% 60%, rgba(0,212,255,0.06), transparent),
+            radial-gradient(ellipse 40% 50% at 30% 40%, rgba(233,30,140,0.04), transparent);
+        pointer-events: none;
+    }
     .video-wrap {
         position: relative;
+        width: 100%;
         max-width: 340px;
         aspect-ratio: 9/16;
         border-radius: 20px;
         overflow: hidden;
-        border: 1px solid rgba(0,212,255,0.15);
-        box-shadow: 0 0 40px rgba(0,212,255,0.1);
+        border: 2px solid rgba(0,212,255,0.2);
+        box-shadow: 0 0 60px rgba(0,212,255,0.12), 0 0 120px rgba(233,30,140,0.06);
         background: #0a0a0f;
+        margin: 0 auto;
     }
 
     /* ── CTA Section ── */
     .cta-section {
         position: relative;
         overflow: hidden;
+        background: linear-gradient(160deg, #12121a 0%, #1a0a2e 40%, #0f1a2e 70%, #12121a 100%);
     }
     .cta-section::before {
         content: '';
         position: absolute;
         inset: 0;
         background:
-            radial-gradient(ellipse 50% 80% at 30% 50%, rgba(233,30,140,0.08), transparent),
-            radial-gradient(ellipse 50% 80% at 70% 50%, rgba(0,212,255,0.06), transparent);
+            radial-gradient(ellipse 50% 80% at 30% 50%, rgba(233,30,140,0.10), transparent),
+            radial-gradient(ellipse 50% 80% at 70% 50%, rgba(0,212,255,0.08), transparent);
         pointer-events: none;
+    }
+    .cta-section::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+        background-size: 50px 50px;
+        pointer-events: none;
+        opacity: 0.6;
+    }
+    .cta-punty {
+        max-width: 180px;
+        border-radius: 20px;
+        filter: drop-shadow(0 0 40px rgba(233,30,140,0.2));
+        margin: 0 auto 2rem;
+    }
+    @media (min-width: 768px) {
+        .cta-punty { max-width: 220px; }
     }
 
     /* ── Section spacing ── */
@@ -510,19 +565,16 @@
             </div>
         </div>
 
-        <!-- Strike Rates — compact pill row -->
+        <!-- Strike Rates -->
         {% if stats.pick_ranks and stats.pick_ranks[0].total > 0 %}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pb-5 pt-2" id="strike-rates">
+        <div class="grid grid-cols-4 gap-3 pb-5 pt-3" id="strike-rates">
             {% for pr in stats.pick_ranks %}
             {% if pr.rank >= 1 %}
             {% set rank_colors = {'1': 'var(--magenta)', '2': 'var(--cyan)', '3': 'var(--yellow)', '4': 'var(--purple)'} %}
-            <div class="sr-pill">
-                <div class="sr-dot" style="background: {{ rank_colors[pr.rank|string] }};"></div>
-                <div>
-                    <div class="sr-pill-rate"><span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span></div>
-                    <div class="sr-pill-label">{{ pr.label }}</div>
-                </div>
-                <div class="sr-pill-detail"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
+            <div class="sr-card">
+                <div class="sr-card-rate" style="color: {{ rank_colors[pr.rank|string] }};"><span data-rank="{{ pr.rank }}" class="sr-rate">{{ pr.rate }}%</span></div>
+                <div class="sr-card-label">{{ pr.label }}</div>
+                <div class="sr-card-detail"><span class="sr-detail" data-rank="{{ pr.rank }}">{{ pr.hits }}/{{ pr.total }}</span></div>
             </div>
             {% endif %}
             {% endfor %}
@@ -651,24 +703,24 @@
             </div>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-7">
             <div class="step-card">
                 <div class="step-num">1</div>
-                <div class="step-title">Crunch The Form</div>
+                <h3 class="step-title">Crunch The Form</h3>
                 <p class="step-desc">
                     Every runner scored across 9 weighted factors — form, market, barriers, jockeys, trainers, track conditions, and more.
                 </p>
             </div>
             <div class="step-card">
                 <div class="step-num">2</div>
-                <div class="step-title">Classify The Race</div>
+                <h3 class="step-title">Classify The Race</h3>
                 <p class="step-desc">
                     Each race classified by type — dominant edge, place leverage, open handicap — to determine the right betting approach.
                 </p>
             </div>
             <div class="step-card">
                 <div class="step-num">3</div>
-                <div class="step-title">Find The Edge</div>
+                <h3 class="step-title">Find The Edge</h3>
                 <p class="step-desc">
                     Win and place probabilities compared to market odds. Only bet when there's a genuine edge — not a hunch.
                     <a href="/how-it-works#step-2" class="font-semibold" style="color: var(--cyan);">Learn more</a>
@@ -676,9 +728,9 @@
             </div>
             <div class="step-card">
                 <div class="step-num" style="background: linear-gradient(135deg, var(--orange), var(--magenta));">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                 </div>
-                <div class="step-title">Bet Smart</div>
+                <h3 class="step-title">Bet Smart</h3>
                 <p class="step-desc">
                     The right bet type for each race — Win, Place, or Each Way — chosen by expected value, not gut feel. Live updates all day.
                 </p>
@@ -694,38 +746,35 @@
 </section>
 
 <!-- ═══════════════════ VIDEO ═══════════════════ -->
-<section class="section-pad">
+<section class="section-pad video-section-bg">
     <div class="max-w-4xl mx-auto px-6 sm:px-8">
-        <div class="flex flex-col md:flex-row items-center gap-10 md:gap-16">
-            <!-- Video -->
-            <div class="flex-shrink-0 mx-auto md:mx-0">
-                <div class="video-wrap" id="video-container">
-                    <video id="punty-video" class="absolute inset-0 w-full h-full object-contain" playsinline poster="/static/punty-character.jpg">
-                        <source src="/static/punty-intro.mp4" type="video/mp4">
-                        <track kind="captions" src="/static/punty-intro-captions.vtt" srclang="en" label="English">
-                    </video>
-                    <div id="play-overlay" class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/30 hover:bg-black/20 transition-colors">
-                        <div class="w-16 h-16 rounded-full flex items-center justify-center" style="background: var(--magenta); box-shadow: 0 0 30px rgba(233,30,140,0.4);">
-                            <svg class="w-8 h-8 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                        </div>
-                    </div>
-                </div>
+        <div class="text-center mb-10">
+            <div class="section-label">Meet The Analyst</div>
+            <div class="section-title">
+                Meet <span style="color: var(--magenta);">Punty</span>
             </div>
+            <p class="text-base leading-relaxed mt-4 max-w-lg mx-auto" style="color: var(--text-secondary);">
+                He's irreverent, he's data-driven, and he doesn't sugarcoat a bad day.
+                Watch how Punty classifies races, finds the edge, and picks the right bet type.
+            </p>
+        </div>
 
-            <!-- Text -->
-            <div class="text-center md:text-left">
-                <div class="section-label">Meet The Analyst</div>
-                <div class="section-title mb-4">
-                    Meet <span style="color: var(--magenta);">Punty</span>
+        <div class="video-wrap" id="video-container">
+            <video id="punty-video" class="absolute inset-0 w-full h-full object-contain" playsinline poster="/static/punty-character.jpg">
+                <source src="/static/punty-intro.mp4" type="video/mp4">
+                <track kind="captions" src="/static/punty-intro-captions.vtt" srclang="en" label="English">
+            </video>
+            <div id="play-overlay" class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/30 hover:bg-black/20 transition-colors">
+                <div class="w-16 h-16 rounded-full flex items-center justify-center" style="background: var(--magenta); box-shadow: 0 0 30px rgba(233,30,140,0.4);">
+                    <svg class="w-8 h-8 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 </div>
-                <p class="text-base leading-relaxed mb-6" style="color: var(--text-secondary);">
-                    Watch how Punty classifies races, finds the edge, and picks the right bet type.
-                    He's irreverent, he's data-driven, and he doesn't sugarcoat a bad day.
-                </p>
-                <a href="/how-it-works" class="btn-secondary inline-flex items-center gap-2 text-sm">
-                    See The Full Process
-                </a>
             </div>
+        </div>
+
+        <div class="text-center mt-8">
+            <a href="/how-it-works" class="btn-secondary inline-flex items-center gap-2 text-sm">
+                See The Full Process
+            </a>
         </div>
     </div>
 </section>
@@ -733,7 +782,8 @@
 <!-- ═══════════════════ CTA ═══════════════════ -->
 <section class="cta-section section-pad-lg" style="border-top: 1px solid var(--border-subtle);">
     <div class="max-w-3xl mx-auto px-6 sm:px-8 text-center relative" style="z-index: 1;">
-        <div class="section-label mb-3">Get Started</div>
+        <img src="/static/punty-character.jpg" alt="Punty" class="cta-punty rounded-2xl">
+
         <h2 class="section-title mb-5" style="font-size: 2.25rem;">
             Ready to Stop Losing Your Arse?
         </h2>
@@ -744,7 +794,7 @@
 
         <div class="flex flex-wrap gap-4 justify-center">
             <a href="/tips" class="btn-primary inline-flex items-center gap-2 text-lg">
-                Browse Tips
+                Browse Today's Tips
             </a>
             <a href="https://x.com/PuntyAI/" target="_blank" class="btn-secondary inline-flex items-center gap-2">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
