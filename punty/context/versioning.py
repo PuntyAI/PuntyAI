@@ -85,7 +85,25 @@ async def create_context_snapshot(
         )
 
         db.add(snapshot)
-        await db.commit()
+
+        # SQLite can lock when concurrent meetings write snapshots.
+        # Retry up to 3 times with short backoff.
+        for attempt in range(3):
+            try:
+                await db.commit()
+                break
+            except Exception as e:
+                if "database is locked" in str(e) and attempt < 2:
+                    logger.warning(
+                        f"DB locked creating snapshot for {meeting_id}, "
+                        f"retry {attempt + 1}/3"
+                    )
+                    await db.rollback()
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    # Re-add after rollback since the object was expunged
+                    db.add(snapshot)
+                else:
+                    raise
 
         logger.info(
             f"Created context snapshot v{new_version} for {meeting_id} "
