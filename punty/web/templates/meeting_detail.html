@@ -903,6 +903,8 @@ function cancelProcess(name) {
     showToast('Process cancelled', 'warning');
 }
 
+var _pendingReloadTimer = null;
+
 function preRaceScrape() {
     const btn = document.getElementById('prerace-btn');
     const origText = btn.textContent;
@@ -917,7 +919,7 @@ function preRaceScrape() {
                 btn.textContent = 'Refreshed!';
                 btn.classList.remove('opacity-50');
                 btn.classList.add('bg-green-100', 'text-green-700');
-                setTimeout(() => {
+                _pendingReloadTimer = setTimeout(() => {
                     btn.textContent = origText;
                     btn.disabled = false;
                     btn.classList.remove('cursor-not-allowed', 'bg-green-100', 'text-green-700');
@@ -1100,6 +1102,9 @@ function startGenerate() {
         return;
     }
     {% endif %}
+
+    // Cancel any pending page reload from Pre-Race Refresh
+    if (_pendingReloadTimer) { clearTimeout(_pendingReloadTimer); _pendingReloadTimer = null; }
 
     var btn = document.getElementById('generate-btn');
     var panel = document.getElementById('generate-progress');
