@@ -124,11 +124,23 @@ def _prepare_legs_data(
             return None
 
         top_runners = list(la.get("top_runners", []))
-        # Tag original picks vs extended pool runners
-        pick_count = len(top_runners)
-        for idx, r in enumerate(top_runners):
-            r["_is_pick"] = True
-            r["_pick_rank"] = idx + 1
+
+        # Build set of actual tip saddlecloths from pre_selections
+        pre_sel = rc.get("pre_selections")
+        tip_saddlecloths = {}  # saddlecloth → rank
+        if pre_sel and hasattr(pre_sel, "picks"):
+            for pick in pre_sel.picks:
+                tip_saddlecloths[pick.saddlecloth] = pick.rank
+
+        # Tag actual tip selections vs probability-pool runners
+        for r in top_runners:
+            sc = r.get("saddlecloth", 0)
+            if sc in tip_saddlecloths:
+                r["_is_pick"] = True
+                r["_pick_rank"] = tip_saddlecloths[sc]
+            else:
+                r["_is_pick"] = False
+                r["_pick_rank"] = 99
 
         # Extend with runners from race context if needed (up to 8)
         if len(top_runners) < 8:
@@ -573,6 +585,17 @@ def _optimiser_select(
                         sel.append(r)
                         existing_sc.add(r.get("saddlecloth"))
         selected.append(sel)
+
+    # Debug: log what was selected per leg
+    for i in range(num_legs):
+        rn = legs_data[i].race_number
+        picks_in = [r for r in legs_data[i].top_runners if r.get("_is_pick")]
+        sel_names = [(r.get("saddlecloth"), r.get("horse_name", "?"), r.get("_is_pick")) for r in selected[i]]
+        logger.info(
+            f"Leg {i+1} R{rn} ({leg_types[i]}, target={targets[i]}): "
+            f"tips={[p.get('saddlecloth') for p in picks_in]} "
+            f"selected={sel_names}"
+        )
 
     # Step 6: Budget optimisation loop
     def _total_combos():
