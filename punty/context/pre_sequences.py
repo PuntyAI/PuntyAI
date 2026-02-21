@@ -124,6 +124,11 @@ def _prepare_legs_data(
             return None
 
         top_runners = list(la.get("top_runners", []))
+        # Tag original picks vs extended pool runners
+        pick_count = len(top_runners)
+        for idx, r in enumerate(top_runners):
+            r["_is_pick"] = True
+            r["_pick_rank"] = idx + 1
 
         # Extend with runners from race context if needed (up to 8)
         if len(top_runners) < 8:
@@ -154,6 +159,8 @@ def _prepare_legs_data(
                         "value_rating": vr,
                         "edge": edge,
                         "current_odds": odds,
+                        "_is_pick": False,
+                        "_pick_rank": 99,
                     })
                     existing_sc.add(sc)
 
@@ -483,36 +490,66 @@ def _optimiser_select(
 
     # Step 5: Populate legs
     # Anchor legs: top win_prob runners (favorites = short-priced, predictable)
-    # Normal/chaos legs: overlay-only selection (edge-driven)
+    # Normal/chaos legs: tip-first selection — picks form the backbone,
+    #   extended pool runners only supplement for width when picks can't fill.
     selected = []
     for i in range(num_legs):
+        runners = legs_data[i].top_runners
+        target = targets[i]
+
         if leg_types[i] == "anchor":
             # Anchor = most probable runners, sorted by win_prob descending
             by_prob = sorted(
-                legs_data[i].top_runners,
+                runners,
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
-            sel = by_prob[:targets[i]]
+            sel = by_prob[:target]
         else:
-            # Normal/chaos: overlays first, then ONE neutral, then probability padding
-            overlays = overlay_pools[i]["overlays"]
-            neutrals = overlay_pools[i]["neutrals"]
-            sel = overlays[:targets[i]]
-            # If overlays can't fill target, allow ONE neutral runner (edge >= -0.01)
-            if len(sel) < targets[i] and neutrals:
-                existing_sc = {r.get("saddlecloth") for r in sel}
-                for r in neutrals:
-                    if len(sel) >= targets[i]:
+            # Normal/chaos: tip-first selection
+            # 1) Picks with positive edge, sorted by win_prob (best picks first)
+            picks_overlay = sorted(
+                [r for r in runners if r.get("_is_pick") and float(r.get("edge", 0)) > 0],
+                key=lambda r: float(r.get("win_prob", 0)),
+                reverse=True,
+            )
+            # 2) Picks with neutral/negative edge (still our tips, just no overlay)
+            picks_rest = sorted(
+                [r for r in runners if r.get("_is_pick") and float(r.get("edge", 0)) <= 0],
+                key=lambda r: float(r.get("win_prob", 0)),
+                reverse=True,
+            )
+            # 3) Extended pool runners with positive edge (non-tips, for width only)
+            extended_overlay = sorted(
+                [r for r in runners if not r.get("_is_pick") and float(r.get("edge", 0)) > 0],
+                key=lambda r: (float(r.get("edge", 0)), float(r.get("win_prob", 0))),
+                reverse=True,
+            )
+
+            sel = []
+            existing_sc = set()
+
+            def _add(runner_list, limit):
+                for r in runner_list:
+                    if len(sel) >= limit:
                         break
-                    if r.get("saddlecloth") not in existing_sc:
+                    sc = r.get("saddlecloth")
+                    if sc not in existing_sc:
                         sel.append(r)
-                        existing_sc.add(r.get("saddlecloth"))
-        # If still under min 2, pad with best win_prob runner (last resort)
+                        existing_sc.add(sc)
+
+            # Fill with picks that have overlay first
+            _add(picks_overlay, target)
+            # Then remaining picks (our tips even without overlay)
+            _add(picks_rest, target)
+            # Only then extend with non-tip overlay runners for width
+            _add(extended_overlay, target)
+
+        # If still under min 2, pad with best win_prob pick (last resort)
         if len(sel) < 2:
             existing_sc = {r.get("saddlecloth") for r in sel}
             by_prob = sorted(
-                legs_data[i].top_runners,
+                [r for r in runners if r.get("_is_pick")],
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
@@ -522,6 +559,19 @@ def _optimiser_select(
                 if r.get("saddlecloth") not in existing_sc:
                     sel.append(r)
                     existing_sc.add(r.get("saddlecloth"))
+            # Absolute last resort: any runner by probability
+            if len(sel) < 2:
+                by_prob_all = sorted(
+                    runners,
+                    key=lambda r: float(r.get("win_prob", 0)),
+                    reverse=True,
+                )
+                for r in by_prob_all:
+                    if len(sel) >= 2:
+                        break
+                    if r.get("saddlecloth") not in existing_sc:
+                        sel.append(r)
+                        existing_sc.add(r.get("saddlecloth"))
         selected.append(sel)
 
     # Step 6: Budget optimisation loop
