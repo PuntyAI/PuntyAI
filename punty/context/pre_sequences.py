@@ -481,21 +481,33 @@ def _optimiser_select(
         for i in range(num_legs):
             targets[i] = min(targets[i], 3)
 
-    # Step 5: Populate from overlay pools (overlays first, then ONE neutral max)
+    # Step 5: Populate legs
+    # Anchor legs: top win_prob runners (favorites = short-priced, predictable)
+    # Normal/chaos legs: overlay-only selection (edge-driven)
     selected = []
     for i in range(num_legs):
-        overlays = overlay_pools[i]["overlays"]
-        neutrals = overlay_pools[i]["neutrals"]
-        sel = overlays[:targets[i]]
-        # If overlays can't fill target, allow ONE neutral runner (edge >= -0.01)
-        if len(sel) < targets[i] and neutrals:
-            existing_sc = {r.get("saddlecloth") for r in sel}
-            for r in neutrals:
-                if len(sel) >= targets[i]:
-                    break
-                if r.get("saddlecloth") not in existing_sc:
-                    sel.append(r)
-                    existing_sc.add(r.get("saddlecloth"))
+        if leg_types[i] == "anchor":
+            # Anchor = most probable runners, sorted by win_prob descending
+            by_prob = sorted(
+                legs_data[i].top_runners,
+                key=lambda r: float(r.get("win_prob", 0)),
+                reverse=True,
+            )
+            sel = by_prob[:targets[i]]
+        else:
+            # Normal/chaos: overlays first, then ONE neutral, then probability padding
+            overlays = overlay_pools[i]["overlays"]
+            neutrals = overlay_pools[i]["neutrals"]
+            sel = overlays[:targets[i]]
+            # If overlays can't fill target, allow ONE neutral runner (edge >= -0.01)
+            if len(sel) < targets[i] and neutrals:
+                existing_sc = {r.get("saddlecloth") for r in sel}
+                for r in neutrals:
+                    if len(sel) >= targets[i]:
+                        break
+                    if r.get("saddlecloth") not in existing_sc:
+                        sel.append(r)
+                        existing_sc.add(r.get("saddlecloth"))
         # If still under min 2, pad with best win_prob runner (last resort)
         if len(sel) < 2:
             existing_sc = {r.get("saddlecloth") for r in sel}
