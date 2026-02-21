@@ -90,10 +90,10 @@ class BaseScraper(ABC):
         pass
 
     def generate_meeting_id(self, venue: str, race_date: date) -> str:
-        """Generate unique meeting ID using normalized venue name."""
-        from punty.venues import normalize_venue
-        venue_slug = normalize_venue(venue) or venue.lower().replace(" ", "-")
-        return f"{venue_slug}-{race_date.isoformat()}"
+        """Generate unique meeting ID using normalized venue slug."""
+        from punty.venues import venue_slug
+        slug = venue_slug(venue) or venue.lower().replace(" ", "-")
+        return f"{slug}-{race_date.isoformat()}"
 
     def generate_race_id(self, meeting_id: str, race_number: int) -> str:
         """Generate unique race ID."""
