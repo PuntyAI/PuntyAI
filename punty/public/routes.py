@@ -1521,11 +1521,351 @@ async def get_bet_type_stats(
         return stats
 
 
-@router.get("/stats")
+async def get_daily_dashboard() -> dict:
+    """Build today's daily scoreboard — results, upcoming, timeline, insights."""
+    from sqlalchemy import case, desc
+    from collections import Counter, defaultdict
+    from punty.results.celebrations import get_celebration
+    from punty.results.picks import get_performance_summary
+
+    today = melb_today()
+    now = melb_now()
+    now_naive = now.replace(tzinfo=None)
+
+    async with async_session() as db:
+        # ── Performance summary (reuse existing) ──
+        performance = await get_performance_summary(db, today)
+
+        # ── Subquery: active content only ──
+        active_content = select(Content.id).where(
+            Content.status.notin_(["superseded", "rejected"])
+        ).scalar_subquery()
+
+        # ── ALL picks today (settled + unsettled) with runner/race details ──
+        result = await db.execute(
+            select(Pick, Runner, Race, Meeting)
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .join(Race, and_(
+                Race.meeting_id == Pick.meeting_id,
+                Race.race_number == Pick.race_number,
+            ))
+            .outerjoin(Runner, and_(
+                Runner.race_id == Race.id,
+                Runner.saddlecloth == Pick.saddlecloth,
+            ))
+            .where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                Pick.content_id.in_(active_content),
+            )
+            .order_by(Meeting.venue, Race.race_number, Pick.tip_rank.nullslast())
+        )
+        all_rows = result.all()
+
+        # Split into settled and unsettled
+        settled_rows = [(p, r, rc, m) for p, r, rc, m in all_rows if p.settled]
+        unsettled_rows = [(p, r, rc, m) for p, r, rc, m in all_rows if not p.settled]
+
+        # Sort settled by PNL desc for big wins
+        settled_by_pnl = sorted(settled_rows, key=lambda x: x[0].pnl or 0, reverse=True)
+
+        # ── Big Wins (top 10 by PNL) ──
+        big_wins = []
+        for pick, runner, race, meeting in settled_by_pnl:
+            if not pick.hit or not pick.pnl or pick.pnl <= 0:
+                continue
+            big_wins.append(_build_win_card(pick, runner, race, meeting, get_celebration))
+            if len(big_wins) >= 10:
+                break
+
+        # ── P&L Timeline (settled picks ordered by settled_at for chart) ──
+        timeline = []
+        settled_chrono = sorted(settled_rows, key=lambda x: x[0].settled_at or x[0].created_at)
+        running_pnl = 0.0
+        for pick, runner, race, meeting in settled_chrono:
+            pnl = pick.pnl or 0
+            running_pnl += pnl
+            # Use race start time or settled_at for x-axis
+            ts = race.start_time or pick.settled_at or pick.created_at
+            timeline.append({
+                "time": ts.strftime("%H:%M") if ts else "?",
+                "pnl": round(pnl, 2),
+                "cumulative": round(running_pnl, 2),
+                "label": f"{meeting.venue} R{pick.race_number}",
+                "hit": bool(pick.hit),
+            })
+
+        # ── Upcoming bets (unsettled, race not finished) ──
+        upcoming = []
+        for pick, runner, race, meeting in unsettled_rows:
+            if pick.pick_type not in ("selection", "exotic", "sequence", "big3_multi"):
+                continue
+            # Race status
+            rs = (race.results_status or "").lower()
+            if rs in ("paying", "closed", "final"):
+                continue  # Already finished, just not settled yet — skip
+            # Display name
+            if pick.pick_type == "selection":
+                name = pick.horse_name or "Runner"
+            elif pick.pick_type == "exotic":
+                name = f"{pick.exotic_type or 'Exotic'} R{pick.race_number}"
+            elif pick.pick_type == "sequence":
+                name = f"{(pick.sequence_variant or '').title()} {pick.sequence_type or 'Sequence'}"
+            else:
+                name = pick.horse_name or f"R{pick.race_number}"
+
+            stake = pick.bet_stake or pick.exotic_stake or 0
+            upcoming.append({
+                "name": name,
+                "venue": meeting.venue,
+                "meeting_id": meeting.id,
+                "race_number": pick.race_number,
+                "pick_type": pick.pick_type,
+                "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                "odds": pick.odds_at_tip,
+                "stake": round(stake, 2),
+                "tip_rank": pick.tip_rank,
+                "value_rating": round(pick.value_rating, 2) if pick.value_rating else None,
+                "win_prob": round(pick.win_probability * 100, 1) if pick.win_probability else None,
+                "confidence": pick.confidence,
+                "is_puntys_pick": pick.is_puntys_pick or False,
+                "start_time": race.start_time.strftime("%H:%M") if race.start_time else None,
+                "is_edge": (pick.value_rating or 0) >= 1.1 and pick.pick_type == "selection",
+            })
+
+        # ── Edge picks (upcoming selections with value_rating >= 1.1) ──
+        edge_picks = [u for u in upcoming if u.get("is_edge")]
+        edge_picks.sort(key=lambda x: x.get("value_rating") or 0, reverse=True)
+
+        # ── Bet type breakdown (all settled picks, with ROI/SR) ──
+        bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
+        for pick, runner, race, meeting in settled_rows:
+            if pick.pick_type != "selection":
+                continue
+            bt = (pick.bet_type or "unknown").replace("_", " ").title()
+            bt_stats[bt]["bets"] += 1
+            bt_stats[bt]["staked"] += pick.bet_stake or 0
+            bt_stats[bt]["pnl"] += pick.pnl or 0
+            if pick.hit:
+                bt_stats[bt]["winners"] += 1
+        bet_types = []
+        for bt, data in sorted(bt_stats.items()):
+            data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0
+            data["roi"] = round(data["pnl"] / data["staked"] * 100, 1) if data["staked"] else 0
+            data["name"] = bt
+            data["staked"] = round(data["staked"], 2)
+            data["pnl"] = round(data["pnl"], 2)
+            bet_types.append(data)
+
+        # ── Insights ──
+        insights = []
+        winning_selections = [
+            (p, r, rc, m) for p, r, rc, m in settled_rows
+            if p.hit and p.pnl and p.pnl > 0 and p.pick_type == "selection"
+        ]
+        all_selections = [
+            (p, r, rc, m) for p, r, rc, m in settled_rows if p.pick_type == "selection"
+        ]
+
+        # Hot Jockey
+        jockey_wins = Counter()
+        jockey_rides = Counter()
+        for pick, runner, race, meeting in all_selections:
+            j = runner.jockey if runner else None
+            if j:
+                jockey_rides[j] += 1
+                if pick.hit:
+                    jockey_wins[j] += 1
+        if jockey_wins:
+            hot_j, hot_j_wins = jockey_wins.most_common(1)[0]
+            hot_j_rides = jockey_rides[hot_j]
+            parts = hot_j.split()
+            short_j = f"{parts[0][0]} {' '.join(parts[1:])}" if len(parts) > 1 else hot_j
+            insights.append({
+                "icon": "fire", "label": "Hot Jockey",
+                "text": f"{short_j} ({hot_j_wins}/{hot_j_rides} winners)",
+            })
+
+        # Hot Trainer
+        trainer_wins = Counter()
+        trainer_runs = Counter()
+        for pick, runner, race, meeting in all_selections:
+            t = runner.trainer if runner else None
+            if t:
+                trainer_runs[t] += 1
+                if pick.hit:
+                    trainer_wins[t] += 1
+        if trainer_wins:
+            hot_t, hot_t_wins = trainer_wins.most_common(1)[0]
+            hot_t_runs = trainer_runs[hot_t]
+            parts = hot_t.split()
+            short_t = f"{parts[0][0]} {' '.join(parts[1:])}" if len(parts) > 1 else hot_t
+            insights.append({
+                "icon": "trophy", "label": "Hot Trainer",
+                "text": f"{short_t} ({hot_t_wins}/{hot_t_runs} winners)",
+            })
+
+        # Best Odds Win
+        if winning_selections:
+            best_odds_win = max(winning_selections, key=lambda x: x[0].odds_at_tip or 0)
+            bo_pick = best_odds_win[0]
+            if bo_pick.odds_at_tip and bo_pick.odds_at_tip >= 4.0:
+                insights.append({
+                    "icon": "zap", "label": "Best Odds",
+                    "text": f"{bo_pick.horse_name} at ${bo_pick.odds_at_tip:.2f} saluted",
+                })
+
+        # Frontrunners vs closers
+        pace_wins = Counter()
+        for pick, runner, race, meeting in winning_selections:
+            smp = (runner.speed_map_position if runner else "") or ""
+            if smp.lower() in ("leader", "on_pace"):
+                pace_wins["front"] += 1
+            elif smp.lower() in ("midfield", "backmarker"):
+                pace_wins["back"] += 1
+        total_pace = pace_wins["front"] + pace_wins["back"]
+        if total_pace >= 3:
+            insights.append({
+                "icon": "horse", "label": "Pace",
+                "text": f"{pace_wins['front']}/{total_pace} winners led or sat on pace",
+            })
+
+        # Best Venue
+        venue_pnl = Counter()
+        venue_bets = Counter()
+        for pick, runner, race, meeting in settled_rows:
+            venue_bets[meeting.venue] += 1
+            venue_pnl[meeting.venue] += pick.pnl or 0
+        if venue_pnl:
+            best_venue = max(venue_pnl, key=venue_pnl.get)
+            bv_pnl = venue_pnl[best_venue]
+            bv_bets = venue_bets[best_venue]
+            if bv_pnl > 0:
+                insights.append({
+                    "icon": "pin", "label": "Best Venue",
+                    "text": f"{best_venue} +${bv_pnl:.0f} from {bv_bets} bets",
+                })
+
+        # Best bet type
+        if bet_types:
+            best_bt = max(bet_types, key=lambda x: x["pnl"])
+            if best_bt["pnl"] > 0:
+                insights.append({
+                    "icon": "chart", "label": "Bet Type",
+                    "text": f"{best_bt['name']} bets leading today ({best_bt['roi']:+.0f}% ROI)",
+                })
+
+        # ── Venue breakdown ──
+        venues = []
+        # Include unsettled counts too
+        venue_upcoming = Counter()
+        for pick, runner, race, meeting in unsettled_rows:
+            venue_upcoming[meeting.venue] += 1
+        all_venue_names = set(list(venue_bets.keys()) + list(venue_upcoming.keys()))
+        for v in sorted(all_venue_names):
+            v_wins = sum(1 for p, r, rc, m in settled_rows if m.venue == v and p.hit and p.pnl and p.pnl > 0)
+            v_total = venue_bets.get(v, 0)
+            v_pnl = venue_pnl.get(v, 0)
+            v_up = venue_upcoming.get(v, 0)
+            # Get meeting_id for cross-link
+            v_mid = None
+            for p, r, rc, m in all_rows:
+                if m.venue == v:
+                    v_mid = m.id
+                    break
+            venues.append({
+                "name": v,
+                "meeting_id": v_mid,
+                "bets": v_total,
+                "winners": v_wins,
+                "upcoming": v_up,
+                "pnl": round(v_pnl, 2),
+            })
+
+        # ── Summary counts for has_data logic ──
+        total_picks = len(all_rows)
+        total_settled = len(settled_rows)
+        total_upcoming = len(unsettled_rows)
+
+        return {
+            "date": today.strftime("%d %B %Y").lstrip("0"),
+            "date_iso": today.isoformat(),
+            "performance": performance,
+            "big_wins": big_wins,
+            "timeline": timeline,
+            "upcoming": upcoming[:30],  # Cap at 30 for page size
+            "edge_picks": edge_picks[:8],
+            "bet_types": bet_types,
+            "insights": insights,
+            "venues": venues,
+            "total_picks": total_picks,
+            "total_settled": total_settled,
+            "total_upcoming": total_upcoming,
+            "has_data": total_picks > 0,
+            "has_settled": total_settled > 0,
+        }
+
+
+def _build_win_card(pick, runner, race, meeting, get_celebration) -> dict:
+    """Build a win card dict for the big wins section."""
+    stake = pick.bet_stake or pick.exotic_stake or 1.0
+    returned = stake + (pick.pnl or 0)
+
+    if pick.pick_type == "selection":
+        display_name = pick.horse_name or "Runner"
+    elif pick.pick_type == "exotic":
+        display_name = f"{pick.exotic_type or 'Exotic'} R{pick.race_number}"
+    elif pick.pick_type == "sequence":
+        display_name = f"{(pick.sequence_variant or '').title()} {pick.sequence_type or 'Sequence'}"
+    elif pick.pick_type == "big3_multi":
+        display_name = "Big 3 Multi"
+    else:
+        display_name = pick.horse_name or f"R{pick.race_number}"
+
+    smp = (runner.speed_map_position if runner else None) or ""
+    running_style = {
+        "leader": "Led all the way", "on_pace": "Sat on pace",
+        "midfield": "Settled midfield", "backmarker": "Came from behind", "": None,
+    }.get(smp.lower(), smp.title() if smp else None)
+
+    margin = runner.result_margin if runner else None
+    if margin and pick.pick_type == "selection":
+        margin_text = f"Won by {margin}"
+    elif pick.pick_type == "exotic":
+        margin_text = f"Paid ${returned:.2f}"
+    else:
+        margin_text = None
+
+    return {
+        "display_name": display_name,
+        "venue": meeting.venue,
+        "meeting_id": meeting.id,
+        "race_number": pick.race_number,
+        "race_name": race.name if race else None,
+        "jockey": runner.jockey if runner else None,
+        "trainer": runner.trainer if runner else None,
+        "odds": pick.odds_at_tip,
+        "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+        "stake": round(stake, 2),
+        "returned": round(returned, 2),
+        "pnl": round(pick.pnl, 2),
+        "tip_rank": pick.tip_rank,
+        "pick_type": pick.pick_type,
+        "running_style": running_style,
+        "margin_text": margin_text,
+        "celebration": get_celebration(pick.pnl, pick.pick_type),
+        "is_puntys_pick": pick.is_puntys_pick or False,
+    }
+
+
+@router.get("/stats", response_class=HTMLResponse)
 async def stats_page(request: Request):
-    """Redirect to tips — stats page hidden for now."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/tips", status_code=301)
+    """Today's daily dashboard — celebrating wins, insights, and performance."""
+    dashboard = await get_daily_dashboard()
+    return templates.TemplateResponse(
+        "stats.html",
+        {"request": request, **dashboard},
+    )
 
 
 @router.get("/tips/{meeting_id}", response_class=HTMLResponse)
