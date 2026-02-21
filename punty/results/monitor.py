@@ -1586,8 +1586,44 @@ class ResultsMonitor:
         if not tc_cooldown:
             track_alert = await detect_track_condition_change(db, meeting_id, snapshot)
             if track_alert:
-                alerts.append(track_alert)
-                self.last_track_change[meeting_id] = now
+                # Verify against Racing Australia (authoritative source) before alerting.
+                # TAB/racing.com can report stale or wrong conditions — RA is the official record.
+                try:
+                    from punty.scrapers.track_conditions import get_conditions_for_meeting
+                    ra_cond = await get_conditions_for_meeting(meeting.venue)
+                    if ra_cond and ra_cond.get("condition"):
+                        from punty.results.change_detection import _base_condition
+                        ra_base = _base_condition(ra_cond["condition"])
+                        new_base = _base_condition(track_alert.new_value or "")
+                        old_base = _base_condition(track_alert.old_value or "")
+                        if ra_base == old_base and ra_base != new_base:
+                            # RA still reports old condition — revert the bogus change
+                            from punty.models.meeting import Meeting as _M
+                            mtg = await db.get(_M, meeting_id)
+                            if mtg:
+                                logger.warning(
+                                    f"Track change NOT corroborated by RA for {meeting.venue}: "
+                                    f"RA says {ra_cond['condition']!r}, reverting {track_alert.new_value!r} → {track_alert.old_value!r}"
+                                )
+                                mtg.track_condition = track_alert.old_value
+                                await db.flush()
+                            track_alert = None
+                        elif ra_base == new_base:
+                            # RA confirms the change — use RA's more precise value
+                            logger.info(f"Track change corroborated by RA: {ra_cond['condition']!r}")
+                            track_alert.new_value = ra_cond["condition"]
+                            from punty.results.change_detection import compose_track_alert
+                            track_alert.message = compose_track_alert(
+                                meeting.venue, track_alert.old_value or "", ra_cond["condition"]
+                            )
+                except Exception as e:
+                    logger.warning(f"RA verification failed for {meeting.venue}: {e}")
+                    # If RA is unreachable, suppress the alert rather than risk a false one
+                    track_alert = None
+
+                if track_alert:
+                    alerts.append(track_alert)
+                    self.last_track_change[meeting_id] = now
 
         if alerts:
             logger.info(f"Change detection for {meeting.venue}: {len(alerts)} alerts — {[a.change_type for a in alerts]}")
@@ -1817,15 +1853,27 @@ class ResultsMonitor:
                 if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                     runner.gear_changes = r["gear_changes"]
 
-        # Track condition from racing.com — only update if more specific
-        # (prevents "Good 4" being overwritten by bare "Good", which causes
-        # flip-flopping between sources and noisy change alerts)
+        # Track condition from racing.com — only allow same-base refinements.
+        # racing.com is NOT authoritative for track conditions (Racing Australia is).
+        # Don't let it change base condition (e.g., Good→Soft) — that causes
+        # false change alerts from source disagreements.
         tc = field_data.get("meeting", {}).get("track_condition")
         if tc:
             from punty.models.meeting import Meeting
-            from punty.scrapers.orchestrator import _should_update_condition
+            from punty.results.change_detection import _base_condition
             meeting = await db.get(Meeting, meeting_id)
-            if meeting and _should_update_condition(tc, meeting.track_condition or ""):
+            if meeting and meeting.track_condition:
+                # Only allow same-base refinements (e.g., "Good" → "Good 4")
+                if _base_condition(tc) == _base_condition(meeting.track_condition):
+                    from punty.scrapers.orchestrator import _should_update_condition
+                    if _should_update_condition(tc, meeting.track_condition):
+                        meeting.track_condition = tc
+                else:
+                    logger.debug(
+                        f"Ignoring racing.com track condition {tc!r} for {meeting_id} "
+                        f"(conflicts with current {meeting.track_condition!r}, RA is authoritative)"
+                    )
+            elif meeting and not meeting.track_condition:
                 meeting.track_condition = tc
 
         await db.flush()

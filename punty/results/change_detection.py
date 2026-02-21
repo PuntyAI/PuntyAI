@@ -344,6 +344,25 @@ def _clean_jockey_name(name: str) -> str:
 
 _SURNAME_PREFIXES = frozenset({"du", "de", "van", "von", "le", "la", "di", "el", "del", "den", "der", "dos", "das", "al"})
 
+# Gaelic prefixes that can appear fused (McDonald) or split (Mc Donald)
+_GAELIC_PREFIXES = ("mc", "mac", "o'")
+
+
+def _normalise_surname(parts: list[str]) -> str:
+    """Normalise surname handling Mc/Mac/O' split or fused forms.
+
+    'mc donald' -> 'donald', 'mcdonald' -> 'donald', 'o sullivan' -> 'sullivan'
+    """
+    # Check if second-to-last part is a Gaelic prefix (split form: "mc donald")
+    if len(parts) >= 2 and parts[-2] in ("mc", "mac", "o"):
+        return parts[-1]
+    # Check if surname starts with a Gaelic prefix (fused form: "mcdonald")
+    surname = parts[-1]
+    for prefix in _GAELIC_PREFIXES:
+        if surname.startswith(prefix) and len(surname) > len(prefix):
+            return surname[len(prefix):]
+    return surname
+
 
 def _same_jockey(name_a: str, name_b: str) -> bool:
     """Check if two jockey name strings refer to the same person.
@@ -364,8 +383,9 @@ def _same_jockey(name_a: str, name_b: str) -> bool:
     if not a or not b:
         return False
 
-    # Core surname = last token (always the actual family name)
-    if a[-1] != b[-1]:
+    # Core surname — normalise Gaelic prefixes (Mc/Mac/O') so
+    # "Mc Donald", "McDonald", "mcdonald" all compare as "donald"
+    if _normalise_surname(a) != _normalise_surname(b):
         return False
 
     # Given names = everything before last token, excluding surname prefixes.
@@ -373,8 +393,9 @@ def _same_jockey(name_a: str, name_b: str) -> bool:
     # match a prefix initial (handles "V.L.Boeuf" where "L" = "Le").
     # Only strip from the last position to avoid eating real first-name initials.
     prefix_initials = {p[0] for p in _SURNAME_PREFIXES}
-    a_given = list(a[:-1])
-    b_given = list(b[:-1])
+    # Strip Gaelic prefix tokens from given names (split form: "james mc donald")
+    a_given = [p for p in a[:-1] if p not in ("mc", "mac", "o")]
+    b_given = [p for p in b[:-1] if p not in ("mc", "mac", "o")]
     # Strip full surname prefixes from anywhere
     a_first = [p for p in a_given if p not in _SURNAME_PREFIXES]
     b_first = [p for p in b_given if p not in _SURNAME_PREFIXES]
@@ -579,10 +600,25 @@ _TRACK_UPGRADE_PHRASES = [
     "Track's come good.",
 ]
 
-_TRACK_DOWNGRADE_PHRASES = [
+# Mild: single-step downgrades (e.g., Good 4 → Soft 5)
+_TRACK_DOWNGRADE_MILD = [
+    "Worth noting.",
+    "Keep an eye on it.",
+    "Conditions shifting.",
+]
+
+# Moderate: two-step downgrades (e.g., Good 3 → Soft 6)
+_TRACK_DOWNGRADE_MOD = [
     "Getting sloppy out there.",
     "Mudlarks time.",
+    "Wet trackers rejoice.",
+]
+
+# Severe: 3+ step downgrades (e.g., Good → Heavy)
+_TRACK_DOWNGRADE_SEVERE = [
     "Track's gone.",
+    "Absolute bog out there.",
+    "Swimming carnival.",
 ]
 
 
@@ -644,16 +680,25 @@ def compose_track_alert(
     old_condition: str,
     new_condition: str,
 ) -> str:
-    """Compose a track condition change alert."""
+    """Compose a track condition change alert with severity-appropriate tone."""
     old_num = _extract_track_number(old_condition)
     new_num = _extract_track_number(new_condition)
 
     if old_num is not None and new_num is not None:
         upgraded = new_num < old_num  # Lower number = firmer/better
+        step = abs(new_num - old_num)
     else:
         upgraded = "good" in new_condition.lower() or "firm" in new_condition.lower()
+        step = 1
 
-    phrase = random.choice(_TRACK_UPGRADE_PHRASES if upgraded else _TRACK_DOWNGRADE_PHRASES)
+    if upgraded:
+        phrase = random.choice(_TRACK_UPGRADE_PHRASES)
+    elif step >= 3:
+        phrase = random.choice(_TRACK_DOWNGRADE_SEVERE)
+    elif step >= 2:
+        phrase = random.choice(_TRACK_DOWNGRADE_MOD)
+    else:
+        phrase = random.choice(_TRACK_DOWNGRADE_MILD)
 
     msg = f"TRACK UPDATE: {venue} {old_condition} \u2192 {new_condition}. {phrase}"
 
