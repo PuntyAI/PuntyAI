@@ -1341,28 +1341,34 @@ class RacingComScraper(BaseScraper):
             page.on("response", capture_graphql)
 
             try:
-                for race_num in race_numbers:
-                    current_race[0] = race_num
-                    try:
-                        race_url = self._build_race_url(venue, race_date, race_num)
-                        # Navigate to blank first to force full SPA reload
-                        if race_num > race_numbers[0]:
-                            await page.goto("about:blank", wait_until="domcontentloaded")
-                            await page.wait_for_timeout(300)
-                        await page.goto(race_url, wait_until="domcontentloaded")
-                        await page.wait_for_timeout(4000)
+                # Use "All" view to load all race entries + odds in one page
+                # (individual race pages no longer trigger getRaceEntriesForField)
+                meeting_url = self._build_meeting_url(venue, race_date)
+                all_url = f"{meeting_url}#/"
+                await page.goto(all_url, wait_until="domcontentloaded")
 
-                        # Click odds element to trigger GetBettingData_CD (lazy-loaded)
-                        try:
-                            odds_el = page.locator("[class*=odds]").first
-                            if await odds_el.is_visible(timeout=2000):
-                                await odds_el.click()
-                                await page.wait_for_timeout(3000)
-                        except Exception:
-                            pass
-                    except Exception as e:
-                        logger.debug(f"Failed to load R{race_num} fields: {e}")
-                        continue
+                # Wait for entries to start appearing
+                try:
+                    await page.wait_for_selector(
+                        "[class*='runner'], [class*='entry'], [class*='field']",
+                        timeout=8000,
+                    )
+                except Exception:
+                    pass
+                await page.wait_for_timeout(4000)
+
+                # Scroll to trigger lazy-loaded entries for later races
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                await page.wait_for_timeout(3000)
+
+                # Click odds element to trigger GetBettingData_CD (lazy-loaded)
+                try:
+                    odds_el = page.locator("[class*=odds]").first
+                    if await odds_el.is_visible(timeout=2000):
+                        await odds_el.click()
+                        await page.wait_for_timeout(3000)
+                except Exception:
+                    pass
             finally:
                 page.remove_listener("response", capture_graphql)
 
