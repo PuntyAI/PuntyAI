@@ -42,6 +42,15 @@
         background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
         white-space: nowrap; flex-shrink: 0;
     }
+    .insight-scroll {
+        display: flex; gap: 0.75rem; animation: insight-marquee 20s linear infinite;
+        width: max-content;
+    }
+    .insight-scroll:hover { animation-play-state: paused; }
+    @keyframes insight-marquee {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+    }
     .insight-icon {
         width: 28px; height: 28px; border-radius: 8px;
         display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
@@ -263,21 +272,35 @@
             {% endif %}
 
             {% if insights %}
-            <!-- Insights -->
+            <!-- Insights (auto-scrolling marquee, pause on hover) -->
             <div class="mb-6">
                 <h2 class="font-heading font-bold text-sm uppercase tracking-wider mb-3" style="color: var(--text-muted);">Insights</h2>
-                <div class="flex gap-3 overflow-x-auto pb-2" style="scrollbar-width: none;">
-                    {% for ins in insights %}
-                    <div class="insight-chip">
-                        <div class="insight-icon" style="background: {% if ins.icon == 'fire' %}rgba(255, 107, 53, 0.15){% elif ins.icon == 'trophy' %}rgba(255, 193, 7, 0.15){% elif ins.icon == 'zap' %}rgba(233, 30, 140, 0.15){% elif ins.icon == 'horse' %}rgba(0, 212, 255, 0.15){% elif ins.icon == 'pin' %}rgba(157, 78, 221, 0.15){% else %}rgba(0, 212, 255, 0.15){% endif %};">
-                            {% if ins.icon == 'fire' %}&#x1F525;{% elif ins.icon == 'trophy' %}&#x1F3C6;{% elif ins.icon == 'zap' %}&#x26A1;{% elif ins.icon == 'horse' %}&#x1F3C7;{% elif ins.icon == 'pin' %}&#x1F4CD;{% elif ins.icon == 'chart' %}&#x1F4C8;{% endif %}
+                <div style="overflow: hidden;">
+                    <div class="insight-scroll">
+                        {% for ins in insights %}
+                        <div class="insight-chip">
+                            <div class="insight-icon" style="background: {% if ins.icon == 'fire' %}rgba(255, 107, 53, 0.15){% elif ins.icon == 'trophy' %}rgba(255, 193, 7, 0.15){% elif ins.icon == 'zap' %}rgba(233, 30, 140, 0.15){% elif ins.icon == 'horse' %}rgba(0, 212, 255, 0.15){% elif ins.icon == 'pin' %}rgba(157, 78, 221, 0.15){% else %}rgba(0, 212, 255, 0.15){% endif %};">
+                                {% if ins.icon == 'fire' %}&#x1F525;{% elif ins.icon == 'trophy' %}&#x1F3C6;{% elif ins.icon == 'zap' %}&#x26A1;{% elif ins.icon == 'horse' %}&#x1F3C7;{% elif ins.icon == 'pin' %}&#x1F4CD;{% elif ins.icon == 'chart' %}&#x1F4C8;{% endif %}
+                            </div>
+                            <div>
+                                <div class="text-[10px] font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ ins.label }}</div>
+                                <div class="text-sm font-heading font-semibold" style="color: var(--text-primary);">{{ ins.text }}</div>
+                            </div>
                         </div>
-                        <div>
-                            <div class="text-[10px] font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ ins.label }}</div>
-                            <div class="text-sm font-heading font-semibold" style="color: var(--text-primary);">{{ ins.text }}</div>
+                        {% endfor %}
+                        <!-- Duplicate for seamless loop -->
+                        {% for ins in insights %}
+                        <div class="insight-chip">
+                            <div class="insight-icon" style="background: {% if ins.icon == 'fire' %}rgba(255, 107, 53, 0.15){% elif ins.icon == 'trophy' %}rgba(255, 193, 7, 0.15){% elif ins.icon == 'zap' %}rgba(233, 30, 140, 0.15){% elif ins.icon == 'horse' %}rgba(0, 212, 255, 0.15){% elif ins.icon == 'pin' %}rgba(157, 78, 221, 0.15){% else %}rgba(0, 212, 255, 0.15){% endif %};">
+                                {% if ins.icon == 'fire' %}&#x1F525;{% elif ins.icon == 'trophy' %}&#x1F3C6;{% elif ins.icon == 'zap' %}&#x26A1;{% elif ins.icon == 'horse' %}&#x1F3C7;{% elif ins.icon == 'pin' %}&#x1F4CD;{% elif ins.icon == 'chart' %}&#x1F4C8;{% endif %}
+                            </div>
+                            <div>
+                                <div class="text-[10px] font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ ins.label }}</div>
+                                <div class="text-sm font-heading font-semibold" style="color: var(--text-primary);">{{ ins.text }}</div>
+                            </div>
                         </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
             </div>
             {% endif %}
