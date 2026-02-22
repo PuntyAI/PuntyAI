@@ -232,7 +232,6 @@ class ContextBuilder:
                 seq_override = None
                 if _is_hk:
                     seq_override = {
-                        "early_quad": (1, 4),
                         "quaddie": (total_races - 3, total_races),
                     }
                 context["pre_built_sequences"] = build_all_sequence_lanes(

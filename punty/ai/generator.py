@@ -1455,9 +1455,8 @@ class ContentGenerator:
         _is_intl = is_international_venue(venue_name)
         _is_hk = _is_intl and guess_state(venue_name) == "HK"
         if _is_hk:
-            # HK-specific: EQ always R1-R4, Quaddie last 4 races, no Big 6
+            # HK-specific: main quaddie on last 4 races only, no early quad or Big 6
             sequences = {
-                "early_quad": (1, 4),
                 "quaddie": (total_races - 3, total_races),
             }
         elif _is_intl:
