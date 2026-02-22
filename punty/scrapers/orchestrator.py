@@ -349,7 +349,20 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             except Exception as e:
                 logger.error(f"RA conditions failed for {venue}: {e}")
 
-        # Step 2c: RA Free Fields cross-check (only when PF succeeded)
+        # Step 2c: HKJC track info for HK venues (RA/PF have no HK data)
+        from punty.venues import is_international_venue, guess_state
+        if is_international_venue(venue) and guess_state(venue) == "HK":
+            try:
+                from punty.scrapers.tab_playwright import HKJCTrackInfoScraper
+                hkjc_track = HKJCTrackInfoScraper()
+                track_info = await hkjc_track.scrape_track_info(race_date)
+                if track_info:
+                    _apply_hkjc_conditions(meeting, track_info)
+                    logger.info(f"HKJC track info applied for {venue}: {track_info}")
+            except Exception as e:
+                logger.warning(f"HKJC track info failed for {venue}: {e}")
+
+        # Step 2d: RA Free Fields cross-check (only when PF succeeded)
         pf_ok = not any("primary" in e or "fields" in e for e in errors)
         if pf_ok:
             try:
@@ -566,6 +579,21 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                     _apply_ra_conditions(meeting, ra_cond)
             except Exception as e:
                 logger.error(f"RA conditions failed for {venue}: {e}")
+
+        # HKJC track info for HK venues
+        from punty.venues import is_international_venue, guess_state
+        if is_international_venue(venue) and guess_state(venue) == "HK":
+            try:
+                from punty.scrapers.tab_playwright import HKJCTrackInfoScraper
+                hkjc_track = HKJCTrackInfoScraper()
+                track_info = await hkjc_track.scrape_track_info(race_date)
+                if track_info:
+                    _apply_hkjc_conditions(meeting, track_info)
+                    yield {"step": 2, "total": total_steps,
+                           "label": f"HKJC track: wind {track_info.get('weather_wind_speed', '?')}km/h {track_info.get('weather_wind_dir', '?')}",
+                           "status": "done"}
+            except Exception as e:
+                logger.warning(f"HKJC track info failed for {venue}: {e}")
 
         # Step 3: RA Free Fields cross-check
         pf_ok = not any("primary" in e or "fields" in e for e in errors)
@@ -1075,6 +1103,25 @@ def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
             meeting.irrigation = bool(irr and "nil" not in irr.lower() and irr.strip() != "0")
         else:
             meeting.irrigation = bool(irr)
+
+
+def _apply_hkjc_conditions(meeting: Meeting, info: dict) -> None:
+    """Apply HKJC wind tracker / track info data to a Meeting object."""
+    if info.get("weather_wind_speed") is not None:
+        meeting.weather_wind_speed = info["weather_wind_speed"]
+    if info.get("weather_wind_dir"):
+        meeting.weather_wind_dir = info["weather_wind_dir"]
+    if info.get("weather_condition"):
+        meeting.weather_condition = info["weather_condition"]
+        if not meeting.weather:
+            meeting.weather = info["weather_condition"]
+    if info.get("weather_temp") is not None:
+        meeting.weather_temp = info["weather_temp"]
+    if info.get("weather_humidity") is not None:
+        meeting.weather_humidity = info["weather_humidity"]
+    if info.get("track_condition") and not meeting.track_condition_locked:
+        if not meeting.track_condition or meeting.track_condition == "TBC":
+            meeting.track_condition = info["track_condition"]
 
 
 import re as _re

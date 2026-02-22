@@ -52,9 +52,23 @@ class TabPlaywrightScraper:
 
         async def capture_tab_api(response):
             """Intercept TAB API responses containing runner/odds data."""
-            if self.API_HOST not in response.url:
+            url = response.url
+
+            # Log all API-like responses for diagnostics
+            if ("api" in url or "tab" in url) and response.status == 200:
+                content_type = response.headers.get("content-type", "")
+                if "json" in content_type or "javascript" in content_type:
+                    if self.API_HOST not in url and "tab.com.au" in url:
+                        logger.debug(f"TAB non-API response: {url[:200]}")
+
+            # Match TAB API responses — try both known API hosts
+            is_tab_api = self.API_HOST in url or "webapi.tab.com.au" in url
+            if not is_tab_api:
                 return
-            if "tab-info-service" not in response.url:
+
+            # Accept any tab-info-service or racing-related endpoint
+            if "tab-info-service" not in url and "racing" not in url and "meetings" not in url:
+                logger.debug(f"TAB API non-racing response: {url[:200]}")
                 return
 
             try:
@@ -130,6 +144,8 @@ class TabPlaywrightScraper:
 
             try:
                 await page.goto(url, wait_until="domcontentloaded")
+                # Give SPA time to hydrate and fire API calls
+                await asyncio.sleep(3)
             except Exception as e:
                 logger.error(f"TAB Playwright navigation failed: {e}")
                 return []
@@ -138,7 +154,16 @@ class TabPlaywrightScraper:
             try:
                 await asyncio.wait_for(capture_done.wait(), timeout=15)
             except asyncio.TimeoutError:
-                logger.warning("TAB API response not captured within 15s, trying race-by-race")
+                # Log page title and snippet for diagnostics
+                try:
+                    title = await page.title()
+                    snippet = await page.evaluate("() => document.body?.innerText?.substring(0, 300) || ''")
+                    logger.warning(
+                        f"TAB API response not captured within 15s. "
+                        f"Page title: {title!r}, snippet: {snippet[:200]!r}"
+                    )
+                except Exception:
+                    logger.warning("TAB API response not captured within 15s, trying race-by-race")
 
             # If we didn't get data from the initial load, try each race
             if not captured_odds and race_count > 0:
@@ -147,7 +172,7 @@ class TabPlaywrightScraper:
                     logger.info(f"TAB Playwright: navigating to R{race_num}")
                     try:
                         await page.goto(race_url, wait_until="domcontentloaded")
-                        await asyncio.sleep(3)  # Allow API call to complete
+                        await asyncio.sleep(5)  # Allow SPA to fire API calls
                     except Exception as e:
                         logger.warning(f"TAB Playwright R{race_num} failed: {e}")
                         continue
@@ -182,9 +207,11 @@ class TabPlaywrightScraper:
 
         async def capture_tab_api(response):
             nonlocal track_condition
-            if self.API_HOST not in response.url:
+            url = response.url
+            is_tab_api = self.API_HOST in url or "webapi.tab.com.au" in url
+            if not is_tab_api:
                 return
-            if "tab-info-service" not in response.url:
+            if "tab-info-service" not in url and "racing" not in url and "meetings" not in url:
                 return
             try:
                 body = await response.text()
@@ -260,9 +287,11 @@ class TabPlaywrightScraper:
         capture_done = asyncio.Event()
 
         async def capture_tab_api(response):
-            if self.API_HOST not in response.url:
+            url = response.url
+            is_tab_api = self.API_HOST in url or "webapi.tab.com.au" in url
+            if not is_tab_api:
                 return
-            if "tab-info-service" not in response.url:
+            if "tab-info-service" not in url and "racing" not in url and "meetings" not in url:
                 return
             try:
                 body = await response.text()
@@ -443,3 +472,126 @@ class HKJCSectionalScraper:
             "source": "hkjc",
             "horses": data,
         }
+
+
+class HKJCTrackInfoScraper:
+    """Scrape HKJC wind tracker / track conditions for HK venues via Playwright.
+
+    HKJC provides live wind and weather data at:
+    https://racing.hkjc.com/en-us/local/info/windtracker
+    """
+
+    WIND_TRACKER_URL = "https://racing.hkjc.com/en-us/local/info/windtracker"
+
+    async def scrape_track_info(self, race_date: date) -> dict | None:
+        """Scrape HKJC wind tracker for weather and track conditions.
+
+        Returns dict with fields matching Meeting model:
+        {
+            weather_wind_speed: int | None,  # km/h
+            weather_wind_dir: str | None,    # e.g. "NE", "SW"
+            weather_condition: str | None,   # e.g. "Fine", "Cloudy"
+            weather_temp: int | None,        # °C
+            weather_humidity: int | None,    # %
+            track_condition: str | None,     # e.g. "Good", "Good to Yielding"
+        }
+        """
+        logger.info(f"HKJC wind tracker: navigating to {self.WIND_TRACKER_URL}")
+
+        from punty.scrapers.playwright_base import new_page
+
+        async with new_page(timeout=20000) as page:
+            try:
+                await page.goto(self.WIND_TRACKER_URL, wait_until="load")
+                await page.wait_for_timeout(4000)  # Next.js app needs time to hydrate
+            except Exception as e:
+                logger.warning(f"HKJC wind tracker navigation failed: {e}")
+                return None
+
+            # Extract all visible text content and try to parse weather data
+            try:
+                data = await page.evaluate("""() => {
+                    const result = {
+                        weather_wind_speed: null,
+                        weather_wind_dir: null,
+                        weather_condition: null,
+                        weather_temp: null,
+                        weather_humidity: null,
+                        track_condition: null,
+                        raw_text: null
+                    };
+
+                    // Get all text content from the main content area
+                    const body = document.body;
+                    if (!body) return result;
+
+                    const allText = body.innerText || body.textContent || '';
+                    result.raw_text = allText.substring(0, 3000);  // Capture for logging
+
+                    // Look for wind speed patterns like "12 km/h", "Wind Speed: 15"
+                    const windSpeedMatch = allText.match(/(?:wind\\s*(?:speed)?\\s*[:：]?\\s*)(\\d+)\\s*(?:km\\/h|kmh|kph)/i)
+                        || allText.match(/(\\d+)\\s*(?:km\\/h|kmh|kph)/i);
+                    if (windSpeedMatch) {
+                        result.weather_wind_speed = parseInt(windSpeedMatch[1]);
+                    }
+
+                    // Wind direction: "N", "NE", "SSW", etc.
+                    const windDirMatch = allText.match(/(?:wind\\s*(?:direction)?\\s*[:：]?\\s*)(N|NE|NNE|ENE|E|ESE|SE|SSE|S|SSW|SW|WSW|W|WNW|NW|NNW)(?:\\s|$|,)/i)
+                        || allText.match(/(?:direction\\s*[:：]?\\s*)(N|NE|NNE|ENE|E|ESE|SE|SSE|S|SSW|SW|WSW|W|WNW|NW|NNW)(?:\\s|$|,)/i);
+                    if (windDirMatch) {
+                        result.weather_wind_dir = windDirMatch[1].toUpperCase();
+                    }
+
+                    // Temperature: "25°C", "Temp: 25"
+                    const tempMatch = allText.match(/(\\d{1,2})\\s*°\\s*[Cc]/i)
+                        || allText.match(/(?:temp(?:erature)?\\s*[:：]?\\s*)(\\d{1,2})/i);
+                    if (tempMatch) {
+                        result.weather_temp = parseInt(tempMatch[1]);
+                    }
+
+                    // Humidity: "65%", "Humidity: 65"
+                    const humidMatch = allText.match(/(?:humidity\\s*[:：]?\\s*)(\\d{1,3})\\s*%?/i)
+                        || allText.match(/(\\d{1,3})\\s*%\\s*(?:humidity|RH)/i);
+                    if (humidMatch) {
+                        result.weather_humidity = parseInt(humidMatch[1]);
+                    }
+
+                    // Weather condition: "Fine", "Cloudy", "Rainy", "Overcast"
+                    const condMatch = allText.match(/(?:weather|condition)\\s*[:：]?\\s*(Fine|Sunny|Cloudy|Overcast|Rainy|Showers|Rain|Drizzle|Humid|Thunderstorm|Clear|Partly Cloudy|Mostly Cloudy)/i);
+                    if (condMatch) {
+                        result.weather_condition = condMatch[1];
+                    }
+
+                    // Track condition: "Good", "Good to Firm", "Good to Yielding", "Yielding", "Soft", "Heavy"
+                    const trackMatch = allText.match(/(?:going|track\\s*(?:condition)?|course\\s*(?:condition)?)\\s*[:：]?\\s*(Good to Firm|Good to Yielding|Good|Firm|Yielding to Soft|Yielding|Soft|Heavy|Wet Fast|Fast)/i);
+                    if (trackMatch) {
+                        result.track_condition = trackMatch[1];
+                    }
+
+                    return result;
+                }""")
+            except Exception as e:
+                logger.warning(f"HKJC wind tracker extraction failed: {e}")
+                return None
+
+        if not data:
+            return None
+
+        # Log raw text for debugging (first run — helps refine selectors)
+        raw = data.pop("raw_text", None)
+        if raw:
+            logger.info(f"HKJC wind tracker raw text (first 500 chars): {raw[:500]}")
+
+        # Check if we got any useful data
+        has_data = any(v is not None for v in data.values())
+        if not has_data:
+            logger.warning("HKJC wind tracker: no weather data extracted from page")
+            return None
+
+        logger.info(
+            f"HKJC wind tracker: wind={data.get('weather_wind_speed')}km/h "
+            f"{data.get('weather_wind_dir')}, temp={data.get('weather_temp')}°C, "
+            f"humidity={data.get('weather_humidity')}%, "
+            f"track={data.get('track_condition')}"
+        )
+        return data
