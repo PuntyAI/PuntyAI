@@ -940,14 +940,16 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
 
 
 async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
-    """Quick refresh of conditions and scratchings for a meeting.
+    """Quick refresh of odds, conditions and scratchings for a meeting.
 
-    Uses PF API for lightweight HTTP calls (no Playwright needed).
-    Odds are already captured by the main racing.com scrape.
+    Fetches fresh odds from racing.com via check_race_fields(), plus
+    conditions/scratchings from PuntingForm and Racing Australia.
     """
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
         raise ValueError(f"Meeting not found: {meeting_id}")
+
+    odds_updated = 0
 
     try:
         from punty.scrapers.punting_form import PuntingFormScraper
@@ -993,8 +995,72 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             except Exception as e:
                 logger.warning(f"RA conditions failed during refresh for {meeting.venue}: {e}")
 
+        # Refresh odds from racing.com via Playwright field check
+        try:
+            from punty.scrapers.playwright_base import is_scrape_in_progress
+            in_progress, _ = is_scrape_in_progress()
+            if not in_progress:
+                from punty.scrapers.racing_com import RacingComScraper
+                races = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting_id)
+                )
+                all_races = races.scalars().all()
+                race_numbers = [r.race_number for r in all_races if r.results_status in (None, "Open", "Interim")]
+                if race_numbers:
+                    scraper = RacingComScraper()
+                    try:
+                        field_data = await scraper.check_race_fields(
+                            meeting.venue, meeting.date, race_numbers
+                        )
+                        # Apply odds from field check to runners
+                        for race_num, runners in field_data.get("races", {}).items():
+                            race_id = f"{meeting_id}-r{race_num}"
+                            for r in runners:
+                                horse_name = r.get("horse_name")
+                                if not horse_name:
+                                    continue
+                                result = await db.execute(
+                                    select(Runner).where(
+                                        Runner.race_id == race_id,
+                                        Runner.horse_name == horse_name,
+                                    ).limit(1)
+                                )
+                                runner = result.scalar_one_or_none()
+                                if not runner:
+                                    continue
+
+                                if r.get("scratched") and not runner.scratched:
+                                    runner.scratched = True
+
+                                odds_data = r.get("odds")
+                                if odds_data:
+                                    best_odds = (
+                                        odds_data.get("odds_tab")
+                                        or odds_data.get("odds_sportsbet")
+                                        or odds_data.get("odds_bet365")
+                                        or odds_data.get("odds_ladbrokes")
+                                    )
+                                    if best_odds:
+                                        runner.current_odds = best_odds
+                                        odds_updated += 1
+                                        if not runner.opening_odds:
+                                            runner.opening_odds = best_odds
+                                    for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
+                                        val = odds_data.get(field)
+                                        if val:
+                                            setattr(runner, field, val)
+                                    if odds_data.get("place_odds"):
+                                        runner.place_odds = odds_data["place_odds"]
+                    finally:
+                        await scraper.close()
+                    logger.info(f"Odds refresh for {meeting_id}: updated {odds_updated} runners from racing.com")
+            else:
+                logger.info(f"Skipping odds refresh for {meeting_id} — Playwright scrape in progress")
+        except Exception as e:
+            logger.warning(f"Racing.com odds refresh failed for {meeting_id}: {e}")
+
         await db.commit()
-        return {"meeting_id": meeting_id, "status": "ok"}
+        return {"meeting_id": meeting_id, "status": "ok", "odds_updated": odds_updated}
     except Exception as e:
         logger.error(f"Odds refresh failed: {e}")
         return {"meeting_id": meeting_id, "status": "error", "error": str(e)}
