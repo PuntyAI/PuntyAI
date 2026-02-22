@@ -75,6 +75,8 @@ class ContextBuilder:
         if not meeting:
             return {}
 
+        self._venue_name = meeting.venue
+
         # Fetch live WillyWeather data for hourly forecasts and observations
         ww_data = await self._fetch_willyweather(meeting)
 
@@ -512,7 +514,7 @@ class ContextBuilder:
                     # HKJC track-specific jockey/trainer rankings (HK venues only)
                     if self._hkjc_jockeys or self._hkjc_trainers:
                         from punty.scrapers.tab_playwright import format_hkjc_ranking
-                        venue_name = meeting.venue
+                        venue_name = self._venue_name
                         if jockey_name and jockey_name in self._hkjc_jockeys:
                             runner_data["hkjc_jockey_ranking"] = format_hkjc_ranking(
                                 self._hkjc_jockeys[jockey_name], "jockey", venue_name,
