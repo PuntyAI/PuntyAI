@@ -1912,6 +1912,26 @@ class ResultsMonitor:
                 if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                     runner.gear_changes = r["gear_changes"]
 
+                # Apply fresh odds (keeps odds current during race day)
+                odds_data = r.get("odds")
+                if odds_data:
+                    best_odds = (
+                        odds_data.get("odds_tab")
+                        or odds_data.get("odds_sportsbet")
+                        or odds_data.get("odds_bet365")
+                        or odds_data.get("odds_ladbrokes")
+                    )
+                    if best_odds:
+                        runner.current_odds = best_odds
+                        if not runner.opening_odds:
+                            runner.opening_odds = best_odds
+                    for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
+                        val = odds_data.get(field)
+                        if val:
+                            setattr(runner, field, val)
+                    if odds_data.get("place_odds"):
+                        runner.place_odds = odds_data["place_odds"]
+
         # Track condition from racing.com — only allow same-base refinements.
         # racing.com is NOT authoritative for track conditions (Racing Australia is).
         # Don't let it change base condition (e.g., Good→Soft) — that causes

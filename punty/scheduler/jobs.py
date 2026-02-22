@@ -889,10 +889,9 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                             if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                                 logger.info(f"Gear change: {horse_name} (R{race_num}) {r['gear_changes']}")
                                 runner.gear_changes = r["gear_changes"]
-                            # Apply odds if runner has none or odds are fresher
+                            # Always apply fresh odds (overnight odds can be wildly stale)
                             odds_data = r.get("odds")
-                            if odds_data and not runner.current_odds:
-                                # Pick best available odds (TAB preferred)
+                            if odds_data:
                                 best_odds = (
                                     odds_data.get("odds_tab")
                                     or odds_data.get("odds_sportsbet")
@@ -904,12 +903,11 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                                     if not runner.opening_odds:
                                         runner.opening_odds = best_odds
                                     odds_updated += 1
-                                # Always apply provider-specific odds
                                 for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
                                     val = odds_data.get(field)
-                                    if val and not getattr(runner, field, None):
+                                    if val:
                                         setattr(runner, field, val)
-                                if odds_data.get("place_odds") and not runner.place_odds:
+                                if odds_data.get("place_odds"):
                                     runner.place_odds = odds_data["place_odds"]
                                 if odds_data.get("odds_flucs") and not runner.odds_flucs:
                                     runner.odds_flucs = odds_data["odds_flucs"]
