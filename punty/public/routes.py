@@ -1523,7 +1523,7 @@ async def get_bet_type_stats(
 
 async def get_daily_dashboard() -> dict:
     """Build today's daily scoreboard — results, upcoming, timeline, insights."""
-    from sqlalchemy import case, desc
+    from sqlalchemy import case, desc, func as sa_func
     from collections import Counter, defaultdict
     from punty.results.celebrations import get_celebration
     from punty.results.picks import get_performance_summary
@@ -1542,12 +1542,14 @@ async def get_daily_dashboard() -> dict:
         ).scalar_subquery()
 
         # ── ALL picks today (settled + unsettled) with runner/race details ──
+        # Use coalesce so sequences (race_number=NULL) join via sequence_start_race
+        pick_race_num = sa_func.coalesce(Pick.race_number, Pick.sequence_start_race)
         result = await db.execute(
             select(Pick, Runner, Race, Meeting)
             .join(Meeting, Pick.meeting_id == Meeting.id)
-            .join(Race, and_(
+            .outerjoin(Race, and_(
                 Race.meeting_id == Pick.meeting_id,
-                Race.race_number == Pick.race_number,
+                Race.race_number == pick_race_num,
             ))
             .outerjoin(Runner, and_(
                 Runner.race_id == Race.id,
@@ -1586,12 +1588,13 @@ async def get_daily_dashboard() -> dict:
             pnl = pick.pnl or 0
             running_pnl += pnl
             # Use race start time or settled_at for x-axis
-            ts = race.start_time or pick.settled_at or pick.created_at
+            ts = (race.start_time if race else None) or pick.settled_at or pick.created_at
+            rn = pick.race_number or pick.sequence_start_race or "?"
             timeline.append({
                 "time": ts.strftime("%H:%M") if ts else "?",
                 "pnl": round(pnl, 2),
                 "cumulative": round(running_pnl, 2),
-                "label": f"{meeting.venue} R{pick.race_number}",
+                "label": f"{meeting.venue} R{rn}",
                 "hit": bool(pick.hit),
             })
 
@@ -1601,7 +1604,7 @@ async def get_daily_dashboard() -> dict:
             if pick.pick_type not in ("selection", "exotic", "sequence", "big3_multi"):
                 continue
             # Race status
-            rs = (race.results_status or "").lower()
+            rs = ((race.results_status if race else None) or "").lower()
             if rs in ("paying", "closed", "final"):
                 continue  # Already finished, just not settled yet — skip
             # Display name
@@ -1629,7 +1632,7 @@ async def get_daily_dashboard() -> dict:
                 "win_prob": round(pick.win_probability * 100, 1) if pick.win_probability else None,
                 "confidence": pick.confidence,
                 "is_puntys_pick": pick.is_puntys_pick or False,
-                "start_time": race.start_time.strftime("%H:%M") if race.start_time else None,
+                "start_time": race.start_time.strftime("%H:%M") if race and race.start_time else None,
                 "is_edge": (pick.value_rating or 0) >= 1.1 and pick.pick_type == "selection",
             })
 
