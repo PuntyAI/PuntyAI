@@ -2462,23 +2462,30 @@ class TestTrackStatsFallback:
         assert score > 0.5
 
     def test_track_dist_preferred_over_track_stats(self):
+        """track_dist_stats gets 1.5x weight vs track_stats 0.8x weight.
+
+        When track_dist_stats is present (>=4 starts), it's used exclusively
+        (track_stats is skipped). The higher weight (1.5 vs 0.8) means
+        the signal has more influence on the final weighted average.
+        With identical last_five, the runner whose strong stats carry
+        more weight should score higher.
+        """
+        # Runner with strong stats in track_dist_stats (1.5x weight)
         runner = _make_runner(
-            track_dist_stats="8: 6-1-0",  # 75% win rate at track+distance
-            track_stats="8: 2-1-1",       # 25% win rate at track overall
-            last_five="11111",
+            track_dist_stats="8: 7-1-0",  # 87.5% win rate, 1.5x weight
+            last_five="33333",            # mediocre last_five to amplify difference
         )
         score_with_td = _form_rating(runner, "Good 4", 0.10)
 
+        # Runner with same strong stats but only in track_stats (0.8x weight)
         runner2 = _make_runner(
-            track_stats="8: 6-1-0",  # Same strong stats but only in track_stats
-            last_five="11111",
+            track_stats="8: 7-1-0",  # 87.5% win rate, only 0.8x weight
+            last_five="33333",
         )
         score_ts_only = _form_rating(runner2, "Good 4", 0.10)
 
-        # Both runners have strong stats available.
-        # Runner 1 has them in track_dist_stats (1.5x weight) which should
-        # outweigh the weaker track_stats. Runner 2 has them only in
-        # track_stats (0.8x weight).
+        # track_dist_stats has nearly 2x the weight (1.5 vs 0.8), so the
+        # strong signal should dominate more in runner 1's weighted average.
         assert score_with_td > score_ts_only
 
     def test_no_track_stats_either(self):
