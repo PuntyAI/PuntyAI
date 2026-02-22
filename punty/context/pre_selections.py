@@ -30,6 +30,7 @@ PLACE_MIN_VALUE = 0.95        # accept slight undervalue for Place safety
 
 # Roughie thresholds
 ROUGHIE_MIN_ODDS = 8.0
+ROUGHIE_MAX_ODDS = 20.0   # $20+ roughies historically -100% ROI
 ROUGHIE_MIN_VALUE = 1.10
 
 # Punty's Pick exotic threshold
@@ -209,7 +210,7 @@ def calculate_pre_selections(
     # Separate roughie candidates (odds >= $8, value >= 1.1)
     roughie_pool = [
         c for c in candidates
-        if c["odds"] >= ROUGHIE_MIN_ODDS and c["value_rating"] >= ROUGHIE_MIN_VALUE
+        if ROUGHIE_MIN_ODDS <= c["odds"] <= ROUGHIE_MAX_ODDS and c["value_rating"] >= ROUGHIE_MIN_VALUE
     ]
 
     # Select top 3 picks + roughie

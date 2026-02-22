@@ -33,7 +33,8 @@ DOMINANT_GAP = 0.08           # probability gap #1 vs #2 for dominant
 DOMINANT_P_WIN = 0.30         # min p_win for dominant classification
 
 # Roughie limits
-ROUGHIE_MAX_WIN_ODDS = 30.0   # no win bets above this
+ROUGHIE_MAX_WIN_ODDS = 20.0   # no win bets above this ($20+ = -100% ROI historically)
+ROUGHIE_MAX_ODDS = 20.0       # hard cap on roughie selection
 ROUGHIE_MIN_P_WIN = 0.06      # minimum model probability for roughie win
 ROUGHIE_MIN_ODDS = 15.0       # minimum odds to qualify as roughie
 
@@ -659,7 +660,7 @@ def optimize_race(
     # Find roughie first
     roughie_pool = [
         c for c in candidates
-        if c["odds"] >= 8.0 and c["value_rating"] >= 1.10
+        if 8.0 <= c["odds"] <= ROUGHIE_MAX_ODDS and c["value_rating"] >= 1.10
     ]
     roughie = None
     if roughie_pool:
