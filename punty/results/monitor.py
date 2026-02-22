@@ -1916,7 +1916,8 @@ class ResultsMonitor:
                 odds_data = r.get("odds")
                 if odds_data:
                     best_odds = (
-                        odds_data.get("odds_tab")
+                        odds_data.get("odds_betfair")
+                        or odds_data.get("odds_tab")
                         or odds_data.get("odds_sportsbet")
                         or odds_data.get("odds_bet365")
                         or odds_data.get("odds_ladbrokes")

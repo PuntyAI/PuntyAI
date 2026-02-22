@@ -995,73 +995,46 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             except Exception as e:
                 logger.warning(f"RA conditions failed during refresh for {meeting.venue}: {e}")
 
-        # Commit conditions/scratchings before the slow Playwright call
-        # to release SQLite write lock and avoid "database is locked"
+        # Commit conditions/scratchings before odds fetch
         await db.commit()
 
-        # Refresh odds from racing.com via Playwright field check
+        # Refresh odds from Betfair Exchange API (fast HTTP, no Playwright)
         try:
-            from punty.scrapers.playwright_base import is_scrape_in_progress
-            in_progress, _ = is_scrape_in_progress()
-            if not in_progress:
-                from punty.scrapers.racing_com import RacingComScraper
-                races = await db.execute(
-                    select(Race).where(Race.meeting_id == meeting_id)
-                )
-                all_races = races.scalars().all()
-                race_numbers = [r.race_number for r in all_races if r.results_status in (None, "Open", "Interim")]
-                if race_numbers:
-                    scraper = RacingComScraper()
-                    try:
-                        field_data = await scraper.check_race_fields(
-                            meeting.venue, meeting.date, race_numbers
+            from punty.scrapers.betfair import BetfairScraper
+            bf = await BetfairScraper.from_settings(db)
+            if bf:
+                try:
+                    bf_odds = await bf.get_odds_for_meeting(
+                        meeting.venue, meeting.date, meeting_id
+                    )
+                    if bf_odds:
+                        await _merge_betfair_odds(db, meeting_id, bf_odds)
+                        # Also update current_odds for runners where Betfair is
+                        # the freshest/only source
+                        for od in bf_odds:
+                            result = await db.execute(
+                                select(Runner).where(Runner.race_id == od["race_id"])
+                                .where(Runner.horse_name == od["horse_name"])
+                                .limit(1)
+                            )
+                            runner = result.scalar_one_or_none()
+                            if runner:
+                                runner.current_odds = od["odds_betfair"]
+                                odds_updated += 1
+                                if not runner.opening_odds:
+                                    runner.opening_odds = od["odds_betfair"]
+                                # Estimate place odds: (win - 1) / 3 + 1
+                                runner.place_odds = round((od["odds_betfair"] - 1) / 3 + 1, 2)
+                        logger.info(
+                            f"Odds refresh for {meeting_id}: updated {odds_updated} "
+                            f"runners from Betfair"
                         )
-                        # Apply odds from field check to runners
-                        for race_num, runners in field_data.get("races", {}).items():
-                            race_id = f"{meeting_id}-r{race_num}"
-                            for r in runners:
-                                horse_name = r.get("horse_name")
-                                if not horse_name:
-                                    continue
-                                result = await db.execute(
-                                    select(Runner).where(
-                                        Runner.race_id == race_id,
-                                        Runner.horse_name == horse_name,
-                                    ).limit(1)
-                                )
-                                runner = result.scalar_one_or_none()
-                                if not runner:
-                                    continue
-
-                                if r.get("scratched") and not runner.scratched:
-                                    runner.scratched = True
-
-                                odds_data = r.get("odds")
-                                if odds_data:
-                                    best_odds = (
-                                        odds_data.get("odds_tab")
-                                        or odds_data.get("odds_sportsbet")
-                                        or odds_data.get("odds_bet365")
-                                        or odds_data.get("odds_ladbrokes")
-                                    )
-                                    if best_odds:
-                                        runner.current_odds = best_odds
-                                        odds_updated += 1
-                                        if not runner.opening_odds:
-                                            runner.opening_odds = best_odds
-                                    for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
-                                        val = odds_data.get(field)
-                                        if val:
-                                            setattr(runner, field, val)
-                                    if odds_data.get("place_odds"):
-                                        runner.place_odds = odds_data["place_odds"]
-                    finally:
-                        await scraper.close()
-                    logger.info(f"Odds refresh for {meeting_id}: updated {odds_updated} runners from racing.com")
+                finally:
+                    await bf.close()
             else:
-                logger.info(f"Skipping odds refresh for {meeting_id} — Playwright scrape in progress")
+                logger.info(f"Betfair not configured — skipping odds refresh for {meeting_id}")
         except Exception as e:
-            logger.warning(f"Racing.com odds refresh failed for {meeting_id}: {e}")
+            logger.warning(f"Betfair odds refresh failed for {meeting_id}: {e}")
 
         await db.commit()
         return {"meeting_id": meeting_id, "status": "ok", "odds_updated": odds_updated}

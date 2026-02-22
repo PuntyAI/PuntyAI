@@ -893,7 +893,8 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                             odds_data = r.get("odds")
                             if odds_data:
                                 best_odds = (
-                                    odds_data.get("odds_tab")
+                                    odds_data.get("odds_betfair")
+                                    or odds_data.get("odds_tab")
                                     or odds_data.get("odds_sportsbet")
                                     or odds_data.get("odds_bet365")
                                     or odds_data.get("odds_ladbrokes")
