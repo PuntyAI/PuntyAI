@@ -320,10 +320,10 @@ class TabPlaywrightScraper:
                     results.append({
                         "horse_name": runner.get("runnerName", ""),
                         "saddlecloth": runner.get("runnerNumber"),
-                        "finish_position": result_place,
+                        "position": result_place,
                         "win_dividend": win_deductions.get("returnWin") or fixed_odds.get("returnWin"),
                         "place_dividend": win_deductions.get("returnPlace") or fixed_odds.get("returnPlace"),
-                        "result_margin": runner.get("resultedMargin"),
+                        "margin": runner.get("resultedMargin"),
                     })
 
                 if results:
@@ -935,8 +935,10 @@ class HKJCResultsScraper:
 
                 # Strip HKJC horse ID suffix like "(L126)" and trailing whitespace
                 horse_name = re.sub(r'\s*\([A-Z]\d{3}\)\s*$', '', horse_name).strip()
-                # Strip HTML entities and non-breaking spaces
+                # Strip HTML entities and non-breaking spaces, convert to title case
                 horse_name = horse_name.replace('&nbsp;', ' ').replace('\xa0', ' ').strip()
+                # HKJC returns ALL CAPS — convert to title case to match DB format
+                horse_name = horse_name.title()
 
                 if not horse_name or finish_pos is None:
                     continue
@@ -960,10 +962,10 @@ class HKJCResultsScraper:
                 results.append({
                     "horse_name": horse_name,
                     "saddlecloth": saddlecloth,
-                    "finish_position": finish_pos,
+                    "position": finish_pos,
                     "win_dividend": None,  # Filled from dividends section
                     "place_dividend": None,
-                    "result_margin": margin,
+                    "margin": margin,
                     "win_odds": win_odds,
                 })
 
