@@ -214,9 +214,11 @@ class ContextBuilder:
                 {"name": t["name"], **t.get("overall", {})} for t in top_trainers
             ]
 
-        # Skip sequences/exotics for international venues (no quaddie/big6 at HK etc.)
-        from punty.venues import is_international_venue
-        if not is_international_venue(meeting.venue):
+        # Build sequence data (AU venues + HK)
+        from punty.venues import is_international_venue, guess_state
+        _is_intl = is_international_venue(meeting.venue)
+        _has_sequences = not _is_intl or guess_state(meeting.venue) == "HK"
+        if _has_sequences:
             # Calculate sequence leg confidence across races
             context["sequence_leg_analysis"] = self._calculate_sequence_legs(context["races"])
 
