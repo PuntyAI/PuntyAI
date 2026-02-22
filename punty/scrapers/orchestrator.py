@@ -995,6 +995,10 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             except Exception as e:
                 logger.warning(f"RA conditions failed during refresh for {meeting.venue}: {e}")
 
+        # Commit conditions/scratchings before the slow Playwright call
+        # to release SQLite write lock and avoid "database is locked"
+        await db.commit()
+
         # Refresh odds from racing.com via Playwright field check
         try:
             from punty.scrapers.playwright_base import is_scrape_in_progress
