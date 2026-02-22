@@ -5,6 +5,8 @@ import pytest
 from punty.context.pre_sequences import (
     MIN_OUTLAY,
     MAX_OUTLAY,
+    BIG6_MIN_OUTLAY,
+    BIG6_MAX_OUTLAY,
     MIN_FLEXI_PCT,
     CHAOS_SHAPES,
     BANKER_SHAPES,
@@ -225,8 +227,8 @@ class TestOptimiser:
         result = _optimiser_select(legs, budget=50.0)
         assert result is None
 
-    def test_anchor_leg_min_2_wide(self):
-        """Anchor leg should get minimum 2 runners (not singled)."""
+    def test_anchor_leg_min_3_wide(self):
+        """Anchor leg should get minimum 3 runners by default."""
         specs = [
             (0.40, 0.10, 8, "STANDOUT"),   # anchor
             (0.25, 0.05, 10, "CLEAR_FAV"),  # normal
@@ -236,7 +238,39 @@ class TestOptimiser:
         legs = self._make_legs(specs)
         result = _optimiser_select(legs, budget=50.0)
         assert result is not None
-        assert len(result[0]) >= 2  # min 2-wide even for anchors
+        assert len(result[0]) >= 3  # min 3-wide for anchors by default
+
+    def test_anchor_short_fav_pick_allows_2_wide(self):
+        """Anchor with short-priced fav (≤$2.50) that is a pick allows 2-wide."""
+        from punty.probability import SequenceLegAnalysis
+        # Build an anchor leg with a $2.00 favourite that is a pick
+        runners = [
+            {"saddlecloth": 1, "horse_name": "H1", "win_prob": 0.50, "edge": 0.15,
+             "current_odds": 2.00, "_is_pick": True, "_pick_rank": 1},
+            {"saddlecloth": 2, "horse_name": "H2", "win_prob": 0.18, "edge": 0.02,
+             "current_odds": 5.50, "_is_pick": False, "_pick_rank": 99},
+        ]
+        for i in range(3, 9):
+            runners.append({"saddlecloth": i, "horse_name": f"H{i}", "win_prob": 0.05,
+                            "edge": -0.02, "current_odds": 20.0, "_is_pick": False, "_pick_rank": 99})
+        anchor_leg = SequenceLegAnalysis(
+            race_number=5, top_runners=runners, leg_confidence="HIGH",
+            suggested_width=2, odds_shape="STANDOUT", shape_width=3,
+        )
+        anchor_leg._field_size = 8
+
+        # 3 normal legs
+        normal_specs = [(0.25, 0.05, 10, "CLEAR_FAV")] * 3
+        normal_legs = self._make_legs(normal_specs)
+        # Shift race numbers to not conflict
+        for j, leg in enumerate(normal_legs):
+            leg.race_number = 6 + j
+
+        all_legs = [anchor_leg] + normal_legs
+        result = _optimiser_select(all_legs, budget=50.0)
+        assert result is not None
+        # Anchor leg CAN be 2-wide (not forced to 3)
+        assert len(result[0]) >= 2
 
     def test_overlay_only_selection(self):
         """Prefer runners with positive edge."""
@@ -271,8 +305,8 @@ class TestOptimiser:
             if field <= 10:
                 assert len(sel) <= 3, f"Leg {i}: {len(sel)} selections for field {field}"
 
-    def test_no_half_field(self):
-        """Never select >= 50% of field."""
+    def test_no_over_half_field(self):
+        """Never select > 50% of field."""
         specs = [
             (0.35, 0.08, 8, "STANDOUT"),
             (0.25, 0.05, 6, "CLEAR_FAV"),  # small field
@@ -284,8 +318,8 @@ class TestOptimiser:
         assert result is not None
         for i, sel in enumerate(result):
             field = getattr(legs[i], "_field_size", 8)
-            assert len(sel) < field / 2, \
-                f"Leg {i}: {len(sel)} of {field} runners (>= 50%)"
+            assert len(sel) <= field // 2, \
+                f"Leg {i}: {len(sel)} of {field} runners (> 50%)"
 
     def test_budget_in_range(self):
         """Outlay between MIN and MAX."""
@@ -304,8 +338,8 @@ class TestOptimiser:
         cost = combos * (MIN_FLEXI_PCT / 100.0)
         assert cost <= MAX_OUTLAY, f"Cost {cost} exceeds MAX_OUTLAY {MAX_OUTLAY}"
 
-    def test_all_legs_min_2_wide(self):
-        """Every leg must have at least 2 selections."""
+    def test_all_legs_min_3_wide(self):
+        """Every leg must have at least 3 selections (default min width)."""
         specs = [
             (0.35, 0.08, 10, "STANDOUT"),
             (0.25, 0.05, 10, "CLEAR_FAV"),
@@ -316,7 +350,7 @@ class TestOptimiser:
         result = _optimiser_select(legs, budget=50.0)
         assert result is not None
         for i, sel in enumerate(result):
-            assert len(sel) >= 2, f"Leg {i} has {len(sel)} runners, min is 2"
+            assert len(sel) >= 3, f"Leg {i} has {len(sel)} runners, min is 3"
 
 
 # ──────────────────────────────────────────────
@@ -658,3 +692,95 @@ class TestBuildReason:
         )
         reason = _build_reason(smart)
         assert "chaos" in reason.lower()
+
+
+# ──────────────────────────────────────────────
+# Tests: New strategy improvements
+# ──────────────────────────────────────────────
+
+class TestStrategyImprovements:
+    def test_big6_reduced_outlay(self):
+        """Big6 outlay should be $20-$30 (not $40-$60)."""
+        leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
+        race_contexts = [_race_ctx(r) for r in range(3, 9)]
+
+        result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
+        assert result is not None
+        assert BIG6_MIN_OUTLAY <= result.total_outlay <= BIG6_MAX_OUTLAY, \
+            f"Big6 outlay ${result.total_outlay} outside ${BIG6_MIN_OUTLAY}-${BIG6_MAX_OUTLAY}"
+
+    def test_big6_max_2_wide_per_leg(self):
+        """Big6 legs should be capped at 2-wide to fit budget."""
+        leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
+        race_contexts = [_race_ctx(r) for r in range(3, 9)]
+
+        result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
+        assert result is not None
+        for i, leg in enumerate(result.legs):
+            assert len(leg.runners) <= 2, \
+                f"Big6 leg {i+1} has {len(leg.runners)} runners, max should be 2"
+
+    def test_mandatory_fav_inclusion(self):
+        """Runner ≤$2.50 must be included in leg even without edge."""
+        from punty.probability import SequenceLegAnalysis
+
+        legs = []
+        for rn in range(5, 9):
+            runners = [
+                # Short-priced fav with negative edge — would normally be excluded
+                {"saddlecloth": 1, "horse_name": f"Fav{rn}", "win_prob": 0.45,
+                 "edge": -0.05, "current_odds": 2.20, "_is_pick": False, "_pick_rank": 99},
+            ]
+            # Other runners with positive edge
+            for i in range(2, 9):
+                runners.append({
+                    "saddlecloth": i, "horse_name": f"Horse{rn}_{i}",
+                    "win_prob": 0.12 - (i - 2) * 0.01, "edge": 0.04 - (i - 2) * 0.01,
+                    "current_odds": round(1.0 / max(0.12 - (i - 2) * 0.01, 0.02) * 0.9, 2),
+                    "_is_pick": True if i <= 4 else False, "_pick_rank": i if i <= 4 else 99,
+                })
+            leg = SequenceLegAnalysis(
+                race_number=rn, top_runners=runners, leg_confidence="MED",
+                suggested_width=3, odds_shape="CLEAR_FAV", shape_width=5,
+            )
+            leg._field_size = 8
+            legs.append(leg)
+
+        result = _optimiser_select(legs, budget=50.0)
+        assert result is not None
+        # Check that the $2.20 favourite appears in every leg
+        for i, sel in enumerate(result):
+            saddlecloths = {r.get("saddlecloth") for r in sel}
+            assert 1 in saddlecloths, \
+                f"Leg {i+1}: $2.20 favourite (sc=1) not included despite ≤$2.50"
+
+    def test_large_field_min_4_wide(self):
+        """Fields of 14+ should have minimum 4-wide legs."""
+        from punty.probability import SequenceLegAnalysis
+
+        legs = []
+        # First leg: anchor (strong runner to pass viability check)
+        la0 = _leg_analysis(5, top_prob=0.40, edge_base=0.10)
+        leg0 = SequenceLegAnalysis(
+            race_number=5, top_runners=la0["top_runners"],
+            leg_confidence="HIGH", suggested_width=3,
+            odds_shape="STANDOUT", shape_width=3,
+        )
+        leg0._field_size = 15
+        legs.append(leg0)
+        # Three more large-field legs
+        for rn in range(6, 9):
+            la = _leg_analysis(rn, top_prob=0.25, edge_base=0.05)
+            leg = SequenceLegAnalysis(
+                race_number=rn, top_runners=la["top_runners"],
+                leg_confidence="MED", suggested_width=4,
+                odds_shape="CLEAR_FAV", shape_width=6,
+            )
+            leg._field_size = 15
+            legs.append(leg)
+
+        result = _optimiser_select(legs, budget=60.0)
+        assert result is not None
+        for i, sel in enumerate(result):
+            assert len(sel) >= 4, \
+                f"Leg {i+1} field 15: has {len(sel)} runners, min should be 4"

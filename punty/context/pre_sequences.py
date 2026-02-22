@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 BASE_OUTLAY = 50.0
 MIN_OUTLAY = 40.0
 MAX_OUTLAY = 60.0
+BIG6_MIN_OUTLAY = 20.0
+BIG6_MAX_OUTLAY = 30.0
 MIN_FLEXI_PCT = 30.0
 
 # Main quaddie re-enabled with wider legs and edge-based construction.
@@ -202,13 +204,15 @@ def _prepare_legs_data(
     if len(legs_data) != num_legs:
         return None
 
-    # Dynamic outlay: scale $40-$60 based on chaos ratio
-    # More chaos legs → wider ticket → need more budget
-    # More banker legs → tighter ticket → less budget needed
+    # Dynamic outlay scaled by chaos ratio
     chaos_count = sum(1 for leg in legs_data if _is_chaos_leg(leg))
     chaos_ratio = chaos_count / num_legs
-    outlay = round(MIN_OUTLAY + chaos_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
-    outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
+    if is_big6:
+        outlay = round(BIG6_MIN_OUTLAY + chaos_ratio * (BIG6_MAX_OUTLAY - BIG6_MIN_OUTLAY), 0)
+        outlay = max(BIG6_MIN_OUTLAY, min(BIG6_MAX_OUTLAY, outlay))
+    else:
+        outlay = round(MIN_OUTLAY + chaos_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
+        outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
 
     return (legs_data, outlay, is_big6)
 
@@ -465,40 +469,63 @@ def _optimiser_select(
         return None
 
     # Step 3: Set initial targets per leg type
+    # Check which legs have a short-priced fav (≤$2.50) that is one of our picks
+    has_short_fav_pick = []
+    for leg in legs_data:
+        found = False
+        for r in leg.top_runners:
+            odds = r.get("current_odds")
+            if odds and float(odds) <= 2.50 and r.get("_is_pick"):
+                found = True
+                break
+        has_short_fav_pick.append(found)
+
     targets = []
     for i, lt in enumerate(leg_types):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
         pool_depth = len(overlay_pools[i]["overlays"]) + len(overlay_pools[i]["neutrals"])
         if lt == "anchor":
-            targets.append(2)  # Min 2-wide even for anchors (single legs = 30% SR vs 64%+ wider)
+            # Allow 2-wide only if we have a short-priced fav selected to win
+            if has_short_fav_pick[i]:
+                targets.append(2)
+            else:
+                targets.append(3)
         elif lt == "chaos":
             targets.append(min(5, pool_depth))
         else:
-            # Normal: 2-4 based on field size and overlay depth
+            # Normal: 3-4 based on field size and overlay depth
             if field_size >= 12:
                 targets.append(min(4, pool_depth))
             else:
                 targets.append(min(3, pool_depth))
 
-    # Step 4: Apply field-size caps
+    # Step 4: Apply field-size caps and minimums
     for i in range(num_legs):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
-        if field_size <= 10:
+        if field_size <= 7:
+            targets[i] = min(targets[i], 3)
+        elif field_size <= 10:
             targets[i] = min(targets[i], 3)
         elif field_size <= 13:
             targets[i] = min(targets[i], 4)
-        elif field_size <= 16:
-            targets[i] = min(targets[i], 6)
-        # Never >= 50% of field
-        max_half = max(1, field_size // 2 - 1) if field_size > 2 else 1
+        else:
+            targets[i] = min(targets[i], 5)
+        # Never > 50% of field (allow exactly half for small fields)
+        max_half = max(1, field_size // 2) if field_size > 2 else 1
         targets[i] = min(targets[i], max_half)
-        # Ensure at least 2 (min 2-wide rule from backtest)
-        targets[i] = max(targets[i], 2)
+        # Field-size-driven minimums (default 3, anchor with short fav pick = 2, 14+ = 4)
+        if field_size >= 14:
+            min_width = 4
+        elif has_short_fav_pick[i] and leg_types[i] == "anchor":
+            min_width = 2
+        else:
+            min_width = 3
+        targets[i] = max(targets[i], min_width)
 
-    # Big6 tighter caps
+    # Big6 tighter caps — 2-wide max to fit $20-30 budget (2^6=64 combos)
     if is_big6:
         for i in range(num_legs):
-            targets[i] = min(targets[i], 3)
+            targets[i] = min(targets[i], 2)
 
     # Step 5: Populate legs
     # Anchor legs: top win_prob runners (favorites = short-priced, predictable)
@@ -586,6 +613,42 @@ def _optimiser_select(
                         existing_sc.add(r.get("saddlecloth"))
         selected.append(sel)
 
+    # Step 5b: Mandatory favourite inclusion — ≤$2.50 must be in leg
+    for i in range(num_legs):
+        runners = legs_data[i].top_runners
+        existing_sc = {r.get("saddlecloth") for r in selected[i]}
+        # Find short-priced favourite (lowest odds ≤ $2.50)
+        short_fav = None
+        for r in runners:
+            odds = r.get("current_odds")
+            if odds and float(odds) <= 2.50 and r.get("saddlecloth") not in existing_sc:
+                if short_fav is None or float(odds) < float(short_fav.get("current_odds", 999)):
+                    short_fav = r
+        if short_fav:
+            # Force-add: replace weakest non-pick runner if at capacity
+            if len(selected[i]) >= targets[i]:
+                worst_idx = None
+                worst_edge = 999
+                for j, r in enumerate(selected[i]):
+                    if not r.get("_is_pick"):
+                        edge = float(r.get("edge", 0))
+                        if edge < worst_edge:
+                            worst_edge = edge
+                            worst_idx = j
+                if worst_idx is not None:
+                    selected[i][worst_idx] = short_fav
+                    logger.info(
+                        f"Leg {i+1} R{legs_data[i].race_number}: forced fav "
+                        f"{short_fav.get('horse_name')} (${short_fav.get('current_odds')}) "
+                        f"replacing weakest non-pick"
+                    )
+            else:
+                selected[i].append(short_fav)
+                logger.info(
+                    f"Leg {i+1} R{legs_data[i].race_number}: added mandatory fav "
+                    f"{short_fav.get('horse_name')} (${short_fav.get('current_odds')})"
+                )
+
     # Debug: log what was selected per leg
     for i in range(num_legs):
         rn = legs_data[i].race_number
@@ -619,7 +682,16 @@ def _optimiser_select(
         best_trim_j = -1
         best_ev_loss = 999
         for i in range(num_legs):
-            if len(selected[i]) <= 2:  # Never trim below min 2-wide
+            field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+            if field_size >= 14:
+                leg_min = 4
+            elif has_short_fav_pick[i] and leg_types[i] == "anchor":
+                leg_min = 2
+            else:
+                leg_min = 3
+            if is_big6:
+                leg_min = min(leg_min, 2)
+            if len(selected[i]) <= leg_min:
                 continue
             for j in range(len(selected[i])):
                 test = [list(s) for s in selected]
@@ -647,16 +719,19 @@ def _optimiser_select(
         current_ev = _calc_ev_proxy(selected, legs_data)
         for i in range(num_legs):
             field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
-            # Respect field-size caps
-            max_sel = 6
-            if field_size <= 10:
+            # Respect field-size caps (must match Step 4 grading)
+            if field_size <= 7:
+                max_sel = 3
+            elif field_size <= 10:
                 max_sel = 3
             elif field_size <= 13:
                 max_sel = 4
+            else:
+                max_sel = 5
             max_half = max(1, field_size // 2 - 1) if field_size > 2 else 1
             max_sel = min(max_sel, max_half)
             if is_big6:
-                max_sel = min(max_sel, 3)
+                max_sel = min(max_sel, 2)
             if len(selected[i]) >= max_sel:
                 continue
             existing_sc = {r.get("saddlecloth") for r in selected[i]}
@@ -686,16 +761,27 @@ def _optimiser_select(
             break
         selected[best_leg_idx].append(best_add)
 
-    # Step 7: Sanity checks
-    # Enforce minimum 2 runners per leg (single legs = 30% SR vs 64%+ wider)
+    # Step 7: Sanity checks — enforce per-leg minimum width
     for i in range(num_legs):
-        if len(selected[i]) < 2:
+        field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+        if field_size >= 14:
+            leg_min = 4
+        elif has_short_fav_pick[i] and leg_types[i] == "anchor":
+            leg_min = 2
+        else:
+            leg_min = 3
+        if is_big6:
+            leg_min = min(leg_min, 2)
+        while len(selected[i]) < leg_min:
             existing_sc = {r.get("saddlecloth") for r in selected[i]}
-            # Add next best runner from top_runners
+            added = False
             for r in legs_data[i].top_runners:
                 if r.get("saddlecloth") not in existing_sc:
                     selected[i].append(r)
+                    added = True
                     break
+            if not added:
+                break
 
     # Max one chaos leg >5 selections
     wide_chaos = [i for i in range(num_legs) if leg_types[i] == "chaos" and len(selected[i]) > 5]
@@ -731,8 +817,11 @@ def build_smart_sequence(
         return None
     legs_data, outlay, is_big6 = prep
 
-    # Clamp outlay to $40-60
-    outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
+    # Clamp outlay to appropriate range
+    if is_big6:
+        outlay = max(BIG6_MIN_OUTLAY, min(BIG6_MAX_OUTLAY, outlay))
+    else:
+        outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
 
     # Run optimiser
     optimised = _optimiser_select(legs_data, budget=outlay, is_big6=is_big6)
@@ -902,7 +991,7 @@ def format_sequence_lanes(blocks: list[SequenceBlock]) -> str:
         for leg in smart.legs:
             runners_str = ", ".join(str(r) for r in leg.runners)
             names_str = ", ".join(leg.runner_names[:len(leg.runners)])
-            if len(leg.runners) <= 2 and leg.odds_shape in BANKER_SHAPES:
+            if len(leg.runners) <= 3 and leg.odds_shape in BANKER_SHAPES:
                 type_marker = " [ANCHOR]"
             elif len(leg.runners) >= 5:
                 type_marker = " [CHAOS]"
