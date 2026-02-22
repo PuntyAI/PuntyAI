@@ -777,23 +777,28 @@ def build_all_sequence_lanes(
     total_races: int,
     leg_analysis: list[dict],
     race_contexts: list[dict],
+    sequence_override: dict | None = None,
 ) -> list[SequenceBlock]:
     """Build single optimised sequence for each applicable sequence type.
 
     Returns SequenceBlock with smart field containing the optimised ticket.
+    If sequence_override is provided, use those lanes instead of standard rules.
     """
-    rules = {
-        7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
-        8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
-        9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
-        10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
-        11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
-        12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
-    }
-    sequences = rules.get(
-        total_races,
-        rules.get(min(rules.keys(), key=lambda k: abs(k - total_races)), {}),
-    )
+    if sequence_override is not None:
+        sequences = sequence_override
+    else:
+        rules = {
+            7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
+            8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
+            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
+        }
+        sequences = rules.get(
+            total_races,
+            rules.get(min(rules.keys(), key=lambda k: abs(k - total_races)), {}),
+        )
     if not sequences:
         return []
 

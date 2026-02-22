@@ -217,7 +217,8 @@ class ContextBuilder:
         # Build sequence data (AU venues + HK)
         from punty.venues import is_international_venue, guess_state
         _is_intl = is_international_venue(meeting.venue)
-        _has_sequences = not _is_intl or guess_state(meeting.venue) == "HK"
+        _is_hk = _is_intl and guess_state(meeting.venue) == "HK"
+        _has_sequences = not _is_intl or _is_hk
         if _has_sequences:
             # Calculate sequence leg confidence across races
             context["sequence_leg_analysis"] = self._calculate_sequence_legs(context["races"])
@@ -227,8 +228,16 @@ class ContextBuilder:
                 from punty.context.pre_sequences import build_all_sequence_lanes
                 total_races = len(context["races"])
                 seq_legs = context.get("sequence_leg_analysis", [])
+                # HK-specific: EQ always R1-R4, Quaddie last 4, no Big 6
+                seq_override = None
+                if _is_hk:
+                    seq_override = {
+                        "early_quad": (1, 4),
+                        "quaddie": (total_races - 3, total_races),
+                    }
                 context["pre_built_sequences"] = build_all_sequence_lanes(
                     total_races, seq_legs, context["races"],
+                    sequence_override=seq_override,
                 )
             except Exception as e:
                 logger.debug(f"Pre-sequence lane construction failed: {e}")
