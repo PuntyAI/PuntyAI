@@ -172,6 +172,12 @@ async def daily_calendar_scrape() -> dict:
 
             # Clear stale meeting cache from previous day
             clear_meetings_cache()
+            # Also clear HKJC ranking cache for fresh daily stats
+            try:
+                from punty.scrapers.tab_playwright import _hkjc_ranking_cache
+                _hkjc_ranking_cache.clear()
+            except Exception:
+                pass
 
             logger.info("Step 3: Scraping fields data for all meetings...")
             result = await db.execute(

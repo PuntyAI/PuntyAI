@@ -732,3 +732,214 @@ class HKJCOddsScraper:
 
         logger.info(f"HKJC odds total: {len(all_odds)} runners for {venue}")
         return all_odds
+
+
+# ============ HKJC JOCKEY / TRAINER RANKINGS ============
+
+# Module-level cache: refreshed once per day.
+_hkjc_ranking_cache: dict[str, list[dict]] = {}
+
+
+class HKJCRankingScraper:
+    """Scrape HKJC jockey and trainer season rankings with track breakdowns.
+
+    Uses Playwright because HKJC is a React SPA — the ranking table body
+    is empty in the static HTML and only populated by client-side JS.
+
+    Data source:
+      - https://racing.hkjc.com/en-us/local/info/jockey-ranking
+      - https://racing.hkjc.com/en-us/local/info/trainer-ranking
+
+    Each page supports racecourse filters: ALL, ST (Sha Tin Turf),
+    STAWT (Sha Tin AWT), HV (Happy Valley Turf).
+
+    Returns data keyed by name with overall + per-track stats.
+    """
+
+    JOCKEY_URL = "https://racing.hkjc.com/en-us/local/info/jockey-ranking"
+    TRAINER_URL = "https://racing.hkjc.com/en-us/local/info/trainer-ranking"
+
+    # <select id="ddlVenueTrackType"> option values → output dict keys
+    TRACKS = {
+        "ALL": "overall",
+        "STT": "sha_tin_turf",
+        "STA": "sha_tin_awt",
+        "HVT": "happy_valley",
+    }
+
+    async def scrape_rankings(
+        self,
+        role: str = "jockey",
+        tracks: list[str] | None = None,
+    ) -> list[dict]:
+        """Scrape jockey or trainer rankings across one or more tracks.
+
+        Args:
+            role: "jockey" or "trainer"
+            tracks: List of track codes (ALL, ST, STAWT, HV).
+                    Defaults to all tracks.
+
+        Returns list of dicts, one per person:
+            {
+                "name": "Z Purton",
+                "overall":       {"win": 80, "second": 50, "third": 40, ...},
+                "sha_tin_turf":  {...},
+                "sha_tin_awt":   {...},
+                "happy_valley":  {...},
+            }
+        """
+        base_url = self.JOCKEY_URL if role == "jockey" else self.TRAINER_URL
+        track_list = tracks or list(self.TRACKS.keys())
+        rides_label = "rides" if role == "jockey" else "runs"
+
+        merged: dict[str, dict] = {}
+
+        from punty.scrapers.playwright_base import new_page
+
+        async with new_page(timeout=25000) as page:
+            # Load the ALL page first — track filters are JS tabs, not URL params
+            url = f"{base_url}?season=Current&view=Numbers&racecourse=ALL"
+            logger.info(f"HKJC {role} ranking: loading {url}")
+
+            try:
+                await page.goto(url, wait_until="domcontentloaded")
+                await asyncio.sleep(5)  # React needs time to hydrate + render table
+            except Exception as e:
+                logger.warning(f"HKJC {role} ranking page load failed: {e}")
+                return []
+
+            for track_code in track_list:
+                track_key = self.TRACKS.get(track_code, track_code.lower())
+
+                # Change the racecourse dropdown (ALL is the default loaded state)
+                if track_code != "ALL":
+                    try:
+                        await page.select_option("#ddlVenueTrackType", track_code)
+                        await asyncio.sleep(2)  # Wait for table to re-render
+                    except Exception as e:
+                        logger.warning(f"HKJC {role} ranking filter change failed ({track_code}): {e}")
+                        continue
+
+                # Extract table rows — find the table with most data rows
+                try:
+                    rows = await page.evaluate("""(ridesLabel) => {
+                        const tables = document.querySelectorAll('table');
+                        let target = null;
+                        let maxRows = 0;
+                        for (const t of tables) {
+                            const tbodyRows = t.querySelectorAll('tbody tr').length;
+                            if (tbodyRows > maxRows) {
+                                maxRows = tbodyRows;
+                                target = t;
+                            }
+                        }
+                        if (!target || maxRows < 2) return [];
+
+                        const result = [];
+                        const trs = target.querySelectorAll('tbody tr');
+                        for (const tr of trs) {
+                            const cells = tr.querySelectorAll('td');
+                            if (cells.length < 7) continue;
+
+                            const name = (cells[0].querySelector('a') || cells[0]).textContent.trim();
+                            if (!name || name.length < 2) continue;
+                            // Skip non-data rows (headers, separators, etc.)
+                            if (name === '---' || name === 'Others' || name.toLowerCase().includes('ranking'))
+                                continue;
+
+                            const nums = [];
+                            for (let i = 1; i < 7; i++) {
+                                const txt = cells[i].textContent.trim().replace(/,/g, '');
+                                nums.push(parseInt(txt) || 0);
+                            }
+                            const [win, second, third, fourth, fifth, total] = nums;
+                            // Skip rows where total is 0 (invalid data)
+                            if (total === 0) continue;
+
+                            const sr = Math.round(win / total * 1000) / 10;
+                            const placeSr = Math.round((win + second + third) / total * 1000) / 10;
+
+                            const stats = {
+                                win, second, third, fourth, fifth, sr, place_sr: placeSr,
+                            };
+                            stats[ridesLabel] = total;
+                            result.push({name, stats});
+                        }
+                        return result;
+                    }""", rides_label)
+                except Exception as e:
+                    logger.warning(f"HKJC {role} ranking extraction failed ({track_code}): {e}")
+                    continue
+
+                for row in rows:
+                    name = row["name"]
+                    if name not in merged:
+                        merged[name] = {"name": name}
+                    merged[name][track_key] = row["stats"]
+
+                logger.info(f"HKJC {role} ranking {track_code}: {len(rows)} entries")
+
+        result = list(merged.values())
+        logger.info(f"HKJC {role} rankings: {len(result)} entries across {len(track_list)} tracks")
+        return result
+
+
+async def fetch_hkjc_rankings(venue: str) -> dict[str, list[dict]]:
+    """Fetch and cache HKJC jockey + trainer rankings for context builder.
+
+    Args:
+        venue: Normalized venue name (e.g. "sha tin", "happy valley")
+
+    Returns dict with keys "jockeys" and "trainers", each a list of
+    ranking dicts with per-track breakdowns.
+    """
+    global _hkjc_ranking_cache
+
+    if "jockeys" in _hkjc_ranking_cache and "trainers" in _hkjc_ranking_cache:
+        return _hkjc_ranking_cache
+
+    scraper = HKJCRankingScraper()
+    try:
+        jockeys = await scraper.scrape_rankings(role="jockey")
+        trainers = await scraper.scrape_rankings(role="trainer")
+        _hkjc_ranking_cache["jockeys"] = jockeys
+        _hkjc_ranking_cache["trainers"] = trainers
+        logger.info(
+            f"HKJC rankings cached: {len(jockeys)} jockeys, {len(trainers)} trainers"
+        )
+    except Exception as e:
+        logger.error(f"HKJC ranking scrape failed: {e}")
+        _hkjc_ranking_cache.setdefault("jockeys", [])
+        _hkjc_ranking_cache.setdefault("trainers", [])
+
+    return _hkjc_ranking_cache
+
+
+def format_hkjc_ranking(person: dict, role: str, venue: str) -> str | None:
+    """Format a single jockey/trainer's HKJC ranking for AI context.
+
+    Returns a compact string like:
+      "Z Purton — Season: 80W/300R (26.7% SR), Sha Tin: 50W/180R (27.8%), HV: 30W/120R (25.0%)"
+    """
+    v = venue.lower().strip()
+    # Pick the venue-specific key
+    venue_key = "happy_valley" if "happy" in v else "sha_tin_turf"
+
+    overall = person.get("overall")
+    if not overall:
+        return None
+
+    rides_key = "rides" if role == "jockey" else "runs"
+    parts = [f"Season: {overall['win']}W/{overall.get(rides_key, 0)}R ({overall['sr']}% SR)"]
+
+    track = person.get(venue_key)
+    if track:
+        label = "HV" if "happy" in v else "ST"
+        parts.append(f"{label}: {track['win']}W/{track.get(rides_key, 0)}R ({track['sr']}%)")
+
+    # Add AWT stats if at Sha Tin
+    awt = person.get("sha_tin_awt")
+    if awt and "happy" not in v:
+        parts.append(f"AWT: {awt['win']}W/{awt.get(rides_key, 0)}R ({awt['sr']}%)")
+
+    return " | ".join(parts)

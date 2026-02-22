@@ -103,6 +103,26 @@ class ContextBuilder:
         except Exception as e:
             logger.debug(f"Strike rate fetch failed: {e}")
 
+        # Fetch HKJC jockey/trainer rankings for HK venues (track-specific stats)
+        self._hkjc_jockeys: dict[str, dict] = {}
+        self._hkjc_trainers: dict[str, dict] = {}
+        try:
+            from punty.venues import is_international_venue, guess_state
+            if is_international_venue(meeting.venue) and guess_state(meeting.venue) == "HK":
+                from punty.scrapers.tab_playwright import fetch_hkjc_rankings
+                hkjc = await fetch_hkjc_rankings(meeting.venue)
+                # Index by lowercase name for matching
+                for j in hkjc.get("jockeys", []):
+                    self._hkjc_jockeys[j["name"].lower()] = j
+                for t in hkjc.get("trainers", []):
+                    self._hkjc_trainers[t["name"].lower()] = t
+                logger.info(
+                    f"HKJC rankings loaded: {len(self._hkjc_jockeys)} jockeys, "
+                    f"{len(self._hkjc_trainers)} trainers for {meeting.venue}"
+                )
+        except Exception as e:
+            logger.debug(f"HKJC ranking fetch failed: {e}")
+
         context = {
             "meeting": {
                 "id": meeting.id,
@@ -170,6 +190,27 @@ class ContextBuilder:
                                 "form": runner.form,
                             })
                             break
+
+        # Add HKJC top jockey/trainer summary at meeting level
+        if self._hkjc_jockeys:
+            # Top 5 jockeys by season wins
+            top_jockeys = sorted(
+                self._hkjc_jockeys.values(),
+                key=lambda j: j.get("overall", {}).get("win", 0),
+                reverse=True,
+            )[:5]
+            context["meeting"]["hkjc_top_jockeys"] = [
+                {"name": j["name"], **j.get("overall", {})} for j in top_jockeys
+            ]
+        if self._hkjc_trainers:
+            top_trainers = sorted(
+                self._hkjc_trainers.values(),
+                key=lambda t: t.get("overall", {}).get("win", 0),
+                reverse=True,
+            )[:5]
+            context["meeting"]["hkjc_top_trainers"] = [
+                {"name": t["name"], **t.get("overall", {})} for t in top_trainers
+            ]
 
         # Skip sequences/exotics for international venues (no quaddie/big6 at HK etc.)
         from punty.venues import is_international_venue
@@ -467,6 +508,19 @@ class ContextBuilder:
                         runner_data["jockey_strike_rate"] = self._jockey_strike_rates[jockey_name]
                     if trainer_name and trainer_name in self._trainer_strike_rates:
                         runner_data["trainer_strike_rate"] = self._trainer_strike_rates[trainer_name]
+
+                    # HKJC track-specific jockey/trainer rankings (HK venues only)
+                    if self._hkjc_jockeys or self._hkjc_trainers:
+                        from punty.scrapers.tab_playwright import format_hkjc_ranking
+                        venue_name = meeting.venue
+                        if jockey_name and jockey_name in self._hkjc_jockeys:
+                            runner_data["hkjc_jockey_ranking"] = format_hkjc_ranking(
+                                self._hkjc_jockeys[jockey_name], "jockey", venue_name,
+                            )
+                        if trainer_name and trainer_name in self._hkjc_trainers:
+                            runner_data["hkjc_trainer_ranking"] = format_hkjc_ranking(
+                                self._hkjc_trainers[trainer_name], "trainer", venue_name,
+                            )
 
                     # Gear
                     runner_data["gear"] = runner.gear
