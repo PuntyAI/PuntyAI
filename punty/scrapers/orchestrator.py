@@ -1003,34 +1003,31 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             from punty.scrapers.betfair import BetfairScraper
             bf = await BetfairScraper.from_settings(db)
             if bf:
-                try:
-                    bf_odds = await bf.get_odds_for_meeting(
-                        meeting.venue, meeting.date, meeting_id
-                    )
-                    if bf_odds:
-                        await _merge_betfair_odds(db, meeting_id, bf_odds)
-                        # Also update current_odds for runners where Betfair is
-                        # the freshest/only source
-                        for od in bf_odds:
-                            result = await db.execute(
-                                select(Runner).where(Runner.race_id == od["race_id"])
-                                .where(Runner.horse_name == od["horse_name"])
-                                .limit(1)
-                            )
-                            runner = result.scalar_one_or_none()
-                            if runner:
-                                runner.current_odds = od["odds_betfair"]
-                                odds_updated += 1
-                                if not runner.opening_odds:
-                                    runner.opening_odds = od["odds_betfair"]
-                                # Estimate place odds: (win - 1) / 3 + 1
-                                runner.place_odds = round((od["odds_betfair"] - 1) / 3 + 1, 2)
-                        logger.info(
-                            f"Odds refresh for {meeting_id}: updated {odds_updated} "
-                            f"runners from Betfair"
+                bf_odds = await bf.get_odds_for_meeting(
+                    meeting.venue, meeting.date, meeting_id
+                )
+                if bf_odds:
+                    await _merge_betfair_odds(db, meeting_id, bf_odds)
+                    # Also update current_odds for runners where Betfair is
+                    # the freshest/only source
+                    for od in bf_odds:
+                        result = await db.execute(
+                            select(Runner).where(Runner.race_id == od["race_id"])
+                            .where(Runner.horse_name == od["horse_name"])
+                            .limit(1)
                         )
-                finally:
-                    await bf.close()
+                        runner = result.scalar_one_or_none()
+                        if runner:
+                            runner.current_odds = od["odds_betfair"]
+                            odds_updated += 1
+                            if not runner.opening_odds:
+                                runner.opening_odds = od["odds_betfair"]
+                            # Estimate place odds: (win - 1) / 3 + 1
+                            runner.place_odds = round((od["odds_betfair"] - 1) / 3 + 1, 2)
+                    logger.info(
+                        f"Odds refresh for {meeting_id}: updated {odds_updated} "
+                        f"runners from Betfair"
+                    )
             else:
                 logger.info(f"Betfair not configured — skipping odds refresh for {meeting_id}")
         except Exception as e:
