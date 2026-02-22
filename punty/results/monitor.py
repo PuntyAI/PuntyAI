@@ -649,11 +649,60 @@ class ResultsMonitor:
                     f"ignoring {old_tc} → {scraped_tc} (changed {int((now - last_change).total_seconds())}s ago)"
                 )
                 scraped_tc = None
-            elif _should_update_condition(scraped_tc, old_tc or ""):
-                # Accept: base category changed (real upgrade/downgrade) OR new is more specific
-                meeting.track_condition = scraped_tc
-                if old_base != new_base:
+            elif old_base != new_base:
+                # Base category change (e.g. Good→Soft) — verify against RA before accepting.
+                # Racing.com can return one-off glitches; RA is the authoritative source.
+                # Tracks normally move one level at a time (Firm→Good→Soft→Heavy).
+                # Multi-level jumps (e.g. Good→Heavy) are almost always data errors.
+                _TRACK_SCALE = ["firm", "good", "dead", "soft", "heavy"]
+                old_idx = _TRACK_SCALE.index(old_base) if old_base in _TRACK_SCALE else -1
+                new_idx = _TRACK_SCALE.index(new_base) if new_base in _TRACK_SCALE else -1
+                if old_idx >= 0 and new_idx >= 0 and abs(new_idx - old_idx) > 1:
+                    logger.warning(
+                        f"Suspicious multi-level track jump for {meeting.venue}: "
+                        f"{old_tc} → {scraped_tc} (skips {abs(new_idx - old_idx) - 1} levels) — rejecting"
+                    )
+                    scraped_tc = None
+
+                ra_confirmed = False
+                if scraped_tc:  # Skip RA call if already rejected by multi-level check
+                    try:
+                        from punty.scrapers.track_conditions import get_conditions_for_meeting
+                        ra_cond = await get_conditions_for_meeting(meeting.venue)
+                        if ra_cond and ra_cond.get("condition"):
+                            ra_base = _base_condition(ra_cond["condition"])
+                            if ra_base == new_base:
+                                # RA confirms the change — use RA's more precise value
+                                scraped_tc = ra_cond["condition"]
+                                ra_confirmed = True
+                                logger.info(
+                                    f"Track change for {meeting.venue} corroborated by RA: "
+                                    f"{old_tc} → {ra_cond['condition']}"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Track change NOT corroborated by RA for {meeting.venue}: "
+                                    f"racing.com says {scraped_tc!r}, RA says {ra_cond['condition']!r} — rejecting"
+                                )
+                                scraped_tc = None
+                        else:
+                            logger.warning(
+                                f"RA has no data for {meeting.venue} — suppressing unverified "
+                                f"track change {old_tc} → {scraped_tc}"
+                            )
+                            scraped_tc = None
+                    except Exception as e:
+                        logger.warning(f"RA verification failed for {meeting.venue}: {e} — suppressing change")
+                        scraped_tc = None
+
+                if ra_confirmed and scraped_tc:
+                    meeting.track_condition = scraped_tc
                     self.last_track_change[meeting_id] = now
+                    await db.flush()
+                    logger.warning(f"Track condition changed for {meeting.venue}: {old_tc} → {scraped_tc}")
+            elif _should_update_condition(scraped_tc, old_tc or ""):
+                # Same base, more specific (e.g. Good → Good 4)
+                meeting.track_condition = scraped_tc
                 await db.flush()
                 logger.warning(f"Track condition changed for {meeting.venue}: {old_tc} → {scraped_tc}")
             else:
