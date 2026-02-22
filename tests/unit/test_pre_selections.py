@@ -137,11 +137,11 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_each_way_outside_win_sweet_spot(self):
-        """$8 odds with moderate prob should get Each Way (outside $4-$6 sweet spot)."""
+    def test_top_pick_place_outside_win_sweet_spot(self):
+        """$8 odds with moderate prob should get Place ($6+ E/W removed)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Each Way"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_top_pick_each_way_odds_too_low(self):
         """Short-priced horses shouldn't get Each Way."""
@@ -157,10 +157,15 @@ class TestDetermineBetType:
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Each Way"
 
     def test_second_pick_each_way_strong_signal_dead_zone(self):
-        """Rank 2 in $3-$4 dead zone gets Each Way with strong signal."""
+        """Rank 2 in $3-$4 dead zone gets E/W only with strong conviction (win_prob≥0.30)."""
+        # win_prob 0.28 is below the 0.30 threshold → Place
         c = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.0,
              "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Each Way"
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
+        # win_prob 0.32 meets the threshold → Each Way
+        c2 = {"win_prob": 0.32, "place_prob": 0.55, "odds": 3.0,
+              "value_rating": 1.15, "place_value_rating": 1.05}
+        assert _determine_bet_type(c2, rank=2, is_roughie=False) == "Each Way"
 
     def test_second_pick_place_when_no_value(self):
         c = {"win_prob": 0.12, "place_prob": 0.45, "odds": 8.0,
@@ -177,10 +182,11 @@ class TestDetermineBetType:
              "value_rating": 1.15, "place_value_rating": 1.10}
         assert _determine_bet_type(c, rank=4, is_roughie=True) == "Place"
 
-    def test_roughie_win_with_strong_value(self):
+    def test_roughie_always_place(self):
+        """All roughies → Place (Rank 4 Win was 0/43 = -98.7% ROI)."""
         c = {"win_prob": 0.20, "place_prob": 0.50, "odds": 10.0,
              "value_rating": 1.25, "place_value_rating": 1.10}
-        assert _determine_bet_type(c, rank=4, is_roughie=True) == "Win"
+        assert _determine_bet_type(c, rank=4, is_roughie=True) == "Place"
 
 
 # ──────────────────────────────────────────────
@@ -310,6 +316,18 @@ class TestAllocateStakes:
 
     def test_empty_picks(self):
         _allocate_stakes([], 20.0)  # no crash
+
+    def test_vr_cap_forces_place(self):
+        """VR > 1.5 Win/Saver Win bets should be downgraded to Place."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 0, 3.0, 1.5, 0.3, 0.6, 1.6, 1.05, 0.5),
+            RecommendedPick(2, 2, "B", "Saver Win", 0, 5.0, 2.0, 0.2, 0.5, 1.8, 1.0, 0.3),
+            RecommendedPick(3, 3, "C", "Place", 0, 7.0, 2.5, 0.15, 0.4, 2.0, 1.0, 0.2),
+        ]
+        _allocate_stakes(picks, 20.0)
+        assert picks[0].bet_type == "Place"  # Win with VR 1.6 → Place
+        assert picks[1].bet_type == "Place"  # Saver Win with VR 1.8 → Place
+        assert picks[2].bet_type == "Place"  # Already Place, unchanged
 
 
 # ──────────────────────────────────────────────

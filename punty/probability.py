@@ -2585,7 +2585,7 @@ def calculate_exotic_combinations(
     VALUE_THRESHOLDS = {
         "Quinella": 1.2,           # High-probability play, both runners in selections
         "Exacta": 1.2,
-        "Trifecta Box": 1.2,      # Best performer (+3.5% ROI)
+        "Trifecta Box": 1.5,      # Raised from 1.2 — reduce frequency, keep for high-value spots
         "Trifecta Standout": 1.2,
         "First4": 1.2,            # Positional legs format — targeted, fewer combos
         "First4 Box": 1.5,        # Rare, extreme value only (0/50 all-time)

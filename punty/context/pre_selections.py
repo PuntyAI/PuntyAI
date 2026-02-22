@@ -440,10 +440,8 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             if rank == 1 and value >= 0.95:
                 return "Win"
             if rank == 2:
-                return "Each Way"
-        # Low-prob fallback: still competitive odds, Each Way or Place
-        if rank <= 2:
-            return "Each Way"
+                return "Place"  # was E/W — rank 2 at $2.40-3 → Place
+        # Low-prob fallback: competitive odds but not enough win conviction → Place
         return "Place"
 
     # $3.00-$4.00: Dead zone for Win (-30.8% ROI)
@@ -456,8 +454,8 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
                 return "Each Way"
             return "Place"
         if rank == 2:
-            if win_prob >= 0.25 and value >= 1.10:
-                return "Each Way"
+            if win_prob >= 0.30 and value >= 1.10:
+                return "Each Way"  # genuine hedge: decent conviction + value
             return "Place"
         return "Place"
 
@@ -471,47 +469,37 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
                 return "Each Way"
             if value >= 1.05:
                 return "Saver Win"
-        # Low-prob fallback: good odds range, still worth Each Way/Place
-        if rank <= 2 and place_prob >= t["place_min_prob"]:
-            return "Each Way"
+        # Low-prob fallback: good odds but not enough conviction → Place
         return "Place"
 
-    # $5.00-$6.00: Mixed — Win data is thin (0/6), lean Each Way
+    # $5.00-$6.00: Mixed — Win data is thin (0/6), Place preferred
     if 5.0 <= odds <= 6.0:
         if win_prob >= t["win_min_prob"]:
             if rank == 1:
                 if value >= 1.05:
                     return "Win"  # only with clear value edge
-                return "Each Way"
+                return "Each Way"  # hedge: like the horse but not confident enough for Win
             if rank == 2:
-                return "Each Way"
+                return "Place"  # was E/W — tighten to Place for rank 2
         # Low-prob fallback
         if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
         return "Place"
 
     # --- Roughie logic ---
+    # Rank 4 Win: 0/43 = -98.7% ROI. All roughies → Place.
     if is_roughie:
-        if 10.0 <= odds <= 20.0 and win_prob >= t["win_min_prob"] and value >= 1.15:
-            return "Win"
-        if win_prob >= t["win_min_prob"] and value >= 1.25:
-            return "Win"
         return "Place"
 
     # --- $6+ non-roughie: Place territory ---
     if rank == 1:
         if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
-            if (t["each_way_min_odds"] <= odds <= t["each_way_max_odds"]
-                    and t["each_way_min_prob"] <= win_prob <= t["each_way_max_prob"]):
-                return "Each Way"
-            return "Place"  # $6+ Win is -42% ROI, prefer Place
+            return "Place"  # $6+ Win is -42% ROI, E/W too risky — prefer Place
         if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
         return "Place"
 
     if rank == 2:
-        if win_prob >= 0.25 and value >= 1.10:
-            return "Each Way"
         if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
             return "Place"
         return "Place"
@@ -667,6 +655,13 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     if not picks:
         return
 
+    # VR 1.5+ is -33.3% ROI — force to Place to cap exposure
+    for pick in picks:
+        if pick.value_rating > 1.5 and pick.bet_type in ("Win", "Saver Win"):
+            pick.bet_type = "Place"
+            place_odds = pick.place_odds or _estimate_place_odds(pick.odds)
+            pick.expected_return = round(pick.place_prob * place_odds - 1, 2)
+
     # Base allocation weights by rank
     base_rank_weights = {1: 0.35, 2: 0.28, 3: 0.22, 4: 0.15}
 
@@ -761,9 +756,9 @@ def _select_exotic(
         if len(top_probs) >= 3:
             spread = max(top_probs) - min(top_probs)
             if spread <= 0.05:
-                cluster_boost = 1.5   # very tight — strongly prefer boxes
+                cluster_boost = 1.2   # very tight — prefer boxes (dampened from 1.5)
             elif spread <= 0.08:
-                cluster_boost = 1.25  # tight — moderate box preference
+                cluster_boost = 1.1   # tight — slight box preference (dampened from 1.25)
 
     # Build rank map: saddlecloth → tip_rank (1=best, 4=roughie)
     rank_map: dict[int, int] = {}
