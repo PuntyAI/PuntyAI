@@ -904,6 +904,12 @@ class ResultsMonitor:
                         await self._check_pace_bias(db, meeting, statuses, race_num)
                     except Exception as e:
                         logger.debug(f"Pace analysis skipped for {meeting.venue} R{race_num}: {e}")
+
+                    # Check for hot jockey/trainer streaks (3+ wins at meeting)
+                    try:
+                        await self._check_hot_streaks(db, meeting)
+                    except Exception as e:
+                        logger.debug(f"Hot streak check failed for {meeting.venue}: {e}")
                 except Exception as e:
                     import traceback
                     logger.error(f"Failed to process result {meeting.venue} R{race_num}: {e}\n{traceback.format_exc()}")
@@ -1622,6 +1628,82 @@ class ResultsMonitor:
         except Exception as e:
             logger.debug(f"Place dividend backfill failed for {meeting.venue}: {e}")
 
+    # ── Hot jockey/trainer streak detection ──────────────────────────────────
+
+    async def _check_hot_streaks(self, db: AsyncSession, meeting):
+        """Alert when a jockey or trainer wins 3+ races at a meeting."""
+        from punty.models.meeting import Runner as RunnerModel
+        from punty.results.change_detection import ChangeAlert, compose_hot_streak_alert
+
+        meeting_id = meeting.id
+        completed = self.processed_races.get(meeting_id, set())
+        if len(completed) < 3:
+            return  # Need at least 3 completed races for a streak
+
+        # Query all winners at this meeting
+        race_ids = [f"{meeting_id}-r{n}" for n in completed]
+        result = await db.execute(
+            select(RunnerModel.jockey, RunnerModel.trainer).where(
+                RunnerModel.race_id.in_(race_ids),
+                RunnerModel.finish_position == 1,
+            )
+        )
+        winners = result.all()
+
+        if not winners:
+            return
+
+        # Count wins per jockey and trainer
+        from collections import Counter
+        jockey_wins = Counter()
+        trainer_wins = Counter()
+        for jockey, trainer in winners:
+            if jockey:
+                jockey_wins[jockey.strip()] += 1
+            if trainer:
+                trainer_wins[trainer.strip()] += 1
+
+        total_races = len(completed)
+
+        if meeting_id not in self.alerted_changes:
+            self.alerted_changes[meeting_id] = set()
+
+        # Check jockeys with 3+ wins
+        for name, wins in jockey_wins.items():
+            if wins >= 3:
+                dedup_key = f"hot_jockey:{name}:{wins}"
+                if dedup_key not in self.alerted_changes[meeting_id]:
+                    self.alerted_changes[meeting_id].add(dedup_key)
+                    msg = compose_hot_streak_alert(name, "jockey", wins, total_races, meeting.venue)
+                    alert = ChangeAlert(
+                        change_type="hot_streak",
+                        meeting_id=meeting_id,
+                        message=msg,
+                    )
+                    try:
+                        await self._post_change_alert(db, meeting, alert)
+                        logger.info(f"Hot jockey alert: {name} {wins}/{total_races} at {meeting.venue}")
+                    except Exception as e:
+                        logger.warning(f"Failed to post hot jockey alert: {e}")
+
+        # Check trainers with 3+ wins
+        for name, wins in trainer_wins.items():
+            if wins >= 3:
+                dedup_key = f"hot_trainer:{name}:{wins}"
+                if dedup_key not in self.alerted_changes[meeting_id]:
+                    self.alerted_changes[meeting_id].add(dedup_key)
+                    msg = compose_hot_streak_alert(name, "trainer", wins, total_races, meeting.venue)
+                    alert = ChangeAlert(
+                        change_type="hot_streak",
+                        meeting_id=meeting_id,
+                        message=msg,
+                    )
+                    try:
+                        await self._post_change_alert(db, meeting, alert)
+                        logger.info(f"Hot trainer alert: {name} {wins}/{total_races} at {meeting.venue}")
+                    except Exception as e:
+                        logger.warning(f"Failed to post hot trainer alert: {e}")
+
     # ── Pre-race change detection ──────────────────────────────────────────
 
     async def _check_pre_race_changes(self, db: AsyncSession, meeting, races, statuses: dict):
@@ -1940,6 +2022,7 @@ class ResultsMonitor:
             "jockey_change": "jockey_alert",
             "gear_change": "gear_alert",
             "weather": "weather_alert",
+            "hot_streak": "hot_streak_alert",
         }
         update = LiveUpdate(
             meeting_id=meeting.id,

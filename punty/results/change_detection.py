@@ -779,6 +779,45 @@ _ABANDONMENT_PHRASES = [
 ]
 
 
+_HOT_JOCKEY_PHRASES = [
+    "On fire today.",
+    "Can't miss right now.",
+    "Riding out of their skin.",
+    "The hot hand is real.",
+    "Back them with confidence.",
+    "In the zone today.",
+    "Absolutely cooking.",
+]
+
+_HOT_TRAINER_PHRASES = [
+    "The stable is firing.",
+    "Everything they saddle up is winning.",
+    "Dominating today.",
+    "Their runners are peaking.",
+    "Quality stable form.",
+    "Running riot today.",
+]
+
+
+def compose_hot_streak_alert(
+    name: str,
+    role: str,
+    wins: int,
+    total_races: int,
+    venue: str,
+) -> str:
+    """Compose a hot jockey/trainer alert (under 280 chars)."""
+    label = "JOCKEY" if role == "jockey" else "TRAINER"
+    phrases = _HOT_JOCKEY_PHRASES if role == "jockey" else _HOT_TRAINER_PHRASES
+    phrase = random.choice(phrases)
+
+    msg = f"HOT {label}: {name} \u2014 {wins} winners from {total_races} races at {venue}! {phrase}"
+
+    if len(msg) > 275:
+        msg = msg[:272] + "..."
+    return msg
+
+
 def compose_abandonment_alert(venue: str) -> str:
     """Compose an abandonment alert message (under 280 chars)."""
     phrase = random.choice(_ABANDONMENT_PHRASES)
