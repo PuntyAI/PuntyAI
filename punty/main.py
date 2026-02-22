@@ -106,72 +106,90 @@ async def lifespan(app: FastAPI):
             _personality_cache.set(setting.value)
             logger.info("Personality prompt loaded from database")
 
-    # Start scheduler
-    from punty.scheduler.manager import scheduler_manager
-    await scheduler_manager.start()
-    await scheduler_manager.setup_daily_morning_job()
+    if not settings.disable_background:
+        # Start scheduler
+        from punty.scheduler.manager import scheduler_manager
+        await scheduler_manager.start()
+        await scheduler_manager.setup_daily_morning_job()
 
-    # Set up per-meeting automation jobs for today's meetings
-    automation_result = await scheduler_manager.setup_daily_automation()
-    scheduled_meetings = automation_result.get("meetings_scheduled", [])
-    logger.info(f"Scheduler started - calendar scrape at 00:05, morning scrape at 05:00, {len(scheduled_meetings)} meetings scheduled for today")
+        # Set up per-meeting automation jobs for today's meetings
+        automation_result = await scheduler_manager.setup_daily_automation()
+        scheduled_meetings = automation_result.get("meetings_scheduled", [])
+        logger.info(f"Scheduler started - calendar scrape at 00:05, morning scrape at 05:00, {len(scheduled_meetings)} meetings scheduled for today")
 
-    # Settle any past races with unsettled picks (catches restarts/missed settlements)
-    try:
-        from punty.results.picks import settle_picks_for_race
-        from punty.models.pick import Pick
-        from punty.models.meeting import Meeting, Race
-        from sqlalchemy import and_
-        from punty.config import melb_today
-        async with async_session() as settle_db:
-            today = melb_today()
-            unsettled_result = await settle_db.execute(
-                sa_select(Race.meeting_id, Race.race_number)
-                .join(Pick, and_(
-                    Pick.meeting_id == Race.meeting_id,
-                    Pick.race_number == Race.race_number,
-                ))
-                .join(Meeting, Meeting.id == Race.meeting_id)
-                .where(
-                    and_(
-                        Race.results_status.in_(["Paying", "Closed"]),
-                        Pick.settled == False,
-                        Meeting.date <= today,
+        # Schedule daily P&L digest at 23:00 AEDT
+        from apscheduler.triggers.cron import CronTrigger
+        from punty.config import MELB_TZ
+        from punty.monitoring.alerts import send_daily_digest
+        scheduler_manager.scheduler.add_job(
+            send_daily_digest,
+            CronTrigger(hour=23, minute=0, timezone=MELB_TZ),
+            id="daily_pnl_digest",
+            args=[app],
+            replace_existing=True,
+        )
+        logger.info("Daily P&L digest scheduled for 23:00 AEDT")
+
+        # Settle any past races with unsettled picks (catches restarts/missed settlements)
+        try:
+            from punty.results.picks import settle_picks_for_race
+            from punty.models.pick import Pick
+            from punty.models.meeting import Meeting, Race
+            from sqlalchemy import and_
+            from punty.config import melb_today
+            async with async_session() as settle_db:
+                today = melb_today()
+                unsettled_result = await settle_db.execute(
+                    sa_select(Race.meeting_id, Race.race_number)
+                    .join(Pick, and_(
+                        Pick.meeting_id == Race.meeting_id,
+                        Pick.race_number == Race.race_number,
+                    ))
+                    .join(Meeting, Meeting.id == Race.meeting_id)
+                    .where(
+                        and_(
+                            Race.results_status.in_(["Paying", "Closed"]),
+                            Pick.settled == False,
+                            Meeting.date <= today,
+                        )
                     )
+                    .distinct()
                 )
-                .distinct()
-            )
-            races_to_settle = unsettled_result.all()
-            if races_to_settle:
-                settled_total = 0
-                for meeting_id, race_number in races_to_settle:
-                    try:
-                        count = await settle_picks_for_race(settle_db, meeting_id, race_number)
-                        settled_total += count
-                    except Exception as e:
-                        logger.warning(f"Startup settlement failed for {meeting_id} R{race_number}: {e}")
-                logger.info(f"Startup settlement: settled {settled_total} picks across {len(races_to_settle)} races")
-    except Exception as e:
-        logger.warning(f"Startup settlement check failed: {e}")
+                races_to_settle = unsettled_result.all()
+                if races_to_settle:
+                    settled_total = 0
+                    for meeting_id, race_number in races_to_settle:
+                        try:
+                            count = await settle_picks_for_race(settle_db, meeting_id, race_number)
+                            settled_total += count
+                        except Exception as e:
+                            logger.warning(f"Startup settlement failed for {meeting_id} R{race_number}: {e}")
+                    logger.info(f"Startup settlement: settled {settled_total} picks across {len(races_to_settle)} races")
+        except Exception as e:
+            logger.warning(f"Startup settlement check failed: {e}")
 
-    # Start Telegram bot
-    from punty.telegram.bot import TelegramBot
-    telegram_bot = TelegramBot(app)
-    if await telegram_bot.start():
-        app.state.telegram_bot = telegram_bot
+        # Start Telegram bot
+        from punty.telegram.bot import TelegramBot
+        telegram_bot = TelegramBot(app)
+        if await telegram_bot.start():
+            app.state.telegram_bot = telegram_bot
+        else:
+            app.state.telegram_bot = None
+
+        # Initialize results monitor
+        monitor = ResultsMonitor(app)
+        app.state.results_monitor = monitor
+
+        # Always start monitor — the poll loop checks _should_be_monitoring()
+        # each iteration and idles outside racing hours. Previously gated on
+        # _should_be_monitoring() at boot, which meant the monitor never started
+        # if the app launched before the first race (e.g. 5am morning restart).
+        monitor.start()
+        logger.info("Results monitor started (will idle until racing window)")
     else:
         app.state.telegram_bot = None
-
-    # Initialize results monitor
-    monitor = ResultsMonitor(app)
-    app.state.results_monitor = monitor
-
-    # Always start monitor — the poll loop checks _should_be_monitoring()
-    # each iteration and idles outside racing hours. Previously gated on
-    # _should_be_monitoring() at boot, which meant the monitor never started
-    # if the app launched before the first race (e.g. 5am morning restart).
-    monitor.start()
-    logger.info("Results monitor started (will idle until racing window)")
+        app.state.results_monitor = None
+        logger.info("Background services disabled (PUNTY_DISABLE_BACKGROUND=true)")
 
     yield
 
@@ -179,8 +197,11 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down PuntyAI...")
     if app.state.telegram_bot:
         await app.state.telegram_bot.stop()
-    monitor.stop()
-    await scheduler_manager.stop()
+    if app.state.results_monitor:
+        app.state.results_monitor.stop()
+    if not settings.disable_background:
+        from punty.scheduler.manager import scheduler_manager
+        await scheduler_manager.stop()
 
     # Close Playwright browser if it was started
     try:

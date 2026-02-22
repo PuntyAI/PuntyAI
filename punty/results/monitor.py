@@ -847,6 +847,16 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
 
+                    # Check intraday loss threshold after settlement
+                    try:
+                        from punty.monitoring.performance import check_intraday_loss
+                        loss_alert = await check_intraday_loss(db)
+                        if loss_alert:
+                            from punty.monitoring.alerts import send_regression_alert
+                            await send_regression_alert(self.app, loss_alert)
+                    except Exception as e:
+                        logger.debug(f"Intraday loss check failed: {e}")
+
                     # Backfill form history — store result data for future lookups
                     try:
                         await _backfill_form_history(db, meeting_id, race_num)

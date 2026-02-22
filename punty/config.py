@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     secret_key: str = ""  # Will use random key if not set
     debug: bool = False
     log_level: str = "INFO"
+    disable_background: bool = False  # PUNTY_DISABLE_BACKGROUND - skip scheduler/monitor/telegram
 
     # OpenAI (no prefix - standard env var)
     openai_api_key: str = ""

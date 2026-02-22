@@ -1,0 +1,77 @@
+name: Deploy
+
+on:
+  push:
+    branches: ['**']
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to staging
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+          command_timeout: 120s
+          script: |
+            cd /opt/puntyai-staging
+            PREV=$(git rev-parse HEAD)
+            git fetch origin
+            git checkout -f origin/${{ github.ref_name }} 2>/dev/null || git checkout -f origin/master
+            source venv/bin/activate
+            pip install -e . --quiet 2>&1 | tail -1
+            chmod 666 prompts/*.md
+            systemctl restart puntyai-staging
+            sleep 3
+            HTTP=$(curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/health)
+            if [ "$HTTP" != "200" ]; then
+              echo "FAIL: health check returned $HTTP, rolling back to $PREV"
+              git checkout -f $PREV
+              systemctl restart puntyai-staging
+              exit 1
+            fi
+            echo "Staging deploy successful ($(git rev-parse --short HEAD))"
+
+  deploy-production:
+    needs: [test, deploy-staging]
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+          command_timeout: 120s
+          script: |
+            cd /opt/puntyai
+            PREV=$(git rev-parse HEAD)
+            git fetch origin master
+            git checkout -f origin/master
+            source venv/bin/activate
+            pip install -e . --quiet 2>&1 | tail -1
+            chmod 666 prompts/*.md
+            systemctl restart puntyai
+            sleep 5
+            for i in 1 2 3; do
+              HTTP=$(curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/health)
+              if [ "$HTTP" = "200" ]; then
+                echo "Production deploy successful ($(git rev-parse --short HEAD))"
+                exit 0
+              fi
+              echo "Health check attempt $i: $HTTP"
+              sleep 3
+            done
+            echo "FAIL: health check failed after 3 retries, rolling back to $PREV"
+            git checkout -f $PREV
+            systemctl restart puntyai
+            exit 1

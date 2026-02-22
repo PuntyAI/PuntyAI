@@ -293,3 +293,30 @@ async def get_all_time_stats_api(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"All-time stats failed: {e}")
         return {"today_winners": 0, "total_winners": 0, "collected": 0}
+
+
+@router.get("/monitoring/digest")
+async def monitoring_digest(db: AsyncSession = Depends(get_db)):
+    """Get today's performance digest (same data sent via Telegram at 23:00)."""
+    from punty.config import melb_today
+    from punty.monitoring.performance import (
+        compute_daily_digest,
+        compute_rolling_comparison,
+        check_regressions,
+        check_calibration_drift,
+    )
+    try:
+        today = melb_today()
+        digest = await compute_daily_digest(db, today)
+        comparison = await compute_rolling_comparison(db)
+        regressions = await check_regressions(db)
+        calibration = await check_calibration_drift(db)
+        return {
+            "digest": digest,
+            "comparison": comparison,
+            "regressions": regressions,
+            "calibration": calibration,
+        }
+    except Exception as e:
+        logger.error(f"Monitoring digest failed: {e}")
+        return {"error": str(e)}
