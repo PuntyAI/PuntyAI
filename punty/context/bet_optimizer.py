@@ -554,14 +554,8 @@ def recommend_bet(
 def _allocate_stakes(
     recommendations: list[BetRecommendation],
     pool: float,
-    watch_only: bool = False,
 ) -> None:
     """Allocate dollar stakes from pool based on stake_pct, rounding to 50c."""
-    if watch_only:
-        for rec in recommendations:
-            rec.stake_pct = 0.0
-        return
-
     # Normalize stake_pcts to sum to 1.0
     total_pct = sum(r.stake_pct for r in recommendations)
     if total_pct <= 0:
@@ -716,8 +710,11 @@ def optimize_race(
     # RULE 8: Capital efficiency
     _enforce_capital_efficiency(recommendations)
 
-    # Allocate stakes
-    _allocate_stakes(recommendations, pool, watch_only=classification.watch_only)
+    # Allocate stakes — watch_only gets half pool instead of zero
+    _allocate_stakes(recommendations, pool)
+    if classification.watch_only:
+        for rec in recommendations:
+            rec.stake_pct *= 0.5
 
     return RaceOptimization(
         classification=classification,

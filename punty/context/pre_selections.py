@@ -279,11 +279,9 @@ def calculate_pre_selections(
     # Cap win-exposed bets to avoid spreading win risk across too many horses
     win_capped = _cap_win_exposure(picks)
 
-    # Allocate stakes from pool
+    # Allocate stakes from pool — watch_only gets half pool instead of zero
     if classification.watch_only:
-        # Watch Only: zero all stakes
-        for p in picks:
-            p.stake = 0.0
+        _allocate_stakes(picks, pool * 0.5)
     else:
         _allocate_stakes(picks, pool)
 

@@ -464,7 +464,7 @@ class TestOptimizeRace:
         assert result.recommendations[0].bet_type == "Win"
 
     def test_full_flow_watch_only(self):
-        """No edge in any runner -> watch_only=True, $0 stakes."""
+        """No edge in any runner -> watch_only=True, half-pool stakes."""
         runners = [
             _candidate(1, "H1", 4.0, 0.25, 0.50, place_odds=2.0),
             _candidate(2, "H2", 5.0, 0.20, 0.40, place_odds=2.5),
@@ -474,9 +474,10 @@ class TestOptimizeRace:
         result = optimize_race(ctx, pool=20.0)
 
         assert result.classification.watch_only is True
-        # All stakes should be 0
-        for rec in result.recommendations:
-            assert rec.stake_pct == 0.0
+        # Watch only gets half pool — stakes non-zero but reduced
+        total = sum(r.stake_pct * 20.0 for r in result.recommendations)
+        assert total > 0
+        assert total <= 10.0 + 0.5  # half of $20 pool + rounding
 
     def test_full_flow_no_bet(self):
         """2yo maiden first starters -> no_bet=True, empty recommendations."""
@@ -504,8 +505,8 @@ class TestOptimizeRace:
         total = sum(r.stake_pct * 20.0 for r in result.recommendations)
         assert total <= 20.5  # allow small rounding
 
-    def test_watch_only_zero_total_stake(self):
-        """Watch only races have zero total stake."""
+    def test_watch_only_reduced_total_stake(self):
+        """Watch only races have reduced (half pool) total stake."""
         runners = [
             _candidate(1, "H1", 4.0, 0.25, 0.50, place_odds=2.0),
             _candidate(2, "H2", 5.0, 0.20, 0.40, place_odds=2.5),
@@ -514,7 +515,8 @@ class TestOptimizeRace:
         result = optimize_race(ctx)
 
         total = sum(r.stake_pct * 20.0 for r in result.recommendations)
-        assert total == 0.0
+        assert total > 0
+        assert total <= 10.0 + 0.5  # half of default $20 pool + rounding
 
     def test_venue_confidence_affects_classification(self):
         """Country venue needs more edge to avoid Watch Only."""
