@@ -27,6 +27,8 @@ class ChangeAlert:
     old_value: Optional[str] = None
     new_value: Optional[str] = None
     impacted_picks: list[dict] = field(default_factory=list)
+    impacts: list[dict] = field(default_factory=list)
+    alternative: Optional[dict] = None
     message: str = ""
 
     @property
