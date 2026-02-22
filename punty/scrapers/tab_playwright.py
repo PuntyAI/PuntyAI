@@ -360,38 +360,64 @@ class HKJCSectionalScraper:
                 return None
 
             # Extract sectional data from the rendered table
+            # HKJC table structure:
+            # Col 0: Finishing Order | Col 1: Horse No. | Col 2: Horse Name
+            # Col 3..N-1: Sectional times (1st Sec, 2nd Sec, ...) | Col N: Total Time
             try:
                 data = await page.evaluate("""() => {
-                    const rows = document.querySelectorAll('table.sectionaltime tr, table.table_bd tr');
-                    if (!rows || rows.length === 0) return null;
+                    // Find the sectional times table (try multiple selectors)
+                    const table = document.querySelector('table.Race') ||
+                                  document.querySelector('table.sectionaltime') ||
+                                  document.querySelector('table.table_bd');
+                    if (!table) return null;
 
-                    // Find header row to get checkpoint distances
+                    const thead = table.querySelector('thead');
+                    const tbody = table.querySelector('tbody');
+                    if (!tbody) return null;
+
+                    // Extract section headers (e.g., "1st Sec.", "2nd Sec.", ...)
                     const headers = [];
-                    const headerRow = rows[0];
-                    if (headerRow) {
-                        const cells = headerRow.querySelectorAll('th, td');
-                        cells.forEach(c => headers.push(c.textContent.trim()));
+                    if (thead) {
+                        const headerCells = thead.querySelectorAll('th, td');
+                        headerCells.forEach(c => headers.push(c.textContent.trim()));
                     }
 
+                    const rows = tbody.querySelectorAll('tr');
+                    if (!rows || rows.length === 0) return null;
+
                     const horses = [];
-                    for (let i = 1; i < rows.length; i++) {
+                    for (let i = 0; i < rows.length; i++) {
                         const cells = rows[i].querySelectorAll('td');
-                        if (cells.length < 3) continue;
+                        if (cells.length < 4) continue;
+
+                        // HKJC columns: [0]=Position, [1]=Horse No, [2]=Horse Name, [3..N-1]=Sections, [N]=Time
+                        const pos = parseInt(cells[0]?.textContent?.trim()) || null;
+                        const saddlecloth = parseInt(cells[1]?.textContent?.trim()) || null;
+                        // Horse name may include ID in parens, e.g. "COME FAST FAY FAY (K121)"
+                        let horseName = cells[2]?.textContent?.trim() || '';
+                        // Strip HKJC horse ID suffix like "(K121)"
+                        horseName = horseName.replace(/\\s*\\([A-Z]\\d{3}\\)\\s*$/, '').trim();
 
                         const horse = {
-                            saddlecloth: parseInt(cells[0]?.textContent?.trim()) || null,
-                            horse_name: cells[1]?.textContent?.trim() || '',
-                            final_position: parseInt(cells[2]?.textContent?.trim()) || null,
-                            sectional_times: []
+                            saddlecloth: saddlecloth,
+                            horse_name: horseName,
+                            final_position: pos,
+                            sectional_times: [],
+                            race_time: null
                         };
 
-                        // Remaining cells are sectional times at each checkpoint
-                        for (let j = 3; j < cells.length && j < headers.length; j++) {
+                        // Sectional columns are between horse name and total time
+                        // Last column is total time
+                        const lastIdx = cells.length - 1;
+                        horse.race_time = cells[lastIdx]?.textContent?.trim() || null;
+
+                        for (let j = 3; j < lastIdx; j++) {
                             const time = cells[j]?.textContent?.trim();
                             if (time && time !== '-') {
+                                const label = (j < headers.length) ? headers[j] : ('Sec ' + (j - 2));
                                 horse.sectional_times.push({
-                                    distance: headers[j] || '',
-                                    time: time,
+                                    section: label,
+                                    time: parseFloat(time) || time,
                                 });
                             }
                         }
