@@ -2463,14 +2463,13 @@ class TestTrackStatsFallback:
 
     def test_track_dist_preferred_over_track_stats(self):
         runner = _make_runner(
-            track_dist_stats="8: 4-2-1",  # 50% win rate
-            track_stats="10: 1-0-0",       # 10% win rate
+            track_dist_stats="8: 4-2-1",  # 50% win rate at track+distance
             last_five="11111",
         )
         score_with_td = _form_rating(runner, "Good 4", 0.10)
 
         runner2 = _make_runner(
-            track_stats="8: 4-2-1",  # Same stats but only in track_stats
+            track_stats="8: 4-2-1",  # Same stats but only track (no distance)
             last_five="11111",
         )
         score_ts_only = _form_rating(runner2, "Good 4", 0.10)
