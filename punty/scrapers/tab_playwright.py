@@ -756,6 +756,255 @@ class HKJCOddsScraper:
         return all_odds
 
 
+# ============ HKJC RESULTS SCRAPER ============
+
+
+class HKJCResultsScraper:
+    """Scrape HKJC race results and statuses via httpx (no Playwright needed).
+
+    HKJC results pages are server-rendered HTML. Much faster and more
+    reliable than TAB Playwright which always times out for HK.
+
+    Results URL:
+    https://racing.hkjc.com/racing/information/english/Racing/LocalResults.aspx?RaceDate=YYYY/MM/DD&Racecourse=ST&RaceNo=N
+    """
+
+    RESULTS_URL = "https://racing.hkjc.com/racing/information/english/Racing/LocalResults.aspx"
+
+    # HKJC venue codes
+    VENUE_CODES = {"sha tin": "ST", "happy valley": "HV"}
+
+    def _get_venue_code(self, venue: str) -> str | None:
+        from punty.venues import normalize_venue
+        v = normalize_venue(venue)
+        return self.VENUE_CODES.get(v)
+
+    async def scrape_race_statuses(
+        self,
+        venue: str,
+        race_date: date,
+        race_count: int,
+    ) -> dict:
+        """Check which races have results (= Paying/Closed status).
+
+        Returns dict matching monitor format:
+        {"statuses": {race_num: status_str, ...}, "track_condition": str|None}
+        """
+        import httpx
+
+        venue_code = self._get_venue_code(venue)
+        if not venue_code:
+            logger.info(f"No HKJC venue code for {venue}")
+            return {"statuses": {}, "track_condition": None}
+
+        date_str = race_date.strftime("%Y/%m/%d")
+        statuses: dict[int, str] = {}
+        track_condition = None
+
+        # Check each race — httpx is fast, no browser overhead
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            follow_redirects=True,
+        ) as client:
+            for race_num in range(1, race_count + 1):
+                try:
+                    resp = await client.get(
+                        self.RESULTS_URL,
+                        params={
+                            "RaceDate": date_str,
+                            "Racecourse": venue_code,
+                            "RaceNo": str(race_num),
+                        },
+                    )
+                    resp.raise_for_status()
+                    html = resp.text
+
+                    # If the page has a results tbody, race is done
+                    if 'class="f_fs12"' in html and '>WIN</td>' in html:
+                        statuses[race_num] = "Paying"
+                    elif 'class="f_fs12"' in html:
+                        statuses[race_num] = "Interim"
+                    else:
+                        statuses[race_num] = "Open"
+
+                    # Extract track condition from first race page
+                    # HKJC format: <td>Going :</td><td colspan="14">GOOD</td>
+                    if race_num == 1 and track_condition is None:
+                        tc_match = re.search(
+                            r'Going\s*:\s*</td>\s*<td[^>]*>\s*([A-Z][A-Z\s]+)',
+                            html,
+                        )
+                        if tc_match:
+                            track_condition = tc_match.group(1).strip().title()
+
+                except Exception as e:
+                    logger.warning(f"HKJC status check failed for R{race_num}: {e}")
+                    statuses[race_num] = "Open"  # Assume open on error
+
+        logger.info(f"HKJC statuses for {venue}: {statuses} | Track: {track_condition}")
+        return {"statuses": statuses, "track_condition": track_condition}
+
+    async def scrape_race_result(
+        self,
+        venue: str,
+        race_date: date,
+        race_number: int,
+    ) -> dict:
+        """Scrape full race results from HKJC for a specific race.
+
+        Returns dict matching orchestrator.upsert_race_results format:
+        {"results": [{horse_name, saddlecloth, finish_position, win_dividend, place_dividend, result_margin}]}
+        """
+        import httpx
+
+        venue_code = self._get_venue_code(venue)
+        if not venue_code:
+            return {"results": []}
+
+        date_str = race_date.strftime("%Y/%m/%d")
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=15.0,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                follow_redirects=True,
+            ) as client:
+                resp = await client.get(
+                    self.RESULTS_URL,
+                    params={
+                        "RaceDate": date_str,
+                        "Racecourse": venue_code,
+                        "RaceNo": str(race_number),
+                    },
+                )
+                resp.raise_for_status()
+                html = resp.text
+        except Exception as e:
+            logger.warning(f"HKJC results fetch failed for R{race_number}: {e}")
+            return {"results": []}
+
+        return self._parse_results_html(html, race_number)
+
+    def _parse_results_html(self, html: str, race_number: int) -> dict:
+        """Parse HKJC results HTML into structured results list.
+
+        HKJC results table structure:
+        - Runner rows inside <tbody class="f_fs12">
+        - Columns: Pla | Horse No | Horse | Jockey | Trainer | Act.Wt | Horse Wt | Dr | LBW | Running Pos | Time | Win Odds
+        - Horse name includes ID suffix like "(L126)" to strip
+        - Dividends per HK$10 unit
+        """
+        results: list[dict] = []
+
+        def clean(s):
+            return re.sub(r'<[^>]+>', '', s).strip()
+
+        # Extract runner rows from <tbody class="f_fs12">
+        tbody_match = re.search(
+            r'<tbody\s+class="f_fs12">(.*?)</tbody>',
+            html,
+            re.DOTALL,
+        )
+        if tbody_match:
+            tbody_html = tbody_match.group(1)
+            row_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL)
+            cell_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL)
+
+            for row_html in row_pattern.findall(tbody_html):
+                cells = cell_pattern.findall(row_html)
+                if len(cells) < 5:
+                    continue
+
+                place_str = clean(cells[0])
+                saddlecloth_str = clean(cells[1])
+                horse_name = clean(cells[2])
+
+                # Parse finish position (handle "1", "2", "DH", "DNF", "WV" etc.)
+                finish_pos = None
+                if place_str.isdigit():
+                    finish_pos = int(place_str)
+                elif re.match(r'DH\s*\d+', place_str, re.IGNORECASE):
+                    dh_match = re.search(r'\d+', place_str)
+                    if dh_match:
+                        finish_pos = int(dh_match.group())
+
+                saddlecloth = None
+                if saddlecloth_str.strip().isdigit():
+                    saddlecloth = int(saddlecloth_str.strip())
+
+                # Strip HKJC horse ID suffix like "(L126)" and trailing whitespace
+                horse_name = re.sub(r'\s*\([A-Z]\d{3}\)\s*$', '', horse_name).strip()
+                # Strip HTML entities and non-breaking spaces
+                horse_name = horse_name.replace('&nbsp;', ' ').replace('\xa0', ' ').strip()
+
+                if not horse_name or finish_pos is None:
+                    continue
+
+                # LBW (Length Behind Winner) is column 8
+                margin = None
+                if len(cells) > 8:
+                    lbw = clean(cells[8])
+                    if lbw and lbw != '-':
+                        margin = lbw
+
+                # Win odds column is last
+                win_odds = None
+                if len(cells) > 10:
+                    odds_str = clean(cells[-1])
+                    try:
+                        win_odds = float(odds_str)
+                    except (ValueError, TypeError):
+                        pass
+
+                results.append({
+                    "horse_name": horse_name,
+                    "saddlecloth": saddlecloth,
+                    "finish_position": finish_pos,
+                    "win_dividend": None,  # Filled from dividends section
+                    "place_dividend": None,
+                    "result_margin": margin,
+                    "win_odds": win_odds,
+                })
+
+        # Extract dividends — structure: <td>WIN</td><td>5</td><td>30.00</td>
+        # Win dividend
+        win_match = re.search(
+            r'>WIN</td>\s*<td[^>]*>\s*(\d+)\s*</td>\s*<td[^>]*>\s*([\d,.]+)',
+            html,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if win_match and results:
+            win_saddlecloth = int(win_match.group(1))
+            win_div = float(win_match.group(2).replace(',', ''))
+            # HKJC dividends are per HK$10 unit, convert to per-$1
+            win_div_per_unit = win_div / 10.0
+            for r in results:
+                if r["saddlecloth"] == win_saddlecloth:
+                    r["win_dividend"] = win_div_per_unit
+                    break
+
+        # Place dividends — multiple PLACE rows, or continuation rows without label
+        # Pattern: PLACE | saddlecloth | dividend  or  (empty) | saddlecloth | dividend
+        place_section = re.search(r'>PLACE</td>(.*?)(?:>QUINELLA|>FORECAST|</table>)', html, re.DOTALL | re.IGNORECASE)
+        if place_section and results:
+            place_html = ">PLACE</td>" + place_section.group(1)
+            pl_rows = re.findall(
+                r'<td[^>]*>\s*(\d+)\s*</td>\s*<td[^>]*>\s*([\d,.]+)',
+                place_html,
+            )
+            for pl_sc_str, pl_div_str in pl_rows:
+                pl_sc = int(pl_sc_str)
+                pl_div = float(pl_div_str.replace(',', '')) / 10.0
+                for r in results:
+                    if r["saddlecloth"] == pl_sc and r["place_dividend"] is None:
+                        r["place_dividend"] = pl_div
+                        break
+
+        logger.info(f"HKJC results for R{race_number}: {len(results)} runners")
+        return {"results": results}
+
+
 # ============ HKJC JOCKEY / TRAINER RANKINGS ============
 
 # Module-level cache: refreshed once per day.

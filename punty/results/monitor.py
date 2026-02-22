@@ -539,16 +539,31 @@ class ResultsMonitor:
         from punty.venues import is_international_venue
 
         if is_international_venue(meeting.venue):
-            # Use TAB Playwright for international venues (HK, etc.)
-            from punty.scrapers.tab_playwright import TabPlaywrightScraper
-            try:
-                tab_pw = TabPlaywrightScraper()
-                status_data = await tab_pw.scrape_race_statuses(meeting.venue, meeting.date)
-                statuses = status_data["statuses"]
-                scraped_tc = status_data.get("track_condition")
-            except Exception as e:
-                logger.error(f"Failed to check TAB statuses for {meeting.venue}: {e}")
-                return
+            # Use HKJC httpx scraper for HK venues (TAB Playwright always times out)
+            from punty.venues import guess_state
+            if guess_state(meeting.venue) == "HK":
+                from punty.scrapers.tab_playwright import HKJCResultsScraper
+                try:
+                    hkjc = HKJCResultsScraper()
+                    status_data = await hkjc.scrape_race_statuses(
+                        meeting.venue, meeting.date, len(races)
+                    )
+                    statuses = status_data["statuses"]
+                    scraped_tc = status_data.get("track_condition")
+                except Exception as e:
+                    logger.error(f"Failed to check HKJC statuses for {meeting.venue}: {e}")
+                    return
+            else:
+                # Non-HK international venues — fallback to TAB Playwright
+                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                try:
+                    tab_pw = TabPlaywrightScraper()
+                    status_data = await tab_pw.scrape_race_statuses(meeting.venue, meeting.date)
+                    statuses = status_data["statuses"]
+                    scraped_tc = status_data.get("track_condition")
+                except Exception as e:
+                    logger.error(f"Failed to check TAB statuses for {meeting.venue}: {e}")
+                    return
         else:
             scraper = RacingComScraper()
             try:
@@ -787,11 +802,19 @@ class ResultsMonitor:
                     await asyncio.sleep(random.uniform(2, 6))
 
                     if is_international_venue(meeting.venue):
-                        from punty.scrapers.tab_playwright import TabPlaywrightScraper
-                        tab_pw = TabPlaywrightScraper()
-                        results_data = await tab_pw.scrape_race_result(
-                            meeting.venue, meeting.date, race_num
-                        )
+                        from punty.venues import guess_state
+                        if guess_state(meeting.venue) == "HK":
+                            from punty.scrapers.tab_playwright import HKJCResultsScraper
+                            hkjc = HKJCResultsScraper()
+                            results_data = await hkjc.scrape_race_result(
+                                meeting.venue, meeting.date, race_num
+                            )
+                        else:
+                            from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                            tab_pw = TabPlaywrightScraper()
+                            results_data = await tab_pw.scrape_race_result(
+                                meeting.venue, meeting.date, race_num
+                            )
                     else:
                         scraper2 = RacingComScraper()
                         try:
