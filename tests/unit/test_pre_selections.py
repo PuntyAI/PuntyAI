@@ -478,15 +478,18 @@ class TestExoticTopPickBonus:
 # ──────────────────────────────────────────────
 
 class TestCalculatePuntysPick:
-    def test_picks_best_ev_selection(self):
+    def test_picks_highest_confidence_selection(self):
+        """Punty's Pick should be the most likely to collect, not highest EV."""
         picks = [
+            # Alpha: Win bet, 30% win prob — collects 30% of the time
             RecommendedPick(1, 1, "Alpha", "Win", 8, 3.5, 1.5, 0.30, 0.60, 1.15, 1.05, 0.05),
+            # Beta: Place bet, 50% place prob — collects 50% of the time
             RecommendedPick(2, 2, "Beta", "Place", 5, 5.0, 2.0, 0.20, 0.50, 1.10, 1.05, -0.1),
         ]
         pp = _calculate_puntys_pick(picks, None)
         assert pp is not None
         assert pp.pick_type == "selection"
-        assert pp.horse_name == "Alpha"
+        assert pp.horse_name == "Beta"  # highest confidence (50% place prob)
 
     def test_exotic_wins_when_high_value(self):
         picks = [
@@ -523,8 +526,20 @@ class TestCalculatePuntysPick:
             RecommendedPick(2, 2, "Beta", "Place", 5, 5.0, 2.0, 0.20, 0.50, 1.10, 1.05, 0.1),
         ]
         pp = _calculate_puntys_pick(picks, None)
-        assert pp.horse_name == "Alpha"
+        assert pp.horse_name == "Beta"  # highest confidence (50% place)
         assert not hasattr(pp, "secondary_horse")
+
+    def test_roughie_excluded_from_puntys_pick(self):
+        """Roughies should never be Punty's Pick even with high EV."""
+        picks = [
+            RecommendedPick(1, 1, "TopPick", "Place", 5.5, 3.0, 1.67, 0.22, 0.55, 1.09, 1.05, -0.05),
+            RecommendedPick(2, 2, "SecondPick", "Place", 4.5, 8.0, 3.33, 0.12, 0.30, 0.85, 0.90, -0.10),
+        ]
+        roughie = RecommendedPick(4, 13, "Roughie", "Place", 3.5, 13.0, 5.0, 0.08, 0.20, 2.69, 2.0, 0.40, is_roughie=True)
+        all_picks = picks + [roughie]
+        pp = _calculate_puntys_pick(all_picks, None)
+        assert pp is not None
+        assert pp.horse_name == "TopPick"  # highest confidence, not roughie
 
     def test_empty_picks_returns_none(self):
         assert _calculate_puntys_pick([], None) is None

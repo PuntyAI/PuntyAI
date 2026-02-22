@@ -843,14 +843,29 @@ def _calculate_puntys_pick(
 ) -> PuntysPick | None:
     """Determine the single best bet for Punty's Pick.
 
-    Compares the best selection EV against the exotic value ratio.
-    Exotic wins only if value >= 1.5x (higher bar than regular exotics).
+    Picks the highest-confidence selection (most likely to collect),
+    excluding roughies. Exotic wins only if value >= 1.5x and EV
+    clearly beats the best selection.
     """
     if not picks:
         return None
 
-    # Best selection by expected return
-    best_sel = max(picks, key=lambda p: p.expected_return)
+    # Exclude roughies — they're speculative, not best-bet material
+    candidates = [p for p in picks if not p.is_roughie]
+    if not candidates:
+        candidates = picks  # fallback if all are roughies (shouldn't happen)
+
+    # Best selection by confidence (probability of collecting)
+    def _collect_prob(p: RecommendedPick) -> float:
+        if p.bet_type in ("Win", "Saver Win"):
+            return p.win_prob
+        elif p.bet_type == "Place":
+            return p.place_prob
+        elif p.bet_type == "Each Way":
+            return p.place_prob  # EW collects if places
+        return p.win_prob
+
+    best_sel = max(candidates, key=_collect_prob)
 
     # Check if exotic beats selections
     if exotic and exotic.value_ratio >= EXOTIC_PUNTYS_PICK_VALUE:
