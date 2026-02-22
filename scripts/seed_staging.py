@@ -44,9 +44,13 @@ def main():
     # Ensure staging data directory exists
     STAGING_DB.parent.mkdir(parents=True, exist_ok=True)
 
-    # Copy production DB to staging
-    shutil.copy2(PROD_DB, STAGING_DB)
-    print(f"Copied {PROD_DB} -> {STAGING_DB}")
+    # Use sqlite3 .backup for WAL-safe copy (shutil.copy misses WAL data)
+    src = sqlite3.connect(PROD_DB)
+    dst = sqlite3.connect(STAGING_DB)
+    src.backup(dst)
+    src.close()
+    dst.close()
+    print(f"Backed up {PROD_DB} -> {STAGING_DB} (WAL-safe)")
 
     # Sanitize sensitive keys
     conn = sqlite3.connect(STAGING_DB)
