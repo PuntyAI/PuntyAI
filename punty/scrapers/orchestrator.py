@@ -1156,9 +1156,20 @@ def _apply_hkjc_conditions(meeting: Meeting, info: dict) -> None:
         meeting.weather_temp = info["weather_temp"]
     if info.get("weather_humidity") is not None:
         meeting.weather_humidity = info["weather_humidity"]
-    if info.get("track_condition") and not meeting.track_condition_locked:
-        if not meeting.track_condition or meeting.track_condition == "TBC":
-            meeting.track_condition = info["track_condition"]
+    # HKJC is the primary source for HK track conditions (RA returns 500)
+    if info.get("track_condition"):
+        meeting.track_condition = info["track_condition"]
+    if info.get("penetrometer") is not None:
+        meeting.penetrometer = info["penetrometer"]
+    if info.get("rainfall") is not None:
+        meeting.rainfall = f"{info['rainfall']}mm"
+    # Store course config and soil moisture in rail_position if available
+    course = info.get("course_config")
+    soil = info.get("soil_moisture")
+    if course:
+        meeting.rail_position = f'"{course}" Course'
+        if soil is not None:
+            meeting.rail_position += f" (Soil {soil}%)"
 
 
 import re as _re

@@ -508,7 +508,12 @@ class HKJCTrackInfoScraper:
                 logger.warning(f"HKJC wind tracker navigation failed: {e}")
                 return None
 
-            # Extract all visible text content and try to parse weather data
+            # Extract weather data from the HKJC wind tracker page.
+            # Page layout after React render:
+            #   "Going GOOD", "Penetrometer Reading\n2.72"
+            #   "Temperature\n22.3°C", "Relative Humidity\n84%"
+            #   Wind readings: "ENE\n4 km/h\n5 km/h" per measurement point
+            #   Course config: '"A+3" COURSE'
             try:
                 data = await page.evaluate("""() => {
                     const result = {
@@ -518,54 +523,69 @@ class HKJCTrackInfoScraper:
                         weather_temp: null,
                         weather_humidity: null,
                         track_condition: null,
+                        penetrometer: null,
+                        rainfall: null,
+                        soil_moisture: null,
+                        course_config: null,
                         raw_text: null
                     };
 
-                    // Get all text content from the main content area
                     const body = document.body;
                     if (!body) return result;
 
-                    const allText = body.innerText || body.textContent || '';
-                    result.raw_text = allText.substring(0, 3000);  // Capture for logging
+                    const allText = body.innerText || '';
+                    result.raw_text = allText.substring(0, 3000);
 
-                    // Look for wind speed patterns like "12 km/h", "Wind Speed: 15"
-                    const windSpeedMatch = allText.match(/(?:wind\\s*(?:speed)?\\s*[:：]?\\s*)(\\d+)\\s*(?:km\\/h|kmh|kph)/i)
-                        || allText.match(/(\\d+)\\s*(?:km\\/h|kmh|kph)/i);
-                    if (windSpeedMatch) {
-                        result.weather_wind_speed = parseInt(windSpeedMatch[1]);
-                    }
+                    // Temperature: "Temperature\n22.3°C"
+                    const tempMatch = allText.match(/Temperature\\s*\\n?\\s*(\\d+\\.?\\d*)\\s*°\\s*C/i);
+                    if (tempMatch) result.weather_temp = parseFloat(tempMatch[1]);
 
-                    // Wind direction: "N", "NE", "SSW", etc.
-                    const windDirMatch = allText.match(/(?:wind\\s*(?:direction)?\\s*[:：]?\\s*)(N|NE|NNE|ENE|E|ESE|SE|SSE|S|SSW|SW|WSW|W|WNW|NW|NNW)(?:\\s|$|,)/i)
-                        || allText.match(/(?:direction\\s*[:：]?\\s*)(N|NE|NNE|ENE|E|ESE|SE|SSE|S|SSW|SW|WSW|W|WNW|NW|NNW)(?:\\s|$|,)/i);
-                    if (windDirMatch) {
-                        result.weather_wind_dir = windDirMatch[1].toUpperCase();
-                    }
+                    // Humidity: "Relative Humidity\n84%"
+                    const humidMatch = allText.match(/(?:Relative\\s+)?Humidity\\s*\\n?\\s*(\\d{1,3})\\s*%/i);
+                    if (humidMatch) result.weather_humidity = parseInt(humidMatch[1]);
 
-                    // Temperature: "25°C", "Temp: 25"
-                    const tempMatch = allText.match(/(\\d{1,2})\\s*°\\s*[Cc]/i)
-                        || allText.match(/(?:temp(?:erature)?\\s*[:：]?\\s*)(\\d{1,2})/i);
-                    if (tempMatch) {
-                        result.weather_temp = parseInt(tempMatch[1]);
-                    }
+                    // Going: "Going GOOD" or "Going GOOD TO YIELDING"
+                    const goingMatch = allText.match(/Going\\s+(Good to Firm|Good to Yielding|Good|Firm|Yielding to Soft|Yielding|Soft|Heavy|Wet Fast|Fast)/i);
+                    if (goingMatch) result.track_condition = goingMatch[1];
 
-                    // Humidity: "65%", "Humidity: 65"
-                    const humidMatch = allText.match(/(?:humidity\\s*[:：]?\\s*)(\\d{1,3})\\s*%?/i)
-                        || allText.match(/(\\d{1,3})\\s*%\\s*(?:humidity|RH)/i);
-                    if (humidMatch) {
-                        result.weather_humidity = parseInt(humidMatch[1]);
-                    }
+                    // Penetrometer: "Penetrometer Reading\n2.72"
+                    const penMatch = allText.match(/Penetrometer\\s+Reading\\s*\\n?\\s*(\\d+\\.?\\d*)/i);
+                    if (penMatch) result.penetrometer = parseFloat(penMatch[1]);
 
-                    // Weather condition: "Fine", "Cloudy", "Rainy", "Overcast"
-                    const condMatch = allText.match(/(?:weather|condition)\\s*[:：]?\\s*(Fine|Sunny|Cloudy|Overcast|Rainy|Showers|Rain|Drizzle|Humid|Thunderstorm|Clear|Partly Cloudy|Mostly Cloudy)/i);
-                    if (condMatch) {
-                        result.weather_condition = condMatch[1];
-                    }
+                    // Rainfall: "Total\n0mm"
+                    const rainMatch = allText.match(/Rainfall[\\s\\S]*?Total\\s*\\n?\\s*(\\d+\\.?\\d*)\\s*mm/i);
+                    if (rainMatch) result.rainfall = parseFloat(rainMatch[1]);
 
-                    // Track condition: "Good", "Good to Firm", "Good to Yielding", "Yielding", "Soft", "Heavy"
-                    const trackMatch = allText.match(/(?:going|track\\s*(?:condition)?|course\\s*(?:condition)?)\\s*[:：]?\\s*(Good to Firm|Good to Yielding|Good|Firm|Yielding to Soft|Yielding|Soft|Heavy|Wet Fast|Fast)/i);
-                    if (trackMatch) {
-                        result.track_condition = trackMatch[1];
+                    // Soil moisture: "Soil Moisture\n16.8%"
+                    const soilMatch = allText.match(/Soil\\s+Moisture\\s*\\n?\\s*(\\d+\\.?\\d*)\\s*%/i);
+                    if (soilMatch) result.soil_moisture = parseFloat(soilMatch[1]);
+
+                    // Course config: '"A+3" COURSE'
+                    const courseMatch = allText.match(/[\\u201c"']([A-C]\\+?\\d?)[\\u201d"']\\s*COURSE/i);
+                    if (courseMatch) result.course_config = courseMatch[1];
+
+                    // Wind: actual measurement readings after "Wind Gust" label
+                    // Format: "ENE\\n4 km/h\\n5 km/h" per sensor point
+                    const gustIdx = allText.indexOf('Wind Gust');
+                    if (gustIdx >= 0) {
+                        const windSection = allText.substring(gustIdx);
+                        const dirs = [];
+                        const speeds = [];
+                        const wp = /(N|NE|NNE|ENE|E|ESE|SE|SSE|S|SSW|SW|WSW|W|WNW|NW|NNW)\\s*\\n\\s*(\\d+)\\s*km\\/h/gi;
+                        let wm;
+                        while ((wm = wp.exec(windSection)) !== null) {
+                            dirs.push(wm[1].toUpperCase());
+                            speeds.push(parseInt(wm[2]));
+                        }
+                        if (speeds.length > 0) {
+                            result.weather_wind_speed = Math.round(
+                                speeds.reduce((a, b) => a + b, 0) / speeds.length
+                            );
+                            const dc = {};
+                            dirs.forEach(d => { dc[d] = (dc[d] || 0) + 1; });
+                            result.weather_wind_dir = Object.entries(dc)
+                                .sort((a, b) => b[1] - a[1])[0][0];
+                        }
                     }
 
                     return result;
@@ -592,7 +612,9 @@ class HKJCTrackInfoScraper:
             f"HKJC wind tracker: wind={data.get('weather_wind_speed')}km/h "
             f"{data.get('weather_wind_dir')}, temp={data.get('weather_temp')}°C, "
             f"humidity={data.get('weather_humidity')}%, "
-            f"track={data.get('track_condition')}"
+            f"track={data.get('track_condition')}, pen={data.get('penetrometer')}, "
+            f"rain={data.get('rainfall')}mm, soil={data.get('soil_moisture')}%, "
+            f"course={data.get('course_config')}"
         )
         return data
 
