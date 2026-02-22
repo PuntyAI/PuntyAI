@@ -397,27 +397,46 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             logger.warning(f"Betfair odds failed for {venue}: {e}")
             errors.append(f"betfair: {e}")
 
-        # Step 5: TAB Playwright odds for international venues (HK, etc.)
+        # Step 5: International venue odds (TAB Playwright → HKJC fallback)
         from punty.venues import get_tab_mnemonic
         if get_tab_mnemonic(venue):
+            race_result = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id)
+            )
+            intl_race_count = len(race_result.scalars().all())
+            intl_odds = []
+
+            # Try TAB first
             try:
                 from punty.scrapers.tab_playwright import TabPlaywrightScraper
                 tab_pw = TabPlaywrightScraper()
-                race_result = await db.execute(
-                    select(Race).where(Race.meeting_id == meeting_id)
+                intl_odds = await tab_pw.scrape_odds_for_meeting(
+                    venue, race_date, meeting_id, intl_race_count
                 )
-                tab_race_count = len(race_result.scalars().all())
-                tab_odds = await tab_pw.scrape_odds_for_meeting(
-                    venue, race_date, meeting_id, tab_race_count
-                )
-                if tab_odds:
-                    await _merge_tab_odds(db, meeting_id, tab_odds)
-                    logger.info(f"TAB Playwright odds: {len(tab_odds)} runners for {venue}")
-                else:
-                    logger.warning(f"TAB Playwright: no odds captured for {venue}")
+                if intl_odds:
+                    logger.info(f"TAB Playwright odds: {len(intl_odds)} runners for {venue}")
             except Exception as e:
                 logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
-                errors.append(f"tab_playwright: {e}")
+
+            # Fallback to HKJC if TAB returned nothing (Akamai block)
+            if not intl_odds and guess_state(venue) == "HK":
+                try:
+                    from punty.scrapers.tab_playwright import HKJCOddsScraper
+                    hkjc_odds = HKJCOddsScraper()
+                    intl_odds = await hkjc_odds.scrape_odds_for_meeting(
+                        venue, race_date, intl_race_count
+                    )
+                    if intl_odds:
+                        logger.info(f"HKJC odds fallback: {len(intl_odds)} runners for {venue}")
+                except Exception as e:
+                    logger.warning(f"HKJC odds fallback failed for {venue}: {e}")
+                    errors.append(f"hkjc_odds: {e}")
+
+            if intl_odds:
+                await _merge_tab_odds(db, meeting_id, intl_odds)
+            else:
+                logger.warning(f"International odds: no odds captured for {venue}")
+                errors.append("intl_odds: no odds captured")
 
         # Close PF scraper only if we own it
         if owns_pf and pf_scraper:
@@ -651,31 +670,49 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             yield {"step": 5, "total": total_steps,
                    "label": f"Betfair failed: {e}", "status": "error"}
 
-        # Step 6: TAB Playwright odds for international venues (HK, etc.)
+        # Step 6: International venue odds (TAB Playwright → HKJC fallback)
         if is_international:
-            yield {"step": 5, "total": total_steps, "label": "Scraping TAB international odds...", "status": "running"}
+            yield {"step": 5, "total": total_steps, "label": "Scraping international odds...", "status": "running"}
+            race_result = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id)
+            )
+            intl_race_count = len(race_result.scalars().all())
+            intl_odds = []
+
+            # Try TAB first
             try:
                 from punty.scrapers.tab_playwright import TabPlaywrightScraper
                 tab_pw = TabPlaywrightScraper()
-                race_result = await db.execute(
-                    select(Race).where(Race.meeting_id == meeting_id)
+                intl_odds = await tab_pw.scrape_odds_for_meeting(
+                    venue, race_date, meeting_id, intl_race_count
                 )
-                tab_race_count = len(race_result.scalars().all())
-                tab_odds = await tab_pw.scrape_odds_for_meeting(
-                    venue, race_date, meeting_id, tab_race_count
-                )
-                if tab_odds:
-                    await _merge_tab_odds(db, meeting_id, tab_odds)
-                    yield {"step": 6, "total": total_steps,
-                           "label": f"TAB international odds: {len(tab_odds)} runners", "status": "done"}
-                else:
-                    yield {"step": 6, "total": total_steps,
-                           "label": "TAB international: no odds captured", "status": "error"}
+                if intl_odds:
+                    logger.info(f"TAB Playwright odds: {len(intl_odds)} runners for {venue}")
             except Exception as e:
                 logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
-                errors.append(f"tab_playwright: {e}")
+
+            # Fallback to HKJC if TAB returned nothing (Akamai block)
+            if not intl_odds and guess_state(venue) == "HK":
+                try:
+                    from punty.scrapers.tab_playwright import HKJCOddsScraper
+                    hkjc_odds_scraper = HKJCOddsScraper()
+                    intl_odds = await hkjc_odds_scraper.scrape_odds_for_meeting(
+                        venue, race_date, intl_race_count
+                    )
+                    if intl_odds:
+                        logger.info(f"HKJC odds fallback: {len(intl_odds)} runners for {venue}")
+                except Exception as e:
+                    logger.warning(f"HKJC odds fallback failed for {venue}: {e}")
+                    errors.append(f"hkjc_odds: {e}")
+
+            if intl_odds:
+                await _merge_tab_odds(db, meeting_id, intl_odds)
                 yield {"step": 6, "total": total_steps,
-                       "label": f"TAB international failed: {e}", "status": "error"}
+                       "label": f"International odds: {len(intl_odds)} runners", "status": "done"}
+            else:
+                errors.append("intl_odds: no odds captured")
+                yield {"step": 6, "total": total_steps,
+                       "label": "International odds: no odds captured", "status": "error"}
 
         # Close scraper
         if pf_scraper:

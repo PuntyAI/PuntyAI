@@ -595,3 +595,140 @@ class HKJCTrackInfoScraper:
             f"track={data.get('track_condition')}"
         )
         return data
+
+
+class HKJCOddsScraper:
+    """Scrape HKJC win/place odds directly from bet.hkjc.com via Playwright.
+
+    Fallback when TAB is blocked by Akamai. HKJC doesn't have aggressive
+    bot protection and serves odds on their betting SPA.
+    """
+
+    # HKJC venue codes
+    VENUE_CODES = {"sha tin": "ST", "happy valley": "HV"}
+
+    async def scrape_odds_for_meeting(
+        self,
+        venue: str,
+        race_date: date,
+        race_count: int,
+    ) -> list[dict]:
+        """Scrape HKJC win/place odds for all races at a HK venue.
+
+        Returns list of dicts matching TabPlaywrightScraper format:
+        {race_number, horse_name, saddlecloth, current_odds, place_odds, scratched}
+        """
+        v = normalize_venue(venue)
+        venue_code = self.VENUE_CODES.get(v)
+        if not venue_code:
+            logger.info(f"No HKJC venue code for {venue}")
+            return []
+
+        date_str = race_date.strftime("%Y-%m-%d")
+        all_odds: list[dict] = []
+
+        from punty.scrapers.playwright_base import new_page
+
+        async with new_page(timeout=30000) as page:
+            for race_num in range(1, race_count + 1):
+                url = f"https://bet.hkjc.com/en/racing/wp/{date_str}/{venue_code}/{race_num}"
+                logger.info(f"HKJC odds: navigating to R{race_num} — {url}")
+
+                try:
+                    await page.goto(url, wait_until="domcontentloaded")
+                    await asyncio.sleep(4)  # SPA needs time to load odds
+                except Exception as e:
+                    logger.warning(f"HKJC odds R{race_num} navigation failed: {e}")
+                    continue
+
+                # Extract odds from rendered page
+                try:
+                    race_odds = await page.evaluate("""(raceNum) => {
+                        const runners = [];
+
+                        // Try multiple selectors for the odds table
+                        // HKJC shows runner rows with horse number, name, win odds, place odds
+                        const rows = document.querySelectorAll(
+                            'tr[data-runner], .runner-row, [class*="runner"], [class*="odds-row"], table tbody tr'
+                        );
+
+                        for (const row of rows) {
+                            const cells = row.querySelectorAll('td, [class*="cell"]');
+                            if (cells.length < 3) continue;
+
+                            // Try to extract structured odds data
+                            const text = row.textContent || '';
+
+                            // Look for patterns like: "1  HORSE NAME  3.5  1.4"
+                            // or extract from specific data attributes
+                            const numEl = row.querySelector('[class*="number"], [class*="no"], td:first-child');
+                            const nameEl = row.querySelector('[class*="name"], [class*="horse"]');
+
+                            let saddlecloth = null;
+                            let horseName = '';
+                            let winOdds = null;
+                            let placeOdds = null;
+                            let scratched = false;
+
+                            if (numEl) {
+                                saddlecloth = parseInt(numEl.textContent.trim()) || null;
+                            }
+                            if (nameEl) {
+                                horseName = nameEl.textContent.trim();
+                            }
+
+                            // Look for odds values (decimal numbers in cells)
+                            const oddsValues = [];
+                            for (const cell of cells) {
+                                const val = parseFloat(cell.textContent.trim());
+                                if (!isNaN(val) && val > 1.0 && val < 999) {
+                                    oddsValues.push(val);
+                                }
+                            }
+
+                            if (oddsValues.length >= 1) {
+                                winOdds = oddsValues[0];
+                            }
+                            if (oddsValues.length >= 2) {
+                                placeOdds = oddsValues[1];
+                            }
+
+                            // Check for scratched indicators
+                            if (text.includes('SCR') || text.includes('Scratched') ||
+                                row.classList.contains('scratched') ||
+                                row.querySelector('[class*="scratch"]')) {
+                                scratched = true;
+                            }
+
+                            if ((saddlecloth || horseName) && (winOdds || scratched)) {
+                                runners.push({
+                                    race_number: raceNum,
+                                    horse_name: horseName,
+                                    saddlecloth: saddlecloth,
+                                    current_odds: winOdds,
+                                    place_odds: placeOdds,
+                                    scratched: scratched
+                                });
+                            }
+                        }
+
+                        // If structured extraction failed, try to get raw text and log it
+                        if (runners.length === 0) {
+                            const body = document.body?.innerText?.substring(0, 1000) || '';
+                            return {runners: [], debug_text: body};
+                        }
+
+                        return {runners: runners, debug_text: null};
+                    }""", race_num)
+                except Exception as e:
+                    logger.warning(f"HKJC odds extraction failed for R{race_num}: {e}")
+                    continue
+
+                if race_odds and race_odds.get("runners"):
+                    all_odds.extend(race_odds["runners"])
+                    logger.info(f"HKJC odds R{race_num}: {len(race_odds['runners'])} runners")
+                elif race_odds and race_odds.get("debug_text"):
+                    logger.info(f"HKJC odds R{race_num}: no runners extracted. Page text: {race_odds['debug_text'][:300]}")
+
+        logger.info(f"HKJC odds total: {len(all_odds)} runners for {venue}")
+        return all_odds
