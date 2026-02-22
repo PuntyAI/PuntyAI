@@ -24,6 +24,9 @@ templates = Jinja2Templates(directory=templates_dir)
 # Static files directory
 static_dir = Path(__file__).parent / "static"
 
+from punty.config import settings as _app_settings
+templates.env.globals["is_staging"] = _app_settings.is_staging
+
 
 async def get_next_race() -> dict:
     """Get the next upcoming race for countdown display."""

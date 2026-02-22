@@ -21,6 +21,11 @@ async def validate_unknown_venue(venue: str) -> dict:
         state: str — state code (NSW, VIC, QLD, SA, WA, TAS, NT, ACT)
         notes: str — any disambiguation info
     """
+    from punty.config import settings
+    if settings.mock_external:
+        logger.info(f"[MOCK] Venue validation for '{venue}' — auto-approving")
+        return {"valid": True, "canonical_name": venue, "state": "VIC", "notes": "mock"}
+
     try:
         import anthropic
         from punty.models.database import async_session

@@ -82,6 +82,10 @@ class TwitterDelivery:
         Returns:
             Dict with post status and tweet ID
         """
+        if settings.mock_external:
+            logger.info(f"[MOCK] Would tweet content {content_id}")
+            return {"status": "mock", "tweet_id": f"mock_{content_id}"}
+
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 
@@ -162,6 +166,10 @@ class TwitterDelivery:
         Returns:
             Dict with thread status and tweet IDs
         """
+        if settings.mock_external:
+            logger.info(f"[MOCK] Would tweet thread for content {content_id}")
+            return {"status": "mock", "tweet_count": 1, "tweet_ids": [f"mock_{content_id}"]}
+
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 
@@ -304,6 +312,10 @@ class TwitterDelivery:
         Returns:
             Dict with post status and tweet ID
         """
+        if settings.mock_external:
+            logger.info(f"[MOCK] Would post long-form content {content_id}")
+            return {"status": "mock", "tweet_id": f"mock_{content_id}", "length": 0}
+
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 

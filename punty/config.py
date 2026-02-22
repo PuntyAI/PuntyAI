@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
     disable_background: bool = False  # PUNTY_DISABLE_BACKGROUND - skip scheduler/monitor/telegram
+    mock_external: bool = False  # PUNTY_MOCK_EXTERNAL - mock AI generation & delivery (for staging)
+
+    @property
+    def is_staging(self) -> bool:
+        """Whether this instance is running in staging mode."""
+        return self.mock_external
 
     # OpenAI (no prefix - standard env var)
     openai_api_key: str = ""

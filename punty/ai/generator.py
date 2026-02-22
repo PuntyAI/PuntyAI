@@ -74,7 +74,12 @@ class ContentGenerator:
 
     def __init__(self, db: AsyncSession, model: str = "gpt-5.2"):
         self.db = db
-        self.ai_client = AIClient(model=model)
+        from punty.config import settings as app_settings
+        if app_settings.mock_external:
+            from punty.ai.mock_client import MockAIClient
+            self.ai_client = MockAIClient()
+        else:
+            self.ai_client = AIClient(model=model)
         self.context_builder = ContextBuilder(db)
         self._openai_key_loaded = False
 

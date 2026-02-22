@@ -56,6 +56,11 @@ class FacebookDelivery:
         Returns:
             Dict with post status and Facebook post ID
         """
+        from punty.config import settings
+        if settings.mock_external:
+            logger.info(f"[MOCK] Would post to Facebook: {content_id}")
+            return {"status": "mock", "post_id": f"mock_{content_id}"}
+
         from punty.models.content import Content, ContentStatus
         from punty.models.meeting import Meeting
 

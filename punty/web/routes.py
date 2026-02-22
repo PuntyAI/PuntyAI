@@ -48,6 +48,9 @@ def _melb_iso(dt):
 templates.env.filters["melb"] = _melb
 templates.env.filters["melb_iso"] = _melb_iso
 
+from punty.config import settings as _app_settings
+templates.env.globals["is_staging"] = _app_settings.is_staging
+
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):

@@ -236,6 +236,12 @@
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen font-body">
+    {% if is_staging %}
+    <div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#ff6b35,#e91e8c);color:white;text-align:center;padding:4px 0;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;">
+      STAGING ENVIRONMENT
+    </div>
+    <div style="height:26px;"></div>
+    {% endif %}
     <div class="scanlines"></div>
 
     <!-- Header -->

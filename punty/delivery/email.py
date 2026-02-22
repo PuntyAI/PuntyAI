@@ -22,6 +22,11 @@ async def send_email(
 
     Returns dict with status and any error message.
     """
+    from punty.config import settings as app_settings
+    if app_settings.mock_external:
+        logger.info(f"[MOCK] Would email {to_email}: {subject}")
+        return {"status": "mock"}
+
     from punty.models.database import async_session
     from punty.models.settings import AppSettings
     from sqlalchemy import select

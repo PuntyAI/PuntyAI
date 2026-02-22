@@ -87,6 +87,15 @@ jobs:
               exit 1
             fi
             echo "Staging deploy successful ($(git rev-parse --short HEAD))"
+            # Auto-seed staging DB from production if empty
+            ROWS=$(sqlite3 /opt/puntyai-staging/data/punty.db "SELECT COUNT(*) FROM meetings" 2>/dev/null || echo "0")
+            if [ "$ROWS" = "0" ]; then
+              cd /opt/puntyai && source venv/bin/activate && python scripts/seed_staging.py
+              systemctl restart puntyai-staging
+              sleep 3
+              curl -sf http://127.0.0.1:8001/health || exit 1
+              echo "Seeded staging DB from production"
+            fi
 
   deploy-production:
     needs: [unit-test, deploy-staging]
