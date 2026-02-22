@@ -2463,19 +2463,22 @@ class TestTrackStatsFallback:
 
     def test_track_dist_preferred_over_track_stats(self):
         runner = _make_runner(
-            track_dist_stats="8: 4-2-1",  # 50% win rate at track+distance
+            track_dist_stats="8: 6-1-0",  # 75% win rate at track+distance
+            track_stats="8: 2-1-1",       # 25% win rate at track overall
             last_five="11111",
         )
         score_with_td = _form_rating(runner, "Good 4", 0.10)
 
         runner2 = _make_runner(
-            track_stats="8: 4-2-1",  # Same stats but only track (no distance)
+            track_stats="8: 6-1-0",  # Same strong stats but only in track_stats
             last_five="11111",
         )
         score_ts_only = _form_rating(runner2, "Good 4", 0.10)
 
-        # track_dist_stats gets 1.5x weight, track_stats only 0.8x
-        # So the runner with track_dist_stats should score higher
+        # Both runners have strong stats available.
+        # Runner 1 has them in track_dist_stats (1.5x weight) which should
+        # outweigh the weaker track_stats. Runner 2 has them only in
+        # track_stats (0.8x weight).
         assert score_with_td > score_ts_only
 
     def test_no_track_stats_either(self):
