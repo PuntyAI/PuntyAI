@@ -332,6 +332,17 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
         if not odds or odds <= 1.0:
             continue
 
+        # Guard against AI-hallucinated place odds (HK races have no fixed place market)
+        # Place odds should be roughly (win-1)/3+1; if way off, use estimate
+        if place_odds:
+            estimated = _estimate_place_odds(odds)
+            if place_odds > estimated * 3:
+                logger.warning(
+                    "Hallucinated place odds: %s win=$%.1f place=$%.1f → $%.2f",
+                    r.get("horse_name", "?"), odds, place_odds, estimated,
+                )
+                place_odds = estimated
+
         win_prob = r.get("_win_prob_raw", 0)
         place_prob = r.get("_place_prob_raw", 0)
         value_rating = r.get("punty_value_rating", 1.0)
