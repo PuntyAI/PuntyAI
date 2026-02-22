@@ -536,11 +536,11 @@ class HKJCTrackInfoScraper:
                     const allText = body.innerText || '';
                     result.raw_text = allText.substring(0, 3000);
 
-                    // Temperature: "Temperature\n22.3°C"
+                    // Temperature: "Temperature 22.3°C"
                     const tempMatch = allText.match(/Temperature\\s*\\n?\\s*(\\d+\\.?\\d*)\\s*°\\s*C/i);
                     if (tempMatch) result.weather_temp = parseFloat(tempMatch[1]);
 
-                    // Humidity: "Relative Humidity\n84%"
+                    // Humidity: "Relative Humidity 84%"
                     const humidMatch = allText.match(/(?:Relative\\s+)?Humidity\\s*\\n?\\s*(\\d{1,3})\\s*%/i);
                     if (humidMatch) result.weather_humidity = parseInt(humidMatch[1]);
 
@@ -548,15 +548,15 @@ class HKJCTrackInfoScraper:
                     const goingMatch = allText.match(/Going\\s+(Good to Firm|Good to Yielding|Good|Firm|Yielding to Soft|Yielding|Soft|Heavy|Wet Fast|Fast)/i);
                     if (goingMatch) result.track_condition = goingMatch[1];
 
-                    // Penetrometer: "Penetrometer Reading\n2.72"
+                    // Penetrometer: "Penetrometer Reading 2.72"
                     const penMatch = allText.match(/Penetrometer\\s+Reading\\s*\\n?\\s*(\\d+\\.?\\d*)/i);
                     if (penMatch) result.penetrometer = parseFloat(penMatch[1]);
 
-                    // Rainfall: "Total\n0mm"
+                    // Rainfall: "Total 0mm"
                     const rainMatch = allText.match(/Rainfall[\\s\\S]*?Total\\s*\\n?\\s*(\\d+\\.?\\d*)\\s*mm/i);
                     if (rainMatch) result.rainfall = parseFloat(rainMatch[1]);
 
-                    // Soil moisture: "Soil Moisture\n16.8%"
+                    // Soil moisture: "Soil Moisture 16.8%"
                     const soilMatch = allText.match(/Soil\\s+Moisture\\s*\\n?\\s*(\\d+\\.?\\d*)\\s*%/i);
                     if (soilMatch) result.soil_moisture = parseFloat(soilMatch[1]);
 
