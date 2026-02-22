@@ -536,16 +536,30 @@ class ResultsMonitor:
         if meeting_id not in self.processed_races:
             self.processed_races[meeting_id] = set()
 
-        scraper = RacingComScraper()
-        try:
-            status_data = await scraper.check_race_statuses(meeting.venue, meeting.date)
-            statuses = status_data["statuses"]
-            scraped_tc = status_data.get("track_condition")
-        except Exception as e:
-            logger.error(f"Failed to check statuses for {meeting.venue}: {e}")
-            return
-        finally:
-            await scraper.close()
+        from punty.venues import is_international_venue
+
+        if is_international_venue(meeting.venue):
+            # Use TAB Playwright for international venues (HK, etc.)
+            from punty.scrapers.tab_playwright import TabPlaywrightScraper
+            try:
+                tab_pw = TabPlaywrightScraper()
+                status_data = await tab_pw.scrape_race_statuses(meeting.venue, meeting.date)
+                statuses = status_data["statuses"]
+                scraped_tc = status_data.get("track_condition")
+            except Exception as e:
+                logger.error(f"Failed to check TAB statuses for {meeting.venue}: {e}")
+                return
+        else:
+            scraper = RacingComScraper()
+            try:
+                status_data = await scraper.check_race_statuses(meeting.venue, meeting.date)
+                statuses = status_data["statuses"]
+                scraped_tc = status_data.get("track_condition")
+            except Exception as e:
+                logger.error(f"Failed to check statuses for {meeting.venue}: {e}")
+                return
+            finally:
+                await scraper.close()
 
         # ── Abandonment detection ───────────────────────────────────────
         # If ALL races are "Abandoned", post alert, void picks, deselect meeting.
@@ -723,13 +737,20 @@ class ResultsMonitor:
                     # Random delay before scraping detailed results
                     await asyncio.sleep(random.uniform(2, 6))
 
-                    scraper2 = RacingComScraper()
-                    try:
-                        results_data = await scraper2.scrape_race_result(
+                    if is_international_venue(meeting.venue):
+                        from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                        tab_pw = TabPlaywrightScraper()
+                        results_data = await tab_pw.scrape_race_result(
                             meeting.venue, meeting.date, race_num
                         )
-                    finally:
-                        await scraper2.close()
+                    else:
+                        scraper2 = RacingComScraper()
+                        try:
+                            results_data = await scraper2.scrape_race_result(
+                                meeting.venue, meeting.date, race_num
+                            )
+                        finally:
+                            await scraper2.close()
 
                     await upsert_race_results(db, meeting_id, race_num, results_data)
 
@@ -1252,7 +1273,8 @@ class ResultsMonitor:
         """
         import json as _json
         from punty.models.meeting import Race
-        from punty.scrapers.racing_com import RacingComScraper
+
+        from punty.venues import is_international_venue, guess_state
 
         race_id = f"{meeting.id}-r{race_num}"
         race = await db.get(Race, race_id)
@@ -1262,6 +1284,29 @@ class ResultsMonitor:
         # Skip if we already have sectional data
         if race.sectional_times:
             return
+
+        if is_international_venue(meeting.venue):
+            # Use HKJC sectional scraper for Hong Kong
+            if guess_state(meeting.venue) == "HK":
+                try:
+                    from punty.scrapers.tab_playwright import HKJCSectionalScraper
+                    hkjc = HKJCSectionalScraper()
+                    sectional_data = await hkjc.scrape_sectional_times(meeting.date, race_num)
+                    if sectional_data and sectional_data.get("horses"):
+                        race.sectional_times = _json.dumps(sectional_data)
+                        race.has_sectionals = True
+                        await db.flush()
+                        logger.info(f"HKJC sectionals stored for {meeting.venue} R{race_num}")
+                    else:
+                        race.has_sectionals = False
+                        await db.flush()
+                except Exception as e:
+                    logger.debug(f"HKJC sectionals failed for {meeting.venue} R{race_num}: {e}")
+            else:
+                logger.debug(f"No sectional source for international venue {meeting.venue}")
+            return
+
+        from punty.scrapers.racing_com import RacingComScraper
 
         scraper = RacingComScraper()
         try:
@@ -1436,14 +1481,27 @@ class ResultsMonitor:
         )
 
         try:
-            scraper = RacingComScraper()
+            from punty.venues import is_international_venue
+            from punty.scrapers.racing_com import RacingComScraper
+            use_tab = is_international_venue(meeting.venue)
+
+            if use_tab:
+                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                tab_pw = TabPlaywrightScraper()
+
+            scraper = None if use_tab else RacingComScraper()
             try:
                 updated = 0
                 for rn in missing_races:
                     try:
-                        results_data = await scraper.scrape_race_result(
-                            meeting.venue, meeting.date, rn
-                        )
+                        if use_tab:
+                            results_data = await tab_pw.scrape_race_result(
+                                meeting.venue, meeting.date, rn
+                            )
+                        else:
+                            results_data = await scraper.scrape_race_result(
+                                meeting.venue, meeting.date, rn
+                            )
                     except Exception as e:
                         logger.debug(f"Place dividend backfill scrape failed for {meeting.venue} R{rn}: {e}")
                         continue
@@ -1487,7 +1545,8 @@ class ResultsMonitor:
                     await db.flush()
                     logger.info(f"Backfilled {updated} place dividend(s) for {meeting.venue}")
             finally:
-                await scraper.close()
+                if scraper:
+                    await scraper.close()
         except Exception as e:
             logger.debug(f"Place dividend backfill failed for {meeting.venue}: {e}")
 

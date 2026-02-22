@@ -171,26 +171,29 @@ class ContextBuilder:
                             })
                             break
 
-        # Calculate sequence leg confidence across races
-        context["sequence_leg_analysis"] = self._calculate_sequence_legs(context["races"])
+        # Skip sequences/exotics for international venues (no quaddie/big6 at HK etc.)
+        from punty.venues import is_international_venue
+        if not is_international_venue(meeting.venue):
+            # Calculate sequence leg confidence across races
+            context["sequence_leg_analysis"] = self._calculate_sequence_legs(context["races"])
 
-        # Pre-build sequence lanes (Skinny/Balanced/Wide) from probability data
-        try:
-            from punty.context.pre_sequences import build_all_sequence_lanes
-            total_races = len(context["races"])
-            seq_legs = context.get("sequence_leg_analysis", [])
-            context["pre_built_sequences"] = build_all_sequence_lanes(
-                total_races, seq_legs, context["races"],
-            )
-        except Exception as e:
-            logger.debug(f"Pre-sequence lane construction failed: {e}")
+            # Pre-build sequence lanes (Skinny/Balanced/Wide) from probability data
+            try:
+                from punty.context.pre_sequences import build_all_sequence_lanes
+                total_races = len(context["races"])
+                seq_legs = context.get("sequence_leg_analysis", [])
+                context["pre_built_sequences"] = build_all_sequence_lanes(
+                    total_races, seq_legs, context["races"],
+                )
+            except Exception as e:
+                logger.debug(f"Pre-sequence lane construction failed: {e}")
 
-        # Pre-calculate Big 3 Multi recommendation
-        try:
-            from punty.context.pre_big3 import calculate_pre_big3
-            context["pre_big3"] = calculate_pre_big3(context["races"])
-        except Exception as e:
-            logger.debug(f"Pre-Big3 calculation failed: {e}")
+            # Pre-calculate Big 3 Multi recommendation
+            try:
+                from punty.context.pre_big3 import calculate_pre_big3
+                context["pre_big3"] = calculate_pre_big3(context["races"])
+            except Exception as e:
+                logger.debug(f"Pre-Big3 calculation failed: {e}")
 
         return context
 

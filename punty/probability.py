@@ -183,6 +183,8 @@ def _context_venue_type(venue: str, state: str) -> str:
     if v in _METRO_SA or v in _METRO_WA:
         return "metro_other"
     s = (state or "").upper().strip()
+    if s in ("HK", "SGP", "NZ", "JP", "UK"):
+        return "international"
     if s in ("VIC", "NSW", "QLD"):
         return "provincial"
     return "country"
@@ -2137,40 +2139,12 @@ def _condition_matches(pattern_cond: str, normalized_cond: str) -> bool:
     return False
 
 
-# Inline venue-to-state mapping (subset of assessment.py)
-_VENUE_STATE = {
-    "flemington": "VIC", "caulfield": "VIC", "moonee valley": "VIC",
-    "sandown": "VIC", "pakenham": "VIC", "cranbourne": "VIC",
-    "mornington": "VIC", "ballarat": "VIC", "bendigo": "VIC",
-    "geelong": "VIC", "sale": "VIC", "warrnambool": "VIC",
-    "kilmore": "VIC", "wangaratta": "VIC",
-    "randwick": "NSW", "rosehill": "NSW", "canterbury": "NSW",
-    "warwick farm": "NSW", "newcastle": "NSW", "kembla grange": "NSW",
-    "gosford": "NSW", "wyong": "NSW", "hawkesbury": "NSW",
-    "tamworth": "NSW", "taree": "NSW", "nowra": "NSW",
-    "eagle farm": "QLD", "doomben": "QLD", "gold coast": "QLD",
-    "sunshine coast": "QLD", "toowoomba": "QLD", "ipswich": "QLD",
-    "mackay": "QLD", "rockhampton": "QLD", "cairns": "QLD",
-    "morphettville": "SA", "murray bridge": "SA", "gawler": "SA",
-    "port augusta": "SA", "port lincoln": "SA",
-    "ascot": "WA", "belmont": "WA", "bunbury": "WA", "albany": "WA",
-    "hobart": "TAS", "launceston": "TAS", "devonport": "TAS",
-    "fannie bay": "NT", "darwin": "NT", "alice springs": "NT",
-}
-
-
 def _get_state_for_venue(venue: str) -> str:
-    """Look up state from venue name."""
-    if not venue:
-        return ""
-    v = venue.lower().strip()
-    if v in _VENUE_STATE:
-        return _VENUE_STATE[v]
-    # Partial match
-    for known, state in _VENUE_STATE.items():
-        if known in v or v in known:
-            return state
-    return ""
+    """Look up state from venue name using central venue registry."""
+    if not venue or not venue.strip():
+        return "VIC"
+    from punty.venues import guess_state
+    return guess_state(venue)
 
 
 # ──────────────────────────────────────────────

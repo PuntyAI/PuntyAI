@@ -1523,8 +1523,13 @@ class TestDeepLearningHelpers:
         assert _get_state_for_venue("Hobart") == "TAS"
 
     def test_state_for_unknown_venue(self):
-        assert _get_state_for_venue("Timbuktu") == ""
-        assert _get_state_for_venue("") == ""
+        # Now delegates to venues.guess_state() which defaults to "VIC"
+        assert _get_state_for_venue("Timbuktu") == "VIC"
+        assert _get_state_for_venue("") == "VIC"
+
+    def test_state_for_hk_venue(self):
+        assert _get_state_for_venue("Sha Tin") == "HK"
+        assert _get_state_for_venue("Happy Valley") == "HK"
 
 
 class TestCalculateWithDLPatterns:

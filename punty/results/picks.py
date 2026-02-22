@@ -220,25 +220,38 @@ async def _settle_picks_for_race_impl(
     race_result = await db.execute(select(Race).where(Race.id == race_id))
     race = race_result.scalar_one_or_none()
 
-    # Determine number of paying places based on field size (TAB NTD rules):
+    # Determine number of paying places based on field size.
+    # Australian TAB NTD rules:
     # - 8+ starters at final scratching time → 3 places paid
     # - 5-7 starters → 2 places paid (No Third Dividend / NTD)
     # - ≤4 starters → no place betting
     # Key: if 8+ at final scratchings but late scratches reduce to 5-7, 3 places STILL apply.
     # race.field_size = original field count from scrape time (before late scratchings).
     # len(active_runners) = post-late-scratching count (runners with results).
+    #
+    # Hong Kong (HKJC): Always 3 places paid regardless of field size.
+    from punty.venues import is_international_venue
+    meeting_id = race_id.rsplit("-r", 1)[0]  # e.g. "sha-tin-2026-02-22-r1" → "sha-tin-2026-02-22"
+    # Extract venue from meeting_id (everything before the date portion)
+    import re as _re
+    _venue_match = _re.match(r"^(.+?)-\d{4}-\d{2}-\d{2}$", meeting_id)
+    venue_from_id = _venue_match.group(1).replace("-", " ") if _venue_match else ""
+
     original_field = (race.field_size if race and race.field_size else None) or len(active_runners)
     post_scratch_field = len(active_runners)
 
-    # Use the HIGHER of original field and post-scratch field for num_places.
-    # If original field was 8+ but late scratches reduced to 5-7, TAB still pays 3 places.
-    effective_field = max(original_field, post_scratch_field)
-    if effective_field <= 4:
-        num_places = 0  # No place betting
-    elif effective_field <= 7:
-        num_places = 2  # NTD — 1st and 2nd only
+    if is_international_venue(venue_from_id):
+        # HK/international: always 3 places
+        num_places = 3
     else:
-        num_places = 3  # 1st, 2nd, and 3rd
+        # Australian TAB NTD rules
+        effective_field = max(original_field, post_scratch_field)
+        if effective_field <= 4:
+            num_places = 0  # No place betting
+        elif effective_field <= 7:
+            num_places = 2  # NTD — 1st and 2nd only
+        else:
+            num_places = 3  # 1st, 2nd, and 3rd
 
     field_size = post_scratch_field  # for logging
 

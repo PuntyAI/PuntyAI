@@ -1448,9 +1448,11 @@ class ContentGenerator:
                 stats_str = f" | 1st-up record: {f['stats']}" if f.get("stats") else ""
                 parts.append(f"- Race {f['race']}: {f['horse']} — {f['days']} days off (${f['odds']}){stats_str}")
 
-        # Sequence lanes (quaddie, early quaddie, big 6)
+        # Sequence lanes (quaddie, early quaddie, big 6) — AU only
+        from punty.venues import is_international_venue
         total_races = summary.get("total_races", len(races))
-        sequences = self._get_sequence_lanes(total_races)
+        _skip_sequences = is_international_venue(meeting.get("venue", ""))
+        sequences = {} if _skip_sequences else self._get_sequence_lanes(total_races)
         if sequences:
             parts.append("\n## SEQUENCE LANES (use these exact race ranges)")
             eq = sequences.get("early_quad")

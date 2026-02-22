@@ -196,3 +196,23 @@ def is_known_venue(venue: str) -> bool:
 def get_all_venues() -> dict[str, str]:
     """Return dict of all known venues: {venue_name: state}."""
     return dict(_VENUE_TO_STATE)
+
+
+# TAB venue mnemonics for international venues
+# Format: normalized_venue -> (mnemonic, jurisdiction, url_slug)
+TAB_VENUE_MNEMONICS: dict[str, tuple[str, str, str]] = {
+    "sha tin": ("SHA", "HK", "SHA-TIN"),
+    "happy valley": ("HV", "HK", "HAPPY-VALLEY"),
+}
+
+
+def get_tab_mnemonic(venue: str) -> tuple[str, str, str] | None:
+    """Get TAB (mnemonic, jurisdiction, url_slug) for a venue, or None if domestic."""
+    v = normalize_venue(venue)
+    return TAB_VENUE_MNEMONICS.get(v)
+
+
+def is_international_venue(venue: str) -> bool:
+    """Check if venue is international (not Australian)."""
+    state = guess_state(venue)
+    return state in ("HK", "SGP", "NZ", "JP", "UK")

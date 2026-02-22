@@ -384,6 +384,28 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             logger.warning(f"Betfair odds failed for {venue}: {e}")
             errors.append(f"betfair: {e}")
 
+        # Step 5: TAB Playwright odds for international venues (HK, etc.)
+        from punty.venues import get_tab_mnemonic
+        if get_tab_mnemonic(venue):
+            try:
+                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                tab_pw = TabPlaywrightScraper()
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting_id)
+                )
+                tab_race_count = len(race_result.scalars().all())
+                tab_odds = await tab_pw.scrape_odds_for_meeting(
+                    venue, race_date, meeting_id, tab_race_count
+                )
+                if tab_odds:
+                    await _merge_tab_odds(db, meeting_id, tab_odds)
+                    logger.info(f"TAB Playwright odds: {len(tab_odds)} runners for {venue}")
+                else:
+                    logger.warning(f"TAB Playwright: no odds captured for {venue}")
+            except Exception as e:
+                logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
+                errors.append(f"tab_playwright: {e}")
+
         # Close PF scraper only if we own it
         if owns_pf and pf_scraper:
             await pf_scraper.close()
@@ -442,7 +464,10 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
     venue = meeting.venue
     race_date = meeting.date
     errors = []
-    total_steps = 5
+    # Check if this is an international venue (needs extra TAB Playwright step)
+    from punty.venues import get_tab_mnemonic
+    is_international = get_tab_mnemonic(venue) is not None
+    total_steps = 6 if is_international else 5
 
     # Acquire scrape lock
     from punty.scrapers.playwright_base import _scrape_lock, _current_scrape
@@ -597,6 +622,32 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             errors.append(f"betfair: {e}")
             yield {"step": 5, "total": total_steps,
                    "label": f"Betfair failed: {e}", "status": "error"}
+
+        # Step 6: TAB Playwright odds for international venues (HK, etc.)
+        if is_international:
+            yield {"step": 5, "total": total_steps, "label": "Scraping TAB international odds...", "status": "running"}
+            try:
+                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                tab_pw = TabPlaywrightScraper()
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting_id)
+                )
+                tab_race_count = len(race_result.scalars().all())
+                tab_odds = await tab_pw.scrape_odds_for_meeting(
+                    venue, race_date, meeting_id, tab_race_count
+                )
+                if tab_odds:
+                    await _merge_tab_odds(db, meeting_id, tab_odds)
+                    yield {"step": 6, "total": total_steps,
+                           "label": f"TAB international odds: {len(tab_odds)} runners", "status": "done"}
+                else:
+                    yield {"step": 6, "total": total_steps,
+                           "label": "TAB international: no odds captured", "status": "error"}
+            except Exception as e:
+                logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
+                errors.append(f"tab_playwright: {e}")
+                yield {"step": 6, "total": total_steps,
+                       "label": f"TAB international failed: {e}", "status": "error"}
 
         # Close scraper
         if pf_scraper:
@@ -1352,6 +1403,104 @@ def _derive_class_stats(runner: "Runner", form_history: list, race_class: str) -
         runner.class_stats = _json.dumps({
             "starts": starts, "wins": wins, "seconds": seconds, "thirds": thirds
         })
+
+
+async def _merge_tab_odds(db: AsyncSession, meeting_id: str, odds_data: list[dict]) -> None:
+    """Merge TAB Playwright odds into existing runner records.
+
+    Matches by saddlecloth number first (reliable for HK), then fuzzy horse name.
+    Sets current_odds, opening_odds, place_odds, odds_tab.
+    """
+    import re
+
+    MAX_VALID_ODDS = 501.0
+
+    def _normalize(name: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", name.strip().lower())
+
+    if not odds_data:
+        return
+
+    matched = 0
+    filled = 0
+
+    for item in odds_data:
+        race_num = item.get("race_number")
+        horse_name = item.get("horse_name", "")
+        saddlecloth = item.get("saddlecloth")
+        win_odds = item.get("current_odds")
+        place_odds = item.get("place_odds")
+        opening_odds = item.get("opening_odds")
+
+        if not race_num:
+            continue
+
+        race_id = f"{meeting_id}-r{race_num}"
+
+        runner = None
+
+        # Strategy 1: Match by saddlecloth (most reliable for HK)
+        if saddlecloth:
+            result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.saddlecloth == saddlecloth,
+                ).limit(1)
+            )
+            runner = result.scalar_one_or_none()
+
+        # Strategy 2: Exact horse name match
+        if not runner and horse_name:
+            result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.horse_name == horse_name,
+                ).limit(1)
+            )
+            runner = result.scalar_one_or_none()
+
+        # Strategy 3: Fuzzy horse name match
+        if not runner and horse_name:
+            norm_tab = _normalize(horse_name)
+            result = await db.execute(
+                select(Runner).where(Runner.race_id == race_id)
+            )
+            candidates = result.scalars().all()
+            for c in candidates:
+                if _normalize(c.horse_name) == norm_tab:
+                    runner = c
+                    break
+
+        if not runner:
+            continue
+
+        matched += 1
+
+        # Apply odds (with MAX_VALID_ODDS guard)
+        if win_odds and 1.0 < win_odds <= MAX_VALID_ODDS:
+            runner.odds_tab = win_odds
+            if not runner.current_odds or runner.current_odds <= 1.0:
+                runner.current_odds = win_odds
+                filled += 1
+            # For HK venues, TAB is often the only source — always set current_odds
+            if not runner.current_odds:
+                runner.current_odds = win_odds
+
+        if opening_odds and 1.0 < opening_odds <= MAX_VALID_ODDS:
+            if not runner.opening_odds:
+                runner.opening_odds = opening_odds
+
+        if place_odds and 1.0 < place_odds <= MAX_VALID_ODDS:
+            runner.place_odds = place_odds
+
+        if item.get("scratched"):
+            runner.scratched = True
+
+    await db.flush()
+    logger.info(
+        f"TAB odds merge: {matched}/{len(odds_data)} matched, "
+        f"{filled} filled current_odds"
+    )
 
 
 async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) -> None:
