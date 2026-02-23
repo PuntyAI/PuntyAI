@@ -51,6 +51,8 @@ _BET_LINE = re.compile(
 )
 # "Bet: Exotics only" — no stake
 _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
+# "Bet: No Bet (Tracked)" — tracked pick, displayed but not staked
+_BET_TRACKED = re.compile(r"Bet:\s*No\s*Bet\s*\(Tracked\)", re.IGNORECASE)
 
 # --- Confidence & Probability ---
 _CONFIDENCE = re.compile(
@@ -305,8 +307,16 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
         for m in _SELECTION.finditer(section):
             # Look for bet line and metadata in the text after this match
             after_text = section[m.end():m.end() + 300]
+            tracked_only = False
+            # Check tracked first — _BET_LINE's 300-char window can
+            # reach the next pick's "Bet: $X" line and match the wrong one.
+            tracked_m = _BET_TRACKED.search(after_text)
             bet_m = _BET_LINE.search(after_text)
-            if bet_m:
+            if tracked_m and (not bet_m or tracked_m.start() < bet_m.start()):
+                bet_stake = 0.0
+                bet_type = "place"  # preserve intended type for accuracy tracking
+                tracked_only = True
+            elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
             elif _BET_EXOTICS_ONLY.search(after_text):
@@ -332,7 +342,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                     f"Estimating place as (win-1)/3+1 = ${round((win_odds - 1) / 3 + 1, 2)}"
                 )
                 place_odds = round((win_odds - 1) / 3 + 1, 2)
-            picks.append({
+            pick_dict = {
                 "id": next_id(),
                 "content_id": content_id,
                 "meeting_id": meeting_id,
@@ -357,14 +367,23 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "confidence": confidence,
                 "win_probability": probability,
                 "value_rating": value_rating,
-            })
+            }
+            if tracked_only:
+                pick_dict["tracked_only"] = True
+            picks.append(pick_dict)
 
         # Roughie (rank 4)
         roughie_m = _ROUGHIE.search(section)
         if roughie_m:
             after_text = section[roughie_m.end():roughie_m.end() + 300]
+            tracked_only = False
+            tracked_m = _BET_TRACKED.search(after_text)
             bet_m = _BET_LINE.search(after_text)
-            if bet_m:
+            if tracked_m and (not bet_m or tracked_m.start() < bet_m.start()):
+                bet_stake = 0.0
+                bet_type = "place"
+                tracked_only = True
+            elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
             elif _BET_EXOTICS_ONLY.search(after_text):
@@ -389,7 +408,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                     f"Estimating place as (win-1)/3+1 = ${round((win_odds - 1) / 3 + 1, 2)}"
                 )
                 place_odds = round((win_odds - 1) / 3 + 1, 2)
-            picks.append({
+            roughie_dict = {
                 "id": next_id(),
                 "content_id": content_id,
                 "meeting_id": meeting_id,
@@ -414,7 +433,10 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 "confidence": confidence,
                 "win_probability": probability,
                 "value_rating": value_rating,
-            })
+            }
+            if tracked_only:
+                roughie_dict["tracked_only"] = True
+            picks.append(roughie_dict)
 
         # Punty's Pick — mark the highlighted best-bet selection(s) or create exotic pick
         puntys_pick_m = _PUNTYS_PICK.search(section)

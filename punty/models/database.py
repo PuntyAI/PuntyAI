@@ -253,6 +253,8 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN pp_pnl FLOAT",
             # Expert tips from racing.com tipsters
             "ALTER TABLE races ADD COLUMN expert_tips TEXT",
+            # Edge-gated tracking: pick displayed but not staked
+            "ALTER TABLE picks ADD COLUMN tracked_only BOOLEAN DEFAULT 0",
         ]:
             try:
                 await conn.execute(_text(col))

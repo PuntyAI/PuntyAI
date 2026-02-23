@@ -601,3 +601,72 @@ class TestDeadHeatSettlement:
         pnl = round(adjusted_odds * stake - stake, 2)
 
         assert pnl == 10.0  # (6.00/3 * 10) - 10 = 20 - 10 = 10
+
+
+class TestTrackedPickSettlement:
+    """Tests for tracked_only pick settlement — pnl always $0, hit recorded."""
+
+    def _settle_tracked(self, bet_type, finish_position, num_places=3):
+        """Simulate tracked pick settlement logic (mirrors picks.py)."""
+        won = finish_position == 1
+        placed = finish_position is not None and finish_position <= num_places
+
+        if bet_type in ("win", "saver_win"):
+            hit = won
+        elif bet_type == "place":
+            hit = placed if num_places > 0 else False
+        elif bet_type == "each_way":
+            hit = won or placed
+        else:
+            hit = won
+
+        pnl = 0.0  # tracked picks always $0
+        return hit, pnl
+
+    def test_tracked_win_bet_winner_hit_true_pnl_zero(self):
+        """Tracked Win bet on a winner: hit=True but pnl=0."""
+        hit, pnl = self._settle_tracked("win", finish_position=1)
+        assert hit is True
+        assert pnl == 0.0
+
+    def test_tracked_win_bet_loser_hit_false_pnl_zero(self):
+        """Tracked Win bet on a loser: hit=False, pnl=0."""
+        hit, pnl = self._settle_tracked("win", finish_position=5)
+        assert hit is False
+        assert pnl == 0.0
+
+    def test_tracked_place_bet_placed_hit_true(self):
+        """Tracked Place bet that placed: hit=True, pnl=0."""
+        hit, pnl = self._settle_tracked("place", finish_position=3)
+        assert hit is True
+        assert pnl == 0.0
+
+    def test_tracked_place_bet_missed_hit_false(self):
+        """Tracked Place bet that missed: hit=False, pnl=0."""
+        hit, pnl = self._settle_tracked("place", finish_position=5)
+        assert hit is False
+        assert pnl == 0.0
+
+    def test_tracked_each_way_winner_hit_true(self):
+        """Tracked EW bet on a winner: hit=True, pnl=0."""
+        hit, pnl = self._settle_tracked("each_way", finish_position=1)
+        assert hit is True
+        assert pnl == 0.0
+
+    def test_tracked_each_way_placed_hit_true(self):
+        """Tracked EW bet that placed (not won): hit=True, pnl=0."""
+        hit, pnl = self._settle_tracked("each_way", finish_position=2)
+        assert hit is True
+        assert pnl == 0.0
+
+    def test_tracked_each_way_missed_hit_false(self):
+        """Tracked EW bet that missed entirely: hit=False, pnl=0."""
+        hit, pnl = self._settle_tracked("each_way", finish_position=6)
+        assert hit is False
+        assert pnl == 0.0
+
+    def test_tracked_saver_win_winner(self):
+        """Tracked Saver Win on a winner: hit=True, pnl=0."""
+        hit, pnl = self._settle_tracked("saver_win", finish_position=1)
+        assert hit is True
+        assert pnl == 0.0

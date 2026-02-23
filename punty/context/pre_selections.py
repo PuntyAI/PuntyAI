@@ -12,10 +12,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Pool constraints
-RACE_POOL = 20.0       # $20 per race
+# Pool constraints — 3-tier confidence staking
+POOL_HIGH = 25.0       # strong edge detected (was 35, reduced to control total outlay)
+POOL_STANDARD = 20.0   # normal
+POOL_LOW = 12.0        # marginal edge only
+RACE_POOL = POOL_STANDARD  # default (for backward compat)
 MIN_STAKE = 1.0        # minimum bet
 STAKE_STEP = 0.50      # round to nearest 50c
+SINGLE_PICK_CAP = 15.0 # max stake when only 1 pick passes edge gate
 
 # Bet type thresholds (defaults — can be overridden by tuned thresholds)
 WIN_MIN_PROB = 0.18          # 18% win prob minimum for Win bet
@@ -72,6 +76,7 @@ class RecommendedPick:
     place_value_rating: float   # place value
     expected_return: float      # estimated return on this bet
     is_roughie: bool = False
+    tracked_only: bool = False  # True = displayed but not staked (edge gate failed)
 
 
 @dataclass
@@ -283,11 +288,11 @@ def calculate_pre_selections(
     # Cap win-exposed bets to avoid spreading win risk across too many horses
     win_capped = _cap_win_exposure(picks)
 
-    # Allocate stakes from pool — watch_only gets half pool instead of zero
-    if classification.watch_only:
-        _allocate_stakes(picks, pool * 0.5)
-    else:
-        _allocate_stakes(picks, pool)
+    # Determine race pool using 3-tier confidence system
+    race_pool = _determine_race_pool(picks, classification)
+
+    # Allocate stakes with edge gating
+    _allocate_stakes(picks, race_pool)
 
     # Select recommended exotic
     anchor_odds = picks[0].odds if picks else 0.0
@@ -417,17 +422,16 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     # Place ROI by band: <$2 = +24%, $2-$4 = +20%, $4-$6 = +35%, $6-$10 = -0.3%
     # EW collect rate: $2.40-$3 = 94%, $3-$4 = 62%
 
-    # Very short-priced favourites (<$1.80): Win or skip
-    # Place odds ≈ $1.10-$1.25 — a Place bet here is more worthless than Win.
-    # Small Win bet if value is there; otherwise minimal stake Win.
-    # Does NOT affect exotics or sequences — only the selection bet.
+    # Very short-priced favourites (<$1.80): Place (edge gate will likely track it)
+    # Place odds ≈ $1.10-$1.25 — neither Win nor Place is worth staking here.
+    # Set to Place so the edge gate can properly evaluate place_prob.
     if odds < 1.80 and not is_roughie:
-        return "Win"  # flagged for minimal stake in _allocate_stakes
+        return "Place"  # edge gate evaluates — likely tracked_only
 
-    # Short-priced favourites ($1.80-$2.00): Win preferred over Place
-    # At these odds, Place returns ~$1.25 — not worth it.
+    # Short-priced favourites ($1.80-$2.00): Place only
+    # Win ROI at these odds is -38.9% historically.
     if odds < 2.00 and not is_roughie:
-        return "Win"
+        return "Place"
 
     # $2.00-$2.40: Win is viable with value edge
     if odds < 2.40 and not is_roughie:
@@ -449,14 +453,12 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
         return "Place"
 
     # $3.00-$4.00: Dead zone for Win (-30.8% ROI)
-    # #1 gets Each Way (62% collect rate), #2 gets Place
+    # Require win_prob >= 0.30 AND value >= 1.10 for any win exposure
     if 3.0 <= odds < 4.0 and not is_roughie:
         if rank == 1:
-            if win_prob >= 0.25 and value >= 1.10:
-                return "Win"  # only with strong conviction
-            if win_prob >= t["each_way_min_prob"]:
-                return "Each Way"
-            return "Place"
+            if win_prob >= 0.30 and value >= 1.10:
+                return "Win"  # only with strong conviction + value overlay
+            return "Place"  # default Place in dead zone
         if rank == 2:
             if win_prob >= 0.30 and value >= 1.10:
                 return "Each Way"  # genuine hedge: decent conviction + value
@@ -647,11 +649,170 @@ def _cap_win_exposure(picks: list[RecommendedPick]) -> int:
     return downgraded
 
 
+def _determine_race_pool(
+    picks: list[RecommendedPick],
+    classification: Any = None,
+) -> float:
+    """Determine pool size based on edge confidence.
+
+    3-tier system replaces flat $20 and watch-only half-pool:
+    - HIGH ($35): Best pick has ev_win > 0.15 OR (place_prob > 0.50 AND place_value > 1.05)
+    - STANDARD ($20): Default — at least one pick would pass edge gate
+    - LOW ($12): Watch-only race OR only marginal edge detected
+
+    Args:
+        picks: Pre-computed picks (before staking, after bet type assignment).
+        classification: RaceClassification from bet_optimizer.
+
+    Returns:
+        Pool amount in dollars.
+    """
+    from punty.context.bet_optimizer import DOMINANT_EDGE, NO_EDGE
+
+    # Watch-only or no-edge → low pool
+    if classification:
+        if classification.watch_only or classification.no_bet:
+            return POOL_LOW
+        if classification.race_type == NO_EDGE:
+            return POOL_LOW
+
+    if not picks:
+        return POOL_LOW
+
+    # Check for HIGH confidence signals
+    best = picks[0]  # rank 1
+    ev_win = best.win_prob * best.odds - 1 if best.odds > 0 else -1
+    has_high_ev = ev_win > 0.15
+    has_strong_place = best.place_prob > 0.50 and best.place_value_rating > 1.05
+
+    # DOMINANT_EDGE classification also qualifies for high pool
+    is_dominant = classification and classification.race_type == DOMINANT_EDGE
+
+    if has_high_ev or has_strong_place or is_dominant:
+        return POOL_HIGH
+
+    # Check if multiple picks have positive edge (standard confidence)
+    positive_ev_count = sum(
+        1 for p in picks
+        if (p.win_prob * p.odds - 1) > 0 or
+           (p.place_prob * (p.place_odds or _estimate_place_odds(p.odds)) - 1) > 0
+    )
+
+    if positive_ev_count >= 2:
+        return POOL_STANDARD
+
+    # Only 1 pick with marginal edge → low pool
+    if positive_ev_count <= 1:
+        return POOL_LOW
+
+    return POOL_STANDARD
+
+
+def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -> bool:
+    """Check if a pick passes the edge gate (proven-profitable criteria).
+
+    Returns True if the pick should be staked, False if tracked-only.
+    Uses live edge profile when available (sample >= 50), otherwise hardcoded.
+    """
+    odds = pick.odds
+    bt = pick.bet_type
+    win_prob = pick.win_prob
+    place_prob = pick.place_prob
+    value = pick.value_rating
+    place_value = pick.place_value_rating
+
+    # Compute EV metrics for the negative-EV gate
+    place_odds_est = pick.place_odds or _estimate_place_odds(odds)
+    ev_win = win_prob * odds - 1
+    ev_place = place_prob * place_odds_est - 1
+
+    # Check live profile override: if live ROI for this bet_type+band is
+    # strongly negative (< -15%) with sufficient sample, reject
+    if live_profile:
+        bt_key = bt.lower().replace(" ", "_")
+        for label, lo, hi in _EDGE_ODDS_BANDS:
+            if lo <= odds < hi:
+                cell = live_profile.get((bt_key, label))
+                if cell and cell["bets"] >= 50:
+                    if cell["roi"] < -15.0:
+                        return False
+                break
+
+    # --- Proven-profitable staking criteria ---
+
+    # 1. Win/Saver at $4.00-$6.00 (sweet spot: +60.8% ROI)
+    if bt in ("Win", "Saver Win") and 4.0 <= odds <= 6.0:
+        return True
+
+    # 2. Win at $2.40-$3.00 with strong conviction (47% win rate band)
+    if bt in ("Win", "Saver Win") and 2.40 <= odds < 3.0 and win_prob >= 0.30:
+        return True
+
+    # 3. Place with sufficient prob and value
+    if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
+        return True
+
+    # 4. Each Way at $3.00-$6.00 with reasonable win probability
+    if bt == "Each Way" and 3.0 <= odds <= 6.0 and win_prob >= 0.20:
+        return True
+
+    # 5. Roughie Place at $8-$20 with strong place probability
+    if pick.is_roughie and bt == "Place" and 8.0 <= odds <= 20.0 and place_prob >= 0.35:
+        return True
+
+    # 6. Place at good odds ($2.50-$8) — our overall profit engine (+13.8% ROI)
+    if bt == "Place" and 2.5 <= odds <= 8.0 and place_prob >= 0.35:
+        return True
+
+    # 7. Win at $2.00-$2.40 with genuine conviction
+    if bt in ("Win", "Saver Win") and 2.0 <= odds < 2.40 and win_prob >= 0.35 and value >= 1.05:
+        return True
+
+    # --- No Bet (tracked) zones ---
+
+    # Win < $2.00: -38.9% ROI historically
+    if bt in ("Win", "Saver Win") and odds < 2.0:
+        return False
+
+    # Win $3.00-$4.00 dead zone without strong conviction
+    # Softer threshold for rank 1-2 (0.25) vs rank 3-4 (0.30) — top picks
+    # in this band can still have genuine edge (e.g. Meltdown $3.70)
+    dead_zone_wp = 0.25 if pick.rank <= 2 else 0.30
+    if bt in ("Win", "Saver Win") and 3.0 <= odds < 4.0 and win_prob < dead_zone_wp and value < 1.10:
+        return False
+
+    # Place with low collection probability
+    if bt == "Place" and place_prob < 0.35:
+        return False
+
+    # Negative expected value both ways — no edge
+    if ev_win < -0.10 and ev_place < -0.05:
+        return False
+
+    # Default: pass through (don't over-filter)
+    return True
+
+
+# Odds bands matching strategy.py's _ODDS_BANDS for live profile lookup
+_EDGE_ODDS_BANDS = [
+    ("$1-$2", 1.0, 2.0),
+    ("$2-$3", 2.0, 3.0),
+    ("$3-$4", 3.0, 4.0),
+    ("$4-$6", 4.0, 6.0),
+    ("$6-$10", 6.0, 10.0),
+    ("$10-$20", 10.0, 20.0),
+    ("$20+", 20.0, 999.0),
+]
+
+
 def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     """Allocate stakes from pool using edge-weighted sizing.
 
-    Instead of static rank weights, scale allocation by expected return
-    so more capital flows to high-edge bets. Historical edges:
+    Two-pass approach:
+    1. Edge gate: mark picks as tracked_only if they don't pass proven-profitable criteria
+    2. Distribute pool only among staked picks
+
+    Historical edges (data-driven):
     - Win $4-$6: +60.8% ROI → deserves larger stake
     - Place (any rank): +13.8% ROI → solid base
     - Roughie $10-$20: +53% ROI → bump up from default 15%
@@ -669,12 +830,39 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
             place_odds = pick.place_odds or _estimate_place_odds(pick.odds)
             pick.expected_return = round(pick.place_prob * place_odds - 1, 2)
 
+    # --- Pass 1: Edge gate ---
+    from punty.memory.strategy import get_cached_edge_profile
+    live_profile = get_cached_edge_profile()
+
+    for pick in picks:
+        if not _passes_edge_gate(pick, live_profile):
+            pick.tracked_only = True
+            pick.stake = 0.0
+
+    # Count staked picks
+    staked_picks = [p for p in picks if not p.tracked_only]
+
+    # Fallback: if ALL picks fail edge gate, stake the best single Place bet
+    if not staked_picks:
+        # Find best place candidate
+        best = max(picks, key=lambda p: p.place_prob)
+        best.tracked_only = False
+        best.bet_type = "Place"
+        place_odds = best.place_odds or _estimate_place_odds(best.odds)
+        best.expected_return = round(best.place_prob * place_odds - 1, 2)
+        staked_picks = [best]
+
+    # --- Pass 2: Allocate pool among staked picks ---
+    # Cap pool when only 1 pick passes — prevents concentration blowups
+    effective_pool = pool
+    if len(staked_picks) == 1:
+        effective_pool = min(pool, SINGLE_PICK_CAP)
+
     # Base allocation weights by rank
     base_rank_weights = {1: 0.35, 2: 0.28, 3: 0.22, 4: 0.15}
 
-    # Edge-aware multipliers on top of rank weights — per pick, not shared dict
     pick_weights: list[float] = []
-    for pick in picks:
+    for pick in staked_picks:
         base = base_rank_weights.get(pick.rank, 0.15)
 
         # Win sweet spot $4-$6 bonus (our best edge at +60.8% ROI)
@@ -689,45 +877,37 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         if pick.expected_return > 0.10:
             base *= 1.15  # 15% bonus for strong +EV
 
-        # Very short-priced Win (<$1.80): minimal stake — odds-on favs
-        # Still included so AI can reference them, but don't burn budget
-        if pick.odds < 1.80 and not pick.is_roughie:
-            base *= 0.25  # near-minimum stake
-
-        # Short-priced Win ($1.80-$2.00): reduced stake — -38.9% ROI historically
-        elif pick.odds < 2.00 and pick.bet_type in ("Win", "Saver Win") and not pick.is_roughie:
-            base *= 0.50  # half stake — poor Win ROI at these odds
-
         # Short-priced Place penalty — these are safe but low-returning
-        elif pick.bet_type == "Place" and pick.odds < 2.5:
+        if pick.bet_type == "Place" and pick.odds < 2.5:
             base *= 0.75  # reduce stake on low-odds Place
 
         pick_weights.append(base)
 
     total_weight = sum(pick_weights)
+    if total_weight <= 0:
+        return
 
-    for i, pick in enumerate(picks):
+    for i, pick in enumerate(staked_picks):
         weight = pick_weights[i]
-        raw_stake = pool * (weight / total_weight)
+        raw_stake = effective_pool * (weight / total_weight)
 
         # Each Way costs double (half win + half place)
         if pick.bet_type == "Each Way":
-            # The displayed stake is per-part, total cost = 2x
             raw_stake = raw_stake / 2  # show per-part amount
 
         # Round to nearest 50c, minimum $1
         stake = max(MIN_STAKE, round(raw_stake / STAKE_STEP) * STAKE_STEP)
         pick.stake = stake
 
-    # Verify total doesn't exceed pool (account for Each Way doubling)
+    # Verify total doesn't exceed effective pool (account for Each Way doubling)
     total = sum(
         p.stake * 2 if p.bet_type == "Each Way" else p.stake
-        for p in picks
+        for p in staked_picks
     )
-    if total > pool + 0.01:
+    if total > effective_pool + 0.01:
         # Scale down proportionally
-        scale = pool / total
-        for p in picks:
+        scale = effective_pool / total
+        for p in staked_picks:
             p.stake = max(MIN_STAKE, round(p.stake * scale / STAKE_STEP) * STAKE_STEP)
 
 
@@ -1035,34 +1215,6 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
             else f"{pick.place_value_rating:.2f}x"
         )
 
-        # Calculate display return
-        if pick.bet_type in ("Win", "Saver Win"):
-            ret = round(pick.stake * pick.odds, 2)
-        elif pick.bet_type == "Place":
-            po = pick.place_odds or _estimate_place_odds(pick.odds)
-            ret = round(pick.stake * po, 2)
-        elif pick.bet_type == "Each Way":
-            po = pick.place_odds or _estimate_place_odds(pick.odds)
-            ret = round(pick.stake * pick.odds + pick.stake * po, 2)
-        else:
-            ret = 0
-
-        # Build bet description with correct return for bet type
-        if pick.bet_type == "Each Way":
-            half = pick.stake / 2
-            po = pick.place_odds or _estimate_place_odds(pick.odds)
-            bet_desc = (
-                f"${pick.stake:.2f} Each Way "
-                f"(=${half:.2f}W + ${half:.2f}P), "
-                f"return ${round(pick.stake * pick.odds, 2):.2f} (wins) / "
-                f"${round(pick.stake * po, 2):.2f} (places)"
-            )
-        elif pick.bet_type == "Place":
-            po = pick.place_odds or _estimate_place_odds(pick.odds)
-            bet_desc = f"${pick.stake:.2f} Place, return ${ret:.2f}"
-        else:
-            bet_desc = f"${pick.stake:.2f} {pick.bet_type}, return ${ret:.2f}"
-
         lines.append(
             f"  {rank_label}: {pick.horse_name} (No.{pick.saddlecloth}) "
             f"— ${pick.odds:.2f} / ${(pick.place_odds or _estimate_place_odds(pick.odds)):.2f}"
@@ -1070,9 +1222,42 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
         lines.append(
             f"    STATS: {prob_label} | Value: {value_label}"
         )
-        lines.append(
-            f"    BET: {bet_desc}"
-        )
+
+        # Tracked picks: no stake, displayed for accuracy tracking
+        if pick.tracked_only:
+            lines.append(
+                f"    BET: No Bet (Tracked) — edge gate: no proven-profitable criteria met"
+            )
+        else:
+            # Calculate display return
+            if pick.bet_type in ("Win", "Saver Win"):
+                ret = round(pick.stake * pick.odds, 2)
+            elif pick.bet_type == "Place":
+                po = pick.place_odds or _estimate_place_odds(pick.odds)
+                ret = round(pick.stake * po, 2)
+            elif pick.bet_type == "Each Way":
+                po = pick.place_odds or _estimate_place_odds(pick.odds)
+                ret = round(pick.stake * pick.odds + pick.stake * po, 2)
+            else:
+                ret = 0
+
+            # Build bet description with correct return for bet type
+            if pick.bet_type == "Each Way":
+                half = pick.stake / 2
+                po = pick.place_odds or _estimate_place_odds(pick.odds)
+                bet_desc = (
+                    f"${pick.stake:.2f} Each Way "
+                    f"(=${half:.2f}W + ${half:.2f}P), "
+                    f"return ${round(pick.stake * pick.odds, 2):.2f} (wins) / "
+                    f"${round(pick.stake * po, 2):.2f} (places)"
+                )
+            elif pick.bet_type == "Place":
+                po = pick.place_odds or _estimate_place_odds(pick.odds)
+                bet_desc = f"${pick.stake:.2f} Place, return ${ret:.2f}"
+            else:
+                bet_desc = f"${pick.stake:.2f} {pick.bet_type}, return ${ret:.2f}"
+
+            lines.append(f"    BET: {bet_desc}")
 
     if pre_sel.exotic:
         ex = pre_sel.exotic
@@ -1102,6 +1287,6 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
         for note in pre_sel.notes:
             lines.append(f"  NOTE: {note}")
 
-    lines.append(f"  Total stake: ${pre_sel.total_stake:.2f} / $20.00")
+    lines.append(f"  Total stake: ${pre_sel.total_stake:.2f}")
 
     return "\n".join(lines)

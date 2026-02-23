@@ -73,6 +73,9 @@ class Pick(Base):
     pp_hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     pp_pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Edge-gated tracking: pick displayed but not staked (pnl always $0)
+    tracked_only: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
+
     # Settlement
     hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -119,6 +122,7 @@ class Pick(Base):
             "pp_odds": self.pp_odds,
             "pp_hit": self.pp_hit,
             "pp_pnl": self.pp_pnl,
+            "tracked_only": self.tracked_only,
             "hit": self.hit,
             "pnl": self.pnl,
             "settled": self.settled,

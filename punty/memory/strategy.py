@@ -373,6 +373,112 @@ async def get_recent_results_with_context(
 
 
 # ──────────────────────────────────────────────
+# Live Edge Profile (adaptive thresholds)
+# ──────────────────────────────────────────────
+
+# Odds band definitions for edge profiling
+_ODDS_BANDS = [
+    ("$1-$2", 1.0, 2.0),
+    ("$2-$3", 2.0, 3.0),
+    ("$3-$4", 3.0, 4.0),
+    ("$4-$6", 4.0, 6.0),
+    ("$6-$10", 6.0, 10.0),
+    ("$10-$20", 10.0, 20.0),
+    ("$20+", 20.0, 999.0),
+]
+
+# Minimum bets per cell before live data overrides hardcoded thresholds
+LIVE_EDGE_MIN_SAMPLE = 50
+
+
+async def compute_live_edge_profile(
+    db: AsyncSession,
+) -> dict[tuple[str, str], dict]:
+    """Compute per-odds-band, per-bet-type ROI lookup from settled picks.
+
+    Returns dict keyed by (bet_type, odds_band) with:
+        roi: float (percentage)
+        sr: float (strike rate percentage)
+        bets: int
+        avg_pnl: float (average P&L per bet)
+
+    Only includes cells with sufficient sample size (>= LIVE_EDGE_MIN_SAMPLE).
+    Used by edge gate and bet type refinements to override hardcoded thresholds
+    when live data is available.
+    """
+    result = await db.execute(
+        select(
+            Pick.bet_type,
+            Pick.odds_at_tip,
+            Pick.bet_stake,
+            Pick.pnl,
+            Pick.hit,
+        )
+        .where(
+            Pick.settled == True,
+            Pick.pick_type == "selection",
+            Pick.bet_type.isnot(None),
+            Pick.bet_type != "exotics_only",
+            Pick.odds_at_tip.isnot(None),
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+        )
+    )
+
+    # Accumulate stats by (bet_type, odds_band)
+    cells: dict[tuple[str, str], dict] = {}
+    for row in result.all():
+        bt = (row.bet_type or "win").lower().replace(" ", "_")
+        odds = float(row.odds_at_tip or 0)
+
+        band_label = None
+        for label, lo, hi in _ODDS_BANDS:
+            if lo <= odds < hi:
+                band_label = label
+                break
+        if not band_label:
+            continue
+
+        key = (bt, band_label)
+        if key not in cells:
+            cells[key] = {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0}
+
+        c = cells[key]
+        c["bets"] += 1
+        c["winners"] += 1 if row.hit else 0
+        c["staked"] += float(row.bet_stake or 0)
+        c["pnl"] += float(row.pnl or 0)
+
+    # Filter by minimum sample and compute derived metrics
+    profile: dict[tuple[str, str], dict] = {}
+    for key, c in cells.items():
+        if c["bets"] < LIVE_EDGE_MIN_SAMPLE:
+            continue
+        profile[key] = {
+            "roi": round(c["pnl"] / c["staked"] * 100, 1) if c["staked"] else 0,
+            "sr": round(c["winners"] / c["bets"] * 100, 1) if c["bets"] else 0,
+            "bets": c["bets"],
+            "avg_pnl": round(c["pnl"] / c["bets"], 2) if c["bets"] else 0,
+        }
+
+    return profile
+
+
+# Module-level cache for live edge profile (refreshed on settlement or daily)
+_live_edge_cache: dict[tuple[str, str], dict] | None = None
+
+
+def get_cached_edge_profile() -> dict[tuple[str, str], dict] | None:
+    """Return cached live edge profile, or None if not yet computed."""
+    return _live_edge_cache
+
+
+def set_cached_edge_profile(profile: dict[tuple[str, str], dict]) -> None:
+    """Update the module-level edge profile cache."""
+    global _live_edge_cache
+    _live_edge_cache = profile
+
+
+# ──────────────────────────────────────────────
 # PatternInsight population
 # ──────────────────────────────────────────────
 
@@ -444,6 +550,15 @@ async def populate_pattern_insights(db: AsyncSession) -> int:
 
     await db.flush()
     logger.info(f"Populated {count} pattern insights")
+
+    # Refresh live edge profile cache on every settlement
+    try:
+        profile = await compute_live_edge_profile(db)
+        set_cached_edge_profile(profile)
+        logger.info(f"Refreshed live edge profile: {len(profile)} cells")
+    except Exception as e:
+        logger.warning(f"Failed to refresh live edge profile: {e}")
+
     return count
 
 

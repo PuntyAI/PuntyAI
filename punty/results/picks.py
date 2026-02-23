@@ -307,6 +307,24 @@ async def _settle_picks_for_race_impl(
                 settled_count += 1
                 continue
 
+            # Tracked-only picks: record accuracy (hit) but always $0 P&L
+            if pick.tracked_only:
+                won = runner.finish_position == 1
+                placed = runner.finish_position is not None and runner.finish_position <= num_places
+                if bet_type in ("win", "saver_win"):
+                    pick.hit = won
+                elif bet_type == "place":
+                    pick.hit = placed if num_places > 0 else False
+                elif bet_type == "each_way":
+                    pick.hit = won or placed
+                else:
+                    pick.hit = won
+                pick.pnl = 0.0
+                pick.settled = True
+                pick.settled_at = now
+                settled_count += 1
+                continue
+
             stake = pick.bet_stake or 1.0
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= num_places

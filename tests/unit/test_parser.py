@@ -510,3 +510,51 @@ class TestParseEarlyMailIntegration:
     def test_parse_none_content(self):
         picks = parse_early_mail(None, "test", "test")
         assert picks == []
+
+
+class TestTrackedBetParsing:
+    """Tests for No Bet (Tracked) format parsing."""
+
+    def test_tracked_bet_selection(self):
+        """Bet: No Bet (Tracked) should set tracked_only=True and stake=0."""
+        content = """
+*Race 1 – Test Race*
+1. *STRONG HORSE* (No.5) — $1.50 / $1.20
+Bet: No Bet (Tracked)
+Confidence: HIGH
+Probability: 45%
+
+2. *GOOD HORSE* (No.3) — $4.50 / $2.00
+Bet: $10 Win
+Confidence: MED
+"""
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        assert len(selections) >= 2
+
+        tracked = [p for p in selections if p.get("tracked_only")]
+        staked = [p for p in selections if not p.get("tracked_only")]
+
+        assert len(tracked) == 1
+        assert tracked[0]["horse_name"] == "STRONG HORSE"
+        assert tracked[0]["bet_stake"] == 0.0
+
+        assert len(staked) >= 1
+        assert staked[0]["bet_stake"] == 10.0
+
+    def test_tracked_roughie(self):
+        """Roughie with No Bet (Tracked) should be parsed correctly."""
+        content = """
+*Race 2 – Test Race*
+1. *PICK ONE* (No.1) — $3.00 / $1.60
+Bet: $8 Win
+
+Roughie: *LONG SHOT* (No.9) — $15.00 / $4.50
+Bet: No Bet (Tracked)
+"""
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        roughie = [p for p in selections if p.get("tip_rank") == 4]
+        assert len(roughie) == 1
+        assert roughie[0].get("tracked_only") is True
+        assert roughie[0]["bet_stake"] == 0.0

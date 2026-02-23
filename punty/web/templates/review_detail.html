@@ -332,19 +332,20 @@ function renderPicks() {
         const settled = p.settled;
         const hitClass = p.hit === true ? 'text-green-600 font-semibold' : p.hit === false ? 'text-red-500' : 'text-gray-400';
         const pnlClass = (p.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-500';
-        return `<tr class="border-b border-gray-100" data-pick-id="${p.id}">
+        const isTracked = p.tracked_only === true;
+        return `<tr class="border-b border-gray-100 ${isTracked ? 'opacity-50' : ''}" data-pick-id="${p.id}">
             <td class="py-2 pr-2">${p.race_number || '-'}</td>
             <td class="py-2 pr-2"><span class="px-1.5 py-0.5 rounded text-xs ${typeColor(p)}">${typeLabel(p)}</span></td>
             <td class="py-2 pr-2">${isSelection ? `<input type="text" value="${esc(p.horse_name || '')}" data-field="horse_name" class="pick-edit w-28 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : (p.exotic_type || p.sequence_type || '-')}</td>
             <td class="py-2 pr-2">${isSelection ? `<input type="number" value="${p.saddlecloth || ''}" data-field="saddlecloth" class="pick-edit w-12 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : '-'}</td>
             <td class="py-2 pr-2">${isSelection ? `<input type="number" step="0.01" value="${p.odds_at_tip || ''}" data-field="odds_at_tip" class="pick-edit w-16 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : '-'}</td>
-            <td class="py-2 pr-2">${isSelection ? `<select data-field="bet_type" class="pick-edit px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>
+            <td class="py-2 pr-2">${isSelection ? (isTracked ? '<span class="text-xs italic text-gray-400">TRACKED</span>' : `<select data-field="bet_type" class="pick-edit px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>
                 <option value="win" ${p.bet_type === 'win' ? 'selected' : ''}>Win</option>
                 <option value="place" ${p.bet_type === 'place' ? 'selected' : ''}>Place</option>
                 <option value="each_way" ${p.bet_type === 'each_way' ? 'selected' : ''}>E/W</option>
                 <option value="saver_win" ${p.bet_type === 'saver_win' ? 'selected' : ''}>Saver</option>
-            </select>` : '-'}</td>
-            <td class="py-2 pr-2">${isSelection ? `<input type="number" step="0.5" value="${p.bet_stake || ''}" data-field="bet_stake" class="pick-edit w-14 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>` : (p.exotic_stake ? '$' + p.exotic_stake : '-')}</td>
+            </select>`) : '-'}</td>
+            <td class="py-2 pr-2">${isSelection ? (isTracked ? '<span class="text-xs text-gray-400">$0</span>' : `<input type="number" step="0.5" value="${p.bet_stake || ''}" data-field="bet_stake" class="pick-edit w-14 px-1 py-0.5 border rounded text-sm" ${settled ? 'disabled' : ''}>`) : (p.exotic_stake ? '$' + p.exotic_stake : '-')}</td>
             <td class="py-2 pr-2">${p.win_probability != null ? `<span style="background:${probColor(p.win_probability)};color:#fff;padding:1px 5px;border-radius:4px;font-size:0.75rem;">${(p.win_probability * 100).toFixed(0)}%</span>` : '-'}</td>
             <td class="py-2 pr-2">${p.value_rating != null ? `<span style="color:${p.value_rating > 1.05 ? '#4ade80' : '#9ca3af'};font-weight:${p.value_rating > 1.05 ? '600' : '400'};">${p.value_rating.toFixed(2)}x</span>` : '-'}</td>
             <td class="py-2 pr-2 ${hitClass}">${p.hit === true ? 'HIT' : p.hit === false ? 'MISS' : '-'}</td>

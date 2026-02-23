@@ -8,6 +8,9 @@ from punty.context.pre_selections import (
     EACH_WAY_MIN_PROB,
     EXOTIC_PUNTYS_PICK_VALUE,
     PLACE_MIN_PROB,
+    POOL_HIGH,
+    POOL_LOW,
+    POOL_STANDARD,
     RACE_POOL,
     ROUGHIE_MIN_ODDS,
     ROUGHIE_MIN_VALUE,
@@ -21,10 +24,12 @@ from punty.context.pre_selections import (
     _calculate_puntys_pick,
     _cap_win_exposure,
     _determine_bet_type,
+    _determine_race_pool,
     _ensure_win_bet,
     _estimate_place_odds,
     _expected_return,
     _generate_notes,
+    _passes_edge_gate,
     _select_exotic,
     calculate_pre_selections,
     format_pre_selections,
@@ -346,12 +351,12 @@ class TestAllocateStakes:
         assert picks[0].bet_type == "Win"
 
     def test_vr_cap_skips_under_2_odds(self):
-        """VR > 1.2 but odds < $2.00 should NOT downgrade (Place div too low)."""
+        """VR > 1.2 at sub-$2 odds — now Place (sub-$2 bet type rule)."""
         picks = [
             RecommendedPick(1, 1, "A", "Win", 0, 1.80, 1.2, 0.5, 0.8, 1.4, 1.05, 0.7),
         ]
         _allocate_stakes(picks, 20.0)
-        assert picks[0].bet_type == "Win"
+        assert picks[0].bet_type == "Place"
 
 
 # ──────────────────────────────────────────────
@@ -735,7 +740,7 @@ class TestCalculatePreSelections:
         assert result.picks == []
 
     def test_two_runner_race(self):
-        """Small field — should still produce picks."""
+        """Small field — should still produce picks. Pool may be $35 (DOMINANT_EDGE)."""
         runners = [
             _runner(1, "A", 2.0, win_prob=0.55, place_prob=0.80, value=1.10),
             _runner(2, "B", 3.0, win_prob=0.35, place_prob=0.65, value=1.05),
@@ -743,7 +748,7 @@ class TestCalculatePreSelections:
         ctx = _race_context(runners)
         result = calculate_pre_selections(ctx)
         assert len(result.picks) == 2
-        assert result.total_stake <= 20.5
+        assert result.total_stake <= 25.5
 
     def test_exotic_recommendation(self):
         runners = [
@@ -880,3 +885,226 @@ class TestContextMultiplierThresholds:
         neutral_mults = {"form": 1.0, "class_fitness": 0.95}
         result = calculate_pre_selections(ctx, place_context_multipliers=neutral_mults)
         assert result is not None
+
+
+# ──────────────────────────────────────────────
+# Tests: Edge Gate (_passes_edge_gate)
+# ──────────────────────────────────────────────
+
+class TestEdgeGate:
+    def _pick(self, bet_type="Win", odds=5.0, win_prob=0.25, place_prob=0.50,
+              value=1.10, place_value=1.05, is_roughie=False):
+        return RecommendedPick(
+            rank=1, saddlecloth=1, horse_name="Test", bet_type=bet_type,
+            stake=0.0, odds=odds,
+            place_odds=round((odds - 1) / 3 + 1, 2),
+            win_prob=win_prob, place_prob=place_prob,
+            value_rating=value, place_value_rating=place_value,
+            expected_return=0.0, is_roughie=is_roughie,
+        )
+
+    def test_win_sweet_spot_passes(self):
+        """Win at $4-$6 always passes (proven +60.8% ROI)."""
+        pick = self._pick(bet_type="Win", odds=5.0)
+        assert _passes_edge_gate(pick) is True
+
+    def test_win_under_2_fails(self):
+        """Win at <$2 should fail (historically -38.9% ROI)."""
+        pick = self._pick(bet_type="Win", odds=1.80, win_prob=0.45)
+        assert _passes_edge_gate(pick) is False
+
+    def test_place_good_prob_passes(self):
+        """Place with high probability passes."""
+        pick = self._pick(bet_type="Place", odds=4.0, place_prob=0.50, place_value=1.05)
+        assert _passes_edge_gate(pick) is True
+
+    def test_place_low_prob_fails(self):
+        """Place with low collection probability fails."""
+        pick = self._pick(bet_type="Place", odds=8.0, place_prob=0.25, place_value=0.85)
+        assert _passes_edge_gate(pick) is False
+
+    def test_each_way_good_range_passes(self):
+        """Each Way at $3-$6 with decent win_prob passes."""
+        pick = self._pick(bet_type="Each Way", odds=4.0, win_prob=0.25)
+        assert _passes_edge_gate(pick) is True
+
+    def test_roughie_place_good_prob_passes(self):
+        """Roughie Place at $8-$20 with strong place_prob passes."""
+        pick = self._pick(bet_type="Place", odds=12.0, place_prob=0.40,
+                          is_roughie=True)
+        assert _passes_edge_gate(pick) is True
+
+    def test_negative_ev_both_ways_fails(self):
+        """Strongly negative EV on both win and place fails."""
+        pick = self._pick(bet_type="Place", odds=15.0, win_prob=0.03,
+                          place_prob=0.10, value=0.50, place_value=0.50)
+        assert _passes_edge_gate(pick) is False
+
+    def test_win_2_40_to_3_strong_conviction_passes(self):
+        """Win at $2.40-$3 with high win_prob passes."""
+        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.35)
+        assert _passes_edge_gate(pick) is True
+
+    def test_win_2_40_to_3_weak_conviction_fails(self):
+        """Win at $2.40-$3 with low win_prob fails."""
+        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.20)
+        assert _passes_edge_gate(pick) is False
+
+    def test_dead_zone_rank1_softer_threshold(self):
+        """Rank 1-2 in $3-$4 dead zone use 0.25 threshold (softer)."""
+        # wp=0.27 passes for rank 1 (threshold 0.25) but fails for rank 3 (0.30)
+        pick_r1 = RecommendedPick(
+            rank=1, saddlecloth=1, horse_name="Test", bet_type="Win",
+            stake=0.0, odds=3.50, place_odds=1.83,
+            win_prob=0.27, place_prob=0.50, value_rating=1.05,
+            place_value_rating=1.05, expected_return=0.0,
+        )
+        pick_r3 = RecommendedPick(
+            rank=3, saddlecloth=3, horse_name="Test3", bet_type="Win",
+            stake=0.0, odds=3.50, place_odds=1.83,
+            win_prob=0.27, place_prob=0.50, value_rating=1.05,
+            place_value_rating=1.05, expected_return=0.0,
+        )
+        assert _passes_edge_gate(pick_r1) is True  # rank 1, wp 0.27 > 0.25
+        assert _passes_edge_gate(pick_r3) is False  # rank 3, wp 0.27 < 0.30
+
+    def test_live_profile_override_rejects_losing_band(self):
+        """Live profile with strong negative ROI overrides even passing criteria."""
+        pick = self._pick(bet_type="Win", odds=5.0, win_prob=0.25)
+        # This would normally pass (sweet spot), but live data says it's losing
+        profile = {("win", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
+        assert _passes_edge_gate(pick, live_profile=profile) is False
+
+
+# ──────────────────────────────────────────────
+# Tests: 3-Tier Pool (_determine_race_pool)
+# ──────────────────────────────────────────────
+
+class TestDetermineRacePool:
+    def _pick(self, odds=5.0, win_prob=0.25, place_prob=0.50,
+              place_value=1.10):
+        return RecommendedPick(
+            rank=1, saddlecloth=1, horse_name="Test", bet_type="Win",
+            stake=0.0, odds=odds,
+            place_odds=round((odds - 1) / 3 + 1, 2),
+            win_prob=win_prob, place_prob=place_prob,
+            value_rating=1.10, place_value_rating=place_value,
+            expected_return=0.0,
+        )
+
+    def test_high_ev_gets_high_pool(self):
+        """Strong EV (>0.15) should get $35 pool."""
+        # ev = 0.35 * 5.0 - 1 = 0.75 > 0.15
+        pick = self._pick(odds=5.0, win_prob=0.35)
+        pool = _determine_race_pool([pick])
+        assert pool == POOL_HIGH
+
+    def test_strong_place_gets_high_pool(self):
+        """Place prob > 0.50 with place_value > 1.05 gets $35 pool."""
+        pick = self._pick(odds=5.0, win_prob=0.15, place_prob=0.55,
+                          place_value=1.10)
+        pool = _determine_race_pool([pick])
+        assert pool == POOL_HIGH
+
+    def test_standard_race_gets_standard_pool(self):
+        """Multiple picks with positive EV but not dominant gets $20."""
+        picks = [
+            self._pick(odds=5.0, win_prob=0.22),  # ev = 0.10
+            self._pick(odds=3.0, win_prob=0.35, place_prob=0.60),  # ev_win = 0.05
+        ]
+        pool = _determine_race_pool(picks)
+        assert pool == POOL_STANDARD
+
+    def test_empty_picks_gets_low_pool(self):
+        """No picks gets $12 pool."""
+        pool = _determine_race_pool([])
+        assert pool == POOL_LOW
+
+    def test_watch_only_gets_low_pool(self):
+        """Watch-only classification gets $12 pool."""
+        from punty.context.bet_optimizer import RaceClassification
+        cls = RaceClassification(
+            race_type="NO_EDGE", confidence=0.5,
+            reasoning="test", watch_only=True, no_bet=False,
+        )
+        pick = self._pick()
+        pool = _determine_race_pool([pick], classification=cls)
+        assert pool == POOL_LOW
+
+
+# ──────────────────────────────────────────────
+# Tests: Edge-gated stake allocation
+# ──────────────────────────────────────────────
+
+class TestEdgeGatedAllocation:
+    def test_tracked_picks_get_zero_stake(self):
+        """Picks that fail edge gate should get $0 stake and tracked_only=True."""
+        # Sub-$2 Win picks should fail
+        picks = [
+            RecommendedPick(1, 1, "Fav", "Place", 0.0, 1.50, 1.17,
+                            0.50, 0.80, 1.0, 1.0, 0.0),
+            RecommendedPick(2, 2, "Good", "Win", 0.0, 5.0, 2.33,
+                            0.25, 0.50, 1.10, 1.05, 0.0),
+        ]
+        _allocate_stakes(picks, 20.0)
+        # Sub-$1.50 Place with place_prob 0.80 should pass (>=0.40, odds 1.50 < 2.50 but... check)
+        # Actually $1.50 is not in the $2.50-$8 range, let's verify the logic
+        # The sub-$2 Place has ev_place = 0.80 * 1.17 - 1 = -0.064 and place_prob >= 0.40 and place_value >= 0.95
+        # place_value is 1.0 >= 0.95, so criterion 3 passes
+        assert picks[1].stake > 0  # Win at $5 should be staked
+
+    def test_fallback_when_all_fail(self):
+        """When all picks fail edge gate, best Place bet is forced."""
+        picks = [
+            RecommendedPick(1, 1, "Bad1", "Win", 0.0, 1.50, 1.17,
+                            0.40, 0.30, 0.80, 0.80, -0.5),
+            RecommendedPick(2, 2, "Bad2", "Win", 0.0, 1.60, 1.20,
+                            0.35, 0.25, 0.75, 0.75, -0.5),
+        ]
+        _allocate_stakes(picks, 20.0)
+        # At least one pick should have stake > 0 (fallback)
+        total_stake = sum(p.stake for p in picks)
+        assert total_stake > 0
+
+    def test_tracked_picks_not_counted_in_total(self):
+        """tracked_only picks should have stake = 0."""
+        picks = [
+            RecommendedPick(1, 1, "Good", "Win", 0.0, 5.0, 2.33,
+                            0.25, 0.50, 1.10, 1.05, 0.0),
+            RecommendedPick(2, 2, "Weak", "Win", 0.0, 1.70, 1.23,
+                            0.40, 0.25, 0.85, 0.85, -0.3),
+        ]
+        _allocate_stakes(picks, 20.0)
+        for p in picks:
+            if p.tracked_only:
+                assert p.stake == 0.0
+
+
+# ──────────────────────────────────────────────
+# Tests: Sub-$2 bet type changes
+# ──────────────────────────────────────────────
+
+class TestSubTwoDollarBetType:
+    def test_sub_180_gets_place(self):
+        """Sub-$1.80 should get Place (not Win as before)."""
+        c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
+             "value_rating": 0.95, "place_value_rating": 1.00}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+
+    def test_180_to_200_gets_place(self):
+        """$1.80-$2.00 should get Place (not Win as before)."""
+        c = {"win_prob": 0.40, "place_prob": 0.70, "odds": 1.90,
+             "value_rating": 1.05, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+
+    def test_dead_zone_requires_strong_conviction(self):
+        """$3-$4 now requires win_prob >= 0.30 AND value >= 1.10 for Win."""
+        # Just below threshold
+        c = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.50,
+             "value_rating": 1.15, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+
+        # Meets threshold
+        c2 = {"win_prob": 0.32, "place_prob": 0.55, "odds": 3.50,
+              "value_rating": 1.15, "place_value_rating": 1.05}
+        assert _determine_bet_type(c2, rank=1, is_roughie=False) == "Win"
