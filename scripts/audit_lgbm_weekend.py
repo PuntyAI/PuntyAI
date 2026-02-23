@@ -640,7 +640,7 @@ def main():
     print(f"NOTABLE RACES: LightGBM vs Public picks disagreed on winner")
     print(f"{'='*80}")
     disagreements = [rd for rd in race_details if rd["lgbm_rank"] == 1 and not rd["pub_top1_won"]]
-    disagreements.sort(key=lambda x: -abs(x["sim_pnl"] - x["pub_pnl"]))
+    disagreements.sort(key=lambda x: -abs(x["lgbm_pnl"] - x["pub_pnl"]))
     print(f"  {'Date':12s} {'Venue':15s} R#  {'Winner':22s} {'Odds':>6s} LGBM# Pub#1                  {'Sim PnL':>8s} {'Pub PnL':>8s}")
     print(f"  {'─'*105}")
     for rd in disagreements[:20]:
