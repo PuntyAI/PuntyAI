@@ -409,8 +409,13 @@ class BulkPickUpdate(BaseModel):
 @router.get("/{content_id}/picks")
 async def get_content_picks(content_id: str, db: AsyncSession = Depends(get_db)):
     """Get all picks for a content item."""
+    from punty.models.content import Content
     from punty.models.pick import Pick
     from sqlalchemy import select
+
+    content = await db.get(Content, content_id)
+    if not content:
+        raise HTTPException(status_code=404, detail=f"Content not found: {content_id}")
 
     result = await db.execute(
         select(Pick).where(Pick.content_id == content_id).order_by(Pick.race_number, Pick.tip_rank)

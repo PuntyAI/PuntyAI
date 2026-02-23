@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
@@ -47,8 +47,12 @@ async def stop_monitor(request: Request):
 
 
 @router.post("/{meeting_id}/check")
-async def check_meeting(meeting_id: str, request: Request):
+async def check_meeting(meeting_id: str, request: Request, db: AsyncSession = Depends(get_db)):
     """Manual one-shot results check for a meeting."""
+    from punty.models.meeting import Meeting
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail=f"Meeting not found: {meeting_id}")
     monitor = getattr(request.app.state, "results_monitor", None)
     if not monitor:
         return {"error": "Monitor not initialized"}
@@ -124,7 +128,11 @@ async def performance_history(
 @router.get("/{meeting_id}/summary")
 async def meeting_summary(meeting_id: str, db: AsyncSession = Depends(get_db)):
     """Get picks vs results P&L summary for a meeting."""
+    from punty.models.meeting import Meeting
     from punty.results.tracker import build_meeting_summary
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail=f"Meeting not found: {meeting_id}")
     try:
         summary = await build_meeting_summary(db, meeting_id)
         return summary
@@ -151,12 +159,12 @@ async def scrape_race_sectionals(
     # Get meeting
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
-        return {"error": f"Meeting not found: {meeting_id}"}
+        raise HTTPException(status_code=404, detail=f"Meeting not found: {meeting_id}")
 
     race_id = f"{meeting_id}-r{race_number}"
     race = await db.get(Race, race_id)
     if not race:
-        return {"error": f"Race not found: {race_id}"}
+        raise HTTPException(status_code=404, detail=f"Race not found: {race_id}")
 
     # Scrape sectionals
     scraper = RacingComScraper()
@@ -199,7 +207,7 @@ async def get_race_sectionals(
     race_id = f"{meeting_id}-r{race_number}"
     race = await db.get(Race, race_id)
     if not race:
-        return {"error": f"Race not found: {race_id}"}
+        raise HTTPException(status_code=404, detail=f"Race not found: {race_id}")
 
     if not race.sectional_times:
         return {
@@ -261,6 +269,12 @@ async def settle_past_races(db: AsyncSession = Depends(get_db)):
             settled_total += count
             if count > 0:
                 logger.info(f"Settled {count} picks for {meeting_id} R{race_number}")
+                # Backfill form history for future lookups
+                try:
+                    from punty.results.monitor import _backfill_form_history
+                    await _backfill_form_history(db, meeting_id, race_number)
+                except Exception:
+                    pass  # non-critical
         except Exception as e:
             errors.append(f"{meeting_id} R{race_number}: {e}")
             logger.error(f"Failed to settle {meeting_id} R{race_number}: {e}")

@@ -140,6 +140,7 @@ def calculate_pre_selections(
         place_context_multipliers: Optional dict of place context multiplier values.
             When the average multiplier is weak (<0.85), PLACE_MIN_PROB is raised
             to require higher place probability (tighter threshold, fewer Place bets).
+            When strong (>1.2), threshold is lowered for wider Place coverage.
         venue_type: Venue tier (metro_vic, provincial, country, etc.)
         meeting_hit_count: Running count of winning selections at this meeting.
         meeting_race_count: How many races processed so far at this meeting.
@@ -157,13 +158,16 @@ def calculate_pre_selections(
     thresholds = _load_thresholds(selection_thresholds)
 
     # Adjust place threshold based on place context multipliers.
-    # Only tighten (raise threshold) when context is weak — never loosen.
+    # Tighten when context is weak (<0.85), loosen when strong (>1.2).
     if place_context_multipliers:
         mults = [v for v in place_context_multipliers.values() if isinstance(v, (int, float))]
         if mults:
             avg_place_strength = sum(mults) / len(mults)
             if avg_place_strength < 0.85:
                 thresholds["place_min_prob"] = min(0.45, thresholds["place_min_prob"] + 0.05)
+            elif avg_place_strength > 1.2:
+                # Favourable conditions — lower threshold to capture more place bets
+                thresholds["place_min_prob"] = max(0.25, thresholds["place_min_prob"] - 0.05)
 
     # Compute field size (active runners) for bet type and exotic decisions
     field_size = sum(1 for r in runners if not r.get("scratched"))

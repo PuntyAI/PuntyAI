@@ -52,6 +52,7 @@
                 <button hx-post="/api/content/{{ item.id }}/review"
                         hx-ext="json-enc"
                         hx-vals='{"action": "reject", "notes": "Quick reject from queue"}'
+                        hx-confirm="Reject this content? Picks will be deleted."
                         hx-swap="none"
                         hx-on::after-request="if(event.detail.successful) { this.closest('div.bg-white').remove(); showToast('Rejected', 'info'); } else showToast('Failed', 'error');"
                         class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">

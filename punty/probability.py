@@ -2090,53 +2090,34 @@ def _deep_learning_factor(
     field_size: int,
     dl_patterns: list[dict] | None,
 ) -> tuple[float, list[dict]]:
-    """Score based on matching deep learning patterns from historical analysis.
+    """Score based on matching jockey/trainer combo patterns.
 
-    Matches runner attributes against 844+ statistical patterns discovered
-    from 280K+ historical runners. Each matching pattern's edge contributes
-    to the score, weighted by confidence and capped to prevent dominance.
+    Hold-out validation (Oct-Dec 2025) showed only jockey_trainer patterns
+    retain signal (+7.0% edge, 67% retention, p=0.000). All other pattern
+    types were noise and have been pruned from dl_patterns.json.
 
     Returns (score, matched_patterns) tuple.
     """
     if not dl_patterns:
         return 0.5, []
 
-    # Skip non-discriminative pattern types — these fire for ALL runners equally
-    # in a race, so they cancel out after normalization and just add noise.
-    # condition_specialist: matches every runner on that condition
-    # market: duplicates the market factor (already 40% weight)
-    # seasonal: matches every runner at that time of year
-    # track_dist_cond: matches every runner in the same race
-    # standard_times: lookup table, not a per-runner pattern
-    _SKIP_TYPES = {
-        "deep_learning_condition_specialist",
-        "deep_learning_market",
-        "deep_learning_seasonal",
-        "deep_learning_track_dist_cond",
-        "deep_learning_standard_times",
-    }
-
     score = 0.5
     total_adjustment = 0.0
-    matched_list = []  # Collect matched patterns for AI visibility
+    matched_list = []
 
-    # Pre-compute runner attributes for matching
-    venue = _get(meeting, "venue") or ""
-    dist_bucket = _get_dist_bucket(race_distance)
-    condition = _normalize_condition(track_condition)
-    position = _get(runner, "speed_map_position") or ""
-    pace_style = _position_to_style(position)
-    barrier = _get(runner, "barrier")
-    barrier_bucket = _get_barrier_bucket(barrier, field_size) if barrier else ""
     jockey = _get(runner, "jockey") or ""
     trainer = _get(runner, "trainer") or ""
-    move_type = _get_move_type(runner)
+    if not jockey or not trainer:
+        return 0.5, []
 
-    # Derive state from venue using assessment mapping
+    venue = _get(meeting, "venue") or ""
     state = _get_state_for_venue(venue)
 
     for pattern in dl_patterns:
         p_type = pattern.get("type", "")
+        if p_type != "deep_learning_jockey_trainer":
+            continue
+
         conds = pattern.get("conditions", {})
         edge = pattern.get("edge", 0.0)
         confidence = pattern.get("confidence", "LOW")
@@ -2144,157 +2125,31 @@ def _deep_learning_factor(
         if not edge or confidence == "LOW":
             continue
 
-        if p_type in _SKIP_TYPES:
-            continue
-
-        # Confidence multiplier: HIGH patterns count more
-        conf_mult = 1.0 if confidence == "HIGH" else 0.6
-
-        matched = False
-
-        if p_type == "deep_learning_pace" and pace_style:
-            matched = (
-                _venue_matches(conds.get("venue", ""), venue)
-                and conds.get("dist_bucket") == dist_bucket
-                and _condition_matches(conds.get("condition", ""), condition)
-                and conds.get("style") == pace_style
-            )
-
-        elif p_type == "deep_learning_barrier_bias" and barrier_bucket:
-            matched = (
-                _venue_matches(conds.get("venue", ""), venue)
-                and conds.get("dist_bucket") == dist_bucket
-                and conds.get("barrier_bucket") == barrier_bucket
-            )
-
-        elif p_type == "deep_learning_jockey_trainer" and jockey and trainer:
-            matched = (
-                conds.get("jockey", "").lower() == jockey.lower()
-                and conds.get("trainer", "").lower() == trainer.lower()
-                and (not state or conds.get("state") == state)
-            )
-
-        elif p_type == "deep_learning_acceleration" and move_type:
-            matched = (
-                _venue_matches(conds.get("venue", ""), venue)
-                and conds.get("dist_bucket") == dist_bucket
-                and _condition_matches(conds.get("condition", ""), condition)
-                and conds.get("move_type") == move_type
-            )
-
-        elif p_type == "deep_learning_pace_collapse" and pace_style == "leader":
-            matched = (
-                _venue_matches(conds.get("venue", ""), venue)
-                and conds.get("dist_bucket") == dist_bucket
-                and _condition_matches(conds.get("condition", ""), condition)
-            )
-
-        elif p_type == "deep_learning_market" and state:
-            odds = _get_median_odds(runner)
-            if odds:
-                sp_range = _odds_to_sp_range(odds)
-                matched = (
-                    conds.get("state") == state
-                    and conds.get("sp_range") == sp_range
-                )
-
-        elif p_type == "deep_learning_class_mover" and state:
-            # Match class movers (upgrade/downgrade runners backed/drifting)
-            direction = conds.get("direction", "")
-            indicator = conds.get("indicator", "")
-            # Derive class movement from runner data
-            runner_class_move = _get(runner, "class_move") or ""
-            runner_mkt_move = _get_market_direction(runner)
-            matched = (
-                conds.get("state") == state
-                and direction == runner_class_move
-                and indicator == runner_mkt_move
-            )
-
-        elif p_type == "deep_learning_weight_impact":
-            # Match weight change impact by distance
-            change_class = conds.get("change_class", "")
-            runner_wt_change = _get_weight_change_class(runner)
-            matched = (
-                conds.get("dist_bucket") == dist_bucket
-                and conds.get("state") == state
-                and change_class == runner_wt_change
-            )
-
-        elif p_type == "deep_learning_form_trend" and state:
-            # Match form trend (improving/declining)
-            trend = conds.get("trend", "")
-            runner_trend = _get_form_trend(runner)
-            matched = (
-                conds.get("state") == state
-                and trend == runner_trend
-            )
-
-        elif p_type == "deep_learning_bounceback":
-            # Match bounceback candidates (excuse for last poor run)
-            excuse_type = conds.get("excuse_type", "")
-            runner_excuse = _get_excuse_type(runner)
-            matched = (
-                conds.get("dist_bucket") == dist_bucket
-                and conds.get("state") == state
-                and excuse_type == runner_excuse
-            )
-
-        elif p_type == "deep_learning_form_cycle":
-            # Match form cycle (runs this prep)
-            prep_runs = conds.get("prep_runs")
-            runner_prep = _get(runner, "prep_runs") or _get(runner, "runs_since_spell")
-            if prep_runs is not None and runner_prep is not None:
-                matched = (int(runner_prep) == int(prep_runs))
-
-        elif p_type == "deep_learning_class_transition":
-            # Match class transition patterns
-            transition = conds.get("transition", "")
-            runner_transition = _get(runner, "class_move") or ""
-            trans_map = {"class_drop": "downgrade", "class_rise": "upgrade"}
-            matched = (trans_map.get(transition, transition) == runner_transition)
-
-        elif p_type == "deep_learning_track_bias":
-            # Match track bias (wide/inside runners at specific venues)
-            width = conds.get("width", "")
-            pattern_venue = conds.get("venue", "")
-            runner_barrier = barrier or 0
-            # wide = barrier > 60% of field, inside = barrier <= 30%
-            if field_size > 0 and runner_barrier:
-                ratio = runner_barrier / field_size
-                runner_width = "wide" if ratio > 0.6 else "inside" if ratio <= 0.3 else "mid"
-            else:
-                runner_width = ""
-            matched = (
-                _venue_matches(pattern_venue, venue)
-                and conds.get("dist_bucket") == dist_bucket
-                and width == runner_width
-            )
+        matched = (
+            conds.get("jockey", "").lower() == jockey.lower()
+            and conds.get("trainer", "").lower() == trainer.lower()
+            and (not state or conds.get("state") == state)
+        )
 
         if matched:
-            # Cap individual pattern contribution
+            conf_mult = 1.0 if confidence == "HIGH" else 0.6
             capped_edge = max(-0.15, min(0.15, edge))
-            # Weight by sample size: patterns with more data are more reliable
             sample_size = pattern.get("sample_size", 50)
             sample_weight = min(1.0, sample_size / 200)
             total_adjustment += capped_edge * conf_mult * sample_weight
 
-            # Collect for AI visibility (top patterns only)
             matched_list.append({
-                "type": p_type.replace("deep_learning_", ""),
+                "type": "jockey_trainer",
                 "edge": edge,
                 "confidence": confidence,
                 "sample_size": sample_size,
                 "description": pattern.get("description", ""),
             })
 
-    # Cap total adjustment to prevent extreme swings
     total_adjustment = max(-0.25, min(0.25, total_adjustment))
     score += total_adjustment
-
     final_score = max(0.05, min(0.95, score))
 
-    # Sort by absolute edge, keep top 3
     matched_list.sort(key=lambda x: abs(x["edge"]), reverse=True)
     return final_score, matched_list[:3]
 

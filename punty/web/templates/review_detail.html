@@ -179,6 +179,7 @@
                     <button hx-post="/api/content/{{ content.id }}/review"
                             hx-ext="json-enc"
                             hx-vals='{"action": "reject"}'
+                            hx-confirm="Reject this content? Picks will be deleted."
                             hx-swap="none"
                             hx-on::after-request="if(event.detail.successful) { showToast('Content rejected', 'info'); setTimeout(() => window.location.reload(), 1000); } else showToast('Failed to reject', 'error');"
                             class="w-full border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50">
@@ -199,6 +200,7 @@
                     <button hx-post="/api/content/{{ content.id }}/review"
                             hx-ext="json-enc"
                             hx-vals='{"action": "unapprove"}'
+                            hx-confirm="Unapprove this content? All picks will be removed."
                             hx-swap="none"
                             hx-on::after-request="if(event.detail.successful) { showToast('Content unapproved, picks removed', 'info'); setTimeout(() => window.location.reload(), 1000); } else showToast('Failed to unapprove', 'error');"
                             class="w-full border border-yellow-400 text-yellow-600 px-4 py-2 rounded-lg hover:bg-yellow-50">
