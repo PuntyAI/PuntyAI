@@ -90,7 +90,18 @@ def _parse_stats(s: Any) -> tuple[int, int, int, int] | None:
 
 
 def _sr_from_stats(s: Any) -> tuple[Optional[float], int]:
-    """Return (strike_rate, starts) from a stats string."""
+    """Return (strike_rate, starts) from a stats string or JSON dict."""
+    # Handle JSON dict format from live DB: {"starts": 27, "wins": 5, ...}
+    if isinstance(s, str) and s.strip().startswith("{"):
+        try:
+            import json
+            d = json.loads(s)
+            if isinstance(d, dict):
+                starts = d.get("starts", 0) or 0
+                wins = d.get("wins", 0) or 0
+                return (wins / starts, starts) if starts > 0 else (None, 0)
+        except (json.JSONDecodeError, ValueError):
+            pass
     parsed = _parse_stats(s)
     if not parsed:
         return None, 0
@@ -157,6 +168,65 @@ def _get(obj: Any, attr: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(attr, default)
     return getattr(obj, attr, default)
+
+
+def _try_parse_json(val: Any) -> Optional[dict]:
+    """Try to parse a JSON string into a dict. Returns None if not JSON."""
+    if not val:
+        return None
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        try:
+            import json
+            parsed = json.loads(val)
+            return parsed if isinstance(parsed, dict) else None
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return None
+
+
+def capped_f(d: dict, key: str, min_runners: int = 20) -> Optional[float]:
+    """Extract float from dict with minimum runner threshold."""
+    if not d or not isinstance(d, dict):
+        return None
+    runners = d.get("runners", 0) or d.get("Runners", 0)
+    if runners < min_runners:
+        return None
+    val = d.get(key) or d.get(key.title())
+    return float(val) if val is not None else None
+
+
+def _extract_avg_margin(form_history_raw: Any) -> float:
+    """Extract average margin from last 5 starts in form_history JSON."""
+    parsed = _try_parse_json(form_history_raw)
+    if not parsed or not isinstance(parsed, list):
+        return float("nan")
+    margins = []
+    for f in parsed[:5]:
+        if not isinstance(f, dict):
+            continue
+        m = f.get("Margin") or f.get("margin")
+        if m is not None:
+            try:
+                margins.append(abs(float(m)))
+            except (ValueError, TypeError):
+                pass
+    if margins:
+        return statistics.mean(margins)
+    return float("nan")
+
+
+def capped_sr(val: Optional[float]) -> Optional[float]:
+    """Convert percentage strike rate to decimal (Proform stores as %, live DB as %).
+    Returns as decimal fraction matching Proform training format."""
+    if val is None:
+        return None
+    # Proform StrikeRate is already a percentage (e.g. 14.15 = 14.15%)
+    # Live DB strike_rate is also a percentage (e.g. 14.15 = 14.15%)
+    # Training extract_features_proform passes raw StrikeRate through _a2e_field
+    # which returns the raw value — so keep consistent: return the raw percentage value
+    return val
 
 
 def _safe_float(val: Any) -> Optional[float]:
@@ -397,7 +467,7 @@ def extract_features_from_runner(
     prize_per_start = prize / c_starts if prize and c_starts and c_starts > 0 else nan
 
     handicap = _safe_float(_get(runner, "handicap_rating"))
-    avg_margin = nan  # Not readily available on live ORM
+    avg_margin = _extract_avg_margin(_get(runner, "form_history"))
 
     # Pace
     days_since = _safe_float(_get(runner, "days_since_last_run"))
@@ -407,22 +477,48 @@ def extract_features_from_runner(
     barrier = _get(runner, "barrier") or 0
     barrier_relative = (barrier - 1) / (field_size - 1) if barrier and field_size > 1 else nan
 
-    # Jockey/trainer — live ORM has stats strings
-    j_sr, j_starts = _sr_from_stats(_get(runner, "jockey_stats"))
-    t_sr, t_starts = _sr_from_stats(_get(runner, "trainer_stats"))
-    jockey_career_sr = j_sr if j_sr is not None else nan
-    jockey_career_runners = j_starts if j_starts else nan
-    trainer_career_sr = t_sr if t_sr is not None else nan
-    # Detailed stats not available live
-    jockey_career_a2e = nan
-    jockey_career_pot = nan
-    jockey_l100_sr = nan
-    trainer_career_a2e = nan
-    trainer_career_pot = nan
-    trainer_l100_sr = nan
-    combo_career_sr = nan
-    combo_career_runners = nan
-    combo_l100_sr = nan
+    # Jockey/trainer — live ORM stores as JSON or string
+    jockey_raw = _get(runner, "jockey_stats")
+    jockey_json = _try_parse_json(jockey_raw)
+    if jockey_json:
+        jc = jockey_json.get("career", {})
+        jl = jockey_json.get("last100", {})
+        jcombo_c = jockey_json.get("combo_career", {})
+        jcombo_l = jockey_json.get("combo_last100", {})
+        jockey_career_sr = _f(capped_sr(capped_f(jc, "strike_rate", 50)))
+        jockey_career_a2e = _f(capped_f(jc, "a2e", 50))
+        jockey_career_pot = _f(capped_f(jc, "pot", 50))
+        jockey_career_runners = _f(jc.get("runners", 0))
+        jockey_l100_sr = _f(capped_sr(capped_f(jl, "strike_rate", 0)))
+        combo_career_sr = _f(capped_sr(capped_f(jcombo_c, "strike_rate", 10)))
+        combo_career_runners = _f(jcombo_c.get("runners", 0))
+        combo_l100_sr = _f(capped_sr(capped_f(jcombo_l, "strike_rate", 10)))
+    else:
+        j_sr, j_starts = _sr_from_stats(jockey_raw)
+        jockey_career_sr = j_sr if j_sr is not None else nan
+        jockey_career_runners = j_starts if j_starts else nan
+        jockey_career_a2e = nan
+        jockey_career_pot = nan
+        jockey_l100_sr = nan
+        combo_career_sr = nan
+        combo_career_runners = nan
+        combo_l100_sr = nan
+
+    trainer_raw = _get(runner, "trainer_stats")
+    trainer_json = _try_parse_json(trainer_raw)
+    if trainer_json:
+        tc = trainer_json.get("career", {})
+        tl = trainer_json.get("last100", {})
+        trainer_career_sr = _f(capped_sr(capped_f(tc, "strike_rate", 50)))
+        trainer_career_a2e = _f(capped_f(tc, "a2e", 50))
+        trainer_career_pot = _f(capped_f(tc, "pot", 50))
+        trainer_l100_sr = _f(capped_sr(capped_f(tl, "strike_rate", 0)))
+    else:
+        t_sr, t_starts = _sr_from_stats(trainer_raw)
+        trainer_career_sr = t_sr if t_sr is not None else nan
+        trainer_career_a2e = nan
+        trainer_career_pot = nan
+        trainer_l100_sr = nan
 
     # Physical
     weight = _safe_float(_get(runner, "weight"))

@@ -20,6 +20,8 @@ STRIKE_RATE_DROP = 5.0  # Alert if SR drops 5+ pp week-over-week
 CONSECUTIVE_LOSS_DAYS = 3  # Alert after 3 consecutive losing days
 DAILY_LOSS_LIMIT = -200.0  # Alert if single day loss exceeds $200
 
+_loss_alert_sent_date: Optional[date] = None  # Only alert once per day
+
 
 async def compute_daily_digest(db: AsyncSession, target_date: date) -> dict:
     """Compute daily P&L digest. Reuses get_performance_summary()."""
@@ -162,8 +164,14 @@ async def check_intraday_loss(db: AsyncSession) -> Optional[str]:
     """Check if today's cumulative P&L has breached the daily loss limit.
 
     Called from monitor.py after each race settlement.
+    Only fires once per day to avoid alert spam.
     """
+    global _loss_alert_sent_date
     today = melb_today()
+
+    if _loss_alert_sent_date == today:
+        return None
+
     result = await db.execute(
         select(func.sum(Pick.pnl))
         .join(Meeting, Pick.meeting_id == Meeting.id)
@@ -176,6 +184,7 @@ async def check_intraday_loss(db: AsyncSession) -> Optional[str]:
     total_pnl = float(result.scalar() or 0)
 
     if total_pnl < DAILY_LOSS_LIMIT:
+        _loss_alert_sent_date = today
         return (
             f"\u26a0\ufe0f Daily loss alert: ${abs(total_pnl):.0f} lost today "
             f"(limit: ${abs(DAILY_LOSS_LIMIT):.0f})"
