@@ -655,10 +655,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     if not picks:
         return
 
-    # VR 1.5+ is -33.3% ROI — force to Place to cap exposure
+    # VR 1.2+ is -33.3% ROI on Win — force to Place to cap exposure
     # Exception: under $2.00, Place pays ~$1.10 — keep as Win (reduced stake)
     for pick in picks:
-        if (pick.value_rating > 1.5
+        if (pick.value_rating > 1.2
                 and pick.bet_type in ("Win", "Saver Win")
                 and pick.odds >= 2.00):
             pick.bet_type = "Place"
@@ -778,9 +778,18 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
 
-        # ALL exotic runners must be from selections
-        if overlap_ratio < 1.0:
-            continue
+        # Overlap rules by exotic type:
+        # Quinella/Exacta: ALL runners must be from our picks (strict 2-runner bets)
+        # Trifecta/First4: at least 2 runners from picks (allow ranking runners
+        # in trailing positions — 3rd for tri, 4th+ for First4)
+        ec_type = ec.get("type", "")
+        if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
+            if overlap_ratio < 1.0:
+                continue
+        else:
+            # Trifecta, First4, etc: require at least 2 from picks
+            if overlap < min(2, n_runners):
+                continue
 
         # Parse probability
         raw_prob = ec.get("probability", 0)

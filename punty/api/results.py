@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
 
 from punty.models.database import get_db
 
@@ -24,6 +25,8 @@ async def monitor_status(request: Request):
 @router.post("/monitor/start")
 async def start_monitor(request: Request):
     """Start the results monitor."""
+    if not request.session.get("user"):
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     monitor = getattr(request.app.state, "results_monitor", None)
     if not monitor:
         return {"error": "Monitor not initialized"}
@@ -34,6 +37,8 @@ async def start_monitor(request: Request):
 @router.post("/monitor/stop")
 async def stop_monitor(request: Request):
     """Stop the results monitor."""
+    if not request.session.get("user"):
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     monitor = getattr(request.app.state, "results_monitor", None)
     if not monitor:
         return {"error": "Monitor not initialized"}

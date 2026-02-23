@@ -859,7 +859,8 @@ def calculate_race_probabilities(
             w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
 
     # Determine pace scenario from race analysis or speed map positions
-    pace_scenario = _determine_pace_scenario(active)
+    # Skip if pace weight is zero (saves iterating all runners)
+    pace_scenario = _determine_pace_scenario(active) if w.get("pace", 0) > 0 else "unknown"
 
     # Pre-calculate shared values
     overround = _calculate_overround(active)
@@ -881,22 +882,25 @@ def calculate_race_probabilities(
         mkt_score = _calibrated_score("market_prob", mkt_raw, fallback=mkt_raw) if mkt_raw > 0 else 0.0
         scores = {
             "market":         mkt_score,
-            "movement":       _market_movement_factor(runner),
+            "movement":       _market_movement_factor(runner) if w.get("movement", 0) > 0 else 0.5,
             "form":           _form_rating(runner, track_condition, baseline, race, meeting),
             "class_fitness":  _class_factor(runner, baseline, race),
-            "pace":           _pace_factor(runner, pace_scenario),
+            "pace":           _pace_factor(runner, pace_scenario) if w.get("pace", 0) > 0 else 0.5,
             "barrier":        _barrier_draw_factor(runner, field_size, race_distance, venue=_get(meeting, "venue", "")),
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
             "weight_carried": _weight_factor(runner, avg_weight, race_distance, race),
             "horse_profile":  _horse_profile_factor(runner, race),
-            "deep_learning":  0.5,  # placeholder, set below
+            "deep_learning":  0.5,  # placeholder, set below if weight > 0
         }
 
-        dl_score, dl_matched_patterns = _deep_learning_factor(
-            runner, meeting, race_distance, track_condition,
-            field_size, dl_patterns,
-        )
-        scores["deep_learning"] = dl_score
+        if w.get("deep_learning", 0) > 0:
+            dl_score, dl_matched_patterns = _deep_learning_factor(
+                runner, meeting, race_distance, track_condition,
+                field_size, dl_patterns,
+            )
+            scores["deep_learning"] = dl_score
+        else:
+            dl_matched_patterns = []
 
         all_factor_scores[rid] = scores
         market_implied[rid] = mkt_raw  # raw market probability for value detection

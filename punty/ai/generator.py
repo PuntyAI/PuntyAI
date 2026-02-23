@@ -1346,18 +1346,40 @@ class ContentGenerator:
                     parts.append(line)
 
             if exotic_combos:
-                parts.append("")
-                parts.append("**Pre-Calculated Exotic Combinations (value ≥ 1.2x):**")
-                parts.append("| Type | Runners | Prob | Value | Combos | Format |")
-                parts.append("|------|---------|------|-------|--------|--------|")
-                for ec in exotic_combos[:6]:
-                    runners_str = ", ".join(str(r) for r in ec["runners"])
-                    names_str = ", ".join(ec.get("runner_names", []))
-                    parts.append(
-                        f"| {ec['type']} | [{runners_str}] {names_str} | "
-                        f"{ec['probability']} | {ec['value']:.2f}x | "
-                        f"{ec['combos']} | {ec['format']} |"
-                    )
+                # Filter combo table to only show combos anchored on our picks.
+                # Quinella/Exacta: ALL runners must be from picks (2-runner bets).
+                # Trifecta/First4: top positions from picks, allow ranking runners
+                # in trailing spots (3rd for tri, 4th+ for First4).
+                pick_saddlecloths = set()
+                if pre_sel_obj := race.get("pre_selections"):
+                    pick_saddlecloths = {p.saddlecloth for p in getattr(pre_sel_obj, "picks", [])}
+                filtered_combos = []
+                for ec in exotic_combos:
+                    runners = set(ec.get("runners", []))
+                    etype = ec.get("type", "")
+                    if etype in ("Quinella", "Exacta", "Exacta Standout"):
+                        # Strict: all runners must be from our picks
+                        if runners <= pick_saddlecloths:
+                            filtered_combos.append(ec)
+                    else:
+                        # Trifecta/First4: at least 2 runners from picks
+                        overlap = len(runners & pick_saddlecloths)
+                        if overlap >= min(2, len(runners)):
+                            filtered_combos.append(ec)
+
+                if filtered_combos:
+                    parts.append("")
+                    parts.append("**Pre-Calculated Exotic Combinations (value ≥ 1.2x):**")
+                    parts.append("| Type | Runners | Prob | Value | Combos | Format |")
+                    parts.append("|------|---------|------|-------|--------|--------|")
+                    for ec in filtered_combos[:6]:
+                        runners_str = ", ".join(str(r) for r in ec["runners"])
+                        names_str = ", ".join(ec.get("runner_names", []))
+                        parts.append(
+                            f"| {ec['type']} | [{runners_str}] {names_str} | "
+                            f"{ec['probability']} | {ec['value']:.2f}x | "
+                            f"{ec['combos']} | {ec['format']} |"
+                        )
 
             # Pre-calculated recommended selections
             pre_sel = race.get("pre_selections")

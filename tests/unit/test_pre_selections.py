@@ -318,7 +318,7 @@ class TestAllocateStakes:
         _allocate_stakes([], 20.0)  # no crash
 
     def test_vr_cap_forces_place(self):
-        """VR > 1.5 Win/Saver Win bets should be downgraded to Place."""
+        """VR > 1.2 Win/Saver Win bets should be downgraded to Place."""
         picks = [
             RecommendedPick(1, 1, "A", "Win", 0, 3.0, 1.5, 0.3, 0.6, 1.6, 1.05, 0.5),
             RecommendedPick(2, 2, "B", "Saver Win", 0, 5.0, 2.0, 0.2, 0.5, 1.8, 1.0, 0.3),
@@ -328,6 +328,30 @@ class TestAllocateStakes:
         assert picks[0].bet_type == "Place"  # Win with VR 1.6 → Place
         assert picks[1].bet_type == "Place"  # Saver Win with VR 1.8 → Place
         assert picks[2].bet_type == "Place"  # Already Place, unchanged
+
+    def test_vr_1_3_win_downgraded(self):
+        """VR 1.3 (in the 1.2-1.5 band) on Win should be downgraded to Place."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 0, 4.0, 1.8, 0.25, 0.55, 1.3, 1.05, 0.5),
+        ]
+        _allocate_stakes(picks, 20.0)
+        assert picks[0].bet_type == "Place"
+
+    def test_vr_1_15_win_stays(self):
+        """VR 1.15 (below 1.2 cap) on Win should NOT be downgraded."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 0, 4.0, 1.8, 0.25, 0.55, 1.15, 1.05, 0.5),
+        ]
+        _allocate_stakes(picks, 20.0)
+        assert picks[0].bet_type == "Win"
+
+    def test_vr_cap_skips_under_2_odds(self):
+        """VR > 1.2 but odds < $2.00 should NOT downgrade (Place div too low)."""
+        picks = [
+            RecommendedPick(1, 1, "A", "Win", 0, 1.80, 1.2, 0.5, 0.8, 1.4, 1.05, 0.7),
+        ]
+        _allocate_stakes(picks, 20.0)
+        assert picks[0].bet_type == "Win"
 
 
 # ──────────────────────────────────────────────
