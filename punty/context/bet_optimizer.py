@@ -598,6 +598,42 @@ def _allocate_stakes(
         )
 
 
+def _cover_short_price_fav(
+    recommendations: list[BetRecommendation],
+    selected: list[tuple[dict, int]],
+) -> None:
+    """When #1 is a sub-$2 Win, upgrade #2 to EW/Saver Win for coverage.
+
+    If the short-priced fav loses we want upside from #2 — straight Place
+    at $3-6 wastes the opportunity when the fav falls over.
+    """
+    if len(recommendations) < 2 or len(selected) < 2:
+        return
+
+    r1 = recommendations[0]
+    r2 = recommendations[1]
+    cand2 = selected[1][0]  # candidate dict for #2 (has odds)
+    odds2 = cand2.get("odds", 0)
+
+    # Only trigger when #1 is a short-priced Win
+    if r1.bet_type != "Win" or "short-priced" not in r1.reasoning:
+        return
+
+    # #2 must currently be Place to upgrade — don't downgrade Win/EW
+    if r2.bet_type != "Place":
+        return
+
+    # Upgrade to EW if odds qualify, otherwise Saver Win
+    if EW_MIN_ODDS <= odds2 <= EW_MAX_ODDS and r2.ev_place > 0:
+        r2.bet_type = "Each Way"
+        r2.stake_pct = 0.30
+        r2.reasoning += " (upgraded: EW coverage for short-priced fav)"
+    elif r2.ev_win > -0.05:
+        r2.bet_type = "Saver Win"
+        r2.stake_pct = 0.25
+        r2.reasoning += " (upgraded: Saver coverage for short-priced fav)"
+
+
 def _enforce_capital_efficiency(recommendations: list[BetRecommendation]) -> None:
     """RULE 8: Max 2 win-exposed bets, max 40% on place component."""
     win_types = {"Win", "Saver Win", "Each Way"}
@@ -722,6 +758,9 @@ def optimize_race(
             candidates=candidates,
         )
         recommendations.append(rec)
+
+    # Short-priced fav coverage: upgrade #2 to EW/Saver when #1 is sub-$2
+    _cover_short_price_fav(recommendations, selected)
 
     # RULE 8: Capital efficiency
     _enforce_capital_efficiency(recommendations)
