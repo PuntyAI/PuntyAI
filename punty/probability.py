@@ -538,10 +538,33 @@ def _use_lightgbm() -> bool:
     return _lgbm_enabled
 
 
+def _lgbm_blend_weight(runner_odds: float) -> float:
+    """Per-runner LGBM blend weight based on market odds.
+
+    Odds-conditional blend: weighted engine dominates short prices,
+    LGBM gains influence at longer prices where it finds overlays.
+
+    Returns LGBM weight (0.0-1.0). Weighted weight = 1.0 - lgbm_weight.
+    """
+    if runner_odds < 3.0:
+        return 0.05          # 95% weighted, 5% LGBM
+    elif runner_odds < 5.0:
+        # Linear 5% → 20% LGBM
+        return 0.05 + (runner_odds - 3.0) / 2.0 * 0.15
+    elif runner_odds < 8.0:
+        # Linear 20% → 70% LGBM
+        return 0.20 + (runner_odds - 5.0) / 3.0 * 0.50
+    else:
+        return 0.70          # 30% weighted, 70% LGBM
+
+
 def _calculate_lgbm_probabilities(
     active: list, race: Any, meeting: Any, pool: float = DEFAULT_POOL,
 ) -> dict[str, "RunnerProbability"]:
-    """Calculate probabilities using LightGBM models.
+    """Calculate probabilities using odds-conditional LGBM/weighted blend.
+
+    Per-runner blend: short-priced runners use mostly weighted engine,
+    longer-priced runners use mostly LightGBM (which finds longshot overlays).
 
     Returns dict[runner_id → RunnerProbability] or empty dict on failure.
     Same output interface as the weighted engine — zero downstream changes.
@@ -555,24 +578,61 @@ def _calculate_lgbm_probabilities(
     if not raw_preds:
         return {}
 
+    # Get weighted engine results for blending
+    weighted_results = calculate_race_probabilities(
+        active, race, meeting, pool, _skip_lgbm=True,
+    )
+    if not weighted_results:
+        return {}
+
     field_size = len(active)
     baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
 
-    # Normalize win probs to sum to 1.0
+    # Normalize LGBM win probs to sum to 1.0
     win_total = sum(wp for wp, _ in raw_preds.values())
     if win_total <= 0:
         return {}
-    win_probs = {rid: wp / win_total for rid, (wp, _) in raw_preds.items()}
+    lgbm_win_probs = {rid: wp / win_total for rid, (wp, _) in raw_preds.items()}
 
-    # Normalize place probs to sum to place_count
+    # Normalize LGBM place probs to sum to place_count
     place_count = 2 if field_size <= 7 else 3
     place_total = sum(pp for _, pp in raw_preds.values())
     if place_total > 0:
-        place_probs = {rid: min(0.95, pp / place_total * place_count)
-                       for rid, (_, pp) in raw_preds.items()}
+        lgbm_place_probs = {rid: min(0.95, pp / place_total * place_count)
+                            for rid, (_, pp) in raw_preds.items()}
     else:
-        place_probs = {rid: _place_probability(win_probs.get(rid, baseline), field_size)
-                       for rid in raw_preds}
+        lgbm_place_probs = {rid: _place_probability(lgbm_win_probs.get(rid, baseline), field_size)
+                            for rid in raw_preds}
+
+    # Blend per-runner based on market odds
+    blended_win = {}
+    blended_place = {}
+    for runner in active:
+        rid = _get(runner, "id", "")
+        odds = _get_median_odds(runner) or 0.0
+        lgbm_w = _lgbm_blend_weight(odds)
+        weighted_w = 1.0 - lgbm_w
+
+        w_result = weighted_results.get(rid)
+        w_win = w_result.win_probability if w_result else baseline
+        w_place = w_result.place_probability if w_result else _place_probability(baseline, field_size)
+
+        l_win = lgbm_win_probs.get(rid, baseline)
+        l_place = lgbm_place_probs.get(rid, _place_probability(l_win, field_size))
+
+        blended_win[rid] = weighted_w * w_win + lgbm_w * l_win
+        blended_place[rid] = weighted_w * w_place + lgbm_w * l_place
+
+    # Re-normalize blended win probs to sum to 1.0
+    bw_total = sum(blended_win.values())
+    if bw_total > 0:
+        blended_win = {rid: p / bw_total for rid, p in blended_win.items()}
+
+    # Re-normalize blended place probs to sum to place_count
+    bp_total = sum(blended_place.values())
+    if bp_total > 0:
+        blended_place = {rid: min(0.95, p / bp_total * place_count)
+                         for rid, p in blended_place.items()}
 
     # Calculate market-implied probabilities (reuse existing logic)
     overround = _calculate_overround(active)
@@ -602,8 +662,8 @@ def _calculate_lgbm_probabilities(
     results = {}
     for runner in active:
         rid = _get(runner, "id", "")
-        win_prob = win_probs.get(rid, baseline)
-        place_prob = place_probs.get(rid, _place_probability(win_prob, field_size))
+        win_prob = blended_win.get(rid, baseline)
+        place_prob = blended_place.get(rid, _place_probability(win_prob, field_size))
 
         # Value detection (win)
         mkt_prob = market_implied.get(rid, baseline)
@@ -649,6 +709,7 @@ def calculate_race_probabilities(
     weights: dict[str, float] | None = None,
     place_weights: dict[str, float] | None = None,
     dl_patterns: list[dict] | None = None,
+    _skip_lgbm: bool = False,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
 
@@ -660,6 +721,7 @@ def calculate_race_probabilities(
         weights: Custom win factor weights (key → 0.0-1.0). Defaults to DEFAULT_WEIGHTS.
         place_weights: Custom place factor weights. Defaults to DEFAULT_PLACE_WEIGHTS.
         dl_patterns: Deep learning patterns from PatternInsight table.
+        _skip_lgbm: Internal flag to skip LGBM branch (used by blend to get weighted results).
 
     Returns:
         Dict mapping runner_id → RunnerProbability
@@ -668,8 +730,8 @@ def calculate_race_probabilities(
     if not active:
         return {}
 
-    # LightGBM branch — parallel code path toggled by config
-    if _use_lightgbm():
+    # LightGBM branch — odds-conditional blend toggled by config
+    if not _skip_lgbm and _use_lightgbm():
         result = _calculate_lgbm_probabilities(active, race, meeting, pool)
         if result:
             return result
