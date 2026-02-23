@@ -659,6 +659,12 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             if bf:
                 bf_odds = await bf.get_odds_for_meeting(venue, race_date, meeting_id)
                 await _merge_betfair_odds(db, meeting_id, bf_odds)
+                # Also fetch PLACE market odds
+                try:
+                    bf_place = await bf.fetch_place_odds(venue, race_date, meeting_id)
+                    await _merge_betfair_place_odds(db, bf_place)
+                except Exception as e:
+                    logger.debug(f"Betfair PLACE market: {e}")
                 yield {"step": 5, "total": total_steps,
                        "label": f"Betfair odds: {len(bf_odds)} runners", "status": "done"}
             else:
@@ -1008,7 +1014,19 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                 )
                 if bf_odds:
                     await _merge_betfair_odds(db, meeting_id, bf_odds)
-                    # Also update current_odds for runners where Betfair is
+                    # Also fetch PLACE market odds for PVR accuracy
+                    bf_place_odds = {}
+                    try:
+                        bf_place = await bf.fetch_place_odds(
+                            meeting.venue, meeting.date, meeting_id
+                        )
+                        for po in bf_place:
+                            key = (po["race_id"], po["horse_name"])
+                            bf_place_odds[key] = po["place_odds_betfair"]
+                    except Exception as e:
+                        logger.debug(f"Betfair PLACE market fetch failed: {e}")
+
+                    # Update current_odds for runners where Betfair is
                     # the freshest/only source
                     for od in bf_odds:
                         result = await db.execute(
@@ -1022,11 +1040,16 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                             odds_updated += 1
                             if not runner.opening_odds:
                                 runner.opening_odds = od["odds_betfair"]
-                            # Estimate place odds: (win - 1) / 3 + 1
-                            runner.place_odds = round((od["odds_betfair"] - 1) / 3 + 1, 2)
+                            # Use real Betfair PLACE odds if available, else estimate
+                            place_key = (od["race_id"], od["horse_name"])
+                            real_place = bf_place_odds.get(place_key)
+                            if real_place and real_place > 1.0:
+                                runner.place_odds = real_place
+                            else:
+                                runner.place_odds = round((od["odds_betfair"] - 1) / 3 + 1, 2)
                     logger.info(
                         f"Odds refresh for {meeting_id}: updated {odds_updated} "
-                        f"runners from Betfair"
+                        f"runners from Betfair ({len(bf_place_odds)} with real place odds)"
                     )
             else:
                 logger.info(f"Betfair not configured — skipping odds refresh for {meeting_id}")
@@ -1448,6 +1471,54 @@ async def _merge_betfair_odds(db: AsyncSession, meeting_id: str, odds_data: list
         f"Betfair merge: {matched}/{len(odds_data)} matched, "
         f"{filled_current} filled current_odds"
     )
+
+
+async def _merge_betfair_place_odds(db: AsyncSession, place_data: list[dict]) -> None:
+    """Merge Betfair PLACE market odds into runner records.
+
+    Overwrites estimated place_odds with real exchange place prices.
+    """
+    import re
+
+    def _normalize(name: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", name.strip().lower())
+
+    if not place_data:
+        return
+
+    matched = 0
+    for item in place_data:
+        race_id = item.get("race_id", "")
+        horse_name = item.get("horse_name", "")
+        price = item.get("place_odds_betfair")
+        if not (race_id and horse_name and price and price > 1.0):
+            continue
+
+        result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.horse_name == horse_name,
+            ).limit(1)
+        )
+        runner = result.scalar_one_or_none()
+
+        if not runner:
+            norm_bf = _normalize(horse_name)
+            result = await db.execute(
+                select(Runner).where(Runner.race_id == race_id)
+            )
+            for c in result.scalars().all():
+                if _normalize(c.horse_name) == norm_bf:
+                    runner = c
+                    break
+
+        if runner:
+            runner.place_odds = price
+            matched += 1
+
+    if matched:
+        await db.flush()
+        logger.info(f"Betfair PLACE merge: {matched}/{len(place_data)} matched")
 
 
 async def _fill_derived_fields(db: AsyncSession, meeting_id: str) -> None:

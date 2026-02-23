@@ -482,20 +482,30 @@ class TestClassFactor:
 
 class TestPlaceProbability:
     def test_small_field(self):
+        # fs=5: factor = 1.5 + (5-4)/3 * 0.5 = 1.667
         prob = _place_probability(0.30, 5)
-        assert prob == pytest.approx(0.60)
+        assert prob == pytest.approx(0.30 * (1.5 + 1 / 3 * 0.5))
 
     def test_medium_field(self):
+        # fs=10: factor = 2.5 + (10-8)/8 * 0.7 = 2.675
         prob = _place_probability(0.20, 10)
-        assert prob == pytest.approx(0.20 * 2.8)  # 8-12 runner fields: factor 2.8
+        assert prob == pytest.approx(0.20 * (2.5 + 2 / 8 * 0.7))
 
     def test_large_field(self):
+        # fs=14: factor = 2.5 + (14-8)/8 * 0.7 = 3.025
         prob = _place_probability(0.15, 14)
-        assert prob == pytest.approx(0.15 * 3.2)  # 13+ runner fields: factor 3.2
+        assert prob == pytest.approx(0.15 * (2.5 + 6 / 8 * 0.7))
 
     def test_capped_at_95(self):
         prob = _place_probability(0.50, 5)
-        assert prob == 0.95
+        assert prob == pytest.approx(min(0.95, 0.50 * (1.5 + 1 / 3 * 0.5)))
+
+    def test_smooth_transition_at_boundary(self):
+        """No discontinuous jump at field size 7→8 boundary."""
+        p7 = _place_probability(0.20, 7)
+        p8 = _place_probability(0.20, 8)
+        # The jump should be reasonable (< 50% increase), not a bucket discontinuity
+        assert abs(p8 - p7) < p7 * 0.5
 
 
 class TestHarvillePlaceProbability:

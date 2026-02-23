@@ -466,6 +466,32 @@ DEFAULT_PLACE_WEIGHTS = {
     "deep_learning": 0.00,
 }  # sums to 1.0 — form dominant for place too, per batch 2 optimization
 
+# Distance-specific place weight overrides — mirrors win structure
+# Sprints: barrier and pace matter more for place; staying: weight/form dominate
+DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
+    "sprint": {  # ≤1100m — barrier crucial for place, pace relevant
+        "form": 0.34, "market": 0.27, "barrier": 0.10, "pace": 0.06,
+        "class_fitness": 0.08, "jockey_trainer": 0.07, "weight_carried": 0.04,
+        "horse_profile": 0.04, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "short": {  # 1101-1399m — transition
+        "form": 0.36, "market": 0.27, "barrier": 0.07, "pace": 0.04,
+        "class_fitness": 0.08, "jockey_trainer": 0.08, "weight_carried": 0.05,
+        "horse_profile": 0.05, "movement": 0.00, "deep_learning": 0.00,
+    },
+    # "middle" uses DEFAULT_PLACE_WEIGHTS (no override)
+    "classic": {  # 1800-2199m — weight_carried matters more for place over distance
+        "form": 0.40, "market": 0.25, "weight_carried": 0.08, "class_fitness": 0.09,
+        "jockey_trainer": 0.09, "horse_profile": 0.05, "barrier": 0.02,
+        "pace": 0.02, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "staying": {  # 2200m+ — stamina (form+weight) dominate
+        "form": 0.42, "market": 0.23, "weight_carried": 0.10, "class_fitness": 0.09,
+        "jockey_trainer": 0.08, "horse_profile": 0.05, "barrier": 0.01,
+        "pace": 0.02, "movement": 0.00, "deep_learning": 0.00,
+    },
+}
+
 # Legacy aliases
 WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
 WEIGHT_FORM = DEFAULT_WEIGHTS["form"]
@@ -859,8 +885,12 @@ def calculate_race_probabilities(
     place_count = 2 if field_size <= 7 else 3
     place_probs: dict[str, float] = {}
     if original_factor_scores:
-        # Start with place-specific base weights
-        pw = place_weights if place_weights else DEFAULT_PLACE_WEIGHTS
+        # Start with place-specific base weights (distance-aware)
+        if place_weights:
+            pw = place_weights
+        else:
+            dist_bucket = _get_dist_bucket(race_distance)
+            pw = DISTANCE_PLACE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_PLACE_WEIGHTS)
         place_w = dict(pw)
 
         # Apply context profile multipliers to scores (same formula as win path)
@@ -2342,22 +2372,27 @@ def _get_state_for_venue(venue: str) -> str:
 def _place_probability(win_prob: float, field_size: int) -> float:
     """Estimate place probability from win probability and field size.
 
-    Uses empirical multipliers calibrated to Australian racing place terms:
-    - Fields <= 7: places 1-2
-    - Fields 8+: places 1-3
+    Uses a smooth continuous function instead of discrete buckets to avoid
+    non-monotonic PVR jumps at field-size boundaries.
+
+    Australian place terms: fields <= 7 pay 2 places, 8+ pay 3.
     """
-    if field_size <= 4:
-        # No place betting — but still return an estimate for EV calcs
-        factor = 1.5
-    elif field_size <= 7:
-        # NTD: only 2 places paid — factor should be lower
-        factor = 2.0
-    elif field_size <= 12:
-        # Standard 3 places
-        factor = 2.8
+    if field_size <= 1:
+        return min(0.95, win_prob)
+
+    place_count = 2 if field_size <= 7 else 3
+
+    # Smooth multiplier: place_count / (1 - 1/field_size) gives theoretical
+    # max, but we dampen it to stay realistic. Linear interpolation across
+    # field sizes gives smooth transitions.
+    # Anchors: fs=4 → 1.5, fs=7 → 2.0, fs=8 → 2.5, fs=12 → 2.8, fs=16 → 3.2
+    if field_size <= 7:
+        # 2-place fields: lerp from 1.5 (fs=4) to 2.0 (fs=7)
+        factor = 1.5 + (min(field_size, 7) - 4) / 3.0 * 0.5
+        factor = max(1.3, factor)  # floor for very small fields
     else:
-        # Large fields — more runners to beat but 3 places
-        factor = 3.2
+        # 3-place fields: lerp from 2.5 (fs=8) to 3.2 (fs=16+)
+        factor = 2.5 + (min(field_size, 16) - 8) / 8.0 * 0.7
 
     return min(0.95, win_prob * factor)
 

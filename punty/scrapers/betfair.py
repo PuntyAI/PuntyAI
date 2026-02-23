@@ -293,3 +293,86 @@ class BetfairScraper:
             # First entry is the best (highest) back price
             return backs[0].get("price")
         return None
+
+    async def fetch_place_odds(
+        self, venue: str, race_date: date, meeting_id: str,
+    ) -> list[dict[str, Any]]:
+        """Fetch PLACE market odds from Betfair Exchange.
+
+        Returns list of dicts: {race_id, horse_name, place_odds_betfair}
+        """
+        search_venue = _strip_venue_prefix(venue)
+        date_from = datetime(race_date.year, race_date.month, race_date.day,
+                             tzinfo=timezone.utc).isoformat()
+        date_to = datetime(race_date.year, race_date.month, race_date.day,
+                           23, 59, 59, tzinfo=timezone.utc).isoformat()
+
+        catalogue = await self._api_call("listMarketCatalogue", {
+            "filter": {
+                "eventTypeIds": ["7"],
+                "marketCountries": ["AU"],
+                "marketTypeCodes": ["PLACE"],
+                "venues": [search_venue],
+                "marketStartTime": {"from": date_from, "to": date_to},
+            },
+            "marketProjection": [
+                "RUNNER_DESCRIPTION",
+                "RUNNER_METADATA",
+                "EVENT",
+                "MARKET_START_TIME",
+                "MARKET_DESCRIPTION",
+            ],
+            "maxResults": "25",
+            "sort": "FIRST_TO_START",
+        })
+
+        if not catalogue:
+            logger.debug(f"Betfair: no PLACE markets for '{search_venue}' on {race_date}")
+            return []
+
+        logger.info(f"Betfair: found {len(catalogue)} PLACE markets for {search_venue}")
+
+        market_ids = [m["marketId"] for m in catalogue]
+        books = await self._api_call("listMarketBook", {
+            "marketIds": market_ids,
+            "priceProjection": {"priceData": ["EX_BEST_OFFERS"]},
+        })
+        book_by_id = {b["marketId"]: b for b in books} if books else {}
+
+        results = []
+        for market in catalogue:
+            market_id = market["marketId"]
+            book = book_by_id.get(market_id, {})
+            book_runners = {r["selectionId"]: r for r in book.get("runners", [])}
+
+            market_name = market.get("marketName", "")
+            race_num = self._extract_race_number(market_name, market)
+            if not race_num:
+                continue
+
+            race_id = f"{meeting_id}-r{race_num}"
+            for runner in market.get("runners", []):
+                selection_id = runner["selectionId"]
+                horse_name = runner.get("runnerName", "")
+                if not horse_name:
+                    continue
+                horse_name = re.sub(r"^\d+\.\s*", "", horse_name)
+
+                book_runner = book_runners.get(selection_id, {})
+                price = self._get_best_back(book_runner)
+                if not price:
+                    price = book_runner.get("lastPriceTraded")
+                if not price or price <= 1.0:
+                    continue
+
+                results.append({
+                    "race_id": race_id,
+                    "horse_name": horse_name,
+                    "place_odds_betfair": round(price, 2),
+                })
+
+        logger.info(
+            f"Betfair: {len(results)} place odds from {len(catalogue)} PLACE markets "
+            f"for {venue}"
+        )
+        return results

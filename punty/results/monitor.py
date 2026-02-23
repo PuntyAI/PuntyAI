@@ -578,7 +578,32 @@ class ResultsMonitor:
 
         # ── Abandonment detection ───────────────────────────────────────
         # If ALL races are "Abandoned", post alert, void picks, deselect meeting.
-        if statuses and all(s == "Abandoned" for s in statuses.values()):
+        # Also detect timeout: all races have no results 6+ hours past last start_time.
+        is_all_abandoned = statuses and all(s == "Abandoned" for s in statuses.values())
+
+        if not is_all_abandoned and races:
+            # Timeout detection: if all race statuses are empty/Open and the
+            # latest scheduled start is 6+ hours ago, treat as silently abandoned
+            from punty.config import melb_now_naive
+            now = melb_now_naive()
+            latest_start = max(
+                (r.start_time for r in races if r.start_time), default=None
+            )
+            all_empty_or_open = all(
+                (not r.results_status or r.results_status == "Open") for r in races
+            )
+            if (
+                latest_start
+                and all_empty_or_open
+                and (now - latest_start).total_seconds() > 6 * 3600
+            ):
+                is_all_abandoned = True
+                logger.warning(
+                    f"Timeout abandonment: {meeting.venue} — all races empty/Open, "
+                    f"latest start {latest_start} is 6+ hours ago"
+                )
+
+        if is_all_abandoned:
             dedup = self.alerted_changes.get(meeting_id, set())
             if "abandonment" not in dedup:
                 logger.warning(f"Meeting ABANDONED: {meeting.venue} ({meeting_id})")
