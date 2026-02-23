@@ -422,18 +422,20 @@ def main():
     print(f"  Settled picks (public): {sum(len(v) for v in picks.values())}")
     print(f"{'='*80}")
 
-    # ── Run LightGBM on every settled race ─────────────────────────────
-    lgbm_top1 = 0
-    lgbm_top3 = 0
-    weighted_top1 = 0
-    weighted_top3 = 0
-    total_races = 0
-    lgbm_sim_pnl = 0.0
-    lgbm_sim_hits = 0
-    lgbm_sim_total = 0
+    # ── Run all engines on every settled race ────────────────────────────
+    from punty.probability import calculate_race_probabilities
+
+    # Counters for 3 engines: lgbm, weighted (public), blend
+    engines = ["lgbm", "weighted", "blend"]
+    top1 = {e: 0 for e in engines}
+    top3 = {e: 0 for e in engines}
+    sim_pnl = {e: 0.0 for e in engines}
+    sim_hits = {e: 0 for e in engines}
+    sim_total = {e: 0 for e in engines}
     pub_total_pnl = 0.0
     pub_total_hits = 0
     pub_total_picks = 0
+    total_races = 0
 
     race_details = []
 
@@ -444,9 +446,36 @@ def main():
 
         meeting = meetings.get(race.get("meeting_id", ""), {})
         total_races += 1
+        field_size = len(race_runners)
 
-        # LightGBM predictions
+        # ── LightGBM predictions ──
         lgbm_preds = run_lgbm_on_race(win_model, place_model, race_runners, race, meeting)
+
+        # ── Weighted engine predictions (same as production) ──
+        weighted_results = calculate_race_probabilities(race_runners, race, meeting)
+        weighted_preds = {}
+        for rid, rp in weighted_results.items():
+            weighted_preds[rid] = (rp.win_probability, rp.place_probability)
+
+        # ── 50/50 Blend ──
+        blend_preds = {}
+        all_rids = set(list(lgbm_preds.keys()) + list(weighted_preds.keys()))
+        baseline = 1.0 / field_size
+        for rid in all_rids:
+            lw, lp = lgbm_preds.get(rid, (baseline, baseline * 2))
+            ww, wp = weighted_preds.get(rid, (baseline, baseline * 2))
+            blend_preds[rid] = (0.5 * lw + 0.5 * ww, 0.5 * lp + 0.5 * wp)
+
+        # Normalize blend win probs to sum to 1.0
+        blend_win_total = sum(wp for wp, _ in blend_preds.values())
+        if blend_win_total > 0:
+            blend_preds = {rid: (wp / blend_win_total, pp) for rid, (wp, pp) in blend_preds.items()}
+        # Normalize blend place probs
+        place_count = 2 if field_size <= 7 else 3
+        blend_place_total = sum(pp for _, pp in blend_preds.values())
+        if blend_place_total > 0:
+            blend_preds = {rid: (wp, min(0.95, pp / blend_place_total * place_count))
+                           for rid, (wp, pp) in blend_preds.items()}
 
         # Find actual winner
         winner = None
@@ -454,42 +483,44 @@ def main():
             if r.get("finish_position") == 1:
                 winner = r
                 break
-
         if not winner:
             continue
 
         winner_id = winner["id"]
+        winner_sc = winner.get("saddlecloth")
 
-        # LightGBM ranking
-        lgbm_ranked = sorted(race_runners, key=lambda r: lgbm_preds.get(r["id"], (0, 0))[0], reverse=True)
-        lgbm_winner_rank = next((i + 1 for i, r in enumerate(lgbm_ranked) if r["id"] == winner_id), 99)
-        if lgbm_winner_rank == 1:
-            lgbm_top1 += 1
-        if lgbm_winner_rank <= 3:
-            lgbm_top3 += 1
+        # Rank each engine and check accuracy
+        all_preds = {"lgbm": lgbm_preds, "weighted": weighted_preds, "blend": blend_preds}
+        engine_ranks = {}
+        for eng, preds in all_preds.items():
+            ranked = sorted(race_runners, key=lambda r: preds.get(r["id"], (0, 0))[0], reverse=True)
+            rank = next((i + 1 for i, r in enumerate(ranked) if r["id"] == winner_id), 99)
+            engine_ranks[eng] = rank
+            if rank == 1:
+                top1[eng] += 1
+            if rank <= 3:
+                top3[eng] += 1
 
-        # Published picks — find weighted engine ranking from pick probabilities
+        # Simulate picks for each engine
+        for eng, preds in all_preds.items():
+            sp = simulate_picks(preds, race_runners, race, meeting)
+            for pick in sp:
+                sim_pnl[eng] += pick["pnl"]
+                sim_hits[eng] += 1 if pick["hit"] else 0
+                sim_total[eng] += 1
+
+        # Published picks — actual public PnL
         race_key = f"{race.get('meeting_id', '')}-r{race.get('race_number', 0)}"
         race_picks = picks.get(race_key, [])
         sel_picks = [p for p in race_picks if p["pick_type"] == "selection"]
 
-        # Check if weighted engine's top pick won
+        pub_top1_won = False
+        pub_top1_name = "N/A"
         if sel_picks:
             top_pick = min(sel_picks, key=lambda p: p.get("tip_rank") or 99)
-            winner_sc = winner.get("saddlecloth")
-            if top_pick.get("saddlecloth") == winner_sc:
-                weighted_top1 += 1
-            if any(p.get("saddlecloth") == winner_sc for p in sel_picks if (p.get("tip_rank") or 99) <= 3):
-                weighted_top3 += 1
+            pub_top1_name = top_pick.get("horse_name", "?")
+            pub_top1_won = top_pick.get("saddlecloth") == winner_sc
 
-        # Simulated LightGBM picks
-        sim_picks = simulate_picks(lgbm_preds, race_runners, race, meeting)
-        for sp in sim_picks:
-            lgbm_sim_pnl += sp["pnl"]
-            lgbm_sim_hits += 1 if sp["hit"] else 0
-            lgbm_sim_total += 1
-
-        # Published PnL
         for p in race_picks:
             if p.get("pnl") is not None:
                 pub_total_pnl += p["pnl"]
@@ -501,14 +532,16 @@ def main():
             "venue": meeting.get("venue", "?"),
             "race_num": race.get("race_number", 0),
             "date": meeting.get("date", ""),
-            "field_size": len(race_runners),
+            "field_size": field_size,
             "winner": winner.get("horse_name", "?"),
             "winner_odds": _safe_float(winner.get("current_odds")) or 0,
-            "lgbm_rank": lgbm_winner_rank,
-            "lgbm_top1_prob": lgbm_preds.get(winner_id, (0, 0))[0],
-            "pub_top1": top_pick.get("horse_name", "?") if sel_picks else "N/A",
-            "pub_top1_won": (top_pick.get("saddlecloth") == winner.get("saddlecloth")) if sel_picks else False,
-            "sim_pnl": sum(sp["pnl"] for sp in sim_picks),
+            "lgbm_rank": engine_ranks["lgbm"],
+            "weighted_rank": engine_ranks["weighted"],
+            "blend_rank": engine_ranks["blend"],
+            "pub_top1": pub_top1_name,
+            "pub_top1_won": pub_top1_won,
+            "lgbm_pnl": sum(p["pnl"] for p in simulate_picks(lgbm_preds, race_runners, race, meeting)),
+            "blend_pnl": sum(p["pnl"] for p in simulate_picks(blend_preds, race_runners, race, meeting)),
             "pub_pnl": sum(p["pnl"] for p in race_picks if p.get("pnl") is not None),
         })
 
@@ -516,80 +549,91 @@ def main():
     print(f"\n{'='*80}")
     print(f"TOP-PICK ACCURACY (did #1 ranked runner win?)")
     print(f"{'='*80}")
-    print(f"  {'Engine':20s} {'Top-1':>10s} {'Top-3':>10s} {'Races':>8s}")
-    print(f"  {'─'*50}")
-    lgbm_pct1 = lgbm_top1 / total_races * 100 if total_races else 0
-    lgbm_pct3 = lgbm_top3 / total_races * 100 if total_races else 0
-    weighted_pct1 = weighted_top1 / total_races * 100 if total_races else 0
-    weighted_pct3 = weighted_top3 / total_races * 100 if total_races else 0
-    print(f"  {'LightGBM':20s} {lgbm_top1:>4d}/{total_races} ({lgbm_pct1:4.1f}%) {lgbm_top3:>4d}/{total_races} ({lgbm_pct3:4.1f}%) {total_races:>6d}")
-    print(f"  {'Weighted (public)':20s} {weighted_top1:>4d}/{total_races} ({weighted_pct1:4.1f}%) {weighted_top3:>4d}/{total_races} ({weighted_pct3:4.1f}%) {total_races:>6d}")
-    delta = lgbm_pct1 - weighted_pct1
-    print(f"\n  LightGBM advantage: {delta:+.1f}% top-1 accuracy")
+    print(f"  {'Engine':20s} {'Top-1':>14s} {'Top-3':>14s} {'Races':>8s}")
+    print(f"  {'─'*58}")
+    for eng, label in [("lgbm", "LightGBM"), ("weighted", "Weighted"), ("blend", "50/50 Blend")]:
+        pct1 = top1[eng] / total_races * 100 if total_races else 0
+        pct3 = top3[eng] / total_races * 100 if total_races else 0
+        print(f"  {label:20s} {top1[eng]:>4d}/{total_races} ({pct1:4.1f}%) {top3[eng]:>4d}/{total_races} ({pct3:4.1f}%) {total_races:>6d}")
+    # Published picks comparison (uses tip_rank from actual content)
+    pub_t1 = sum(1 for rd in race_details if rd["pub_top1_won"])
+    pub_t3 = sum(1 for rd in race_details if rd.get("pub_top1_won"))  # approx
+    print(f"  {'Published picks':20s} {pub_t1:>4d}/{total_races} ({pub_t1/total_races*100:4.1f}%)")
+    blend_pct1 = top1["blend"] / total_races * 100 if total_races else 0
+    best_single = max(top1["lgbm"], top1["weighted"])
+    print(f"\n  Blend vs best single engine: {top1['blend'] - best_single:+d} top-1 picks")
 
     print(f"\n{'='*80}")
-    print(f"P&L COMPARISON")
+    print(f"P&L COMPARISON (simulated flat staking)")
     print(f"{'='*80}")
     print(f"  {'Engine':20s} {'Total PnL':>12s} {'Hits':>8s} {'Picks':>8s} {'Hit%':>8s} {'ROI':>8s}")
     print(f"  {'─'*66}")
-    lgbm_stake = lgbm_sim_total * 5.0  # avg $5 stake
-    pub_stake = pub_total_picks * 5.0
-    lgbm_roi = lgbm_sim_pnl / (lgbm_sim_total * 5.0) * 100 if lgbm_sim_total else 0
-    pub_roi = pub_total_pnl / (pub_total_picks * 5.0) * 100 if pub_total_picks else 0
-    lgbm_hit_pct = lgbm_sim_hits / lgbm_sim_total * 100 if lgbm_sim_total else 0
+    for eng, label in [("lgbm", "LightGBM (sim)"), ("weighted", "Weighted (sim)"), ("blend", "Blend 50/50 (sim)")]:
+        t = sim_total[eng]
+        h = sim_hits[eng]
+        p = sim_pnl[eng]
+        hp = h / t * 100 if t else 0
+        roi = p / (t * 5.0) * 100 if t else 0
+        print(f"  {label:20s} ${p:>+10.2f} {h:>6d} {t:>6d} {hp:>6.1f}% {roi:>+6.1f}%")
     pub_hit_pct = pub_total_hits / pub_total_picks * 100 if pub_total_picks else 0
-    print(f"  {'LightGBM (sim)':20s} ${lgbm_sim_pnl:>+10.2f} {lgbm_sim_hits:>6d} {lgbm_sim_total:>6d} {lgbm_hit_pct:>6.1f}% {lgbm_roi:>+6.1f}%")
-    print(f"  {'Weighted (public)':20s} ${pub_total_pnl:>+10.2f} {pub_total_hits:>6d} {pub_total_picks:>6d} {pub_hit_pct:>6.1f}% {pub_roi:>+6.1f}%")
+    pub_roi = pub_total_pnl / (pub_total_picks * 5.0) * 100 if pub_total_picks else 0
+    print(f"  {'Published (actual)':20s} ${pub_total_pnl:>+10.2f} {pub_total_hits:>6d} {pub_total_picks:>6d} {pub_hit_pct:>6.1f}% {pub_roi:>+6.1f}%")
 
     # ── Per-venue breakdown ────────────────────────────────────────────
     print(f"\n{'='*80}")
     print(f"PER-VENUE BREAKDOWN")
     print(f"{'='*80}")
-    venue_stats = defaultdict(lambda: {"lgbm_top1": 0, "weighted_top1": 0, "races": 0,
-                                         "lgbm_pnl": 0.0, "pub_pnl": 0.0})
+    venue_stats = defaultdict(lambda: {"lgbm_top1": 0, "weighted_top1": 0, "blend_top1": 0,
+                                         "races": 0, "lgbm_pnl": 0.0, "blend_pnl": 0.0, "pub_pnl": 0.0})
     for rd in race_details:
         v = rd["venue"]
         venue_stats[v]["races"] += 1
         if rd["lgbm_rank"] == 1:
             venue_stats[v]["lgbm_top1"] += 1
-        if rd["pub_top1_won"]:
+        if rd["weighted_rank"] == 1:
             venue_stats[v]["weighted_top1"] += 1
-        venue_stats[v]["lgbm_pnl"] += rd["sim_pnl"]
+        if rd["blend_rank"] == 1:
+            venue_stats[v]["blend_top1"] += 1
+        venue_stats[v]["lgbm_pnl"] += rd["lgbm_pnl"]
+        venue_stats[v]["blend_pnl"] += rd["blend_pnl"]
         venue_stats[v]["pub_pnl"] += rd["pub_pnl"]
 
-    print(f"  {'Venue':20s} {'Races':>6s} {'LGBM Top1':>10s} {'Pub Top1':>10s} {'LGBM PnL':>10s} {'Pub PnL':>10s}")
-    print(f"  {'─'*68}")
+    print(f"  {'Venue':18s} {'R':>3s} {'LGBM':>7s} {'Wt':>7s} {'Blend':>7s} {'LGBM PnL':>10s} {'Blend PnL':>10s} {'Pub PnL':>10s}")
+    print(f"  {'─'*76}")
     for venue in sorted(venue_stats, key=lambda v: -venue_stats[v]["races"]):
         vs = venue_stats[venue]
-        races_n = vs["races"]
-        l1 = f"{vs['lgbm_top1']}/{races_n}"
-        w1 = f"{vs['weighted_top1']}/{races_n}"
-        print(f"  {venue:20s} {races_n:>6d} {l1:>10s} {w1:>10s} ${vs['lgbm_pnl']:>+8.2f} ${vs['pub_pnl']:>+8.2f}")
+        n = vs["races"]
+        print(f"  {venue:18s} {n:>3d} {vs['lgbm_top1']:>3d}/{n:<3d} {vs['weighted_top1']:>3d}/{n:<3d} {vs['blend_top1']:>3d}/{n:<3d}"
+              f" ${vs['lgbm_pnl']:>+8.2f} ${vs['blend_pnl']:>+8.2f} ${vs['pub_pnl']:>+8.2f}")
 
     # ── Per-day breakdown ──────────────────────────────────────────────
     print(f"\n{'='*80}")
     print(f"PER-DAY BREAKDOWN")
     print(f"{'='*80}")
-    day_stats = defaultdict(lambda: {"lgbm_top1": 0, "weighted_top1": 0, "races": 0,
-                                       "lgbm_pnl": 0.0, "pub_pnl": 0.0})
+    day_stats = defaultdict(lambda: {"lgbm_top1": 0, "weighted_top1": 0, "blend_top1": 0,
+                                       "races": 0, "lgbm_pnl": 0.0, "blend_pnl": 0.0, "pub_pnl": 0.0})
     for rd in race_details:
         d = rd["date"]
         day_stats[d]["races"] += 1
         if rd["lgbm_rank"] == 1:
             day_stats[d]["lgbm_top1"] += 1
-        if rd["pub_top1_won"]:
+        if rd["weighted_rank"] == 1:
             day_stats[d]["weighted_top1"] += 1
-        day_stats[d]["lgbm_pnl"] += rd["sim_pnl"]
+        if rd["blend_rank"] == 1:
+            day_stats[d]["blend_top1"] += 1
+        day_stats[d]["lgbm_pnl"] += rd["lgbm_pnl"]
+        day_stats[d]["blend_pnl"] += rd["blend_pnl"]
         day_stats[d]["pub_pnl"] += rd["pub_pnl"]
 
-    print(f"  {'Date':12s} {'Races':>6s} {'LGBM Top1':>12s} {'Pub Top1':>12s} {'LGBM PnL':>10s} {'Pub PnL':>10s}")
-    print(f"  {'─'*64}")
+    print(f"  {'Date':12s} {'R':>4s} {'LGBM Top1':>12s} {'Wt Top1':>12s} {'Blend Top1':>12s} {'Blend PnL':>10s} {'Pub PnL':>10s}")
+    print(f"  {'─'*74}")
     for day in sorted(day_stats):
         ds = day_stats[day]
         n = ds["races"]
-        l1_pct = ds["lgbm_top1"] / n * 100 if n else 0
-        w1_pct = ds["weighted_top1"] / n * 100 if n else 0
-        print(f"  {day:12s} {n:>6d} {ds['lgbm_top1']:>4d} ({l1_pct:4.1f}%) {ds['weighted_top1']:>4d} ({w1_pct:4.1f}%) ${ds['lgbm_pnl']:>+8.2f} ${ds['pub_pnl']:>+8.2f}")
+        l1 = ds["lgbm_top1"] / n * 100 if n else 0
+        w1 = ds["weighted_top1"] / n * 100 if n else 0
+        b1 = ds["blend_top1"] / n * 100 if n else 0
+        print(f"  {day:12s} {n:>4d} {ds['lgbm_top1']:>4d} ({l1:4.1f}%) {ds['weighted_top1']:>4d} ({w1:4.1f}%) {ds['blend_top1']:>4d} ({b1:4.1f}%) ${ds['blend_pnl']:>+8.2f} ${ds['pub_pnl']:>+8.2f}")
 
     # ── Interesting disagreements ──────────────────────────────────────
     print(f"\n{'='*80}")
@@ -617,19 +661,20 @@ def main():
 
     # ── Odds-band analysis ─────────────────────────────────────────────
     print(f"\n{'='*80}")
-    print(f"LGBM TOP-1 ACCURACY BY WINNER'S ODDS BAND")
+    print(f"TOP-1 ACCURACY BY WINNER'S ODDS BAND")
     print(f"{'='*80}")
     bands = [(1, 2), (2, 3), (3, 5), (5, 8), (8, 15), (15, 100)]
-    print(f"  {'Band':12s} {'Races':>6s} {'LGBM Top1':>12s} {'Pub Top1':>12s}")
-    print(f"  {'─'*44}")
+    print(f"  {'Band':12s} {'Races':>6s} {'LGBM':>12s} {'Weighted':>12s} {'Blend':>12s}")
+    print(f"  {'─'*56}")
     for lo, hi in bands:
         band_races = [rd for rd in race_details if lo <= rd["winner_odds"] < hi]
         if not band_races:
             continue
         n = len(band_races)
         l1 = sum(1 for rd in band_races if rd["lgbm_rank"] == 1)
-        w1 = sum(1 for rd in band_races if rd["pub_top1_won"])
-        print(f"  ${lo:<3d}-${hi:<3d}    {n:>6d} {l1:>4d} ({l1/n*100:4.1f}%) {w1:>4d} ({w1/n*100:4.1f}%)")
+        w1 = sum(1 for rd in band_races if rd["weighted_rank"] == 1)
+        b1 = sum(1 for rd in band_races if rd["blend_rank"] == 1)
+        print(f"  ${lo:<3d}-${hi:<3d}    {n:>6d} {l1:>4d} ({l1/n*100:4.1f}%) {w1:>4d} ({w1/n*100:4.1f}%) {b1:>4d} ({b1/n*100:4.1f}%)")
 
 
 if __name__ == "__main__":
