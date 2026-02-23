@@ -423,29 +423,32 @@ DEFAULT_WEIGHTS = {
     "deep_learning": 0.00,
 }  # sums to 1.0 — form dominant, market secondary
 
-# Distance-specific weight adjustments (deltas from DEFAULT_WEIGHTS)
-# Sprints: barrier and pace matter more, form slightly less
-# Staying: form dominates, barrier barely matters, weight carried more important
+# Distance-specific weight overrides — tuned via batch 2 grid search (seed=123, 400 combos x 500 races per bucket)
+# Middle was biggest win: -0.39% → +9.75% ROI. horse_profile elevated for short/middle distances.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m
-        "form": 0.45, "market": 0.30, "barrier": 0.06, "pace": 0.04,
-        "weight_carried": 0.04, "horse_profile": 0.04, "class_fitness": 0.03,
-        "jockey_trainer": 0.04, "movement": 0.00, "deep_learning": 0.00,
-    },
-    "short": {  # 1101-1399m
-        "form": 0.48, "market": 0.30, "barrier": 0.04, "pace": 0.02,
-        "weight_carried": 0.05, "horse_profile": 0.04, "class_fitness": 0.03,
-        "jockey_trainer": 0.04, "movement": 0.00, "deep_learning": 0.00,
-    },
-    # "middle" uses DEFAULT_WEIGHTS (no override needed)
-    "classic": {  # 1800-2199m
-        "form": 0.52, "market": 0.28, "weight_carried": 0.07, "barrier": 0.01,
-        "horse_profile": 0.04, "class_fitness": 0.04, "jockey_trainer": 0.04,
+    "sprint": {  # ≤1100m — tuner found baseline already optimal (batch 2, seed=123)
+        "form": 0.51, "market": 0.32, "weight_carried": 0.05, "barrier": 0.03,
+        "horse_profile": 0.025, "class_fitness": 0.025, "jockey_trainer": 0.04,
         "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
     },
-    "staying": {  # 2200m+
-        "form": 0.55, "market": 0.25, "weight_carried": 0.08, "barrier": 0.00,
-        "horse_profile": 0.04, "class_fitness": 0.04, "jockey_trainer": 0.04,
+    "short": {  # 1101-1399m — horse_profile 4x boost, pace emerges (batch 2)
+        "form": 0.465, "market": 0.291, "horse_profile": 0.093, "jockey_trainer": 0.058,
+        "barrier": 0.023, "weight_carried": 0.023, "class_fitness": 0.023,
+        "pace": 0.023, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "middle": {  # 1400-1799m — biggest improvement: -0.39% → +9.75% win ROI (batch 2)
+        "form": 0.449, "market": 0.281, "horse_profile": 0.090, "weight_carried": 0.067,
+        "jockey_trainer": 0.056, "barrier": 0.034, "class_fitness": 0.023,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "classic": {  # 1800-2199m — jockey_trainer 2x boost (batch 2)
+        "form": 0.455, "market": 0.284, "jockey_trainer": 0.091, "weight_carried": 0.068,
+        "horse_profile": 0.046, "barrier": 0.034, "class_fitness": 0.023,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "staying": {  # 2200m+ — jockey_trainer & class_fitness elevated (batch 2)
+        "form": 0.455, "market": 0.284, "jockey_trainer": 0.091, "class_fitness": 0.068,
+        "weight_carried": 0.046, "horse_profile": 0.046, "barrier": 0.011,
         "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
     },
 }
@@ -466,29 +469,33 @@ DEFAULT_PLACE_WEIGHTS = {
     "deep_learning": 0.00,
 }  # sums to 1.0 — form dominant for place too, per batch 2 optimization
 
-# Distance-specific place weight overrides — mirrors win structure
-# Sprints: barrier and pace matter more for place; staying: weight/form dominate
+# Distance-specific place weight overrides — tuned via batch 2 grid search
+# Key finding: class_fitness 3x for staying place, jockey_trainer dominant for classic place
 DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — barrier crucial for place, pace relevant
-        "form": 0.34, "market": 0.27, "barrier": 0.10, "pace": 0.06,
-        "class_fitness": 0.08, "jockey_trainer": 0.07, "weight_carried": 0.04,
-        "horse_profile": 0.04, "movement": 0.00, "deep_learning": 0.00,
+    "sprint": {  # ≤1100m — tuned: barrier 0.08, movement emerges (batch 2)
+        "form": 0.347, "market": 0.248, "class_fitness": 0.099, "jockey_trainer": 0.099,
+        "barrier": 0.079, "weight_carried": 0.079, "horse_profile": 0.030,
+        "movement": 0.020, "pace": 0.00, "deep_learning": 0.00,
     },
-    "short": {  # 1101-1399m — transition
-        "form": 0.36, "market": 0.27, "barrier": 0.07, "pace": 0.04,
-        "class_fitness": 0.08, "jockey_trainer": 0.08, "weight_carried": 0.05,
-        "horse_profile": 0.05, "movement": 0.00, "deep_learning": 0.00,
+    "short": {  # 1101-1399m — weight_carried boosted, pace emerges (batch 2)
+        "form": 0.380, "market": 0.272, "weight_carried": 0.087, "class_fitness": 0.054,
+        "jockey_trainer": 0.054, "horse_profile": 0.054, "pace": 0.044,
+        "barrier": 0.033, "movement": 0.022, "deep_learning": 0.00,
     },
-    # "middle" uses DEFAULT_PLACE_WEIGHTS (no override)
-    "classic": {  # 1800-2199m — weight_carried matters more for place over distance
-        "form": 0.40, "market": 0.25, "weight_carried": 0.08, "class_fitness": 0.09,
-        "jockey_trainer": 0.09, "horse_profile": 0.05, "barrier": 0.02,
-        "pace": 0.02, "movement": 0.00, "deep_learning": 0.00,
+    "middle": {  # 1400-1799m — barrier 3x boost, class_fitness elevated (batch 2)
+        "form": 0.341, "market": 0.284, "class_fitness": 0.091, "barrier": 0.091,
+        "jockey_trainer": 0.057, "horse_profile": 0.057, "weight_carried": 0.034,
+        "pace": 0.023, "movement": 0.023, "deep_learning": 0.00,
     },
-    "staying": {  # 2200m+ — stamina (form+weight) dominate
-        "form": 0.42, "market": 0.23, "weight_carried": 0.10, "class_fitness": 0.09,
-        "jockey_trainer": 0.08, "horse_profile": 0.05, "barrier": 0.01,
-        "pace": 0.02, "movement": 0.00, "deep_learning": 0.00,
+    "classic": {  # 1800-2199m — jockey_trainer dominant for place (batch 2)
+        "form": 0.333, "market": 0.286, "jockey_trainer": 0.143, "class_fitness": 0.095,
+        "weight_carried": 0.048, "pace": 0.038, "barrier": 0.029,
+        "horse_profile": 0.029, "movement": 0.00, "deep_learning": 0.00,
+    },
+    "staying": {  # 2200m+ — class_fitness 3x for staying place (batch 2)
+        "form": 0.385, "market": 0.275, "class_fitness": 0.165, "jockey_trainer": 0.055,
+        "barrier": 0.033, "weight_carried": 0.033, "horse_profile": 0.033,
+        "movement": 0.022, "pace": 0.00, "deep_learning": 0.00,
     },
 }
 

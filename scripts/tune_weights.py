@@ -83,9 +83,10 @@ FIXED_ZERO = ["deep_learning"]
 WIN_MAX_COMBOS = 1500   # Phase 1: win weights (~5 hours)
 PLACE_MAX_COMBOS = 1500  # Phase 2: place weights (~5 hours)
 
-# Per-distance: fewer combos since sample is smaller
-DIST_WIN_MAX_COMBOS = 800
-DIST_PLACE_MAX_COMBOS = 800
+# Per-distance: fewer combos to fit in overnight run (~8 hours total)
+DIST_WIN_MAX_COMBOS = 400
+DIST_PLACE_MAX_COMBOS = 400
+DIST_SAMPLE_SIZE = 500  # Races per bucket (enough for stable signal)
 
 def generate_weight_combos(search_space, max_combos, seed_offset=1000):
     """Generate weight combinations — random sample from the full grid."""
@@ -350,7 +351,7 @@ async def optimize_bucket(bucket_name, bucket_races, current_win_w, current_plac
     """Run win + place optimization for a single distance bucket."""
     import random
 
-    sample_size = min(len(bucket_races), max(200, len(bucket_races)))
+    sample_size = min(DIST_SAMPLE_SIZE, len(bucket_races))
     rng = random.Random(SEED + hash(bucket_name))
     sample = rng.sample(bucket_races, sample_size) if len(bucket_races) > sample_size else bucket_races
 
@@ -508,9 +509,9 @@ async def _run_by_distance(races_data, start_time):
     print(f"Total races: {len(races_data)}, Elapsed: {total_time:.0f}s")
 
     for bucket_name, res in results_by_bucket.items():
-        print(f"\n{'─'*70}")
+        print(f"\n{'-'*70}")
         print(f"  {bucket_name.upper()} ({res['races']} races)")
-        print(f"{'─'*70}")
+        print(f"{'-'*70}")
         bl = res["baseline"]
         bw = res["best_win"]["result"]
         bp = res["best_place"]["result"]
