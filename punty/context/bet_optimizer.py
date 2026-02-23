@@ -510,6 +510,22 @@ def recommend_bet(
     # RULE 7: EW odds filter — applied as post-check
     # RULE 8: Capital efficiency — handled in optimize_race()
 
+    # Short-priced guard: under $2.00, Place pays ~$1.10-$1.30 — pointless.
+    # Always Win at these odds (reduced stake handled downstream).
+    if candidate["odds"] < 2.00 and rank <= 3:
+        pct = 0.25 if candidate["odds"] < 1.50 else 0.30
+        return BetRecommendation(
+            saddlecloth=candidate["saddlecloth"],
+            horse_name=candidate["horse_name"],
+            bet_type="Win",
+            stake_pct=pct,
+            ev_win=round(candidate["ev_win"], 4),
+            ev_place=round(candidate["ev_place"], 4),
+            win_edge=round(candidate["win_edge"], 4),
+            place_edge=round(candidate["place_edge"], 4),
+            reasoning=f"Win, short-priced ${candidate['odds']:.2f} — Place div too low",
+        )
+
     if race_type == DOMINANT_EDGE:
         bt, pct, reason = _recommend_bet_dominant(candidate, rank, field_size)
     elif race_type == PLACE_LEVERAGE:

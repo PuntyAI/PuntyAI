@@ -656,8 +656,11 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         return
 
     # VR 1.5+ is -33.3% ROI — force to Place to cap exposure
+    # Exception: under $2.00, Place pays ~$1.10 — keep as Win (reduced stake)
     for pick in picks:
-        if pick.value_rating > 1.5 and pick.bet_type in ("Win", "Saver Win"):
+        if (pick.value_rating > 1.5
+                and pick.bet_type in ("Win", "Saver Win")
+                and pick.odds >= 2.00):
             pick.bet_type = "Place"
             place_odds = pick.place_odds or _estimate_place_odds(pick.odds)
             pick.expected_return = round(pick.place_prob * place_odds - 1, 2)
