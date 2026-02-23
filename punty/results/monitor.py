@@ -122,6 +122,7 @@ class ResultsMonitor:
         self.processed_races: dict[str, set[int]] = {}  # {meeting_id: {race_nums}}
         self.wrapups_generated: set[str] = set()
         self.pace_updates_posted: dict[str, int] = {}  # {meeting_id: count}
+        self.last_pace_bias: dict[str, str | None] = {}  # {meeting_id: last bias_type posted}
         self.weather_alerts_posted: dict[str, int] = {}  # {meeting_id: count}
         self.alerted_changes: dict[str, set[str]] = {}  # {meeting_id: set of dedup keys}
         self.last_change_check: dict[str, datetime] = {}  # rate limit per meeting
@@ -278,6 +279,7 @@ class ResultsMonitor:
                 self.processed_races.clear()
                 self.wrapups_generated.clear()
                 self.pace_updates_posted.clear()
+                self.last_pace_bias.clear()
                 self.weather_alerts_posted.clear()
                 self.alerted_changes.clear()
                 self.last_change_check.clear()
@@ -1318,9 +1320,11 @@ class ResultsMonitor:
         if not bias_result:
             return
         # First check always posts (even "maps are tracking" when no bias)
-        # Subsequent checks only post if a bias has developed
-        if not bias_result.bias_detected and posted_count > 0:
-            return
+        # Subsequent checks only post if bias_type has CHANGED
+        last_bias = self.last_pace_bias.get(meeting_id)
+        current_bias = bias_result.bias_type if bias_result.bias_detected else None
+        if posted_count > 0 and current_bias == last_bias:
+            return  # Same bias state as last post — skip
 
         # Find the meeting's early mail (falls back to superseded if new one not yet posted)
         early_mail = await self._get_posted_early_mail(db, meeting_id)
@@ -1343,6 +1347,10 @@ class ResultsMonitor:
         if not tweet_text:
             return
 
+        # Increment counter and store bias state BEFORE async post (prevent race condition)
+        self.pace_updates_posted[meeting_id] = posted_count + 1
+        self.last_pace_bias[meeting_id] = current_bias
+
         # Post to Twitter (chain off last tweet in thread)
         reply_tweet_id = None
         thread_parent = None
@@ -1353,7 +1361,6 @@ class ResultsMonitor:
                 try:
                     reply_result = await twitter.post_reply(thread_parent, tweet_text)
                     reply_tweet_id = reply_result.get("tweet_id")
-                    self.pace_updates_posted[meeting_id] = posted_count + 1
                     logger.info(f"Posted pace analysis for {meeting.venue} (update {posted_count + 1}, bias: {bias_result.bias_type})")
                 except Exception as e:
                     logger.warning(f"Failed to post pace analysis reply: {e}")
@@ -1376,7 +1383,6 @@ class ResultsMonitor:
         )
         db.add(update)
         await db.flush()
-        self.pace_updates_posted[meeting_id] = posted_count + 1
 
     async def _scrape_sectional_times(self, db: AsyncSession, meeting, race_num: int):
         """Scrape and store post-race sectional times for a race.
@@ -1694,9 +1700,9 @@ class ResultsMonitor:
         trainer_wins = Counter()
         for jockey, trainer in winners:
             if jockey:
-                jockey_wins[jockey.strip()] += 1
+                jockey_wins[jockey.strip().title()] += 1
             if trainer:
-                trainer_wins[trainer.strip()] += 1
+                trainer_wins[trainer.strip().title()] += 1
 
         total_races = len(completed)
 

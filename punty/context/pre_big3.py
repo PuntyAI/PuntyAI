@@ -164,6 +164,9 @@ def calculate_pre_big3(race_contexts: list[dict]) -> Big3Recommendation | None:
             for c2 in lists[1]:
                 for c3 in lists[2]:
                     horses = [c1, c2, c3]
+                    # Reject combos where ALL 3 legs are sub-$4 (negative EV)
+                    if all(h.win_odds < 4.0 for h in horses):
+                        continue
                     multi_prob = c1.win_prob * c2.win_prob * c3.win_prob
                     multi_odds = c1.win_odds * c2.win_odds * c3.win_odds
 

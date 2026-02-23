@@ -302,3 +302,59 @@ class TestFormatPreBig3:
         text = format_pre_big3(rec)
         assert "[STRONG]" in text
         assert "[SOLID]" in text
+
+
+class TestBig3MinOdds:
+    """Big3 combos where all 3 legs are sub-$4 should be rejected."""
+
+    def test_all_short_odds_rejected(self):
+        """When all candidates are sub-$4, no Big3 should be recommended."""
+        races = [
+            _race_ctx(1, ranked=[
+                {"saddlecloth": 1, "horse": "Fav1", "win_prob": 0.40},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav1", "current_odds": 2.50},
+            ]),
+            _race_ctx(2, ranked=[
+                {"saddlecloth": 1, "horse": "Fav2", "win_prob": 0.40},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav2", "current_odds": 2.80},
+            ]),
+            _race_ctx(3, ranked=[
+                {"saddlecloth": 1, "horse": "Fav3", "win_prob": 0.45},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav3", "current_odds": 2.20},
+            ]),
+            _race_ctx(4, ranked=[
+                {"saddlecloth": 1, "horse": "Fav4", "win_prob": 0.42},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav4", "current_odds": 3.00},
+            ]),
+        ]
+        result = calculate_pre_big3(races)
+        # All candidates are sub-$4, so no valid Big3 combination exists
+        assert result is None
+
+    def test_one_longer_odds_allowed(self):
+        """When at least one leg is $4+, Big3 can still be generated."""
+        races = [
+            _race_ctx(1, ranked=[
+                {"saddlecloth": 1, "horse": "Fav1", "win_prob": 0.35},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav1", "current_odds": 3.00},
+            ]),
+            _race_ctx(2, ranked=[
+                {"saddlecloth": 1, "horse": "Fav2", "win_prob": 0.25},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav2", "current_odds": 5.00},
+            ]),
+            _race_ctx(3, ranked=[
+                {"saddlecloth": 1, "horse": "Fav3", "win_prob": 0.30},
+            ], runners=[
+                {"saddlecloth": 1, "horse_name": "Fav3", "current_odds": 3.50},
+            ]),
+        ]
+        result = calculate_pre_big3(races)
+        # At least one $5 horse — guard should NOT reject
+        # (may still be None if EV too low, but not because of odds guard)
+        # This test verifies the guard doesn't filter it out

@@ -724,6 +724,81 @@ def _calculate_lgbm_probabilities(
 
 
 # ──────────────────────────────────────────────
+# Post-scoring adjustment helpers
+# ──────────────────────────────────────────────
+
+def _campaign_run_count(runner: Any) -> int:
+    """Count runs in current campaign from last_five string.
+
+    Each digit or 'x' in last_five represents one run.
+    If days_since_last_run > 60 and no form, assume first-up.
+    """
+    last_five = _get(runner, "last_five") or ""
+    positions = [c for c in last_five.strip() if c.isdigit() or c.lower() == "x"]
+    if positions:
+        return len(positions)
+    # Fallback: if spelled-out or missing, estimate from days since last run
+    dslr = _get(runner, "days_since_last_run")
+    if dslr and isinstance(dslr, (int, float)) and dslr > 60:
+        return 1  # First-up
+    return 3  # Default mid-campaign if unknown
+
+
+def _false_favourite_score(runner: Any, race: Any) -> int:
+    """Score false-favourite red flags (0-10). Only evaluated for odds < $4.
+
+    Red flags:
+    - Career win rate < 15%, 5+ starts → +2
+    - First-up with 0 first-up wins (2+ attempts) → +2
+    - 7+ runs in campaign → +1
+    - Weight >= 58.5kg for 3YO filly/mare → +1
+    - Previous run unplaced (last_five[0] >= 4 or 'x') → +1
+    - Class jump after maiden win → +1
+    """
+    score = 0
+
+    # Career win rate < 15% with 5+ starts
+    career = parse_stats_string(_get(runner, "career_record"))
+    if career and career.starts >= 5 and career.win_rate < 0.15:
+        score += 2
+
+    # First-up with no first-up wins
+    fu_stats = parse_stats_string(_get(runner, "first_up_stats"))
+    dslr = _get(runner, "days_since_last_run")
+    is_first_up = dslr and isinstance(dslr, (int, float)) and dslr > 60
+    if is_first_up and fu_stats and fu_stats.starts >= 2 and fu_stats.wins == 0:
+        score += 2
+
+    # 7+ runs in campaign
+    run_count = _campaign_run_count(runner)
+    if run_count >= 7:
+        score += 1
+
+    # Weight >= 58.5kg for 3YO filly/mare
+    weight = _get(runner, "weight")
+    sex = (_get(runner, "sex") or "").lower()
+    age = _get(runner, "age")
+    if (weight and isinstance(weight, (int, float)) and weight >= 58.5
+            and age and isinstance(age, (int, float)) and age <= 3
+            and sex in ("f", "m", "filly", "mare")):
+        score += 1
+
+    # Previous run unplaced (last_five[0] >= 4 or 'x')
+    last_five = (_get(runner, "last_five") or "").strip()
+    if last_five:
+        first_char = last_five[0].lower()
+        if first_char == "x" or (first_char.isdigit() and int(first_char) >= 4):
+            score += 1
+
+    # Class jump after maiden win
+    race_class = (_get(race, "class_") or "").lower() if race else ""
+    if career and career.wins == 1 and "maiden" not in race_class:
+        score += 1
+
+    return score
+
+
+# ──────────────────────────────────────────────
 # Main entry point
 # ──────────────────────────────────────────────
 
@@ -877,6 +952,84 @@ def calculate_race_probabilities(
 
     # Step 2b: Market floor — prevent extreme disagreement with market
     win_probs = _apply_market_floor(win_probs, market_implied)
+
+    # Step 2d: Post-scoring adjustments (ProPun strategy multipliers)
+    # Applied after calibration + market floor, before place probability calculation.
+    # Each adjustment is a small multiplier that nudges probabilities based on
+    # empirically validated patterns. Re-normalized afterward.
+    for runner in active:
+        rid = _get(runner, "id", "")
+        if rid not in win_probs:
+            continue
+        multiplier = 1.0
+        odds = runner_odds.get(rid, 99)
+
+        # Campaign fatigue: penalize horses deep into a campaign
+        run_count = _campaign_run_count(runner)
+        if run_count == 7:
+            multiplier *= 0.95
+        elif run_count == 8:
+            multiplier *= 0.90
+        elif run_count >= 9:
+            multiplier *= 0.85
+
+        # False favourite penalty: short-priced runners with red flags
+        if odds < 4.0:
+            ff_score = _false_favourite_score(runner, race)
+            if ff_score >= 4:
+                penalty = min(0.25, 0.15 + (ff_score - 4) * 0.03)
+                multiplier *= (1 - penalty)
+
+        # Second-up value trigger
+        dslr = _get(runner, "days_since_last_run")
+        if dslr and isinstance(dslr, (int, float)) and 21 <= dslr <= 60:
+            su_stats = parse_stats_string(_get(runner, "second_up_stats"))
+            if su_stats and su_stats.win_rate >= 0.15:
+                # Check last start was competitive (beaten <= 3L)
+                last_margin = _get(runner, "last_start_margin")
+                if last_margin is None:
+                    # Try to derive from form_history
+                    fh = _get(runner, "form_history")
+                    if fh:
+                        try:
+                            fh_data = json.loads(fh) if isinstance(fh, str) else fh
+                            if isinstance(fh_data, list) and fh_data:
+                                last_margin = fh_data[0].get("margin")
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                competitive = (last_margin is not None
+                               and isinstance(last_margin, (int, float))
+                               and last_margin <= 3.0)
+                if competitive:
+                    # Check distance increase <= 200m
+                    last_dist = _get(runner, "last_start_distance")
+                    race_dist = _get(race, "distance") or 1400
+                    if (last_dist and isinstance(last_dist, (int, float))
+                            and 1000 <= last_dist <= 1200
+                            and race_dist - last_dist <= 200):
+                        multiplier *= 1.05
+
+        # Track specialist boost
+        track_stats = parse_stats_string(_get(runner, "track_stats"))
+        if track_stats and track_stats.wins >= 3 and track_stats.win_rate >= 0.25:
+            multiplier *= 1.05
+
+        # Wide barrier overlay: proven track/distance winners from wide draws
+        barrier = _get(runner, "barrier")
+        if (barrier and isinstance(barrier, (int, float))
+                and field_size >= 14 and barrier > field_size - 3
+                and odds >= 5.0):
+            td_stats = parse_stats_string(_get(runner, "track_dist_stats"))
+            if td_stats and td_stats.wins >= 1:
+                multiplier *= 1.03
+
+        if multiplier != 1.0:
+            win_probs[rid] *= multiplier
+
+    # Re-normalize after post-scoring adjustments
+    ps_total = sum(win_probs.values())
+    if ps_total > 0:
+        win_probs = {rid: p / ps_total for rid, p in win_probs.items()}
 
     # Step 2c: Compute place probabilities using separate place weights
     # Place bets reward consistency (top 2-3 finish) not just winning.
@@ -1547,9 +1700,9 @@ def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, ven
     elif relative <= 0.30:
         score += 0.03 * dist_mult  # inner quarter
     elif relative >= 0.85:
-        score -= 0.08 * dist_mult  # widest gates
+        score -= 0.06 * dist_mult  # widest gates (softened from 0.08)
     elif relative >= 0.70:
-        score -= 0.04 * dist_mult  # outer quarter
+        score -= 0.03 * dist_mult  # outer quarter (softened from 0.04)
 
     return max(0.05, min(0.95, score))
 
@@ -2810,9 +2963,15 @@ def calculate_exotic_combinations(
         "Exacta": 1.2,
         "Trifecta Box": 1.5,      # Raised from 1.2 — reduce frequency, keep for high-value spots
         "Trifecta Standout": 1.2,
+        "Trifecta Contrarian": 1.3,  # Higher threshold — contrarian approach needs stronger edge
         "First4": 1.2,            # Positional legs format — targeted, fewer combos
         "First4 Box": 1.5,        # Rare, extreme value only (0/50 all-time)
     }
+
+    # Odds-on favourite detection
+    fav = sorted_runners[0] if sorted_runners else None
+    fav_odds = 1.0 / fav["market_implied"] if fav and fav.get("market_implied", 0) > 0 else 99
+    fav_is_odds_on = fav_odds < 2.0
 
     # Minimum win probability for lead runner — prevents degenerate exotics
     # where value is high but absolute probability is negligible.
@@ -2906,7 +3065,9 @@ def calculate_exotic_combinations(
                 ))
 
     # --- Trifecta Box: 3 runners from top 4 ---
-    for combo in combinations(top4, 3):
+    # When favourite is odds-on, exclude from box (everyone includes them → crushed dividends)
+    tri_box_pool = [r for r in top4 if not (fav_is_odds_on and r is fav)] if fav_is_odds_on else top4
+    for combo in combinations(tri_box_pool, 3):
         our_probs = [r["win_prob"] for r in combo]
         mkt_probs = [r["market_implied"] for r in combo]
         our_prob = _box_probability(our_probs, 3)
@@ -2927,9 +3088,9 @@ def calculate_exotic_combinations(
             ))
 
     # --- Trifecta Box: 4 runners from top 4 ---
-    if len(top4) >= 4:
-        our_probs = [r["win_prob"] for r in top4]
-        mkt_probs = [r["market_implied"] for r in top4]
+    if len(tri_box_pool) >= 4:
+        our_probs = [r["win_prob"] for r in tri_box_pool]
+        mkt_probs = [r["market_implied"] for r in tri_box_pool]
         our_prob = _box_probability(our_probs, 3)
         mkt_prob = _box_probability(mkt_probs, 3)
         value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
@@ -2937,8 +3098,8 @@ def calculate_exotic_combinations(
         if value >= VALUE_THRESHOLDS["Trifecta Box"]:
             results.append(ExoticCombination(
                 exotic_type="Trifecta Box",
-                runners=[r["saddlecloth"] for r in top4],
-                runner_names=[r.get("horse_name", "") for r in top4],
+                runners=[r["saddlecloth"] for r in tri_box_pool],
+                runner_names=[r.get("horse_name", "") for r in tri_box_pool],
                 estimated_probability=round(our_prob, 6),
                 market_probability=round(mkt_prob, 6),
                 value_ratio=round(value, 3),
@@ -2978,9 +3139,52 @@ def calculate_exotic_combinations(
                     format="flat",
                 ))
 
+    # --- Contrarian Trifecta: anchor fav to win, fill 2nd/3rd from value runners ---
+    # Trigger: top runner market_implied > 0.40 (< $2.50) AND field_size >= 10
+    if (fav and fav.get("market_implied", 0) > 0.40
+            and len(sorted_runners) >= 10):
+        # Exclude 2nd/3rd most popular from fill positions
+        excluded_sc = {r["saddlecloth"] for r in sorted_runners[1:3]}
+        # Contrarian pool: $12-$40 odds with win_prob >= 5%
+        contrarian_pool = [
+            r for r in sorted_runners[3:]
+            if (r.get("market_implied", 0) > 0
+                and 1.0 / r["market_implied"] >= 12
+                and 1.0 / r["market_implied"] <= 40
+                and r.get("win_prob", 0) >= 0.05
+                and r["saddlecloth"] not in excluded_sc)
+        ]
+        # Build contrarian trifectas: fav wins, 2 contrarian runners fill 2nd/3rd
+        for combo in combinations(contrarian_pool[:6], 2):
+            all_runners_ct = [fav] + list(combo)
+            our_prob = 0.0
+            mkt_prob = 0.0
+            for perm in permutations(combo):
+                our_prob += _harville_probability(
+                    [fav["win_prob"]] + [r["win_prob"] for r in perm]
+                )
+                mkt_prob += _harville_probability(
+                    [fav["market_implied"]] + [r["market_implied"] for r in perm]
+                )
+            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+
+            if value >= VALUE_THRESHOLDS["Trifecta Contrarian"]:
+                results.append(ExoticCombination(
+                    exotic_type="Trifecta Contrarian",
+                    runners=[r["saddlecloth"] for r in all_runners_ct],
+                    runner_names=[r.get("horse_name", "") for r in all_runners_ct],
+                    estimated_probability=round(our_prob, 6),
+                    market_probability=round(mkt_prob, 6),
+                    value_ratio=round(value, 3),
+                    cost=stake,
+                    num_combos=2,
+                    format="flat",
+                ))
+
     # --- First4 positional (legs format): targeted positions ---
+    # Skip First4 entirely when favourite is odds-on (crushed dividends)
     # 1st: [top1] / 2nd: [top1,top2] / 3rd: [top1,top2,top3] / 4th: [top3,top4,top5]
-    if len(top4) >= 4:
+    if len(top4) >= 4 and not fav_is_odds_on:
         # Build positional legs using probability rankings
         leg1 = top4[:1]    # anchor: best runner
         leg2 = top4[:2]    # top 2
@@ -3040,8 +3244,9 @@ def calculate_exotic_combinations(
 
     # --- First4 Box: RARE — only when genuine 5-way contention ---
     # Only generate when 5+ runners each have >12% win prob (strong field)
+    # Skip when favourite is odds-on (same as First4 positional)
     strong_runners = [r for r in sorted_runners if r.get("win_prob", 0) >= 0.12]
-    if len(strong_runners) >= 5:
+    if len(strong_runners) >= 5 and not fav_is_odds_on:
         for combo in combinations(strong_runners[:5], 4):
             our_probs = [r["win_prob"] for r in combo]
             mkt_probs = [r["market_implied"] for r in combo]
