@@ -78,7 +78,7 @@ def load_weekend_data(conn):
            JOIN meetings m ON c.meeting_id = m.id
            WHERE m.date >= ? AND m.date <= ?
            AND p.settled = 1
-           AND c.status = 'approved'
+           AND c.status IN ('approved', 'sent')
            ORDER BY m.date, p.race_number""",
         (DATE_FROM, DATE_TO),
     ).fetchall():
