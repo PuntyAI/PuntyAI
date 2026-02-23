@@ -519,6 +519,125 @@ class StatsRecord:
 
 
 # ──────────────────────────────────────────────
+# LightGBM integration
+# ──────────────────────────────────────────────
+
+_lgbm_enabled: bool | None = None  # Cached config check
+
+
+def _use_lightgbm() -> bool:
+    """Check if LightGBM engine is enabled via config."""
+    global _lgbm_enabled
+    if _lgbm_enabled is not None:
+        return _lgbm_enabled
+    try:
+        from punty.config import get_settings
+        _lgbm_enabled = get_settings().use_lightgbm
+    except Exception:
+        _lgbm_enabled = False
+    return _lgbm_enabled
+
+
+def _calculate_lgbm_probabilities(
+    active: list, race: Any, meeting: Any, pool: float = DEFAULT_POOL,
+) -> dict[str, "RunnerProbability"]:
+    """Calculate probabilities using LightGBM models.
+
+    Returns dict[runner_id → RunnerProbability] or empty dict on failure.
+    Same output interface as the weighted engine — zero downstream changes.
+    """
+    try:
+        from punty.ml.inference import predict_race
+    except ImportError:
+        return {}
+
+    raw_preds = predict_race(active, race, meeting)
+    if not raw_preds:
+        return {}
+
+    field_size = len(active)
+    baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
+
+    # Normalize win probs to sum to 1.0
+    win_total = sum(wp for wp, _ in raw_preds.values())
+    if win_total <= 0:
+        return {}
+    win_probs = {rid: wp / win_total for rid, (wp, _) in raw_preds.items()}
+
+    # Normalize place probs to sum to place_count
+    place_count = 2 if field_size <= 7 else 3
+    place_total = sum(pp for _, pp in raw_preds.values())
+    if place_total > 0:
+        place_probs = {rid: min(0.95, pp / place_total * place_count)
+                       for rid, (_, pp) in raw_preds.items()}
+    else:
+        place_probs = {rid: _place_probability(win_probs.get(rid, baseline), field_size)
+                       for rid in raw_preds}
+
+    # Calculate market-implied probabilities (reuse existing logic)
+    overround = _calculate_overround(active)
+    market_implied = {}
+    runner_odds_map = {}
+    for runner in active:
+        rid = _get(runner, "id", "")
+        mkt = _market_consensus(runner, overround)
+        market_implied[rid] = mkt
+        odds = _get_median_odds(runner)
+        runner_odds_map[rid] = odds or 0.0
+
+    # Build place market consensus
+    place_market_implied = {}
+    place_raw_probs = {}
+    for runner in active:
+        rid = _get(runner, "id", "")
+        po = _get(runner, "place_odds", None)
+        if po and po > 1.0:
+            place_raw_probs[rid] = 1.0 / po
+    if place_raw_probs:
+        place_overround = sum(place_raw_probs.values())
+        if place_overround > 0:
+            for rid, p in place_raw_probs.items():
+                place_market_implied[rid] = p / place_overround * place_count
+
+    results = {}
+    for runner in active:
+        rid = _get(runner, "id", "")
+        win_prob = win_probs.get(rid, baseline)
+        place_prob = place_probs.get(rid, _place_probability(win_prob, field_size))
+
+        # Value detection (win)
+        mkt_prob = market_implied.get(rid, baseline)
+        value = win_prob / mkt_prob if mkt_prob > 0 else 1.0
+        edge = win_prob - mkt_prob
+
+        # Place value detection
+        mkt_place_prob = place_market_implied.get(rid)
+        if mkt_place_prob and mkt_place_prob > 0:
+            place_value = place_prob / mkt_place_prob
+        else:
+            mkt_place = _place_probability(mkt_prob, field_size)
+            place_value = place_prob / mkt_place if mkt_place > 0 else 1.0
+
+        # Recommended stake (quarter-Kelly)
+        odds = runner_odds_map.get(rid, 0.0)
+        stake = _recommended_stake(win_prob, odds, pool)
+
+        results[rid] = RunnerProbability(
+            win_probability=round(win_prob, 4),
+            place_probability=round(place_prob, 4),
+            market_implied=round(mkt_prob, 4),
+            value_rating=round(value, 3),
+            place_value_rating=round(place_value, 3),
+            edge=round(edge, 4),
+            recommended_stake=round(stake, 2),
+            factors={},  # Phase 2: SHAP values
+            matched_patterns=[],
+        )
+
+    return results
+
+
+# ──────────────────────────────────────────────
 # Main entry point
 # ──────────────────────────────────────────────
 
@@ -548,6 +667,13 @@ def calculate_race_probabilities(
     active = [r for r in runners if not _get(r, "scratched", False)]
     if not active:
         return {}
+
+    # LightGBM branch — parallel code path toggled by config
+    if _use_lightgbm():
+        result = _calculate_lgbm_probabilities(active, race, meeting, pool)
+        if result:
+            return result
+        logger.warning("LightGBM prediction failed, falling back to weighted engine")
 
     # Use cached DL patterns if not explicitly passed
     if dl_patterns is None:
