@@ -775,7 +775,7 @@ class TestCalculateRaceProbabilities:
         runners = [
             _make_runner(id="r1", current_odds=3.0, last_five="12345"),
         ]
-        results = calculate_race_probabilities(runners, _make_race(), _make_meeting())
+        results = calculate_race_probabilities(runners, _make_race(), _make_meeting(), _skip_lgbm=True)
         factors = results["r1"].factors
 
         assert "market" in factors
@@ -1150,12 +1150,12 @@ class TestCustomWeights:
         meeting = _make_meeting()
 
         # Default weights
-        default_results = calculate_race_probabilities(runners, race, meeting)
+        default_results = calculate_race_probabilities(runners, race, meeting, _skip_lgbm=True)
 
         # Heavy form weights — should amplify the form difference
         custom = {k: 0.0 for k in DEFAULT_WEIGHTS}
         custom["form"] = 1.0  # 100% form
-        custom_results = calculate_race_probabilities(runners, race, meeting, weights=custom)
+        custom_results = calculate_race_probabilities(runners, race, meeting, weights=custom, _skip_lgbm=True)
 
         # With form-only weights, the form gap between 11111 and 55555 should be more extreme
         default_gap = default_results["r1"].win_probability - default_results["r2"].win_probability
@@ -1553,7 +1553,7 @@ class TestCalculateWithDLPatterns:
         meeting = _make_meeting(venue="Cranbourne")
 
         # Without patterns
-        results_no_dl = calculate_race_probabilities(runners, race, meeting)
+        results_no_dl = calculate_race_probabilities(runners, race, meeting, _skip_lgbm=True)
 
         # With a pattern that boosts leaders at Cranbourne sprints
         dl_patterns = [{
@@ -1569,10 +1569,10 @@ class TestCalculateWithDLPatterns:
             "barrier": 0.02, "movement": 0.00, "pace": 0.00, "deep_learning": 0.10,
         }
         results_with_dl = calculate_race_probabilities(
-            runners, race, meeting, dl_patterns=dl_patterns, weights=dl_weights,
+            runners, race, meeting, dl_patterns=dl_patterns, weights=dl_weights, _skip_lgbm=True,
         )
         results_no_dl = calculate_race_probabilities(
-            runners, race, meeting, weights=dl_weights,
+            runners, race, meeting, weights=dl_weights, _skip_lgbm=True,
         )
 
         # r1 (leader) should get a boost, r2 (midfield) shouldn't
@@ -1581,7 +1581,7 @@ class TestCalculateWithDLPatterns:
     def test_deep_learning_factor_in_factors_dict(self):
         """The deep_learning factor should appear in the factors breakdown."""
         runners = [_make_runner(id="r1", current_odds=3.0)]
-        results = calculate_race_probabilities(runners, _make_race(), _make_meeting())
+        results = calculate_race_probabilities(runners, _make_race(), _make_meeting(), _skip_lgbm=True)
         assert "deep_learning" in results["r1"].factors
 
 
@@ -2346,7 +2346,7 @@ class TestContextMultipliers:
             race = _make_race(distance=1000, class_="BM64")
             meeting = _make_meeting(venue="Flemington")
 
-            result = calculate_race_probabilities(runners, race, meeting)
+            result = calculate_race_probabilities(runners, race, meeting, _skip_lgbm=True)
 
             assert result["r1"].factors["barrier"] > 0.55
             assert result["r3"].factors["barrier"] < 0.45
@@ -2388,7 +2388,7 @@ class TestContextMultipliers:
         race = _make_race(class_="Maiden", distance=1200)
         meeting = _make_meeting()
 
-        probs = calculate_race_probabilities(runners, race, meeting)
+        probs = calculate_race_probabilities(runners, race, meeting, _skip_lgbm=True)
 
         # r1 should have highest probability from strong signals
         assert probs["r1"].win_probability > 0.15
