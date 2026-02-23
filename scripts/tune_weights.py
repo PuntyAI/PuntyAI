@@ -1,10 +1,14 @@
 """Grid search weight optimizer using backtest.db historical data.
 
 Usage (local):
-    python scripts/tune_weights.py
+    python scripts/tune_weights.py                    # Global tuning (default)
+    python scripts/tune_weights.py --by-distance      # Per-distance-bucket tuning
 
 Searches over factor weight combinations and evaluates each against
-the full backtest dataset. Outputs data/optimal_weights.json.
+the full backtest dataset. Outputs data/optimal_weights_batch{N}.json.
+
+With --by-distance, produces per-distance-bucket weights in
+data/optimal_weights_batch{N}_by_distance.json.
 """
 
 import asyncio
@@ -38,6 +42,15 @@ BATCH = 2          # Batch 2 = 2026-02-18
 SEED = 123          # Different seed per batch for different race samples
 SAMPLE_SIZE = 1000  # 1K races: good balance of reliability vs speed
 
+# Distance buckets matching probability.py
+DISTANCE_BUCKETS = {
+    "sprint":  (0, 1100),
+    "short":   (1101, 1399),
+    "middle":  (1400, 1799),
+    "classic": (1800, 2199),
+    "staying": (2200, 9999),
+}
+
 # Win weight search space
 WIN_SEARCH_SPACE = {
     "market":        [0.25, 0.30, 0.35, 0.40, 0.45, 0.50],
@@ -69,6 +82,10 @@ FIXED_ZERO = ["deep_learning"]
 
 WIN_MAX_COMBOS = 1500   # Phase 1: win weights (~5 hours)
 PLACE_MAX_COMBOS = 1500  # Phase 2: place weights (~5 hours)
+
+# Per-distance: fewer combos since sample is smaller
+DIST_WIN_MAX_COMBOS = 800
+DIST_PLACE_MAX_COMBOS = 800
 
 def generate_weight_combos(search_space, max_combos, seed_offset=1000):
     """Generate weight combinations — random sample from the full grid."""
@@ -304,11 +321,95 @@ def print_result(label, result, current=None):
     print(f"  Quaddie est: {result['quaddie_skinny']}/{result['quaddie_balanced']}/{result['quaddie_wide']}%")
 
 
+def _get_dist_bucket(distance: int) -> str:
+    """Map distance to bucket (matches probability.py)."""
+    if distance <= 1100:
+        return "sprint"
+    elif distance <= 1399:
+        return "short"
+    elif distance <= 1799:
+        return "middle"
+    elif distance <= 2199:
+        return "classic"
+    else:
+        return "staying"
+
+
+def bucket_races_by_distance(races_data):
+    """Split race data into distance buckets."""
+    bucketed = defaultdict(list)
+    for item in races_data:
+        _meeting, race, _active, _winners, _placers = item
+        dist = getattr(race, "distance", None) or 1400
+        bucket = _get_dist_bucket(dist)
+        bucketed[bucket].append(item)
+    return dict(bucketed)
+
+
+async def optimize_bucket(bucket_name, bucket_races, current_win_w, current_place_w, start_time):
+    """Run win + place optimization for a single distance bucket."""
+    import random
+
+    sample_size = min(len(bucket_races), max(200, len(bucket_races)))
+    rng = random.Random(SEED + hash(bucket_name))
+    sample = rng.sample(bucket_races, sample_size) if len(bucket_races) > sample_size else bucket_races
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"DISTANCE BUCKET: {bucket_name.upper()} ({len(sample)} races from {len(bucket_races)} total)")
+    logger.info(f"{'='*60}")
+
+    # Phase 1: Win weights
+    win_combos = generate_weight_combos(WIN_SEARCH_SPACE, DIST_WIN_MAX_COMBOS, seed_offset=hash(bucket_name) % 10000)
+    baseline = await evaluate_weights(current_win_w, sample, place_weights=current_place_w)
+    if not baseline:
+        logger.warning(f"  {bucket_name}: baseline evaluation failed, skipping")
+        return None
+
+    logger.info(f"  Baseline: top1={baseline['top1_win_rate']}%, win_roi={baseline['win_roi']}%")
+
+    best_win_result = baseline
+    for i, weights in enumerate(win_combos):
+        r = await evaluate_weights(weights, sample, place_weights=current_place_w)
+        if r and r["score"] > best_win_result["score"]:
+            best_win_result = r
+            logger.info(f"  [{bucket_name}] Win best at {i}: score={r['score']:.6f}, "
+                        f"top1={r['top1_win_rate']}%, win_roi={r['win_roi']}%")
+        if (i + 1) % 200 == 0:
+            logger.info(f"  [{bucket_name}] Win: {i+1}/{len(win_combos)} ({time.time()-start_time:.0f}s)")
+
+    best_win_weights = best_win_result["weights"]
+
+    # Phase 2: Place weights
+    place_combos = generate_weight_combos(PLACE_SEARCH_SPACE, DIST_PLACE_MAX_COMBOS, seed_offset=hash(bucket_name) % 10000 + 5000)
+    best_place_result = await evaluate_weights(best_win_weights, sample, place_weights=current_place_w)
+    best_place_weights = current_place_w
+
+    for i, pw in enumerate(place_combos):
+        r = await evaluate_weights(best_win_weights, sample, place_weights=pw)
+        if r and r["place_roi"] > best_place_result.get("place_roi", -999):
+            best_place_result = r
+            best_place_weights = pw
+            logger.info(f"  [{bucket_name}] Place best at {i}: place_roi={r['place_roi']}%")
+        if (i + 1) % 200 == 0:
+            logger.info(f"  [{bucket_name}] Place: {i+1}/{len(place_combos)} ({time.time()-start_time:.0f}s)")
+
+    return {
+        "bucket": bucket_name,
+        "races": len(sample),
+        "total_available": len(bucket_races),
+        "baseline": baseline,
+        "best_win": {"weights": best_win_weights, "result": best_win_result},
+        "best_place": {"weights": best_place_weights, "result": best_place_result},
+    }
+
+
 async def main():
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
     from sqlalchemy.orm import selectinload
     from punty.models.meeting import Meeting, Race, Runner
+
+    by_distance = "--by-distance" in sys.argv
 
     start_time = time.time()
 
@@ -349,8 +450,96 @@ async def main():
 
     logger.info(f"Loaded {len(races_data)} races into memory ({time.time() - start_time:.0f}s)")
 
-    # Sample races
+    if by_distance:
+        await _run_by_distance(races_data, start_time)
+    else:
+        await _run_global(races_data, start_time)
+
+    await bt_engine.dispose()
+
+
+async def _run_by_distance(races_data, start_time):
+    """Run per-distance-bucket weight optimization."""
     import random
+    from punty.probability import DEFAULT_WEIGHTS, DEFAULT_PLACE_WEIGHTS
+
+    current_win_w = dict(DEFAULT_WEIGHTS)
+    current_place_w = dict(DEFAULT_PLACE_WEIGHTS)
+
+    bucketed = bucket_races_by_distance(races_data)
+    logger.info(f"Distance distribution: " + ", ".join(
+        f"{k}={len(v)}" for k, v in sorted(bucketed.items())
+    ))
+
+    results_by_bucket = {}
+    for bucket_name in ["sprint", "short", "middle", "classic", "staying"]:
+        bucket_races = bucketed.get(bucket_name, [])
+        if len(bucket_races) < 50:
+            logger.warning(f"Skipping {bucket_name}: only {len(bucket_races)} races (need 50+)")
+            continue
+
+        result = await optimize_bucket(
+            bucket_name, bucket_races, current_win_w, current_place_w, start_time,
+        )
+        if result:
+            results_by_bucket[bucket_name] = result
+
+    total_time = time.time() - start_time
+
+    # Save
+    output = {
+        "meta": {
+            "batch": BATCH, "seed": SEED, "mode": "by_distance",
+            "total_races": len(races_data),
+            "elapsed_seconds": round(total_time, 1),
+        },
+        "by_distance": results_by_bucket,
+    }
+
+    output_path = Path(f"data/optimal_weights_batch{BATCH}_by_distance.json")
+    with open(output_path, "w") as f:
+        json.dump(output, f, indent=2)
+    logger.info(f"\nResults saved to {output_path}")
+
+    # Print summary
+    print(f"\n{'='*70}")
+    print(f"DISTANCE-SPECIFIC WEIGHT OPTIMIZATION - BATCH {BATCH}")
+    print(f"{'='*70}")
+    print(f"Total races: {len(races_data)}, Elapsed: {total_time:.0f}s")
+
+    for bucket_name, res in results_by_bucket.items():
+        print(f"\n{'─'*70}")
+        print(f"  {bucket_name.upper()} ({res['races']} races)")
+        print(f"{'─'*70}")
+        bl = res["baseline"]
+        bw = res["best_win"]["result"]
+        bp = res["best_place"]["result"]
+        print(f"  Baseline:   top1={bl['top1_win_rate']}%, win_roi={bl['win_roi']}%, place_roi={bl['place_roi']}%")
+        print(f"  Best Win:   top1={bw['top1_win_rate']}%, win_roi={bw['win_roi']}%, place_roi={bw['place_roi']}%")
+        print(f"  Best Place: place_roi={bp['place_roi']}%")
+
+        print(f"  Win weights: ", end="")
+        for k, v in sorted(res["best_win"]["weights"].items()):
+            if v > 0.001:
+                print(f"{k}={v:.3f} ", end="")
+        print()
+
+        print(f"  Place weights: ", end="")
+        for k, v in sorted(res["best_place"]["weights"].items()):
+            if v > 0.001:
+                print(f"{k}={v:.3f} ", end="")
+        print()
+
+
+async def _run_global(races_data, start_time):
+    """Run global (non-distance-specific) weight optimization."""
+    import random
+    from punty.probability import DEFAULT_WEIGHTS, DEFAULT_PLACE_WEIGHTS
+
+    current_win_w = dict(DEFAULT_WEIGHTS)
+    current_place_w = dict(DEFAULT_PLACE_WEIGHTS)
+
+    # Sample races
     random.seed(SEED)
     sample_size = min(SAMPLE_SIZE, len(races_data))
     sample = random.sample(races_data, sample_size)
@@ -367,9 +556,6 @@ async def main():
         json.dump(batch_meta, f, indent=2)
 
     # Get current defaults
-    from punty.probability import DEFAULT_WEIGHTS, DEFAULT_PLACE_WEIGHTS
-    current_win_w = dict(DEFAULT_WEIGHTS)
-    current_place_w = dict(DEFAULT_PLACE_WEIGHTS)
 
     # ================================================================
     # PHASE 1: Optimize WIN weights (place weights held at current)
@@ -534,8 +720,6 @@ async def main():
         for k, v in sorted(pw.items()):
             if v > 0.001:
                 print(f"    {k}: {v:.4f}")
-
-    await bt_engine.dispose()
 
 
 asyncio.run(main())

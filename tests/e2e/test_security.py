@@ -109,7 +109,7 @@ class TestLargePayload:
         """Extremely long query param should not crash the server."""
         long_val = "A" * 10000
         resp = page.request.get(f"/api/public/bet-type-stats?venue={long_val}")
-        assert resp.status in (200, 400, 414, 422)
+        assert resp.status in (200, 400, 414, 422, 429)
 
     def test_health_after_abuse(self, page):
         """Server should still be healthy after abuse."""

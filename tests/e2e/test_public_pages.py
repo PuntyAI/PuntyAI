@@ -28,12 +28,10 @@ class TestHomepage:
 
 
 class TestStatsPage:
-    def test_redirects_to_tips(self, public_page):
-        """Stats page is hidden — should redirect to tips."""
+    def test_loads_200(self, public_page):
+        """Stats page renders the daily scorecard dashboard."""
         resp = public_page.goto("/public/stats")
-        # Playwright follows redirects, so we end up on tips with 200
         assert resp.status == 200
-        assert "/tips" in public_page.url
 
 
 class TestTipsPage:
