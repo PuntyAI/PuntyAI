@@ -9,6 +9,7 @@ Outlay range $40-$60, budget-optimised to trim/add runners by edge.
 
 import logging
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -513,13 +514,15 @@ def _optimiser_select(
         # Never > 50% of field (allow exactly half for small fields)
         max_half = max(1, field_size // 2) if field_size > 2 else 1
         targets[i] = min(targets[i], max_half)
-        # Field-size-driven minimums (default 3, anchor with short fav pick = 2, 14+ = 4)
+        # Field-size-driven minimums
+        # ALL quaddie legs minimum 3-wide (37% → 62% hit rate)
+        # Big6 can be 2-wide (budget constraint: 3^6=729 combos doesn't fit)
         if field_size >= 14:
             min_width = 4
-        elif has_short_fav_pick[i] and leg_types[i] == "anchor":
-            min_width = 2
+        elif is_big6:
+            min_width = 2  # Big6 budget can't support wider
         else:
-            min_width = 3
+            min_width = 3  # Quaddie: always 3-wide minimum
         targets[i] = max(targets[i], min_width)
 
     # Big6 tighter caps — 2-wide max to fit $20-30 budget (2^6=64 combos)
@@ -685,12 +688,10 @@ def _optimiser_select(
             field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
             if field_size >= 14:
                 leg_min = 4
-            elif has_short_fav_pick[i] and leg_types[i] == "anchor":
+            elif is_big6:
                 leg_min = 2
             else:
                 leg_min = 3
-            if is_big6:
-                leg_min = min(leg_min, 2)
             if len(selected[i]) <= leg_min:
                 continue
             for j in range(len(selected[i])):
@@ -766,12 +767,10 @@ def _optimiser_select(
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
         if field_size >= 14:
             leg_min = 4
-        elif has_short_fav_pick[i] and leg_types[i] == "anchor":
+        elif is_big6:
             leg_min = 2
         else:
             leg_min = 3
-        if is_big6:
-            leg_min = min(leg_min, 2)
         while len(selected[i]) < leg_min:
             existing_sc = {r.get("saddlecloth") for r in selected[i]}
             added = False
@@ -806,12 +805,21 @@ def build_smart_sequence(
     race_range: tuple[int, int],
     leg_analysis: list[dict],
     race_contexts: list[dict],
+    track_condition: str = "",
 ) -> SmartSequence | None:
     """Build a single optimised sequence bet using edge-driven overlay selection.
 
     Legs classified as anchor (single) / chaos (wide) / normal.
     Outlay $40-$60, budget-optimised by trimming/adding runners by edge.
     """
+    # Data-driven track condition filters (Feb 24 audit)
+    tc = (track_condition or "").lower()
+    if "heavy" in tc:
+        return None  # All winning sequences were Good 3-4
+    soft_match = re.search(r'soft\s*(\d+)', tc)
+    if soft_match and int(soft_match.group(1)) >= 6:
+        return None  # Zero sequence wins on Soft 6+
+
     prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
     if not prep:
         return None
@@ -867,6 +875,7 @@ def build_all_sequence_lanes(
     leg_analysis: list[dict],
     race_contexts: list[dict],
     sequence_override: dict | None = None,
+    track_condition: str = "",
 ) -> list[SequenceBlock]:
     """Build single optimised sequence for each applicable sequence type.
 
@@ -907,7 +916,8 @@ def build_all_sequence_lanes(
             logger.info("Main Quaddie suppressed (ENABLE_MAIN_QUADDIE=False)")
             continue
 
-        smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts)
+        smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts,
+                                     track_condition=track_condition)
         if not smart:
             continue
 

@@ -7,6 +7,7 @@ with justification.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -280,7 +281,7 @@ def calculate_pre_selections(
                 used_saddlecloths.add(c["saddlecloth"])
                 break
 
-    # Ensure at least one Win/Each Way/Saver Win bet (mandatory rule)
+    # Ensure at least one Win/Saver Win bet (mandatory rule)
     # Skip for PLACE_LEVERAGE — this classification can go all-Place
     if classification.race_type != "PLACE_LEVERAGE":
         _ensure_win_bet(picks)
@@ -300,6 +301,9 @@ def calculate_pre_selections(
         exotic_combos, used_saddlecloths,
         field_size=field_size, anchor_odds=anchor_odds,
         venue_type=venue_type, picks=picks,
+        track_condition=race_context.get("track_condition", ""),
+        race_class=race_context.get("class", ""),
+        is_hk=(race_context.get("state") == "HK"),
     )
 
     # Calculate Punty's Pick
@@ -396,7 +400,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     # Field size affects place payouts:
     # ≤4 runners: no place betting, ≤7 runners: only 2 places paid
-    # Prefer Win/Each Way over Place in small fields
+    # Prefer Win over Place in small fields
     num_places = 0 if field_size <= 4 else (2 if field_size <= 7 else 3)
 
     if num_places == 0:
@@ -405,11 +409,11 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     if num_places == 2:
         # Only 2 places paid — Place is much harder to collect.
-        # Prefer Win or Each Way over straight Place.
+        # Prefer Win over straight Place.
         if rank <= 2 and win_prob >= 0.25:
             return "Win"
         if rank <= 2:
-            return "Each Way"
+            return "Win"  # small fields (≤7) still need Win exposure
         # Lower ranks: only Place if very high place probability
         if place_prob >= 0.55 and place_value >= 1.0:
             return "Place"
@@ -438,7 +442,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
         if rank <= 2 and win_prob >= 0.35 and value >= 1.05:
             return "Win"  # solid value overlay — don't force Place
         if rank == 1 and win_prob >= 0.30 and value >= 1.00:
-            return "Each Way"  # protect with EW instead of straight Place
+            return "Place"  # E/W killed — -16.16% ROI
         return "Place"
 
     # $2.40-$3.00: Win sweet spot #1 (+21.3% ROI, 47% win rate)
@@ -446,6 +450,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if 2.40 <= odds < 3.0:
         if win_prob >= t["win_min_prob"]:
             if rank == 1 and value >= 0.95:
+                # Win→Place guard: if much more likely to place than win, prefer Place
+                if place_prob >= 2.0 * win_prob:
+                    return "Place"  # much more likely to place than win
                 return "Win"
             if rank == 2:
                 return "Place"  # was E/W — rank 2 at $2.40-3 → Place
@@ -457,11 +464,14 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if 3.0 <= odds < 4.0 and not is_roughie:
         if rank == 1:
             if win_prob >= 0.30 and value >= 1.10:
+                # Win→Place guard: if much more likely to place than win, prefer Place
+                if place_prob >= 2.0 * win_prob:
+                    return "Place"  # much more likely to place than win
                 return "Win"  # only with strong conviction + value overlay
             return "Place"  # default Place in dead zone
         if rank == 2:
             if win_prob >= 0.30 and value >= 1.10:
-                return "Each Way"  # genuine hedge: decent conviction + value
+                return "Place"  # E/W killed — rank 2 $3-4 → Place
             return "Place"
         return "Place"
 
@@ -472,7 +482,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             if rank == 1:
                 return "Win"
             if rank == 2:
-                return "Each Way"
+                return "Place"  # E/W killed — rank 2 $4-5 → Place
             if value >= 1.05:
                 return "Saver Win"
         # Low-prob fallback: good odds but not enough conviction → Place
@@ -484,7 +494,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             if rank == 1:
                 if value >= 1.05:
                     return "Win"  # only with clear value edge
-                return "Each Way"  # hedge: like the horse but not confident enough for Win
+                return "Place"  # E/W killed — rank 1 $5-6 → Place
             if rank == 2:
                 return "Place"  # was E/W — tighten to Place for rank 2
         # Low-prob fallback
@@ -606,8 +616,8 @@ def _estimate_place_odds(win_odds: float) -> float:
 
 
 def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
-    """Ensure at least one pick is Win, Saver Win, or Each Way (mandatory rule)."""
-    has_win = any(p.bet_type in ("Win", "Saver Win", "Each Way") for p in picks)
+    """Ensure at least one pick is Win or Saver Win (mandatory rule)."""
+    has_win = any(p.bet_type in ("Win", "Saver Win") for p in picks)
     if has_win or not picks:
         return
 
@@ -631,7 +641,7 @@ def _cap_win_exposure(picks: list[RecommendedPick]) -> int:
     Returns:
         Number of picks downgraded to Place.
     """
-    _WIN_TYPES = {"Win", "Saver Win", "Each Way"}
+    _WIN_TYPES = {"Win", "Saver Win"}
     win_exposed = [p for p in picks if p.bet_type in _WIN_TYPES]
     if len(win_exposed) <= MAX_WIN_EXPOSED:
         return 0
@@ -656,7 +666,7 @@ def _determine_race_pool(
     """Determine pool size based on edge confidence.
 
     3-tier system replaces flat $20 and watch-only half-pool:
-    - HIGH ($35): Best pick has ev_win > 0.15 OR (place_prob > 0.50 AND place_value > 1.05)
+    - HIGH ($25): Best pick has ev_win > 0.15 OR (place_prob > 0.50 AND place_value > 1.05)
     - STANDARD ($20): Default — at least one pick would pass edge gate
     - LOW ($12): Watch-only race OR only marginal edge detected
 
@@ -752,8 +762,8 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
         return True
 
-    # 4. Each Way at $3.00-$6.00 with reasonable win probability
-    if bt == "Each Way" and 3.0 <= odds <= 6.0 and win_prob >= 0.20:
+    # 4. Place at $3.00-$6.00 with decent place probability (was E/W, now Place)
+    if bt == "Place" and 3.0 <= odds <= 6.0 and place_prob >= 0.40:
         return True
 
     # 5. Roughie Place at $8-$20 with strong place probability
@@ -891,19 +901,12 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         weight = pick_weights[i]
         raw_stake = effective_pool * (weight / total_weight)
 
-        # Each Way costs double (half win + half place)
-        if pick.bet_type == "Each Way":
-            raw_stake = raw_stake / 2  # show per-part amount
-
         # Round to nearest 50c, minimum $1
         stake = max(MIN_STAKE, round(raw_stake / STAKE_STEP) * STAKE_STEP)
         pick.stake = stake
 
-    # Verify total doesn't exceed effective pool (account for Each Way doubling)
-    total = sum(
-        p.stake * 2 if p.bet_type == "Each Way" else p.stake
-        for p in staked_picks
-    )
+    # Verify total doesn't exceed effective pool
+    total = sum(p.stake for p in staked_picks)
     if total > effective_pool + 0.01:
         # Scale down proportionally
         scale = effective_pool / total
@@ -918,6 +921,9 @@ def _select_exotic(
     anchor_odds: float = 0.0,
     venue_type: str = "",
     picks: list[RecommendedPick] | None = None,
+    track_condition: str = "",
+    race_class: str = "",
+    is_hk: bool = False,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet based on probability × value (EV).
 
@@ -933,6 +939,18 @@ def _select_exotic(
     """
     if not exotic_combos:
         return None
+
+    # Data-driven filters (Feb 24 audit)
+    tc = (track_condition or "").lower()
+    if "heavy" in tc:
+        return None  # 0/21 exotic hits on Heavy tracks
+    soft_match = re.search(r'soft\s*(\d+)', tc)
+    if soft_match and int(soft_match.group(1)) >= 7:
+        return None  # 0% strike on Soft 7+
+    if is_hk:
+        return None  # 0/11 exotic hits on HK races
+    if field_size and field_size <= 6:
+        return None  # All types losing in ≤6 fields
 
     # --- Tight cluster detection ---
     # When top 3 non-roughie picks are within 8% win probability,
@@ -962,11 +980,15 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
 
+        # Trifecta Box field restriction: only profitable in 9-12 fields
+        ec_type = ec.get("type", "")
+        if ec_type == "Trifecta Box" and field_size and (field_size < 9 or field_size > 12):
+            continue  # Only profitable in 9-12 fields (+$238 vs -$484 in 13+)
+
         # Overlap rules by exotic type:
         # Quinella/Exacta: ALL runners must be from our picks (strict 2-runner bets)
         # Trifecta/First4: at least 2 runners from picks (allow ranking runners
         # in trailing positions — 3rd for tri, 4th+ for First4)
-        ec_type = ec.get("type", "")
         if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
             if overlap_ratio < 1.0:
                 continue
