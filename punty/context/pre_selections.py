@@ -766,7 +766,9 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
         return False
 
     # Place with low collection probability
-    if bt == "Place" and place_prob < 0.35:
+    # Relaxed floor for mid-price ($3+): 0.30 vs 0.35 — lets more Place bets through (#19)
+    place_floor = 0.30 if (bt == "Place" and odds >= 3.0) else 0.35
+    if bt == "Place" and place_prob < place_floor:
         return False
 
     # Negative expected value both ways — no edge
@@ -861,9 +863,9 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         if pick.expected_return > 0.10:
             base *= 1.15  # 15% bonus for strong +EV
 
-        # Short-priced Place penalty — these are safe but low-returning
-        if pick.bet_type == "Place" and pick.odds < 2.5:
-            base *= 0.75  # reduce stake on low-odds Place
+        # High-confidence Place bonus — Place is our profit engine (+7.55% ROI)
+        if pick.bet_type == "Place" and pick.place_prob >= 0.45:
+            base *= 1.15  # 15% stake boost for high-confidence Place
 
         pick_weights.append(base)
 

@@ -198,6 +198,11 @@ def get_all_venues() -> dict[str, str]:
     return dict(_VENUE_TO_STATE)
 
 
+def get_venues_for_state(state: str) -> set[str]:
+    """Return all venue names for a given state code (e.g. 'NSW' → {'randwick', 'rosehill', ...})."""
+    return set(_STATE_TRACKS.get(state.upper(), []))
+
+
 # TAB venue mnemonics for international venues
 # Format: normalized_venue -> (mnemonic, jurisdiction, url_slug)
 TAB_VENUE_MNEMONICS: dict[str, tuple[str, str, str]] = {
