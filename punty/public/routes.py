@@ -244,7 +244,7 @@ async def get_winner_stats(today: bool = False) -> dict:
         early_mail_content = early_mail_result.scalars().all()
 
         # Build list of today's tips with internal links
-        from punty.memory.assessment import _get_state_from_track as get_state_for_track
+        from punty.venues import guess_state as get_state_for_track
         todays_tips = []
         for content in early_mail_content:
             meeting = next((m for m in today_meetings if m.id == content.meeting_id), None)
@@ -1272,8 +1272,8 @@ async def get_bet_type_stats(
     if venue:
         meeting_conds.append(Meeting.venue.ilike(f"%{_esc(venue)}%"))
     if state:
-        from punty.memory.assessment import TRACK_STATE_MAP
-        state_tracks = [t for t, s in TRACK_STATE_MAP.items() if s == state.upper()]
+        from punty.venues import get_venues_for_state
+        state_tracks = get_venues_for_state(state)
         if state_tracks:
             meeting_conds.append(or_(*[Meeting.venue.ilike(f"%{t}%") for t in state_tracks]))
     if date_from:

@@ -1,8 +1,8 @@
 """Pre-calculate optimal Big 3 Multi combination.
 
-Finds the 3-horse combination across different races that maximises
-the product of win probabilities while ensuring the combined multi
-odds still offer value (positive expected value).
+Selects the 3 horses across different races with the highest win
+probabilities to maximise multi hit rate (#23). Previously used
+EV-optimized (prob × odds) which chased payouts over collection.
 
 The AI receives this as a RECOMMENDED default and can override
 with justification.
@@ -148,51 +148,33 @@ def calculate_pre_big3(race_contexts: list[dict]) -> Big3Recommendation | None:
         logger.debug(f"Only {len(candidates_by_race)} races with candidates, need 3")
         return None
 
-    # Find optimal 3-race combination
-    # For each combo of 3 races, try all candidate combinations
-    best: Big3Recommendation | None = None
-    best_ev = 0.0
+    # Find optimal 3-race combination by maximising multi probability (#23)
+    # Pick the single best candidate per race (highest win_prob), then
+    # choose the 3 races whose best candidates have the highest combined probability.
+    best_per_race: dict[int, Big3Candidate] = {}
+    for rn, cands in candidates_by_race.items():
+        best_per_race[rn] = max(cands, key=lambda c: c.win_prob)
 
-    race_numbers = sorted(candidates_by_race.keys())
+    # Sort races by their best candidate's win_prob descending
+    sorted_races = sorted(best_per_race.keys(), key=lambda rn: best_per_race[rn].win_prob, reverse=True)
 
-    for race_combo in combinations(race_numbers, 3):
-        # Get candidate lists for these 3 races
-        lists = [candidates_by_race[rn] for rn in race_combo]
-
-        # Try all combinations of candidates
-        for c1 in lists[0]:
-            for c2 in lists[1]:
-                for c3 in lists[2]:
-                    horses = [c1, c2, c3]
-                    # Reject combos where ALL 3 legs are sub-$4 (negative EV)
-                    if all(h.win_odds < 4.0 for h in horses):
-                        continue
-                    multi_prob = c1.win_prob * c2.win_prob * c3.win_prob
-                    multi_odds = c1.win_odds * c2.win_odds * c3.win_odds
-
-                    # Expected value: probability * payout * pool_takeout
-                    ev = multi_prob * multi_odds * POOL_TAKEOUT
-
-                    if ev > best_ev:
-                        best_ev = ev
-                        best = Big3Recommendation(
-                            horses=horses,
-                            multi_prob=multi_prob,
-                            multi_odds=multi_odds,
-                            expected_value=ev,
-                            stake=MULTI_STAKE,
-                            estimated_return=ev * MULTI_STAKE,
-                        )
-
-    if not best:
+    if len(sorted_races) < 3:
         return None
 
-    if best.expected_value < MIN_MULTI_EV:
-        logger.info(
-            f"Best Big 3 EV {best.expected_value:.2f} below minimum {MIN_MULTI_EV}"
-        )
-        # Still return it but log the warning — let the AI decide
-        pass
+    # Take top 3 races by probability
+    top_horses = [best_per_race[rn] for rn in sorted_races[:3]]
+    multi_prob = top_horses[0].win_prob * top_horses[1].win_prob * top_horses[2].win_prob
+    multi_odds = top_horses[0].win_odds * top_horses[1].win_odds * top_horses[2].win_odds
+    ev = multi_prob * multi_odds * POOL_TAKEOUT
+
+    best = Big3Recommendation(
+        horses=top_horses,
+        multi_prob=multi_prob,
+        multi_odds=multi_odds,
+        expected_value=ev,
+        stake=MULTI_STAKE,
+        estimated_return=ev * MULTI_STAKE,
+    )
 
     logger.info(
         f"Big 3 recommendation: "
@@ -212,22 +194,21 @@ def format_pre_big3(rec: Big3Recommendation) -> str:
 
     lines = ["\n**PRE-CALCULATED BIG 3 MULTI (recommended combination):**"]
     lines.append(
-        f"This combination maximises the multi's expected value "
-        f"by selecting the 3 horses across different races with the "
-        f"best probability × odds product."
+        f"This combination selects the 3 most probable winners "
+        f"across different races to maximise multi hit rate."
     )
     lines.append("")
 
     for i, h in enumerate(rec.horses, 1):
-        ev_flag = ""
+        prob_flag = ""
         if h.win_prob >= 0.30:
-            ev_flag = " [STRONG]"
+            prob_flag = " [STRONG]"
         elif h.win_prob >= 0.20:
-            ev_flag = " [SOLID]"
+            prob_flag = " [SOLID]"
         lines.append(
             f"  {i}) {h.horse_name} (Race {h.race_number}, No.{h.saddlecloth}) "
             f"— ${h.win_odds:.2f} "
-            f"(win prob: {h.win_prob:.0%}){ev_flag}"
+            f"(win prob: {h.win_prob:.0%}){prob_flag}"
         )
         if h.reason:
             lines.append(f"     {h.reason}")
@@ -239,20 +220,10 @@ def format_pre_big3(rec: Big3Recommendation) -> str:
         f"| EV ratio: {rec.expected_value:.2f}x"
     )
 
-    if rec.expected_value >= 1.2:
-        lines.append("  VALUE: Strong positive EV — recommend this multi.")
-    elif rec.expected_value >= 1.0:
-        lines.append("  VALUE: Fair value — proceed with this multi.")
-    else:
-        lines.append(
-            f"  WARNING: Below fair value (EV {rec.expected_value:.2f}x). "
-            f"Consider skipping the multi or finding better candidates."
-        )
-
     lines.append("")
     lines.append(
-        "  Use these exact horses unless you have strong reason to override. "
-        "The combination is mathematically optimised for maximum EV."
+        "  Use these exact horses — they are the 3 most likely winners on the card. "
+        "Do NOT substitute lower-probability horses for higher odds."
     )
 
     return "\n".join(lines)

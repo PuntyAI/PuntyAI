@@ -17,6 +17,7 @@ from punty.memory.models import RaceAssessment, RaceMemory
 from punty.memory.embeddings import EmbeddingService
 from punty.models.meeting import Meeting, Race, Runner
 from punty.models.pick import Pick
+from punty.venues import guess_state
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def build_assessment_query_text(
 
     Exposed so callers can pre-compute embeddings in batch.
     """
-    state = _get_state_from_track(track)
+    state = guess_state(track) if track else None
     query_parts = [track, f"{distance}m", race_class, going]
     if age_restriction:
         query_parts.append(age_restriction)
@@ -687,7 +688,7 @@ async def generate_race_assessment(
     total_pnl = sum(p.pnl or 0 for p in picks)
 
     # Derive additional fields
-    state = _get_state_from_track(meeting.venue)
+    state = guess_state(meeting.venue)
     sex_restriction = _get_sex_restriction(race.name, runners)
     field_size = len([r for r in runners if not r.get("scratched")])
 
@@ -796,7 +797,7 @@ async def retrieve_assessment_context(
         List of assessment dicts with key_learnings and context
     """
     # Derive state from track for filtering
-    state = _get_state_from_track(track)
+    state = guess_state(track) if track else None
 
     # Step 1: SQL filter for candidates
     # Same track, distance within 200m

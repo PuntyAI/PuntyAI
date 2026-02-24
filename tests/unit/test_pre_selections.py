@@ -954,6 +954,18 @@ class TestEdgeGate:
                           place_prob=0.10, value=0.50, place_value=0.50)
         assert _passes_edge_gate(pick) is False
 
+    def test_place_mid_price_relaxed_floor(self):
+        """Place at $3+ uses relaxed 0.30 floor instead of 0.35 (#19)."""
+        # place_prob=0.32 at $4 should pass (0.32 >= 0.30)
+        pick = self._pick(bet_type="Place", odds=4.0, place_prob=0.32, place_value=1.00)
+        assert _passes_edge_gate(pick) is True
+
+    def test_place_cheap_still_uses_strict_floor(self):
+        """Place at <$3 still uses strict 0.35 floor (#19)."""
+        # place_prob=0.32 at $2.50 should fail (0.32 < 0.35)
+        pick = self._pick(bet_type="Place", odds=2.50, place_prob=0.32, place_value=1.00)
+        assert _passes_edge_gate(pick) is False
+
     def test_win_2_40_to_3_strong_conviction_passes(self):
         """Win at $2.40-$3 with high win_prob passes."""
         pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.35)

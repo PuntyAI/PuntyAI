@@ -237,7 +237,8 @@ class TestFormatPreBig3:
         assert "EV" in text
         assert "Multi probability" in text
 
-    def test_strong_ev_flag(self):
+    def test_contains_use_instruction(self):
+        """Format should instruct AI to use exact horses (#23)."""
         rec = Big3Recommendation(
             horses=[
                 Big3Candidate(1, 1, "A", 0.35, 2.5, 1, ""),
@@ -251,23 +252,8 @@ class TestFormatPreBig3:
             estimated_return=13.0,
         )
         text = format_pre_big3(rec)
-        assert "Strong positive EV" in text
-
-    def test_below_value_warning(self):
-        rec = Big3Recommendation(
-            horses=[
-                Big3Candidate(1, 1, "A", 0.20, 3.0, 1, ""),
-                Big3Candidate(2, 2, "B", 0.15, 4.0, 1, ""),
-                Big3Candidate(3, 3, "C", 0.15, 5.0, 1, ""),
-            ],
-            multi_prob=0.0045,
-            multi_odds=60.0,
-            expected_value=0.23,
-            stake=MULTI_STAKE,
-            estimated_return=2.3,
-        )
-        text = format_pre_big3(rec)
-        assert "WARNING" in text
+        assert "most likely winners" in text
+        assert "Do NOT substitute" in text
 
     def test_includes_reasons(self):
         rec = Big3Recommendation(
@@ -304,11 +290,11 @@ class TestFormatPreBig3:
         assert "[SOLID]" in text
 
 
-class TestBig3MinOdds:
-    """Big3 combos where all 3 legs are sub-$4 should be rejected."""
+class TestBig3ProbabilitySelection:
+    """Big3 now selects by highest win probability (#23)."""
 
-    def test_all_short_odds_rejected(self):
-        """When all candidates are sub-$4, no Big3 should be recommended."""
+    def test_selects_highest_prob_horses(self):
+        """Should pick the 3 horses with highest win_prob across races."""
         races = [
             _race_ctx(1, ranked=[
                 {"saddlecloth": 1, "horse": "Fav1", "win_prob": 0.40},
@@ -332,11 +318,14 @@ class TestBig3MinOdds:
             ]),
         ]
         result = calculate_pre_big3(races)
-        # All candidates are sub-$4, so no valid Big3 combination exists
-        assert result is None
+        # Prob-based: picks top 3 by win_prob = Fav3(0.45), Fav4(0.42), Fav1/Fav2(0.40)
+        assert result is not None
+        probs = sorted([h.win_prob for h in result.horses], reverse=True)
+        assert probs[0] == 0.45
+        assert probs[1] == 0.42
 
-    def test_one_longer_odds_allowed(self):
-        """When at least one leg is $4+, Big3 can still be generated."""
+    def test_short_odds_accepted_for_prob(self):
+        """Short-priced favs are the BEST multi candidates by probability."""
         races = [
             _race_ctx(1, ranked=[
                 {"saddlecloth": 1, "horse": "Fav1", "win_prob": 0.35},
@@ -355,6 +344,7 @@ class TestBig3MinOdds:
             ]),
         ]
         result = calculate_pre_big3(races)
-        # At least one $5 horse — guard should NOT reject
-        # (may still be None if EV too low, but not because of odds guard)
-        # This test verifies the guard doesn't filter it out
+        assert result is not None
+        # Top 3 by prob: Fav1(0.35), Fav3(0.30), Fav2(0.25)
+        probs = sorted([h.win_prob for h in result.horses], reverse=True)
+        assert probs == [0.35, 0.30, 0.25]
