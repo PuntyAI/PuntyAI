@@ -280,7 +280,7 @@ def calculate_pre_selections(
                 used_saddlecloths.add(c["saddlecloth"])
                 break
 
-    # Ensure at least one Win/Each Way/Saver Win bet (mandatory rule)
+    # Ensure at least one Win/Saver Win bet (mandatory rule)
     # Skip for PLACE_LEVERAGE — this classification can go all-Place
     if classification.race_type != "PLACE_LEVERAGE":
         _ensure_win_bet(picks)
@@ -396,7 +396,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     # Field size affects place payouts:
     # ≤4 runners: no place betting, ≤7 runners: only 2 places paid
-    # Prefer Win/Each Way over Place in small fields
+    # Prefer Win over Place in small fields
     num_places = 0 if field_size <= 4 else (2 if field_size <= 7 else 3)
 
     if num_places == 0:
@@ -405,11 +405,11 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     if num_places == 2:
         # Only 2 places paid — Place is much harder to collect.
-        # Prefer Win or Each Way over straight Place.
+        # Prefer Win over straight Place.
         if rank <= 2 and win_prob >= 0.25:
             return "Win"
         if rank <= 2:
-            return "Each Way"
+            return "Win"  # small fields (≤7) still need Win exposure
         # Lower ranks: only Place if very high place probability
         if place_prob >= 0.55 and place_value >= 1.0:
             return "Place"
@@ -438,7 +438,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
         if rank <= 2 and win_prob >= 0.35 and value >= 1.05:
             return "Win"  # solid value overlay — don't force Place
         if rank == 1 and win_prob >= 0.30 and value >= 1.00:
-            return "Each Way"  # protect with EW instead of straight Place
+            return "Place"  # E/W killed — -16.16% ROI
         return "Place"
 
     # $2.40-$3.00: Win sweet spot #1 (+21.3% ROI, 47% win rate)
@@ -461,7 +461,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             return "Place"  # default Place in dead zone
         if rank == 2:
             if win_prob >= 0.30 and value >= 1.10:
-                return "Each Way"  # genuine hedge: decent conviction + value
+                return "Place"  # E/W killed — rank 2 $3-4 → Place
             return "Place"
         return "Place"
 
@@ -472,7 +472,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             if rank == 1:
                 return "Win"
             if rank == 2:
-                return "Each Way"
+                return "Place"  # E/W killed — rank 2 $4-5 → Place
             if value >= 1.05:
                 return "Saver Win"
         # Low-prob fallback: good odds but not enough conviction → Place
@@ -484,7 +484,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             if rank == 1:
                 if value >= 1.05:
                     return "Win"  # only with clear value edge
-                return "Each Way"  # hedge: like the horse but not confident enough for Win
+                return "Place"  # E/W killed — rank 1 $5-6 → Place
             if rank == 2:
                 return "Place"  # was E/W — tighten to Place for rank 2
         # Low-prob fallback
@@ -606,8 +606,8 @@ def _estimate_place_odds(win_odds: float) -> float:
 
 
 def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
-    """Ensure at least one pick is Win, Saver Win, or Each Way (mandatory rule)."""
-    has_win = any(p.bet_type in ("Win", "Saver Win", "Each Way") for p in picks)
+    """Ensure at least one pick is Win or Saver Win (mandatory rule)."""
+    has_win = any(p.bet_type in ("Win", "Saver Win") for p in picks)
     if has_win or not picks:
         return
 
@@ -631,7 +631,7 @@ def _cap_win_exposure(picks: list[RecommendedPick]) -> int:
     Returns:
         Number of picks downgraded to Place.
     """
-    _WIN_TYPES = {"Win", "Saver Win", "Each Way"}
+    _WIN_TYPES = {"Win", "Saver Win"}
     win_exposed = [p for p in picks if p.bet_type in _WIN_TYPES]
     if len(win_exposed) <= MAX_WIN_EXPOSED:
         return 0
@@ -752,8 +752,8 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
         return True
 
-    # 4. Each Way at $3.00-$6.00 with reasonable win probability
-    if bt == "Each Way" and 3.0 <= odds <= 6.0 and win_prob >= 0.20:
+    # 4. Place at $3.00-$6.00 with decent place probability (was E/W, now Place)
+    if bt == "Place" and 3.0 <= odds <= 6.0 and place_prob >= 0.40:
         return True
 
     # 5. Roughie Place at $8-$20 with strong place probability
@@ -891,19 +891,12 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         weight = pick_weights[i]
         raw_stake = effective_pool * (weight / total_weight)
 
-        # Each Way costs double (half win + half place)
-        if pick.bet_type == "Each Way":
-            raw_stake = raw_stake / 2  # show per-part amount
-
         # Round to nearest 50c, minimum $1
         stake = max(MIN_STAKE, round(raw_stake / STAKE_STEP) * STAKE_STEP)
         pick.stake = stake
 
-    # Verify total doesn't exceed effective pool (account for Each Way doubling)
-    total = sum(
-        p.stake * 2 if p.bet_type == "Each Way" else p.stake
-        for p in staked_picks
-    )
+    # Verify total doesn't exceed effective pool
+    total = sum(p.stake for p in staked_picks)
     if total > effective_pool + 0.01:
         # Scale down proportionally
         scale = effective_pool / total

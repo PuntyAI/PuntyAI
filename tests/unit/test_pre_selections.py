@@ -155,22 +155,22 @@ class TestDetermineBetType:
         result = _determine_bet_type(c, rank=1, is_roughie=False)
         assert result == "Win"  # odds below $4, so Win not E/W
 
-    def test_second_pick_each_way_in_sweet_spot(self):
-        """Rank 2 in $4-$6 sweet spot gets Each Way (upside + place protection)."""
+    def test_second_pick_place_in_sweet_spot(self):
+        """Rank 2 in $4-$6 sweet spot gets Place (E/W killed — -16.16% ROI)."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Each Way"
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
 
-    def test_second_pick_each_way_strong_signal_dead_zone(self):
-        """Rank 2 in $3-$4 dead zone gets E/W only with strong conviction (win_prob≥0.30)."""
-        # win_prob 0.28 is below the 0.30 threshold → Place
+    def test_second_pick_place_dead_zone(self):
+        """Rank 2 in $3-$4 dead zone gets Place regardless of conviction (E/W killed)."""
+        # win_prob 0.28 → Place
         c = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.0,
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
-        # win_prob 0.32 meets the threshold → Each Way
+        # win_prob 0.32 → also Place now (was E/W)
         c2 = {"win_prob": 0.32, "place_prob": 0.55, "odds": 3.0,
               "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c2, rank=2, is_roughie=False) == "Each Way"
+        assert _determine_bet_type(c2, rank=2, is_roughie=False) == "Place"
 
     def test_second_pick_place_when_no_value(self):
         c = {"win_prob": 0.12, "place_prob": 0.45, "odds": 8.0,
@@ -216,13 +216,13 @@ class TestEnsureWinBet:
         _ensure_win_bet(picks)
         assert picks[0].bet_type == "Win"
 
-    def test_each_way_counts_as_win(self):
+    def test_saver_win_counts_as_win(self):
         picks = [
-            RecommendedPick(1, 1, "A", "Each Way", 8, 3.0, 1.5, 0.3, 0.6, 1.1, 1.05, 0.5),
+            RecommendedPick(1, 1, "A", "Saver Win", 8, 3.0, 1.5, 0.3, 0.6, 1.1, 1.05, 0.5),
             RecommendedPick(2, 2, "B", "Place", 5, 5.0, 2.0, 0.2, 0.5, 1.0, 1.0, 0.3),
         ]
         _ensure_win_bet(picks)
-        assert picks[0].bet_type == "Each Way"  # unchanged
+        assert picks[0].bet_type == "Saver Win"  # unchanged
 
 
 # ──────────────────────────────────────────────
@@ -230,18 +230,17 @@ class TestEnsureWinBet:
 # ──────────────────────────────────────────────
 
 class TestCapWinExposure:
-    def test_downgrades_third_and_fourth_when_four_win_exposed(self):
-        """Canterbury R1 scenario: 2 EW + 2 Win → should cap at 2 win-exposed."""
+    def test_downgrades_third_when_three_win_exposed(self):
+        """3 Win/Saver + 1 roughie → should cap at 2 win-exposed."""
         picks = [
-            RecommendedPick(1, 9, "Farfetched", "Each Way", 3.5, 3.90, 1.97, 0.213, 0.351, 0.43, 0.90, 0.15),
-            RecommendedPick(2, 8, "Rach", "Each Way", 2.5, 4.60, 2.20, 0.184, 0.233, 0.67, 0.85, 0.10),
+            RecommendedPick(1, 9, "Farfetched", "Win", 3.5, 3.90, 1.97, 0.213, 0.351, 0.43, 0.90, 0.15),
+            RecommendedPick(2, 8, "Rach", "Saver Win", 2.5, 4.60, 2.20, 0.184, 0.233, 0.67, 0.85, 0.10),
             RecommendedPick(3, 3, "Farindira", "Win", 5.0, 8.50, 3.50, 0.159, 0.30, 1.23, 1.05, 0.35),
-            RecommendedPick(4, 5, "Mister Martini", "Win", 3.5, 23.0, 8.33, 0.071, 0.15, 1.74, 1.10, 0.63, is_roughie=True),
+            RecommendedPick(4, 5, "Mister Martini", "Place", 3.5, 23.0, 8.33, 0.071, 0.15, 1.74, 1.10, 0.63, is_roughie=True),
         ]
         _cap_win_exposure(picks)
-        # Picks 1-2 keep their EW bets, picks 3-4 downgraded to Place
-        assert picks[0].bet_type == "Each Way"
-        assert picks[1].bet_type == "Each Way"
+        assert picks[0].bet_type == "Win"
+        assert picks[1].bet_type == "Saver Win"
         assert picks[2].bet_type == "Place"
         assert picks[3].bet_type == "Place"
 
@@ -249,13 +248,13 @@ class TestCapWinExposure:
         """2 win-exposed + 2 Place = fine, no changes."""
         picks = [
             RecommendedPick(1, 1, "A", "Win", 7, 4.0, 2.0, 0.25, 0.50, 1.1, 1.0, 0.50),
-            RecommendedPick(2, 2, "B", "Each Way", 5, 5.0, 2.5, 0.20, 0.45, 1.0, 1.0, 0.30),
+            RecommendedPick(2, 2, "B", "Saver Win", 5, 5.0, 2.5, 0.20, 0.45, 1.0, 1.0, 0.30),
             RecommendedPick(3, 3, "C", "Place", 5, 6.0, 3.0, 0.15, 0.40, 0.9, 1.0, 0.20),
             RecommendedPick(4, 4, "D", "Place", 3, 10.0, 4.0, 0.08, 0.25, 1.5, 1.1, 0.10, is_roughie=True),
         ]
         _cap_win_exposure(picks)
         assert picks[0].bet_type == "Win"
-        assert picks[1].bet_type == "Each Way"
+        assert picks[1].bet_type == "Saver Win"
         assert picks[2].bet_type == "Place"
         assert picks[3].bet_type == "Place"
 
@@ -277,7 +276,7 @@ class TestCapWinExposure:
         """When downgrading to Place, expected_return should reflect place odds."""
         picks = [
             RecommendedPick(1, 1, "A", "Win", 7, 4.0, 2.0, 0.30, 0.55, 1.1, 1.0, 0.50),
-            RecommendedPick(2, 2, "B", "Each Way", 5, 5.0, 2.5, 0.22, 0.45, 1.0, 1.0, 0.30),
+            RecommendedPick(2, 2, "B", "Saver Win", 5, 5.0, 2.5, 0.22, 0.45, 1.0, 1.0, 0.30),
             RecommendedPick(3, 3, "C", "Win", 5, 8.0, 3.5, 0.15, 0.35, 1.2, 1.0, 0.20),
         ]
         _cap_win_exposure(picks)
@@ -302,15 +301,14 @@ class TestAllocateStakes:
         total = sum(p.stake for p in picks)
         assert total <= 20.5  # allow small rounding
 
-    def test_each_way_costs_double(self):
+    def test_two_place_bets_total_within_pool(self):
         picks = [
-            RecommendedPick(1, 1, "A", "Each Way", 0, 6.0, 2.5, 0.2, 0.5, 1.1, 1.05, 0.5),
+            RecommendedPick(1, 1, "A", "Place", 0, 6.0, 2.5, 0.2, 0.5, 1.1, 1.05, 0.5),
             RecommendedPick(2, 2, "B", "Place", 0, 5.0, 2.0, 0.2, 0.5, 1.0, 1.0, 0.3),
         ]
         _allocate_stakes(picks, 20.0)
-        # Each Way actual cost = stake * 2
-        actual_total = picks[0].stake * 2 + picks[1].stake
-        assert actual_total <= 20.5
+        total = sum(p.stake for p in picks)
+        assert total <= 20.5
 
     def test_minimum_stake(self):
         picks = [
@@ -711,7 +709,7 @@ class TestCalculatePreSelections:
         assert roughies[0].horse_name == "Outsider"
 
     def test_at_least_one_win_bet(self):
-        """Mandatory rule: at least one Win/Saver Win/Each Way per race."""
+        """Mandatory rule: at least one Win/Saver Win per race."""
         runners = [
             _runner(1, "A", 3.0, win_prob=0.10, place_prob=0.45, value=0.90, place_value=1.10),
             _runner(2, "B", 4.0, win_prob=0.10, place_prob=0.42, value=0.85, place_value=1.05),
@@ -720,7 +718,7 @@ class TestCalculatePreSelections:
         ctx = _race_context(runners)
         result = calculate_pre_selections(ctx)
 
-        win_types = {"Win", "Saver Win", "Each Way"}
+        win_types = {"Win", "Saver Win"}
         assert any(p.bet_type in win_types for p in result.picks)
 
     def test_empty_runners(self):
@@ -923,9 +921,9 @@ class TestEdgeGate:
         pick = self._pick(bet_type="Place", odds=8.0, place_prob=0.25, place_value=0.85)
         assert _passes_edge_gate(pick) is False
 
-    def test_each_way_good_range_passes(self):
-        """Each Way at $3-$6 with decent win_prob passes."""
-        pick = self._pick(bet_type="Each Way", odds=4.0, win_prob=0.25)
+    def test_place_mid_range_passes(self):
+        """Place at $3-$6 with decent place_prob passes (was E/W rule)."""
+        pick = self._pick(bet_type="Place", odds=4.0, place_prob=0.45)
         assert _passes_edge_gate(pick) is True
 
     def test_roughie_place_good_prob_passes(self):
@@ -1108,3 +1106,31 @@ class TestSubTwoDollarBetType:
         c2 = {"win_prob": 0.32, "place_prob": 0.55, "odds": 3.50,
               "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c2, rank=1, is_roughie=False) == "Win"
+
+
+# ──────────────────────────────────────────────
+# Tests: Each Way killed (#11)
+# ──────────────────────────────────────────────
+
+class TestEachWayKilled:
+    """Verify no E/W assignment from _determine_bet_type (except ≤7 field Win)."""
+
+    def test_ew_paths_all_return_place_or_win(self):
+        """Sweep all odds bands and ranks — no Each Way should ever be returned."""
+        for odds in [2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0, 12.0]:
+            for rank in [1, 2, 3, 4]:
+                for wp in [0.10, 0.20, 0.30, 0.40]:
+                    c = {"win_prob": wp, "place_prob": wp * 2,
+                         "odds": odds, "value_rating": 1.15,
+                         "place_value_rating": 1.05}
+                    result = _determine_bet_type(c, rank=rank, is_roughie=(rank == 4))
+                    assert result != "Each Way", (
+                        f"Got E/W at odds={odds}, rank={rank}, wp={wp}"
+                    )
+
+    def test_small_field_no_ew(self):
+        """≤7 field returns Win (not E/W) for rank ≤2."""
+        c = {"win_prob": 0.20, "place_prob": 0.40, "odds": 4.0,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        result = _determine_bet_type(c, rank=2, is_roughie=False, field_size=6)
+        assert result == "Win"  # not Each Way

@@ -402,9 +402,7 @@ def _recommend_bet_dominant(c: dict, rank: int, field_size: int) -> tuple[str, f
     if rank == 1:
         return "Win", 0.40, "Clear standout, strong win overlay"
     if rank == 2:
-        if EW_MIN_ODDS <= c["odds"] <= EW_MAX_ODDS and c["ev_place"] > 0:
-            return "Each Way", 0.25, "Secondary pick, EW for place protection"
-        return "Place", 0.25, "Place fallback, odds outside EW range"
+        return "Place", 0.25, "Secondary pick, place protection"
     if rank == 3:
         return "Place", 0.20, "Third pick, place-only"
     # Rank 4 (roughie)
@@ -421,18 +419,14 @@ def _recommend_bet_compressed(
     if rank == 1:
         if len(overlays) >= 2 and 4.0 <= c["odds"] <= 6.0:
             return "Win", 0.35, "Win overlay in sweet spot $4-$6"
-        if c["ev_win"] > 0 and EW_MIN_ODDS <= c["odds"] <= EW_MAX_ODDS:
-            return "Each Way", 0.30, "Positive EV, each way for coverage"
         if c["ev_place"] > 0.03 and c["place_odds"] >= 2.0:
-            return "Place", 0.30, "Place edge, win EV insufficient"
+            return "Place", 0.30, "Place edge"
         return "Place", 0.30, "Default place, no clear win edge"
 
     if rank == 2:
         # RULE 3: Win + Saver Win when 2+ overlays
         if len(overlays) >= 2 and c["win_edge"] >= WIN_EDGE_MIN:
             return "Saver Win", 0.20, "Second overlay, saver win structure"
-        if c["ev_place"] > 0 and EW_MIN_ODDS <= c["odds"] <= EW_MAX_ODDS:
-            return "Each Way", 0.25, "EW coverage"
         return "Place", 0.25, "Place, modest edge"
 
     if rank == 3:
@@ -447,11 +441,8 @@ def _recommend_bet_compressed(
 
 def _recommend_bet_place_leverage(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
     """Bet recommendation for PLACE_LEVERAGE race."""
-    # RULE 2: EW when both EVs positive, otherwise Place
+    # Place for all ranks in place leverage race (was E/W, audit shows Place better)
     if rank == 1:
-        if (c["ev_win"] >= 0 and c["ev_place"] >= 0
-                and EW_MIN_ODDS <= c["odds"] <= EW_MAX_ODDS):
-            return "Each Way", 0.30, "EW, both EVs positive in place leverage race"
         return "Place", 0.30, "Place, leveraging place edge"
     if rank == 2:
         if c["ev_place"] > 0:
@@ -540,15 +531,11 @@ def recommend_bet(
             candidate, rank, field_size, candidates or [],
         )
 
-    # RULE 7 post-check: EW odds filter
+    # RULE 7 post-check: E/W killed — all E/W paths removed
+    # (kept as safety net in case any upstream path produces E/W)
     if bt == "Each Way":
-        if candidate["odds"] < EW_MIN_ODDS or candidate["odds"] > EW_MAX_ODDS:
-            if candidate["ev_place"] > 0:
-                bt = "Place"
-                reason += f" (EW filtered, odds ${candidate['odds']:.1f})"
-            else:
-                bt = "Win" if candidate["ev_win"] > 0 else "Place"
-                reason += f" (EW filtered, odds ${candidate['odds']:.1f})"
+        bt = "Place"
+        reason += " (E/W killed — Place outperforms)"
 
     return BetRecommendation(
         saddlecloth=candidate["saddlecloth"],
@@ -623,12 +610,8 @@ def _cover_short_price_fav(
     if r2.bet_type != "Place":
         return
 
-    # Upgrade to EW if odds qualify, otherwise Saver Win
-    if EW_MIN_ODDS <= odds2 <= EW_MAX_ODDS and r2.ev_place > 0:
-        r2.bet_type = "Each Way"
-        r2.stake_pct = 0.30
-        r2.reasoning += " (upgraded: EW coverage for short-priced fav)"
-    elif r2.ev_win > -0.05:
+    # Upgrade to Saver Win for coverage when short-priced fav in play
+    if r2.ev_win > -0.05:
         r2.bet_type = "Saver Win"
         r2.stake_pct = 0.25
         r2.reasoning += " (upgraded: Saver coverage for short-priced fav)"
@@ -636,7 +619,7 @@ def _cover_short_price_fav(
 
 def _enforce_capital_efficiency(recommendations: list[BetRecommendation]) -> None:
     """RULE 8: Max 2 win-exposed bets, max 40% on place component."""
-    win_types = {"Win", "Saver Win", "Each Way"}
+    win_types = {"Win", "Saver Win"}
     win_exposed = [r for r in recommendations if r.bet_type in win_types]
 
     if len(win_exposed) > MAX_WIN_BETS:

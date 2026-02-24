@@ -245,19 +245,18 @@ class TestBetRecommendation:
         rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
         assert rec.bet_type == "Win"
 
-    def test_place_leverage_rank1_ew_when_both_ev_positive(self):
+    def test_place_leverage_rank1_place(self):
+        """Place leverage rank 1 should always be Place (E/W killed)."""
         c = _candidate(1, "Placer", 7.0, 0.18, 0.55, place_odds=2.0)
         rec = recommend_bet(c, PLACE_LEVERAGE, rank=1, field_size=10)
-        assert rec.bet_type == "Each Way"
+        assert rec.bet_type == "Place"
 
-    def test_place_leverage_can_skip_win_bet(self):
-        """All picks in PLACE_LEVERAGE can be Place."""
+    def test_place_leverage_all_place(self):
+        """All picks in PLACE_LEVERAGE should be Place (E/W killed)."""
         for rank in [1, 2, 3, 4]:
             c = _candidate(rank, f"H{rank}", 15.0, 0.10, 0.35, place_odds=4.0)
-            # EV_win = 0.10*15 - 1 = 0.50, EV_place = 0.35*4 - 1 = 0.40
-            # But rank 1 with odds $15 is EW range, and both EVs positive -> EW
             rec = recommend_bet(c, PLACE_LEVERAGE, rank=rank, field_size=10)
-            assert rec.bet_type in ("Place", "Each Way")
+            assert rec.bet_type == "Place"
 
     def test_compressed_2_overlays_win_plus_saver(self):
         """RULE 3: 2 overlays -> Win + Saver Win."""
@@ -309,20 +308,15 @@ class TestBetRecommendation:
         rec = recommend_bet(c, CHAOS_HANDICAP, rank=1, field_size=14)
         assert rec.bet_type == "Win"
 
-    def test_ew_filter_under_2_50(self):
-        """RULE 7: EW filtered when odds < $2.50."""
-        c = _candidate(2, "ShortPrice", 2.0, 0.40, 0.70, place_odds=1.33)
-        rec = recommend_bet(c, PLACE_LEVERAGE, rank=1, field_size=10)
-        # Odds $2.0 < $2.50 -> EW filtered
-        assert rec.bet_type != "Each Way"
-
-    def test_ew_filter_over_15(self):
-        """RULE 7: EW filtered when odds > $15."""
-        c = _candidate(1, "LongOdds", 18.0, 0.10, 0.30, place_odds=5.0)
-        c["ev_win"] = 0.10 * 18 - 1  # 0.80
-        c["ev_place"] = 0.30 * 5 - 1  # 0.50
-        rec = recommend_bet(c, PLACE_LEVERAGE, rank=1, field_size=10)
-        assert rec.bet_type != "Each Way"
+    def test_no_ew_at_any_odds(self):
+        """E/W killed — no odds range should produce Each Way."""
+        for odds, place_odds in [(2.0, 1.33), (5.0, 2.33), (18.0, 5.0)]:
+            c = _candidate(1, "Test", odds, 0.25, 0.55, place_odds=place_odds)
+            for race_type in [DOMINANT_EDGE, COMPRESSED_VALUE, PLACE_LEVERAGE, CHAOS_HANDICAP]:
+                rec = recommend_bet(c, race_type, rank=1, field_size=10, candidates=[c])
+                assert rec.bet_type != "Each Way", (
+                    f"E/W at ${odds} in {race_type}"
+                )
 
     def test_max_2_win_bets_per_race(self):
         """RULE 8: Capital efficiency caps at 2 win-exposed bets."""
@@ -330,12 +324,12 @@ class TestBetRecommendation:
 
         recs = [
             BetRecommendation(1, "H1", "Win", 0.35, 0.1, 0.1, 0.05, 0.05, ""),
-            BetRecommendation(2, "H2", "Each Way", 0.25, 0.1, 0.1, 0.04, 0.04, ""),
+            BetRecommendation(2, "H2", "Win", 0.25, 0.1, 0.1, 0.04, 0.04, ""),
             BetRecommendation(3, "H3", "Saver Win", 0.20, 0.1, 0.1, 0.03, 0.03, ""),
             BetRecommendation(4, "H4", "Place", 0.15, 0.1, 0.1, 0.01, 0.01, ""),
         ]
         _enforce_capital_efficiency(recs)
-        win_types = {"Win", "Saver Win", "Each Way"}
+        win_types = {"Win", "Saver Win"}
         win_count = sum(1 for r in recs if r.bet_type in win_types)
         assert win_count <= 2
 
