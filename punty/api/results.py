@@ -273,8 +273,8 @@ async def settle_past_races(db: AsyncSession = Depends(get_db)):
                 try:
                     from punty.results.monitor import _backfill_form_history
                     await _backfill_form_history(db, meeting_id, race_number)
-                except Exception:
-                    pass  # non-critical
+                except Exception as e:
+                    logger.warning(f"Failed to backfill form history for {meeting_id} R{race_number}: {e}")
         except Exception as e:
             errors.append(f"{meeting_id} R{race_number}: {e}")
             logger.error(f"Failed to settle {meeting_id} R{race_number}: {e}")

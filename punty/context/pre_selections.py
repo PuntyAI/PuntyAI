@@ -656,7 +656,7 @@ def _determine_race_pool(
     """Determine pool size based on edge confidence.
 
     3-tier system replaces flat $20 and watch-only half-pool:
-    - HIGH ($35): Best pick has ev_win > 0.15 OR (place_prob > 0.50 AND place_value > 1.05)
+    - HIGH ($25): Best pick has ev_win > 0.15 OR (place_prob > 0.50 AND place_value > 1.05)
     - STANDARD ($20): Default — at least one pick would pass edge gate
     - LOW ($12): Watch-only race OR only marginal edge detected
 
