@@ -440,6 +440,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
 
         # Punty's Pick — mark the highlighted best-bet selection(s) or create exotic pick
         puntys_pick_m = _PUNTYS_PICK.search(section)
+        exotic_pp_created = False  # Track if PP exotic was created to avoid duplicates
         if puntys_pick_m:
             pick_line = puntys_pick_m.group(1)
 
@@ -475,6 +476,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                     "multi_odds": None,
                     "estimated_return_pct": None,
                 })
+                exotic_pp_created = True
             else:
                 # Selection Punty's Pick — mark matching selections
                 # Also extract bet type per horse (may differ from main selection)
@@ -505,9 +507,12 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                                 )
 
         # Exotic — try primary pattern (with Degenerate Exotic header) then fallback
-        exotic_m = _EXOTIC.search(section)
-        if not exotic_m:
-            exotic_m = _EXOTIC_FALLBACK.search(section)
+        # Skip if Punty's Pick already created an exotic for this race
+        exotic_m = None
+        if not exotic_pp_created:
+            exotic_m = _EXOTIC.search(section)
+            if not exotic_m:
+                exotic_m = _EXOTIC_FALLBACK.search(section)
         if exotic_m:
             exotic_type = _normalize_exotic_type(exotic_m.group(1))
             runners_str = exotic_m.group(2).strip()
