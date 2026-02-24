@@ -12,7 +12,6 @@ from punty.memory.strategy import (
     _insight_text,
     aggregate_bet_type_performance,
     aggregate_tip_rank_performance,
-    aggregate_puntys_pick_performance,
     build_strategy_context,
     populate_pattern_insights,
 )
@@ -310,13 +309,8 @@ class TestBuildStrategyContext:
         async def mock_agg(db, window_days=None):
             return mock_recent if window_days == 30 else mock_overall
 
-        mock_pp = {"bets": 30, "winners": 9, "strike_rate": 30.0, "staked": 240.0, "pnl": -18.0, "roi": -7.5, "avg_odds": 4.20}
-
-        async def mock_pp_agg(db, window_days=None):
-            return mock_pp
-
         mock_recent_results = [
-            "- [WIN] Top [PP]: FAST HORSE @ $3.50 Win → Finished 1 | +$25.00",
+            "- [WIN] Top: FAST HORSE @ $3.50 Win → Finished 1 | +$25.00",
             "- [LOSS] 2nd: SLOW HORSE @ $5.00 Place → Finished 6 | -$6.00",
             "- [WIN] Exacta: runners [1, 3] — $20 stake | +$85.00",
         ]
@@ -324,7 +318,6 @@ class TestBuildStrategyContext:
         db = AsyncMock()
         with patch("punty.memory.strategy.aggregate_bet_type_performance", side_effect=mock_agg), \
              patch("punty.memory.strategy.aggregate_tip_rank_performance", return_value=mock_ranks), \
-             patch("punty.memory.strategy.aggregate_puntys_pick_performance", side_effect=mock_pp_agg), \
              patch("punty.memory.strategy.get_recent_results_with_context", return_value=mock_recent_results):
             result = await build_strategy_context(db)
 
@@ -333,7 +326,6 @@ class TestBuildStrategyContext:
         assert "Bet Type Scorecard" in result
         assert "Last 30 Days" in result
         assert "Pick Rank Performance" in result
-        assert "PUNTY'S PICK Performance" in result
         assert "STRATEGY DIRECTIVES" in result
         assert "ROI TARGETS" in result
         assert "RECENT RESULTS" in result
@@ -343,32 +335,3 @@ class TestBuildStrategyContext:
         assert "Top Pick" in result
         assert "Roughie" in result
 
-    @pytest.mark.asyncio
-    async def test_puntys_pick_shows_breakdown_with_exotics(self):
-        """When exotic Punty's Picks exist, context should show selection/exotic breakdown."""
-        mock_overall = [
-            _make_stat("selection", "Win", 50, 12, 400.0, -40.0, 4.0, 30.0),
-        ]
-
-        async def mock_agg(db, window_days=None):
-            return mock_overall
-
-        mock_pp = {
-            "bets": 25, "winners": 8, "strike_rate": 32.0,
-            "staked": 280.0, "pnl": 20.0, "roi": 7.1, "avg_odds": 3.80,
-            "selection_bets": 20, "selection_winners": 6,
-            "exotic_bets": 5, "exotic_winners": 2,
-        }
-
-        async def mock_pp_agg(db, window_days=None):
-            return mock_pp
-
-        db = AsyncMock()
-        with patch("punty.memory.strategy.aggregate_bet_type_performance", side_effect=mock_agg), \
-             patch("punty.memory.strategy.aggregate_tip_rank_performance", return_value=[]), \
-             patch("punty.memory.strategy.aggregate_puntys_pick_performance", side_effect=mock_pp_agg), \
-             patch("punty.memory.strategy.get_recent_results_with_context", return_value=[]):
-            result = await build_strategy_context(db)
-
-        assert "Selections: 20 picks, 6 winners" in result
-        assert "Exotics: 5 picks, 2 winners" in result

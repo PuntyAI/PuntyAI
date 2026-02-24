@@ -813,7 +813,6 @@ class TestFormatPreSelections:
 
         assert "LOCKED SELECTIONS" in formatted
         assert "Race 1" in formatted
-        assert "Punty's Pick" in formatted
         assert "Total stake" in formatted
         assert "$" in formatted
 

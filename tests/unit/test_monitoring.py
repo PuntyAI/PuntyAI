@@ -316,7 +316,6 @@ class TestFormatDailyDigest:
                 "exotic": {"bets": 2, "winners": 1, "strike_rate": 50.0, "staked": 40.0, "pnl": 15.5},
                 "sequence": {"bets": 2, "winners": 1, "strike_rate": 50.0, "staked": 40.0, "pnl": 0.0},
             },
-            "puntys_pick": {"bets": 3, "winners": 2, "strike_rate": 66.7, "staked": 15.0, "pnl": 12.0},
         }
         comparison = {
             "current_7d_pnl": 156.0,
@@ -336,7 +335,6 @@ class TestFormatDailyDigest:
         assert "+$47.50" in msg
         assert "12 bets" in msg
         assert "Selections" in msg
-        assert "Punty's Pick" in msg
         assert "Rolling 7-Day" in msg
         assert "No regressions detected" in msg
 
@@ -351,7 +349,6 @@ class TestFormatDailyDigest:
             "total_returned": 0.0,
             "total_pnl": -100.0,
             "by_product": {},
-            "puntys_pick": None,
         }
         comparison = {
             "current_7d_pnl": -300.0,
@@ -382,7 +379,6 @@ class TestFormatDailyDigest:
             "total_returned": 0.0,
             "total_pnl": -20.0,
             "by_product": {},
-            "puntys_pick": None,
         }
         comparison = {
             "current_7d_pnl": 0, "previous_7d_pnl": 0, "pnl_delta": 0,

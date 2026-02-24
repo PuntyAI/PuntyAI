@@ -1035,38 +1035,6 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
 
     overall_strike = (total_winners / total_bets * 100) if total_bets > 0 else 0.0
 
-    # Punty's Pick — side game, NOT included in totals
-    pp_hit_expr = func.coalesce(Pick.pp_hit, Pick.hit)
-    pp_pnl_expr = func.coalesce(Pick.pp_pnl, Pick.pnl)
-    pp_result = await db.execute(
-        select(
-            func.count(Pick.id),
-            func.sum(case((pp_hit_expr == True, 1), else_=0)),
-            func.sum(pp_pnl_expr),
-            func.sum(Pick.bet_stake),
-        )
-        .join(Meeting, Pick.meeting_id == Meeting.id)
-        .where(
-            Meeting.date == target_date,
-            Pick.settled == True,
-            Pick.pick_type == "selection",
-            Pick.is_puntys_pick == True,
-        )
-    )
-    pp_row = pp_result.one()
-    pp_total = pp_row[0] or 0
-    pp_hits = int(pp_row[1] or 0)
-    pp_pnl_val = float(pp_row[2] or 0)
-    pp_staked = float(pp_row[3] or 0)
-
-    puntys_pick = {
-        "bets": pp_total,
-        "winners": pp_hits,
-        "strike_rate": round(pp_hits / pp_total * 100, 1) if pp_total > 0 else 0.0,
-        "staked": round(pp_staked, 2),
-        "pnl": round(pp_pnl_val, 2),
-    } if pp_total > 0 else None
-
     return {
         "date": target_date.isoformat(),
         "total_bets": total_bets,
@@ -1076,7 +1044,6 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         "total_returned": round(total_staked + total_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "by_product": by_product,
-        "puntys_pick": puntys_pick,
     }
 
 

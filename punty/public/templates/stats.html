@@ -439,23 +439,6 @@
                     {% endif %}
                     {% endfor %}
 
-                    {% if perf.puntys_pick %}
-                    {% set pp = perf.puntys_pick %}
-                    {% set pp_roi = (pp.pnl / pp.staked * 100) if pp.staked else 0 %}
-                    <div class="product-bar" style="border-color: rgba(157, 78, 221, 0.2);">
-                        <div class="w-24 sm:w-28">
-                            <span class="font-heading font-semibold text-sm" style="color: var(--purple);">Punty's Pick</span>
-                            <span class="text-[9px] italic" style="color: var(--text-muted);"> side game</span>
-                        </div>
-                        <div class="flex-1 mx-1">
-                            <div class="w-full rounded-full h-2" style="background: rgba(255,255,255,0.06);">
-                                <div class="h-2 rounded-full" style="width: {{ [pp.strike_rate, 100]|min }}%; background: var(--purple);"></div>
-                            </div>
-                        </div>
-                        <div class="w-16 text-right text-sm" style="color: var(--text-muted);">{{ pp.winners }}/{{ pp.bets }}</div>
-                        <div class="w-20 text-right text-sm font-heading font-semibold" style="color: {% if pp_roi >= 0 %}#4ade80{% else %}#f87171{% endif %};">{{ '%+.1f'|format(pp_roi) }}%</div>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
 

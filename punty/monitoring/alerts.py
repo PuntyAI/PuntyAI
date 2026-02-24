@@ -63,13 +63,6 @@ def format_daily_digest(
                     f"({p['bets']}/{p['winners']}, {p['strike_rate']}%)"
                 )
 
-    # Punty's Pick
-    pp = digest.get("puntys_pick")
-    if pp:
-        lines.append(
-            f"  Punty's Pick: {_fmt_pnl(pp['pnl'])} "
-            f"({pp['bets']}/{pp['winners']}, {pp['strike_rate']}%)"
-        )
     lines.append("")
 
     # Rolling comparison
