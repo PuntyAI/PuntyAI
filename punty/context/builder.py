@@ -237,6 +237,7 @@ class ContextBuilder:
                 context["pre_built_sequences"] = build_all_sequence_lanes(
                     total_races, seq_legs, context["races"],
                     sequence_override=seq_override,
+                    track_condition=meeting.track_condition or "",
                 )
             except Exception as e:
                 logger.debug(f"Pre-sequence lane construction failed: {e}")

@@ -753,16 +753,20 @@ class TestCalculatePreSelections:
             _runner(1, "A", 3.0, win_prob=0.30, value=1.10),
             _runner(2, "B", 4.0, win_prob=0.22, value=1.08),
             _runner(3, "C", 6.0, win_prob=0.15, value=1.05),
+            _runner(4, "D", 8.0, win_prob=0.10, value=0.95),
+            _runner(5, "E", 10.0, win_prob=0.08, value=0.90),
+            _runner(6, "F", 12.0, win_prob=0.06, value=0.85),
+            _runner(7, "G", 15.0, win_prob=0.05, value=0.80),
         ]
         ctx = _race_context(runners)
         ctx["probabilities"]["exotic_combinations"] = [
-            {"type": "Trifecta Box", "runners": [1, 2, 3],
-             "runner_names": ["A", "B", "C"],
-             "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"},
+            {"type": "Exacta Standout", "runners": [1, 2],
+             "runner_names": ["A", "B"],
+             "probability": "8.5%", "value": 1.40, "combos": 1, "format": "standout"},
         ]
         result = calculate_pre_selections(ctx)
         assert result.exotic is not None
-        assert result.exotic.exotic_type == "Trifecta Box"
+        assert result.exotic.exotic_type == "Exacta Standout"
 
     def test_puntys_pick_exotic_when_high_value(self):
         """Exotic should become Punty's Pick when value >= 1.5x and EV > selection."""
@@ -770,6 +774,11 @@ class TestCalculatePreSelections:
         runners = [
             _runner(1, "A", 3.00, win_prob=0.35, value=1.05),
             _runner(2, "B", 4.50, win_prob=0.22, value=1.02),
+            _runner(3, "C", 8.0, win_prob=0.12, value=0.95),
+            _runner(4, "D", 10.0, win_prob=0.08, value=0.90),
+            _runner(5, "E", 12.0, win_prob=0.06, value=0.85),
+            _runner(6, "F", 15.0, win_prob=0.05, value=0.80),
+            _runner(7, "G", 20.0, win_prob=0.04, value=0.75),
         ]
         ctx = _race_context(runners)
         # Exotic EV: 0.50 * 3.0 - 1 = 0.50, sel EV: 0.35 * 3.0 - 1 = 0.05
@@ -810,6 +819,11 @@ class TestFormatPreSelections:
         runners = [
             _runner(1, "A", 3.0, win_prob=0.30),
             _runner(2, "B", 4.0, win_prob=0.25),
+            _runner(3, "C", 6.0, win_prob=0.15),
+            _runner(4, "D", 8.0, win_prob=0.10),
+            _runner(5, "E", 10.0, win_prob=0.08),
+            _runner(6, "F", 12.0, win_prob=0.06),
+            _runner(7, "G", 15.0, win_prob=0.05),
         ]
         ctx = _race_context(runners)
         ctx["probabilities"]["exotic_combinations"] = [
@@ -1166,3 +1180,57 @@ class TestWinToPlaceGuard:
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.6,
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+
+
+# ──────────────────────────────────────────────
+# Tests: Exotic filters (#9)
+# ──────────────────────────────────────────────
+
+class TestExoticFilters:
+    """Data-driven exotic filters from Feb 24 audit."""
+
+    COMBOS = [{"type": "Exacta Standout", "runners": [1, 2],
+               "runner_names": ["A", "B"],
+               "probability": "20.0%", "value": 1.50, "combos": 1, "format": "standout"}]
+
+    def test_heavy_track_blocks_exotic(self):
+        result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
+                                track_condition="Heavy 10")
+        assert result is None
+
+    def test_soft_7_blocks_exotic(self):
+        result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
+                                track_condition="Soft 7")
+        assert result is None
+
+    def test_soft_5_allows_exotic(self):
+        result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
+                                track_condition="Soft 5")
+        assert result is not None
+
+    def test_hk_blocks_exotic(self):
+        result = _select_exotic(self.COMBOS, {1, 2}, field_size=8, is_hk=True)
+        assert result is None
+
+    def test_small_field_blocks_exotic(self):
+        result = _select_exotic(self.COMBOS, {1, 2}, field_size=5)
+        assert result is None
+
+    def test_good_track_allows_exotic(self):
+        result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
+                                track_condition="Good 4")
+        assert result is not None
+
+    def test_trifecta_box_field_restriction(self):
+        """Trifecta Box only allowed in 9-12 field."""
+        tri_combos = [{"type": "Trifecta Box", "runners": [1, 2, 3],
+                        "runner_names": ["A", "B", "C"],
+                        "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"}]
+        # 7-field: blocked
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=7,
+                                track_condition="Good 4")
+        assert result is None
+        # 10-field: allowed
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
+                                track_condition="Good 4")
+        assert result is not None

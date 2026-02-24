@@ -7,6 +7,7 @@ with justification.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -300,6 +301,9 @@ def calculate_pre_selections(
         exotic_combos, used_saddlecloths,
         field_size=field_size, anchor_odds=anchor_odds,
         venue_type=venue_type, picks=picks,
+        track_condition=race_context.get("track_condition", ""),
+        race_class=race_context.get("class", ""),
+        is_hk=(race_context.get("state") == "HK"),
     )
 
     # Calculate Punty's Pick
@@ -917,6 +921,9 @@ def _select_exotic(
     anchor_odds: float = 0.0,
     venue_type: str = "",
     picks: list[RecommendedPick] | None = None,
+    track_condition: str = "",
+    race_class: str = "",
+    is_hk: bool = False,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet based on probability × value (EV).
 
@@ -932,6 +939,18 @@ def _select_exotic(
     """
     if not exotic_combos:
         return None
+
+    # Data-driven filters (Feb 24 audit)
+    tc = (track_condition or "").lower()
+    if "heavy" in tc:
+        return None  # 0/21 exotic hits on Heavy tracks
+    soft_match = re.search(r'soft\s*(\d+)', tc)
+    if soft_match and int(soft_match.group(1)) >= 7:
+        return None  # 0% strike on Soft 7+
+    if is_hk:
+        return None  # 0/11 exotic hits on HK races
+    if field_size and field_size <= 6:
+        return None  # All types losing in ≤6 fields
 
     # --- Tight cluster detection ---
     # When top 3 non-roughie picks are within 8% win probability,
@@ -961,11 +980,15 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
 
+        # Trifecta Box field restriction: only profitable in 9-12 fields
+        ec_type = ec.get("type", "")
+        if ec_type == "Trifecta Box" and field_size and (field_size < 9 or field_size > 12):
+            continue  # Only profitable in 9-12 fields (+$238 vs -$484 in 13+)
+
         # Overlap rules by exotic type:
         # Quinella/Exacta: ALL runners must be from our picks (strict 2-runner bets)
         # Trifecta/First4: at least 2 runners from picks (allow ranking runners
         # in trailing positions — 3rd for tri, 4th+ for First4)
-        ec_type = ec.get("type", "")
         if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
             if overlap_ratio < 1.0:
                 continue
