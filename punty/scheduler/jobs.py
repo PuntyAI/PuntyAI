@@ -1074,14 +1074,14 @@ async def meeting_post_race_job(meeting_id: str, retry_count: int = 0, job_start
             results["retry_scheduled"] = True
 
             # Schedule retry, passing job_started_at to track total elapsed time
+            from functools import partial
             from punty.scheduler.manager import scheduler_manager
             from datetime import timedelta
 
-            _started = job_started_at
             retry_time = melb_now() + timedelta(minutes=RETRY_DELAY_MINUTES)
             scheduler_manager.add_job(
                 f"{meeting_id}-post-race-retry-{retry_count + 1}",
-                lambda: meeting_post_race_job(meeting_id, retry_count + 1, job_started_at=_started),
+                partial(meeting_post_race_job, meeting_id, retry_count + 1, job_started_at=job_started_at),
                 trigger_type="date",
                 run_date=retry_time,
             )

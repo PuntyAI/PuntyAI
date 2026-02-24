@@ -482,6 +482,75 @@ Leads and controls.
         assert puntys[0].get("pp_odds") is None
 
 
+class TestDuplicateExoticPrevention:
+    """Tests that exotic Punty's Pick doesn't create duplicate exotic picks."""
+
+    def test_pp_exotic_suppresses_standard_exotic(self):
+        """When Punty's Pick is an exotic, the standard exotic handler should be skipped."""
+        content = """
+*Race 5 – Test Sprint*
+
+1. *HORSE A* (No.6) — $3.00 / $1.50
+   Bet: $11 Place
+2. *HORSE B* (No.3) — $5.00 / $2.00
+   Bet: $5 Place
+3. *HORSE C* (No.8) — $7.00 / $2.50
+   Bet: $4 Place
+Roughie: *HORSE D* (No.11) — $15.00 / $4.00
+Bet: No Bet (Tracked)
+
+*Punty's Pick:* Quinella [6, 3] — $15 (Value: 1.8x)
+
+*Degenerate Exotic*
+Quinella: 6, 3 — $15
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        exotics = [p for p in picks if p["pick_type"] == "exotic"]
+        # Should be exactly 1 exotic, not 2
+        assert len(exotics) == 1
+        assert exotics[0].get("is_puntys_pick") is True
+        assert exotics[0]["exotic_type"] == "Quinella"
+
+    def test_standard_exotic_still_parsed_without_pp(self):
+        """Standard exotics should still be parsed when there's no PP exotic."""
+        content = """
+*Race 2 – Test Race*
+
+1. *HORSE A* (No.1) — $3.00 / $1.50
+   Bet: $10 Win
+2. *HORSE B* (No.4) — $5.00 / $2.00
+   Bet: $6 Place
+3. *HORSE C* (No.7) — $8.00 / $2.50
+   Bet: $4 Each Way
+Roughie: *HORSE D* (No.9) — $20.00 / $5.00
+Bet: No Bet (Tracked)
+
+*Punty's Pick:* HORSE A (No.1) $3.00 Win
+
+*Degenerate Exotic*
+Trifecta Box: 1, 4, 7 — $15
+"""
+        counter = [0]
+
+        def next_id():
+            counter[0] += 1
+            return f"pk-test-{counter[0]:03d}"
+
+        picks = _parse_race_sections(content, "test-content", "test-meeting", next_id)
+
+        exotics = [p for p in picks if p["pick_type"] == "exotic"]
+        assert len(exotics) == 1
+        assert exotics[0]["exotic_type"] == "Trifecta Box"
+        assert exotics[0].get("is_puntys_pick") is None  # Not a PP exotic
+
+
 class TestParseEarlyMailIntegration:
     """Integration tests for full early mail parsing."""
 
