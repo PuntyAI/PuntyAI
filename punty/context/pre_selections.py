@@ -1267,20 +1267,6 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
             f"| Value: {ex.value_ratio:.2f}x | {ex.num_combos} combos"
         )
 
-    if pre_sel.puntys_pick:
-        pp = pre_sel.puntys_pick
-        if pp.pick_type == "exotic":
-            runners_str = ", ".join(str(r) for r in pp.exotic_runners)
-            lines.append(
-                f"  Punty's Pick: {pp.exotic_type} [{runners_str}] "
-                f"— $20 (Value: {pp.exotic_value:.1f}x) | {pp.reason}"
-            )
-        else:
-            lines.append(
-                f"  Punty's Pick: {pp.horse_name} (No.{pp.saddlecloth}) "
-                f"${pp.odds:.2f} {pp.bet_type} | {pp.reason}"
-            )
-
     if pre_sel.notes:
         for note in pre_sel.notes:
             lines.append(f"  NOTE: {note}")

@@ -515,17 +515,15 @@
         background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
 
-    /* Punty's Pick Block (highlighted at bottom of race) */
-    .puntys-pick-block {
-        margin-top: 1rem; padding: 0.875rem 1rem; border-radius: 10px;
-        border-left: 3px solid var(--magenta);
-        background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(255, 107, 53, 0.06));
-    }
-    .puntys-pick-block p { margin-bottom: 0.25rem; }
-    .puntys-pick-avatar {
-        width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
-        border: 1.5px solid rgba(233, 30, 140, 0.4);
-        vertical-align: middle; margin-right: 4px;
+    /* Punty's Pick inline badge */
+    .pp-badge {
+        display: inline-flex; align-items: center; gap: 3px;
+        margin-left: 6px; padding: 2px 8px; border-radius: 6px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase;
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.2), rgba(255, 107, 53, 0.2));
+        color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.3);
+        vertical-align: middle; white-space: nowrap;
     }
 
     /* Selection metadata labels */
@@ -766,12 +764,6 @@
         font-family: 'Rajdhani', sans-serif; font-weight: 500;
         font-size: 0.75rem; color: var(--text-muted);
     }
-    .seq-puntys-pick {
-        margin-top: 0.75rem; padding: 0.625rem 0.875rem;
-        border-radius: 8px; border-left: 3px solid var(--magenta);
-        background: linear-gradient(135deg, rgba(233, 30, 140, 0.06), rgba(255, 107, 53, 0.06));
-    }
-    .seq-puntys-pick p { margin-bottom: 0; }
     @media (max-width: 640px) {
         .seq-variant-card { padding: 0.625rem 0.75rem; }
         .seq-legs { gap: 0.125rem; }
@@ -1144,28 +1136,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Move Punty's Pick to bottom + highlight
+            // Inline Punty's Pick badge — find the PP line and add a badge next to the matching selection
             var pickEl = body.querySelector('.puntys-pick');
             if (pickEl) {
                 var pickP = pickEl.closest('p') || pickEl.parentElement;
-                var pickNodes = [pickP];
-                // Grab explanation paragraph but exclude exotic lines
-                var nextSib = pickP.nextElementSibling;
-                if (nextSib && nextSib.tagName === 'P' &&
-                    !nextSib.querySelector('strong:first-child') &&
-                    !/^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*:/i.test(nextSib.textContent.trim())) {
-                    pickNodes.push(nextSib);
+                // Extract horse name from PP span
+                var ppStrong = pickEl.querySelector('strong');
+                var ppName = ppStrong ? ppStrong.textContent.trim() : '';
+                // Find the matching selection line by horse name
+                var matched = false;
+                if (ppName) {
+                    var selStrongs = body.querySelectorAll('p strong');
+                    for (var si = 0; si < selStrongs.length; si++) {
+                        if (selStrongs[si].textContent.trim() === ppName && selStrongs[si] !== ppStrong) {
+                            var badge = document.createElement('span');
+                            badge.className = 'pp-badge';
+                            badge.textContent = "Punty's Pick";
+                            selStrongs[si].parentNode.insertBefore(badge, selStrongs[si].nextSibling);
+                            matched = true;
+                            break;
+                        }
+                    }
                 }
-                var pickWrap = document.createElement('div');
-                pickWrap.className = 'puntys-pick-block';
-                // Add small Punty avatar inline before the label
-                var pickImg = document.createElement('img');
-                pickImg.src = '/static/punty-character.jpg';
-                pickImg.alt = 'Punty';
-                pickImg.className = 'puntys-pick-avatar';
-                pickEl.insertBefore(pickImg, pickEl.firstChild);
-                pickNodes.forEach(function(n) { pickWrap.appendChild(n); });
-                body.appendChild(pickWrap);
+                // Remove the standalone PP line (it's now represented by the badge)
+                if (matched && pickP) {
+                    pickP.remove();
+                } else if (!matched && pickEl) {
+                    // No matching selection found — convert PP line in-place to a badge
+                    var badge = document.createElement('span');
+                    badge.className = 'pp-badge';
+                    badge.textContent = "Punty's Pick";
+                    pickEl.replaceWith(badge);
+                }
             }
         }
 
@@ -1404,14 +1406,15 @@ document.addEventListener('DOMContentLoaded', function() {
             p.parentNode.replaceChild(fragment, p);
         });
 
-        // Style Punty's Pick line
+        // Inline Punty's Pick badge for sequence sections
         var remaining = body.querySelectorAll('p');
         remaining.forEach(function(p) {
             if (p.querySelector('.puntys-pick') || /Punty.s\s+Pick/i.test(p.textContent)) {
-                var wrap = document.createElement('div');
-                wrap.className = 'seq-puntys-pick';
-                wrap.innerHTML = p.innerHTML;
-                p.parentNode.replaceChild(wrap, p);
+                var badge = document.createElement('span');
+                badge.className = 'pp-badge';
+                badge.textContent = "Punty's Pick";
+                while (p.firstChild) p.removeChild(p.firstChild);
+                p.appendChild(badge);
             }
         });
     }
@@ -1502,20 +1505,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Punty's Pick winner: check if the pick horse won
-        if (raceWinners) {
-            var pickBlock = acc.querySelector('.puntys-pick-block');
-            if (pickBlock) {
-                var pickText = pickBlock.textContent || '';
-                var pickScMatch = pickText.match(/\(No\.?\s*(\d+)\)/);
-                if (pickScMatch) {
-                    var pickSc = parseInt(pickScMatch[1]);
-                    if (raceWinners.indexOf(pickSc) !== -1) {
-                        addBadge(pickBlock, 'WINNER');
-                    }
-                }
-            }
-        }
 
         // Exotic winners: check <p> elements AND walk text nodes in accordion body
         if (raceExotic) {

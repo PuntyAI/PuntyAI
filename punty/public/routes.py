@@ -387,46 +387,6 @@ async def get_winner_stats(today: bool = False) -> dict:
             if recent_row:
                 best_bet = _build_best_bet(*recent_row, is_today=False)
 
-        # Punty's Picks — only selections flagged as is_puntys_pick
-        # Use pp_hit/pp_pnl when set (Punty's Pick had different bet type than main selection)
-        from sqlalchemy import literal_column
-        pp_hit_expr = func.coalesce(Pick.pp_hit, Pick.hit)
-        pp_pnl_expr = func.coalesce(Pick.pp_pnl, Pick.pnl)
-        pp_conds = [
-            Pick.settled == True,
-            Pick.pick_type == "selection",
-            Pick.is_puntys_pick == True,
-            Pick.bet_type != "exotics_only",
-        ]
-        if today:
-            pp_conds.append(Meeting.date == today_date)
-        pp_q = select(
-            func.count(Pick.id),
-            func.sum(case((pp_hit_expr == True, 1), else_=0)),
-            func.sum(pp_pnl_expr),
-            func.sum(Pick.bet_stake),
-        ).where(and_(*pp_conds))
-        if today:
-            pp_q = pp_q.join(Meeting, Pick.meeting_id == Meeting.id)
-        pp_result = await db.execute(pp_q)
-        pp_row = pp_result.one()
-        pp_total = pp_row[0] or 0
-        pp_hits = int(pp_row[1] or 0)
-        pp_pnl = float(pp_row[2] or 0)
-        pp_staked = float(pp_row[3] or 0)
-        pp_rate = round(pp_hits / pp_total * 100, 1) if pp_total > 0 else 0
-        pp_roi = round(pp_pnl / pp_staked * 100, 1) if pp_staked > 0 else 0
-        pick_ranks.append({
-            "label": "Punty's Picks",
-            "rank": 0,
-            "hits": pp_hits,
-            "total": pp_total,
-            "rate": pp_rate,
-            "pnl": round(pp_pnl, 2),
-            "staked": round(pp_staked, 2),
-            "roi": pp_roi,
-        })
-
         return {
             "today_winners": today_winners,
             "alltime_winners": alltime_winners,

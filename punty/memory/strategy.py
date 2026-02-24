@@ -211,93 +211,6 @@ async def aggregate_tip_rank_performance(
     return results
 
 
-async def aggregate_puntys_pick_performance(
-    db: AsyncSession,
-    window_days: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
-    """Aggregate performance of ALL Punty's Picks (is_puntys_pick=True).
-
-    Includes both selection and exotic Punty's Picks.
-    Uses bet_stake for selections, exotic_stake for exotics.
-    """
-    date_filter = []
-    if window_days:
-        cutoff = melb_today() - timedelta(days=window_days)
-        date_filter.append(Pick.settled_at >= cutoff)
-
-    # Selection Punty's Picks — use pp_hit/pp_pnl when PP had different bet type
-    pp_hit_expr = func.coalesce(Pick.pp_hit, Pick.hit)
-    pp_pnl_expr = func.coalesce(Pick.pp_pnl, Pick.pnl)
-    sel_q = (
-        select(
-            func.count(Pick.id),
-            func.sum(case((pp_hit_expr == True, 1), else_=0)),
-            func.sum(Pick.bet_stake),
-            func.sum(pp_pnl_expr),
-            func.avg(Pick.odds_at_tip),
-        )
-        .where(
-            Pick.settled == True,
-            Pick.pick_type == "selection",
-            Pick.is_puntys_pick == True,
-            Pick.bet_type != "exotics_only",
-            *date_filter,
-        )
-    )
-    sel_row = (await db.execute(sel_q)).one()
-
-    # Exotic Punty's Picks
-    exo_q = (
-        select(
-            func.count(Pick.id),
-            func.sum(case((Pick.hit == True, 1), else_=0)),
-            func.sum(Pick.exotic_stake),
-            func.sum(Pick.pnl),
-        )
-        .where(
-            Pick.settled == True,
-            Pick.pick_type == "exotic",
-            Pick.is_puntys_pick == True,
-            *date_filter,
-        )
-    )
-    exo_row = (await db.execute(exo_q)).one()
-
-    sel_bets = sel_row[0] or 0
-    exo_bets = exo_row[0] or 0
-    total_bets = sel_bets + exo_bets
-
-    if total_bets == 0:
-        return None
-
-    sel_winners = int(sel_row[1] or 0)
-    exo_winners = int(exo_row[1] or 0)
-    sel_staked = float(sel_row[2] or 0)
-    exo_staked = float(exo_row[2] or 0)
-    sel_pnl = float(sel_row[3] or 0)
-    exo_pnl = float(exo_row[3] or 0)
-    sel_avg_odds = float(sel_row[4] or 0)
-
-    total_winners = sel_winners + exo_winners
-    total_staked = sel_staked + exo_staked
-    total_pnl = sel_pnl + exo_pnl
-
-    return {
-        "bets": total_bets,
-        "winners": total_winners,
-        "strike_rate": round(total_winners / total_bets * 100, 1) if total_bets else 0,
-        "staked": round(total_staked, 2),
-        "pnl": round(total_pnl, 2),
-        "roi": round(total_pnl / total_staked * 100, 1) if total_staked else 0,
-        "avg_odds": round(sel_avg_odds, 2),
-        # Breakdown
-        "selection_bets": sel_bets,
-        "selection_winners": sel_winners,
-        "exotic_bets": exo_bets,
-        "exotic_winners": exo_winners,
-    }
-
-
 async def get_recent_results_with_context(
     db: AsyncSession, limit: int = 15,
 ) -> list[str]:
@@ -526,23 +439,6 @@ async def populate_pattern_insights(db: AsyncSession) -> int:
             avg_odds=r["avg_odds"],
             insight_text=f"{r['label']}: {r['strike_rate']}% SR at avg ${r['avg_odds']:.2f}, {r['roi']:+.1f}% ROI",
             conditions_json=json.dumps(r),
-            created_at=now,
-            updated_at=now,
-        ))
-        count += 1
-
-    # Punty's Pick insight
-    pp = await aggregate_puntys_pick_performance(db)
-    if pp:
-        db.add(PatternInsight(
-            pattern_type="puntys_pick",
-            pattern_key="puntys_pick_overall",
-            sample_count=pp["bets"],
-            hit_rate=pp["strike_rate"],
-            avg_pnl=pp["pnl"] / pp["bets"] if pp["bets"] else 0,
-            avg_odds=pp["avg_odds"],
-            insight_text=f"Punty's Pick: {pp['strike_rate']}% SR, {pp['roi']:+.1f}% ROI over {pp['bets']} bets",
-            conditions_json=json.dumps(pp),
             created_at=now,
             updated_at=now,
         ))
@@ -830,42 +726,6 @@ async def build_strategy_context(db: AsyncSession, **_kw: Any) -> str:
             parts.append(f"**AVOID roughies at {', '.join(avoid_bands)} — historically unprofitable**")
         if hunt_bands:
             parts.append(f"**HUNT roughies at {', '.join(hunt_bands)} — this is your sweet spot**")
-        parts.append("")
-
-    # Punty's Pick performance (the highlighted best-bet per race)
-    pp_stats = await aggregate_puntys_pick_performance(db)
-    if pp_stats:
-        pp = pp_stats
-        parts.append("### PUNTY'S PICK Performance (Your Best-Bet Recommendation)")
-        parts.append(
-            f"- **All-Time**: {pp['bets']} picks, {pp['winners']} winners "
-            f"({pp['strike_rate']}% SR), {_pnl_str(pp['pnl'])} P&L ({pp['roi']:+.1f}% ROI)"
-        )
-        if pp.get("selection_bets") and pp.get("exotic_bets"):
-            parts.append(
-                f"  - Selections: {pp['selection_bets']} picks, {pp['selection_winners']} winners"
-                f"  |  Exotics: {pp['exotic_bets']} picks, {pp['exotic_winners']} winners"
-            )
-        if pp["strike_rate"] < 30:
-            parts.append(
-                f"- **WARNING**: Your best-bet picks are only hitting {pp['strike_rate']}%. "
-                "The public sees this stat. You need to do BETTER."
-            )
-            parts.append(
-                "- **PP RULE**: Select ONLY runners with >25% win probability for Punty's Pick. "
-                "Avoid speculative exotics as PP. Stick to selections with genuine win chances."
-            )
-        if pp["roi"] < 0:
-            parts.append(
-                f"- **LOSING MONEY**: Punty's Pick ROI is {pp['roi']:+.1f}%. "
-                "Pick higher-probability plays, not long shots."
-            )
-        pp_30 = await aggregate_puntys_pick_performance(db, window_days=30)
-        if pp_30 and pp_30["bets"] >= 3:
-            parts.append(
-                f"- **Last 30 Days**: {pp_30['bets']} picks, {pp_30['winners']} winners "
-                f"({pp_30['strike_rate']}% SR), {pp_30['roi']:+.1f}% ROI"
-            )
         parts.append("")
 
     # Strategy directives

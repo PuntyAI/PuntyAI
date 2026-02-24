@@ -309,27 +309,6 @@
             {% endif %}
             {% endfor %}
 
-            {% if performance.puntys_pick %}
-            {% set pp = performance.puntys_pick %}
-            <div class="mt-2 pt-2 border-t border-gray-100">
-                <div class="flex flex-wrap sm:flex-nowrap items-center justify-between text-sm gap-1">
-                    <div class="w-24 sm:w-28 shrink-0">
-                        <span class="font-medium text-purple-600">Punty's Pick</span>
-                        <span class="text-[10px] text-gray-400 italic ml-1">side game</span>
-                    </div>
-                    <div class="flex-1 mx-1 sm:mx-3 min-w-[3rem]">
-                        <div class="w-full bg-gray-100 rounded-full h-2">
-                            <div class="h-2 rounded-full {{ 'bg-purple-500' if pp.pnl >= 0 else 'bg-red-400' }}"
-                                 style="width: {{ [pp.strike_rate, 100]|min }}%"></div>
-                        </div>
-                    </div>
-                    <div class="w-14 sm:w-20 text-right text-gray-500 shrink-0">{{ pp.winners }}/{{ pp.bets }}</div>
-                    <div class="w-16 sm:w-20 text-right font-medium shrink-0 {{ 'text-green-600' if pp.pnl >= 0 else 'text-red-600' }}">
-                        {{ '%+.1f'|format(pp.pnl / pp.staked * 100 if pp.staked else 0) }}%
-                    </div>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
     {% endif %}
