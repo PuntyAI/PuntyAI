@@ -1140,33 +1140,35 @@ document.addEventListener('DOMContentLoaded', function() {
             var pickEl = body.querySelector('.puntys-pick');
             if (pickEl) {
                 var pickP = pickEl.closest('p') || pickEl.parentElement;
-                // Extract horse name from PP span
-                var ppStrong = pickEl.querySelector('strong');
-                var ppName = ppStrong ? ppStrong.textContent.trim() : '';
-                // Find the matching selection line by horse name
+                // Extract horse name from text AFTER the .puntys-pick span (label is inside, name is outside)
+                var ppText = pickP ? pickP.textContent.trim() : '';
+                // Remove "Punty's Pick:" prefix to get "HORSE NAME (No.X) ..."
+                var ppName = ppText.replace(/^Punty[\u2019']?s\s+Pick:?\s*/i, '').trim();
+                // Extract just the horse name (before the parenthetical)
+                var nameMatch = ppName.match(/^([A-Z][A-Z\s''\-]+?)(?:\s*\(|$)/);
+                ppName = nameMatch ? nameMatch[1].trim() : ppName.split('(')[0].trim();
+                // Find the matching selection line by horse name (search all strong tags, not just in <p>)
                 var matched = false;
                 if (ppName) {
-                    var selStrongs = body.querySelectorAll('p strong');
+                    var selStrongs = body.querySelectorAll('strong');
                     for (var si = 0; si < selStrongs.length; si++) {
-                        if (selStrongs[si].textContent.trim() === ppName && selStrongs[si] !== ppStrong) {
+                        var selText = selStrongs[si].textContent.trim();
+                        if (selText === ppName && selStrongs[si].closest('.puntys-pick') === null) {
                             var badge = document.createElement('span');
                             badge.className = 'pp-badge';
-                            badge.textContent = "Punty's Pick";
+                            badge.textContent = "Punty\u2019s Pick";
                             selStrongs[si].parentNode.insertBefore(badge, selStrongs[si].nextSibling);
                             matched = true;
                             break;
                         }
                     }
                 }
-                // Remove the standalone PP line (it's now represented by the badge)
-                if (matched && pickP) {
+                // Remove the standalone PP paragraph
+                if (pickP) {
                     pickP.remove();
-                } else if (!matched && pickEl) {
-                    // No matching selection found — convert PP line in-place to a badge
-                    var badge = document.createElement('span');
-                    badge.className = 'pp-badge';
-                    badge.textContent = "Punty's Pick";
-                    pickEl.replaceWith(badge);
+                    // Also remove trailing <br> or empty text nodes left behind
+                    var nextSib = pickP.nextSibling;
+                    if (nextSib && nextSib.nodeName === 'BR') nextSib.remove();
                 }
             }
         }
