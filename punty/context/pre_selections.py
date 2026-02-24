@@ -437,42 +437,16 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if odds < 2.00 and not is_roughie:
         return "Place"
 
-    # $2.00-$2.40: Win is viable with value edge
+    # $2.00-$2.40: Outside $4-$6 win zone — Place only
     if odds < 2.40 and not is_roughie:
-        if rank <= 2 and win_prob >= 0.35 and value >= 1.05:
-            return "Win"  # solid value overlay — don't force Place
-        if rank == 1 and win_prob >= 0.30 and value >= 1.00:
-            return "Place"  # E/W killed — -16.16% ROI
         return "Place"
 
-    # $2.40-$3.00: Win sweet spot #1 (+21.3% ROI, 47% win rate)
-    # #2 gets Each Way (94% collect rate at these odds)
+    # $2.40-$3.00: Outside $4-$6 win zone — Place only
     if 2.40 <= odds < 3.0:
-        if win_prob >= t["win_min_prob"]:
-            if rank == 1 and value >= 0.95:
-                # Win→Place guard: if much more likely to place than win, prefer Place
-                if place_prob >= 2.0 * win_prob:
-                    return "Place"  # much more likely to place than win
-                return "Win"
-            if rank == 2:
-                return "Place"  # was E/W — rank 2 at $2.40-3 → Place
-        # Low-prob fallback: competitive odds but not enough win conviction → Place
         return "Place"
 
-    # $3.00-$4.00: Dead zone for Win (-30.8% ROI)
-    # Require win_prob >= 0.30 AND value >= 1.10 for any win exposure
+    # $3.00-$4.00: Outside $4-$6 win zone — Place only
     if 3.0 <= odds < 4.0 and not is_roughie:
-        if rank == 1:
-            if win_prob >= 0.30 and value >= 1.10:
-                # Win→Place guard: if much more likely to place than win, prefer Place
-                if place_prob >= 2.0 * win_prob:
-                    return "Place"  # much more likely to place than win
-                return "Win"  # only with strong conviction + value overlay
-            return "Place"  # default Place in dead zone
-        if rank == 2:
-            if win_prob >= 0.30 and value >= 1.10:
-                return "Place"  # E/W killed — rank 2 $3-4 → Place
-            return "Place"
         return "Place"
 
     # $4.00-$5.00: THE profit engine (+144.8% ROI, 54% win rate)
@@ -980,10 +954,10 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
 
-        # Trifecta Box field restriction: only profitable in 9-12 fields
+        # Trifecta Box killed: -$622 P&L, 6.8% strike rate
         ec_type = ec.get("type", "")
-        if ec_type == "Trifecta Box" and field_size and (field_size < 9 or field_size > 12):
-            continue  # Only profitable in 9-12 fields (+$238 vs -$484 in 13+)
+        if ec_type == "Trifecta Box":
+            continue  # Trifecta Standout still alive — different risk profile
 
         # Overlap rules by exotic type:
         # Quinella/Exacta: ALL runners must be from our picks (strict 2-runner bets)

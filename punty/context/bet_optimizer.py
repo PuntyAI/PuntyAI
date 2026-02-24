@@ -400,7 +400,9 @@ def classify_race(
 def _recommend_bet_dominant(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
     """Bet recommendation for DOMINANT_EDGE race."""
     if rank == 1:
-        return "Win", 0.40, "Clear standout, strong win overlay"
+        if 4.0 <= c["odds"] <= 6.0:
+            return "Win", 0.40, "Clear standout, strong win overlay"
+        return "Place", 0.35, "Standout but odds outside $4-$6 win zone"
     if rank == 2:
         return "Place", 0.25, "Secondary pick, place protection"
     if rank == 3:
@@ -458,7 +460,7 @@ def _recommend_bet_chaos(c: dict, rank: int, field_size: int) -> tuple[str, floa
     """Bet recommendation for CHAOS_HANDICAP race."""
     # RULE 6: Win on best overlay OR Exotics Only. Avoid broad EW.
     if rank == 1:
-        if c["win_edge"] > WIN_EDGE_MIN and c["odds"] >= 4.0:
+        if c["win_edge"] > WIN_EDGE_MIN and 4.0 <= c["odds"] <= 6.0:
             return "Win", 0.30, "Best overlay in chaos race"
         return "Place", 0.25, "Place, no strong win overlay in chaos"
     if rank == 2:
@@ -470,24 +472,11 @@ def _recommend_bet_chaos(c: dict, rank: int, field_size: int) -> tuple[str, floa
 
 
 def _recommend_roughie(c: dict) -> tuple[str, float, str]:
-    """RULE 5: Roughie bet recommendation."""
-    odds = c["odds"]
+    """RULE 5: Roughie bet recommendation — always Place.
 
-    # Never win above $30
-    if odds > ROUGHIE_MAX_WIN_ODDS:
-        return "Place", 0.15, f"Place, roughie ${odds:.0f} exceeds win cap"
-
-    # Small Win if p_win >= 0.06 and positive edge
-    if (c["win_prob"] >= ROUGHIE_MIN_P_WIN
-            and c["win_edge"] > 0
-            and odds >= ROUGHIE_MIN_ODDS):
-        return "Win", 0.10, f"Small win, roughie ${odds:.0f} with edge"
-
-    # Never EW above $15
-    if odds > EW_MAX_ODDS:
-        return "Place", 0.15, "Place, odds too high for EW"
-
-    return "Place", 0.15, "Place, roughie default"
+    Roughie Win was 0/43 = -98.7% ROI historically. All roughies → Place.
+    """
+    return "Place", 0.15, "Place, roughie (Win 0/43 = -98.7% ROI)"
 
 
 def recommend_bet(

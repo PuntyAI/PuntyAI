@@ -233,17 +233,33 @@ class TestClassifyRace:
 # ──────────────────────────────────────────────
 
 class TestBetRecommendation:
-    def test_dominant_edge_rank1_win_only(self):
+    def test_dominant_edge_rank1_win_in_sweet_spot(self):
         c = _candidate(1, "Champ", 5.0, 0.35, 0.65)
         rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
         assert rec.bet_type == "Win"
         assert rec.stake_pct == 0.40
 
-    def test_dominant_edge_no_ew_rank1(self):
-        """Dominant edge rank 1 should always be Win, never EW."""
-        c = _candidate(1, "Champ", 4.0, 0.35, 0.65)
+    def test_dominant_edge_rank1_place_below_4(self):
+        """Dominant edge rank 1 outside $4-$6 should be Place."""
+        c = _candidate(1, "Champ", 3.0, 0.35, 0.65)
         rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
-        assert rec.bet_type == "Win"
+        assert rec.bet_type == "Place"
+
+    def test_dominant_edge_rank1_place_above_6(self):
+        """Dominant edge rank 1 above $6 should be Place."""
+        c = _candidate(1, "Champ", 8.0, 0.35, 0.65)
+        rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
+        assert rec.bet_type == "Place"
+
+    def test_dominant_edge_rank1_win_at_boundary(self):
+        """Dominant edge rank 1 at $4.00 and $6.00 should be Win."""
+        c4 = _candidate(1, "Champ", 4.0, 0.35, 0.65)
+        rec4 = recommend_bet(c4, DOMINANT_EDGE, rank=1, field_size=10)
+        assert rec4.bet_type == "Win"
+
+        c6 = _candidate(1, "Champ", 6.0, 0.35, 0.65)
+        rec6 = recommend_bet(c6, DOMINANT_EDGE, rank=1, field_size=10)
+        assert rec6.bet_type == "Win"
 
     def test_place_leverage_rank1_place(self):
         """Place leverage rank 1 should always be Place (E/W killed)."""
@@ -280,33 +296,37 @@ class TestBetRecommendation:
         rec = recommend_bet(c, COMPRESSED_VALUE, rank=3, field_size=10, candidates=[c])
         assert rec.bet_type == "Place"
 
-    def test_roughie_small_win_under_30(self):
-        """RULE 5: Roughie under $30 with edge -> small Win."""
+    def test_roughie_always_place(self):
+        """RULE 5: All roughies -> Place (Win 0/43 = -98.7% ROI)."""
         c = _candidate(4, "Roughie", 20.0, 0.08, 0.25)
-        # win_edge = 0.08 - 0.05 = 0.03 > 0 ✓
         rec = recommend_bet(c, COMPRESSED_VALUE, rank=4, field_size=10, candidates=[c])
-        assert rec.bet_type == "Win"
-        assert rec.stake_pct == 0.10
+        assert rec.bet_type == "Place"
+        assert rec.stake_pct == 0.15
 
-    def test_roughie_no_win_above_30(self):
-        """RULE 5: Roughie above $30 -> Place only."""
+    def test_roughie_place_even_with_edge(self):
+        """Roughie with positive edge still gets Place."""
+        c = _candidate(4, "EdgeRoughie", 15.0, 0.10, 0.30)
+        rec = recommend_bet(c, COMPRESSED_VALUE, rank=4, field_size=10, candidates=[c])
+        assert rec.bet_type == "Place"
+
+    def test_roughie_place_above_30(self):
+        """Roughie above $30 -> Place."""
         c = _candidate(4, "Longshot", 50.0, 0.04, 0.12)
         rec = recommend_bet(c, COMPRESSED_VALUE, rank=4, field_size=10, candidates=[c])
         assert rec.bet_type == "Place"
 
-    def test_roughie_no_ew_above_15(self):
-        """Never EW on $15+ runners."""
-        c = _candidate(4, "Roughie", 18.0, 0.08, 0.25)
-        rec = recommend_bet(c, COMPRESSED_VALUE, rank=4, field_size=10, candidates=[c])
-        # Should be Win (positive edge) or Place, never EW
-        assert rec.bet_type != "Each Way"
-
     def test_chaos_win_best_overlay(self):
-        """RULE 6: Chaos race, rank 1 with overlay -> Win."""
+        """RULE 6: Chaos race, rank 1 with overlay in $4-$6 -> Win."""
         c = _candidate(1, "BestOverlay", 6.0, 0.22, 0.50)
-        # win_edge = 0.22 - 0.167 = 0.053 > 0.03 ✓, odds >= 4.0 ✓
+        # win_edge = 0.22 - 0.167 = 0.053 > 0.03 ✓, odds in $4-$6 ✓
         rec = recommend_bet(c, CHAOS_HANDICAP, rank=1, field_size=14)
         assert rec.bet_type == "Win"
+
+    def test_chaos_place_when_above_6(self):
+        """Chaos race, rank 1 with overlay but odds > $6 -> Place."""
+        c = _candidate(1, "ChaosLong", 8.0, 0.22, 0.50)
+        rec = recommend_bet(c, CHAOS_HANDICAP, rank=1, field_size=14)
+        assert rec.bet_type == "Place"
 
     def test_no_ew_at_any_odds(self):
         """E/W killed — no odds range should produce Each Way."""

@@ -131,10 +131,11 @@ class TestBuildCandidates:
 # ──────────────────────────────────────────────
 
 class TestDetermineBetType:
-    def test_top_pick_win_when_strong(self):
+    def test_top_pick_place_below_4(self):
+        """$3.50 is outside $4-$6 win zone — Place regardless of conviction."""
         c = {"win_prob": 0.30, "place_prob": 0.55, "odds": 3.5,
              "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_top_pick_win_in_sweet_spot(self):
         """$4-$6 with good prob/value should be Win (edge: +60.8% ROI)."""
@@ -143,17 +144,17 @@ class TestDetermineBetType:
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
     def test_top_pick_place_outside_win_sweet_spot(self):
-        """$8 odds with moderate prob should get Place ($6+ E/W removed)."""
+        """$8 odds with moderate prob should get Place ($6+ removed)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
-    def test_top_pick_place_when_place_prob_dominant(self):
-        """Short-priced horse with dominant place_prob gets Place (Win→Place guard)."""
+    def test_top_pick_place_at_2_50(self):
+        """$2.50 is outside $4-$6 win zone — Place."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False)
-        assert result == "Place"  # place_prob >= 2 * win_prob → Place
+        assert result == "Place"
 
     def test_second_pick_place_in_sweet_spot(self):
         """Rank 2 in $4-$6 sweet spot gets Place (E/W killed — -16.16% ROI)."""
@@ -364,10 +365,10 @@ class TestAllocateStakes:
 class TestSelectExotic:
     def test_prefers_overlap_with_selections(self):
         combos = [
-            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
-             "probability": "8.5%", "value": 1.30, "combos": 6, "format": "boxed"},
-            {"type": "Trifecta Box", "runners": [5, 6, 7], "runner_names": ["E", "F", "G"],
-             "probability": "9.0%", "value": 1.35, "combos": 6, "format": "boxed"},
+            {"type": "Trifecta", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+             "probability": "8.5%", "value": 1.30, "combos": 6, "format": "legs"},
+            {"type": "Trifecta", "runners": [5, 6, 7], "runner_names": ["E", "F", "G"],
+             "probability": "9.0%", "value": 1.35, "combos": 6, "format": "legs"},
         ]
         result = _select_exotic(combos, {1, 2, 3, 4})
         assert result is not None
@@ -409,19 +410,19 @@ class TestSelectExotic:
             # Exacta: 10% prob × 1.3 value = 0.13 EV
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.10, "value": 1.3, "combos": 1, "format": "flat"},
-            # Trifecta Box: 8% prob × 2.0 value = 0.16 EV (higher)
-            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
-             "probability": 0.08, "value": 2.0, "combos": 6, "format": "boxed"},
+            # First4: 8% prob × 2.0 value = 0.16 EV (higher)
+            {"type": "First4", "runners": [1, 2, 3, 4], "runner_names": ["A", "B", "C", "D"],
+             "probability": 0.08, "value": 2.0, "combos": 6, "format": "legs"},
         ]
-        result = _select_exotic(combos, {1, 2, 3})
+        result = _select_exotic(combos, {1, 2, 3, 4})
         assert result is not None
-        assert result.exotic_type == "Trifecta Box"
+        assert result.exotic_type == "First4"
 
     def test_all_types_can_win(self):
         """Every exotic type can be selected when it has the best EV."""
         for etype, fmt in [
             ("Quinella", "flat"), ("Exacta Standout", "standout"),
-            ("Trifecta Box", "boxed"), ("First4", "legs"), ("First4 Box", "boxed"),
+            ("Trifecta", "legs"), ("First4", "legs"), ("First4 Box", "boxed"),
         ]:
             combos = [
                 {"type": etype, "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
@@ -438,7 +439,7 @@ class TestSelectExotic:
 
 class TestTightClusterExoticBoost:
     def test_tight_cluster_boosts_box_over_exacta(self):
-        """When top 3 picks are within 5%, Trifecta Box should beat Exacta."""
+        """When top 3 picks are within 5%, boxed exotic should beat Exacta."""
         # Picks at 28%, 25%, 23% — very tight cluster (5% spread)
         picks = [
             RecommendedPick(1, 1, "Alpha", "Win", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
@@ -446,16 +447,17 @@ class TestTightClusterExoticBoost:
             RecommendedPick(3, 3, "Gamma", "Win", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
         ]
         combos = [
-            # Exacta has slightly higher base EV
+            # Exacta: 12% prob × 1.3 value = 0.156 base EV
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
-             "probability": 0.12, "value": 1.4, "combos": 1, "format": "flat"},
-            # Trifecta Box has slightly lower base EV but should win with cluster boost
-            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
-             "probability": 0.10, "value": 1.35, "combos": 6, "format": "boxed"},
+             "probability": 0.12, "value": 1.3, "combos": 1, "format": "flat"},
+            # First4 Box: 10% prob × 1.35 value = 0.135 base EV
+            # With 1.2x cluster boost → 0.162 (beats Exacta's 0.156 × 0.85 penalty = 0.133)
+            {"type": "First4 Box", "runners": [1, 2, 3, 4], "runner_names": ["A", "B", "C", "D"],
+             "probability": 0.10, "value": 1.35, "combos": 24, "format": "boxed"},
         ]
-        result = _select_exotic(combos, {1, 2, 3}, picks=picks)
+        result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks)
         assert result is not None
-        assert result.exotic_type == "Trifecta Box"
+        assert result.exotic_type == "First4 Box"
 
     def test_no_boost_when_spread_wide(self):
         """No cluster boost when picks are spread (>8%)."""
@@ -468,8 +470,8 @@ class TestTightClusterExoticBoost:
             # Exacta has higher base EV and should win without cluster boost
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.5, "combos": 1, "format": "flat"},
-            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
-             "probability": 0.08, "value": 1.3, "combos": 6, "format": "boxed"},
+            {"type": "Trifecta", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+             "probability": 0.08, "value": 1.3, "combos": 6, "format": "legs"},
         ]
         result = _select_exotic(combos, {1, 2, 3}, picks=picks)
         assert result is not None
@@ -542,14 +544,14 @@ class TestCalculatePuntysPick:
         ]
         # Exotic with genuinely high EV: 0.40 * 3.5 - 1 = 0.40 vs sel EV 0.05
         exotic = RecommendedExotic(
-            exotic_type="Trifecta Box", runners=[1, 2, 3],
+            exotic_type="Trifecta", runners=[1, 2, 3],
             runner_names=["A", "B", "C"], probability=0.40,
-            value_ratio=3.5, num_combos=6, format="boxed",
+            value_ratio=3.5, num_combos=6, format="legs",
         )
         pp = _calculate_puntys_pick(picks, exotic)
         assert pp is not None
         assert pp.pick_type == "exotic"
-        assert pp.exotic_type == "Trifecta Box"
+        assert pp.exotic_type == "Trifecta"
 
     def test_exotic_loses_when_low_value(self):
         picks = [
@@ -1116,10 +1118,10 @@ class TestSubTwoDollarBetType:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
-        # Meets threshold
+        # Even with strong conviction, $3.50 is outside $4-$6 win zone
         c2 = {"win_prob": 0.32, "place_prob": 0.55, "odds": 3.50,
               "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c2, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c2, rank=1, is_roughie=False) == "Place"
 
 
 # ──────────────────────────────────────────────
@@ -1169,11 +1171,11 @@ class TestWinToPlaceGuard:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_rank1_win_stays_when_place_prob_not_dominant(self):
-        """$3.50, wp=0.30, pp=0.55 → Win (0.55 < 2*0.30=0.60)."""
+    def test_rank1_place_at_3_50_outside_win_zone(self):
+        """$3.50 is outside $4-$6 win zone → Place regardless of guard."""
         c = {"win_prob": 0.30, "place_prob": 0.55, "odds": 3.5,
              "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_rank1_guard_at_2_60(self):
         """$2.60, wp=0.30, pp=0.65 → Place (guard triggers in $2.40-$3 band too)."""
@@ -1221,16 +1223,13 @@ class TestExoticFilters:
                                 track_condition="Good 4")
         assert result is not None
 
-    def test_trifecta_box_field_restriction(self):
-        """Trifecta Box only allowed in 9-12 field."""
+    def test_trifecta_box_always_blocked(self):
+        """Trifecta Box killed — -$622 P&L, 6.8% strike rate."""
         tri_combos = [{"type": "Trifecta Box", "runners": [1, 2, 3],
                         "runner_names": ["A", "B", "C"],
                         "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"}]
-        # 7-field: blocked
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=7,
-                                track_condition="Good 4")
-        assert result is None
-        # 10-field: allowed
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
-                                track_condition="Good 4")
-        assert result is not None
+        # Blocked in all field sizes
+        for fs in [7, 10, 12, 14]:
+            result = _select_exotic(tri_combos, {1, 2, 3}, field_size=fs,
+                                    track_condition="Good 4")
+            assert result is None, f"Trifecta Box should be blocked in {fs}-field"
