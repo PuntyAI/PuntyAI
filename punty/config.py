@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     disable_background: bool = False  # PUNTY_DISABLE_BACKGROUND - skip scheduler/monitor/telegram
     mock_external: bool = False  # PUNTY_MOCK_EXTERNAL - mock AI generation & delivery (for staging)
-    use_lightgbm: bool = False  # PUNTY_USE_LIGHTGBM - use LightGBM probability engine
+    use_lightgbm: bool = True  # PUNTY_USE_LIGHTGBM - use LightGBM probability engine
 
     @property
     def is_staging(self) -> bool:
