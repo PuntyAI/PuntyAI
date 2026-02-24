@@ -446,6 +446,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if 2.40 <= odds < 3.0:
         if win_prob >= t["win_min_prob"]:
             if rank == 1 and value >= 0.95:
+                # Win→Place guard: if much more likely to place than win, prefer Place
+                if place_prob >= 2.0 * win_prob:
+                    return "Place"  # much more likely to place than win
                 return "Win"
             if rank == 2:
                 return "Place"  # was E/W — rank 2 at $2.40-3 → Place
@@ -457,6 +460,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if 3.0 <= odds < 4.0 and not is_roughie:
         if rank == 1:
             if win_prob >= 0.30 and value >= 1.10:
+                # Win→Place guard: if much more likely to place than win, prefer Place
+                if place_prob >= 2.0 * win_prob:
+                    return "Place"  # much more likely to place than win
                 return "Win"  # only with strong conviction + value overlay
             return "Place"  # default Place in dead zone
         if rank == 2:

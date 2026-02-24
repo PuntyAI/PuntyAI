@@ -132,7 +132,7 @@ class TestBuildCandidates:
 
 class TestDetermineBetType:
     def test_top_pick_win_when_strong(self):
-        c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 3.5,
+        c = {"win_prob": 0.30, "place_prob": 0.55, "odds": 3.5,
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
@@ -148,12 +148,12 @@ class TestDetermineBetType:
              "value_rating": 0.95, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
-    def test_top_pick_each_way_odds_too_low(self):
-        """Short-priced horses shouldn't get Each Way."""
+    def test_top_pick_place_when_place_prob_dominant(self):
+        """Short-priced horse with dominant place_prob gets Place (Win→Place guard)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False)
-        assert result == "Win"  # odds below $4, so Win not E/W
+        assert result == "Place"  # place_prob >= 2 * win_prob → Place
 
     def test_second_pick_place_in_sweet_spot(self):
         """Rank 2 in $4-$6 sweet spot gets Place (E/W killed — -16.16% ROI)."""
@@ -1134,3 +1134,35 @@ class TestEachWayKilled:
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=2, is_roughie=False, field_size=6)
         assert result == "Win"  # not Each Way
+
+
+# ──────────────────────────────────────────────
+# Tests: Win → Place guard (#10)
+# ──────────────────────────────────────────────
+
+class TestWinToPlaceGuard:
+    """place_prob >= 2.0 * win_prob guard in $2.40-$4.00 bands."""
+
+    def test_rank1_win_to_place_high_place_prob(self):
+        """$3.50, wp=0.30, pp=0.65 → Place (0.65 >= 2*0.30)."""
+        c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 3.5,
+             "value_rating": 1.15, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+
+    def test_rank1_win_stays_in_sweet_spot(self):
+        """$4.50 is outside guard range ($4+) — Win stays."""
+        c = {"win_prob": 0.25, "place_prob": 0.55, "odds": 4.5,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+
+    def test_rank1_win_stays_when_place_prob_not_dominant(self):
+        """$3.50, wp=0.30, pp=0.55 → Win (0.55 < 2*0.30=0.60)."""
+        c = {"win_prob": 0.30, "place_prob": 0.55, "odds": 3.5,
+             "value_rating": 1.15, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+
+    def test_rank1_guard_at_2_60(self):
+        """$2.60, wp=0.30, pp=0.65 → Place (guard triggers in $2.40-$3 band too)."""
+        c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.6,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
