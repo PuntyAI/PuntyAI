@@ -78,6 +78,7 @@ class RecommendedPick:
     expected_return: float      # estimated return on this bet
     is_roughie: bool = False
     tracked_only: bool = False  # True = displayed but not staked (edge gate failed)
+    no_bet_reason: str | None = None  # Human-readable reason when tracked_only=True
 
 
 @dataclass
@@ -273,6 +274,7 @@ def calculate_pre_selections(
                 thresholds=thresholds, field_size=field_size,
             )
             pick.tracked_only = True
+            pick.no_bet_reason = "NTD field — only 2 staked picks"
             pick.stake = 0.0
             picks.append(pick)
             used_saddlecloths.add(c["saddlecloth"])
@@ -284,6 +286,7 @@ def calculate_pre_selections(
                 thresholds=thresholds, field_size=field_size,
             )
             pick.tracked_only = True
+            pick.no_bet_reason = "NTD field — only 2 staked picks"
             pick.stake = 0.0
             picks.append(pick)
             used_saddlecloths.add(roughie["saddlecloth"])
@@ -747,10 +750,11 @@ def _determine_race_pool(
     return POOL_STANDARD
 
 
-def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -> bool:
+def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -> tuple[bool, str | None]:
     """Check if a pick passes the edge gate (proven-profitable criteria).
 
-    Returns True if the pick should be staked, False if tracked-only.
+    Returns (True, None) if the pick should be staked,
+    or (False, reason) with a human-readable explanation if tracked-only.
     Uses live edge profile when available (sample >= 50), otherwise hardcoded.
     """
     odds = pick.odds
@@ -774,64 +778,64 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
                 cell = live_profile.get((bt_key, label))
                 if cell and cell["bets"] >= 50:
                     if cell["roi"] < -15.0:
-                        return False
+                        return (False, f"Losing odds band (live ROI {cell['roi']:.0f}%)")
                 break
 
     # --- Proven-profitable staking criteria ---
 
     # 1. Win/Saver at $4.00-$6.00 (sweet spot: +60.8% ROI)
     if bt in ("Win", "Saver Win") and 4.0 <= odds <= 6.0:
-        return True
+        return (True, None)
 
     # 2. Win at $2.40-$3.00 with strong conviction (47% win rate band)
     if bt in ("Win", "Saver Win") and 2.40 <= odds < 3.0 and win_prob >= 0.30:
-        return True
+        return (True, None)
 
     # 3. Place with sufficient prob and value
     if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
-        return True
+        return (True, None)
 
     # 4. Place at $3.00-$6.00 with decent place probability (was E/W, now Place)
     if bt == "Place" and 3.0 <= odds <= 6.0 and place_prob >= 0.40:
-        return True
+        return (True, None)
 
     # 5. Roughie Place at $8-$20 with strong place probability
     if pick.is_roughie and bt == "Place" and 8.0 <= odds <= 20.0 and place_prob >= 0.35:
-        return True
+        return (True, None)
 
     # 6. Place at good odds ($2.50-$8) — our overall profit engine (+13.8% ROI)
     if bt == "Place" and 2.5 <= odds <= 8.0 and place_prob >= 0.35:
-        return True
+        return (True, None)
 
     # 7. Win at $2.00-$2.40 with genuine conviction
     if bt in ("Win", "Saver Win") and 2.0 <= odds < 2.40 and win_prob >= 0.35 and value >= 1.05:
-        return True
+        return (True, None)
 
     # --- No Bet (tracked) zones ---
 
     # Win < $2.00: -38.9% ROI historically
     if bt in ("Win", "Saver Win") and odds < 2.0:
-        return False
+        return (False, f"Too short to back (Win < $2.00)")
 
     # Win $3.00-$4.00 dead zone without strong conviction
     # Softer threshold for rank 1-2 (0.25) vs rank 3-4 (0.30) — top picks
     # in this band can still have genuine edge (e.g. Meltdown $3.70)
     dead_zone_wp = 0.25 if pick.rank <= 2 else 0.30
     if bt in ("Win", "Saver Win") and 3.0 <= odds < 4.0 and win_prob < dead_zone_wp and value < 1.10:
-        return False
+        return (False, f"Not enough edge (Win $3-$4, {win_prob * 100:.0f}% win prob)")
 
     # Place with low collection probability
     # Relaxed floor for mid-price ($3+): 0.30 vs 0.35 — lets more Place bets through (#19)
     place_floor = 0.30 if (bt == "Place" and odds >= 3.0) else 0.35
     if bt == "Place" and place_prob < place_floor:
-        return False
+        return (False, f"Place prob too low ({place_prob * 100:.0f}% < {place_floor * 100:.0f}%)")
 
     # Negative expected value both ways — no edge
     if ev_win < -0.10 and ev_place < -0.05:
-        return False
+        return (False, "Negative expected value")
 
     # Default: pass through (don't over-filter)
-    return True
+    return (True, None)
 
 
 # Odds bands matching strategy.py's _ODDS_BANDS for live profile lookup
@@ -876,8 +880,12 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     live_profile = get_cached_edge_profile()
 
     for pick in picks:
-        if not _passes_edge_gate(pick, live_profile):
+        if pick.tracked_only:
+            continue  # already marked (e.g. NTD path) — preserve original reason
+        passed, reason = _passes_edge_gate(pick, live_profile)
+        if not passed:
             pick.tracked_only = True
+            pick.no_bet_reason = reason or "No proven edge in this odds band"
             pick.stake = 0.0
 
     # Count staked picks
@@ -1282,8 +1290,9 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
 
         # Tracked picks: no stake, displayed for accuracy tracking
         if pick.tracked_only:
+            reason = pick.no_bet_reason or "edge gate failed"
             lines.append(
-                f"    BET: No Bet — edge gate: no proven-profitable criteria met"
+                f"    BET: No Bet — {reason}"
             )
         else:
             # Calculate display return

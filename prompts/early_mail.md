@@ -70,8 +70,9 @@ Repeat for each race in order:
 Probability: {PROB}% | Value: {VALUE}x
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
 
-**NO BET SELECTIONS:** When a selection has Bet: No Bet (tracked only, no real stake), output ONLY:
-   Bet: No Bet
+**NO BET SELECTIONS:** When a selection has `BET: No Bet — {REASON}`, output:
+   Bet: No Bet — {REASON}
+Copy the reason text exactly from the data (e.g. "Too short to back (Win < $2.00)", "Place prob too low (28% < 30%)").
 Do NOT include ", return $0.00" or any return amount on No Bet lines. The return is always zero — showing it looks broken.
 Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, wet form, class drop, etc.}
 

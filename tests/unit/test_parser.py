@@ -627,3 +627,51 @@ Bet: No Bet (Tracked)
         assert len(roughie) == 1
         assert roughie[0].get("tracked_only") is True
         assert roughie[0]["bet_stake"] == 0.0
+
+    def test_tracked_with_reason(self):
+        """Bet: No Bet — reason should capture the reason text."""
+        content = """
+*Race 1 – Test Race*
+1. *SHORT HORSE* (No.5) — $1.50 / $1.20
+Bet: No Bet — Too short to back (Win < $2.00)
+Confidence: HIGH
+Probability: 45%
+
+2. *GOOD HORSE* (No.3) — $4.50 / $2.00
+Bet: $10 Win
+Confidence: MED
+"""
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        tracked = [p for p in selections if p.get("tracked_only")]
+        assert len(tracked) == 1
+        assert tracked[0]["no_bet_reason"] == "Too short to back (Win < $2.00)"
+
+    def test_tracked_without_reason_no_key(self):
+        """Bet: No Bet without reason should not have no_bet_reason key."""
+        content = """
+*Race 1 – Test Race*
+1. *STRONG HORSE* (No.5) — $1.50 / $1.20
+Bet: No Bet
+Confidence: HIGH
+"""
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        tracked = [p for p in picks if p.get("tracked_only")]
+        assert len(tracked) == 1
+        assert "no_bet_reason" not in tracked[0]
+
+    def test_tracked_roughie_with_reason(self):
+        """Roughie with No Bet — reason should capture reason."""
+        content = """
+*Race 2 – Test Race*
+1. *PICK ONE* (No.1) — $3.00 / $1.60
+Bet: $8 Win
+
+Roughie: *LONG SHOT* (No.9) — $15.00 / $4.50
+Bet: No Bet — Place prob too low (20% < 35%)
+"""
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        roughie = [p for p in picks if p.get("tip_rank") == 4]
+        assert len(roughie) == 1
+        assert roughie[0].get("tracked_only") is True
+        assert roughie[0]["no_bet_reason"] == "Place prob too low (20% < 35%)"

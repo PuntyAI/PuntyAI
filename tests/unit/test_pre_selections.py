@@ -919,61 +919,61 @@ class TestEdgeGate:
     def test_win_sweet_spot_passes(self):
         """Win at $4-$6 always passes (proven +60.8% ROI)."""
         pick = self._pick(bet_type="Win", odds=5.0)
-        assert _passes_edge_gate(pick) is True
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_win_under_2_fails(self):
         """Win at <$2 should fail (historically -38.9% ROI)."""
         pick = self._pick(bet_type="Win", odds=1.80, win_prob=0.45)
-        assert _passes_edge_gate(pick) is False
+        assert _passes_edge_gate(pick)[0] is False
 
     def test_place_good_prob_passes(self):
         """Place with high probability passes."""
         pick = self._pick(bet_type="Place", odds=4.0, place_prob=0.50, place_value=1.05)
-        assert _passes_edge_gate(pick) is True
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_place_low_prob_fails(self):
         """Place with low collection probability fails."""
         pick = self._pick(bet_type="Place", odds=8.0, place_prob=0.25, place_value=0.85)
-        assert _passes_edge_gate(pick) is False
+        assert _passes_edge_gate(pick)[0] is False
 
     def test_place_mid_range_passes(self):
         """Place at $3-$6 with decent place_prob passes (was E/W rule)."""
         pick = self._pick(bet_type="Place", odds=4.0, place_prob=0.45)
-        assert _passes_edge_gate(pick) is True
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_roughie_place_good_prob_passes(self):
         """Roughie Place at $8-$20 with strong place_prob passes."""
         pick = self._pick(bet_type="Place", odds=12.0, place_prob=0.40,
                           is_roughie=True)
-        assert _passes_edge_gate(pick) is True
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_negative_ev_both_ways_fails(self):
         """Strongly negative EV on both win and place fails."""
         pick = self._pick(bet_type="Place", odds=15.0, win_prob=0.03,
                           place_prob=0.10, value=0.50, place_value=0.50)
-        assert _passes_edge_gate(pick) is False
+        assert _passes_edge_gate(pick)[0] is False
 
     def test_place_mid_price_relaxed_floor(self):
         """Place at $3+ uses relaxed 0.30 floor instead of 0.35 (#19)."""
         # place_prob=0.32 at $4 should pass (0.32 >= 0.30)
         pick = self._pick(bet_type="Place", odds=4.0, place_prob=0.32, place_value=1.00)
-        assert _passes_edge_gate(pick) is True
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_place_cheap_still_uses_strict_floor(self):
         """Place at <$3 still uses strict 0.35 floor (#19)."""
         # place_prob=0.32 at $2.50 should fail (0.32 < 0.35)
         pick = self._pick(bet_type="Place", odds=2.50, place_prob=0.32, place_value=1.00)
-        assert _passes_edge_gate(pick) is False
+        assert _passes_edge_gate(pick)[0] is False
 
     def test_win_2_40_to_3_strong_conviction_passes(self):
         """Win at $2.40-$3 with high win_prob passes."""
         pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.35)
-        assert _passes_edge_gate(pick) is True
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_win_2_40_to_3_weak_conviction_fails(self):
         """Win at $2.40-$3 with low win_prob fails."""
         pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.20)
-        assert _passes_edge_gate(pick) is False
+        assert _passes_edge_gate(pick)[0] is False
 
     def test_dead_zone_rank1_softer_threshold(self):
         """Rank 1-2 in $3-$4 dead zone use 0.25 threshold (softer)."""
@@ -990,15 +990,15 @@ class TestEdgeGate:
             win_prob=0.27, place_prob=0.50, value_rating=1.05,
             place_value_rating=1.05, expected_return=0.0,
         )
-        assert _passes_edge_gate(pick_r1) is True  # rank 1, wp 0.27 > 0.25
-        assert _passes_edge_gate(pick_r3) is False  # rank 3, wp 0.27 < 0.30
+        assert _passes_edge_gate(pick_r1)[0] is True  # rank 1, wp 0.27 > 0.25
+        assert _passes_edge_gate(pick_r3)[0] is False  # rank 3, wp 0.27 < 0.30
 
     def test_live_profile_override_rejects_losing_band(self):
         """Live profile with strong negative ROI overrides even passing criteria."""
         pick = self._pick(bet_type="Win", odds=5.0, win_prob=0.25)
         # This would normally pass (sweet spot), but live data says it's losing
         profile = {("win", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
-        assert _passes_edge_gate(pick, live_profile=profile) is False
+        assert _passes_edge_gate(pick, live_profile=profile)[0] is False
 
 
 # ──────────────────────────────────────────────
@@ -1353,3 +1353,120 @@ class TestNtdStakedPickCap:
 
         ntd_notes = [n for n in result.notes if "NTD" in n]
         assert len(ntd_notes) == 0, f"≤4 field should not trigger NTD, got: {result.notes}"
+
+
+# ──────────────────────────────────────────────
+# Tests: No Bet reasons (_passes_edge_gate returns reasons)
+# ──────────────────────────────────────────────
+
+class TestNoBetReasons:
+    def _pick(self, bet_type="Win", odds=5.0, win_prob=0.25, place_prob=0.50,
+              value=1.10, place_value=1.05, is_roughie=False, rank=1):
+        return RecommendedPick(
+            rank=rank, saddlecloth=1, horse_name="Test", bet_type=bet_type,
+            stake=0.0, odds=odds,
+            place_odds=round((odds - 1) / 3 + 1, 2),
+            win_prob=win_prob, place_prob=place_prob,
+            value_rating=value, place_value_rating=place_value,
+            expected_return=0.0, is_roughie=is_roughie,
+        )
+
+    def test_pass_returns_none_reason(self):
+        """Passing picks return (True, None)."""
+        pick = self._pick(bet_type="Win", odds=5.0)
+        passed, reason = _passes_edge_gate(pick)
+        assert passed is True
+        assert reason is None
+
+    def test_win_under_2_reason(self):
+        """Win < $2 returns 'Too short to back' reason."""
+        pick = self._pick(bet_type="Win", odds=1.80, win_prob=0.45)
+        passed, reason = _passes_edge_gate(pick)
+        assert passed is False
+        assert "Too short" in reason
+
+    def test_dead_zone_reason(self):
+        """Win $3-$4 dead zone returns specific reason with prob."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.20, value=1.05, rank=3)
+        passed, reason = _passes_edge_gate(pick)
+        assert passed is False
+        assert "Not enough edge" in reason
+        assert "20%" in reason
+
+    def test_place_low_prob_reason(self):
+        """Place with low prob returns reason with threshold."""
+        pick = self._pick(bet_type="Place", odds=8.0, place_prob=0.25, place_value=0.85)
+        passed, reason = _passes_edge_gate(pick)
+        assert passed is False
+        assert "Place prob too low" in reason
+        assert "25%" in reason
+
+    def test_negative_ev_reason(self):
+        """Negative EV both ways returns 'Negative expected value'."""
+        # Win bet at $7 with low win_prob — doesn't hit pass criteria (wp<0.18),
+        # doesn't hit "too short" or "dead zone" or "place prob too low" (bt=Win),
+        # ev_win = 0.05*7-1 = -0.65, ev_place = 0.15*3.0-1 = -0.55 → negative EV gate
+        pick = self._pick(bet_type="Win", odds=7.0, win_prob=0.05,
+                          place_prob=0.15, value=0.50, place_value=0.50)
+        passed, reason = _passes_edge_gate(pick)
+        assert passed is False
+        assert "Negative expected value" in reason
+
+    def test_live_profile_reason(self):
+        """Live profile override returns reason with ROI."""
+        pick = self._pick(bet_type="Win", odds=5.0, win_prob=0.25)
+        profile = {("win", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
+        passed, reason = _passes_edge_gate(pick, live_profile=profile)
+        assert passed is False
+        assert "Losing odds band" in reason
+        assert "-20%" in reason
+
+    def test_allocate_stakes_sets_reason(self):
+        """_allocate_stakes stores no_bet_reason when edge gate fails."""
+        picks = [
+            RecommendedPick(1, 1, "Short", "Win", 0.0, 1.50, 1.17,
+                            0.50, 0.80, 1.0, 1.0, 0.0),
+            RecommendedPick(2, 2, "Good", "Win", 0.0, 5.0, 2.33,
+                            0.25, 0.50, 1.10, 1.05, 0.0),
+        ]
+        _allocate_stakes(picks, 20.0)
+        # Sub-$2 Win should fail with reason
+        short_pick = picks[0]
+        if short_pick.tracked_only:
+            assert short_pick.no_bet_reason is not None
+            assert "Too short" in short_pick.no_bet_reason
+
+    def test_ntd_tracked_picks_have_reason(self):
+        """NTD tracked-only picks should have 'NTD field' reason."""
+        runners = [
+            _runner(1, "Alpha", 4.5, win_prob=0.30, place_prob=0.60, value=1.15),
+            _runner(2, "Beta", 5.0, win_prob=0.22, place_prob=0.50, value=1.10),
+            _runner(3, "Gamma", 6.5, win_prob=0.16, place_prob=0.42, value=1.08),
+            _runner(4, "Delta", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
+            _runner(5, "Epsilon", 15.0, win_prob=0.06, place_prob=0.20, value=0.90),
+            _runner(6, "Zeta", 20.0, win_prob=0.04, place_prob=0.15, value=0.80),
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+        tracked = [p for p in result.picks if p.tracked_only]
+        assert len(tracked) >= 1
+        for t in tracked:
+            assert t.no_bet_reason is not None
+            assert "NTD" in t.no_bet_reason
+
+    def test_format_includes_reason(self):
+        """format_pre_selections should include the no_bet_reason text."""
+        pick = self._pick(bet_type="Place", odds=8.0, place_prob=0.25, place_value=0.85)
+        pick.tracked_only = True
+        pick.no_bet_reason = "Place prob too low (25% < 35%)"
+        pre_sel = RacePreSelections(
+            race_number=1,
+            picks=[pick],
+            exotic=None,
+            puntys_pick=None,
+            total_stake=0.0,
+            notes=[],
+        )
+        output = format_pre_selections(pre_sel)
+        assert "Place prob too low (25% < 35%)" in output
+        assert "No Bet" in output

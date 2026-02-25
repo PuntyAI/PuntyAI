@@ -51,8 +51,11 @@ _BET_LINE = re.compile(
 )
 # "Bet: Exotics only" — no stake
 _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
-# "Bet: No Bet (Tracked)" or "Bet: No Bet" — tracked pick, displayed but not staked
-_BET_TRACKED = re.compile(r"Bet:\s*No\s*Bet(?:\s*\(Tracked\))?", re.IGNORECASE)
+# "Bet: No Bet (Tracked)" or "Bet: No Bet" or "Bet: No Bet — reason"
+_BET_TRACKED = re.compile(
+    r"Bet:\s*No\s*Bet(?:\s*\(Tracked\))?(?:\s*[—–\-]\s*(.+))?",
+    re.IGNORECASE,
+)
 
 # --- Confidence & Probability ---
 _CONFIDENCE = re.compile(
@@ -308,6 +311,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             # Look for bet line and metadata in the text after this match
             after_text = section[m.end():m.end() + 300]
             tracked_only = False
+            no_bet_reason = None
             # Check tracked first — _BET_LINE's 300-char window can
             # reach the next pick's "Bet: $X" line and match the wrong one.
             tracked_m = _BET_TRACKED.search(after_text)
@@ -316,6 +320,7 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
                 bet_stake = 0.0
                 bet_type = "place"  # preserve intended type for accuracy tracking
                 tracked_only = True
+                no_bet_reason = tracked_m.group(1).strip() if tracked_m.group(1) else None
             elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
@@ -370,6 +375,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             }
             if tracked_only:
                 pick_dict["tracked_only"] = True
+                if no_bet_reason:
+                    pick_dict["no_bet_reason"] = no_bet_reason
             picks.append(pick_dict)
 
         # Roughie (rank 4)
@@ -377,12 +384,14 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
         if roughie_m:
             after_text = section[roughie_m.end():roughie_m.end() + 300]
             tracked_only = False
+            no_bet_reason = None
             tracked_m = _BET_TRACKED.search(after_text)
             bet_m = _BET_LINE.search(after_text)
             if tracked_m and (not bet_m or tracked_m.start() < bet_m.start()):
                 bet_stake = 0.0
                 bet_type = "place"
                 tracked_only = True
+                no_bet_reason = tracked_m.group(1).strip() if tracked_m.group(1) else None
             elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
@@ -436,6 +445,8 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             }
             if tracked_only:
                 roughie_dict["tracked_only"] = True
+                if no_bet_reason:
+                    roughie_dict["no_bet_reason"] = no_bet_reason
             picks.append(roughie_dict)
 
         # Punty's Pick — mark the highlighted best-bet selection(s) or create exotic pick
