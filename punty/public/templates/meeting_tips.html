@@ -99,15 +99,27 @@
         <nav class="section-nav" id="section-nav">
             <div class="section-nav-inner">
                 {% if early_mail %}
-                <a href="#section-early-mail" class="section-nav-item" data-section="section-early-mail">
+                <a href="#section-punts" class="section-nav-item" data-section="section-punts">
                     <span class="section-nav-dot" style="background: var(--magenta);"></span>
-                    Early Mail
+                    Punts
                 </a>
                 {% endif %}
                 {% if live_updates %}
                 <a href="#section-live" class="section-nav-item" data-section="section-live">
                     <span class="section-nav-dot" style="background: var(--orange);"></span>
                     Live
+                </a>
+                {% endif %}
+                {% if meeting_stats %}
+                <a href="#meeting-stats-section" class="section-nav-item" data-section="meeting-stats-section">
+                    <span class="section-nav-dot" style="background: var(--purple);"></span>
+                    Stats
+                </a>
+                {% endif %}
+                {% if early_mail %}
+                <a href="#section-early-mail" class="section-nav-item" data-section="section-early-mail">
+                    <span class="section-nav-dot" style="background: var(--cyan);"></span>
+                    Early Mail
                 </a>
                 {% endif %}
                 {% if wrapup %}
@@ -122,54 +134,10 @@
             <div class="race-nav" id="race-nav-row" style="display:none;"></div>
         </nav>
 
-        <!-- Early Mail Section -->
-        {% if early_mail %}
-        <div class="mb-8" id="section-early-mail">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(233, 30, 140, 0.15);">
-                    <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                    </svg>
-                </div>
-                <h2 class="text-2xl font-display font-bold">
-                    <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Early Mail</span>
-                </h2>
-            </div>
-            <div class="tips-content" id="early-mail-content">
-                {{ early_mail.content | safe }}
-            </div>
-        </div>
-        {% endif %}
+        <!-- Punty's Punts (JS populates from early mail content) -->
+        <div class="mb-8" id="section-punts"></div>
 
-        <!-- Nuggets & Final Word (extracted from early mail by JS, rendered here) -->
-        <div id="extracted-sections"></div>
-
-        <!-- Meeting Stats (expandable) -->
-        {% if meeting_stats %}
-        <div class="mb-8" id="meeting-stats-section">
-            <div class="section-toggle" onclick="toggleSection('meeting-stats')">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(157, 78, 221, 0.15);">
-                        <svg class="w-5 h-5" style="color: var(--purple);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                    </div>
-                    <h2 class="text-2xl font-display font-bold">
-                        <span style="background: linear-gradient(135deg, var(--purple), var(--magenta)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Meeting Stats</span>
-                    </h2>
-                </div>
-                <svg class="section-chevron" id="meeting-stats-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                </svg>
-            </div>
-            <div class="section-body" id="meeting-stats-body">
-                <div id="ms-grid" class="pt-4"></div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Live Updates Section (after tips, max 4 visible with scroll) -->
+        <!-- Live Updates Section (newest first) -->
         {% if live_updates %}
         <div class="mb-8" id="section-live">
             <div class="flex items-center gap-3 mb-4">
@@ -185,7 +153,7 @@
             </div>
 
             <div class="live-updates-scroll space-y-3">
-                {% for update in live_updates %}
+                {% for update in live_updates | reverse %}
                 <div class="live-update-card {% if update.type == 'celebration' %}live-celebration{% else %}live-pace{% endif %}">
                     <div class="flex items-start gap-3">
                         <div class="live-icon flex-shrink-0">
@@ -221,10 +189,57 @@
         </div>
         {% endif %}
 
+        <!-- Meeting Stats (expandable) -->
+        {% if meeting_stats %}
+        <div class="mb-8" id="meeting-stats-section">
+            <div class="section-toggle" onclick="toggleSection('meeting-stats')">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(157, 78, 221, 0.15);">
+                        <svg class="w-5 h-5" style="color: var(--purple);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-display font-bold">
+                        <span style="background: linear-gradient(135deg, var(--purple), var(--magenta)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Meeting Stats</span>
+                    </h2>
+                </div>
+                <svg class="section-chevron" id="meeting-stats-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <div class="section-body" id="meeting-stats-body">
+                <div id="ms-grid" class="pt-4"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Early Mail Section -->
+        {% if early_mail %}
+        <div class="mb-8" id="section-early-mail">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(0, 212, 255, 0.15);">
+                    <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-display font-bold">
+                    <span style="background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Early Mail</span>
+                </h2>
+            </div>
+            <div class="tips-content" id="early-mail-content">
+                {{ early_mail.content | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Nuggets & Final Word (extracted from early mail by JS, rendered here) -->
+        <div id="extracted-sections"></div>
+
         <!-- Wrap-up Section -->
         {% if wrapup %}
         <div class="mb-8" id="section-wrapup">
-            <div class="flex items-center gap-3 mb-4">
+            <div class="flex items-center gap-3 mb-2">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(0, 212, 255, 0.15);">
                     <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
@@ -234,7 +249,7 @@
                     <span style="background: linear-gradient(135deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Wrap-Up</span>
                 </h2>
             </div>
-            <div class="card p-6">
+            <div class="card pt-4 px-6 pb-6">
                 <div class="prose prose-invert max-w-none tips-content">
                     {{ wrapup.content | safe }}
                 </div>
@@ -1042,10 +1057,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         if (hasRaces) navContainer.style.display = 'flex';
     }
-    // Anchor for scroll-spy targeting
-    var tipsAnchor = document.createElement('div');
-    tipsAnchor.id = 'section-tips';
-    tipsContent.appendChild(tipsAnchor);
+    // Punts container — race accordions, Big 3, sequences go here (top of page)
+    var puntsContainer = document.getElementById('section-punts');
 
     // "Punty's Punts" section heading above race cards
     var puntsHeader = document.createElement('div');
@@ -1059,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', function() {
     puntsTitle.textContent = "Punty's Punts";
     puntsHeader.appendChild(puntsImg);
     puntsHeader.appendChild(puntsTitle);
-    tipsContent.appendChild(puntsHeader);
+    puntsContainer.appendChild(puntsHeader);
 
     // Race and sequence sections
     sections.forEach(function(sec, idx) {
@@ -1067,10 +1080,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!sec.isRace && /SEQUENCE\s+LANES/i.test(sec.heading.textContent)) {
             var divider = document.createElement('div');
             divider.className = 'sequence-divider';
-            divider.innerHTML = '<div class="sequence-divider-line"></div>' +
-                '<span class="sequence-divider-label">Sequence Lanes</span>' +
-                '<div class="sequence-divider-line"></div>';
-            tipsContent.appendChild(divider);
+            var line1 = document.createElement('div');
+            line1.className = 'sequence-divider-line';
+            var label = document.createElement('span');
+            label.className = 'sequence-divider-label';
+            label.textContent = 'Sequence Lanes';
+            var line2 = document.createElement('div');
+            line2.className = 'sequence-divider-line';
+            divider.appendChild(line1);
+            divider.appendChild(label);
+            divider.appendChild(line2);
+            puntsContainer.appendChild(divider);
             return;
         }
 
@@ -1300,12 +1320,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         accordion.appendChild(header);
         accordion.appendChild(body);
-        tipsContent.appendChild(accordion);
+        puntsContainer.appendChild(accordion);
     });
 
     // Append Big 3 & Multi accordion after all race/sequence sections
     if (big3Acc) {
-        tipsContent.appendChild(big3Acc);
+        puntsContainer.appendChild(big3Acc);
     }
 
     // --- Style Sequence Variant Cards ---
@@ -1442,7 +1462,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // After accordion restructuring, headings are inside .race-accordion-header (not h2/h3).
     // Iterate per-accordion so we know which race each element belongs to.
-    var accordions = tipsContent.querySelectorAll('.race-accordion');
+    var accordions = puntsContainer.querySelectorAll('.race-accordion');
     accordions.forEach(function(acc) {
         // Extract race number from the accordion header (R1, R2, etc.)
         var pill = acc.querySelector('.race-pill');
@@ -1513,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Sequence winners (in their own sections, not inside race accordions)
     if (hasSequences) {
-        var seqEls = tipsContent.querySelectorAll('.seq-variant-card, p, li, strong');
+        var seqEls = puntsContainer.querySelectorAll('.seq-variant-card, p, li, strong');
         seqEls.forEach(function(el) {
             var text = el.textContent || '';
             var variantMatch = text.match(/^(Skinny|Balanced|Wide)\s*\(/i);
@@ -1533,9 +1553,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Punty's Pick badges (after winner badges so PP appears first) ---
     (function() {
-        var tipsEl = document.getElementById('early-mail-content');
-        if (!tipsEl) return;
-        var bodies = tipsEl.querySelectorAll('.race-accordion-body');
+        if (!puntsContainer) return;
+        var bodies = puntsContainer.querySelectorAll('.race-accordion-body');
         bodies.forEach(function(body) {
             // Walk all <strong> tags in paragraphs — each is a selection
             var strongs = body.querySelectorAll('p strong');
