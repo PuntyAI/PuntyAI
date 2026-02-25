@@ -1138,37 +1138,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Inline Punty's Pick badge — find the PP line and add a badge next to the matching selection
-            var pickEl = body.querySelector('.puntys-pick');
-            if (pickEl) {
-                var pickP = pickEl.closest('p') || pickEl.parentElement;
-                // Get horse name: prefer data-horse attribute (new content), fallback to text parsing
-                var ppName = pickEl.getAttribute('data-horse') || '';
-                if (!ppName && pickP) {
-                    var ppText = pickP.textContent.trim();
-                    ppName = ppText.replace(/^Punty[\u2019']?s\s+Pick:?\s*/i, '').split('(')[0].trim();
-                }
-                // Find the matching selection line by horse name (search all strong/bold tags)
-                var matched = false;
-                if (ppName) {
-                    var ppLower = ppName.toLowerCase();
-                    var selStrongs = body.querySelectorAll('strong');
-                    for (var si = 0; si < selStrongs.length; si++) {
-                        // Strip leading "1. " / "2. " number prefix from selection text
-                        var selText = selStrongs[si].textContent.trim().replace(/^\d+\.\s*/, '');
-                        if (selText.toLowerCase() === ppLower && !selStrongs[si].closest('.puntys-pick')) {
-                            var badge = document.createElement('span');
-                            badge.className = 'pp-badge';
-                            badge.textContent = "Punty\u2019s Pick";
-                            selStrongs[si].parentNode.insertBefore(badge, selStrongs[si].nextSibling);
-                            matched = true;
-                            break;
-                        }
-                    }
-                }
-                // Remove the standalone PP paragraph
-                if (pickP) {
-                    pickP.remove();
+            // Remove standalone PP paragraph (badge is now inline on staked picks)
+            var pickEls = body.querySelectorAll('.puntys-pick');
+            for (var pi = 0; pi < pickEls.length; pi++) {
+                var pickP = pickEls[pi].closest('p') || pickEls[pi].parentElement;
+                if (pickP) pickP.remove();
+            }
+
+            // Add "Punty's Pick" badge on every staked selection (not "No Bet")
+            // Find all selection paragraphs that contain a .sel-bet but NOT .sel-nobet
+            var selParas = body.querySelectorAll('p');
+            for (var sp = 0; sp < selParas.length; sp++) {
+                var para = selParas[sp];
+                var betSpan = para.querySelector('.sel-bet');
+                if (!betSpan || betSpan.classList.contains('sel-nobet')) continue;
+                // Find the <strong> with the horse name (first strong in this paragraph)
+                var horseStrong = para.querySelector('strong');
+                if (!horseStrong) continue;
+                // Insert badge after the price — find first <br> in paragraph (end of first line)
+                var firstBr = para.querySelector('br');
+                if (firstBr) {
+                    var badge = document.createElement('span');
+                    badge.className = 'pp-badge';
+                    badge.textContent = "Punty\u2019s Pick";
+                    para.insertBefore(badge, firstBr);
                 }
             }
         }
