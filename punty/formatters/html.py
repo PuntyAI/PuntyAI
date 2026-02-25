@@ -264,10 +264,10 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     )
 
     # Style selection metadata lines (before paragraph wrapping)
-    # "No Bet (tracked)" → muted "No Bet" with distinct class
+    # "No Bet (tracked), return $0.00" → muted "No Bet" (strip tracked label + return)
     content = re.sub(
-        r'^\s*Bet:\s*No\s*Bet\s*\((?:T|t)racked\)\s*,?\s*(.*)$',
-        r'<span class="sel-bet sel-nobet"><span class="sel-label">Bet</span> No Bet\1</span>',
+        r'^\s*Bet:\s*No\s*Bet\s*(?:\((?:T|t)racked\))?\s*(?:,\s*return\s*\$[\d.]+)?.*$',
+        r'<span class="sel-bet sel-nobet"><span class="sel-label">Bet</span> No Bet</span>',
         content, flags=re.MULTILINE
     )
     content = re.sub(

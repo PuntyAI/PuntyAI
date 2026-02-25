@@ -977,6 +977,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         .where(
             Meeting.date == target_date,
             Pick.settled == True,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
         .group_by(Pick.pick_type)
     )
