@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Punty's Punts - Racing Tips Archive | PuntyAI{% endblock %}
+{% block title %}Tips Archive | PuntyAI{% endblock %}
 
 {% block head %}
 <meta name="description" content="Browse Punty's horse racing tips archive. Expert AI analysis for Australian thoroughbred racing.">
@@ -75,8 +75,14 @@
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
         <!-- Header -->
         <div class="text-center mb-8">
+            <div class="mb-4">
+                <a href="/tips" class="inline-flex items-center gap-1 text-sm font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    Back to Dashboard
+                </a>
+            </div>
             <h1 class="text-4xl md:text-5xl font-display font-bold mb-4">
-                <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Punty's Punts</span>
+                <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Tips Archive</span>
             </h1>
             <p class="text-lg" style="color: var(--text-secondary);">
                 Browse Punty's tips archive. Click on a meeting to read the full early mail and wrap-up.
@@ -107,7 +113,7 @@
 
         <!-- Search Filters -->
         <div id="tips-search"></div>
-        <form method="GET" action="/tips" class="card p-4 mb-8">
+        <form method="GET" action="/tips/archive" class="card p-4 mb-8">
             <div class="flex flex-wrap gap-3 items-end">
                 <div class="flex-1 min-w-[150px]" x-data="venueSearch()" x-init="init()">
                     <label class="block text-xs font-heading font-semibold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Venue</label>
@@ -144,7 +150,7 @@
                 <div class="flex gap-2">
                     <button type="submit" class="px-4 py-2 rounded-lg font-heading font-semibold text-sm" style="background: var(--magenta); color: white;">Search</button>
                     {% if venue or date_from or date_to %}
-                    <a href="/tips" class="px-4 py-2 rounded-lg font-heading font-semibold text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-secondary);">Clear</a>
+                    <a href="/tips/archive" class="px-4 py-2 rounded-lg font-heading font-semibold text-sm" style="background: var(--bg-dark); border: 1px solid var(--border-subtle); color: var(--text-secondary);">Clear</a>
                     {% endif %}
                 </div>
             </div>
@@ -265,7 +271,7 @@
         {% if total_pages > 1 %}
         <div class="flex items-center justify-center gap-2 mt-12">
             {% if has_prev %}
-            <a href="/tips?page={{ page - 1 }}{{ filter_params }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
+            <a href="/tips/archive?page={{ page - 1 }}{{ filter_params }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
                 &larr; Newer
             </a>
             {% endif %}
@@ -275,7 +281,7 @@
             </span>
 
             {% if has_next %}
-            <a href="/tips?page={{ page + 1 }}{{ filter_params }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
+            <a href="/tips/archive?page={{ page + 1 }}{{ filter_params }}" class="px-4 py-2 rounded-lg font-heading font-semibold transition-colors hover:bg-white/5" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary);">
                 Older &rarr;
             </a>
             {% endif %}
@@ -291,7 +297,7 @@
             <p style="color: var(--text-secondary);">
                 No tips found for that search. Try broadening your filters.
             </p>
-            <a href="/tips" class="btn-secondary inline-flex items-center gap-2 mt-6">Clear Filters</a>
+            <a href="/tips/archive" class="btn-secondary inline-flex items-center gap-2 mt-6">Clear Filters</a>
             {% else %}
             <h2 class="text-2xl font-heading font-bold mb-2">No Tips Yet</h2>
             <p style="color: var(--text-secondary);">

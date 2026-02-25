@@ -1,0 +1,79 @@
+{# Next Race Hero — large countdown + picks for the next race #}
+{% if next_race.has_next %}
+<div class="next-race-hero card" style="border-color: rgba(233, 30, 140, 0.3); overflow: hidden;">
+    <div class="next-race-glow"></div>
+    <div class="p-6 relative">
+        <div class="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
+            {# Countdown #}
+            <div class="text-center md:text-left flex-shrink-0">
+                <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--magenta);">Next Race</div>
+                <div class="text-3xl md:text-4xl font-display font-black" style="color: white;" id="next-race-countdown" data-start="{{ next_race.start_time_iso }}">
+                    --:--
+                </div>
+                <div class="mt-1 font-heading font-semibold" style="color: var(--text-secondary);">
+                    {{ next_race.venue }} &mdash; R{{ next_race.race_number }}
+                </div>
+                {% if next_race.race_name %}
+                <div class="text-sm" style="color: var(--text-muted);">{{ next_race.race_name }}</div>
+                {% endif %}
+            </div>
+
+            {# Picks for this race #}
+            <div class="flex-1 min-w-0">
+                {% if next_race_picks %}
+                <div class="text-xs font-heading font-bold uppercase tracking-wider mb-2" style="color: var(--text-muted);">Our Picks</div>
+                <div class="space-y-2">
+                    {% for pick in next_race_picks %}
+                    <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background: rgba(255,255,255,0.03);">
+                        {# Rank badge #}
+                        {% if pick.tip_rank %}
+                        <span class="rank-badge rank-{{ pick.tip_rank }}">{{ pick.tip_rank }}</span>
+                        {% endif %}
+                        {# Horse + details #}
+                        <div class="flex-1 min-w-0">
+                            <span class="font-heading font-bold text-white truncate">{{ pick.name }}</span>
+                            {% if pick.is_puntys_pick %}
+                            <span class="pp-badge ml-1">PP</span>
+                            {% endif %}
+                        </div>
+                        {# Odds #}
+                        {% if pick.odds %}
+                        <span class="font-heading font-bold" style="color: var(--cyan);">${{ '%.2f'|format(pick.odds) }}</span>
+                        {% endif %}
+                        {# Bet type #}
+                        <span class="type-badge type-selection">{{ pick.bet_type }}</span>
+                        {# Confidence #}
+                        {% if pick.win_prob %}
+                        <span class="text-xs" style="color: var(--text-muted);">{{ pick.win_prob }}%</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-sm" style="color: var(--text-muted);">No picks loaded for this race yet.</div>
+                {% endif %}
+            </div>
+
+            {# CTA #}
+            <div class="flex-shrink-0 text-center">
+                <a href="/tips/{{ next_race.meeting_id }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-heading font-bold text-sm uppercase tracking-wider transition-all hover:scale-105" style="background: var(--gradient-sunset); color: white;">
+                    Full Card
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% elif next_race.get('all_done') %}
+<div class="card p-6 text-center" style="border-color: rgba(255,255,255,0.06);">
+    <div class="text-2xl mb-2">&#x1F3C1;</div>
+    <div class="font-heading font-bold text-lg" style="color: var(--text-secondary);">All Done For Today</div>
+    <p class="text-sm mt-1" style="color: var(--text-muted);">Check back tomorrow for the next early mail.</p>
+</div>
+{% else %}
+<div class="card p-6 text-center" style="border-color: rgba(255,255,255,0.06);">
+    <div class="text-2xl mb-2">&#x1F3C7;</div>
+    <div class="font-heading font-bold text-lg" style="color: var(--text-secondary);">No Racing Today</div>
+    <p class="text-sm mt-1" style="color: var(--text-muted);">Check the <a href="/tips/archive" style="color: var(--cyan);">archive</a> for past tips.</p>
+</div>
+{% endif %}

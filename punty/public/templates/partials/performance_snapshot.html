@@ -1,0 +1,75 @@
+{# Performance Snapshot — ROI, strike rates, product breakdown #}
+{% set perf = dashboard.performance|default({}) %}
+{% set ranks = stats.pick_ranks|default([]) %}
+{% set bt = dashboard.bet_types|default([]) %}
+
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Performance Snapshot
+    </h2>
+
+    {# Hero stat chips #}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="card p-3 text-center">
+            <div class="text-xs font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">Bets</div>
+            <div class="text-2xl font-display font-bold text-white mt-1">{{ perf.total_bets|default(0) }}</div>
+        </div>
+        <div class="card p-3 text-center">
+            <div class="text-xs font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">Winners</div>
+            <div class="text-2xl font-display font-bold mt-1" style="color: var(--cyan);">{{ perf.total_winners|default(0) }}</div>
+        </div>
+        <div class="card p-3 text-center">
+            <div class="text-xs font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">P&L</div>
+            {% set total_pnl = perf.total_pnl|default(0) %}
+            <div class="text-2xl font-display font-bold mt-1 {% if total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                {{ '+' if total_pnl >= 0 }}${{ '%.0f'|format(total_pnl) }}
+            </div>
+        </div>
+        <div class="card p-3 text-center">
+            <div class="text-xs font-heading font-bold uppercase tracking-wider" style="color: var(--text-muted);">Strike</div>
+            {% set sr = (perf.total_winners|default(0) / perf.total_bets * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
+            <div class="text-2xl font-display font-bold mt-1" style="color: var(--yellow);">{{ sr }}%</div>
+        </div>
+    </div>
+
+    {# Tip Rank Strike Rates #}
+    {% if ranks %}
+    <div class="mb-6">
+        <div class="text-xs font-heading font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">By Tip Rank</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {% for r in ranks %}
+            <div class="px-3 py-2 rounded-lg" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="rank-badge rank-{{ r.rank }}">{{ r.rank }}</span>
+                    <span class="text-xs font-heading font-semibold" style="color: var(--text-secondary);">{{ r.label }}</span>
+                </div>
+                <div class="text-lg font-heading font-bold text-white">{{ r.rate }}%</div>
+                <div class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.total }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Bet Type Breakdown #}
+    {% if bt %}
+    <div>
+        <div class="text-xs font-heading font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">By Bet Type</div>
+        <div class="space-y-2">
+            {% for b in bt %}
+            <div class="product-bar">
+                <span class="font-heading font-semibold text-sm text-white flex-1">{{ b.name }}</span>
+                <span class="text-xs" style="color: var(--text-muted);">{{ b.winners }}/{{ b.bets }}</span>
+                <span class="font-heading font-bold text-sm {% if b.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                    {{ '+' if b.pnl >= 0 }}${{ '%.0f'|format(b.pnl) }}
+                </span>
+                <span class="text-xs {% if b.roi >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                    {{ b.roi }}%
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>

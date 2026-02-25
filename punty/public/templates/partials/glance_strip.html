@@ -1,0 +1,56 @@
+{# At-A-Glance Strip — top info bar with today's key stats #}
+<div class="glance-strip">
+    <div class="glance-inner">
+        {# Date #}
+        <div class="glance-chip">
+            <span class="glance-label">Today</span>
+            <span class="glance-value">{{ dashboard.date }}</span>
+        </div>
+
+        {# Next Race Countdown #}
+        {% if next_race.has_next %}
+        <div class="glance-chip glance-chip-accent">
+            <span class="glance-label">Next Race</span>
+            <span class="glance-value" id="glance-countdown" data-start="{{ next_race.start_time_iso }}">
+                {{ next_race.venue }} R{{ next_race.race_number }} @ {{ next_race.start_time_formatted }}
+            </span>
+        </div>
+        {% elif next_race.get('all_done') %}
+        <div class="glance-chip">
+            <span class="glance-label">Racing</span>
+            <span class="glance-value" style="color: var(--text-muted);">All done for today</span>
+        </div>
+        {% endif %}
+
+        {# Today P&L #}
+        {% set pnl = dashboard.performance.total_pnl|default(0) %}
+        <div class="glance-chip">
+            <span class="glance-label">Today P&L</span>
+            <span class="glance-value {% if pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                {{ '+' if pnl >= 0 }}${{ '%.2f'|format(pnl) }}
+            </span>
+        </div>
+
+        {# 7-Day Trend #}
+        <div class="glance-chip">
+            <span class="glance-label">7-Day</span>
+            <span class="glance-value {% if seven_day_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                {{ '+' if seven_day_pnl >= 0 }}${{ '%.2f'|format(seven_day_pnl) }}
+                <span class="text-xs" style="color: var(--text-muted);">({{ seven_day_roi }}% ROI)</span>
+            </span>
+        </div>
+
+        {# Meetings Count #}
+        {% set meetings_count = stats.todays_tips|length %}
+        <div class="glance-chip">
+            <span class="glance-label">Meetings</span>
+            <span class="glance-value">{{ meetings_count }}</span>
+        </div>
+
+        {# Quick Links #}
+        <div class="glance-links">
+            <a href="/tips/archive" class="glance-link">Archive</a>
+            <a href="/stats" class="glance-link">Scorecard</a>
+        </div>
+    </div>
+</div>
