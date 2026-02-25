@@ -1,0 +1,75 @@
+{# Results & Wins Feed — reverse-chron results #}
+{% set big_wins = dashboard.big_wins|default([]) %}
+{% set wins = recent_wins.recent_wins|default([]) if recent_wins is mapping else [] %}
+
+{% if big_wins or wins %}
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Results & Wins
+    </h2>
+    <div class="space-y-3">
+        {# Big wins first (pinned) #}
+        {% for win in big_wins[:5] %}
+        <div class="win-card {% if win.pnl > 50 %}win-card-hero{% endif %}">
+            <div class="flex items-center gap-3">
+                {# Win tick #}
+                <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(34, 197, 94, 0.15);">
+                    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="font-heading font-bold text-white">{{ win.display_name }}</span>
+                        {% if win.tip_rank %}
+                        <span class="rank-badge rank-{{ win.tip_rank }}">{{ win.tip_rank }}</span>
+                        {% endif %}
+                        {% if win.is_puntys_pick %}
+                        <span class="pp-badge">PP</span>
+                        {% endif %}
+                        <span class="type-badge type-{{ win.pick_type }}">{{ win.pick_type|replace('_', ' ')|title }}</span>
+                    </div>
+                    <div class="text-xs" style="color: var(--text-muted);">
+                        <a href="/tips/{{ win.meeting_id }}" class="hover:text-white transition-colors">{{ win.venue }} R{{ win.race_number }}</a>
+                        {% if win.bet_type %} &middot; {{ win.bet_type }}{% endif %}
+                    </div>
+                </div>
+                <div class="text-right flex-shrink-0">
+                    <div class="font-heading font-bold text-green-400">${{ '%.2f'|format(win.returned) }}</div>
+                    <div class="text-xs text-green-400/60">${{ '%.2f'|format(win.stake) }} &rarr; +${{ '%.2f'|format(win.pnl) }}</div>
+                </div>
+            </div>
+            {% if win.celebration %}
+            <div class="mt-2 text-xs font-heading italic" style="color: var(--magenta);">{{ win.celebration }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        {# Recent wins ticker #}
+        {% for w in wins[:10] %}
+        {% if w.horse_name and w.horse_name not in big_wins|map(attribute='display_name')|list %}
+        <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);">
+            <svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            <span class="font-heading font-semibold text-white text-sm">{{ w.horse_name }}</span>
+            <span class="text-xs" style="color: var(--text-muted);">{{ w.venue }} R{{ w.race_number }}</span>
+            {% if w.returned %}
+            <span class="ml-auto font-heading font-bold text-green-400 text-sm">${{ '%.2f'|format(w.returned) }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Results & Wins
+    </h2>
+    <div class="card p-6 text-center">
+        <div class="text-sm" style="color: var(--text-muted);">Racing underway &mdash; results will appear here</div>
+        {% if dashboard.total_upcoming > 0 %}
+        <div class="text-xs mt-1" style="color: var(--text-muted);">{{ dashboard.total_upcoming }} bets in play</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

@@ -1141,7 +1141,320 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
 
 
 @router.get("/tips", response_class=HTMLResponse)
-async def tips_page(
+async def tips_dashboard(request: Request):
+    """Racing dashboard — one-stop page for today's racing."""
+    import asyncio
+    from datetime import timedelta
+    from punty.results.picks import get_performance_history
+
+    today = melb_today()
+    week_ago = today - timedelta(days=7)
+
+    # Run all data fetches in parallel
+    dashboard, stats, next_race_data, recent_wins = await asyncio.gather(
+        get_daily_dashboard(),
+        get_winner_stats(today=True),
+        get_next_race(),
+        get_recent_wins_public(15),
+    )
+
+    # 7-day performance history
+    async with async_session() as db:
+        perf_history = await get_performance_history(db, week_ago, today)
+
+    seven_day_pnl = sum(d["pnl"] for d in perf_history)
+    seven_day_bets = sum(d["bets"] for d in perf_history)
+    seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
+
+    # Enrich todays_tips with track_condition from dashboard venues
+    venue_info = {v["name"]: v for v in dashboard.get("venues", [])}
+    for tip in stats.get("todays_tips", []):
+        tip["track_condition"] = None
+        # Look up meeting for track condition
+        mid = tip.get("meeting_id")
+        if mid:
+            async with async_session() as db:
+                m = await db.get(Meeting, mid)
+                if m:
+                    tip["track_condition"] = m.track_condition
+
+    # Best of meets + pooled plays
+    best_of, pooled = await asyncio.gather(
+        get_best_of_meets(),
+        get_pooled_plays(),
+    )
+
+    # Match next race to upcoming picks
+    next_race_picks = []
+    if next_race_data.get("has_next"):
+        nr_mid = next_race_data.get("meeting_id")
+        nr_rn = next_race_data.get("race_number")
+        for u in dashboard.get("upcoming", []):
+            if u.get("meeting_id") == nr_mid and u.get("race_number") == nr_rn:
+                next_race_picks.append(u)
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "dashboard": dashboard,
+            "stats": stats,
+            "next_race": next_race_data,
+            "next_race_picks": next_race_picks,
+            "recent_wins": recent_wins,
+            "perf_history": perf_history,
+            "seven_day_pnl": round(seven_day_pnl, 2),
+            "seven_day_roi": seven_day_roi,
+            "best_of": best_of,
+            "pooled": pooled,
+        }
+    )
+
+
+@router.get("/tips/_glance", response_class=HTMLResponse)
+async def tips_glance(request: Request):
+    """HTMX partial: at-a-glance strip refresh."""
+    import asyncio
+    from datetime import timedelta
+    from punty.results.picks import get_performance_history
+
+    today = melb_today()
+    week_ago = today - timedelta(days=7)
+
+    dashboard, stats, next_race_data = await asyncio.gather(
+        get_daily_dashboard(),
+        get_winner_stats(today=True),
+        get_next_race(),
+    )
+
+    async with async_session() as db:
+        perf_history = await get_performance_history(db, week_ago, today)
+
+    seven_day_pnl = sum(d["pnl"] for d in perf_history)
+    seven_day_bets = sum(d["bets"] for d in perf_history)
+    seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
+
+    return templates.TemplateResponse(
+        "partials/glance_strip.html",
+        {
+            "request": request,
+            "dashboard": dashboard,
+            "stats": stats,
+            "next_race": next_race_data,
+            "seven_day_pnl": round(seven_day_pnl, 2),
+            "seven_day_roi": seven_day_roi,
+        }
+    )
+
+
+@router.get("/tips/_next-race", response_class=HTMLResponse)
+async def tips_next_race(request: Request):
+    """HTMX partial: next race hero refresh."""
+    import asyncio
+
+    dashboard, next_race_data = await asyncio.gather(
+        get_daily_dashboard(),
+        get_next_race(),
+    )
+
+    next_race_picks = []
+    if next_race_data.get("has_next"):
+        nr_mid = next_race_data.get("meeting_id")
+        nr_rn = next_race_data.get("race_number")
+        for u in dashboard.get("upcoming", []):
+            if u.get("meeting_id") == nr_mid and u.get("race_number") == nr_rn:
+                next_race_picks.append(u)
+
+    return templates.TemplateResponse(
+        "partials/next_race.html",
+        {
+            "request": request,
+            "next_race": next_race_data,
+            "next_race_picks": next_race_picks,
+        }
+    )
+
+
+@router.get("/tips/_results-feed", response_class=HTMLResponse)
+async def tips_results_feed(request: Request):
+    """HTMX partial: results feed refresh."""
+    import asyncio
+
+    dashboard, recent_wins = await asyncio.gather(
+        get_daily_dashboard(),
+        get_recent_wins_public(15),
+    )
+
+    return templates.TemplateResponse(
+        "partials/results_feed.html",
+        {
+            "request": request,
+            "dashboard": dashboard,
+            "recent_wins": recent_wins,
+        }
+    )
+
+
+async def get_best_of_meets() -> dict:
+    """Get best winner, roughie, and exotic pick per today's meeting."""
+    today = melb_today()
+
+    async with async_session() as db:
+        active_content = select(Content.id).where(
+            Content.status.notin_(["superseded", "rejected"])
+        ).scalar_subquery()
+
+        result = await db.execute(
+            select(Pick, Meeting)
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                Pick.content_id.in_(active_content),
+            )
+        )
+        rows = result.all()
+
+    from punty.venues import guess_state as get_state_for_track
+
+    meets = {}
+    for pick, meeting in rows:
+        mid = meeting.id
+        if mid not in meets:
+            meets[mid] = {
+                "venue": meeting.venue,
+                "meeting_id": mid,
+                "state": get_state_for_track(meeting.venue) or "AUS",
+                "best_winner": None,
+                "roughie": None,
+                "exotic": None,
+            }
+
+        # Best Winner: selection, tip_rank <= 3, not roughie, highest win_prob
+        if (pick.pick_type == "selection"
+                and (pick.tip_rank or 99) <= 3
+                and not pick.is_roughie
+                and (pick.win_probability or 0) >= 0.22):
+            current = meets[mid]["best_winner"]
+            if not current or (pick.win_probability or 0) > (current.get("win_prob") or 0):
+                meets[mid]["best_winner"] = {
+                    "horse": pick.horse_name,
+                    "race": pick.race_number,
+                    "odds": pick.odds_at_tip,
+                    "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                    "win_prob": pick.win_probability,
+                    "tip_rank": pick.tip_rank,
+                    "is_puntys_pick": pick.is_puntys_pick or False,
+                }
+
+        # Best Roughie: tip_rank == 4, highest value_rating, odds >= $8
+        if (pick.pick_type == "selection"
+                and pick.tip_rank == 4
+                and (pick.odds_at_tip or 0) >= 8
+                and (pick.win_probability or 0) >= 0.08):
+            current = meets[mid]["roughie"]
+            if not current or (pick.value_rating or 0) > (current.get("value_rating") or 0):
+                meets[mid]["roughie"] = {
+                    "horse": pick.horse_name,
+                    "race": pick.race_number,
+                    "odds": pick.odds_at_tip,
+                    "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                    "value_rating": pick.value_rating,
+                }
+
+        # Best Exotic: first exotic per meeting
+        if pick.pick_type == "exotic" and not meets[mid]["exotic"]:
+            meets[mid]["exotic"] = {
+                "type": pick.exotic_type,
+                "race": pick.race_number,
+                "runners": pick.exotic_runners,
+                "stake": pick.exotic_stake,
+            }
+
+    return meets
+
+
+async def get_pooled_plays() -> dict | None:
+    """Get the best quaddie of the day for metro meets."""
+    today = melb_today()
+
+    METRO_VENUES = {
+        "randwick", "flemington", "caulfield", "moonee valley",
+        "eagle farm", "doomben", "morphettville", "rosehill",
+    }
+
+    async with async_session() as db:
+        active_content = select(Content.id).where(
+            Content.status.notin_(["superseded", "rejected"])
+        ).scalar_subquery()
+
+        result = await db.execute(
+            select(Pick, Meeting)
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                Pick.content_id.in_(active_content),
+                Pick.pick_type == "sequence",
+                Pick.sequence_type == "quaddie",
+            )
+        )
+        rows = result.all()
+
+    if not rows:
+        return None
+
+    # Filter to metro venues
+    metro_rows = [
+        (p, m) for p, m in rows
+        if m.venue.lower().strip() in METRO_VENUES
+    ]
+
+    if not metro_rows:
+        # Fallback to any quaddie
+        metro_rows = rows
+
+    # Pick the quaddie with lowest combo count (most targeted), prefer Skinny
+    import json as _json
+
+    best = None
+    best_score = float("inf")
+    for pick, meeting in metro_rows:
+        legs = pick.sequence_legs
+        if isinstance(legs, str):
+            try:
+                legs = _json.loads(legs)
+            except (ValueError, TypeError):
+                legs = []
+        combo_count = 1
+        for leg in (legs or []):
+            if isinstance(leg, list):
+                combo_count *= len(leg)
+            elif isinstance(leg, dict):
+                combo_count *= len(leg.get("runners", [1]))
+
+        # Score: lower combos = better; Skinny gets -1000 bonus
+        score = combo_count
+        if (pick.sequence_variant or "").lower() == "skinny":
+            score -= 1000
+
+        if score < best_score:
+            best_score = score
+            best = {
+                "venue": meeting.venue,
+                "meeting_id": meeting.id,
+                "variant": (pick.sequence_variant or "").title(),
+                "legs": legs,
+                "start_race": pick.sequence_start_race,
+                "combo_count": combo_count,
+                "stake": pick.exotic_stake or pick.bet_stake,
+            }
+
+    return best
+
+
+@router.get("/tips/archive", response_class=HTMLResponse)
+async def tips_archive(
     request: Request,
     page: int = 1,
     venue: str | None = None,

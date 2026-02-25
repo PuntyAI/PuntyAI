@@ -1,0 +1,37 @@
+{# Today's Meetings Grid — card per meeting #}
+{% set tips = stats.todays_tips|default([]) %}
+{% if tips %}
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Today's Meetings
+    </h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {% for tip in tips %}
+        <a href="/tips/{{ tip.meeting_id }}" class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group">
+            <div class="flex items-start justify-between mb-2">
+                <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors text-sm leading-tight">
+                    {{ tip.venue }}
+                </div>
+                <span class="state-badge state-{{ tip.state|lower }}">{{ tip.state }}</span>
+            </div>
+            {% if tip.track_condition %}
+            <div class="text-xs mb-2" style="color: var(--cyan);">{{ tip.track_condition }}</div>
+            {% endif %}
+            {# Venue P&L if available #}
+            {% set venue_data = dashboard.venues|selectattr('name', 'equalto', tip.venue)|first %}
+            {% if venue_data and venue_data.pnl is not none and venue_data.bets > 0 %}
+            <div class="flex items-center justify-between text-xs">
+                <span style="color: var(--text-muted);">{{ venue_data.bets }} bets</span>
+                <span class="font-heading font-bold {% if venue_data.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                    {{ '+' if venue_data.pnl >= 0 }}${{ '%.0f'|format(venue_data.pnl) }}
+                </span>
+            </div>
+            {% elif venue_data and venue_data.upcoming > 0 %}
+            <div class="text-xs" style="color: var(--text-muted);">{{ venue_data.upcoming }} upcoming</div>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,67 @@
+{# Pooled Plays — Quaddie of the Day #}
+{% if pooled %}
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        Quaddie Of The Day
+    </h2>
+    <div class="card p-5" style="border-color: rgba(255, 107, 53, 0.3);">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <div class="font-heading font-bold text-white text-lg">{{ pooled.venue }}</div>
+                <div class="flex items-center gap-2 mt-1">
+                    {% if pooled.variant %}
+                    <span class="type-badge" style="background: rgba(255, 107, 53, 0.15); color: var(--orange);">{{ pooled.variant }}</span>
+                    {% endif %}
+                    <span class="text-xs" style="color: var(--text-muted);">{{ pooled.combo_count }} combos</span>
+                    {% if pooled.stake %}
+                    <span class="text-xs" style="color: var(--text-muted);">&middot; ${{ '%.0f'|format(pooled.stake) }} outlay</span>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="/tips/{{ pooled.meeting_id }}" class="px-3 py-1.5 rounded-lg font-heading font-bold text-xs uppercase tracking-wider transition-all hover:scale-105" style="background: rgba(255, 107, 53, 0.15); color: var(--orange); border: 1px solid rgba(255, 107, 53, 0.3);">
+                Full Card
+            </a>
+        </div>
+
+        {# Leg-by-leg display #}
+        {% if pooled.legs %}
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {% for leg in pooled.legs %}
+            <div class="px-3 py-2 rounded-lg" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);">
+                <div class="text-xs font-heading font-bold uppercase mb-1" style="color: var(--text-muted);">
+                    R{{ (pooled.start_race or 1) + loop.index0 }}
+                </div>
+                <div class="space-y-0.5">
+                    {% if leg is mapping %}
+                        {% for runner in leg.get('runners', []) %}
+                        <div class="text-sm font-heading font-semibold text-white truncate">{{ runner }}</div>
+                        {% endfor %}
+                    {% elif leg is iterable and leg is not string %}
+                        {% for runner in leg %}
+                        <div class="text-sm font-heading font-semibold text-white truncate">{{ runner }}</div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="text-sm font-heading font-semibold text-white">{{ leg }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+{# Empty state — only show if we have meetings #}
+{% if stats.todays_tips|default([])|length > 0 %}
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        Quaddie Of The Day
+    </h2>
+    <div class="card p-5 text-center" style="border-color: rgba(255,255,255,0.06);">
+        <div class="text-sm" style="color: var(--text-muted);">No quaddie recommended today</div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
