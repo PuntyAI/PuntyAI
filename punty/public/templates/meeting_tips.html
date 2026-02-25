@@ -517,13 +517,17 @@
 
     /* Punty's Pick inline badge */
     .pp-badge {
-        display: inline-flex; align-items: center; gap: 3px;
-        margin-left: 6px; padding: 2px 8px; border-radius: 6px;
+        display: inline-flex; align-items: center; gap: 4px;
+        margin-left: 8px; padding: 3px 10px 3px 6px; border-radius: 8px;
         font-family: 'Rajdhani', sans-serif; font-weight: 700;
-        font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase;
-        background: linear-gradient(135deg, rgba(233, 30, 140, 0.2), rgba(255, 107, 53, 0.2));
-        color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.3);
+        font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase;
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.25), rgba(255, 107, 53, 0.25));
+        color: #ff69b4; border: 1px solid rgba(233, 30, 140, 0.5);
         vertical-align: middle; white-space: nowrap;
+        box-shadow: 0 0 6px rgba(233, 30, 140, 0.3);
+    }
+    .pp-badge img {
+        width: 16px; height: 16px; border-radius: 50%; object-fit: cover;
     }
 
     /* Selection metadata labels */
@@ -1144,26 +1148,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 var pickP = pickEls[pi].closest('p') || pickEls[pi].parentElement;
                 if (pickP) pickP.remove();
             }
-
-            // Add "Punty's Pick" badge on every staked selection (not "No Bet")
-            // Find all selection paragraphs that contain a .sel-bet but NOT .sel-nobet
-            var selParas = body.querySelectorAll('p');
-            for (var sp = 0; sp < selParas.length; sp++) {
-                var para = selParas[sp];
-                var betSpan = para.querySelector('.sel-bet');
-                if (!betSpan || betSpan.classList.contains('sel-nobet')) continue;
-                // Find the <strong> with the horse name (first strong in this paragraph)
-                var horseStrong = para.querySelector('strong');
-                if (!horseStrong) continue;
-                // Insert badge after the price — find first <br> in paragraph (end of first line)
-                var firstBr = para.querySelector('br');
-                if (firstBr) {
-                    var badge = document.createElement('span');
-                    badge.className = 'pp-badge';
-                    badge.textContent = "Punty\u2019s Pick";
-                    para.insertBefore(badge, firstBr);
-                }
-            }
         }
 
         // For race sections, move exotic title with exotic paragraph
@@ -1546,6 +1530,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // --- Punty's Pick badges (after winner badges so PP appears first) ---
+    (function() {
+        var tipsEl = document.getElementById('tips-content');
+        if (!tipsEl) return;
+        var bodies = tipsEl.querySelectorAll('.race-accordion-body');
+        bodies.forEach(function(body) {
+            // Walk all <strong> tags in paragraphs — each is a selection
+            var strongs = body.querySelectorAll('p strong');
+            for (var si = 0; si < strongs.length; si++) {
+                var sel = strongs[si];
+                if (sel.closest('.puntys-pick')) continue;
+                // Walk forward to find this selection's .sel-bet (stop at next <strong>)
+                var nextSel = strongs[si + 1] || null;
+                var node = sel.nextSibling;
+                var hasBet = false;
+                while (node && node !== nextSel) {
+                    if (node.nodeType === 1 && node.classList && node.classList.contains('sel-bet')) {
+                        hasBet = !node.classList.contains('sel-nobet');
+                        break;
+                    }
+                    node = node.nextSibling;
+                }
+                if (!hasBet) continue;
+                // Find insertion point: first <br> after this <strong> (end of price line)
+                var br = sel.nextSibling;
+                while (br && br !== nextSel) {
+                    if (br.nodeName === 'BR') break;
+                    br = br.nextSibling;
+                }
+                if (!br || br.nodeName !== 'BR') continue;
+                // Insert BEFORE any existing winner badge (win-tick) on this line
+                var insertBefore = br;
+                var prev = br.previousSibling;
+                while (prev && prev.nodeType === 1 && prev.classList && prev.classList.contains('win-tick')) {
+                    insertBefore = prev;
+                    prev = prev.previousSibling;
+                }
+                var badge = document.createElement('span');
+                badge.className = 'pp-badge';
+                var img = document.createElement('img');
+                img.src = '/static/punty-character.jpg';
+                img.alt = 'Punty';
+                badge.appendChild(img);
+                badge.appendChild(document.createTextNode("Punty\u2019s Pick"));
+                insertBefore.parentNode.insertBefore(badge, insertBefore);
+            }
+        });
+    })();
 
     // --- Section Nav: smooth scroll + scroll spy ---
     (function() {
