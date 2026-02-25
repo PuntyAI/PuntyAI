@@ -242,12 +242,11 @@
                 <div class="tips-content pt-4" id="early-mail-content">
                     {{ early_mail.content | safe }}
                 </div>
+                <!-- Nuggets & Final Word (extracted from early mail by JS) -->
+                <div id="extracted-sections"></div>
             </div>
         </div>
         {% endif %}
-
-        <!-- Nuggets & Final Word (extracted from early mail by JS, rendered here) -->
-        <div id="extracted-sections"></div>
 
         <!-- Wrap-up Section (collapsible, open by default) -->
         {% if wrapup %}
