@@ -1224,7 +1224,7 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
         # Tracked picks: no stake, displayed for accuracy tracking
         if pick.tracked_only:
             lines.append(
-                f"    BET: No Bet (Tracked) — edge gate: no proven-profitable criteria met"
+                f"    BET: No Bet — edge gate: no proven-profitable criteria met"
             )
         else:
             # Calculate display return

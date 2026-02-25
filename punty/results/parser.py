@@ -51,8 +51,8 @@ _BET_LINE = re.compile(
 )
 # "Bet: Exotics only" — no stake
 _BET_EXOTICS_ONLY = re.compile(r"Bet:\s*Exotics\s*only", re.IGNORECASE)
-# "Bet: No Bet (Tracked)" — tracked pick, displayed but not staked
-_BET_TRACKED = re.compile(r"Bet:\s*No\s*Bet\s*\(Tracked\)", re.IGNORECASE)
+# "Bet: No Bet (Tracked)" or "Bet: No Bet" — tracked pick, displayed but not staked
+_BET_TRACKED = re.compile(r"Bet:\s*No\s*Bet(?:\s*\(Tracked\))?", re.IGNORECASE)
 
 # --- Confidence & Probability ---
 _CONFIDENCE = re.compile(

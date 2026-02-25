@@ -163,7 +163,7 @@ async def get_winner_stats(today: bool = False) -> dict:
             Content.status.notin_(["superseded", "rejected"])
         ).scalar_subquery()
 
-        # Today's winners (all pick types that hit)
+        # Today's winners (all pick types that hit, excluding tracked-only)
         today_result = await db.execute(
             select(func.count(Pick.id))
             .join(Meeting, Pick.meeting_id == Meeting.id)
@@ -173,6 +173,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                     Pick.settled == True,
                     Meeting.date == today_date,
                     Pick.content_id.in_(active_content),
+                    or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                 )
             )
         )
@@ -204,13 +205,14 @@ async def get_winner_stats(today: bool = False) -> dict:
                     r.results_status in complete_statuses for r in races
                 )
 
-        # All-time winners (all pick types)
+        # All-time winners (all pick types, excluding tracked-only)
         alltime_result = await db.execute(
             select(func.count(Pick.id)).where(
                 and_(
                     Pick.hit == True,
                     Pick.settled == True,
                     Pick.content_id.in_(active_content),
+                    or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                 )
             )
         )
@@ -263,6 +265,7 @@ async def get_winner_stats(today: bool = False) -> dict:
             Pick.settled == True,
             Pick.pick_type == "selection",
             Pick.bet_type != "exotics_only",
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         ]
         if today:
             rank_conds.append(Meeting.date == today_date)
@@ -353,6 +356,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Meeting.date == today_date,
                         Meeting.selected == True,
                         Pick.content_id.in_(active_content),
+                        or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                     )
                 )
                 .order_by(Pick.pnl.desc())
@@ -378,6 +382,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                         Meeting.date < today_date,
                         Meeting.selected == True,
                         Pick.content_id.in_(active_content),
+                        or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                     )
                 )
                 .order_by(Pick.pnl.desc())
