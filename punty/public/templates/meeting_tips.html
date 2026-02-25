@@ -1154,7 +1154,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     var ppLower = ppName.toLowerCase();
                     var selStrongs = body.querySelectorAll('strong');
                     for (var si = 0; si < selStrongs.length; si++) {
-                        var selText = selStrongs[si].textContent.trim();
+                        // Strip leading "1. " / "2. " number prefix from selection text
+                        var selText = selStrongs[si].textContent.trim().replace(/^\d+\.\s*/, '');
                         if (selText.toLowerCase() === ppLower && !selStrongs[si].closest('.puntys-pick')) {
                             var badge = document.createElement('span');
                             badge.className = 'pp-badge';
