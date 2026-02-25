@@ -1144,11 +1144,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 var pickP = pickEl.closest('p') || pickEl.parentElement;
                 // Extract horse name from text AFTER the .puntys-pick span (label is inside, name is outside)
                 var ppText = pickP ? pickP.textContent.trim() : '';
-                // Remove "Punty's Pick:" prefix to get "HORSE NAME (No.X) ..."
+                // Remove "Punty's Pick:" prefix to get "Horse Name (No.X) ..."
                 var ppName = ppText.replace(/^Punty[\u2019']?s\s+Pick:?\s*/i, '').trim();
-                // Extract just the horse name (before the parenthetical)
-                var nameMatch = ppName.match(/^([A-Z][A-Z\s''\-]+?)(?:\s*\(|$)/);
-                ppName = nameMatch ? nameMatch[1].trim() : ppName.split('(')[0].trim();
+                // Extract just the horse name (everything before first parenthetical)
+                ppName = ppName.split('(')[0].trim();
                 // Find the matching selection line by horse name (search all strong tags, not just in <p>)
                 var matched = false;
                 if (ppName) {
