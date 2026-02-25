@@ -398,6 +398,24 @@
         0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.2); }
         50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.7), 0 0 40px rgba(34, 197, 94, 0.35); }
     }
+    /* Exotic miss badge (red X) */
+    .exotic-miss {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 0.75em;
+        letter-spacing: 0.15em; text-transform: uppercase;
+        margin-left: 10px; padding: 4px 12px 4px 10px; border-radius: 6px;
+        background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff;
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.5), 0 0 24px rgba(239, 68, 68, 0.2);
+        animation: miss-glow 1.8s ease-in-out infinite;
+        vertical-align: middle; line-height: 1.2;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    .exotic-miss .miss-emoji { font-size: 1.3em; line-height: 1; filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.6)); }
+    @keyframes miss-glow {
+        0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.5), 0 0 24px rgba(239, 68, 68, 0.2); }
+        50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.7), 0 0 40px rgba(239, 68, 68, 0.35); }
+    }
+
     .puntys-pick {
         display: inline-flex; align-items: center; gap: 4px;
         background: linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(233, 30, 140, 0.15));
@@ -834,6 +852,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var meetingStats = {{ meeting_stats | tojson }};
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
+    var loseExotics = {{ losing_exotics | tojson }};
+    var ppPicks = {{ pp_picks | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
     var seqResults = {{ sequence_results | tojson }};
     var meetingDate = '{{ meeting.date }}';
@@ -1511,11 +1531,28 @@ document.addEventListener('DOMContentLoaded', function() {
         strongEl.setAttribute('data-badged', '1');
     }
 
+    // Add a red X miss badge to an element
+    function addMissBadge(el) {
+        if (el.querySelector && el.querySelector('.exotic-miss')) return;
+        if (el.getAttribute && el.getAttribute('data-badged')) return;
+        var miss = document.createElement('span');
+        miss.className = 'exotic-miss';
+        var emoji = document.createElement('span');
+        emoji.className = 'miss-emoji';
+        emoji.textContent = '\u274C';
+        miss.appendChild(emoji);
+        miss.appendChild(document.createTextNode(' MISS'));
+        miss.title = 'Missed!';
+        el.appendChild(miss);
+        el.setAttribute('data-badged', '1');
+    }
+
     var hasSelections = winners && Object.keys(winners).length;
     var hasExotics = winExotics && Object.keys(winExotics).length;
+    var hasLosing = loseExotics && Object.keys(loseExotics).length;
     var hasSequences = winSequences && winSequences.length;
 
-    if (!hasSelections && !hasExotics && !hasSequences) return;
+    if (!hasSelections && !hasExotics && !hasLosing && !hasSequences) return;
 
     // After accordion restructuring, headings are inside .race-accordion-header (not h2/h3).
     // Iterate per-accordion so we know which race each element belongs to.
@@ -1529,6 +1566,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var raceWinners = hasSelections ? winners[String(raceNum)] : null;
         var raceExotic = hasExotics ? winExotics[String(raceNum)] : null;
+        var raceExoticLost = hasLosing ? loseExotics[String(raceNum)] : null;
 
         // Selection winners / finish positions
         // Build finish position lookup for this race from racesData
@@ -1585,13 +1623,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
 
-        // Exotic winners: check <p> elements AND walk text nodes in accordion body
-        if (raceExotic) {
+        // Exotic badges: HIT for winners, MISS (red X) for losers
+        if (raceExotic || raceExoticLost) {
             var exoticRe = /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))/i;
             var bodyEls = acc.querySelectorAll('.race-accordion-body p, .race-accordion-body .exotic-title');
             bodyEls.forEach(function(el) {
                 var text = (el.textContent || '').trim();
-                if (exoticRe.test(text)) addBadge(el, 'HIT');
+                if (exoticRe.test(text)) {
+                    if (raceExotic) { addBadge(el, 'HIT'); }
+                    else { addMissBadge(el); }
+                }
             });
             // Also check bare text nodes (exotic lines not wrapped in <p>)
             var body = acc.querySelector('.race-accordion-body');
@@ -1600,11 +1641,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (var cn = 0; cn < childNodes.length; cn++) {
                     var node = childNodes[cn];
                     if (node.nodeType === 3 && exoticRe.test((node.textContent || '').trim())) {
-                        // Wrap text node in a span and badge it
                         var wrapper = document.createElement('span');
                         wrapper.textContent = node.textContent;
                         node.parentNode.replaceChild(wrapper, node);
-                        addBadge(wrapper, 'HIT');
+                        if (raceExotic) { addBadge(wrapper, 'HIT'); }
+                        else { addMissBadge(wrapper); }
                     }
                 }
             }
@@ -1631,50 +1672,81 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Punty's Pick badges (after winner badges so PP appears first) ---
+    // --- Punty's Pick badges (data-driven, placed after BET line) ---
     (function() {
-        if (!puntsContainer) return;
-        var bodies = puntsContainer.querySelectorAll('.race-accordion-body');
-        bodies.forEach(function(body) {
-            // Walk all <strong> tags in paragraphs — each is a selection
-            var strongs = body.querySelectorAll('p strong');
+        if (!puntsContainer || !ppPicks || !Object.keys(ppPicks).length) return;
+        var accordions = puntsContainer.querySelectorAll('.race-accordion');
+        accordions.forEach(function(acc) {
+            var pill = acc.querySelector('.race-pill');
+            if (!pill) return;
+            var raceNum = parseInt((pill.textContent || '').replace(/\D/g, ''));
+            if (!raceNum || !ppPicks[String(raceNum)]) return;
+            var ppSc = ppPicks[String(raceNum)];
+
+            // Build finish position map for this race
+            var fpMap = {};
+            var raceObj = racesData.find(function(r) { return r.num === raceNum; });
+            if (raceObj) {
+                raceObj.runners.forEach(function(r) { if (r.fp) fpMap[r.sc] = r.fp; });
+            }
+
+            var strongs = acc.querySelectorAll('.race-accordion-body strong');
             for (var si = 0; si < strongs.length; si++) {
                 var sel = strongs[si];
                 if (sel.closest('.puntys-pick')) continue;
-                // Walk forward to find this selection's .sel-bet (stop at next <strong>)
+                // Extract saddlecloth from text after <strong>
+                var sib = sel.nextSibling;
+                var nextText = '';
+                while (sib) {
+                    if (sib.nodeType === 3) { nextText += sib.textContent; break; }
+                    if (sib.nodeType === 1 && sib.tagName === 'BR') break;
+                    if (sib.nodeType === 1) { nextText += sib.textContent; break; }
+                    break;
+                }
+                var scMatch = nextText.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
+                if (!scMatch) continue;
+                var sc = parseInt(scMatch[1]);
+                if (sc !== ppSc) continue;
+
+                // Find the .sel-bet element for this selection
                 var nextSel = strongs[si + 1] || null;
                 var node = sel.nextSibling;
-                var hasBet = false;
+                var betEl = null;
                 while (node && node !== nextSel) {
                     if (node.nodeType === 1 && node.classList && node.classList.contains('sel-bet')) {
-                        hasBet = !node.classList.contains('sel-nobet');
+                        betEl = node;
                         break;
                     }
                     node = node.nextSibling;
                 }
-                if (!hasBet) continue;
-                // Find insertion point: first <br> after this <strong> (end of price line)
-                var br = sel.nextSibling;
-                while (br && br !== nextSel) {
-                    if (br.nodeName === 'BR') break;
-                    br = br.nextSibling;
-                }
-                if (!br || br.nodeName !== 'BR') continue;
-                // Insert BEFORE any existing winner badge (win-tick) on this line
-                var insertBefore = br;
-                var prev = br.previousSibling;
-                while (prev && prev.nodeType === 1 && prev.classList && prev.classList.contains('win-tick')) {
-                    insertBefore = prev;
-                    prev = prev.previousSibling;
-                }
+
+                // Build PP badge
                 var badge = document.createElement('span');
                 badge.className = 'pp-badge';
                 var img = document.createElement('img');
                 img.src = '/static/punty-character.jpg';
                 img.alt = 'Punty';
                 badge.appendChild(img);
-                badge.appendChild(document.createTextNode("Punty\u2019s Pick"));
-                insertBefore.parentNode.insertBefore(badge, insertBefore);
+                var label = "Punty\u2019s Pick";
+                // Add finish position result if available
+                var fp = fpMap[sc];
+                if (fp) {
+                    var ordinal = fp === 1 ? '1st' : fp === 2 ? '2nd' : fp === 3 ? '3rd' : fp + 'th';
+                    label += ' \u2014 ' + ordinal;
+                }
+                badge.appendChild(document.createTextNode(label));
+
+                // Insert after the BET line (after .sel-bet element)
+                if (betEl && betEl.nextSibling) {
+                    // Insert a line break then the badge after the bet element
+                    var br = document.createElement('br');
+                    betEl.parentNode.insertBefore(br, betEl.nextSibling);
+                    br.parentNode.insertBefore(badge, br.nextSibling);
+                } else if (betEl) {
+                    betEl.parentNode.appendChild(document.createElement('br'));
+                    betEl.parentNode.appendChild(badge);
+                }
+                break; // Only one PP per race
             }
         });
     })();

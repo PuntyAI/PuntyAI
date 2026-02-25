@@ -763,9 +763,11 @@ def _compute_pick_data(all_picks: list) -> dict:
     """
     winners_map = {}       # {race_number: [saddlecloth, ...]}
     winning_exotics = {}   # {race_number: exotic_type}
+    losing_exotics = {}    # {race_number: exotic_type}  — settled but NOT hit
     winning_sequences = [] # [{type, variant}]
     sequence_results = []
     picks_lookup = {}      # {race_number: {saddlecloth: {...}}}
+    pp_picks = {}          # {race_number: saddlecloth}  — Punty's Pick per race
 
     # Accumulators for stats
     sel_stats = {}   # {bet_type: {total, hits, pnl, staked}}
@@ -782,6 +784,9 @@ def _compute_pick_data(all_picks: list) -> dict:
                 "hit": pick.hit,
                 "pnl": float(pick.pnl) if pick.pnl is not None else None,
             }
+            # Track Punty's Pick per race
+            if pick.is_puntys_pick:
+                pp_picks[pick.race_number] = pick.saddlecloth
 
         # --- Winners (settled + hit) ---
         if pick.settled and pick.hit:
@@ -796,6 +801,11 @@ def _compute_pick_data(all_picks: list) -> dict:
                 })
             elif pick.pick_type == "big3_multi":
                 winning_sequences.append({"type": "big3_multi", "variant": None})
+
+        # --- Losing exotics (settled but NOT hit) ---
+        if pick.settled and not pick.hit:
+            if pick.pick_type == "exotic" and pick.race_number and pick.exotic_type:
+                losing_exotics[pick.race_number] = pick.exotic_type
 
         # --- Settled sequence/multi results ---
         if pick.settled and pick.pick_type in ("sequence", "big3_multi"):
@@ -908,9 +918,11 @@ def _compute_pick_data(all_picks: list) -> dict:
     return {
         "winners_map": winners_map,
         "winning_exotics": winning_exotics,
+        "losing_exotics": losing_exotics,
         "winning_sequences": winning_sequences,
         "sequence_results": sequence_results,
         "picks_lookup": picks_lookup,
+        "pp_picks": pp_picks,
         "meeting_stats": meeting_stats,
     }
 
@@ -1116,7 +1128,9 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             } if wrapup else None,
             "winners": pick_data["winners_map"],
             "winning_exotics": pick_data["winning_exotics"],
+            "losing_exotics": pick_data["losing_exotics"],
             "winning_sequences": pick_data["winning_sequences"],
+            "pp_picks": pick_data["pp_picks"],
             "sequence_results": pick_data["sequence_results"],
             "live_updates": live_updates,
             "venue_stats": venue_stats,
@@ -1863,7 +1877,9 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "wrapup": data["wrapup"],
             "winners": data.get("winners", {}),
             "winning_exotics": data.get("winning_exotics", {}),
+            "losing_exotics": data.get("losing_exotics", {}),
             "winning_sequences": data.get("winning_sequences", []),
+            "pp_picks": data.get("pp_picks", {}),
             "sequence_results": data.get("sequence_results", []),
             "live_updates": data.get("live_updates", []),
             "venue_stats": data.get("venue_stats"),
