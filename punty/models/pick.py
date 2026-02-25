@@ -75,6 +75,7 @@ class Pick(Base):
 
     # Edge-gated tracking: pick displayed but not staked (pnl always $0)
     tracked_only: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
+    no_bet_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Settlement
     hit: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
@@ -123,6 +124,7 @@ class Pick(Base):
             "pp_hit": self.pp_hit,
             "pp_pnl": self.pp_pnl,
             "tracked_only": self.tracked_only,
+            "no_bet_reason": self.no_bet_reason,
             "hit": self.hit,
             "pnl": self.pnl,
             "settled": self.settled,

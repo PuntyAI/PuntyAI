@@ -52,7 +52,7 @@ Repeat for each race in order:
 *Map & tempo:* {R_TEMPO_LINE}
 *Punty read:* {R_PUNTY_READ — This is your race preview. Paint the picture: who leads, who stalks, where the danger is. Reference form, fitness, track patterns, jockey intent. Drop a pop culture analogy or sharp comparison if it fits. Make it readable, entertaining, and insightful. This is the bit where punters decide if they're backing your play.}
 
-*Top 3 + Roughie ($20 pool)*
+*Top 3 + Roughie ({TOTAL_STAKE} pool)*
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
    Probability: {PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
@@ -70,8 +70,9 @@ Repeat for each race in order:
 Probability: {PROB}% | Value: {VALUE}x
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
 
-**NO BET SELECTIONS:** When a selection has Bet: No Bet (tracked only, no real stake), output ONLY:
-   Bet: No Bet
+**NO BET SELECTIONS:** When a selection has `BET: No Bet — {REASON}`, output:
+   Bet: No Bet — {REASON}
+Copy the reason text exactly from the data (e.g. "Too short to back (Win < $2.00)", "Place prob too low (28% < 30%)").
 Do NOT include ", return $0.00" or any return amount on No Bet lines. The return is always zero — showing it looks broken.
 Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, wet form, class drop, etc.}
 
@@ -275,7 +276,7 @@ The model uses your track record data to make optimal allocation decisions.
 If no track record data is provided, generate tips normally.
 
 ## GENERAL RULES
-1) Top 3 + Roughie: $20 total pool per race. Bet types and stakes are PRE-ASSIGNED — copy them exactly.
+1) Top 3 + Roughie: pool varies by confidence ($12/$20/$25 per race — see "Total stake" in the data). Bet types and stakes are PRE-ASSIGNED — copy them exactly.
    Each Way costs DOUBLE (e.g. "$5 Each Way" = $10 total: $5 win + $5 place). If it wins, both pay. If it only places, win part loses.
    You MUST show the return on each STAKED bet line: "Bet: $8 Win, return $25.60" (but NOT on No Bet lines — see NO BET SELECTIONS rule above)
    Degenerate exotics: $15 fixed. Sequences: ONE optimised ticket per type, $30-$60 outlay.
@@ -328,7 +329,7 @@ If no track record data is provided, generate tips normally.
        - If the Roughie has value > 1.3x → small stake Win or Place on the Roughie
        - If it's wide open (no runner above 20%) → Place on highest probability only
        - **If an exotic combo has value ≥ 1.5x AND the race suits it → Exotic Punty's Pick**
-    e) Stake from the $20 pool (same allocation as above, just highlighted)
+    e) Stake from the race pool (same allocation as above, just highlighted)
     f) Keep reasoning to ONE punchy line — racing logic, not numbers
 
     **FORMAT (selection):**
@@ -376,7 +377,7 @@ If no track record data is provided, generate tips normally.
     - **punty_place_probability**: Calculated place chance (top 3) (e.g. "65.0%")
     - **punty_value_rating**: Win probability vs market. >1.0 = value.
     - **punty_place_value_rating**: Place probability vs market place odds. >1.0 = value on place.
-    - **punty_recommended_stake**: Model-recommended stake from $20 pool (Kelly criterion)
+    - **punty_recommended_stake**: Model-recommended stake from race pool (Kelly criterion)
     - **punty_market_implied**: Market's raw probability
 
     **HOW TO USE THIS DATA:**
