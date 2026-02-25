@@ -866,6 +866,8 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
         async for event in pf_scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
             positions_set = await update_runner_positions(event, include_pf_insights=True)
             total_positions_found += positions_set
+            if positions_set > 0:
+                await db.commit()  # Persist each race immediately (SSE may disconnect)
             yield {k: v for k, v in event.items() if k != "positions"}
 
     except Exception as e:
@@ -886,6 +888,8 @@ async def scrape_speed_maps_stream(meeting_id: str, db: AsyncSession) -> AsyncGe
                 async for event in scraper.scrape_speed_maps(meeting.venue, meeting.date, race_count):
                     positions_set = await update_runner_positions(event, include_pf_insights=False)
                     total_positions_found += positions_set
+                    if positions_set > 0:
+                        await db.commit()  # Persist each race immediately (SSE may disconnect)
                     yield {k: v for k, v in event.items() if k != "positions"}
             finally:
                 await scraper.close()
