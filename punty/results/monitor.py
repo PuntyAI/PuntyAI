@@ -14,6 +14,26 @@ logger = logging.getLogger(__name__)
 
 AEST = MELB_TZ  # Alias for backwards compat
 
+
+def _race_datetime(race_time, fallback_date, tz=MELB_TZ) -> datetime:
+    """Convert a race start_time to a timezone-aware datetime.
+
+    If race_time is already a full datetime, use its date (handles midnight-
+    crossing meetings like Happy Valley where start_time.date() may be the
+    next calendar day vs meeting.date). If it's just a time, combine with
+    fallback_date.
+    """
+    if isinstance(race_time, datetime):
+        dt = race_time
+    elif isinstance(race_time, time):
+        dt = datetime.combine(fallback_date, race_time)
+    else:
+        dt = datetime.combine(fallback_date, race_time)
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return dt
+
 # Monitor stops 20 minutes after last race completes (or wrap-up generated)
 POST_RACING_BUFFER = timedelta(minutes=20)
 
@@ -204,9 +224,8 @@ class ResultsMonitor:
                 # No races loaded yet - don't monitor until data exists
                 return False
 
-            # Don't start until first race time (DST-safe: use tz-aware comparisons)
-            first_time = first_race_time.time() if isinstance(first_race_time, datetime) else first_race_time
-            first_dt = datetime.combine(today, first_time, tzinfo=AEST)
+            # Don't start until first race time (handles midnight-crossing HK meetings)
+            first_dt = _race_datetime(first_race_time, today)
 
             if now_aest < first_dt:
                 return False
@@ -239,9 +258,8 @@ class ResultsMonitor:
                 # Still waiting for wrap-ups to generate
                 return True
 
-            # All races complete + all wrap-ups done — apply buffer (DST-safe)
-            last_time = last_race_time.time() if isinstance(last_race_time, datetime) else last_race_time
-            last_dt = datetime.combine(today, last_time, tzinfo=AEST)
+            # All races complete + all wrap-ups done — apply buffer (handles midnight-crossing)
+            last_dt = _race_datetime(last_race_time, today)
             cutoff = last_dt + POST_RACING_BUFFER
 
             if now_aest <= cutoff:
@@ -498,10 +516,33 @@ class ResultsMonitor:
             result = await db.execute(
                 select(Meeting).where(
                     Meeting.date == today,
-                    Meeting.selected == True,  # Only process active/selected meetings
+                    Meeting.selected == True,
                 )
             )
-            meetings = result.scalars().all()
+            meetings = list(result.scalars().all())
+
+            # Also include deselected meetings that have unsettled picks
+            # (e.g. quality gate deselected after content was generated)
+            from punty.models.pick import Pick
+            unsettled_result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == False,
+                ).where(
+                    Meeting.id.in_(
+                        select(Pick.meeting_id).where(
+                            Pick.settled == False,
+                            Pick.pick_type.in_(["selection", "exotic"]),
+                        ).distinct()
+                    )
+                )
+            )
+            deselected_with_picks = unsettled_result.scalars().all()
+            existing_ids = {m.id for m in meetings}
+            for m in deselected_with_picks:
+                if m.id not in existing_ids:
+                    meetings.append(m)
+                    logger.info(f"Including deselected {m.venue} — has unsettled picks")
 
             for meeting in meetings:
                 # Skip meetings where wrapup is already done
@@ -577,6 +618,31 @@ class ResultsMonitor:
                 return
             finally:
                 await scraper.close()
+
+            # Fallback: if racing.com returned empty statuses (common for WA/SA/QLD
+            # venues), try PuntingForm API as backup status source
+            if not statuses:
+                try:
+                    from punty.scrapers.punting_form import PuntingFormScraper
+                    pf = PuntingFormScraper()
+                    try:
+                        pf_status_data = await pf.scrape_race_statuses(
+                            meeting.venue, meeting.date
+                        )
+                        pf_statuses = pf_status_data["statuses"]
+                        if pf_statuses:
+                            logger.info(
+                                f"Racing.com empty for {meeting.venue} — "
+                                f"using PuntingForm statuses: {pf_statuses}"
+                            )
+                            statuses = pf_statuses
+                            # Use PF track condition only if racing.com didn't provide one
+                            if not scraped_tc and pf_status_data.get("track_condition"):
+                                scraped_tc = pf_status_data["track_condition"]
+                    finally:
+                        await pf.close()
+                except Exception as e:
+                    logger.warning(f"PuntingForm status fallback failed for {meeting.venue}: {e}")
 
         # ── Abandonment detection ───────────────────────────────────────
         # If ALL races are "Abandoned", post alert, void picks, deselect meeting.
@@ -850,6 +916,38 @@ class ResultsMonitor:
                             )
                         finally:
                             await scraper2.close()
+
+                        # Fallback: if racing.com returned no results (common for
+                        # WA/SA/QLD venues), try PuntingForm API
+                        has_positions = any(
+                            r.get("position") is not None
+                            for r in results_data.get("results", [])
+                        )
+                        if not has_positions:
+                            try:
+                                from punty.scrapers.punting_form import PuntingFormScraper
+                                pf = PuntingFormScraper()
+                                try:
+                                    pf_results = await pf.scrape_race_result(
+                                        meeting.venue, meeting.date, race_num
+                                    )
+                                    pf_has_pos = any(
+                                        r.get("position") is not None
+                                        for r in pf_results.get("results", [])
+                                    )
+                                    if pf_has_pos:
+                                        logger.info(
+                                            f"Racing.com empty for {meeting.venue} R{race_num} — "
+                                            f"using PuntingForm results"
+                                        )
+                                        results_data = pf_results
+                                finally:
+                                    await pf.close()
+                            except Exception as e:
+                                logger.warning(
+                                    f"PuntingForm result fallback failed for "
+                                    f"{meeting.venue} R{race_num}: {e}"
+                                )
 
                     await upsert_race_results(db, meeting_id, race_num, results_data)
 
@@ -1778,9 +1876,7 @@ class ResultsMonitor:
             if status != "Open":
                 continue
             if race.start_time:
-                from datetime import time as _time
-                st = race.start_time if isinstance(race.start_time, _time) else race.start_time.time()
-                race_start = datetime.combine(meeting.date, st, tzinfo=MELB_TZ)
+                race_start = _race_datetime(race.start_time, meeting.date)
                 if race_start < now + timedelta(minutes=5):
                     continue
             upcoming.append(race.race_number)
