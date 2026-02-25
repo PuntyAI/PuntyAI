@@ -389,6 +389,13 @@
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     .win-tick .win-emoji { font-size: 1.3em; line-height: 1; filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.6)); }
+    /* Muted position badge for No Bet selections */
+    .win-tick.position-badge {
+        background: linear-gradient(135deg, #475569, #334155);
+        box-shadow: none; animation: none;
+        font-size: 0.65em; padding: 3px 8px;
+    }
+    .win-tick.position-badge .win-emoji { display: none; }
     @keyframes win-glow {
         0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.2); }
         50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.7), 0 0 40px rgba(34, 197, 94, 0.35); }
@@ -1484,10 +1491,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Add badge inline next to a <strong> tag inside a multi-selection paragraph
-    function addBadgeAfterStrong(strongEl, label) {
+    function addBadgeAfterStrong(strongEl, label, extraClass) {
         if (strongEl.getAttribute('data-badged')) return;
         var tick = document.createElement('span');
-        tick.className = 'win-tick';
+        tick.className = 'win-tick' + (extraClass ? ' ' + extraClass : '');
         tick.innerHTML = '<span class="win-emoji">&#x1F3C6;</span> ' + label;
         tick.title = label + '!';
         // Insert after the strong element's parent text run (after odds)
@@ -1525,36 +1532,59 @@ document.addEventListener('DOMContentLoaded', function() {
         var raceWinners = hasSelections ? winners[String(raceNum)] : null;
         var raceExotic = hasExotics ? winExotics[String(raceNum)] : null;
 
-        // Selection winners: find <strong> tags with horse names, check adjacent (No.X) text
-        // Only match in selection lines (numbered picks, Roughie, Punty's Pick) — skip narrative paragraphs
-        if (raceWinners) {
-            var strongs = acc.querySelectorAll('.race-accordion-body strong');
-            strongs.forEach(function(s) {
-                // Skip if inside a narrative paragraph (Punty read, Map & tempo, Race type, Why:)
-                var parentP = s.closest('p');
-                if (parentP) {
-                    var pText = parentP.textContent.trim();
-                    if (/^(Punty\s*read|Map\s*&\s*tempo|Race\s*type|Why)\s*:/i.test(pText)) return;
-                }
-                // Get the text after this strong element to find (No.X)
-                var nextText = '';
-                var sib = s.nextSibling;
-                // Collect text until we hit <br>, another element, or end
-                while (sib) {
-                    if (sib.nodeType === 3) { nextText += sib.textContent; break; }
-                    if (sib.nodeType === 1 && sib.tagName === 'BR') break;
-                    if (sib.nodeType === 1) { nextText += sib.textContent; break; }
+        // Selection winners / finish positions
+        // Build finish position lookup for this race from racesData
+        var fpMap = {};  // {saddlecloth: finish_position}
+        var raceObj = racesData.find(function(r) { return r.num === raceNum; });
+        if (raceObj) {
+            raceObj.runners.forEach(function(r) { if (r.fp) fpMap[r.sc] = r.fp; });
+        }
+
+        var strongs = acc.querySelectorAll('.race-accordion-body strong');
+        strongs.forEach(function(s) {
+            // Skip narrative paragraphs (Punty read, Map & tempo, Race type, Why:)
+            var parentP = s.closest('p');
+            if (parentP) {
+                var pText = parentP.textContent.trim();
+                if (/^(Punty\s*read|Map\s*&\s*tempo|Race\s*type|Why)\s*:/i.test(pText)) return;
+            }
+            // Get the text after this strong element to find (No.X)
+            var nextText = '';
+            var sib = s.nextSibling;
+            while (sib) {
+                if (sib.nodeType === 3) { nextText += sib.textContent; break; }
+                if (sib.nodeType === 1 && sib.tagName === 'BR') break;
+                if (sib.nodeType === 1) { nextText += sib.textContent; break; }
+                break;
+            }
+            var scMatch = nextText.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
+            if (!scMatch) return;
+            var sc = parseInt(scMatch[1]);
+
+            // Check if this selection is No Bet
+            var isNoBet = false;
+            var node = s.nextSibling;
+            while (node) {
+                if (node.nodeType === 1 && node.classList && node.classList.contains('sel-bet')) {
+                    isNoBet = node.classList.contains('sel-nobet');
                     break;
                 }
-                var scMatch = nextText.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
-                if (scMatch) {
-                    var sc = parseInt(scMatch[1]);
-                    if (raceWinners.indexOf(sc) !== -1) {
-                        addBadgeAfterStrong(s, 'WINNER');
-                    }
+                if (node.nodeType === 1 && node.tagName === 'STRONG') break;
+                node = node.nextSibling;
+            }
+
+            if (isNoBet) {
+                // No Bet: show finish position if available (1st, 2nd, 3rd, etc.)
+                var fp = fpMap[sc];
+                if (fp) {
+                    var ordinal = fp === 1 ? '1ST' : fp === 2 ? '2ND' : fp === 3 ? '3RD' : fp + 'TH';
+                    addBadgeAfterStrong(s, ordinal, 'position-badge');
                 }
-            });
-        }
+            } else if (raceWinners && raceWinners.indexOf(sc) !== -1) {
+                // Staked pick that won
+                addBadgeAfterStrong(s, 'WINNER');
+            }
+        });
 
 
         // Exotic winners: check <p> elements AND walk text nodes in accordion body
