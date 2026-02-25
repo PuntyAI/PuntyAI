@@ -1119,6 +1119,122 @@ class PuntingFormScraper(BaseScraper):
             "race_number": race_num,
         }
 
+    async def scrape_race_statuses(
+        self, venue: str, race_date: date
+    ) -> dict:
+        """Check race statuses via PuntingForm API.
+
+        Fallback for venues where racing.com GraphQL returns nothing (e.g. WA).
+        Returns dict matching RacingComScraper.check_race_statuses format:
+        {"statuses": {race_num: status_str}, "track_condition": str|None}
+        """
+        pf_meeting_id = await self.resolve_meeting_id(venue, race_date)
+        if not pf_meeting_id:
+            return {"statuses": {}, "track_condition": None}
+
+        try:
+            fields_data = await self.get_fields(pf_meeting_id)
+        except Exception as e:
+            logger.warning(f"PF status check failed for {venue}: {e}")
+            return {"statuses": {}, "track_condition": None}
+
+        statuses: dict[int, str] = {}
+        track_condition = None
+
+        # Extract track condition
+        track_info = fields_data.get("track") or {}
+        tc = track_info.get("trackCondition") or ""
+        if tc:
+            track_condition = tc.strip()
+
+        for pf_race in fields_data.get("races", []):
+            race_num = pf_race.get("number", 0)
+            if not race_num:
+                continue
+
+            # Check for results — top4Finishers populated = race complete
+            top4 = pf_race.get("top4Finishers") or []
+            race_status = pf_race.get("status", "")
+
+            if top4 or race_status.lower() in ("closed", "final", "paying", "resulted"):
+                statuses[race_num] = "Paying"
+            elif race_status.lower() in ("abandoned",):
+                statuses[race_num] = "Abandoned"
+            else:
+                statuses[race_num] = "Open"
+
+        logger.info(f"PF race statuses for {venue}: {statuses}")
+        return {"statuses": statuses, "track_condition": track_condition}
+
+    async def scrape_race_result(
+        self, venue: str, race_date: date, race_number: int
+    ) -> dict:
+        """Scrape results for a single completed race via PuntingForm API.
+
+        Returns dict matching RacingComScraper.scrape_race_result format:
+        {race_number, results: [{horse_name, saddlecloth, position, ...}], exotics: {}}
+        """
+        pf_meeting_id = await self.resolve_meeting_id(venue, race_date)
+        if not pf_meeting_id:
+            return {"race_number": race_number, "results": [], "exotics": {}}
+
+        try:
+            fields_data = await self.get_fields(pf_meeting_id, race_number=race_number)
+        except Exception as e:
+            logger.warning(f"PF result scrape failed for {venue} R{race_number}: {e}")
+            return {"race_number": race_number, "results": [], "exotics": {}}
+
+        results = []
+        target_race = None
+        for pf_race in fields_data.get("races", []):
+            if pf_race.get("number") == race_number:
+                target_race = pf_race
+                break
+
+        if not target_race:
+            return {"race_number": race_number, "results": [], "exotics": {}}
+
+        # Extract positions from top4Finishers
+        top4 = target_race.get("top4Finishers") or []
+        top4_names = {}
+        for t in top4:
+            name = (t.get("runnerName") or "").strip()
+            pos = t.get("position")
+            if name and pos:
+                top4_names[name.lower()] = pos
+
+        # Build results from runner data + top4 positions
+        for pf_runner in target_race.get("runners", []):
+            horse_name = (pf_runner.get("name") or "").strip()
+            tab_no = pf_runner.get("tabNo")
+            if not horse_name:
+                continue
+
+            position = top4_names.get(horse_name.lower())
+            # Also check runner-level position field
+            if position is None:
+                position = pf_runner.get("position")
+
+            # Extract dividends if PF provides them
+            win_div = pf_runner.get("winDividend") or pf_runner.get("winDiv")
+            place_div = pf_runner.get("placeDividend") or pf_runner.get("placeDiv")
+
+            results.append({
+                "horse_name": horse_name,
+                "saddlecloth": tab_no,
+                "position": position,
+                "margin": None,
+                "starting_price": pf_runner.get("startingPrice"),
+                "win_dividend": float(win_div) if win_div else None,
+                "place_dividend": float(place_div) if place_div else None,
+            })
+
+        logger.info(
+            f"PF results for {venue} R{race_number}: "
+            f"{sum(1 for r in results if r['position'])} finishers"
+        )
+        return {"race_number": race_number, "results": results, "exotics": {}}
+
     async def scrape_results(self, venue: str, race_date: date) -> list[dict[str, Any]]:
         """Not implemented (dividends come from TAB)."""
         return []
