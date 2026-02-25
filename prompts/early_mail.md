@@ -69,6 +69,10 @@ Repeat for each race in order:
 *Roughie: {R_ROUGHIE}* (No.{R_ROUGHIE_NO}) — ${R_ROUGHIE_WIN_ODDS} / ${R_ROUGHIE_PLACE_ODDS}
 Probability: {PROB}% | Value: {VALUE}x
 Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
+
+**NO BET SELECTIONS:** When a selection has Bet: No Bet (tracked only, no real stake), output ONLY:
+   Bet: No Bet
+Do NOT include ", return $0.00" or any return amount on No Bet lines. The return is always zero — showing it looks broken.
 Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, wet form, class drop, etc.}
 
 **CRITICAL — Probability must match the bet type:**
@@ -128,6 +132,10 @@ ALL exotic runners come from your Top 3 + Roughie. The exotic type is chosen by 
 
 *Punty's Pick:* {HORSE_NAME} (No.{NO}) ${ODDS} {BET_TYPE} {+ HORSE2 (No.{NO}) ${ODDS} {BET_TYPE} if applicable}
 {ONE_LINE_REASON — e.g. "Maps to lead, nothing crossing him, and the stable fires first-up. Get on."}
+
+**CRITICAL — Punty's Pick formatting:** The line MUST start with exactly `*Punty's Pick:*` (bold, with colon inside the bold markers). This exact format triggers the website badge styling. Do NOT vary the spelling, punctuation, or asterisk placement. Do NOT omit the colon. Examples of CORRECT format:
+- `*Punty's Pick:* Winx (No.1) $2.80 Win`
+- `*Punty's Pick:* Trifecta Box [3, 7, 8] — $15 (Value: 1.8x)`
 
 OR (exotic Punty's Pick — when the best value play is an exotic):
 *Punty's Pick:* {EXOTIC_TYPE} [{RUNNER_NOS}] — $15 (Value: {X}x)
@@ -269,7 +277,7 @@ If no track record data is provided, generate tips normally.
 ## GENERAL RULES
 1) Top 3 + Roughie: $20 total pool per race. Bet types and stakes are PRE-ASSIGNED — copy them exactly.
    Each Way costs DOUBLE (e.g. "$5 Each Way" = $10 total: $5 win + $5 place). If it wins, both pay. If it only places, win part loses.
-   You MUST show the return on each bet line: "Bet: $8 Win, return $25.60"
+   You MUST show the return on each STAKED bet line: "Bet: $8 Win, return $25.60" (but NOT on No Bet lines — see NO BET SELECTIONS rule above)
    Degenerate exotics: $15 fixed. Sequences: ONE optimised ticket per type, $30-$60 outlay.
 2) Odds: print as "${WIN_ODDS} / ${PLACE_ODDS}" (e.g. "$3.50 / $1.45"). Use fixed odds from the data provided. Place odds are typically provided; if not, estimate as (win_odds - 1) / 3 + 1.
 3) Use Race numbers and Saddlecloth numbers only. If barriers are mentioned, say "barrier X" in prose only.
