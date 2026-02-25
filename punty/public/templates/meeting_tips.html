@@ -398,22 +398,11 @@
         0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.2); }
         50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.7), 0 0 40px rgba(34, 197, 94, 0.35); }
     }
-    /* Exotic miss badge (red X) */
+    /* Exotic miss badge (red cross) */
     .exotic-miss {
-        display: inline-flex; align-items: center; gap: 5px;
-        font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 0.75em;
-        letter-spacing: 0.15em; text-transform: uppercase;
-        margin-left: 10px; padding: 4px 12px 4px 10px; border-radius: 6px;
-        background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff;
-        box-shadow: 0 0 12px rgba(239, 68, 68, 0.5), 0 0 24px rgba(239, 68, 68, 0.2);
-        animation: miss-glow 1.8s ease-in-out infinite;
-        vertical-align: middle; line-height: 1.2;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-    .exotic-miss .miss-emoji { font-size: 1.3em; line-height: 1; filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.6)); }
-    @keyframes miss-glow {
-        0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.5), 0 0 24px rgba(239, 68, 68, 0.2); }
-        50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.7), 0 0 40px rgba(239, 68, 68, 0.35); }
+        display: inline-block; margin-left: 10px;
+        font-size: 1.2em; line-height: 1; vertical-align: middle;
+        color: #ef4444; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.5));
     }
 
     .puntys-pick {
@@ -1531,18 +1520,13 @@ document.addEventListener('DOMContentLoaded', function() {
         strongEl.setAttribute('data-badged', '1');
     }
 
-    // Add a red X miss badge to an element
+    // Add a red cross to an element
     function addMissBadge(el) {
         if (el.querySelector && el.querySelector('.exotic-miss')) return;
         if (el.getAttribute && el.getAttribute('data-badged')) return;
         var miss = document.createElement('span');
         miss.className = 'exotic-miss';
-        var emoji = document.createElement('span');
-        emoji.className = 'miss-emoji';
-        emoji.textContent = '\u274C';
-        miss.appendChild(emoji);
-        miss.appendChild(document.createTextNode(' MISS'));
-        miss.title = 'Missed!';
+        miss.textContent = '\u274C';
         el.appendChild(miss);
         el.setAttribute('data-badged', '1');
     }
