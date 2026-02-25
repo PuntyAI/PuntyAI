@@ -1166,17 +1166,35 @@ async def tips_dashboard(request: Request):
     seven_day_bets = sum(d["bets"] for d in perf_history)
     seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
 
-    # Enrich todays_tips with track_condition from dashboard venues
-    venue_info = {v["name"]: v for v in dashboard.get("venues", [])}
+    # Always fetch today's selected meetings (independent of content approval)
+    from punty.venues import guess_state as get_state_for_track
+    async with async_session() as db:
+        meetings_result = await db.execute(
+            select(Meeting).where(
+                and_(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type.in_(["race", None]),
+                )
+            )
+        )
+        today_meetings = meetings_result.scalars().all()
+
+    meetings_list = []
+    for m in today_meetings:
+        meetings_list.append({
+            "venue": m.venue,
+            "meeting_id": m.id,
+            "state": get_state_for_track(m.venue) or "AUS",
+            "track_condition": m.track_condition,
+        })
+
+    # Enrich todays_tips with track_condition
     for tip in stats.get("todays_tips", []):
         tip["track_condition"] = None
-        # Look up meeting for track condition
-        mid = tip.get("meeting_id")
-        if mid:
-            async with async_session() as db:
-                m = await db.get(Meeting, mid)
-                if m:
-                    tip["track_condition"] = m.track_condition
+        match = next((m for m in meetings_list if m["meeting_id"] == tip.get("meeting_id")), None)
+        if match:
+            tip["track_condition"] = match["track_condition"]
 
     # Best of meets + pooled plays
     best_of, pooled = await asyncio.gather(
@@ -1207,6 +1225,7 @@ async def tips_dashboard(request: Request):
             "seven_day_roi": seven_day_roi,
             "best_of": best_of,
             "pooled": pooled,
+            "meetings_list": meetings_list,
         }
     )
 
