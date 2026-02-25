@@ -335,10 +335,20 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
 
     # Highlight "Punty's Pick:" lines with special styling
     # Match various apostrophe forms and optional colon
-    # Wrap in puntys-pick span AND inject visible heading directly in HTML
+    # Capture the horse name after the label for data-horse attribute
+    def _wrap_pp(m):
+        label = m.group(1)
+        rest = m.group(2) or ""
+        # Extract horse name: text before first "(" parenthetical
+        horse_match = re.match(r'\s*(\S.*?)\s*\(', rest)
+        horse_clean = horse_match.group(1).strip() if horse_match else ""
+        horse_clean = re.sub(r'</?strong>', '', horse_clean).strip()
+        attr = f' data-horse="{horse_clean}"' if horse_clean else ""
+        return f'<span class="puntys-pick"{attr}>{label}</span>{rest}'
+
     content = re.sub(
-        "(<strong>Punty['\u2018\u2019]?s\\s+Pick:?</strong>)",
-        r'<span class="puntys-pick">\1</span>',
+        r"(<strong>Punty['\u2018\u2019]?s\s+Pick:?</strong>)(.*?)(?=<br|$)",
+        _wrap_pp,
         content,
         flags=re.IGNORECASE,
     )
