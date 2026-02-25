@@ -239,15 +239,21 @@ class TestBetRecommendation:
         assert rec.bet_type == "Win"
         assert rec.stake_pct == 0.40
 
-    def test_dominant_edge_rank1_place_below_4(self):
-        """Dominant edge rank 1 outside $4-$6 should be Place."""
+    def test_dominant_edge_rank1_win_below_4(self):
+        """Dominant edge rank 1 at $3 should be Win (wide $2-$10 range)."""
         c = _candidate(1, "Champ", 3.0, 0.35, 0.65)
         rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
-        assert rec.bet_type == "Place"
+        assert rec.bet_type == "Win"
 
-    def test_dominant_edge_rank1_place_above_6(self):
-        """Dominant edge rank 1 above $6 should be Place."""
+    def test_dominant_edge_rank1_win_above_6(self):
+        """Dominant edge rank 1 at $8 should be Win (wide $2-$10 range)."""
         c = _candidate(1, "Champ", 8.0, 0.35, 0.65)
+        rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
+        assert rec.bet_type == "Win"
+
+    def test_dominant_edge_rank1_place_above_10(self):
+        """Dominant edge rank 1 above $10 should be Place."""
+        c = _candidate(1, "Champ", 12.0, 0.35, 0.65)
         rec = recommend_bet(c, DOMINANT_EDGE, rank=1, field_size=10)
         assert rec.bet_type == "Place"
 
@@ -261,16 +267,22 @@ class TestBetRecommendation:
         rec6 = recommend_bet(c6, DOMINANT_EDGE, rank=1, field_size=10)
         assert rec6.bet_type == "Win"
 
-    def test_place_leverage_rank1_place(self):
-        """Place leverage rank 1 should always be Place (E/W killed)."""
+    def test_place_leverage_rank1_win_when_confident(self):
+        """Place leverage rank 1 with odds $2.50-$8 and win_prob >= 0.15 should Win."""
         c = _candidate(1, "Placer", 7.0, 0.18, 0.55, place_odds=2.0)
+        rec = recommend_bet(c, PLACE_LEVERAGE, rank=1, field_size=10)
+        assert rec.bet_type == "Win"
+
+    def test_place_leverage_rank1_place_when_low_prob(self):
+        """Place leverage rank 1 with low win_prob should be Place."""
+        c = _candidate(1, "Placer", 7.0, 0.10, 0.55, place_odds=2.0)
         rec = recommend_bet(c, PLACE_LEVERAGE, rank=1, field_size=10)
         assert rec.bet_type == "Place"
 
-    def test_place_leverage_all_place(self):
-        """All picks in PLACE_LEVERAGE should be Place (E/W killed)."""
-        for rank in [1, 2, 3, 4]:
-            c = _candidate(rank, f"H{rank}", 15.0, 0.10, 0.35, place_odds=4.0)
+    def test_place_leverage_ranks_2_to_4_place(self):
+        """Ranks 2-4 in PLACE_LEVERAGE should be Place."""
+        for rank in [2, 3, 4]:
+            c = _candidate(rank, f"H{rank}", 7.0, 0.18, 0.55, place_odds=2.0)
             rec = recommend_bet(c, PLACE_LEVERAGE, rank=rank, field_size=10)
             assert rec.bet_type == "Place"
 
@@ -322,9 +334,16 @@ class TestBetRecommendation:
         rec = recommend_bet(c, CHAOS_HANDICAP, rank=1, field_size=14)
         assert rec.bet_type == "Win"
 
-    def test_chaos_place_when_above_6(self):
-        """Chaos race, rank 1 with overlay but odds > $6 -> Place."""
+    def test_chaos_win_when_above_6_with_edge(self):
+        """Chaos race, rank 1 with overlay and odds $8 -> Win (wider range)."""
         c = _candidate(1, "ChaosLong", 8.0, 0.22, 0.50)
+        # win_edge = 0.22 - 0.125 = 0.095 > 0.03, odds $2.50-$10 ✓
+        rec = recommend_bet(c, CHAOS_HANDICAP, rank=1, field_size=14)
+        assert rec.bet_type == "Win"
+
+    def test_chaos_place_when_above_10(self):
+        """Chaos race, rank 1 with odds > $10 -> Place."""
+        c = _candidate(1, "ChaosLong", 12.0, 0.15, 0.40)
         rec = recommend_bet(c, CHAOS_HANDICAP, rank=1, field_size=14)
         assert rec.bet_type == "Place"
 
@@ -338,8 +357,8 @@ class TestBetRecommendation:
                     f"E/W at ${odds} in {race_type}"
                 )
 
-    def test_max_2_win_bets_per_race(self):
-        """RULE 8: Capital efficiency caps at 2 win-exposed bets."""
+    def test_max_3_win_bets_per_race(self):
+        """RULE 8: Capital efficiency caps at 3 win-exposed bets."""
         from punty.context.bet_optimizer import _enforce_capital_efficiency
 
         recs = [
@@ -351,7 +370,22 @@ class TestBetRecommendation:
         _enforce_capital_efficiency(recs)
         win_types = {"Win", "Saver Win"}
         win_count = sum(1 for r in recs if r.bet_type in win_types)
-        assert win_count <= 2
+        assert win_count <= 3
+
+    def test_max_win_bets_enforced_at_4(self):
+        """If all 4 are win-exposed, one gets downgraded to Place."""
+        from punty.context.bet_optimizer import _enforce_capital_efficiency
+
+        recs = [
+            BetRecommendation(1, "H1", "Win", 0.35, 0.1, 0.1, 0.05, 0.05, ""),
+            BetRecommendation(2, "H2", "Win", 0.25, 0.1, 0.1, 0.04, 0.04, ""),
+            BetRecommendation(3, "H3", "Saver Win", 0.20, 0.1, 0.1, 0.03, 0.03, ""),
+            BetRecommendation(4, "H4", "Win", 0.15, 0.1, 0.1, 0.02, 0.02, ""),
+        ]
+        _enforce_capital_efficiency(recs)
+        win_types = {"Win", "Saver Win"}
+        win_count = sum(1 for r in recs if r.bet_type in win_types)
+        assert win_count <= 3
 
 
 # ──────────────────────────────────────────────

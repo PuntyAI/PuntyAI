@@ -781,34 +781,34 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
                         return (False, f"Losing odds band (live ROI {cell['roi']:.0f}%)")
                 break
 
-    # --- Proven-profitable staking criteria ---
+    # --- Win-first staking criteria ---
 
-    # 1. Win/Saver at $4.00-$6.00 (sweet spot: +60.8% ROI)
-    if bt in ("Win", "Saver Win") and 4.0 <= odds <= 6.0:
-        return (True, None)
+    # 1. Win/Saver at $2.00-$10.00 — wide Win zone (optimizer sets bet type)
+    if bt in ("Win", "Saver Win") and 2.0 <= odds <= 10.0:
+        # $2.00-$4.00: needs reasonable conviction
+        if odds < 4.0 and win_prob >= 0.20:
+            return (True, None)
+        # $4.00-$6.00: proven sweet spot
+        if 4.0 <= odds <= 6.0:
+            return (True, None)
+        # $6.00-$10.00: needs some model confidence
+        if odds > 6.0 and win_prob >= 0.15:
+            return (True, None)
 
-    # 2. Win at $2.40-$3.00 with strong conviction (47% win rate band)
-    if bt in ("Win", "Saver Win") and 2.40 <= odds < 3.0 and win_prob >= 0.30:
-        return (True, None)
-
-    # 3. Place with sufficient prob and value
+    # 2. Place with sufficient prob and value
     if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
         return (True, None)
 
-    # 4. Place at $3.00-$6.00 with decent place probability (was E/W, now Place)
+    # 3. Place at $3.00-$6.00 with decent place probability
     if bt == "Place" and 3.0 <= odds <= 6.0 and place_prob >= 0.40:
         return (True, None)
 
-    # 5. Roughie Place at $8-$20 with strong place probability
+    # 4. Roughie Place at $8-$20 with strong place probability
     if pick.is_roughie and bt == "Place" and 8.0 <= odds <= 20.0 and place_prob >= 0.35:
         return (True, None)
 
-    # 6. Place at good odds ($2.50-$8) — our overall profit engine (+13.8% ROI)
+    # 5. Place at good odds ($2.50-$8) — our overall profit engine (+13.8% ROI)
     if bt == "Place" and 2.5 <= odds <= 8.0 and place_prob >= 0.35:
-        return (True, None)
-
-    # 7. Win at $2.00-$2.40 with genuine conviction
-    if bt in ("Win", "Saver Win") and 2.0 <= odds < 2.40 and win_prob >= 0.35 and value >= 1.05:
         return (True, None)
 
     # --- No Bet (tracked) zones ---
@@ -817,15 +817,11 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt in ("Win", "Saver Win") and odds < 2.0:
         return (False, f"Too short to back (Win < $2.00)")
 
-    # Win $3.00-$4.00 dead zone without strong conviction
-    # Softer threshold for rank 1-2 (0.25) vs rank 3-4 (0.30) — top picks
-    # in this band can still have genuine edge (e.g. Meltdown $3.70)
-    dead_zone_wp = 0.25 if pick.rank <= 2 else 0.30
-    if bt in ("Win", "Saver Win") and 3.0 <= odds < 4.0 and win_prob < dead_zone_wp and value < 1.10:
-        return (False, f"Not enough edge (Win $3-$4, {win_prob * 100:.0f}% win prob)")
+    # Win $2.00-$4.00 without sufficient conviction
+    if bt in ("Win", "Saver Win") and 2.0 <= odds < 4.0 and win_prob < 0.20:
+        return (False, f"Not enough conviction (Win ${odds:.0f}, {win_prob * 100:.0f}% win prob)")
 
     # Place with low collection probability
-    # Relaxed floor for mid-price ($3+): 0.30 vs 0.35 — lets more Place bets through (#19)
     place_floor = 0.30 if (bt == "Place" and odds >= 3.0) else 0.35
     if bt == "Place" and place_prob < place_floor:
         return (False, f"Place prob too low ({place_prob * 100:.0f}% < {place_floor * 100:.0f}%)")
@@ -865,15 +861,9 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     if not picks:
         return
 
-    # VR 1.2+ is -33.3% ROI on Win — force to Place to cap exposure
-    # Exception: under $2.00, Place pays ~$1.10 — keep as Win (reduced stake)
-    for pick in picks:
-        if (pick.value_rating > 1.2
-                and pick.bet_type in ("Win", "Saver Win")
-                and pick.odds >= 2.00):
-            pick.bet_type = "Place"
-            place_odds = pick.place_odds or _estimate_place_odds(pick.odds)
-            pick.expected_return = round(pick.place_prob * place_odds - 1, 2)
+    # VR cap removed — let the optimizer's bet type stand.
+    # Previously VR 1.2+ forced Win→Place, but we now trust the optimizer's
+    # wider Win range ($2-$10) and don't want double-filtering.
 
     # --- Pass 1: Edge gate ---
     from punty.memory.strategy import get_cached_edge_profile
@@ -914,9 +904,9 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     for pick in staked_picks:
         base = base_rank_weights.get(pick.rank, 0.15)
 
-        # Win sweet spot $4-$6 bonus (our best edge at +60.8% ROI)
-        if pick.bet_type in ("Win", "Saver Win") and 4.0 <= pick.odds <= 6.0:
-            base *= 1.25  # 25% stake boost in sweet spot
+        # Win bonus — broader range now that Win is default
+        if pick.bet_type in ("Win", "Saver Win") and 2.5 <= pick.odds <= 8.0:
+            base *= 1.15  # 15% stake boost for Win bets in range
 
         # Roughie $10-$20 bonus (+53% ROI sweet spot)
         if pick.is_roughie and 10.0 <= pick.odds <= 20.0:

@@ -321,25 +321,25 @@ class TestAllocateStakes:
     def test_empty_picks(self):
         _allocate_stakes([], 20.0)  # no crash
 
-    def test_vr_cap_forces_place(self):
-        """VR > 1.2 Win/Saver Win bets should be downgraded to Place."""
+    def test_vr_cap_removed_win_stays(self):
+        """VR > 1.2 Win bets should no longer be downgraded (VR cap removed)."""
         picks = [
             RecommendedPick(1, 1, "A", "Win", 0, 3.0, 1.5, 0.3, 0.6, 1.6, 1.05, 0.5),
             RecommendedPick(2, 2, "B", "Saver Win", 0, 5.0, 2.0, 0.2, 0.5, 1.8, 1.0, 0.3),
             RecommendedPick(3, 3, "C", "Place", 0, 7.0, 2.5, 0.15, 0.4, 2.0, 1.0, 0.2),
         ]
         _allocate_stakes(picks, 20.0)
-        assert picks[0].bet_type == "Place"  # Win with VR 1.6 → Place
-        assert picks[1].bet_type == "Place"  # Saver Win with VR 1.8 → Place
+        assert picks[0].bet_type == "Win"  # VR cap removed — Win stays
+        assert picks[1].bet_type == "Saver Win"  # VR cap removed — Saver stays
         assert picks[2].bet_type == "Place"  # Already Place, unchanged
 
-    def test_vr_1_3_win_downgraded(self):
-        """VR 1.3 (in the 1.2-1.5 band) on Win should be downgraded to Place."""
+    def test_vr_1_3_win_stays(self):
+        """VR 1.3 on Win should NOT be downgraded (VR cap removed)."""
         picks = [
             RecommendedPick(1, 1, "A", "Win", 0, 4.0, 1.8, 0.25, 0.55, 1.3, 1.05, 0.5),
         ]
         _allocate_stakes(picks, 20.0)
-        assert picks[0].bet_type == "Place"
+        assert picks[0].bet_type == "Win"
 
     def test_vr_1_15_win_stays(self):
         """VR 1.15 (below 1.2 cap) on Win should NOT be downgraded."""
@@ -971,13 +971,17 @@ class TestEdgeGate:
         assert _passes_edge_gate(pick)[0] is True
 
     def test_win_2_40_to_3_weak_conviction_fails(self):
-        """Win at $2.40-$3 with low win_prob fails."""
-        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.20)
+        """Win at $2.40-$3 with very low win_prob (< 0.20) fails."""
+        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.15)
         assert _passes_edge_gate(pick)[0] is False
 
-    def test_dead_zone_rank1_softer_threshold(self):
-        """Rank 1-2 in $3-$4 dead zone use 0.25 threshold (softer)."""
-        # wp=0.27 passes for rank 1 (threshold 0.25) but fails for rank 3 (0.30)
+    def test_win_2_40_to_3_passes_with_conviction(self):
+        """Win at $2.40-$3 with win_prob >= 0.20 passes."""
+        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.20)
+        assert _passes_edge_gate(pick)[0] is True
+
+    def test_win_3_to_4_passes_with_conviction(self):
+        """Win at $3-$4 with win_prob >= 0.20 passes (no more dead zone)."""
         pick_r1 = RecommendedPick(
             rank=1, saddlecloth=1, horse_name="Test", bet_type="Win",
             stake=0.0, odds=3.50, place_odds=1.83,
@@ -990,8 +994,8 @@ class TestEdgeGate:
             win_prob=0.27, place_prob=0.50, value_rating=1.05,
             place_value_rating=1.05, expected_return=0.0,
         )
-        assert _passes_edge_gate(pick_r1)[0] is True  # rank 1, wp 0.27 > 0.25
-        assert _passes_edge_gate(pick_r3)[0] is False  # rank 3, wp 0.27 < 0.30
+        assert _passes_edge_gate(pick_r1)[0] is True  # wp 0.27 >= 0.20
+        assert _passes_edge_gate(pick_r3)[0] is True  # wp 0.27 >= 0.20 (same threshold now)
 
     def test_live_profile_override_rejects_losing_band(self):
         """Live profile with strong negative ROI overrides even passing criteria."""
@@ -1385,13 +1389,13 @@ class TestNoBetReasons:
         assert passed is False
         assert "Too short" in reason
 
-    def test_dead_zone_reason(self):
-        """Win $3-$4 dead zone returns specific reason with prob."""
-        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.20, value=1.05, rank=3)
+    def test_low_conviction_reason(self):
+        """Win $2-$4 with low conviction returns specific reason."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.15, value=1.05, rank=3)
         passed, reason = _passes_edge_gate(pick)
         assert passed is False
-        assert "Not enough edge" in reason
-        assert "20%" in reason
+        assert "Not enough conviction" in reason
+        assert "15%" in reason
 
     def test_place_low_prob_reason(self):
         """Place with low prob returns reason with threshold."""

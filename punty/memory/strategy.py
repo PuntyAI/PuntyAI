@@ -57,6 +57,7 @@ async def aggregate_bet_type_performance(
             Pick.pick_type == "selection",
             Pick.bet_type.isnot(None),
             Pick.bet_type != "exotics_only",
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             *date_filter,
         )
         .group_by(Pick.bet_type)
@@ -184,6 +185,7 @@ async def aggregate_tip_rank_performance(
             Pick.settled == True,
             Pick.pick_type == "selection",
             Pick.tip_rank.isnot(None),
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             *date_filter,
         )
         .group_by(Pick.tip_rank)
@@ -572,6 +574,7 @@ async def _roughie_band_analysis(db: AsyncSession) -> list[dict[str, Any]]:
             Pick.pick_type == "selection",
             Pick.tip_rank == 4,
             Pick.odds_at_tip.isnot(None),
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
     )
 
