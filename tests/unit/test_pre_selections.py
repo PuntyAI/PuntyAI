@@ -1244,3 +1244,112 @@ class TestExoticFilters:
             result = _select_exotic(tri_combos, {1, 2, 3}, field_size=fs,
                                     track_condition="Good 4")
             assert result is None, f"Trifecta Box should be blocked in {fs}-field"
+
+
+# ──────────────────────────────────────────────
+# Tests: NTD staked-pick cap
+# ──────────────────────────────────────────────
+
+class TestNtdStakedPickCap:
+    """In ≤7 runner fields (NTD), only 2 picks staked: 1 Win + 1 Place, selected by place_prob."""
+
+    def test_ntd_field_caps_to_2_staked(self):
+        """6-runner field: only 2 staked picks, rest tracked_only."""
+        runners = [
+            _runner(1, "Alpha", 4.5, win_prob=0.30, place_prob=0.60, value=1.15),
+            _runner(2, "Beta", 5.0, win_prob=0.22, place_prob=0.50, value=1.10),
+            _runner(3, "Gamma", 6.5, win_prob=0.16, place_prob=0.42, value=1.08),
+            _runner(4, "Delta", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
+            _runner(5, "Epsilon", 15.0, win_prob=0.06, place_prob=0.20, value=0.90),
+            _runner(6, "Zeta", 20.0, win_prob=0.04, place_prob=0.15, value=0.80),
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+
+        staked = [p for p in result.picks if not p.tracked_only]
+        tracked = [p for p in result.picks if p.tracked_only]
+
+        assert len(staked) <= 2, f"NTD field should have at most 2 staked picks, got {len(staked)}"
+        assert len(tracked) >= 1, "NTD field should have at least 1 tracked-only pick"
+        for t in tracked:
+            assert t.stake == 0.0, f"Tracked-only pick {t.horse_name} should have $0 stake"
+
+    def test_ntd_selects_by_place_prob(self):
+        """NTD picks should be the 2 highest place_prob candidates."""
+        runners = [
+            _runner(1, "HighWP", 4.5, win_prob=0.35, place_prob=0.45, value=1.15),
+            _runner(2, "HighPP", 5.0, win_prob=0.18, place_prob=0.65, value=1.05),
+            _runner(3, "MidPP", 6.0, win_prob=0.15, place_prob=0.55, value=1.08),
+            _runner(4, "LowPP", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
+            _runner(5, "Filler", 15.0, win_prob=0.06, place_prob=0.20, value=0.90),
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+
+        staked = [p for p in result.picks if not p.tracked_only]
+        staked_names = {p.horse_name for p in staked}
+        # HighPP (0.65) and MidPP (0.55) should be selected, not HighWP (0.45)
+        assert "HighPP" in staked_names, f"HighPP (pp=0.65) should be staked, got {staked_names}"
+        assert "MidPP" in staked_names, f"MidPP (pp=0.55) should be staked, got {staked_names}"
+
+    def test_ntd_win_plus_place(self):
+        """NTD should have pick #1 = Win and pick #2 = Place."""
+        runners = [
+            _runner(1, "A", 4.5, win_prob=0.30, place_prob=0.60, value=1.15),
+            _runner(2, "B", 5.0, win_prob=0.22, place_prob=0.50, value=1.10),
+            _runner(3, "C", 6.5, win_prob=0.16, place_prob=0.42, value=1.08),
+            _runner(4, "D", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
+            _runner(5, "E", 15.0, win_prob=0.06, place_prob=0.20, value=0.90),
+            _runner(6, "F", 20.0, win_prob=0.04, place_prob=0.15, value=0.80),
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+
+        staked = [p for p in result.picks if not p.tracked_only]
+        assert len(staked) >= 2
+        assert staked[0].bet_type == "Win", f"Pick #1 should be Win, got {staked[0].bet_type}"
+        assert staked[1].bet_type == "Place", f"Pick #2 should be Place, got {staked[1].bet_type}"
+
+    def test_normal_field_no_ntd_cap(self):
+        """10-runner field: NTD path should NOT activate."""
+        runners = [
+            _runner(i, f"Horse{i}", 3.0 + i, win_prob=0.30 - i * 0.03,
+                    place_prob=0.60 - i * 0.04, value=1.10)
+            for i in range(1, 11)
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+
+        non_roughie = [p for p in result.picks if not p.is_roughie]
+        assert len(non_roughie) >= 2
+
+    def test_ntd_note_generated(self):
+        """NTD field should produce a note mentioning Win + Place."""
+        runners = [
+            _runner(1, "A", 4.5, win_prob=0.30, place_prob=0.60, value=1.15),
+            _runner(2, "B", 5.5, win_prob=0.22, place_prob=0.50, value=1.10),
+            _runner(3, "C", 7.0, win_prob=0.15, place_prob=0.40, value=1.05),
+            _runner(4, "D", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
+            _runner(5, "E", 18.0, win_prob=0.05, place_prob=0.18, value=0.90),
+            _runner(6, "F", 25.0, win_prob=0.03, place_prob=0.12, value=0.80),
+            _runner(7, "G", 30.0, win_prob=0.02, place_prob=0.10, value=0.70),
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+
+        ntd_notes = [n for n in result.notes if "NTD" in n]
+        assert len(ntd_notes) >= 1, f"Expected NTD note, got notes: {result.notes}"
+
+    def test_very_small_field_no_ntd(self):
+        """4-runner field: NTD path should NOT activate (≤4 is win-only)."""
+        runners = [
+            _runner(1, "A", 4.5, win_prob=0.35, place_prob=0.65, value=1.15),
+            _runner(2, "B", 5.0, win_prob=0.25, place_prob=0.55, value=1.10),
+            _runner(3, "C", 7.0, win_prob=0.18, place_prob=0.42, value=1.05),
+            _runner(4, "D", 12.0, win_prob=0.10, place_prob=0.30, value=1.00),
+        ]
+        ctx = _race_context(runners)
+        result = calculate_pre_selections(ctx)
+
+        ntd_notes = [n for n in result.notes if "NTD" in n]
+        assert len(ntd_notes) == 0, f"≤4 field should not trigger NTD, got: {result.notes}"
