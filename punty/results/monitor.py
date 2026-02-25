@@ -190,11 +190,14 @@ class ResultsMonitor:
 
         async with async_session() as db:
             today = melb_today()
+            from datetime import timedelta
+            yesterday = today - timedelta(days=1)
 
-            # Get all selected meetings for today
+            # Get selected meetings for today AND yesterday (races can cross midnight)
             result = await db.execute(
                 select(Meeting).where(
-                    Meeting.date == today,
+                    Meeting.date >= yesterday,
+                    Meeting.date <= today,
                     Meeting.selected == True,
                 )
             )
@@ -512,10 +515,13 @@ class ResultsMonitor:
 
         async with async_session() as db:
             from punty.config import melb_today
+            from datetime import timedelta
             today = melb_today()
+            yesterday = today - timedelta(days=1)
             result = await db.execute(
                 select(Meeting).where(
-                    Meeting.date == today,
+                    Meeting.date >= yesterday,
+                    Meeting.date <= today,
                     Meeting.selected == True,
                 )
             )
@@ -526,7 +532,8 @@ class ResultsMonitor:
             from punty.models.pick import Pick
             unsettled_result = await db.execute(
                 select(Meeting).where(
-                    Meeting.date == today,
+                    Meeting.date >= yesterday,
+                    Meeting.date <= today,
                     Meeting.selected == False,
                 ).where(
                     Meeting.id.in_(
