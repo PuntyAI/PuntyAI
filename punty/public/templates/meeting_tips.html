@@ -1142,19 +1142,20 @@ document.addEventListener('DOMContentLoaded', function() {
             var pickEl = body.querySelector('.puntys-pick');
             if (pickEl) {
                 var pickP = pickEl.closest('p') || pickEl.parentElement;
-                // Extract horse name from text AFTER the .puntys-pick span (label is inside, name is outside)
-                var ppText = pickP ? pickP.textContent.trim() : '';
-                // Remove "Punty's Pick:" prefix to get "Horse Name (No.X) ..."
-                var ppName = ppText.replace(/^Punty[\u2019']?s\s+Pick:?\s*/i, '').trim();
-                // Extract just the horse name (everything before first parenthetical)
-                ppName = ppName.split('(')[0].trim();
-                // Find the matching selection line by horse name (search all strong tags, not just in <p>)
+                // Get horse name: prefer data-horse attribute (new content), fallback to text parsing
+                var ppName = pickEl.getAttribute('data-horse') || '';
+                if (!ppName && pickP) {
+                    var ppText = pickP.textContent.trim();
+                    ppName = ppText.replace(/^Punty[\u2019']?s\s+Pick:?\s*/i, '').split('(')[0].trim();
+                }
+                // Find the matching selection line by horse name (search all strong/bold tags)
                 var matched = false;
                 if (ppName) {
+                    var ppLower = ppName.toLowerCase();
                     var selStrongs = body.querySelectorAll('strong');
                     for (var si = 0; si < selStrongs.length; si++) {
                         var selText = selStrongs[si].textContent.trim();
-                        if (selText === ppName && selStrongs[si].closest('.puntys-pick') === null) {
+                        if (selText.toLowerCase() === ppLower && !selStrongs[si].closest('.puntys-pick')) {
                             var badge = document.createElement('span');
                             badge.className = 'pp-badge';
                             badge.textContent = "Punty\u2019s Pick";
@@ -1167,9 +1168,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Remove the standalone PP paragraph
                 if (pickP) {
                     pickP.remove();
-                    // Also remove trailing <br> or empty text nodes left behind
-                    var nextSib = pickP.nextSibling;
-                    if (nextSib && nextSib.nodeName === 'BR') nextSib.remove();
                 }
             }
         }
