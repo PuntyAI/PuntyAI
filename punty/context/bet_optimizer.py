@@ -43,7 +43,7 @@ EW_MIN_ODDS = 2.50
 EW_MAX_ODDS = 15.00
 
 # Capital efficiency
-MAX_WIN_BETS = 2              # max primary win bets per race
+MAX_WIN_BETS = 3              # max primary win bets per race (picks 1-3 can Win)
 
 # Venue confidence tiers
 VENUE_CONFIDENCE = {
@@ -400,10 +400,12 @@ def classify_race(
 def _recommend_bet_dominant(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
     """Bet recommendation for DOMINANT_EDGE race."""
     if rank == 1:
-        if 4.0 <= c["odds"] <= 6.0:
-            return "Win", 0.40, "Clear standout, strong win overlay"
-        return "Place", 0.35, "Standout but odds outside $4-$6 win zone"
+        if 2.0 <= c["odds"] <= 10.0:
+            return "Win", 0.40, "Clear standout, back to win"
+        return "Place", 0.35, "Standout but odds outside $2-$10 range"
     if rank == 2:
+        if c["win_edge"] > WIN_EDGE_MIN and 2.0 <= c["odds"] <= 10.0:
+            return "Win", 0.25, "Secondary pick with win edge"
         return "Place", 0.25, "Secondary pick, place protection"
     if rank == 3:
         return "Place", 0.20, "Third pick, place-only"
@@ -419,16 +421,15 @@ def _recommend_bet_compressed(
     overlays = [ca for ca in candidates[:3] if ca["win_edge"] >= WIN_EDGE_MIN]
 
     if rank == 1:
-        if len(overlays) >= 2 and 4.0 <= c["odds"] <= 6.0:
-            return "Win", 0.35, "Win overlay in sweet spot $4-$6"
+        if 2.0 <= c["odds"] <= 10.0:
+            return "Win", 0.35, "Win, back top pick"
         if c["ev_place"] > 0.03 and c["place_odds"] >= 2.0:
             return "Place", 0.30, "Place edge"
         return "Place", 0.30, "Default place, no clear win edge"
 
     if rank == 2:
-        # RULE 3: Win + Saver Win when 2+ overlays
-        if len(overlays) >= 2 and c["win_edge"] >= WIN_EDGE_MIN:
-            return "Saver Win", 0.20, "Second overlay, saver win structure"
+        if c["win_edge"] >= WIN_EDGE_MIN and 2.0 <= c["odds"] <= 10.0:
+            return "Saver Win", 0.20, "Second pick with win edge"
         return "Place", 0.25, "Place, modest edge"
 
     if rank == 3:
@@ -443,8 +444,9 @@ def _recommend_bet_compressed(
 
 def _recommend_bet_place_leverage(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
     """Bet recommendation for PLACE_LEVERAGE race."""
-    # Place for all ranks in place leverage race (was E/W, audit shows Place better)
     if rank == 1:
+        if 2.5 <= c["odds"] <= 8.0 and c.get("win_prob", 0) >= 0.15:
+            return "Win", 0.30, "Win, confident enough in leverage race"
         return "Place", 0.30, "Place, leveraging place edge"
     if rank == 2:
         if c["ev_place"] > 0:
@@ -458,9 +460,8 @@ def _recommend_bet_place_leverage(c: dict, rank: int, field_size: int) -> tuple[
 
 def _recommend_bet_chaos(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
     """Bet recommendation for CHAOS_HANDICAP race."""
-    # RULE 6: Win on best overlay OR Exotics Only. Avoid broad EW.
     if rank == 1:
-        if c["win_edge"] > WIN_EDGE_MIN and 4.0 <= c["odds"] <= 6.0:
+        if c["win_edge"] > WIN_EDGE_MIN and 2.5 <= c["odds"] <= 10.0:
             return "Win", 0.30, "Best overlay in chaos race"
         return "Place", 0.25, "Place, no strong win overlay in chaos"
     if rank == 2:
@@ -607,7 +608,7 @@ def _cover_short_price_fav(
 
 
 def _enforce_capital_efficiency(recommendations: list[BetRecommendation]) -> None:
-    """RULE 8: Max 2 win-exposed bets, max 40% on place component."""
+    """RULE 8: Max 3 win-exposed bets per race."""
     win_types = {"Win", "Saver Win"}
     win_exposed = [r for r in recommendations if r.bet_type in win_types]
 
@@ -616,7 +617,7 @@ def _enforce_capital_efficiency(recommendations: list[BetRecommendation]) -> Non
         win_exposed.sort(key=lambda r: r.stake_pct)
         for r in win_exposed[:-MAX_WIN_BETS]:
             r.bet_type = "Place"
-            r.reasoning += " (capped: max 2 win bets)"
+            r.reasoning += " (capped: max 3 win bets)"
 
 
 # ──────────────────────────────────────────────
