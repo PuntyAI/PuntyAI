@@ -35,28 +35,27 @@
     </div>
 </div>
 <script>
-// Sequence countdown timers
+// Sequence countdown timers — minutes only, no seconds (avoids flashing)
 (function() {
-    function pad(n) { return n < 10 ? '0' + n : '' + n; }
     function updateSeqCountdowns() {
         document.querySelectorAll('.seq-countdown').forEach(function(el) {
             var start = el.getAttribute('data-start');
             if (!start) return;
-            var diff = Math.max(0, Math.floor((new Date(start) - new Date()) / 1000));
-            if (diff <= 0) {
+            var mins = Math.ceil((new Date(start) - new Date()) / 60000);
+            if (mins <= 0) {
                 el.textContent = 'LIVE';
                 el.style.color = 'var(--magenta)';
+            } else if (mins >= 60) {
+                var h = Math.floor(mins / 60);
+                var m = mins % 60;
+                el.textContent = h + 'h ' + m + 'm';
             } else {
-                var h = Math.floor(diff / 3600);
-                var m = Math.floor((diff % 3600) / 60);
-                var s = diff % 60;
-                var text = h > 0 ? h + 'h ' + pad(m) + 'm' : m + 'm ' + pad(s) + 's';
-                el.textContent = text;
+                el.textContent = mins + 'm';
             }
         });
     }
     updateSeqCountdowns();
-    setInterval(updateSeqCountdowns, 1000);
+    setInterval(updateSeqCountdowns, 60000);
 })();
 </script>
 {% endif %}
