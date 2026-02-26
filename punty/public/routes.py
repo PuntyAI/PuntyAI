@@ -1176,7 +1176,12 @@ async def tips_dashboard(request: Request):
                 func.min(Race.start_time).label("next_jump"),
                 func.min(Race.race_number).label("next_race_num"),
             )
-            .where(Race.results_status.in_([None, "Open", "scheduled"]))
+            .where(
+                or_(
+                    Race.results_status.is_(None),
+                    Race.results_status.in_(["Open", "scheduled"]),
+                )
+            )
             .group_by(Race.meeting_id)
             .subquery()
         )
@@ -1269,6 +1274,19 @@ async def tips_glance(request: Request):
     seven_day_bets = sum(d["bets"] for d in perf_history)
     seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
 
+    # Quick meetings count (independent of content approval)
+    async with async_session() as db:
+        meetings_count_result = await db.execute(
+            select(func.count()).select_from(Meeting).where(
+                and_(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type.in_(["race", None]),
+                )
+            )
+        )
+        meetings_count = meetings_count_result.scalar() or 0
+
     return templates.TemplateResponse(
         "partials/glance_strip.html",
         {
@@ -1278,6 +1296,7 @@ async def tips_glance(request: Request):
             "next_race": next_race_data,
             "seven_day_pnl": round(seven_day_pnl, 2),
             "seven_day_roi": seven_day_roi,
+            "meetings_count": meetings_count,
         }
     )
 
@@ -1409,9 +1428,11 @@ async def get_best_of_meets() -> dict:
 
 
 async def get_all_sequences() -> list:
-    """Get all sequence bets (quaddies, big6, etc.) for today's meetings."""
+    """Get all sequence bets (quaddies, big6, etc.) for today's meetings.
+    Excludes sequences whose first leg race has already started."""
     today = melb_today()
     import json as _json
+    from datetime import datetime, timezone
 
     async with async_session() as db:
         active_content = select(Content.id).where(
@@ -1430,11 +1451,32 @@ async def get_all_sequences() -> list:
         )
         rows = result.all()
 
+        # Fetch race start times for filtering started sequences
+        race_times = {}
+        if rows:
+            meeting_ids = list({m.id for _, m in rows})
+            races_result = await db.execute(
+                select(Race.meeting_id, Race.race_number, Race.start_time)
+                .where(Race.meeting_id.in_(meeting_ids))
+            )
+            for mid, rn, st in races_result.all():
+                race_times[(mid, rn)] = st
+
     if not rows:
         return []
 
+    now = datetime.now(timezone.utc)
     sequences = []
     for pick, meeting in rows:
+        # Skip sequences whose first leg has already started
+        start_race = pick.sequence_start_race or 1
+        first_leg_time = race_times.get((meeting.id, start_race))
+        if first_leg_time:
+            if first_leg_time.tzinfo is None:
+                from zoneinfo import ZoneInfo
+                first_leg_time = first_leg_time.replace(tzinfo=ZoneInfo("Australia/Melbourne"))
+            if first_leg_time <= now:
+                continue
         legs = pick.sequence_legs
         if isinstance(legs, str):
             try:
