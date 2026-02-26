@@ -2440,6 +2440,8 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "races": data.get("races", []),
             "meeting_stats": data.get("meeting_stats", []),
             "same_day_meetings": data.get("same_day_meetings", []),
+            "scratched_picks": data.get("scratched_picks", {}),
+            "alternatives": data.get("alternatives", {}),
             "meta_title": meta_title,
             "meta_description": meta_desc,
         }
