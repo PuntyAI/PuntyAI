@@ -1039,6 +1039,17 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                             .limit(1)
                         )
                         runner = result.scalar_one_or_none()
+                        if not runner:
+                            continue
+                        # Apply Betfair scratching detection
+                        if od.get("scratched"):
+                            if not runner.scratched:
+                                runner.scratched = True
+                                logger.info(
+                                    f"Scratched {runner.horse_name} via Betfair "
+                                    f"REMOVED status ({od['race_id']})"
+                                )
+                            continue
                         if runner:
                             runner.current_odds = od["odds_betfair"]
                             odds_updated += 1

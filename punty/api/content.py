@@ -270,6 +270,25 @@ async def review_content(
         content.status = ContentStatus.APPROVED
         content.review_notes = action.notes
 
+        # Warn if content mentions scratched runners
+        if content.content_type == "early_mail" and content.raw_content:
+            from punty.models.meeting import Runner
+            scratched_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id.like(f"{content.meeting_id}-%"),
+                    Runner.scratched == True,
+                )
+            )
+            scratched_names = {r.horse_name.lower() for r in scratched_result.scalars()}
+            if scratched_names:
+                content_lower = content.raw_content.lower()
+                mentioned = [n for n in scratched_names if n in content_lower]
+                if mentioned:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        f"Approving {content_id} with scratched runners mentioned: {mentioned}"
+                    )
+
         # Store picks from early mail on approval
         if content.content_type == "early_mail" and content.raw_content:
             # Supersede any previously approved early_mail for this meeting
