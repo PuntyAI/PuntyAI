@@ -304,7 +304,12 @@
         <!-- RIGHT COLUMN (sidebar) -->
         <aside class="tips-sidebar">
             <!-- Next Race Countdown -->
-            {% if next_race_time %}
+            {% if meeting_finished|default(false) %}
+            <div class="card p-4 text-center" style="border-color: rgba(74, 222, 128, 0.2);">
+                <div class="text-xs font-heading font-bold uppercase tracking-wider mb-2" style="color: var(--text-muted);">Meeting</div>
+                <div class="font-display font-bold text-2xl" style="color: #4ade80;">Finished</div>
+            </div>
+            {% elif next_race_time %}
             <div class="card p-4 text-center" style="border-color: rgba(233, 30, 140, 0.3);">
                 <div class="text-xs font-heading font-bold uppercase tracking-wider mb-2" style="color: var(--text-muted);">Next Race</div>
                 <div class="countdown-fixed font-display font-bold text-2xl" style="color: var(--magenta);" data-start="{{ next_race_time }}">--:--</div>
@@ -2106,6 +2111,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }, 30000);
+
+    // Sidebar countdown timer (data-start attribute)
+    function pad(n) { return n < 10 ? '0' + n : n; }
+    function updateSidebarCountdown() {
+        document.querySelectorAll('.countdown-fixed[data-start]').forEach(function(el) {
+            var start = el.dataset.start;
+            if (!start) return;
+            var target = new Date(start).getTime();
+            if (isNaN(target)) return;
+            var diff = target - Date.now();
+            if (diff <= 0) {
+                el.textContent = 'JUMPING';
+                el.style.color = '#4ade80';
+                return;
+            }
+            var h = Math.floor(diff / 3600000);
+            var m = Math.floor((diff % 3600000) / 60000);
+            var s = Math.floor((diff % 60000) / 1000);
+            if (h > 0) {
+                el.textContent = h + 'h ' + pad(m) + 'm ' + pad(s) + 's';
+            } else if (m > 0) {
+                el.textContent = pad(m) + 'm ' + pad(s) + 's';
+            } else {
+                el.textContent = pad(s) + 's';
+                el.style.color = 'var(--magenta)';
+            }
+        });
+    }
+    updateSidebarCountdown();
+    setInterval(updateSidebarCountdown, 1000);
 });
 </script>
 {% endblock %}

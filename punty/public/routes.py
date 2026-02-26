@@ -2673,10 +2673,17 @@ async def meeting_tips_page(request: Request, meeting_id: str):
 
     # Find next upcoming race time for sidebar countdown
     next_race_time = None
+    meeting_finished = False
     from punty.config import melb_now_naive
     now = melb_now_naive()
-    for r in data.get("races", []):
-        if r.get("time") and r.get("status") not in ("Paying", "Closed", "Final"):
+    races = data.get("races", [])
+    has_unfinished = False
+    for r in races:
+        status = r.get("status") or ""
+        if status in ("Paying", "Closed", "Final"):
+            continue
+        has_unfinished = True
+        if r.get("time"):
             try:
                 race_dt = datetime.strptime(
                     data["meeting"].get("date", "") + "T" + r["time"],
@@ -2687,6 +2694,8 @@ async def meeting_tips_page(request: Request, meeting_id: str):
                     break
             except (ValueError, TypeError):
                 pass
+    if races and not has_unfinished:
+        meeting_finished = True
 
     response = templates.TemplateResponse(
         "meeting_tips.html",
@@ -2709,6 +2718,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "scratched_picks": data.get("scratched_picks", {}),
             "alternatives": data.get("alternatives", {}),
             "next_race_time": next_race_time,
+            "meeting_finished": meeting_finished,
             "meta_title": meta_title,
             "meta_description": meta_desc,
         }
