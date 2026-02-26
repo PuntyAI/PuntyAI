@@ -355,6 +355,9 @@ def calculate_pre_selections(
 
     # Select recommended exotic
     anchor_odds = picks[0].odds if picks else 0.0
+    active_odds = [r.get("current_odds", 0) for r in runners
+                   if not r.get("scratched") and r.get("current_odds", 0) > 0]
+    fav_price = min(active_odds) if active_odds else 0.0
     exotic = _select_exotic(
         exotic_combos, used_saddlecloths,
         field_size=field_size, anchor_odds=anchor_odds,
@@ -362,6 +365,8 @@ def calculate_pre_selections(
         track_condition=race_context.get("track_condition", ""),
         race_class=race_context.get("class", ""),
         is_hk=(race_context.get("state") == "HK"),
+        fav_price=fav_price,
+        distance=race_context.get("distance", 0),
     )
 
     # Calculate Punty's Pick
@@ -953,6 +958,8 @@ def _select_exotic(
     track_condition: str = "",
     race_class: str = "",
     is_hk: bool = False,
+    fav_price: float = 0.0,
+    distance: int = 0,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet based on probability × value (EV).
 
@@ -1009,10 +1016,26 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
 
-        # Trifecta Box killed: -$622 P&L, 6.8% strike rate
         ec_type = ec.get("type", "")
+
+        # Trifecta Standout killed: 0/20 hits, -100% ROI across all scenarios
+        if ec_type == "Trifecta Standout":
+            continue
+
+        # Trifecta Box: profitable only in narrow scenario (field 11-13,
+        # non-sprint, fav $2-$3.50, Good/Soft track). All other combos lose.
         if ec_type == "Trifecta Box":
-            continue  # Trifecta Standout still alive — different risk profile
+            if not (11 <= field_size <= 13):
+                continue
+            if distance and distance <= 1200:
+                continue
+            if fav_price and not (2.01 <= fav_price <= 3.50):
+                continue
+
+        # Exacta/Quinella fav_price guard: only profitable when fav $2-$3.50
+        if fav_price and ec_type in ("Exacta", "Quinella"):
+            if fav_price <= 2.0 or fav_price > 3.50:
+                continue
 
         # Overlap rules by exotic type:
         # Quinella/Exacta: ALL runners must be from our picks (strict 2-runner bets)
@@ -1025,6 +1048,10 @@ def _select_exotic(
             # Trifecta, First4, etc: require at least 2 from picks
             if overlap < min(2, n_runners):
                 continue
+
+        # Quinella 2-runner in small fields: -73% ROI, skip
+        if ec_type == "Quinella" and n_runners == 2 and field_size and field_size <= 10:
+            continue
 
         # Parse probability
         raw_prob = ec.get("probability", 0)

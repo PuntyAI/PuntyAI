@@ -245,8 +245,19 @@ class BetfairScraper:
                 # Strip saddlecloth prefix (e.g. "1. Arties Magic" → "Arties Magic")
                 horse_name = re.sub(r"^\d+\.\s*", "", horse_name)
 
-                # Get best back price from book
+                # Check runner status — Betfair marks scratchings as REMOVED
                 book_runner = book_runners.get(selection_id, {})
+                runner_status = book_runner.get("status", "ACTIVE")
+                if runner_status == "REMOVED":
+                    results.append({
+                        "race_id": race_id,
+                        "horse_name": horse_name,
+                        "odds_betfair": 0,
+                        "scratched": True,
+                    })
+                    continue
+
+                # Get best back price from book
                 price = self._get_best_back(book_runner)
                 if not price:
                     # Fallback to lastPriceTraded
@@ -258,6 +269,7 @@ class BetfairScraper:
                     "race_id": race_id,
                     "horse_name": horse_name,
                     "odds_betfair": round(price, 2),
+                    "scratched": False,
                 })
 
         logger.info(

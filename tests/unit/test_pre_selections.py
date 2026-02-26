@@ -1238,16 +1238,29 @@ class TestExoticFilters:
                                 track_condition="Good 4")
         assert result is not None
 
-    def test_trifecta_box_always_blocked(self):
-        """Trifecta Box killed — -$622 P&L, 6.8% strike rate."""
+    def test_trifecta_box_scenario_filter(self):
+        """Trifecta Box allowed only in mid-field, non-sprint, fav $2-$3.50."""
         tri_combos = [{"type": "Trifecta Box", "runners": [1, 2, 3],
                         "runner_names": ["A", "B", "C"],
                         "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"}]
-        # Blocked in all field sizes
-        for fs in [7, 10, 12, 14]:
+        # Blocked: field too small or too large
+        for fs in [7, 10, 14]:
             result = _select_exotic(tri_combos, {1, 2, 3}, field_size=fs,
-                                    track_condition="Good 4")
+                                    track_condition="Good 4", fav_price=2.80, distance=1600)
             assert result is None, f"Trifecta Box should be blocked in {fs}-field"
+        # Blocked: sprint distance
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=12,
+                                track_condition="Good 4", fav_price=2.80, distance=1100)
+        assert result is None, "Trifecta Box should be blocked in sprint"
+        # Blocked: fav too short
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=12,
+                                track_condition="Good 4", fav_price=1.80, distance=1600)
+        assert result is None, "Trifecta Box should be blocked when fav < $2"
+        # Allowed: mid-field, non-sprint, fav $2-$3.50
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=12,
+                                track_condition="Good 4", fav_price=2.80, distance=1600)
+        assert result is not None, "Trifecta Box should be allowed in qualifying scenario"
+        assert result.exotic_type == "Trifecta Box"
 
 
 # ──────────────────────────────────────────────
