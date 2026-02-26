@@ -9,7 +9,7 @@
     {% endif %}
     <div class="space-y-4">
         {% for mid, data in best_of.items() %}
-        <div class="card p-4">
+        <div class="card p-4" x-show="isActive('{{ data.venue }}')" x-transition>
             <div class="flex items-center justify-between mb-3">
                 <a href="/tips/{{ data.meeting_id }}" class="font-heading font-bold text-white hover:text-punty-mbright transition-colors">
                     {{ data.venue }}

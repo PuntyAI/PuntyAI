@@ -13,7 +13,7 @@
     <div class="space-y-3">
         {# Big wins first (pinned) #}
         {% for win in big_wins[:5] %}
-        <div class="win-card {% if win.pnl > 50 %}win-card-hero{% endif %}">
+        <div class="win-card {% if win.pnl > 50 %}win-card-hero{% endif %}" x-show="isActive('{{ win.venue }}')" x-transition>
             <div class="flex items-center gap-3">
                 {# Win tick #}
                 <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(34, 197, 94, 0.15);">
@@ -49,7 +49,7 @@
         {# Recent wins ticker #}
         {% for w in wins[:10] %}
         {% if w.horse_name and w.horse_name not in big_wins|map(attribute='display_name')|list %}
-        <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);">
+        <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);" x-show="isActive('{{ w.venue }}')" x-transition>
             <svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
             <span class="font-heading font-semibold text-white text-sm">{{ w.horse_name }}</span>
             <span class="text-xs" style="color: var(--text-muted);">{{ w.venue }} R{{ w.race_number }}</span>

@@ -10,7 +10,7 @@
     {% endif %}
     <div class="space-y-2">
         {% for seq in sequences %}
-        <div class="card px-4 py-3" style="border-color: rgba(255, 107, 53, 0.2);">
+        <div class="card px-4 py-3" style="border-color: rgba(255, 107, 53, 0.2);" x-show="isActive('{{ seq.venue }}')" x-transition>
             {# Header row: venue, type badge, countdown, combos, link #}
             <div class="flex items-center gap-2 mb-1.5">
                 <span class="font-heading font-bold text-white text-sm">{{ seq.venue }}</span>

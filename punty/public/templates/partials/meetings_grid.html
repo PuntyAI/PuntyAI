@@ -16,15 +16,22 @@
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {% for meet in meetings %}
-        <a href="/tips/{{ meet.meeting_id }}{% if meet.next_race_num %}#race-{{ meet.next_race_num }}{% endif %}"
-           class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group {% if meet.is_metro|default(false) %}metro-card{% endif %}"
+        <div @click="toggleVenue('{{ meet.venue }}')"
+           class="card p-4 transition-all group cursor-pointer {% if meet.is_metro|default(false) %}metro-card{% endif %}"
+           :style="isActive('{{ meet.venue }}') ? 'opacity: 1; border-left: 3px solid var(--magenta);' : 'opacity: 0.4; border-left: 3px solid transparent;'"
            {% if not meet.is_metro|default(true) %}x-show="showAll" x-transition{% endif %}
            data-metro="{{ 'true' if meet.is_metro|default(false) else 'false' }}">
             <div class="flex items-start justify-between mb-2">
                 <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors text-sm leading-tight">
                     {{ meet.venue }}
                 </div>
-                <span class="state-badge state-{{ meet.state|lower }}">{{ meet.state }}</span>
+                <div class="flex items-center gap-1.5">
+                    <span class="state-badge state-{{ meet.state|lower }}">{{ meet.state }}</span>
+                    <a href="/tips/{{ meet.meeting_id }}{% if meet.next_race_num %}#race-{{ meet.next_race_num }}{% endif %}"
+                       @click.stop
+                       class="text-xs font-heading font-bold transition-colors hover:text-white"
+                       style="color: var(--cyan); line-height: 1;">&rarr;</a>
+                </div>
             </div>
             {% if meet.is_metro|default(false) %}
             <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--magenta);">Metro</div>
@@ -52,7 +59,7 @@
             <div class="text-xs" style="color: var(--text-muted);">Complete</div>
             {% endif %}
             {% endif %}
-        </a>
+        </div>
         {% endfor %}
     </div>
 </div>
