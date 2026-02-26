@@ -61,7 +61,8 @@ class TwitterFormatter:
         Returns:
             Twitter-formatted content as a single post
         """
-        content = cls._clean_markdown(raw_content)
+        from punty.formatters import strip_json_block
+        content = cls._clean_markdown(strip_json_block(raw_content))
         hashtags = cls._get_hashtags(venue)
         return f"{content}\n\n{hashtags}"
 
@@ -77,7 +78,8 @@ class TwitterFormatter:
         Returns:
             List of individual tweet strings
         """
-        content = cls._clean_markdown(raw_content)
+        from punty.formatters import strip_json_block
+        content = cls._clean_markdown(strip_json_block(raw_content))
         hashtags = cls._get_hashtags(venue)
 
         return cls._split_into_thread(content, hashtags, content_type, venue)

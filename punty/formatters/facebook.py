@@ -30,7 +30,8 @@ class FacebookFormatter:
         Returns:
             Formatted plain text for Facebook
         """
-        text = cls._clean_markdown(raw_content)
+        from punty.formatters import strip_json_block
+        text = cls._clean_markdown(strip_json_block(raw_content))
 
         # Add emoji prefix (matches Twitter styling)
         text = "🏇 " + text

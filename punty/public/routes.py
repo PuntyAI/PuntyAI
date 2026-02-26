@@ -1856,6 +1856,14 @@ async def get_all_sequences() -> list:
                 legs_data = _json.loads(legs_data)
             except (ValueError, TypeError):
                 legs_data = []
+        # Handle string format "1,3/4,2/2,7/1,3,5" (legs separated by /)
+        if isinstance(legs_data, str) and "/" in legs_data:
+            legs_data = [
+                [int(r) for r in leg.strip().split(",") if r.strip().isdigit()]
+                for leg in legs_data.split("/")
+            ]
+        elif isinstance(legs_data, str):
+            legs_data = []
         num_legs = len(legs_data) if legs_data else 4
         last_leg_race = start_race + num_legs - 1
         last_leg_time = race_times.get((meeting.id, last_leg_race))
