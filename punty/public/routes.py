@@ -518,9 +518,9 @@ async def homepage(request: Request):
                 Pick.pick_type == "selection",
             )
         )
-        at_row = alltime_stats.one()
-        alltime_total = at_row.total or 0
-        alltime_hits = at_row.hits or 0
+        at_row = alltime_stats.one_or_none()
+        alltime_total = (at_row.total or 0) if at_row else 0
+        alltime_hits = (at_row.hits or 0) if at_row else 0
 
     pnl_30d = sum(d["pnl"] for d in perf_history)
     amount_won_30d = sum(d["pnl"] for d in perf_history if d["pnl"] > 0)
