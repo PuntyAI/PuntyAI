@@ -138,6 +138,7 @@ async def _get_picks_for_race(meeting_id: str, race_number: int) -> list[dict]:
 
         out.append({
             "name": name,
+            "saddlecloth": pick.saddlecloth,
             "venue": "",
             "meeting_id": meeting_id,
             "race_number": race_number,
@@ -1108,6 +1109,23 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                 "runners": runners_data,
             })
 
+        # Build scratched picks + alternatives for template
+        scratched_picks = {}   # {race_number: [saddlecloth, ...]}
+        alternatives = {}      # {race_number: {name, sc, odds}}
+        for rd in races_data:
+            rn = rd["num"]
+            scr = [r["sc"] for r in rd["runners"] if r["x"] and r.get("pick")]
+            if not scr:
+                continue
+            scratched_picks[rn] = scr
+            pick_scs = {r["sc"] for r in rd["runners"] if r.get("pick")}
+            cands = sorted(
+                [r for r in rd["runners"] if not r["x"] and r["sc"] not in pick_scs and r.get("odds")],
+                key=lambda r: r["odds"]
+            )
+            if cands:
+                alternatives[rn] = {"name": cands[0]["name"], "sc": cands[0]["sc"], "odds": cands[0]["odds"]}
+
         # Venue historical stats (Punty's track record here) — single query
         from sqlalchemy import case
         venue_stats = None
@@ -1206,6 +1224,8 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             "races": races_data,
             "meeting_stats": pick_data["meeting_stats"],
             "same_day_meetings": same_day_meetings,
+            "scratched_picks": scratched_picks,
+            "alternatives": alternatives,
         }
 
 
@@ -1305,6 +1325,18 @@ async def tips_dashboard(request: Request):
         if not next_race_picks:
             next_race_picks = await _get_picks_for_race(nr_mid, nr_rn)
 
+    # Build scratched saddlecloths for next race
+    next_race_scratched = set()
+    if next_race_data.get("has_next"):
+        nr_mid = next_race_data.get("meeting_id")
+        nr_rn = next_race_data.get("race_number")
+        race_id = f"{nr_mid}-r{nr_rn}"
+        async with async_session() as db:
+            runners_res = await db.execute(
+                select(Runner).where(Runner.race_id == race_id, Runner.scratched == True)
+            )
+            next_race_scratched = {r.saddlecloth for r in runners_res.scalars().all() if r.saddlecloth}
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -1313,6 +1345,7 @@ async def tips_dashboard(request: Request):
             "stats": stats,
             "next_race": next_race_data,
             "next_race_picks": next_race_picks,
+            "next_race_scratched": next_race_scratched,
             "recent_wins": recent_wins,
             "perf_history": perf_history,
             "seven_day_pnl": round(seven_day_pnl, 2),
@@ -1396,12 +1429,25 @@ async def tips_next_race(request: Request):
         if not next_race_picks:
             next_race_picks = await _get_picks_for_race(nr_mid, nr_rn)
 
+    # Build scratched saddlecloths for next race
+    next_race_scratched = set()
+    if next_race_data.get("has_next"):
+        nr_mid = next_race_data.get("meeting_id")
+        nr_rn = next_race_data.get("race_number")
+        race_id = f"{nr_mid}-r{nr_rn}"
+        async with async_session() as db:
+            runners_res = await db.execute(
+                select(Runner).where(Runner.race_id == race_id, Runner.scratched == True)
+            )
+            next_race_scratched = {r.saddlecloth for r in runners_res.scalars().all() if r.saddlecloth}
+
     return templates.TemplateResponse(
         "partials/next_race.html",
         {
             "request": request,
             "next_race": next_race_data,
             "next_race_picks": next_race_picks,
+            "next_race_scratched": next_race_scratched,
         }
     )
 

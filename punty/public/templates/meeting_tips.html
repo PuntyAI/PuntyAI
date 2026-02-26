@@ -374,6 +374,29 @@
     .race-accordion-body .tips-divider { display: none; }
     .tips-content em { font-style: italic; color: var(--text-muted); }
 
+    /* Scratched treatment */
+    .scratched-badge {
+        display: inline-flex; align-items: center;
+        margin-left: 6px; padding: 2px 8px; border-radius: 4px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.7rem;
+        text-transform: uppercase; letter-spacing: 0.05em;
+        background: rgba(239, 68, 68, 0.15); color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .scratched-text { text-decoration: line-through; opacity: 0.45; }
+    .alt-runner-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        margin-left: 8px; padding: 2px 8px; border-radius: 4px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 0.72rem;
+        background: rgba(74, 222, 128, 0.1); color: #4ade80;
+        border: 1px solid rgba(74, 222, 128, 0.25);
+    }
+    .seq-leg-pill.scratched-pill { text-decoration: line-through; opacity: 0.4; }
+    .seq-leg-pill.alt-pill {
+        background: rgba(74, 222, 128, 0.15); color: #4ade80;
+        border: 1px solid rgba(74, 222, 128, 0.3);
+    }
+
     /* Win Badge */
     .win-tick {
         display: inline-flex; align-items: center; gap: 5px;
@@ -845,6 +868,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var ppPicks = {{ pp_picks | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
     var seqResults = {{ sequence_results | tojson }};
+    var scratchedPicks = {{ scratched_picks | tojson }};
+    var altRunners = {{ alternatives | tojson }};
     var meetingDate = '{{ meeting.date }}';
 
     // --- Section toggle ---
@@ -1346,6 +1371,40 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!sec.isRace) {
             // Style Skinny/Balanced/Wide as colored cards
             styleSequenceVariants(body);
+
+            // Sequence scratching: mark scratched pills + append alt pill
+            var seqHeadText = sec.heading.textContent || '';
+            var seqRaceMatch = seqHeadText.match(/R(\d+)\s*[-–]\s*R(\d+)/i);
+            if (seqRaceMatch) {
+                var seqStartR = parseInt(seqRaceMatch[1]);
+                var cards = body.querySelectorAll('.seq-variant-card');
+                cards.forEach(function(card) {
+                    var legs = card.querySelectorAll('.seq-leg');
+                    legs.forEach(function(leg, legIdx) {
+                        var legRaceNum = seqStartR + legIdx;
+                        var legRaceObj = racesData.find(function(r) { return r.num === legRaceNum; });
+                        if (!legRaceObj) return;
+                        var legScrSet = {};
+                        legRaceObj.runners.forEach(function(r) { if (r.x) legScrSet[r.sc] = true; });
+                        var pills = leg.querySelectorAll('.seq-leg-pill');
+                        pills.forEach(function(pill) {
+                            var pillSc = parseInt(pill.textContent.trim());
+                            if (legScrSet[pillSc]) {
+                                pill.classList.add('scratched-pill');
+                                var altR = altRunners[String(legRaceNum)];
+                                if (altR) {
+                                    var altPill = document.createElement('span');
+                                    altPill.className = 'seq-leg-pill alt-pill';
+                                    altPill.textContent = String(altR.sc);
+                                    altPill.title = altR.name + ' $' + altR.odds.toFixed(2);
+                                    pill.parentNode.insertBefore(altPill, pill.nextSibling);
+                                }
+                            }
+                        });
+                    });
+                });
+            }
+
             var seqPill = '<span class="race-pill" style="background: linear-gradient(135deg, var(--yellow), var(--orange));">&#9830;</span>';
             header.innerHTML = '<div class="flex items-center gap-3">' + seqPill +
                 '<div class="font-heading font-bold text-white text-sm">' + sec.heading.textContent + '</div></div>' +
@@ -1581,6 +1640,33 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!scMatch) return;
             var sc = parseInt(scMatch[1]);
 
+            // Scratched pick: strikethrough + SCR badge, skip winner logic
+            var scrRace = scratchedPicks[String(raceNum)];
+            if (scrRace && scrRace.indexOf(sc) !== -1) {
+                s.classList.add('scratched-text');
+                var scrBadge = document.createElement('span');
+                scrBadge.className = 'scratched-badge';
+                scrBadge.textContent = 'SCR';
+                // Insert badge after the "(No.X) — $Y.YY" text node
+                var insertAfter = s.nextSibling;
+                if (insertAfter && insertAfter.nodeType === 3) insertAfter = insertAfter.nextSibling;
+                if (insertAfter) s.parentNode.insertBefore(scrBadge, insertAfter);
+                else s.parentNode.appendChild(scrBadge);
+                // Dim subsequent metadata spans
+                var dimNode = scrBadge.nextSibling;
+                while (dimNode) {
+                    if (dimNode.nodeType === 1 && dimNode.classList &&
+                        (dimNode.classList.contains('sel-bet') || dimNode.classList.contains('sel-winpct') ||
+                         dimNode.classList.contains('sel-conf') || dimNode.classList.contains('sel-prob') ||
+                         dimNode.classList.contains('sel-why'))) {
+                        dimNode.classList.add('scratched-text');
+                    }
+                    if (dimNode.nodeType === 1 && dimNode.tagName === 'STRONG') break;
+                    dimNode = dimNode.nextSibling;
+                }
+                return; // skip winner/position badge
+            }
+
             // Check if this selection is No Bet
             var isNoBet = false;
             var node = s.nextSibling;
@@ -1633,6 +1719,53 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             }
+        }
+
+        // Exotic scratching: cross out scratched saddlecloths + show alternative
+        if (raceObj) {
+            var scratchedScs = {};
+            raceObj.runners.forEach(function(r) { if (r.x) scratchedScs[r.sc] = true; });
+            var exoticEls = acc.querySelectorAll('.race-accordion-body p, .race-accordion-body .exotic-title');
+            var exoticScRe = /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*(?:\(?\w*\)?)?\s*:?\s*([\d,\s]+)/i;
+            exoticEls.forEach(function(el) {
+                var text = (el.textContent || '').trim();
+                var m = text.match(exoticScRe);
+                if (!m) return;
+                var nums = m[2].split(/,\s*/);
+                var hasScratch = nums.some(function(n) { return scratchedScs[parseInt(n.trim())]; });
+                if (!hasScratch) return;
+                // Walk text nodes and wrap scratched numbers with strikethrough spans
+                var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+                var textNodes = [];
+                while (walker.nextNode()) textNodes.push(walker.currentNode);
+                textNodes.forEach(function(tn) {
+                    var parts = tn.textContent.split(/(\b\d+\b)/);
+                    if (parts.length <= 1) return;
+                    var hasMatch = parts.some(function(p) { return /^\d+$/.test(p) && scratchedScs[parseInt(p)]; });
+                    if (!hasMatch) return;
+                    var frag = document.createDocumentFragment();
+                    parts.forEach(function(p) {
+                        if (/^\d+$/.test(p) && scratchedScs[parseInt(p)]) {
+                            var sp = document.createElement('span');
+                            sp.className = 'scratched-text';
+                            sp.textContent = p;
+                            frag.appendChild(sp);
+                        } else {
+                            frag.appendChild(document.createTextNode(p));
+                        }
+                    });
+                    tn.parentNode.replaceChild(frag, tn);
+                });
+                // Append alternative runner badge if available
+                var alt = altRunners[String(raceNum)];
+                if (alt) {
+                    var altBadge = document.createElement('span');
+                    altBadge.className = 'alt-runner-badge';
+                    var arrow = document.createTextNode('\u2192 #' + alt.sc + ' ' + alt.name + ' $' + alt.odds.toFixed(2));
+                    altBadge.appendChild(arrow);
+                    el.appendChild(altBadge);
+                }
+            });
         }
     });
 

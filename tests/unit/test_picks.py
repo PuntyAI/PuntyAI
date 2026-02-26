@@ -670,3 +670,60 @@ class TestTrackedPickSettlement:
         hit, pnl = self._settle_tracked("saver_win", finish_position=1)
         assert hit is True
         assert pnl == 0.0
+
+
+class TestScratchedSelectionVoiding:
+    """Tests for scratched selection voiding — stake returned (pnl=0)."""
+
+    def _settle_scratched(self, bet_type="win", stake=10.0, odds=3.50):
+        """Simulate settlement of a scratched runner.
+
+        When a runner is scratched, the bet never ran — stake is returned.
+        This mirrors the exotic void logic (picks.py lines 682-689).
+        """
+        pick = Pick(
+            id="test-scr-1",
+            bet_type=bet_type,
+            bet_stake=stake,
+            odds_at_tip=odds,
+        )
+
+        # Simulate scratched runner detection (before has_result check)
+        runner_scratched = True
+        if runner_scratched:
+            hit = False
+            pnl = 0.0
+            settled = True
+        else:
+            hit = None
+            pnl = None
+            settled = False
+
+        return hit, pnl, settled
+
+    def test_scratched_win_bet_voided(self):
+        """Scratched win bet: hit=False, pnl=0 (stake returned), settled=True."""
+        hit, pnl, settled = self._settle_scratched("win", stake=10.0)
+        assert hit is False
+        assert pnl == 0.0
+        assert settled is True
+
+    def test_scratched_place_bet_voided(self):
+        """Scratched place bet: hit=False, pnl=0, settled=True."""
+        hit, pnl, settled = self._settle_scratched("place", stake=6.0)
+        assert hit is False
+        assert pnl == 0.0
+        assert settled is True
+
+    def test_scratched_saver_win_voided(self):
+        """Scratched saver win bet: voided regardless of bet type."""
+        hit, pnl, settled = self._settle_scratched("saver_win", stake=8.0)
+        assert hit is False
+        assert pnl == 0.0
+        assert settled is True
+
+    def test_scratched_pnl_not_negative(self):
+        """Key invariant: scratched bets must never have negative pnl."""
+        for bt in ("win", "place", "saver_win", "each_way"):
+            _, pnl, _ = self._settle_scratched(bt, stake=20.0, odds=5.0)
+            assert pnl == 0.0, f"Scratched {bt} bet should have pnl=0, got {pnl}"

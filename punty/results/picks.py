@@ -292,6 +292,16 @@ async def _settle_picks_for_race_impl(
         elif pick.horse_name:
             runner = runners_by_name.get(pick.horse_name.upper())
 
+        # Void scratched selections — stake returned (pnl=0)
+        if runner and runner.scratched:
+            pick.hit = False
+            pick.pnl = 0.0
+            pick.settled = True
+            pick.settled_at = now
+            settled_count += 1
+            logger.info(f"Voided scratched selection {pick.horse_name} R{pick.race_number}")
+            continue
+
         # Settle if runner has finish position, OR if race is final with results populated
         has_result = runner and (runner.finish_position is not None or (race_final and results_populated))
 

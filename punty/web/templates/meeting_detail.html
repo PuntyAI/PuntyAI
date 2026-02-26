@@ -268,9 +268,11 @@
                                 {% for pick in selections|sort(attribute='tip_rank') %}
                                 {% set rank_labels = {1: 'TOP', 2: '2nd', 3: '3rd', 4: 'Roughie'} %}
                                 {% set rank_styles = {1: 'pick-top', 2: 'pick-2nd', 3: 'pick-3rd', 4: 'pick-roughie'} %}
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}" {% if pick.is_puntys_pick %}style="outline: 2px solid #f472b6; outline-offset: 1px;"{% endif %}>
+                                {% set is_scratched = pick.saddlecloth in scratched_by_race.get(race.race_number, set()) %}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}" {% if is_scratched %}style="text-decoration: line-through; opacity: 0.5;{% if pick.is_puntys_pick %} outline: 2px solid #f472b6; outline-offset: 1px;{% endif %}"{% elif pick.is_puntys_pick %}style="outline: 2px solid #f472b6; outline-offset: 1px;"{% endif %}>
                                     {% if pick.is_puntys_pick %}&#x1F3AF; {% elif pick.tip_rank == 1 %}&#9733; {% endif %}{{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
+                                    {% if is_scratched %}<span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:0 4px;border-radius:3px;font-size:0.65rem;font-weight:700;text-decoration:none;opacity:1;">SCR</span>{% endif %}
                                     {% set display_odds = pick.place_odds_at_tip if pick.bet_type == 'place' else pick.odds_at_tip %}
                                     {% if display_odds %}${{ "%.2f"|format(display_odds) }}{% endif %}
                                     {% if pick.win_probability %}
@@ -288,8 +290,9 @@
                                 {% endfor %}
                                 {% for pick in exotics %}
                                 {% set runners = pick.exotic_runners|fromjson if pick.exotic_runners else [] %}
+                                {% set race_scr = scratched_by_race.get(race.race_number, set()) %}
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold pick-exotic" {% if pick.is_puntys_pick %}style="outline: 2px solid #f472b6; outline-offset: 1px;"{% endif %}>
-                                    {% if pick.is_puntys_pick %}&#x1F3AF; {% endif %}{{ pick.exotic_type or 'Exotic' }}: {% if runners and runners[0] is sequence and runners[0] is not string %}{% for leg in runners %}{{ leg|join(', ') }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}{{ runners|join(', ') }}{% endif %}
+                                    {% if pick.is_puntys_pick %}&#x1F3AF; {% endif %}{{ pick.exotic_type or 'Exotic' }}: {% if runners and runners[0] is sequence and runners[0] is not string %}{% for leg in runners %}{{ leg|join(', ') }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}{% for r in runners %}{% if r|int in race_scr %}<span style="text-decoration:line-through;opacity:0.5;">{{ r }}</span>{% else %}{{ r }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
                                     {% if pick.exotic_stake %}&bull; ${{ "%.0f"|format(pick.exotic_stake) }}{% endif %}
                                     {% if pick.estimated_return_pct %}({{ "%.0f"|format(pick.estimated_return_pct) }}%){% endif %}
                                     {% if pick.settled %}
