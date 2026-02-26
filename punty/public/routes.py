@@ -1426,6 +1426,7 @@ async def tips_dashboard(request: Request):
         today_meetings = meetings_result.all()
 
     from punty.venues import is_metro
+    tips_meeting_ids = {t["meeting_id"] for t in stats.get("todays_tips", [])}
     meetings_list = []
     for m, next_jump, next_race_num in today_meetings:
         meetings_list.append({
@@ -1436,6 +1437,7 @@ async def tips_dashboard(request: Request):
             "next_jump": next_jump.isoformat() if next_jump else None,
             "next_race_num": next_race_num,
             "is_metro": is_metro(m.venue),
+            "has_tips": m.id in tips_meeting_ids,
         })
 
     # Enrich todays_tips with track_condition
