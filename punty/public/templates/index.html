@@ -33,12 +33,16 @@
         mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
         -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
     }
+    .hero-text {
+        max-width: 440px;
+    }
     .hero-character {
         position: relative;
         width: 100%;
-        max-width: 420px;
+        max-width: 388px;
         border-radius: 24px;
         overflow: hidden;
+        box-shadow: 0 8px 40px rgba(233,30,140,0.18), 0 2px 16px rgba(0,0,0,0.4);
     }
     .hero-character img {
         width: 100%;
@@ -57,28 +61,52 @@
     }
 
     /* ── Proof Bar ── */
+    .proof-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(233,30,140,0.2), rgba(0,212,255,0.15), transparent);
+        margin-top: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
     .proof-bar {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-        margin-top: 2rem;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-top: 1rem;
     }
     .proof-tile {
         background: var(--bg-card);
         border: 1px solid var(--border-subtle);
         border-radius: 14px;
-        padding: 1.25rem;
+        padding: 1.5rem 1.25rem;
         text-align: center;
-        transition: transform 0.15s, border-color 0.15s;
+        transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
         text-decoration: none;
+        box-shadow: 0 0 0 0 transparent;
+        position: relative;
+    }
+    .proof-tile::after {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        background: linear-gradient(135deg, rgba(233,30,140,0.06), rgba(0,212,255,0.04)) border-box;
+        mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        -webkit-mask-composite: xor;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
     }
     .proof-tile:hover {
         transform: translateY(-2px);
         border-color: rgba(233, 30, 140, 0.3);
+        box-shadow: 0 0 20px rgba(233,30,140,0.06);
     }
+    .proof-tile:hover::after { opacity: 1; }
     .proof-value {
         font-family: 'Orbitron', sans-serif;
-        font-size: 2rem;
+        font-size: 2.5rem;
         font-weight: 800;
         line-height: 1.1;
         background: var(--gradient-sunset);
@@ -87,27 +115,29 @@
     }
     .proof-label {
         font-family: 'Rajdhani', sans-serif;
-        font-size: 0.75rem;
-        font-weight: 700;
+        font-size: 0.7rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.1em;
         color: var(--text-muted);
-        margin-top: 0.375rem;
+        margin-top: 0.5rem;
     }
 
     /* ── Ticker ── */
     .ticker-wrap {
         overflow: hidden;
-        padding: 0.75rem 0;
-        border-top: 1px solid var(--border-subtle);
-        border-bottom: 1px solid var(--border-subtle);
-        margin: 2rem 0;
+        padding: 1rem 0;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        margin: 2.5rem 0;
+        background: rgba(255,255,255,0.008);
     }
     .ticker-track {
         display: flex;
-        gap: 3rem;
-        animation: ticker 30s linear infinite;
+        gap: 3.5rem;
+        animation: ticker 40s linear infinite;
         width: max-content;
+        padding: 0 1rem;
     }
     .ticker-track:hover { animation-play-state: paused; }
     @keyframes ticker {
@@ -122,6 +152,7 @@
         font-family: 'Rajdhani', sans-serif;
         font-weight: 600;
         font-size: 0.85rem;
+        letter-spacing: 0.02em;
         color: var(--text-secondary);
     }
     .ticker-item .pnl-green { color: #4ade80; }
@@ -142,14 +173,16 @@
         flex: 0 0 200px;
         background: var(--bg-card);
         border: 1px solid var(--border-subtle);
-        border-radius: 14px;
+        border-radius: 16px;
         padding: 1.25rem;
-        transition: all 0.15s;
+        transition: all 0.2s ease;
         text-decoration: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     .meeting-card:hover {
-        transform: translateY(-2px);
+        transform: translateY(-3px);
         border-color: rgba(233, 30, 140, 0.3);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 0 12px rgba(233,30,140,0.06);
     }
     .meeting-card.metro-card {
         border-color: rgba(233, 30, 140, 0.2);
@@ -176,36 +209,132 @@
     .state-aus { background: rgba(255,255,255,0.06); color: var(--text-muted); }
 
     /* ── How It Works ── */
+    .hiw-section {
+        position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(233,30,140,0.015) 100%);
+    }
+    .hiw-steps {
+        position: relative;
+    }
+    /* Vertical connector line */
+    .hiw-steps::before {
+        content: '';
+        position: absolute;
+        left: 1.75rem;
+        top: 2.5rem;
+        bottom: 2.5rem;
+        width: 1px;
+        background: linear-gradient(180deg, rgba(233,30,140,0.2), rgba(255,107,53,0.15), rgba(255,193,7,0.1));
+        pointer-events: none;
+    }
     .hiw-step {
         display: flex;
         align-items: flex-start;
         gap: 1.25rem;
-        padding: 1.25rem 0;
+        padding: 1rem 0;
+        position: relative;
     }
     .hiw-num {
         flex-shrink: 0;
-        width: 3rem;
-        height: 3rem;
+        width: 3.5rem;
+        height: 3.5rem;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'Orbitron', sans-serif;
         font-weight: 800;
-        font-size: 1rem;
+        font-size: 1.1rem;
         color: white;
         background: var(--gradient-sunset);
+        box-shadow: 0 2px 12px rgba(233,30,140,0.2);
+        position: relative;
+        z-index: 1;
+    }
+
+    /* ── CTA Section ── */
+    .cta-block {
+        position: relative;
+        padding: 2.5rem 2rem;
+        border-radius: 20px;
+        overflow: hidden;
+        background: linear-gradient(135deg, rgba(233, 30, 140, 0.1), rgba(255, 107, 53, 0.1));
+        border: 1px solid rgba(233, 30, 140, 0.2);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 40px rgba(233,30,140,0.05);
+    }
+    .cta-block::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(233,30,140,0.04) 0%, transparent 50%, rgba(255,107,53,0.04) 100%);
+        animation: cta-shimmer 6s ease-in-out infinite;
+        pointer-events: none;
+    }
+    @keyframes cta-shimmer {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.8; }
+    }
+
+    /* ── Primary CTA button enhancements ── */
+    .btn-cta-lg {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--gradient-sunset);
+        color: white;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 1.15rem;
+        padding: 0.9rem 2.5rem;
+        border-radius: 12px;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        transition: transform 0.15s, box-shadow 0.15s;
+        box-shadow: 0 2px 16px rgba(233,30,140,0.25);
+    }
+    .btn-cta-lg:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 24px rgba(233,30,140,0.35);
+    }
+
+    /* ── Section divider ── */
+    .section-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+        margin: 0;
+    }
+
+    /* ── Footer adjustments ── */
+    footer .footer-heading {
+        color: rgba(255,255,255,0.7);
+    }
+
+    /* ── Noise texture overlay (global subtle) ── */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        opacity: 0.015;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 9999;
     }
 
     /* ── Responsive ── */
     @media (max-width: 767px) {
-        .proof-bar { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
-        .proof-value { font-size: 1.5rem; }
+        .proof-bar { grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+        .proof-value { font-size: 1.75rem; }
         .hero { min-height: auto; padding: 3rem 0; }
         .hero-character { max-width: 280px; margin: 0 auto 2rem; }
+        .hero-text { max-width: 100%; }
+        .cta-block { padding: 2rem 1.5rem; }
+        .btn-cta-lg { font-size: 1rem; padding: 0.75rem 2rem; }
+        .hiw-steps::before { left: 1.5rem; }
     }
     @media (max-width: 639px) {
-        .proof-tile { padding: 1rem; }
+        .proof-tile { padding: 1rem 0.75rem; }
+        .proof-value { font-size: 1.5rem; }
         .meeting-card { flex: 0 0 170px; }
     }
 </style>
@@ -217,30 +346,31 @@
    ════════════════════════════════════ #}
 <section class="hero">
     <div class="max-w-6xl mx-auto px-4 sm:px-8 relative z-10">
-        <div class="grid md:grid-cols-2 gap-8 items-center">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
             {# Left: Copy #}
-            <div>
-                <h1 class="text-4xl md:text-5xl lg:text-6xl font-display font-bold leading-tight mb-4">
-                    <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Beat the Market.</span><br>
-                    <span class="text-white">Don't Chase It.</span>
+            <div class="hero-text">
+                <h1 class="font-display font-bold leading-tight" style="font-size: clamp(2.25rem, 5vw, 3.75rem);">
+                    <span class="text-white">Beat the </span><span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Market.</span><br>
+                    <span class="text-white" style="opacity: 0.75;">Don't Chase It.</span>
                 </h1>
-                <p class="text-lg md:text-xl mb-8" style="color: var(--text-secondary); max-width: 480px;">
+                <p class="text-lg md:text-xl" style="color: var(--text-secondary); margin-top: 1.5rem; margin-bottom: 2.5rem;">
                     AI-powered probability engine finds value on the track so you don't chase favourites.
                 </p>
                 <div class="flex flex-wrap gap-3">
-                    <a href="/tips" class="btn-primary inline-flex items-center gap-2 text-lg px-8 py-3">
+                    <a href="/tips" class="btn-cta-lg">
                         See Today's Tips
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
                     </a>
-                    <a href="/stats" class="btn-secondary inline-flex items-center gap-2 px-6 py-3">
+                    <a href="/stats" class="btn-secondary inline-flex items-center gap-2 px-6 py-3" style="opacity: 0.85;">
                         View Scorecard
                     </a>
                 </div>
 
                 {# Proof Bar #}
+                <div class="proof-divider"></div>
                 <div class="proof-bar">
                     <a href="/stats" class="proof-tile">
-                        <div class="proof-value" style="color: {{ 'var(--green)' if roi_7d >= 0 else 'var(--red, #ef4444)' }};">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</div>
+                        <div class="proof-value" style="-webkit-text-fill-color: {{ '#4ade80' if roi_7d >= 0 else '#ef4444' }};">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</div>
                         <div class="proof-label">7 Day ROI</div>
                     </a>
                     <a href="/stats" class="proof-tile">
@@ -323,10 +453,11 @@
 {# ════════════════════════════════════
    SECTION 2: Today's Early Mail
    ════════════════════════════════════ #}
-<section class="py-12">
+<section style="padding: 3.5rem 0 3rem;">
     <div class="max-w-6xl mx-auto px-4 sm:px-8">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl md:text-3xl font-display font-bold">
+        <div class="section-divider" style="margin-bottom: 2.5rem;"></div>
+        <div class="flex items-center justify-between" style="margin-bottom: 2rem;">
+            <h2 class="font-display font-bold" style="font-size: clamp(1.5rem, 3vw, 2rem);">
                 <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Today's Early Mail</span>
             </h2>
             {% if meetings %}
@@ -372,14 +503,15 @@
 {# ════════════════════════════════════
    SECTION 3: How Punty Picks Winners
    ════════════════════════════════════ #}
-<section class="py-12" style="background: rgba(255,255,255,0.01);">
+<section class="hiw-section" style="padding: 3rem 0;">
     <div class="max-w-4xl mx-auto px-4 sm:px-8">
-        <h2 class="text-2xl md:text-3xl font-display font-bold text-center mb-8">
+        <div class="section-divider" style="margin-bottom: 2.5rem;"></div>
+        <h2 class="font-display font-bold text-center" style="font-size: clamp(1.5rem, 3vw, 2rem); margin-bottom: 2rem;">
             <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">How Punty Picks Winners</span>
         </h2>
 
         <div x-data="{ open: false }">
-            <div class="space-y-1">
+            <div class="hiw-steps">
                 <div class="hiw-step">
                     <div class="hiw-num">1</div>
                     <div>
@@ -403,7 +535,7 @@
                 </div>
             </div>
 
-            <div x-show="open" x-collapse class="space-y-1">
+            <div x-show="open" x-collapse class="hiw-steps" style="margin-top: -0.5rem;">
                 <div class="hiw-step">
                     <div class="hiw-num">4</div>
                     <div>
@@ -420,7 +552,7 @@
                 </div>
             </div>
 
-            <button @click="open = !open" class="mt-4 text-sm font-heading font-semibold transition-colors" style="color: var(--cyan);">
+            <button @click="open = !open" class="mt-3 text-sm font-heading font-semibold transition-colors" style="color: var(--cyan);">
                 <span x-text="open ? 'Show less' : 'Learn more'">Learn more</span>
                 <svg class="w-4 h-4 inline-block transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
@@ -432,29 +564,29 @@
 {# ════════════════════════════════════
    SECTION 4: Bottom CTA
    ════════════════════════════════════ #}
-<section class="py-16">
+<section style="padding: 3.5rem 0 4rem;">
     <div class="max-w-5xl mx-auto px-4 sm:px-8">
-        <div class="card p-8 md:p-12 relative overflow-hidden" style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.1), rgba(255, 107, 53, 0.1)); border-color: rgba(233, 30, 140, 0.2);">
-            <div class="grid md:grid-cols-3 gap-8 items-center">
+        <div class="cta-block">
+            <div class="grid md:grid-cols-3 gap-8 items-center relative z-10">
                 <div class="md:col-span-2">
-                    <h2 class="text-3xl md:text-4xl font-display font-bold mb-3">
+                    <h2 class="font-display font-bold" style="font-size: clamp(1.75rem, 4vw, 2.5rem); margin-bottom: 1rem;">
                         <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Ready to Bet With Edge?</span>
                     </h2>
-                    <p class="text-lg mb-6" style="color: var(--text-secondary);">
+                    <p class="text-lg" style="color: var(--text-secondary); margin-bottom: 2rem;">
                         Our probability engine analyses every runner. You get the value plays — fully tracked, fully transparent.
                     </p>
                     <div class="flex flex-wrap gap-3">
-                        <a href="/tips" class="btn-primary inline-flex items-center gap-2 px-8 py-3">
+                        <a href="/tips" class="btn-cta-lg">
                             Browse Today's Tips
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
                         </a>
-                        <a href="/about" class="btn-secondary inline-flex items-center gap-2 px-6 py-3">
+                        <a href="/about" class="btn-secondary inline-flex items-center gap-2 px-6 py-3" style="opacity: 0.8;">
                             About Punty
                         </a>
                     </div>
                 </div>
                 <div class="hidden md:flex justify-center">
-                    <div id="cta-carousel" class="w-40 h-40 rounded-2xl overflow-hidden relative" style="border: 2px solid rgba(233, 30, 140, 0.3); filter: drop-shadow(0 0 30px rgba(233, 30, 140, 0.2));">
+                    <div id="cta-carousel" class="w-44 h-44 rounded-2xl overflow-hidden relative" style="border: 2px solid rgba(233, 30, 140, 0.3); box-shadow: 0 4px 24px rgba(233,30,140,0.15), 0 0 40px rgba(233,30,140,0.08);">
                         <img src="/static/punty-character.jpg" alt="Punty" class="w-full h-full object-cover absolute inset-0 transition-opacity duration-700" style="opacity: 1;">
                     </div>
                 </div>
