@@ -800,21 +800,17 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
         if odds > 6.0 and win_prob >= 0.15:
             return (True, None)
 
-    # 2. Place with sufficient prob and value
-    if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
-        return (True, None)
-
-    # 3. Place at $3.00-$6.00 with decent place probability
-    if bt == "Place" and 3.0 <= odds <= 6.0 and place_prob >= 0.40:
-        return (True, None)
-
-    # 4. Roughie Place at $8-$20 with strong place probability
-    if pick.is_roughie and bt == "Place" and 8.0 <= odds <= 20.0 and place_prob >= 0.35:
-        return (True, None)
-
-    # 5. Place at good odds ($2.50-$8) — our overall profit engine (+13.8% ROI)
-    if bt == "Place" and 2.5 <= odds <= 8.0 and place_prob >= 0.35:
-        return (True, None)
+    # 2. Place with graduated prob threshold by odds band
+    if bt == "Place":
+        # Short odds ($1.50-$3): needs high collection prob
+        if odds < 3.0 and place_prob >= 0.55:
+            return (True, None)
+        # Medium odds ($3-$6): standard threshold
+        if 3.0 <= odds <= 6.0 and place_prob >= 0.40:
+            return (True, None)
+        # Longer odds ($6+): lower threshold acceptable (bigger payoff compensates)
+        if odds > 6.0 and place_prob >= 0.35:
+            return (True, None)
 
     # --- No Bet (tracked) zones ---
 
@@ -826,10 +822,11 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt in ("Win", "Saver Win") and 2.0 <= odds < 4.0 and win_prob < 0.20:
         return (False, f"Not enough conviction (Win ${odds:.0f}, {win_prob * 100:.0f}% win prob)")
 
-    # Place with low collection probability
-    place_floor = 0.30 if (bt == "Place" and odds >= 3.0) else 0.35
-    if bt == "Place" and place_prob < place_floor:
-        return (False, f"Place prob too low ({place_prob * 100:.0f}% < {place_floor * 100:.0f}%)")
+    # Place with low collection probability — graduated by odds
+    if bt == "Place":
+        place_floor = 0.55 if odds < 3.0 else (0.40 if odds <= 6.0 else 0.35)
+        if place_prob < place_floor:
+            return (False, f"Place prob too low ({place_prob * 100:.0f}% < {place_floor * 100:.0f}%)")
 
     # Negative expected value both ways — no edge
     if ev_win < -0.10 and ev_place < -0.05:

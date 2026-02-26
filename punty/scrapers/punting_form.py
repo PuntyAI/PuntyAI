@@ -302,6 +302,7 @@ def _pf_form_entry_to_history(entry: dict) -> dict:
         "comment": entry.get("stewardsReport"),
         "top4": top4 if top4 else None,
         "is_trial": entry.get("isBarrierTrial", False),
+        "kri": entry.get("KRI"),  # Kick Reaction Index (0-100)
     }
 
 

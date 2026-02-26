@@ -436,3 +436,28 @@ If no track record data is provided, generate tips normally.
        NEVER swap positions. If you think a lower-ranked pick "should" be #1, you are wrong —
        the model has already considered all factors including form, pace, barrier, market, class,
        jockey, trainer, weight, and historical patterns.
+
+16) STRUCTURED DATA (REQUIRED):
+    After the full early mail text, output a JSON block wrapped in ```json fences containing all picks in this exact schema:
+    ```json
+    {
+      "big3": [{"rank": 1, "horse": "NAME", "race": 1, "saddlecloth": 1, "odds": 3.50}],
+      "big3_multi": {"stake": 10, "multi_odds": 2.80, "collect": 28.00},
+      "races": {
+        "1": {
+          "selections": [
+            {"rank": 1, "horse": "NAME", "saddlecloth": 1, "win_odds": 3.50, "place_odds": 1.45, "bet_type": "Win", "stake": 10.0, "confidence": "HIGH", "probability": 32.0, "value": 1.2}
+          ],
+          "roughie": {"horse": "NAME", "saddlecloth": 8, "win_odds": 15.0, "place_odds": 4.0, "bet_type": "Place"},
+          "exotic": {"type": "Trifecta Box", "runners": [1, 3, 5], "stake": 20},
+          "puntys_pick": {"saddlecloth": 1, "bet_type": "Win", "odds": 3.50}
+        }
+      },
+      "sequences": [
+        {"type": "Quaddie", "start_race": 5, "end_race": 8, "variants": [
+          {"name": "Smart", "legs": "1,3/4,2/2,7/1,3,5", "combos": 27, "unit_price": 2.22, "total": 59.94}
+        ]}
+      ]
+    }
+    ```
+    **Rules:** Use the EXACT saddlecloth numbers, odds, stakes, and bet types from the locked selections. Race keys must be string numbers matching race_number. This JSON is parsed programmatically — any deviation will cause pick loss.
