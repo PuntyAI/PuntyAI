@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import select
@@ -62,6 +63,26 @@ class TwitterDelivery:
             except ImportError:
                 raise ValueError("tweepy not installed. Run: pip install tweepy")
         return self._client
+
+    def _get_api_v1(self):
+        """Get Tweepy v1.1 API for media upload."""
+        import tweepy
+        auth = tweepy.OAuth1UserHandler(
+            self._api_key, self._api_secret,
+            self._access_token, self._access_secret,
+        )
+        return tweepy.API(auth)
+
+    async def _upload_media(self, image_path: Path) -> str | None:
+        """Upload image via v1.1 API, return media_id string."""
+        try:
+            api = self._get_api_v1()
+            media = await asyncio.to_thread(api.media_upload, filename=str(image_path))
+            logger.info("Uploaded media: %s -> media_id=%s", image_path.name, media.media_id)
+            return str(media.media_id)
+        except Exception as e:
+            logger.warning("Media upload failed, posting without image: %s", e)
+            return None
 
     async def is_configured(self) -> bool:
         """Check if Twitter delivery is configured."""
@@ -303,17 +324,18 @@ class TwitterDelivery:
             logger.error(f"Twitter reply error: {e}")
             raise ValueError(f"Twitter API error: {e}")
 
-    async def send_long_post(self, content_id: str) -> dict:
+    async def send_long_post(self, content_id: str, image_path: Path | None = None) -> dict:
         """Post content as a single long-form post (for verified accounts).
 
         Args:
             content_id: ID of content to post
+            image_path: Optional path to an image to attach
 
         Returns:
             Dict with post status and tweet ID
         """
         if settings.mock_external:
-            logger.info(f"[MOCK] Would post long-form content {content_id}")
+            logger.info(f"[MOCK] Would post long-form content {content_id} with image={image_path}")
             return {"status": "mock", "tweet_id": f"mock_{content_id}", "length": 0}
 
         from punty.models.content import Content, ContentStatus
@@ -342,10 +364,20 @@ class TwitterDelivery:
         # Format for long-form post
         post_text = self._format_long_post(content.raw_content, content.content_type, venue)
 
+        # Upload image if provided
+        media_ids = None
+        if image_path:
+            await self._load_keys()
+            media_id = await self._upload_media(image_path)
+            if media_id:
+                media_ids = [media_id]
+
         # Post as long-form (blocking → thread)
         try:
             client = self._get_client()
-            response = await asyncio.to_thread(client.create_tweet, text=post_text)
+            response = await asyncio.to_thread(
+                client.create_tweet, text=post_text, media_ids=media_ids
+            )
             tweet_id = response.data["id"]
 
             # Update content status and store tweet ID

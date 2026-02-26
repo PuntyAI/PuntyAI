@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -47,18 +48,19 @@ class FacebookDelivery:
         await self._load_keys()
         return bool(self._page_id and self._access_token)
 
-    async def send(self, content_id: str) -> dict:
+    async def send(self, content_id: str, image_path: Path | None = None) -> dict:
         """Post content to the Facebook Page.
 
         Args:
             content_id: ID of content to post
+            image_path: Optional path to an image to attach
 
         Returns:
             Dict with post status and Facebook post ID
         """
         from punty.config import settings
         if settings.mock_external:
-            logger.info(f"[MOCK] Would post to Facebook: {content_id}")
+            logger.info(f"[MOCK] Would post to Facebook: {content_id} with image={image_path}")
             return {"status": "mock", "post_id": f"mock_{content_id}"}
 
         from punty.models.content import Content, ContentStatus
@@ -97,14 +99,28 @@ class FacebookDelivery:
         last_error = None
         for attempt in range(MAX_DELIVERY_RETRIES + 1):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        f"{GRAPH_API_BASE}/{self._page_id}/feed",
-                        data={
-                            "message": formatted,
-                            "access_token": self._access_token,
-                        },
-                    )
+                if image_path and image_path.exists():
+                    # Photo post — better reach than text-only
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        with open(image_path, "rb") as f:
+                            resp = await client.post(
+                                f"{GRAPH_API_BASE}/{self._page_id}/photos",
+                                data={
+                                    "message": formatted,
+                                    "access_token": self._access_token,
+                                },
+                                files={"source": (image_path.name, f, "image/png")},
+                            )
+                else:
+                    # Text-only fallback
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(
+                            f"{GRAPH_API_BASE}/{self._page_id}/feed",
+                            data={
+                                "message": formatted,
+                                "access_token": self._access_token,
+                            },
+                        )
 
                 if resp.status_code != 200:
                     error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
