@@ -372,6 +372,13 @@ async def meeting_detail(
     setting = setting_result.scalar_one_or_none()
     race_previews_enabled = setting and setting.value == "true"
 
+    # Build scratched saddlecloths per race for visual treatment
+    scratched_by_race = {}
+    for race in meeting.races:
+        scr = {r.saddlecloth for r in race.runners if r.scratched}
+        if scr:
+            scratched_by_race[race.race_number] = scr
+
     return templates.TemplateResponse(
         "meeting_detail.html",
         {
@@ -383,6 +390,7 @@ async def meeting_detail(
             "meeting_picks": meeting_picks,
             "sequences_by_race": sequences_by_race,
             "race_previews_enabled": race_previews_enabled,
+            "scratched_by_race": scratched_by_race,
         },
     )
 
