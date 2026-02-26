@@ -38,7 +38,7 @@ if settings.google_client_id:
 
 # Paths that never require login
 PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health"}
-PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/api/public/", "/public")
+PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/api/public/", "/public", "/social-img/")
 
 # Public site paths (served on punty.ai, not app.punty.ai)
 PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/glossary", "/calculator", "/terms", "/privacy", "/data-deletion", "/tips", "/stats", "/blog", "/sitemap.xml", "/sitemap-static.xml", "/sitemap-blog.xml", "/sitemap-tips.xml", "/robots.txt", "/llms.txt"}
