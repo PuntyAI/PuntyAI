@@ -285,15 +285,15 @@
             {% include "partials/meetings_grid.html" %}
         </div>
 
-        {# ── Main content: even 2-col with best-of+sequences on left, results+perf on right ── #}
+        {# ── Main content: best-of on left, sequences+results+perf on right ── #}
         <div class="grid md:grid-cols-2 gap-6 mb-6">
             <div class="space-y-6">
                 {% include "partials/best_of_meet.html" %}
+            </div>
+            <div class="space-y-6">
                 {% if sequences|default([])|length > 0 %}
                 {% include "partials/sequence_bets.html" %}
                 {% endif %}
-            </div>
-            <div class="space-y-6">
                 <div id="results-feed"
                      hx-get="/tips/_results-feed"
                      hx-trigger="every 120s [document.visibilityState === 'visible']"

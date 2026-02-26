@@ -1,4 +1,4 @@
-{# Sequence Bets — all quaddies, big6 etc. compact format #}
+{# Sequence Bets — all quaddies, big6 etc. compact format, ordered by up next #}
 {% if sequences|default([])|length > 0 %}
 <div>
     <h2 class="section-heading">
@@ -8,10 +8,15 @@
     <div class="space-y-2">
         {% for seq in sequences %}
         <div class="card px-4 py-3" style="border-color: rgba(255, 107, 53, 0.2);">
-            {# Header row: venue, type badge, combos, link #}
+            {# Header row: venue, type badge, countdown, combos, link #}
             <div class="flex items-center gap-2 mb-1.5">
                 <span class="font-heading font-bold text-white text-sm">{{ seq.venue }}</span>
                 <span class="type-badge" style="background: rgba(255, 107, 53, 0.15); color: var(--orange);">{{ seq.type }}{% if seq.variant %} {{ seq.variant }}{% endif %}</span>
+                {% if seq.first_leg_time %}
+                <span class="text-xs font-heading font-semibold seq-countdown" data-start="{{ seq.first_leg_time }}" style="color: var(--yellow);">
+                    R{{ seq.first_leg_race }}
+                </span>
+                {% endif %}
                 <span class="text-xs ml-auto flex-shrink-0" style="color: var(--text-muted);">{{ seq.combo_count }} combos{% if seq.stake %} &middot; ${{ '%.0f'|format(seq.stake) }}{% endif %}</span>
                 <a href="/tips/{{ seq.meeting_id }}" class="flex-shrink-0 text-xs font-heading font-bold uppercase tracking-wider transition-colors" style="color: var(--orange);">Card &rarr;</a>
             </div>
@@ -29,4 +34,29 @@
         {% endfor %}
     </div>
 </div>
+<script>
+// Sequence countdown timers
+(function() {
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function updateSeqCountdowns() {
+        document.querySelectorAll('.seq-countdown').forEach(function(el) {
+            var start = el.getAttribute('data-start');
+            if (!start) return;
+            var diff = Math.max(0, Math.floor((new Date(start) - new Date()) / 1000));
+            if (diff <= 0) {
+                el.textContent = 'LIVE';
+                el.style.color = 'var(--magenta)';
+            } else {
+                var h = Math.floor(diff / 3600);
+                var m = Math.floor((diff % 3600) / 60);
+                var s = diff % 60;
+                var text = h > 0 ? h + 'h ' + pad(m) + 'm' : m + 'm ' + pad(s) + 's';
+                el.textContent = text;
+            }
+        });
+    }
+    updateSeqCountdowns();
+    setInterval(updateSeqCountdowns, 1000);
+})();
+</script>
 {% endif %}
