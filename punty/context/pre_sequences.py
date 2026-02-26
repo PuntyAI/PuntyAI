@@ -886,6 +886,7 @@ def build_all_sequence_lanes(
         sequences = sequence_override
     else:
         rules = {
+            6:  {"early_quad": (1, 4), "quaddie": (3, 6), "big6": None},
             7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
             8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
             9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
