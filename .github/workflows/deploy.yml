@@ -77,15 +77,22 @@ jobs:
             pip install -e . --quiet 2>&1 | tail -1
             chmod 666 prompts/*.md
             systemctl restart puntyai-staging
-            sleep 3
-            HTTP=$(curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/health)
+            sleep 5
+            for i in 1 2 3; do
+              HTTP=$(curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/health)
+              if [ "$HTTP" = "200" ]; then
+                echo "Staging deploy successful ($(git rev-parse --short HEAD))"
+                break
+              fi
+              echo "Health check attempt $i: $HTTP"
+              sleep 3
+            done
             if [ "$HTTP" != "200" ]; then
-              echo "FAIL: health check returned $HTTP, rolling back to $PREV"
+              echo "FAIL: health check failed after 3 retries, rolling back to $PREV"
               git checkout -f $PREV
               systemctl restart puntyai-staging
               exit 1
             fi
-            echo "Staging deploy successful ($(git rev-parse --short HEAD))"
             # Auto-seed staging DB from production if empty
             ROWS=$(sqlite3 /opt/puntyai-staging/data/punty.db "SELECT COUNT(*) FROM meetings" 2>/dev/null || echo "0")
             if [ "$ROWS" = "0" ]; then

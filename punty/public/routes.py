@@ -1612,20 +1612,24 @@ async def get_all_sequences() -> list:
     now = datetime.now(MELB_TZ)
     sequences = []
     for pick, meeting in rows:
-        # Skip sequences whose first leg has already started
+        # Skip sequences whose last leg has already started (fully underway)
         start_race = pick.sequence_start_race or 1
-        first_leg_time = race_times.get((meeting.id, start_race))
-        if first_leg_time:
-            if first_leg_time.tzinfo is None:
-                first_leg_time = first_leg_time.replace(tzinfo=MELB_TZ)
-            if first_leg_time <= now:
-                continue
-        legs = pick.sequence_legs
-        if isinstance(legs, str):
+        legs_data = pick.sequence_legs
+        if isinstance(legs_data, str):
             try:
-                legs = _json.loads(legs)
+                legs_data = _json.loads(legs_data)
             except (ValueError, TypeError):
-                legs = []
+                legs_data = []
+        num_legs = len(legs_data) if legs_data else 4
+        last_leg_race = start_race + num_legs - 1
+        last_leg_time = race_times.get((meeting.id, last_leg_race))
+        if last_leg_time:
+            if last_leg_time.tzinfo is None:
+                last_leg_time = last_leg_time.replace(tzinfo=MELB_TZ)
+            if last_leg_time <= now:
+                continue
+        first_leg_time = race_times.get((meeting.id, start_race))
+        legs = legs_data
 
         combo_count = 1
         for leg in (legs or []):
