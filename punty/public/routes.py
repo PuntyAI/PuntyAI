@@ -91,6 +91,75 @@ async def get_next_race() -> dict:
         }
 
 
+async def _get_picks_for_race(meeting_id: str, race_number: int) -> list[dict]:
+    """Direct query for picks in a specific race — fallback when upcoming filter misses them."""
+    import json as _json_fb
+
+    async with async_session() as db:
+        active_content = select(Content.id).where(
+            Content.status.notin_(["superseded", "rejected"])
+        ).scalar_subquery()
+
+        result = await db.execute(
+            select(Pick)
+            .where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.content_id.in_(active_content),
+                Pick.settled == False,
+            )
+            .order_by(Pick.tip_rank.nullslast())
+        )
+        picks = result.scalars().all()
+
+    out = []
+    for pick in picks:
+        if pick.pick_type not in ("selection", "exotic"):
+            continue
+
+        if pick.pick_type == "selection":
+            name = pick.horse_name or "Runner"
+        else:
+            name = f"{pick.exotic_type or 'Exotic'} R{pick.race_number}"
+
+        exotic_runners = None
+        if pick.pick_type == "exotic" and pick.exotic_runners:
+            try:
+                exotic_runners = _json_fb.loads(pick.exotic_runners) if isinstance(pick.exotic_runners, str) else pick.exotic_runners
+            except (ValueError, TypeError):
+                exotic_runners = None
+            if exotic_runners and isinstance(exotic_runners, list) and any(isinstance(r, list) for r in exotic_runners):
+                exotic_runners = [item for sub in exotic_runners for item in (sub if isinstance(sub, list) else [sub])]
+
+        wp = round(pick.win_probability * 100, 1) if pick.win_probability else None
+        pp = round(pick.place_probability * 100, 1) if pick.place_probability else None
+        bt_lower = (pick.bet_type or "").lower()
+        show_prob = pp if bt_lower == "place" and pp else wp
+
+        out.append({
+            "name": name,
+            "venue": "",
+            "meeting_id": meeting_id,
+            "race_number": race_number,
+            "pick_type": pick.pick_type,
+            "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+            "exotic_type": pick.exotic_type,
+            "exotic_runners": exotic_runners,
+            "odds": pick.odds_at_tip,
+            "stake": round(pick.bet_stake or pick.exotic_stake or 0, 2),
+            "tip_rank": pick.tip_rank,
+            "value_rating": round(pick.value_rating, 2) if pick.value_rating else None,
+            "win_prob": wp,
+            "place_prob": pp,
+            "show_prob": show_prob,
+            "confidence": pick.confidence,
+            "is_puntys_pick": pick.is_puntys_pick or False,
+            "start_time": None,
+            "is_edge": (pick.value_rating or 0) >= 1.1 and pick.pick_type == "selection",
+        })
+    return out
+
+
 async def get_recent_wins_public(limit: int = 15) -> dict:
     """Get recent wins for public ticker with Punty celebrations."""
     from punty.results.celebrations import get_celebration
@@ -1232,6 +1301,10 @@ async def tips_dashboard(request: Request):
             if u.get("meeting_id") == nr_mid and u.get("race_number") == nr_rn:
                 next_race_picks.append(u)
 
+        # Fallback: direct query if upcoming filter returned empty
+        if not next_race_picks:
+            next_race_picks = await _get_picks_for_race(nr_mid, nr_rn)
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -1319,6 +1392,10 @@ async def tips_next_race(request: Request):
             if u.get("meeting_id") == nr_mid and u.get("race_number") == nr_rn:
                 next_race_picks.append(u)
 
+        # Fallback: direct query if upcoming filter returned empty
+        if not next_race_picks:
+            next_race_picks = await _get_picks_for_race(nr_mid, nr_rn)
+
     return templates.TemplateResponse(
         "partials/next_race.html",
         {
@@ -1384,9 +1461,11 @@ async def get_best_of_meets() -> dict:
                 "exotic": None,
             }
 
-        # Best Winner: selection, tip_rank <= 3 (not roughie), highest win_prob
+        # Best Winner: selection, tip_rank <= 3, Win/Saver Win only, highest win_prob
+        bt_lower = (pick.bet_type or "").lower()
         if (pick.pick_type == "selection"
                 and (pick.tip_rank or 99) <= 3
+                and bt_lower in ("win", "saver_win", "saver win")
                 and (pick.win_probability or 0) >= 0.22):
             current = meets[mid]["best_winner"]
             if not current or (pick.win_probability or 0) > (current.get("win_prob") or 0):
@@ -1415,8 +1494,8 @@ async def get_best_of_meets() -> dict:
                     "value_rating": pick.value_rating,
                 }
 
-        # Best Exotic: first exotic per meeting
-        if pick.pick_type == "exotic" and not meets[mid]["exotic"]:
+        # Best Exotic: exotic with highest stake per meeting (prefer higher race)
+        if pick.pick_type == "exotic":
             import json as _json3
             runners = pick.exotic_runners
             if isinstance(runners, str):
@@ -1427,12 +1506,19 @@ async def get_best_of_meets() -> dict:
             # Flatten nested arrays (e.g. [[5], [8, 2, 1]] → [5, 8, 2, 1])
             if runners and isinstance(runners, list) and any(isinstance(r, list) for r in runners):
                 runners = [item for sub in runners for item in (sub if isinstance(sub, list) else [sub])]
-            meets[mid]["exotic"] = {
+            new_exotic = {
                 "type": pick.exotic_type,
                 "race": pick.race_number,
                 "runners": runners or [],
-                "stake": pick.exotic_stake,
+                "stake": pick.exotic_stake or 0,
             }
+            current = meets[mid]["exotic"]
+            # Replace if no current, higher stake, or same stake but later race
+            if (not current
+                    or (new_exotic["stake"] or 0) > (current.get("stake") or 0)
+                    or ((new_exotic["stake"] or 0) == (current.get("stake") or 0)
+                        and (new_exotic["race"] or 0) > (current.get("race") or 0))):
+                meets[mid]["exotic"] = new_exotic
 
     return meets
 
@@ -1516,6 +1602,12 @@ async def get_all_sequences() -> list:
                 "runners": [str(r) for r in runners],
             })
 
+        # Store first leg time for sorting and display
+        flt = first_leg_time
+        if flt and flt.tzinfo is None:
+            from zoneinfo import ZoneInfo
+            flt = flt.replace(tzinfo=ZoneInfo("Australia/Melbourne"))
+
         sequences.append({
             "venue": meeting.venue,
             "meeting_id": meeting.id,
@@ -1524,7 +1616,12 @@ async def get_all_sequences() -> list:
             "legs": leg_summaries,
             "combo_count": combo_count,
             "stake": pick.exotic_stake or pick.bet_stake,
+            "first_leg_time": flt.isoformat() if flt else None,
+            "first_leg_race": start_race,
         })
+
+    # Sort by first leg time (soonest first = "up next")
+    sequences.sort(key=lambda s: s.get("first_leg_time") or "9999")
 
     return sequences
 
