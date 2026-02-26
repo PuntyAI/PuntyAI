@@ -285,10 +285,13 @@
             {% include "partials/meetings_grid.html" %}
         </div>
 
-        {# ── Main content: even 2-col with best-of on left, results+perf on right ── #}
+        {# ── Main content: even 2-col with best-of+sequences on left, results+perf on right ── #}
         <div class="grid md:grid-cols-2 gap-6 mb-6">
             <div class="space-y-6">
                 {% include "partials/best_of_meet.html" %}
+                {% if sequences|default([])|length > 0 %}
+                {% include "partials/sequence_bets.html" %}
+                {% endif %}
             </div>
             <div class="space-y-6">
                 <div id="results-feed"
@@ -300,13 +303,6 @@
                 {% include "partials/performance_snapshot.html" %}
             </div>
         </div>
-
-        {# ── Sequence Bets (full-width, bottom — hides started sequences) ── #}
-        {% if sequences|default([])|length > 0 %}
-        <div class="mb-6">
-            {% include "partials/sequence_bets.html" %}
-        </div>
-        {% endif %}
 
         {# ── Quick Links Footer ── #}
         {% include "partials/dashboard_footer.html" %}
