@@ -11,7 +11,7 @@
         {% if next_race.has_next %}
         <div class="glance-chip glance-chip-accent">
             <span class="glance-label">Next Race</span>
-            <span class="glance-value" id="glance-countdown" data-start="{{ next_race.start_time_iso }}">
+            <span class="glance-value countdown-fixed" id="glance-countdown" data-start="{{ next_race.start_time_iso }}">
                 {{ next_race.venue }} R{{ next_race.race_number }} @ {{ next_race.start_time_formatted }}
             </span>
         </div>
