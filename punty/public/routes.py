@@ -1607,7 +1607,9 @@ async def get_all_sequences() -> list:
     if not rows:
         return []
 
-    now = datetime.now(timezone.utc)
+    from zoneinfo import ZoneInfo
+    MELB_TZ = ZoneInfo("Australia/Melbourne")
+    now = datetime.now(MELB_TZ)
     sequences = []
     for pick, meeting in rows:
         # Skip sequences whose first leg has already started
@@ -1615,8 +1617,7 @@ async def get_all_sequences() -> list:
         first_leg_time = race_times.get((meeting.id, start_race))
         if first_leg_time:
             if first_leg_time.tzinfo is None:
-                from zoneinfo import ZoneInfo
-                first_leg_time = first_leg_time.replace(tzinfo=ZoneInfo("Australia/Melbourne"))
+                first_leg_time = first_leg_time.replace(tzinfo=MELB_TZ)
             if first_leg_time <= now:
                 continue
         legs = pick.sequence_legs
