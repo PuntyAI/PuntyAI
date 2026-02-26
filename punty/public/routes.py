@@ -1349,10 +1349,9 @@ async def get_best_of_meets() -> dict:
                 "exotic": None,
             }
 
-        # Best Winner: selection, tip_rank <= 3, not roughie, highest win_prob
+        # Best Winner: selection, tip_rank <= 3 (not roughie), highest win_prob
         if (pick.pick_type == "selection"
                 and (pick.tip_rank or 99) <= 3
-                and not pick.is_roughie
                 and (pick.win_probability or 0) >= 0.22):
             current = meets[mid]["best_winner"]
             if not current or (pick.win_probability or 0) > (current.get("win_prob") or 0):
