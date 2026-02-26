@@ -1166,27 +1166,43 @@ async def tips_dashboard(request: Request):
     seven_day_bets = sum(d["bets"] for d in perf_history)
     seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
 
-    # Always fetch today's selected meetings (independent of content approval)
+    # Always fetch today's selected meetings with next-race jump times
     from punty.venues import guess_state as get_state_for_track
     async with async_session() as db:
+        # Get meetings with their next un-run race start_time for sorting
+        next_jump_sq = (
+            select(
+                Race.meeting_id,
+                func.min(Race.start_time).label("next_jump"),
+                func.min(Race.race_number).label("next_race_num"),
+            )
+            .where(Race.results_status.in_([None, "Open", "scheduled"]))
+            .group_by(Race.meeting_id)
+            .subquery()
+        )
         meetings_result = await db.execute(
-            select(Meeting).where(
+            select(Meeting, next_jump_sq.c.next_jump, next_jump_sq.c.next_race_num)
+            .outerjoin(next_jump_sq, Meeting.id == next_jump_sq.c.meeting_id)
+            .where(
                 and_(
                     Meeting.date == today,
                     Meeting.selected == True,
                     Meeting.meeting_type.in_(["race", None]),
                 )
             )
+            .order_by(next_jump_sq.c.next_jump.asc().nullslast())
         )
-        today_meetings = meetings_result.scalars().all()
+        today_meetings = meetings_result.all()
 
     meetings_list = []
-    for m in today_meetings:
+    for m, next_jump, next_race_num in today_meetings:
         meetings_list.append({
             "venue": m.venue,
             "meeting_id": m.id,
             "state": get_state_for_track(m.venue) or "AUS",
             "track_condition": m.track_condition,
+            "next_jump": next_jump.isoformat() if next_jump else None,
+            "next_race_num": next_race_num,
         })
 
     # Enrich todays_tips with track_condition
@@ -1196,10 +1212,10 @@ async def tips_dashboard(request: Request):
         if match:
             tip["track_condition"] = match["track_condition"]
 
-    # Best of meets + pooled plays
-    best_of, pooled = await asyncio.gather(
+    # Best of meets + sequence bets
+    best_of, sequences = await asyncio.gather(
         get_best_of_meets(),
-        get_pooled_plays(),
+        get_all_sequences(),
     )
 
     # Match next race to upcoming picks
@@ -1224,7 +1240,7 @@ async def tips_dashboard(request: Request):
             "seven_day_pnl": round(seven_day_pnl, 2),
             "seven_day_roi": seven_day_roi,
             "best_of": best_of,
-            "pooled": pooled,
+            "sequences": sequences,
             "meetings_list": meetings_list,
         }
     )
@@ -1392,14 +1408,10 @@ async def get_best_of_meets() -> dict:
     return meets
 
 
-async def get_pooled_plays() -> dict | None:
-    """Get the best quaddie of the day for metro meets."""
+async def get_all_sequences() -> list:
+    """Get all sequence bets (quaddies, big6, etc.) for today's meetings."""
     today = melb_today()
-
-    METRO_VENUES = {
-        "randwick", "flemington", "caulfield", "moonee valley",
-        "eagle farm", "doomben", "morphettville", "rosehill",
-    }
+    import json as _json
 
     async with async_session() as db:
         active_content = select(Content.id).where(
@@ -1414,36 +1426,22 @@ async def get_pooled_plays() -> dict | None:
                 Meeting.selected == True,
                 Pick.content_id.in_(active_content),
                 Pick.pick_type == "sequence",
-                Pick.sequence_type == "quaddie",
             )
         )
         rows = result.all()
 
     if not rows:
-        return None
+        return []
 
-    # Filter to metro venues
-    metro_rows = [
-        (p, m) for p, m in rows
-        if m.venue.lower().strip() in METRO_VENUES
-    ]
-
-    if not metro_rows:
-        # Fallback to any quaddie
-        metro_rows = rows
-
-    # Pick the quaddie with lowest combo count (most targeted), prefer Skinny
-    import json as _json
-
-    best = None
-    best_score = float("inf")
-    for pick, meeting in metro_rows:
+    sequences = []
+    for pick, meeting in rows:
         legs = pick.sequence_legs
         if isinstance(legs, str):
             try:
                 legs = _json.loads(legs)
             except (ValueError, TypeError):
                 legs = []
+
         combo_count = 1
         for leg in (legs or []):
             if isinstance(leg, list):
@@ -1451,24 +1449,32 @@ async def get_pooled_plays() -> dict | None:
             elif isinstance(leg, dict):
                 combo_count *= len(leg.get("runners", [1]))
 
-        # Score: lower combos = better; Skinny gets -1000 bonus
-        score = combo_count
-        if (pick.sequence_variant or "").lower() == "skinny":
-            score -= 1000
+        # Build compact leg summaries (e.g. "R5: 3,9,6")
+        leg_summaries = []
+        start = pick.sequence_start_race or 1
+        for i, leg in enumerate(legs or []):
+            if isinstance(leg, list):
+                runners = leg
+            elif isinstance(leg, dict):
+                runners = leg.get("runners", [])
+            else:
+                runners = [leg]
+            leg_summaries.append({
+                "race": start + i,
+                "runners": [str(r) for r in runners],
+            })
 
-        if score < best_score:
-            best_score = score
-            best = {
-                "venue": meeting.venue,
-                "meeting_id": meeting.id,
-                "variant": (pick.sequence_variant or "").title(),
-                "legs": legs,
-                "start_race": pick.sequence_start_race,
-                "combo_count": combo_count,
-                "stake": pick.exotic_stake or pick.bet_stake,
-            }
+        sequences.append({
+            "venue": meeting.venue,
+            "meeting_id": meeting.id,
+            "type": (pick.sequence_type or "quaddie").title(),
+            "variant": (pick.sequence_variant or "").title(),
+            "legs": leg_summaries,
+            "combo_count": combo_count,
+            "stake": pick.exotic_stake or pick.bet_stake,
+        })
 
-    return best
+    return sequences
 
 
 @router.get("/tips/archive", response_class=HTMLResponse)

@@ -1,5 +1,4 @@
-{# Today's Meetings Grid — card per meeting #}
-{# Use meetings_list (from DB, always available) with todays_tips as enrichment #}
+{# Today's Meetings Grid — ordered by next jump time #}
 {% set meetings = meetings_list|default(stats.todays_tips|default([])) %}
 {% if meetings %}
 <div>
@@ -9,7 +8,7 @@
     </h2>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {% for meet in meetings %}
-        <a href="/tips/{{ meet.meeting_id }}" class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group">
+        <a href="/tips/{{ meet.meeting_id }}{% if meet.next_race_num %}#race-{{ meet.next_race_num }}{% endif %}" class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group">
             <div class="flex items-start justify-between mb-2">
                 <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors text-sm leading-tight">
                     {{ meet.venue }}
@@ -19,7 +18,14 @@
             {% if meet.track_condition %}
             <div class="text-xs mb-2" style="color: var(--cyan);">{{ meet.track_condition }}</div>
             {% endif %}
-            {# Venue P&L if available #}
+            {# Next race jump time #}
+            {% if meet.next_jump %}
+            <div class="flex items-center gap-1.5 text-xs">
+                <span style="color: var(--text-muted);">R{{ meet.next_race_num }}</span>
+                <span class="countdown-fixed font-heading font-semibold" style="color: var(--magenta);" data-start="{{ meet.next_jump }}">--:--</span>
+            </div>
+            {% else %}
+            {# All races done #}
             {% set venue_data = dashboard.venues|selectattr('name', 'equalto', meet.venue)|first %}
             {% if venue_data and venue_data.pnl is not none and venue_data.bets > 0 %}
             <div class="flex items-center justify-between text-xs">
@@ -28,8 +34,9 @@
                     {{ '+' if venue_data.pnl >= 0 }}${{ '%.0f'|format(venue_data.pnl) }}
                 </span>
             </div>
-            {% elif venue_data and venue_data.upcoming > 0 %}
-            <div class="text-xs" style="color: var(--text-muted);">{{ venue_data.upcoming }} upcoming</div>
+            {% else %}
+            <div class="text-xs" style="color: var(--text-muted);">Complete</div>
+            {% endif %}
             {% endif %}
         </a>
         {% endfor %}

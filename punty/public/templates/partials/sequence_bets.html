@@ -1,0 +1,43 @@
+{# Sequence Bets — all quaddies, big6 etc. in compact single-line format #}
+{% if sequences|default([])|length > 0 %}
+<div>
+    <h2 class="section-heading">
+        <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        Sequence Bets
+    </h2>
+    <div class="space-y-2">
+        {% for seq in sequences %}
+        <div class="card px-4 py-3" style="border-color: rgba(255, 107, 53, 0.2);">
+            <div class="flex items-center gap-3 flex-wrap">
+                {# Type + Variant badge #}
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="font-heading font-bold text-white text-sm">{{ seq.venue }}</span>
+                    <span class="type-badge" style="background: rgba(255, 107, 53, 0.15); color: var(--orange);">{{ seq.type }}{% if seq.variant %} {{ seq.variant }}{% endif %}</span>
+                </div>
+                {# Legs inline: R5: 3,9,6 | R6: 15,5,14 | ... #}
+                <div class="flex items-center gap-1 flex-1 min-w-0 flex-wrap text-xs">
+                    {% for leg in seq.legs %}
+                    {% if not loop.first %}<span style="color: rgba(255,255,255,0.15);">|</span>{% endif %}
+                    <span>
+                        <span class="font-heading font-bold" style="color: var(--text-muted);">R{{ leg.race }}:</span>
+                        <span class="font-heading font-semibold text-white">{{ leg.runners|join(', ') }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+                {# Combos + outlay #}
+                <div class="flex items-center gap-2 flex-shrink-0 text-xs" style="color: var(--text-muted);">
+                    <span>{{ seq.combo_count }} combos</span>
+                    {% if seq.stake %}
+                    <span>&middot; ${{ '%.0f'|format(seq.stake) }}</span>
+                    {% endif %}
+                </div>
+                {# Link #}
+                <a href="/tips/{{ seq.meeting_id }}" class="flex-shrink-0 text-xs font-heading font-bold uppercase tracking-wider transition-colors" style="color: var(--orange);">
+                    Card &rarr;
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
