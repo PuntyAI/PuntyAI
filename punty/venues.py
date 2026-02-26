@@ -132,6 +132,29 @@ for _state, _tracks in _STATE_TRACKS.items():
         _VENUE_TO_STATE[_track] = _state
 
 
+METRO_VENUES = {
+    # VIC
+    "flemington", "caulfield", "moonee valley", "sandown", "cranbourne", "pakenham",
+    # NSW
+    "randwick", "rosehill", "warwick farm", "canterbury", "newcastle", "kembla grange",
+    # QLD
+    "eagle farm", "doomben", "gold coast", "sunshine coast", "ipswich",
+    # SA
+    "morphettville", "morphettville parks",
+    # WA
+    "ascot", "belmont", "bunbury", "pinjarra",
+    # TAS
+    "hobart", "launceston",
+    # HK
+    "sha tin", "happy valley",
+}
+
+
+def is_metro(venue: str) -> bool:
+    """Check if venue is a major metropolitan racecourse."""
+    return normalize_venue(venue) in METRO_VENUES
+
+
 def normalize_venue(venue: str) -> str:
     """Normalize venue name: strip sponsors, apply aliases, lowercase.
 

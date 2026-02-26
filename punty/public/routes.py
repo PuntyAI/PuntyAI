@@ -477,12 +477,88 @@ async def get_winner_stats(today: bool = False) -> dict:
 @router.get("/", response_class=HTMLResponse)
 async def homepage(request: Request):
     """Public homepage."""
-    stats = await get_winner_stats()
+    import asyncio
+    from datetime import timedelta
+    from punty.results.picks import get_performance_history
+    from punty.venues import guess_state as get_state_for_track, is_metro
+
+    today = melb_today()
+    thirty_ago = today - timedelta(days=30)
+
+    stats, next_race_data = await asyncio.gather(
+        get_winner_stats(),
+        get_next_race(),
+    )
+
+    # 30-day P&L + strike rate
+    async with async_session() as db:
+        perf_history = await get_performance_history(db, thirty_ago, today)
+
+        # All-time bet count
+        bets_count_result = await db.execute(
+            select(func.count(Pick.id)).where(
+                Pick.settled == True,
+                or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            )
+        )
+        bets_all_time = bets_count_result.scalar() or 0
+
+    pnl_30d = sum(d["pnl"] for d in perf_history)
+    bets_30d = sum(d["bets"] for d in perf_history)
+    hits_30d = sum(d.get("hits", 0) for d in perf_history)
+    strike_30d = round(hits_30d / bets_30d * 100, 1) if bets_30d else 0
+
+    # Today's meetings with metro flag
+    async with async_session() as db:
+        from sqlalchemy import func as sa_func
+        next_jump_sq = (
+            select(
+                Race.meeting_id,
+                sa_func.min(Race.start_time).label("next_jump"),
+            )
+            .where(or_(
+                Race.results_status.is_(None),
+                Race.results_status.in_(["Open", "scheduled"]),
+            ))
+            .group_by(Race.meeting_id)
+            .subquery()
+        )
+        meetings_result = await db.execute(
+            select(Meeting, next_jump_sq.c.next_jump)
+            .outerjoin(next_jump_sq, Meeting.id == next_jump_sq.c.meeting_id)
+            .where(and_(
+                Meeting.date == today,
+                Meeting.selected == True,
+                Meeting.meeting_type.in_(["race", None]),
+            ))
+            .order_by(next_jump_sq.c.next_jump.asc().nullslast())
+        )
+        today_meetings = meetings_result.all()
+
+    meetings = []
+    for m, next_jump in today_meetings:
+        meetings.append({
+            "venue": m.venue,
+            "meeting_id": m.id,
+            "state": get_state_for_track(m.venue) or "AUS",
+            "track_condition": m.track_condition,
+            "next_jump": next_jump.isoformat() if next_jump else None,
+            "is_metro": is_metro(m.venue),
+        })
+
+    # Sort: metro first, then by next_jump
+    meetings.sort(key=lambda x: (not x["is_metro"], x["next_jump"] or "9999"))
+
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
             "stats": stats,
+            "meetings": meetings,
+            "pnl_30d": round(pnl_30d, 2),
+            "strike_30d": strike_30d,
+            "bets_all_time": bets_all_time,
+            "next_race": next_race_data,
         }
     )
 
@@ -848,11 +924,40 @@ def _compute_pick_data(all_picks: list) -> dict:
     for pick in all_picks:
         # --- Selection picks lookup (all, not just settled) ---
         if pick.pick_type == "selection" and pick.race_number and pick.saddlecloth:
+            # Edge/confidence calculation
+            bt_lower = (pick.bet_type or "").lower()
+            model_prob = None
+            if "place" in bt_lower and pick.place_probability:
+                model_prob = round(pick.place_probability * 100, 1)
+            elif pick.win_probability:
+                model_prob = round(pick.win_probability * 100, 1)
+            market_implied = round(100 / pick.odds_at_tip, 1) if pick.odds_at_tip else None
+            edge_pct = round(model_prob - market_implied, 1) if model_prob and market_implied else None
+            if edge_pct is not None:
+                if edge_pct >= 10:
+                    confidence = "HIGH EDGE"
+                elif edge_pct >= 5:
+                    confidence = "VALUE"
+                elif edge_pct >= 3:
+                    confidence = "EDGE"
+                else:
+                    confidence = "SPECULATIVE"
+            else:
+                confidence = None
+
             picks_lookup.setdefault(pick.race_number, {})[pick.saddlecloth] = {
                 "tip_rank": pick.tip_rank,
                 "bet_type": pick.bet_type,
                 "hit": pick.hit,
                 "pnl": float(pick.pnl) if pick.pnl is not None else None,
+                "odds": float(pick.odds_at_tip) if pick.odds_at_tip else None,
+                "stake": float(pick.bet_stake) if pick.bet_stake else None,
+                "model_prob": model_prob,
+                "market_implied": market_implied,
+                "edge_pct": edge_pct,
+                "confidence": confidence,
+                "is_puntys_pick": bool(pick.is_puntys_pick),
+                "is_roughie": bool(pick.is_roughie) if hasattr(pick, 'is_roughie') else (pick.tip_rank == 4),
             }
             # Track Punty's Pick per race
             if pick.is_puntys_pick:
@@ -1288,6 +1393,7 @@ async def tips_dashboard(request: Request):
         )
         today_meetings = meetings_result.all()
 
+    from punty.venues import is_metro
     meetings_list = []
     for m, next_jump, next_race_num in today_meetings:
         meetings_list.append({
@@ -1297,6 +1403,7 @@ async def tips_dashboard(request: Request):
             "track_condition": m.track_condition,
             "next_jump": next_jump.isoformat() if next_jump else None,
             "next_race_num": next_race_num,
+            "is_metro": is_metro(m.venue),
         })
 
     # Enrich todays_tips with track_condition
@@ -1337,6 +1444,41 @@ async def tips_dashboard(request: Request):
             )
             next_race_scratched = {r.saddlecloth for r in runners_res.scalars().all() if r.saddlecloth}
 
+    # Build primary_play from next race picks (Punty's Pick or rank 1)
+    primary_play = None
+    if next_race_picks and next_race_data.get("has_next"):
+        # Prefer Punty's Pick, else rank 1
+        pp = next((p for p in next_race_picks if p.get("is_puntys_pick")), None)
+        if not pp:
+            pp = next((p for p in next_race_picks if p.get("tip_rank") == 1), None)
+        if not pp and next_race_picks:
+            pp = next_race_picks[0]
+
+        if pp and pp.get("odds"):
+            bt_lower = (pp.get("bet_type") or "").lower()
+            model_prob = (pp.get("place_prob") or pp.get("win_prob") or 0) / 100
+            if "place" in bt_lower and pp.get("place_prob"):
+                model_prob = pp["place_prob"] / 100
+            elif pp.get("win_prob"):
+                model_prob = pp["win_prob"] / 100
+            market_implied = 1 / pp["odds"] if pp["odds"] else 0
+            edge_pct = round((model_prob - market_implied) * 100, 1)
+            if edge_pct >= 10:
+                confidence = "HIGH EDGE"
+            elif edge_pct >= 5:
+                confidence = "VALUE"
+            elif edge_pct >= 3:
+                confidence = "EDGE"
+            else:
+                confidence = "SMALL EDGE"
+            primary_play = {
+                **pp,
+                "model_prob": round(model_prob * 100, 1),
+                "market_implied": round(market_implied * 100, 1),
+                "edge_pct": edge_pct,
+                "confidence": confidence,
+            }
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -1353,6 +1495,7 @@ async def tips_dashboard(request: Request):
             "best_of": best_of,
             "sequences": sequences,
             "meetings_list": meetings_list,
+            "primary_play": primary_play,
         }
     )
 
@@ -1448,6 +1591,71 @@ async def tips_next_race(request: Request):
             "next_race": next_race_data,
             "next_race_picks": next_race_picks,
             "next_race_scratched": next_race_scratched,
+        }
+    )
+
+
+@router.get("/tips/_live-edge", response_class=HTMLResponse)
+async def tips_live_edge(request: Request):
+    """HTMX partial: Live Edge Zone refresh."""
+    import asyncio
+
+    dashboard, next_race_data = await asyncio.gather(
+        get_daily_dashboard(),
+        get_next_race(),
+    )
+
+    next_race_picks = []
+    if next_race_data.get("has_next"):
+        nr_mid = next_race_data.get("meeting_id")
+        nr_rn = next_race_data.get("race_number")
+        for u in dashboard.get("upcoming", []):
+            if u.get("meeting_id") == nr_mid and u.get("race_number") == nr_rn:
+                next_race_picks.append(u)
+        if not next_race_picks:
+            next_race_picks = await _get_picks_for_race(nr_mid, nr_rn)
+
+    # Build primary_play
+    primary_play = None
+    if next_race_picks and next_race_data.get("has_next"):
+        pp = next((p for p in next_race_picks if p.get("is_puntys_pick")), None)
+        if not pp:
+            pp = next((p for p in next_race_picks if p.get("tip_rank") == 1), None)
+        if not pp and next_race_picks:
+            pp = next_race_picks[0]
+
+        if pp and pp.get("odds"):
+            bt_lower = (pp.get("bet_type") or "").lower()
+            model_prob = (pp.get("place_prob") or pp.get("win_prob") or 0) / 100
+            if "place" in bt_lower and pp.get("place_prob"):
+                model_prob = pp["place_prob"] / 100
+            elif pp.get("win_prob"):
+                model_prob = pp["win_prob"] / 100
+            market_implied = 1 / pp["odds"] if pp["odds"] else 0
+            edge_pct = round((model_prob - market_implied) * 100, 1)
+            if edge_pct >= 10:
+                confidence = "HIGH EDGE"
+            elif edge_pct >= 5:
+                confidence = "VALUE"
+            elif edge_pct >= 3:
+                confidence = "EDGE"
+            else:
+                confidence = "SMALL EDGE"
+            primary_play = {
+                **pp,
+                "model_prob": round(model_prob * 100, 1),
+                "market_implied": round(market_implied * 100, 1),
+                "edge_pct": edge_pct,
+                "confidence": confidence,
+            }
+
+    return templates.TemplateResponse(
+        "partials/live_edge.html",
+        {
+            "request": request,
+            "next_race": next_race_data,
+            "next_race_picks": next_race_picks,
+            "primary_play": primary_play,
         }
     )
 
@@ -2427,6 +2635,23 @@ async def meeting_tips_page(request: Request, meeting_id: str):
     meta_title = f"{venue} Racing Tips {date_str} | PuntyAI"
     meta_desc = f"AI racing tips and form guide for {venue} on {date_str}. Early mail analysis, selections, exotics, and live race updates."
 
+    # Find next upcoming race time for sidebar countdown
+    next_race_time = None
+    from datetime import datetime
+    now = datetime.now()
+    for r in data.get("races", []):
+        if r.get("time") and r.get("status") not in ("Paying", "Closed", "Final"):
+            try:
+                race_dt = datetime.strptime(
+                    data["meeting"].get("date", "") + "T" + r["time"],
+                    "%Y-%m-%dT%H:%M"
+                )
+                if race_dt > now:
+                    next_race_time = race_dt.strftime("%Y-%m-%dT%H:%M:00+11:00")
+                    break
+            except (ValueError, TypeError):
+                pass
+
     response = templates.TemplateResponse(
         "meeting_tips.html",
         {
@@ -2447,6 +2672,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "same_day_meetings": data.get("same_day_meetings", []),
             "scratched_picks": data.get("scratched_picks", {}),
             "alternatives": data.get("alternatives", {}),
+            "next_race_time": next_race_time,
             "meta_title": meta_title,
             "meta_description": meta_desc,
         }

@@ -1061,8 +1061,12 @@ class ResultsMonitor:
             s in ("Paying", "Closed") for s in statuses.values()
         )
 
+        # Also skip pre-race/weather checks for yesterday's meetings (results-only)
+        from punty.config import melb_today
+        is_past_meeting = meeting.date < melb_today()
+
         # Pre-race change detection AFTER results (scratchings, track condition, jockey/gear)
-        if not all_finished:
+        if not all_finished and not is_past_meeting:
             try:
                 await self._check_pre_race_changes(db, meeting, races, statuses)
             except Exception as e:
