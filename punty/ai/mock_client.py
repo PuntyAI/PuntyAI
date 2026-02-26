@@ -58,7 +58,7 @@ Punty read: MOCK HERO has the gate speed to cross and control. STAGING FLYER the
    Confidence: med
    Why: Maps to sit behind the speed
 3. *DATA DASHER* (No.5) — $8.00 / $2.50
-   Bet: $4 Each Way, return $42.00
+   Bet: $4 Place, return $10.00
    Confidence: low
    Why: Strong closing sectionals last start
 Roughie: *LONGSHOT LARRY* (No.8) — $15.00 / $4.00
@@ -108,7 +108,7 @@ Punty read: TEST RUNNER relishes the wet and gets the right tempo. STAYER SUPREM
 
 *Top 3 + Roughie ($20 pool)*
 1. *TEST RUNNER* (No.2) — $8.00 / $2.50
-   Bet: $6 Each Way, return $53.00
+   Bet: $6 Place, return $15.00
    Confidence: med
    Why: Wet track form is superb, maps to get a nice trail
 2. *STAYER SUPREME* (No.1) — $2.80 / $1.30

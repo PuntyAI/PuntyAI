@@ -800,21 +800,17 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
         if odds > 6.0 and win_prob >= 0.15:
             return (True, None)
 
-    # 2. Place with sufficient prob and value
-    if bt == "Place" and place_prob >= 0.40 and place_value >= 0.95:
-        return (True, None)
-
-    # 3. Place at $3.00-$6.00 with decent place probability
-    if bt == "Place" and 3.0 <= odds <= 6.0 and place_prob >= 0.40:
-        return (True, None)
-
-    # 4. Roughie Place at $8-$20 with strong place probability
-    if pick.is_roughie and bt == "Place" and 8.0 <= odds <= 20.0 and place_prob >= 0.35:
-        return (True, None)
-
-    # 5. Place at good odds ($2.50-$8) — our overall profit engine (+13.8% ROI)
-    if bt == "Place" and 2.5 <= odds <= 8.0 and place_prob >= 0.35:
-        return (True, None)
+    # 2. Place with graduated prob threshold by odds band
+    if bt == "Place":
+        # Short odds ($1.50-$3): needs high collection prob
+        if odds < 3.0 and place_prob >= 0.55:
+            return (True, None)
+        # Medium odds ($3-$6): standard threshold
+        if 3.0 <= odds <= 6.0 and place_prob >= 0.40:
+            return (True, None)
+        # Longer odds ($6+): lower threshold acceptable (bigger payoff compensates)
+        if odds > 6.0 and place_prob >= 0.35:
+            return (True, None)
 
     # --- No Bet (tracked) zones ---
 
@@ -826,10 +822,11 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt in ("Win", "Saver Win") and 2.0 <= odds < 4.0 and win_prob < 0.20:
         return (False, f"Not enough conviction (Win ${odds:.0f}, {win_prob * 100:.0f}% win prob)")
 
-    # Place with low collection probability
-    place_floor = 0.30 if (bt == "Place" and odds >= 3.0) else 0.35
-    if bt == "Place" and place_prob < place_floor:
-        return (False, f"Place prob too low ({place_prob * 100:.0f}% < {place_floor * 100:.0f}%)")
+    # Place with low collection probability — graduated by odds
+    if bt == "Place":
+        place_floor = 0.55 if odds < 3.0 else (0.40 if odds <= 6.0 else 0.35)
+        if place_prob < place_floor:
+            return (False, f"Place prob too low ({place_prob * 100:.0f}% < {place_floor * 100:.0f}%)")
 
     # Negative expected value both ways — no edge
     if ev_win < -0.10 and ev_place < -0.05:
@@ -925,6 +922,16 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         if pick.bet_type == "Place" and pick.place_prob >= 0.45:
             base *= 1.15  # 15% stake boost for high-confidence Place
 
+        # Place overlay stake modifier — reduce stake on thin-edge bets
+        # Market place prob estimated as 3/odds (place pays ~1/3 of field)
+        if pick.bet_type == "Place" and pick.place_prob and pick.odds and pick.odds > 1.0:
+            market_place_prob = min(1.0, 3.0 / pick.odds)
+            overlay = pick.place_prob / market_place_prob if market_place_prob > 0 else 1.0
+            if overlay < 1.05:
+                base *= 0.60  # Thin edge: reduce 40%
+            elif overlay < 1.10:
+                base *= 0.80  # Moderate edge: reduce 20%
+
         pick_weights.append(base)
 
     total_weight = sum(pick_weights)
@@ -1018,9 +1025,12 @@ def _select_exotic(
 
         ec_type = ec.get("type", "")
 
-        # Trifecta Standout killed: 0/20 hits, -100% ROI across all scenarios
+        # Trifecta Standout: only when #1 pick is dominant (win_prob >= 0.30)
+        # AND field size 8-12 (not too open, not too small)
         if ec_type == "Trifecta Standout":
-            continue
+            top_pick_prob = max((p.win_prob for p in picks if p.rank == 1), default=0)
+            if top_pick_prob < 0.30 or not (8 <= field_size <= 12):
+                continue
 
         # Trifecta Box: profitable only in narrow scenario (field 11-13,
         # non-sprint, fav $2-$3.50, Good/Soft track). All other combos lose.

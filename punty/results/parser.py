@@ -21,7 +21,7 @@ _BIG3_HORSE = re.compile(
     re.IGNORECASE,
 )
 _BIG3_MULTI = re.compile(
-    r"Multi.*?(\d+)U\s*[×x]\s*~?\$?(\d+\.?\d*)\s*=\s*~?(\d+\.?\d*)U",
+    r"Multi.*?\$?(\d+)(?:U)?\s*[×x]\s*~?\$?(\d+\.?\d*)\s*=\s*~?\$?(\d+\.?\d*)\s*(?:U|collect)?",
     re.IGNORECASE,
 )
 
@@ -184,10 +184,160 @@ def _normalize_exotic_type(raw: str) -> str:
     return raw.strip()
 
 
+def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) -> list[dict] | None:
+    """Try to extract picks from JSON block in AI output. Returns None if no JSON found."""
+    json_match = re.search(r'```json\s*\n(.*?)\n```', raw_content, re.DOTALL)
+    if not json_match:
+        return None
+    try:
+        data = json.loads(json_match.group(1))
+    except json.JSONDecodeError:
+        logger.warning("JSON block found but failed to parse")
+        return None
+
+    picks: list[dict] = []
+    _id_counter = 0
+
+    def _next_id() -> str:
+        nonlocal _id_counter
+        _id_counter += 1
+        return f"pk-{content_id[:8]}-{_id_counter:03d}"
+
+    def _pick_base() -> dict:
+        return {
+            "content_id": content_id,
+            "meeting_id": meeting_id,
+            "race_number": None,
+            "horse_name": None,
+            "saddlecloth": None,
+            "tip_rank": None,
+            "odds_at_tip": None,
+            "place_odds_at_tip": None,
+            "pick_type": None,
+            "bet_type": None,
+            "bet_stake": None,
+            "exotic_type": None,
+            "exotic_runners": None,
+            "exotic_stake": None,
+            "sequence_type": None,
+            "sequence_variant": None,
+            "sequence_legs": None,
+            "sequence_start_race": None,
+            "multi_odds": None,
+            "estimated_return_pct": None,
+        }
+
+    # --- Big 3 ---
+    for b in data.get("big3", []):
+        p = _pick_base()
+        p["id"] = _next_id()
+        p["pick_type"] = "big3"
+        p["race_number"] = b.get("race")
+        p["horse_name"] = b.get("horse")
+        p["saddlecloth"] = b.get("saddlecloth")
+        p["tip_rank"] = b.get("rank")
+        p["odds_at_tip"] = b.get("odds")
+        picks.append(p)
+
+    # --- Big 3 Multi ---
+    b3m = data.get("big3_multi")
+    if b3m and b3m.get("stake"):
+        p = _pick_base()
+        p["id"] = _next_id()
+        p["pick_type"] = "big3_multi"
+        p["exotic_stake"] = b3m.get("stake")
+        p["multi_odds"] = b3m.get("multi_odds")
+        picks.append(p)
+
+    # --- Race selections + exotics ---
+    for race_key, race_data in data.get("races", {}).items():
+        race_num = int(race_key)
+
+        for sel in race_data.get("selections", []):
+            p = _pick_base()
+            p["id"] = _next_id()
+            p["pick_type"] = "selection"
+            p["race_number"] = race_num
+            p["horse_name"] = sel.get("horse")
+            p["saddlecloth"] = sel.get("saddlecloth")
+            p["tip_rank"] = sel.get("rank")
+            p["odds_at_tip"] = sel.get("win_odds")
+            p["place_odds_at_tip"] = sel.get("place_odds")
+            p["bet_type"] = _normalize_bet_type(sel.get("bet_type", "place"))
+            p["bet_stake"] = sel.get("stake")
+            p["confidence"] = sel.get("confidence")
+            p["win_probability"] = sel.get("probability")
+            p["value_rating"] = sel.get("value")
+            picks.append(p)
+
+        # Roughie
+        roughie = race_data.get("roughie")
+        if roughie and roughie.get("horse"):
+            p = _pick_base()
+            p["id"] = _next_id()
+            p["pick_type"] = "selection"
+            p["race_number"] = race_num
+            p["horse_name"] = roughie.get("horse")
+            p["saddlecloth"] = roughie.get("saddlecloth")
+            p["tip_rank"] = 4
+            p["odds_at_tip"] = roughie.get("win_odds")
+            p["place_odds_at_tip"] = roughie.get("place_odds")
+            bt = roughie.get("bet_type", "exotics_only")
+            p["bet_type"] = _normalize_bet_type(bt) if bt != "exotics_only" else "exotics_only"
+            p["bet_stake"] = roughie.get("stake", 0.0)
+            picks.append(p)
+
+        # Exotic
+        exotic = race_data.get("exotic")
+        if exotic and exotic.get("type"):
+            p = _pick_base()
+            p["id"] = _next_id()
+            p["pick_type"] = "exotic"
+            p["race_number"] = race_num
+            p["exotic_type"] = _normalize_exotic_type(exotic["type"])
+            runners = exotic.get("runners", [])
+            p["exotic_runners"] = json.dumps(runners) if runners else None
+            p["exotic_stake"] = exotic.get("stake")
+            picks.append(p)
+
+    # --- Sequences ---
+    for seq in data.get("sequences", []):
+        seq_type = seq.get("type", "").lower()
+        start_race = seq.get("start_race")
+        end_race = seq.get("end_race")
+        for var in seq.get("variants", []):
+            p = _pick_base()
+            p["id"] = _next_id()
+            p["pick_type"] = "sequence"
+            p["sequence_type"] = "quaddie" if "quad" in seq_type else "big6"
+            p["sequence_variant"] = var.get("name", "").lower()
+            legs_str = var.get("legs", "")
+            p["sequence_legs"] = json.dumps(legs_str) if legs_str else None
+            p["sequence_start_race"] = start_race
+            p["exotic_stake"] = var.get("total")
+            p["estimated_return_pct"] = var.get("est_return")
+            picks.append(p)
+
+    if not picks:
+        logger.warning("JSON block parsed but produced 0 picks")
+        return None
+
+    logger.info(f"Parsed {len(picks)} picks from JSON block")
+    return picks
+
+
 def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list[dict]:
     """Parse early mail content into a list of pick dicts ready for DB insertion."""
     if not raw_content:
         return []
+
+    # Try JSON first (Phase 2 — deterministic parsing)
+    json_picks = _try_parse_json_block(raw_content, content_id, meeting_id)
+    if json_picks:
+        return json_picks
+
+    # Fall back to regex parsing
+    logger.info("No JSON block found, using regex parser")
 
     picks: list[dict] = []
     _id_counter = 0
@@ -227,6 +377,42 @@ def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list
             )
 
     return picks
+
+
+def validate_parsed_picks(parsed_picks: list[dict], pre_selections: dict) -> list[str]:
+    """Compare parsed picks against pre-selection recommendations. Return warnings.
+
+    Cross-references parser output with what the pre-selection engine recommended,
+    logging any silent failures where picks were expected but not parsed.
+    """
+    warnings = []
+    expected_races = set(pre_selections.get("races", {}).keys())
+    parsed_races = set(p.get("race_number") for p in parsed_picks if p.get("pick_type") == "selection")
+
+    missing_races = expected_races - parsed_races
+    for race_num in sorted(missing_races):
+        race_data = pre_selections.get("races", {}).get(race_num, {})
+        expected_count = len(race_data.get("picks", []))
+        warnings.append(
+            f"Race {race_num}: no picks parsed (expected {expected_count} selections)"
+        )
+
+    # Check Big3 Multi was parsed
+    has_big3_multi = any(p.get("pick_type") == "big3_multi" for p in parsed_picks)
+    if pre_selections.get("big3") and not has_big3_multi:
+        warnings.append("Big3 Multi not parsed — check regex match")
+
+    # Check exotics per race
+    parsed_exotic_races = set(p.get("race_number") for p in parsed_picks if p.get("pick_type") == "exotic")
+    expected_exotic_races = set(
+        rn for rn, rd in pre_selections.get("races", {}).items()
+        if rd.get("exotic")
+    )
+    missing_exotics = expected_exotic_races - parsed_exotic_races
+    for race_num in sorted(missing_exotics):
+        warnings.append(f"Race {race_num}: exotic not parsed")
+
+    return warnings
 
 
 def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> list[dict]:
@@ -324,6 +510,9 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
+                # E/W killed in pre-selections (Batch 1) — auto-convert to Place
+                if bet_type == "each_way":
+                    bet_type = "place"
             elif _BET_EXOTICS_ONLY.search(after_text):
                 bet_stake = 0.0
                 bet_type = "exotics_only"
@@ -395,6 +584,9 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
+                # E/W killed in pre-selections (Batch 1) — auto-convert to Place
+                if bet_type == "each_way":
+                    bet_type = "place"
             elif _BET_EXOTICS_ONLY.search(after_text):
                 bet_stake = 0.0
                 bet_type = "exotics_only"

@@ -580,13 +580,13 @@ def _lgbm_blend_weight(runner_odds: float) -> float:
     Returns LGBM weight (0.0-1.0). Weighted weight = 1.0 - lgbm_weight.
     """
     if runner_odds < 3.0:
-        return 0.05          # 95% weighted, 5% LGBM
+        return 0.25          # 75% weighted, 25% LGBM (was 5% — LGBM has 68% accuracy)
     elif runner_odds < 5.0:
-        # Linear 5% → 20% LGBM
-        return 0.05 + (runner_odds - 3.0) / 2.0 * 0.15
+        # Linear 25% → 45% LGBM
+        return 0.25 + (runner_odds - 3.0) / 2.0 * 0.20
     elif runner_odds < 8.0:
-        # Linear 20% → 70% LGBM
-        return 0.20 + (runner_odds - 5.0) / 3.0 * 0.50
+        # Linear 45% → 70% LGBM
+        return 0.45 + (runner_odds - 5.0) / 3.0 * 0.25
     else:
         return 0.70          # 30% weighted, 70% LGBM
 
@@ -864,6 +864,25 @@ def calculate_race_probabilities(
         else:
             dist_bucket = _get_dist_bucket(race_distance)
             w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
+
+    # Apply track condition adjustments — heavy/soft reduce form predictiveness,
+    # increase barrier importance (inside rail advantage in wet going)
+    _CONDITION_WEIGHT_ADJ = {
+        "heavy": {"form": -0.05, "barrier": +0.03, "horse_profile": +0.02},
+        "soft":  {"form": -0.02, "barrier": +0.01, "horse_profile": +0.01},
+    }
+    cond_key = "heavy" if "heavy" in track_condition.lower() else (
+        "soft" if "soft" in track_condition.lower() else None
+    )
+    if cond_key and not weights:  # Only adjust auto-selected weights, not explicit overrides
+        adj = _CONDITION_WEIGHT_ADJ[cond_key]
+        w = dict(w)  # Don't mutate shared dict
+        for factor, delta in adj.items():
+            if factor in w:
+                w[factor] = max(0.0, w[factor] + delta)
+        total_w = sum(w.values())
+        if total_w > 0:
+            w = {k: v / total_w for k, v in w.items()}
 
     # Determine pace scenario from race analysis or speed map positions
     # Skip if pace weight is zero (saves iterating all runners)
@@ -1325,14 +1344,16 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
                 signal_sum += _stat_to_score(su.win_rate, baseline, "second_up_sr") * 0.5
                 signals += 0.5
 
-    # Career win/place percentage (Q5-Q1: 26.6% win, 18.8% place)
+    # Career win/place percentage — strongest predictor per backtest
     career = parse_stats_string(_get(runner, "career_record"))
     if career and career.starts >= 10:
         career_win_score = _stat_to_score(career.win_rate, baseline, "career_win_pct")
         career_place_score = _stat_to_score(career.place_rate, baseline * 3, "career_place_pct")
         career_score = career_win_score * 0.7 + career_place_score * 0.3
-        signal_sum += career_score * 0.6
-        signals += 0.6
+        # Proven horses (20+ starts) get double weight — strongest signal per backtest
+        career_weight = 1.2 if career.starts >= 20 else 0.6
+        signal_sum += career_score * career_weight
+        signals += career_weight
 
     # Average condition score — aggregate across all track conditions (Q5-Q1: 10.6%)
     cond_total_starts = 0
@@ -1355,6 +1376,32 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
     elif form_trend == "declining":
         signal_sum += 0.45  # slight negative (0.5 baseline - 0.05)
         signals += 1.0
+
+    # KRI sub-signal: Kick Reaction Index (0-100) with recency weighting
+    fh_for_kri = _get(runner, "form_history")
+    if fh_for_kri:
+        try:
+            fh_kri = json.loads(fh_for_kri) if isinstance(fh_for_kri, str) else fh_for_kri
+            if isinstance(fh_kri, list):
+                kri_vals = [f.get("kri") for f in fh_kri[:5] if f.get("kri") and f["kri"] > 0]
+                if len(kri_vals) >= 2:
+                    kri_avg = sum(kri_vals) / len(kri_vals)
+                    # Map KRI 0-100 to 0.1-0.9 score: 50=neutral, 80+=strong
+                    kri_score = 0.1 + (min(kri_avg, 100) / 100.0) * 0.8
+                    signal_sum += kri_score * 0.8
+                    signals += 0.8
+                    # KRI trend: recent 2 vs older 2 (momentum signal)
+                    if len(kri_vals) >= 4:
+                        recent = sum(kri_vals[:2]) / 2
+                        older = sum(kri_vals[2:4]) / 2
+                        if recent > older + 5:  # improving by 5+ points
+                            signal_sum += 0.58 * 0.3
+                            signals += 0.3
+                        elif recent < older - 5:  # declining
+                            signal_sum += 0.42 * 0.3
+                            signals += 0.3
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     if signals > 0:
         score = signal_sum / signals
@@ -1715,6 +1762,13 @@ def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, ven
     elif relative >= 0.70:
         score -= 0.03 * dist_mult  # outer quarter (softened from 0.04)
 
+    # Aggressive penalty for outside barriers in large fields (13+)
+    # Backtest: gates 10+ in 13+ fields = ~2% win rate in sprints, ~5% at middle distances
+    if field_size >= 13 and barrier >= 10:
+        gates_from_ten = barrier - 9  # 1 for gate 10, 5 for gate 14
+        penalty = 0.04 * gates_from_ten * dist_mult
+        score -= penalty
+
     return max(0.05, min(0.95, score))
 
 
@@ -1842,11 +1896,21 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
             signal_sum += t_score * 0.4
             signals += 0.4
 
-    # --- Combo bonus: jockey+trainer combination (20% extra signal) ---
+    # --- Combo bonus: jockey+trainer combination ---
     if j_a2e and "combo_career" in j_a2e:
         combo = j_a2e["combo_career"]
         combo_runners = combo.get("runners", 0) or 0
-        if combo_runners >= 5:
+        if combo_runners >= 20:
+            # High-confidence partnership: combo becomes PRIMARY signal (+13.1% spread)
+            combo_sr = (combo.get("strike_rate", 0) or 0)
+            combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
+            if combo_decimal > 0 and baseline > 0:
+                ratio = combo_decimal / baseline
+                combo_score = 0.5 + max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
+                signal_sum += combo_score * 0.5
+                signals += 0.5
+        elif combo_runners >= 5:
+            # Standard combo: secondary signal (0.2 weight)
             combo_sr = (combo.get("strike_rate", 0) or 0)
             combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
             if combo_decimal > 0 and baseline > 0:
@@ -1865,8 +1929,10 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
             if l100_decimal > 0 and baseline > 0:
                 ratio = l100_decimal / baseline
                 l100_score = 0.5 + max(-0.12, min(0.18, (ratio - 1.0) * 0.15))
-                signal_sum += l100_score * 0.25
-                signals += 0.25
+                # Elevated weight for high-sample combos (30+ runners)
+                l100_weight = 0.40 if combo_l100_runners >= 30 else 0.25
+                signal_sum += l100_score * l100_weight
+                signals += l100_weight
 
     if signals > 0:
         score = signal_sum / signals

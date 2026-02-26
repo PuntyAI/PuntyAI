@@ -193,7 +193,7 @@ class TestValidateSelections:
         assert not any("mandatory" in i.message.lower() for i in result.issues)
 
     def test_no_win_bet_warning(self):
-        """All Place bets (no Win) produces mandatory rule warning."""
+        """All Place bets (no Win) produces warning."""
         runner_map = {1: _runner(1), 2: _runner(2)}
         picks = [
             _selection(1, 1, bet_type="Place", stake=10.0),
@@ -201,7 +201,7 @@ class TestValidateSelections:
         ]
         result = ValidationResult()
         _validate_selections(picks, runner_map, 1, result)
-        assert any("mandatory" in i.message.lower() for i in result.issues)
+        assert any("no win" in i.message.lower() for i in result.issues)
 
     def test_each_way_counts_as_win(self):
         """Each Way satisfies the mandatory Win bet requirement."""
@@ -211,15 +211,16 @@ class TestValidateSelections:
         _validate_selections(picks, runner_map, 1, result)
         assert not any("mandatory" in i.message.lower() for i in result.issues)
 
-    def test_each_way_double_counted_in_stakes(self):
-        """Each Way stake counts double (win + place halves)."""
+    def test_each_way_single_counted_in_stakes(self):
+        """Each Way stake counts as single (E/W killed, treated as Place)."""
         runner_map = {1: _runner(1, win_prob=0.20)}
-        # $10 Each Way = $20 total, which matches target exactly
+        # $10 E/W = $10 total now (no longer doubled)
         picks = [_selection(1, 1, bet_type="Each Way", stake=10.0)]
         result = ValidationResult()
         _validate_selections(picks, runner_map, 1, result)
         stake_issues = [i for i in result.issues if i.category == "stake"]
-        assert len(stake_issues) == 0
+        # $10 vs $20 target = $10 difference, exceeds $3 tolerance
+        assert len(stake_issues) == 1
 
     def test_stake_over_target(self):
         """Stakes way over $20 produce warning."""
