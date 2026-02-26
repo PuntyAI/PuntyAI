@@ -458,7 +458,7 @@ def _optimiser_select(
         else:
             leg_types.append("normal")
 
-    # Step 2: Viability check — need at least one anchor OR one strong runner
+    # Step 2: Classify anchor presence (informational — no longer a hard skip)
     has_anchor = "anchor" in leg_types
     has_strong = any(
         float(r.get("win_prob", 0)) >= 0.32
@@ -466,8 +466,7 @@ def _optimiser_select(
         for r in leg.top_runners[:1]  # top runner only
     )
     if not has_anchor and not has_strong:
-        logger.info("PASS: no anchor leg and no strong runner (>=32%)")
-        return None
+        logger.info("No anchor leg and no strong runner (>=32%%) — building wider legs")
 
     # Step 3: Set initial targets per leg type
     # Check which legs have a short-priced fav (≤$2.50) that is one of our picks

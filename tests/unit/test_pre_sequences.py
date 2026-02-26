@@ -215,8 +215,8 @@ class TestOptimiser:
             legs.append(leg)
         return legs
 
-    def test_pass_when_no_anchor_no_strong(self):
-        """No anchor leg and no strong runner → PASS (None)."""
+    def test_no_anchor_no_strong_still_builds(self):
+        """No anchor leg and no strong runner → still builds wider legs."""
         specs = [
             (0.18, 0.02, 12, "OPEN_BUNCH"),
             (0.15, 0.01, 14, "WIDE_OPEN"),
@@ -225,7 +225,10 @@ class TestOptimiser:
         ]
         legs = self._make_legs(specs)
         result = _optimiser_select(legs, budget=50.0)
-        assert result is None
+        assert result is not None
+        # All legs should be at least 3-wide (min width for no-anchor races)
+        for leg in result:
+            assert len(leg) >= 3
 
     def test_anchor_leg_min_3_wide(self):
         """Anchor leg should get minimum 3 runners by default."""
