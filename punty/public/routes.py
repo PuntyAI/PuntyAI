@@ -1,6 +1,6 @@
 """Public website routes - no authentication required."""
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -2673,8 +2673,8 @@ async def meeting_tips_page(request: Request, meeting_id: str):
 
     # Find next upcoming race time for sidebar countdown
     next_race_time = None
-    from datetime import datetime
-    now = datetime.now()
+    from punty.config import melb_now_naive
+    now = melb_now_naive()
     for r in data.get("races", []):
         if r.get("time") and r.get("status") not in ("Paying", "Closed", "Final"):
             try:
