@@ -496,15 +496,9 @@ async def homepage(request: Request):
     async with async_session() as db:
         perf_history = await get_performance_history(db, thirty_ago, today)
 
-        # Biggest single win (highest positive pnl)
-        biggest_win_result = await db.execute(
-            select(func.max(Pick.pnl)).where(
-                Pick.settled == True,
-                Pick.pnl > 0,
-                or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
-            )
-        )
-        biggest_win = biggest_win_result.scalar() or 0
+        # 7-day P&L
+        seven_ago = today - timedelta(days=7)
+        perf_7d = await get_performance_history(db, seven_ago, today)
 
         # All-time strike rate fallback
         from sqlalchemy import case
@@ -523,7 +517,7 @@ async def homepage(request: Request):
         alltime_hits = (at_row.hits or 0) if at_row else 0
 
     pnl_30d = sum(d["pnl"] for d in perf_history)
-    amount_won_30d = sum(d["pnl"] for d in perf_history if d["pnl"] > 0)
+    pnl_7d = sum(d["pnl"] for d in perf_7d)
     bets_30d = sum(d["bets"] for d in perf_history)
     hits_30d = sum(d.get("hits", 0) for d in perf_history)
     strike_30d = round(hits_30d / bets_30d * 100, 1) if bets_30d else 0
@@ -579,9 +573,8 @@ async def homepage(request: Request):
             "stats": stats,
             "meetings": meetings,
             "pnl_30d": round(pnl_30d, 2),
-            "amount_won_30d": round(amount_won_30d, 2),
+            "pnl_7d": round(pnl_7d, 2),
             "strike_30d": strike_30d,
-            "biggest_win": round(biggest_win, 2),
             "next_race": next_race_data,
         }
     )

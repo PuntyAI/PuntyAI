@@ -240,16 +240,16 @@
                 {# Proof Bar #}
                 <div class="proof-bar">
                     <a href="/stats" class="proof-tile">
-                        <div class="proof-value">${{ '{:,.0f}'.format(amount_won_30d|int) if amount_won_30d else '0' }}</div>
-                        <div class="proof-label">Won Last 30 Days</div>
+                        <div class="proof-value" style="color: {{ 'var(--green)' if pnl_7d >= 0 else 'var(--red, #ef4444)' }};">{{ '+$' if pnl_7d >= 0 else '-$' }}{{ '{:,.0f}'.format(pnl_7d|abs|int) if pnl_7d else '0' }}</div>
+                        <div class="proof-label">7 Day P&amp;L</div>
                     </a>
                     <a href="/stats" class="proof-tile">
                         <div class="proof-value">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</div>
                         <div class="proof-label">Strike Rate</div>
                     </a>
                     <a href="/stats" class="proof-tile">
-                        <div class="proof-value">${{ '{:,.0f}'.format(biggest_win|int) if biggest_win else '0' }}</div>
-                        <div class="proof-label">Biggest Win</div>
+                        <div class="proof-value" style="color: {{ 'var(--green)' if pnl_30d >= 0 else 'var(--red, #ef4444)' }};">{{ '+$' if pnl_30d >= 0 else '-$' }}{{ '{:,.0f}'.format(pnl_30d|abs|int) if pnl_30d else '0' }}</div>
+                        <div class="proof-label">30 Day P&amp;L</div>
                     </a>
                     <a href="/stats" class="proof-tile">
                         <div class="proof-value">100%</div>
