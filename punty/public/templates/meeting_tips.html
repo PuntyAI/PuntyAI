@@ -1389,6 +1389,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var accordion = document.createElement('div');
         accordion.className = 'race-accordion';
         accordion.id = 'sec-acc-' + idx;
+        if (sec.isRace && sec.raceNum) {
+            accordion.setAttribute('data-race', sec.raceNum);
+        }
 
         var header = document.createElement('div');
         header.className = 'race-accordion-header';
@@ -2099,6 +2102,20 @@ document.addEventListener('DOMContentLoaded', function() {
         window.addEventListener('scroll', updateRacePills, { passive: true });
         updateRacePills();
     })();
+
+    // Handle #race-N deep links
+    var hash = window.location.hash;
+    if (hash && hash.indexOf('#race-') === 0) {
+        var raceNum = parseInt(hash.substring(6));
+        var target = document.querySelector('[data-race="' + raceNum + '"]');
+        if (target) {
+            target.classList.add('open');
+            setTimeout(function() {
+                var navH = (document.getElementById('section-nav') ? document.getElementById('section-nav').offsetHeight : 0) + 12;
+                window.scrollTo({ top: target.getBoundingClientRect().top + window.pageYOffset - navH, behavior: 'smooth' });
+            }, 100);
+        }
+    }
 
     // Live countdown updater (every 30s)
     setInterval(function() {
