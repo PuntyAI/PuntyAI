@@ -1068,6 +1068,7 @@ async def get_performance_history(
             func.count(Pick.id).label("count"),
             func.sum(Pick.pnl).label("total_pnl"),
             func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
+            func.sum(func.coalesce(Pick.bet_stake, Pick.exotic_stake, 0)).label("total_staked"),
         )
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
@@ -1086,6 +1087,7 @@ async def get_performance_history(
         bets = row.count or 0
         pnl = float(row.total_pnl or 0)
         winners = int(row.winners or 0)
+        staked = float(row.total_staked or 0)
         strike = (winners / bets * 100) if bets > 0 else 0.0
         days.append({
             "date": row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
@@ -1093,6 +1095,7 @@ async def get_performance_history(
             "winners": winners,
             "strike_rate": round(strike, 1),
             "pnl": round(pnl, 2),
+            "staked": round(staked, 2),
         })
 
     return days
