@@ -313,6 +313,29 @@
                     {% include "partials/live_edge.html" %}
                 </div>
 
+                {# ── Filtered Next Up fallback (shows when main next race venue is hidden) ── #}
+                <div x-show="hiddenVenues.indexOf('{{ next_race.venue|default("") }}') > -1 && hiddenVenues.length > 0"
+                     x-transition
+                     class="card p-4 text-center" style="border-color: rgba(233, 30, 140, 0.2);">
+                    <div x-data="{ fn: {} }" x-effect="fn = getFilteredNext(hiddenVenues)">
+                        <template x-if="fn.venue">
+                            <div>
+                                <div class="flex items-center justify-center gap-2 mb-1">
+                                    <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--magenta); display: inline-block; animation: live-dot 1.5s ease-in-out infinite;"></span>
+                                    <span class="text-xs font-heading font-bold uppercase tracking-wider" style="color: var(--magenta);">Next Up (Filtered)</span>
+                                </div>
+                                <a :href="'/tips/' + fn.mid + '#race-' + fn.rn" class="block hover:opacity-80 transition-opacity" style="text-decoration: none;">
+                                    <div class="countdown-fixed font-display font-bold" style="font-size: 1.5rem; color: var(--magenta);" :data-start="fn.jump">--:--</div>
+                                    <div class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem;" x-text="fn.venue + ' \u2014 R' + fn.rn"></div>
+                                </a>
+                            </div>
+                        </template>
+                        <template x-if="!fn.venue">
+                            <div class="text-sm" style="color: var(--text-muted);">No upcoming races in filtered venues</div>
+                        </template>
+                    </div>
+                </div>
+
                 {# ── Metrics Row ── #}
                 {% set perf = dashboard.performance|default({}) %}
                 <div class="metrics-row dash-metrics">
@@ -520,6 +543,22 @@
 
 {% block scripts %}
 <script>
+// Filtered Next Up — picks nearest active venue's next jump
+var _meetingsData = {{ meetings_list|default([])|tojson }};
+function getFilteredNext(hidden) {
+    var now = Date.now();
+    var best = null;
+    for (var i = 0; i < _meetingsData.length; i++) {
+        var m = _meetingsData[i];
+        if (!m.next_jump || hidden.indexOf(m.venue) > -1) continue;
+        var t = new Date(m.next_jump).getTime();
+        if (t > now && (!best || t < best._t)) {
+            best = { venue: m.venue, mid: m.meeting_id, rn: m.next_race_num, jump: m.next_jump, _t: t };
+        }
+    }
+    return best || {};
+}
+
 // Countdown timer for next race / meetings
 (function() {
     function pad(n) { return n < 10 ? '0' + n : '' + n; }
