@@ -454,7 +454,9 @@
                     </div>
                 </div>
                 <div class="hidden md:flex justify-center">
-                    <img src="/static/punty-character.jpg" alt="Punty" class="w-40 h-40 rounded-2xl object-cover" style="border: 2px solid rgba(233, 30, 140, 0.3); filter: drop-shadow(0 0 30px rgba(233, 30, 140, 0.2));">
+                    <div id="cta-carousel" class="w-40 h-40 rounded-2xl overflow-hidden relative" style="border: 2px solid rgba(233, 30, 140, 0.3); filter: drop-shadow(0 0 30px rgba(233, 30, 140, 0.2));">
+                        <img src="/static/punty-character.jpg" alt="Punty" class="w-full h-full object-cover absolute inset-0 transition-opacity duration-700" style="opacity: 1;">
+                    </div>
                 </div>
             </div>
         </div>
@@ -483,6 +485,36 @@
     function tickAll() { document.querySelectorAll('[data-start]').forEach(updateCountdown); }
     tickAll();
     setInterval(tickAll, 1000);
+})();
+
+// CTA image carousel — crossfade through 3 random social images
+(function() {
+    var images = {{ cta_images | tojson }};
+    if (!images.length) return;
+    var container = document.getElementById('cta-carousel');
+    if (!container) return;
+    var current = container.querySelector('img');
+    var idx = 0;
+
+    function crossfade() {
+        var next = document.createElement('img');
+        next.src = images[idx];
+        next.alt = 'Punty';
+        next.className = 'w-full h-full object-cover absolute inset-0 transition-opacity duration-700';
+        next.style.opacity = '0';
+        container.appendChild(next);
+        // Force reflow then fade in new, fade out old
+        next.offsetHeight;
+        next.style.opacity = '1';
+        current.style.opacity = '0';
+        setTimeout(function() {
+            current.remove();
+            current = next;
+        }, 700);
+        idx = (idx + 1) % images.length;
+    }
+
+    setInterval(crossfade, 4000);
 })();
 </script>
 {% endblock %}
