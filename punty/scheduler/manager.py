@@ -226,12 +226,13 @@ class SchedulerManager:
         """Set up the daily scheduled jobs.
 
         - 00:05 AM: Calendar scrape (find meetings, auto-select, initial data load)
-        - 05:00 AM: Morning scrape (full re-scrape + speed maps for all meetings)
+        - 05:00 AM: Morning scrape (full re-scrape + speed maps + generate early mail)
         - Thursday 22:00: Weekly pattern refresh (patterns, awards, ledger, news)
         - Friday 08:00: Weekly blog generation
 
-        Early mail generation is handled by meeting_pre_race_job
-        which runs 2 hours before each meeting's first race.
+        Early mail is generated during morning scrape (~05:30) and approved
+        but not posted. meeting_pre_race_job (T-90m) compares snapshots and
+        posts existing content or regenerates if material changes are detected.
         """
         from punty.scheduler.jobs import daily_calendar_scrape, daily_morning_scrape
         from punty.scheduler.jobs import weekly_pattern_refresh, weekly_blog_job
@@ -303,7 +304,8 @@ class SchedulerManager:
     async def setup_meeting_automation(self, meeting_id: str) -> dict:
         """Schedule automation jobs for a meeting based on race times.
 
-        - Pre-race job: 2.5 hours (150 min) before first race
+        - Pre-race job: 90 min before first race (refresh + compare + post/regen)
+          Morning content is already generated at ~05:30 by morning_generate_all().
         - Post-race job: 30 min after last race
 
         Returns: dict with scheduled job times
@@ -342,8 +344,8 @@ class SchedulerManager:
             # Calculate job times
             from datetime import timedelta
 
-            # Pre-race: 150 minutes before first race
-            pre_race_time = first_race_time - timedelta(minutes=150)
+            # Pre-race: 90 minutes before first race (morning gen already done)
+            pre_race_time = first_race_time - timedelta(minutes=90)
 
             # Post-race: 60 minutes after last race (wrap-up generation + social delivery)
             post_race_time = last_race_time + timedelta(minutes=60)
