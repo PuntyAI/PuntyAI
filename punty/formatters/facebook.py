@@ -32,9 +32,25 @@ class FacebookFormatter:
         """
         text = cls._clean_markdown(raw_content)
 
-        # Add responsible gambling footer
+        # Add emoji prefix (matches Twitter styling)
+        text = "🏇 " + text
+
+        # Add hashtag + responsible gambling footer (matches Twitter styling)
+        venue_tag = f"#{venue.replace(' ', '')}Racing" if venue else ""
+        footer_parts = ["#AusRacing #HorseRacing"]
+        if venue_tag:
+            footer_parts.append(venue_tag)
+        footer = " ".join(footer_parts)
+
         if "Gamble Responsibly" not in text:
-            text += "\n\nGamble Responsibly. gamblinghelponline.org.au | 1800 858 858"
+            text += f"\n\n{footer}\n\nGamble Responsibly. gamblinghelponline.org.au | 1800 858 858"
+        else:
+            # Insert hashtags before the existing Gamble Responsibly line
+            text = text.replace(
+                "Gamble Responsibly",
+                f"{footer}\n\nGamble Responsibly",
+                1,
+            )
 
         # Truncate if somehow over limit
         if len(text) > cls.MAX_LENGTH:

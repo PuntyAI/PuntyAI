@@ -143,12 +143,12 @@ class TestTruncateForSocials:
         assert "FINAL WORD" in result
         assert "Gamble Responsibly" in result
 
-    def test_removes_nuggets_and_find_out_more(self):
-        """NUGGETS and FIND OUT MORE sections should be removed."""
+    def test_preserves_nuggets_removes_find_out_more(self):
+        """NUGGETS should be preserved, FIND OUT MORE should be removed."""
         content = _build_early_mail(8)
         result = truncate_for_socials(content)
 
-        assert "NUGGETS FROM THE TRACK" not in result
+        assert "NUGGETS FROM THE TRACK" in result
         assert "FIND OUT MORE" not in result
 
     def test_no_truncation_few_races(self):

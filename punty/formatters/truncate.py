@@ -94,6 +94,11 @@ def truncate_for_socials(
         raw_content, SEQUENCE_HEADING_RE, [NUGGETS_HEADING_RE, FIND_OUT_RE, FINAL_WORD_RE]
     )
 
+    # Extract nuggets from the track section (if present)
+    nuggets_section = _extract_section(
+        raw_content, NUGGETS_HEADING_RE, [FIND_OUT_RE, FINAL_WORD_RE]
+    )
+
     # Extract final word section (responsible gambling)
     final_word_section = _extract_section(
         raw_content, FINAL_WORD_RE, []
@@ -112,6 +117,8 @@ def truncate_for_socials(
     parts = [kept, "", teaser]
     if sequences_section:
         parts.append(sequences_section.strip())
+    if nuggets_section:
+        parts.append(nuggets_section.strip())
     if final_word_section:
         parts.append(final_word_section.strip())
 
