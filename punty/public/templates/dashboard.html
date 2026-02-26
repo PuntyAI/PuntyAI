@@ -348,7 +348,7 @@
                             <svg class="w-4 h-4 transition-transform" :class="open.best_of && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                         </div>
                         <div x-show="open.best_of" x-collapse class="px-3 pb-3">
-                            {% include "partials/best_of_meet.html" %}
+                            {% with hide_heading=true %}{% include "partials/best_of_meet.html" %}{% endwith %}
                         </div>
                     </div>
                     {% endif %}
@@ -365,7 +365,7 @@
                             <svg class="w-4 h-4 transition-transform" :class="open.sequences && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                         </div>
                         <div x-show="open.sequences" x-collapse class="px-3 pb-3">
-                            {% include "partials/sequence_bets.html" %}
+                            {% with hide_heading=true %}{% include "partials/sequence_bets.html" %}{% endwith %}
                         </div>
                     </div>
                     {% endif %}
