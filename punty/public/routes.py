@@ -133,8 +133,12 @@ async def _get_picks_for_race(meeting_id: str, race_number: int) -> list[dict]:
             if exotic_runners and isinstance(exotic_runners, list) and any(isinstance(r, list) for r in exotic_runners):
                 exotic_runners = [item for sub in exotic_runners for item in (sub if isinstance(sub, list) else [sub])]
 
-        wp = round(pick.win_probability * 100, 1) if pick.win_probability else None
-        pp = round(pick.place_probability * 100, 1) if pick.place_probability else None
+        # Normalise to percentage (0-100). DB stores some as decimal (0.306),
+        # some as percentage (30.6) depending on source (prob engine vs JSON parser).
+        raw_wp = pick.win_probability or 0
+        raw_pp = pick.place_probability or 0
+        wp = round((raw_wp * 100 if raw_wp <= 1 else raw_wp), 1) if raw_wp else None
+        pp = round((raw_pp * 100 if raw_pp <= 1 else raw_pp), 1) if raw_pp else None
         bt_lower = (pick.bet_type or "").lower()
         show_prob = pp if bt_lower == "place" and pp else wp
 
@@ -2382,8 +2386,10 @@ async def get_daily_dashboard() -> dict:
 
             stake = pick.bet_stake or pick.exotic_stake or 0
             # Probability: use place_prob for Place bets, win_prob otherwise
-            wp = round(pick.win_probability * 100, 1) if pick.win_probability else None
-            pp = round(pick.place_probability * 100, 1) if pick.place_probability else None
+            raw_wp = pick.win_probability or 0
+            raw_pp = pick.place_probability or 0
+            wp = round((raw_wp * 100 if raw_wp <= 1 else raw_wp), 1) if raw_wp else None
+            pp = round((raw_pp * 100 if raw_pp <= 1 else raw_pp), 1) if raw_pp else None
             bt_lower = (pick.bet_type or "").lower()
             show_prob = pp if bt_lower == "place" and pp else wp
 
