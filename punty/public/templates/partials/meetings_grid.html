@@ -2,36 +2,58 @@
 {% set meetings = meetings_list|default(stats.todays_tips|default([])) %}
 {% if meetings %}
 <div x-data="{ showAll: false }">
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-2">
         <h2 class="section-heading mb-0">
             <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Today's Meetings
         </h2>
-        {% set has_regional = meetings|selectattr('is_metro', 'equalto', false)|list|length > 0 if meetings[0] is mapping and 'is_metro' in meetings[0]|default({}) else false %}
-        {% if has_regional %}
-        <button @click="showAll = !showAll" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
-            <span x-text="showAll ? 'Metro Only' : 'Show All'">Show All</span>
-        </button>
-        {% endif %}
+        <div class="flex items-center gap-2">
+            {# Filter toggle #}
+            <button @click="hiddenVenues.length ? (hiddenVenues = []) : null"
+                    x-show="hiddenVenues.length > 0"
+                    x-transition
+                    class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors"
+                    style="color: var(--magenta);">
+                Clear Filter
+            </button>
+            {% set has_regional = meetings|selectattr('is_metro', 'equalto', false)|list|length > 0 if meetings[0] is mapping and 'is_metro' in meetings[0]|default({}) else false %}
+            {% if has_regional %}
+            <button @click="showAll = !showAll" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
+                <span x-text="showAll ? 'Metro Only' : 'Show All'">Show All</span>
+            </button>
+            {% endif %}
+        </div>
     </div>
+
+    {# Filter pill bar — compact venue toggles #}
+    <div class="flex flex-wrap gap-1.5 mb-3" style="margin-top: 0.25rem;">
+        {% for meet in meetings %}
+        <button @click="toggleVenue('{{ meet.venue }}')"
+                {% if not meet.is_metro|default(true) %}x-show="showAll" x-transition{% endif %}
+                class="font-heading font-semibold text-xs px-2.5 py-1 rounded-full transition-all"
+                :style="isActive('{{ meet.venue }}') ? 'background: rgba(233, 30, 140, 0.15); color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.3);' : 'background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06); opacity: 0.5;'">
+            {{ meet.venue }}
+        </button>
+        {% endfor %}
+    </div>
+
+    {# Meeting cards — clickable links to tips page #}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {% for meet in meetings %}
-        <div @click="toggleVenue('{{ meet.venue }}')"
-           class="card p-4 transition-all group cursor-pointer {% if meet.is_metro|default(false) %}metro-card{% endif %}"
-           :style="isActive('{{ meet.venue }}') ? 'opacity: 1; border-left: 3px solid var(--magenta);' : 'opacity: 0.4; border-left: 3px solid transparent;'"
+        {% if meet.has_tips|default(true) %}
+        <a href="/tips/{{ meet.meeting_id }}{% if meet.next_race_num %}#race-{{ meet.next_race_num }}{% endif %}"
+        {% else %}
+        <div
+        {% endif %}
+           class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group {% if meet.is_metro|default(false) %}metro-card{% endif %}"
+           :style="isActive('{{ meet.venue }}') ? '' : 'opacity: 0.35;'"
            {% if not meet.is_metro|default(true) %}x-show="showAll" x-transition{% endif %}
            data-metro="{{ 'true' if meet.is_metro|default(false) else 'false' }}">
             <div class="flex items-start justify-between mb-2">
                 <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors text-sm leading-tight">
                     {{ meet.venue }}
                 </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="state-badge state-{{ meet.state|lower }}">{{ meet.state }}</span>
-                    <a href="/tips/{{ meet.meeting_id }}{% if meet.next_race_num %}#race-{{ meet.next_race_num }}{% endif %}"
-                       @click.stop
-                       class="text-xs font-heading font-bold transition-colors hover:text-white"
-                       style="color: var(--cyan); line-height: 1;">&rarr;</a>
-                </div>
+                <span class="state-badge state-{{ meet.state|lower }}">{{ meet.state }}</span>
             </div>
             {% if meet.is_metro|default(false) %}
             <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--magenta);">Metro</div>
@@ -59,7 +81,7 @@
             <div class="text-xs" style="color: var(--text-muted);">Complete</div>
             {% endif %}
             {% endif %}
-        </div>
+        {% if meet.has_tips|default(true) %}</a>{% else %}</div>{% endif %}
         {% endfor %}
     </div>
 </div>
