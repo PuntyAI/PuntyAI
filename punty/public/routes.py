@@ -1424,6 +1424,9 @@ async def get_best_of_meets() -> dict:
                     runners = _json3.loads(runners)
                 except (ValueError, TypeError):
                     runners = []
+            # Flatten nested arrays (e.g. [[5], [8, 2, 1]] → [5, 8, 2, 1])
+            if runners and isinstance(runners, list) and any(isinstance(r, list) for r in runners):
+                runners = [item for sub in runners for item in (sub if isinstance(sub, list) else [sub])]
             meets[mid]["exotic"] = {
                 "type": pick.exotic_type,
                 "race": pick.race_number,
@@ -1992,7 +1995,7 @@ async def get_daily_dashboard() -> dict:
             bt_lower = (pick.bet_type or "").lower()
             show_prob = pp if bt_lower == "place" and pp else wp
 
-            # Exotic runners as list
+            # Exotic runners as flat list
             exotic_runners = None
             if pick.pick_type == "exotic" and pick.exotic_runners:
                 import json as _json2
@@ -2000,6 +2003,9 @@ async def get_daily_dashboard() -> dict:
                     exotic_runners = _json2.loads(pick.exotic_runners) if isinstance(pick.exotic_runners, str) else pick.exotic_runners
                 except (ValueError, TypeError):
                     exotic_runners = None
+                # Flatten nested arrays (e.g. [[5], [8, 2, 1]] → [5, 8, 2, 1])
+                if exotic_runners and isinstance(exotic_runners, list) and any(isinstance(r, list) for r in exotic_runners):
+                    exotic_runners = [item for sub in exotic_runners for item in (sub if isinstance(sub, list) else [sub])]
 
             upcoming.append({
                 "name": name,
