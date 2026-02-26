@@ -21,7 +21,7 @@ _BIG3_HORSE = re.compile(
     re.IGNORECASE,
 )
 _BIG3_MULTI = re.compile(
-    r"Multi.*?(\d+)U\s*[×x]\s*~?\$?(\d+\.?\d*)\s*=\s*~?(\d+\.?\d*)U",
+    r"Multi.*?\$?(\d+)(?:U)?\s*[×x]\s*~?\$?(\d+\.?\d*)\s*=\s*~?\$?(\d+\.?\d*)\s*(?:U|collect)?",
     re.IGNORECASE,
 )
 
@@ -229,6 +229,42 @@ def parse_early_mail(raw_content: str, content_id: str, meeting_id: str) -> list
     return picks
 
 
+def validate_parsed_picks(parsed_picks: list[dict], pre_selections: dict) -> list[str]:
+    """Compare parsed picks against pre-selection recommendations. Return warnings.
+
+    Cross-references parser output with what the pre-selection engine recommended,
+    logging any silent failures where picks were expected but not parsed.
+    """
+    warnings = []
+    expected_races = set(pre_selections.get("races", {}).keys())
+    parsed_races = set(p.get("race_number") for p in parsed_picks if p.get("pick_type") == "selection")
+
+    missing_races = expected_races - parsed_races
+    for race_num in sorted(missing_races):
+        race_data = pre_selections.get("races", {}).get(race_num, {})
+        expected_count = len(race_data.get("picks", []))
+        warnings.append(
+            f"Race {race_num}: no picks parsed (expected {expected_count} selections)"
+        )
+
+    # Check Big3 Multi was parsed
+    has_big3_multi = any(p.get("pick_type") == "big3_multi" for p in parsed_picks)
+    if pre_selections.get("big3") and not has_big3_multi:
+        warnings.append("Big3 Multi not parsed — check regex match")
+
+    # Check exotics per race
+    parsed_exotic_races = set(p.get("race_number") for p in parsed_picks if p.get("pick_type") == "exotic")
+    expected_exotic_races = set(
+        rn for rn, rd in pre_selections.get("races", {}).items()
+        if rd.get("exotic")
+    )
+    missing_exotics = expected_exotic_races - parsed_exotic_races
+    for race_num in sorted(missing_exotics):
+        warnings.append(f"Race {race_num}: exotic not parsed")
+
+    return warnings
+
+
 def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> list[dict]:
     picks = []
     section_m = _BIG3_SECTION.search(raw_content)
@@ -324,6 +360,9 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
+                # E/W killed in pre-selections (Batch 1) — auto-convert to Place
+                if bet_type == "each_way":
+                    bet_type = "place"
             elif _BET_EXOTICS_ONLY.search(after_text):
                 bet_stake = 0.0
                 bet_type = "exotics_only"
@@ -395,6 +434,9 @@ def _parse_race_sections(raw_content: str, content_id: str, meeting_id: str, nex
             elif bet_m:
                 bet_stake = float(bet_m.group(1))
                 bet_type = _normalize_bet_type(bet_m.group(2))
+                # E/W killed in pre-selections (Batch 1) — auto-convert to Place
+                if bet_type == "each_way":
+                    bet_type = "place"
             elif _BET_EXOTICS_ONLY.search(after_text):
                 bet_stake = 0.0
                 bet_type = "exotics_only"

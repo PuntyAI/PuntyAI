@@ -925,6 +925,16 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         if pick.bet_type == "Place" and pick.place_prob >= 0.45:
             base *= 1.15  # 15% stake boost for high-confidence Place
 
+        # Place overlay stake modifier — reduce stake on thin-edge bets
+        # Market place prob estimated as 3/odds (place pays ~1/3 of field)
+        if pick.bet_type == "Place" and pick.place_prob and pick.odds and pick.odds > 1.0:
+            market_place_prob = min(1.0, 3.0 / pick.odds)
+            overlay = pick.place_prob / market_place_prob if market_place_prob > 0 else 1.0
+            if overlay < 1.05:
+                base *= 0.60  # Thin edge: reduce 40%
+            elif overlay < 1.10:
+                base *= 0.80  # Moderate edge: reduce 20%
+
         pick_weights.append(base)
 
     total_weight = sum(pick_weights)
@@ -1018,9 +1028,12 @@ def _select_exotic(
 
         ec_type = ec.get("type", "")
 
-        # Trifecta Standout killed: 0/20 hits, -100% ROI across all scenarios
+        # Trifecta Standout: only when #1 pick is dominant (win_prob >= 0.30)
+        # AND field size 8-12 (not too open, not too small)
         if ec_type == "Trifecta Standout":
-            continue
+            top_pick_prob = max((p.win_prob for p in picks if p.rank == 1), default=0)
+            if top_pick_prob < 0.30 or not (8 <= field_size <= 12):
+                continue
 
         # Trifecta Box: profitable only in narrow scenario (field 11-13,
         # non-sprint, fav $2-$3.50, Good/Soft track). All other combos lose.

@@ -161,19 +161,18 @@ def _validate_selections(
                     category="probability",
                 ))
 
+        # E/W killed (Batch 1) — treat any remaining as Place for staking
         if bet_type == "each way":
-            has_win_bet = True
-            # Each Way costs double
-            total_stake += stake * 2
+            total_stake += stake  # Single stake (no longer doubled)
         else:
             total_stake += stake
 
-    # Check mandatory Win/Each Way bet
+    # Check mandatory Win/Saver Win bet
     if selections and not has_win_bet:
         result.issues.append(ValidationIssue(
             level="warning",
             race_number=race_num,
-            message="No Win/Saver Win/Each Way bet — mandatory rule violated",
+            message="No Win/Saver Win bet in race selections",
             category="consistency",
         ))
 

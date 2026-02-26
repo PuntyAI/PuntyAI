@@ -27,7 +27,7 @@ ENABLE_MAIN_QUADDIE = True
 
 # Minimum estimated return % thresholds — skip sequences below these
 MIN_RETURN_PCT = {
-    "early_quaddie": 20.0,
+    "early_quaddie": 30.0,  # Raised from 20% — early races have worse data quality
     "quaddie": 20.0,
     "big6": 5.0,
 }
@@ -818,6 +818,26 @@ def build_smart_sequence(
     soft_match = re.search(r'soft\s*(\d+)', tc)
     if soft_match and int(soft_match.group(1)) >= 6:
         return None  # Zero sequence wins on Soft 6+
+
+    # Early quaddie confidence gate: skip if average top-pick probability is too low
+    # Early races (R1-R4) have worse data quality and less settled odds
+    if "early" in sequence_type.lower():
+        start, end = race_range
+        leg_map = {la["race_number"]: la for la in leg_analysis}
+        leg_confidences = []
+        for rn in range(start, end + 1):
+            la = leg_map.get(rn)
+            if la:
+                top_runners = la.get("top_runners", [])
+                top_prob = max((float(r.get("win_prob", 0)) for r in top_runners), default=0)
+                leg_confidences.append(top_prob)
+        avg_confidence = sum(leg_confidences) / len(leg_confidences) if leg_confidences else 0
+        if avg_confidence < 0.22:
+            logger.info(
+                f"Skipping {sequence_type}: avg top-pick probability {avg_confidence:.2f} "
+                f"< 0.22 threshold (chaos territory)"
+            )
+            return None
 
     prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
     if not prep:

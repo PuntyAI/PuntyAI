@@ -172,9 +172,9 @@ Bet: Exotics only
         assert sel2["bet_type"] == "place"
         assert sel2["bet_stake"] == 6.0
 
-        # Check each way
+        # Check each way auto-converts to place (E/W killed in Batch 1)
         sel3 = selections[2]
-        assert sel3["bet_type"] == "each_way"
+        assert sel3["bet_type"] == "place"
         assert sel3["bet_stake"] == 4.0
 
         # Check roughie

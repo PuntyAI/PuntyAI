@@ -580,13 +580,13 @@ def _lgbm_blend_weight(runner_odds: float) -> float:
     Returns LGBM weight (0.0-1.0). Weighted weight = 1.0 - lgbm_weight.
     """
     if runner_odds < 3.0:
-        return 0.05          # 95% weighted, 5% LGBM
+        return 0.25          # 75% weighted, 25% LGBM (was 5% — LGBM has 68% accuracy)
     elif runner_odds < 5.0:
-        # Linear 5% → 20% LGBM
-        return 0.05 + (runner_odds - 3.0) / 2.0 * 0.15
+        # Linear 25% → 45% LGBM
+        return 0.25 + (runner_odds - 3.0) / 2.0 * 0.20
     elif runner_odds < 8.0:
-        # Linear 20% → 70% LGBM
-        return 0.20 + (runner_odds - 5.0) / 3.0 * 0.50
+        # Linear 45% → 70% LGBM
+        return 0.45 + (runner_odds - 5.0) / 3.0 * 0.25
     else:
         return 0.70          # 30% weighted, 70% LGBM
 
@@ -864,6 +864,25 @@ def calculate_race_probabilities(
         else:
             dist_bucket = _get_dist_bucket(race_distance)
             w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
+
+    # Apply track condition adjustments — heavy/soft reduce form predictiveness,
+    # increase barrier importance (inside rail advantage in wet going)
+    _CONDITION_WEIGHT_ADJ = {
+        "heavy": {"form": -0.05, "barrier": +0.03, "horse_profile": +0.02},
+        "soft":  {"form": -0.02, "barrier": +0.01, "horse_profile": +0.01},
+    }
+    cond_key = "heavy" if "heavy" in track_condition.lower() else (
+        "soft" if "soft" in track_condition.lower() else None
+    )
+    if cond_key and not weights:  # Only adjust auto-selected weights, not explicit overrides
+        adj = _CONDITION_WEIGHT_ADJ[cond_key]
+        w = dict(w)  # Don't mutate shared dict
+        for factor, delta in adj.items():
+            if factor in w:
+                w[factor] = max(0.0, w[factor] + delta)
+        total_w = sum(w.values())
+        if total_w > 0:
+            w = {k: v / total_w for k, v in w.items()}
 
     # Determine pace scenario from race analysis or speed map positions
     # Skip if pace weight is zero (saves iterating all runners)

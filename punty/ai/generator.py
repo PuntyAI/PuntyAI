@@ -249,7 +249,7 @@ class ContentGenerator:
                             system_prompt=system_prompt,
                             context=context_str,
                             instruction=early_mail_prompt + f"\n\nGenerate Early Mail for {venue} on {context['meeting']['date']}",
-                            temperature=0.8,
+                            temperature=0.5,  # Lower temp for parsing reliability (0.8 caused format variance)
                         ),
                         timeout=600.0,  # 10 minute timeout (reasoning models on large meets)
                     )
