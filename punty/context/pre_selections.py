@@ -1358,4 +1358,19 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
 
     lines.append(f"  Total stake: ${pre_sel.total_stake:.2f}")
 
+    # Punty's Pick — explicit instruction for the AI
+    pp = pre_sel.puntys_pick
+    if pp:
+        if pp.pick_type == "exotic" and pp.exotic_type:
+            runners_str = ", ".join(str(r) for r in pp.exotic_runners)
+            val_str = f" (Value: {pp.exotic_value:.1f}x)" if pp.exotic_value else ""
+            lines.append(
+                f"  PUNTY'S PICK: {pp.exotic_type} [{runners_str}] — $20{val_str}"
+            )
+        elif pp.horse_name and pp.saddlecloth:
+            lines.append(
+                f"  PUNTY'S PICK: {pp.horse_name} (No.{pp.saddlecloth}) "
+                f"${pp.odds:.2f} {pp.bet_type}"
+            )
+
     return "\n".join(lines)
