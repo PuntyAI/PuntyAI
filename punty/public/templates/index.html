@@ -240,7 +240,7 @@
                 {# Proof Bar #}
                 <div class="proof-bar">
                     <a href="/stats" class="proof-tile">
-                        <div class="proof-value">${{ '%,.0f'|format(amount_won_30d) if amount_won_30d else '0' }}</div>
+                        <div class="proof-value">${{ '{:,.0f}'.format(amount_won_30d|int) if amount_won_30d else '0' }}</div>
                         <div class="proof-label">Won Last 30 Days</div>
                     </a>
                     <a href="/stats" class="proof-tile">
@@ -248,7 +248,7 @@
                         <div class="proof-label">Strike Rate</div>
                     </a>
                     <a href="/stats" class="proof-tile">
-                        <div class="proof-value">${{ '%,.0f'|format(biggest_win) if biggest_win else '0' }}</div>
+                        <div class="proof-value">${{ '{:,.0f}'.format(biggest_win|int) if biggest_win else '0' }}</div>
                         <div class="proof-label">Biggest Win</div>
                     </a>
                     <a href="/stats" class="proof-tile">
