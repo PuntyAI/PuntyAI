@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 
 from punty.config import melb_today, melb_now, MELB_TZ
 from punty.models.database import async_session
@@ -302,8 +302,8 @@ async def get_winner_stats(today: bool = False) -> dict:
                 )
             )
         )
-        row = alltime_winnings_result.one()
-        alltime_winnings = (row[0] or 0) + (row[1] or 0)
+        row = alltime_winnings_result.one_or_none()
+        alltime_winnings = ((row[0] or 0) + (row[1] or 0)) if row else 0
 
         # Get early mail content for today (approved or sent)
         early_mail_result = await db.execute(
@@ -311,7 +311,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                 and_(
                     Content.content_type == "early_mail",
                     Content.status.in_(["approved", "sent"]),
-                    Content.meeting_id.in_(meeting_ids) if meeting_ids else False,
+                    Content.meeting_id.in_(meeting_ids) if meeting_ids else text("1=0"),
                 )
             )
         )
