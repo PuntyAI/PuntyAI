@@ -86,6 +86,8 @@ async def get_next_race() -> dict:
             "meeting_id": next_race.meeting_id,
             "race_number": next_race.race_number,
             "race_name": next_race.name,
+            "distance": next_race.distance,
+            "class": next_race.class_,
             "start_time_iso": start_time_aware.isoformat(),
             "start_time_formatted": next_race.start_time.strftime("%H:%M"),
         }
@@ -494,19 +496,40 @@ async def homepage(request: Request):
     async with async_session() as db:
         perf_history = await get_performance_history(db, thirty_ago, today)
 
-        # All-time bet count
-        bets_count_result = await db.execute(
-            select(func.count(Pick.id)).where(
+        # Biggest single win (highest positive pnl)
+        biggest_win_result = await db.execute(
+            select(func.max(Pick.pnl)).where(
                 Pick.settled == True,
+                Pick.pnl > 0,
                 or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             )
         )
-        bets_all_time = bets_count_result.scalar() or 0
+        biggest_win = biggest_win_result.scalar() or 0
+
+        # All-time strike rate fallback
+        from sqlalchemy import case
+        alltime_stats = await db.execute(
+            select(
+                func.count(Pick.id).label("total"),
+                func.sum(case((Pick.hit == True, 1), else_=0)).label("hits"),
+            ).where(
+                Pick.settled == True,
+                or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+                Pick.pick_type == "selection",
+            )
+        )
+        at_row = alltime_stats.one()
+        alltime_total = at_row.total or 0
+        alltime_hits = at_row.hits or 0
 
     pnl_30d = sum(d["pnl"] for d in perf_history)
+    amount_won_30d = sum(d["pnl"] for d in perf_history if d["pnl"] > 0)
     bets_30d = sum(d["bets"] for d in perf_history)
     hits_30d = sum(d.get("hits", 0) for d in perf_history)
     strike_30d = round(hits_30d / bets_30d * 100, 1) if bets_30d else 0
+    # Use all-time strike rate if 30d has no data
+    if not strike_30d and alltime_total:
+        strike_30d = round(alltime_hits / alltime_total * 100, 1)
 
     # Today's meetings with metro flag
     async with async_session() as db:
@@ -556,8 +579,9 @@ async def homepage(request: Request):
             "stats": stats,
             "meetings": meetings,
             "pnl_30d": round(pnl_30d, 2),
+            "amount_won_30d": round(amount_won_30d, 2),
             "strike_30d": strike_30d,
-            "bets_all_time": bets_all_time,
+            "biggest_win": round(biggest_win, 2),
             "next_race": next_race_data,
         }
     )
@@ -1456,11 +1480,12 @@ async def tips_dashboard(request: Request):
 
         if pp and pp.get("odds"):
             bt_lower = (pp.get("bet_type") or "").lower()
-            model_prob = (pp.get("place_prob") or pp.get("win_prob") or 0) / 100
             if "place" in bt_lower and pp.get("place_prob"):
                 model_prob = pp["place_prob"] / 100
             elif pp.get("win_prob"):
                 model_prob = pp["win_prob"] / 100
+            else:
+                model_prob = (pp.get("place_prob") or pp.get("win_prob") or 0) / 100
             market_implied = 1 / pp["odds"] if pp["odds"] else 0
             edge_pct = round((model_prob - market_implied) * 100, 1)
             if edge_pct >= 10:
@@ -1626,11 +1651,12 @@ async def tips_live_edge(request: Request):
 
         if pp and pp.get("odds"):
             bt_lower = (pp.get("bet_type") or "").lower()
-            model_prob = (pp.get("place_prob") or pp.get("win_prob") or 0) / 100
             if "place" in bt_lower and pp.get("place_prob"):
                 model_prob = pp["place_prob"] / 100
             elif pp.get("win_prob"):
                 model_prob = pp["win_prob"] / 100
+            else:
+                model_prob = (pp.get("place_prob") or pp.get("win_prob") or 0) / 100
             market_implied = 1 / pp["odds"] if pp["odds"] else 0
             edge_pct = round((model_prob - market_implied) * 100, 1)
             if edge_pct >= 10:
@@ -2365,6 +2391,7 @@ async def get_daily_dashboard() -> dict:
 
             upcoming.append({
                 "name": name,
+                "saddlecloth": pick.saddlecloth,
                 "venue": meeting.venue,
                 "meeting_id": meeting.id,
                 "race_number": pick.race_number,
