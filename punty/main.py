@@ -242,6 +242,11 @@ static_path = Path(__file__).parent / "web" / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=static_path), name="static")
 
+# Mount social images (data/social_images → /social-img/)
+social_img_path = Path("data/social_images")
+if social_img_path.exists():
+    app.mount("/social-img", StaticFiles(directory=social_img_path), name="social-img")
+
 # Include routers
 # Public site routes (served via hostname routing middleware on punty.ai)
 app.include_router(public_router, prefix="/public", tags=["public"])

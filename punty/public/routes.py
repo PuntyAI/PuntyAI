@@ -480,12 +480,19 @@ async def get_winner_stats(today: bool = False) -> dict:
 async def homepage(request: Request):
     """Public homepage."""
     import asyncio
+    import random
     from datetime import timedelta
+    from pathlib import Path
     from punty.results.picks import get_performance_history
     from punty.venues import guess_state as get_state_for_track, is_metro
 
     today = melb_today()
     thirty_ago = today - timedelta(days=30)
+
+    # Pick 3 random social images for CTA carousel
+    social_dir = Path("data/social_images")
+    social_imgs = sorted(social_dir.glob("punty_promo_*.png")) if social_dir.exists() else []
+    cta_images = [f"/social-img/{p.name}" for p in random.sample(social_imgs, min(3, len(social_imgs)))] if social_imgs else []
 
     stats, next_race_data = await asyncio.gather(
         get_winner_stats(),
@@ -577,6 +584,7 @@ async def homepage(request: Request):
             "roi_7d": roi_7d,
             "strike_30d": strike_30d,
             "next_race": next_race_data,
+            "cta_images": cta_images,
         }
     )
 
