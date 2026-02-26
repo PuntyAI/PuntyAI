@@ -4,7 +4,7 @@
     <div class="next-race-glow"></div>
     <div class="p-6 relative">
         <div class="flex flex-col md:flex-row md:items-start gap-4 md:gap-8">
-            {# Countdown #}
+            {# Countdown + race info #}
             <div class="text-center md:text-left flex-shrink-0" style="min-width: 180px;">
                 <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--magenta);">Next Race</div>
                 <div class="text-3xl md:text-4xl font-display font-black countdown-fixed" style="color: white;" id="next-race-countdown" data-start="{{ next_race.start_time_iso }}">
@@ -16,6 +16,10 @@
                 {% if next_race.race_name %}
                 <div class="text-sm" style="color: var(--text-muted);">{{ next_race.race_name }}</div>
                 {% endif %}
+                <a href="/tips/{{ next_race.meeting_id }}" class="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-lg font-heading font-bold text-xs uppercase tracking-wider transition-all hover:scale-105" style="background: var(--gradient-sunset); color: white;">
+                    Full Card
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
             </div>
 
             {# Picks for this race #}
@@ -25,26 +29,49 @@
                 <div class="space-y-2">
                     {% for pick in next_race_picks %}
                     <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background: rgba(255,255,255,0.03);">
-                        {# Rank badge #}
-                        {% if pick.tip_rank %}
-                        <span class="rank-badge rank-{{ pick.tip_rank }}">{{ pick.tip_rank }}</span>
-                        {% endif %}
-                        {# Horse + details #}
-                        <div class="flex-1 min-w-0">
-                            <span class="font-heading font-bold text-white truncate">{{ pick.name }}</span>
-                            {% if pick.is_puntys_pick %}
-                            <span class="pp-badge ml-1">PP</span>
+                        {% if pick.pick_type == "selection" %}
+                            {# Selection pick — rank badge, horse, odds, bet type, prob #}
+                            {% if pick.tip_rank %}
+                            <span class="rank-badge rank-{{ pick.tip_rank }}">{{ pick.tip_rank }}</span>
                             {% endif %}
-                        </div>
-                        {# Odds #}
-                        {% if pick.odds %}
-                        <span class="font-heading font-bold" style="color: var(--cyan);">${{ '%.2f'|format(pick.odds) }}</span>
-                        {% endif %}
-                        {# Bet type #}
-                        <span class="type-badge type-selection">{{ pick.bet_type }}</span>
-                        {# Confidence #}
-                        {% if pick.win_prob %}
-                        <span class="text-xs" style="color: var(--text-muted);">{{ pick.win_prob }}%</span>
+                            <div class="flex-1 min-w-0">
+                                <span class="font-heading font-bold text-white truncate">{{ pick.name }}</span>
+                                {% if pick.is_puntys_pick %}
+                                <span class="pp-badge ml-1">PP</span>
+                                {% endif %}
+                            </div>
+                            {% if pick.odds %}
+                            <span class="font-heading font-bold" style="color: var(--cyan);">${{ '%.2f'|format(pick.odds) }}</span>
+                            {% endif %}
+                            {% if pick.bet_type %}
+                            <span class="type-badge type-selection">{{ pick.bet_type }}</span>
+                            {% endif %}
+                            {% if pick.show_prob %}
+                            <span class="text-xs" style="color: var(--text-muted);">{{ pick.show_prob }}%</span>
+                            {% endif %}
+                            {% if pick.value_rating and pick.value_rating >= 1.1 %}
+                            <span class="text-xs font-heading font-bold" style="color: var(--yellow);">{{ pick.value_rating }}x</span>
+                            {% endif %}
+                        {% elif pick.pick_type == "exotic" %}
+                            {# Exotic pick — type badge, runners, stake #}
+                            <span class="type-badge type-exotic">{{ pick.exotic_type or 'Exotic' }}</span>
+                            <div class="flex-1 min-w-0">
+                                <span class="font-heading font-bold text-white">{{ pick.name }}</span>
+                                {% if pick.exotic_runners %}
+                                <span class="text-xs ml-2" style="color: var(--text-secondary);">[{{ pick.exotic_runners|join(', ') }}]</span>
+                                {% endif %}
+                            </div>
+                            {% if pick.stake %}
+                            <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">${{ '%.0f'|format(pick.stake) }}</span>
+                            {% endif %}
+                        {% else %}
+                            {# Other pick types (sequence, big3) #}
+                            <div class="flex-1 min-w-0">
+                                <span class="font-heading font-bold text-white">{{ pick.name }}</span>
+                            </div>
+                            {% if pick.stake %}
+                            <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">${{ '%.0f'|format(pick.stake) }}</span>
+                            {% endif %}
                         {% endif %}
                     </div>
                     {% endfor %}
@@ -52,14 +79,6 @@
                 {% else %}
                 <div class="text-sm" style="color: var(--text-muted);">No picks loaded for this race yet.</div>
                 {% endif %}
-            </div>
-
-            {# CTA #}
-            <div class="flex-shrink-0 self-start hidden md:block">
-                <a href="/tips/{{ next_race.meeting_id }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-heading font-bold text-sm uppercase tracking-wider transition-all hover:scale-105" style="background: var(--gradient-sunset); color: white;">
-                    Full Card
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                </a>
             </div>
         </div>
     </div>

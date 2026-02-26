@@ -285,23 +285,11 @@
             {% include "partials/meetings_grid.html" %}
         </div>
 
-        {# ── Sequence Bets (full-width) ── #}
-        {% if sequences|default([])|length > 0 %}
-        <div class="mb-6">
-            {% include "partials/sequence_bets.html" %}
-        </div>
-        {% endif %}
-
-        {# ── Main content: 2/3 + 1/3 when we have best-of, else 2-col even ── #}
-        {% set has_left = best_of|default({})|length > 0 %}
-        {% if has_left %}
-        <div class="grid lg:grid-cols-3 gap-6 mb-6">
-            {# Left column (2/3) — best-of #}
-            <div class="lg:col-span-2 space-y-6">
+        {# ── Main content: even 2-col with best-of on left, results+perf on right ── #}
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <div class="space-y-6">
                 {% include "partials/best_of_meet.html" %}
             </div>
-
-            {# Right column (1/3) #}
             <div class="space-y-6">
                 <div id="results-feed"
                      hx-get="/tips/_results-feed"
@@ -312,18 +300,11 @@
                 {% include "partials/performance_snapshot.html" %}
             </div>
         </div>
-        {% else %}
-        {# No best-of yet — show results + performance in even 2-col #}
-        <div class="grid md:grid-cols-2 gap-6 mb-6">
-            <div id="results-feed"
-                 hx-get="/tips/_results-feed"
-                 hx-trigger="every 120s [document.visibilityState === 'visible']"
-                 hx-swap="innerHTML">
-                {% include "partials/results_feed.html" %}
-            </div>
-            <div>
-                {% include "partials/performance_snapshot.html" %}
-            </div>
+
+        {# ── Sequence Bets (full-width, bottom — hides started sequences) ── #}
+        {% if sequences|default([])|length > 0 %}
+        <div class="mb-6">
+            {% include "partials/sequence_bets.html" %}
         </div>
         {% endif %}
 
@@ -344,6 +325,7 @@
         var start = el.dataset.start;
         if (!start) return;
         var target = new Date(start).getTime();
+        if (isNaN(target)) return;
         var now = Date.now();
         var diff = target - now;
 
@@ -357,7 +339,6 @@
         var m = Math.floor((diff % 3600000) / 60000);
         var s = Math.floor((diff % 60000) / 1000);
 
-        // Fixed-width format: always show padded minutes and seconds
         if (h > 0) {
             el.textContent = h + 'h ' + pad(m) + 'm ' + pad(s) + 's';
         } else if (m > 0) {
@@ -369,12 +350,16 @@
     }
 
     function tickAll() {
-        var els = document.querySelectorAll('[data-start]');
-        els.forEach(updateCountdown);
+        document.querySelectorAll('[data-start]').forEach(updateCountdown);
     }
 
     tickAll();
     setInterval(tickAll, 1000);
+
+    // Re-init countdowns after HTMX replaces DOM elements
+    document.body.addEventListener('htmx:afterSwap', function() {
+        tickAll();
+    });
 })();
 </script>
 {% endblock %}

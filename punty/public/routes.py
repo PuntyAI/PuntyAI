@@ -1176,7 +1176,12 @@ async def tips_dashboard(request: Request):
                 func.min(Race.start_time).label("next_jump"),
                 func.min(Race.race_number).label("next_race_num"),
             )
-            .where(Race.results_status.in_([None, "Open", "scheduled"]))
+            .where(
+                or_(
+                    Race.results_status.is_(None),
+                    Race.results_status.in_(["Open", "scheduled"]),
+                )
+            )
             .group_by(Race.meeting_id)
             .subquery()
         )
@@ -1269,6 +1274,19 @@ async def tips_glance(request: Request):
     seven_day_bets = sum(d["bets"] for d in perf_history)
     seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
 
+    # Quick meetings count (independent of content approval)
+    async with async_session() as db:
+        meetings_count_result = await db.execute(
+            select(func.count()).select_from(Meeting).where(
+                and_(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                    Meeting.meeting_type.in_(["race", None]),
+                )
+            )
+        )
+        meetings_count = meetings_count_result.scalar() or 0
+
     return templates.TemplateResponse(
         "partials/glance_strip.html",
         {
@@ -1278,6 +1296,7 @@ async def tips_glance(request: Request):
             "next_race": next_race_data,
             "seven_day_pnl": round(seven_day_pnl, 2),
             "seven_day_roi": seven_day_roi,
+            "meetings_count": meetings_count,
         }
     )
 
@@ -1398,10 +1417,17 @@ async def get_best_of_meets() -> dict:
 
         # Best Exotic: first exotic per meeting
         if pick.pick_type == "exotic" and not meets[mid]["exotic"]:
+            import json as _json3
+            runners = pick.exotic_runners
+            if isinstance(runners, str):
+                try:
+                    runners = _json3.loads(runners)
+                except (ValueError, TypeError):
+                    runners = []
             meets[mid]["exotic"] = {
                 "type": pick.exotic_type,
                 "race": pick.race_number,
-                "runners": pick.exotic_runners,
+                "runners": runners or [],
                 "stake": pick.exotic_stake,
             }
 
@@ -1409,9 +1435,11 @@ async def get_best_of_meets() -> dict:
 
 
 async def get_all_sequences() -> list:
-    """Get all sequence bets (quaddies, big6, etc.) for today's meetings."""
+    """Get all sequence bets (quaddies, big6, etc.) for today's meetings.
+    Excludes sequences whose first leg race has already started."""
     today = melb_today()
     import json as _json
+    from datetime import datetime, timezone
 
     async with async_session() as db:
         active_content = select(Content.id).where(
@@ -1430,11 +1458,32 @@ async def get_all_sequences() -> list:
         )
         rows = result.all()
 
+        # Fetch race start times for filtering started sequences
+        race_times = {}
+        if rows:
+            meeting_ids = list({m.id for _, m in rows})
+            races_result = await db.execute(
+                select(Race.meeting_id, Race.race_number, Race.start_time)
+                .where(Race.meeting_id.in_(meeting_ids))
+            )
+            for mid, rn, st in races_result.all():
+                race_times[(mid, rn)] = st
+
     if not rows:
         return []
 
+    now = datetime.now(timezone.utc)
     sequences = []
     for pick, meeting in rows:
+        # Skip sequences whose first leg has already started
+        start_race = pick.sequence_start_race or 1
+        first_leg_time = race_times.get((meeting.id, start_race))
+        if first_leg_time:
+            if first_leg_time.tzinfo is None:
+                from zoneinfo import ZoneInfo
+                first_leg_time = first_leg_time.replace(tzinfo=ZoneInfo("Australia/Melbourne"))
+            if first_leg_time <= now:
+                continue
         legs = pick.sequence_legs
         if isinstance(legs, str):
             try:
@@ -1937,6 +1986,21 @@ async def get_daily_dashboard() -> dict:
                 name = pick.horse_name or f"R{pick.race_number}"
 
             stake = pick.bet_stake or pick.exotic_stake or 0
+            # Probability: use place_prob for Place bets, win_prob otherwise
+            wp = round(pick.win_probability * 100, 1) if pick.win_probability else None
+            pp = round(pick.place_probability * 100, 1) if pick.place_probability else None
+            bt_lower = (pick.bet_type or "").lower()
+            show_prob = pp if bt_lower == "place" and pp else wp
+
+            # Exotic runners as list
+            exotic_runners = None
+            if pick.pick_type == "exotic" and pick.exotic_runners:
+                import json as _json2
+                try:
+                    exotic_runners = _json2.loads(pick.exotic_runners) if isinstance(pick.exotic_runners, str) else pick.exotic_runners
+                except (ValueError, TypeError):
+                    exotic_runners = None
+
             upcoming.append({
                 "name": name,
                 "venue": meeting.venue,
@@ -1944,11 +2008,15 @@ async def get_daily_dashboard() -> dict:
                 "race_number": pick.race_number,
                 "pick_type": pick.pick_type,
                 "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                "exotic_type": pick.exotic_type,
+                "exotic_runners": exotic_runners,
                 "odds": pick.odds_at_tip,
                 "stake": round(stake, 2),
                 "tip_rank": pick.tip_rank,
                 "value_rating": round(pick.value_rating, 2) if pick.value_rating else None,
-                "win_prob": round(pick.win_probability * 100, 1) if pick.win_probability else None,
+                "win_prob": wp,
+                "place_prob": pp,
+                "show_prob": show_prob,
                 "confidence": pick.confidence,
                 "is_puntys_pick": pick.is_puntys_pick or False,
                 "start_time": race.start_time.strftime("%H:%M") if race and race.start_time else None,

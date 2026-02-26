@@ -532,8 +532,17 @@
 
             <nav class="hidden md:flex items-center gap-1">
                 <a href="/" class="nav-link">Home</a>
-                <a href="/tips" class="nav-link">Tips</a>
-                <a href="/stats" class="nav-link">Scorecard</a>
+                <div class="toolbox-wrap">
+                    <a href="/tips" class="toolbox-btn" aria-expanded="false" aria-haspopup="true">
+                        Tips
+                        <svg class="w-3.5 h-3.5 toolbox-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </a>
+                    <div class="toolbox-menu">
+                        <a href="/tips">Dashboard</a>
+                        <a href="/tips/archive">All Tips</a>
+                        <a href="/stats">Scorecard</a>
+                    </div>
+                </div>
                 <div class="toolbox-wrap">
                     <button class="toolbox-btn" aria-expanded="false" aria-haspopup="true">
                         Toolbox
@@ -601,7 +610,7 @@
                     <h4 class="font-heading font-bold text-white mb-4 uppercase tracking-wider text-sm">Links</h4>
                     <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
                         <li><a href="/tips" class="hover:text-white transition-colors">Tips</a></li>
-                        <li><a href="/tips/archive" class="hover:text-white transition-colors">Tips Archive</a></li>
+                        <li><a href="/tips/archive" class="hover:text-white transition-colors">All Tips</a></li>
                         <li><a href="/stats" class="hover:text-white transition-colors">Scorecard</a></li>
                         <li><a href="/blog" class="hover:text-white transition-colors">Blog</a></li>
                         <li><a href="/how-it-works" class="hover:text-white transition-colors">How It Works</a></li>
@@ -666,7 +675,7 @@
             </div>
             <a href="/">Home</a>
             <a href="/tips">Tips</a>
-            <a href="/tips/archive">Archive</a>
+            <a href="/tips/archive">All Tips</a>
             <a href="/stats">Scorecard</a>
             <span class="menu-section-label">Toolbox</span>
             <a href="/how-it-works">How It Works</a>
