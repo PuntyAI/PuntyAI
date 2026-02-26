@@ -145,7 +145,7 @@ class ContentGenerator:
         """Generate Early Mail content for a meeting."""
         result = {}
         async for event in self.generate_early_mail_stream(meeting_id, save):
-            if event.get("status") == "complete":
+            if event.get("status") in ("complete", "generation_done"):
                 result = event.get("result", {})
             elif event.get("status") == "error":
                 raise ValueError(event.get("label", "Generation failed"))
@@ -577,7 +577,7 @@ class ContentGenerator:
         """Generate results commentary for a race."""
         result = {}
         async for event in self.generate_results_stream(meeting_id, race_number, save):
-            if event.get("status") == "complete":
+            if event.get("status") in ("complete", "generation_done"):
                 result = event.get("result", {})
             elif event.get("status") == "error":
                 raise ValueError(event.get("label", "Generation failed"))
