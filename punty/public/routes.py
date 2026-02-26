@@ -2419,11 +2419,18 @@ async def get_daily_dashboard() -> dict:
         # ── Bet type breakdown (all settled picks, with ROI/SR) ──
         bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
         for pick, runner, race, meeting in settled_rows:
-            if pick.pick_type != "selection":
-                continue
-            bt = (pick.bet_type or "unknown").replace("_", " ").title()
+            # Label by pick type: selections use bet_type, exotics use exotic_type, sequences use sequence_type
+            if pick.pick_type == "selection":
+                bt = (pick.bet_type or "unknown").replace("_", " ").title()
+            elif pick.pick_type == "exotic":
+                bt = (pick.exotic_type or "Exotic").replace("_", " ").title()
+            elif pick.pick_type in ("sequence", "big3_multi"):
+                bt = (pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
+            else:
+                bt = (pick.pick_type or "unknown").replace("_", " ").title()
             bt_stats[bt]["bets"] += 1
-            bt_stats[bt]["staked"] += pick.bet_stake or 0
+            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            bt_stats[bt]["staked"] += stake or 0
             bt_stats[bt]["pnl"] += pick.pnl or 0
             if pick.hit:
                 bt_stats[bt]["winners"] += 1
