@@ -72,7 +72,9 @@ async def send_twitter_long_post(content_id: str, db: AsyncSession = Depends(get
     twitter = TwitterDelivery(db)
 
     try:
-        result = await twitter.send_long_post(content_id)
+        from punty.delivery.images import get_next_image
+        image_path = get_next_image()
+        result = await twitter.send_long_post(content_id, image_path=image_path)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -147,7 +149,9 @@ async def send_facebook_post(content_id: str, db: AsyncSession = Depends(get_db)
     fb = FacebookDelivery(db)
 
     try:
-        result = await fb.send(content_id)
+        from punty.delivery.images import get_next_image
+        image_path = get_next_image()
+        result = await fb.send(content_id, image_path=image_path)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -310,6 +314,9 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
         return {"status": "scheduled", "send_at": request.schedule_at}
 
     # Send immediately based on platform
+    from punty.delivery.images import get_next_image
+    image_path = get_next_image()
+
     if request.platform == "socials":
         # Post to both Twitter and Facebook
         # Refresh content to ensure we have the latest status before each send
@@ -322,7 +329,7 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
 
         twitter = TwitterDelivery(db)
         try:
-            results["twitter"] = await twitter.send_long_post(request.content_id)
+            results["twitter"] = await twitter.send_long_post(request.content_id, image_path=image_path)
         except Exception as e:
             results["twitter"] = {"status": "error", "message": str(e)}
             # Restore approved status so Facebook can still send
@@ -331,7 +338,7 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
 
         fb = FacebookDelivery(db)
         try:
-            results["facebook"] = await fb.send(request.content_id)
+            results["facebook"] = await fb.send(request.content_id, image_path=image_path)
         except Exception as e:
             results["facebook"] = {"status": "error", "message": str(e)}
 
@@ -350,7 +357,7 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
 
         twitter = TwitterDelivery(db)
         try:
-            result = await twitter.send_long_post(request.content_id)
+            result = await twitter.send_long_post(request.content_id, image_path=image_path)
             return result
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -360,7 +367,7 @@ async def send_content(request: SendRequest, db: AsyncSession = Depends(get_db))
 
         fb = FacebookDelivery(db)
         try:
-            result = await fb.send(request.content_id)
+            result = await fb.send(request.content_id, image_path=image_path)
             return result
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
