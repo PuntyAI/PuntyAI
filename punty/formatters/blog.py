@@ -13,6 +13,8 @@ def format_blog_html(raw_content: str) -> str:
     if not raw_content:
         return ""
 
+    from punty.formatters import strip_json_block
+    raw_content = strip_json_block(raw_content)
     lines = raw_content.split("\n")
     html_lines: list[str] = []
     in_list = False
@@ -105,6 +107,8 @@ def format_blog_teaser(raw_content: str, blog_url: str) -> str:
     if not raw_content:
         return ""
 
+    from punty.formatters import strip_json_block
+    raw_content = strip_json_block(raw_content)
     lines = raw_content.strip().split("\n")
 
     # Find first substantial paragraph (skip title/header lines)

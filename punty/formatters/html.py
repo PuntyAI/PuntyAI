@@ -108,7 +108,8 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     Returns:
         HTML-formatted content
     """
-    content = raw_content
+    from punty.formatters import strip_json_block
+    content = strip_json_block(raw_content)
 
     # Replace banned words first
     content = replace_banned_words(content, seed)
