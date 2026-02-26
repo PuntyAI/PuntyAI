@@ -361,7 +361,7 @@ async def auto_approve_content(content_id: str, db: AsyncSession) -> dict:
     }
 
 
-async def auto_post_to_twitter(content_id: str, db: AsyncSession) -> dict:
+async def auto_post_to_twitter(content_id: str, db: AsyncSession, image_path=None) -> dict:
     """Post approved content to Twitter.
 
     Returns: dict with post status
@@ -376,7 +376,7 @@ async def auto_post_to_twitter(content_id: str, db: AsyncSession) -> dict:
 
     try:
         # Use long-form post for early mail (usually > 280 chars)
-        result = await twitter.send_long_post(content_id)
+        result = await twitter.send_long_post(content_id, image_path=image_path)
         logger.info(f"Auto-posted to Twitter: {content_id} -> {result.get('tweet_id')}")
         return result
     except Exception as e:
@@ -384,7 +384,7 @@ async def auto_post_to_twitter(content_id: str, db: AsyncSession) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-async def auto_post_to_facebook(content_id: str, db: AsyncSession) -> dict:
+async def auto_post_to_facebook(content_id: str, db: AsyncSession, image_path=None) -> dict:
     """Post approved content to Facebook Page.
 
     Returns: dict with post status
@@ -398,7 +398,7 @@ async def auto_post_to_facebook(content_id: str, db: AsyncSession) -> dict:
         return {"status": "skipped", "reason": "Facebook not configured"}
 
     try:
-        result = await fb.send(content_id)
+        result = await fb.send(content_id, image_path=image_path)
         logger.info(f"Auto-posted to Facebook: {content_id} -> {result.get('post_id')}")
         return result
     except Exception as e:
@@ -420,11 +420,15 @@ async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
         log_system(f"Auto-approval failed: {approve_result.get('issues', [])}", status="warning")
         return approve_result
 
+    # Get rotating promo image for social posts
+    from punty.delivery.images import get_next_image
+    image_path = get_next_image()
+
     # Step 2: Post to Twitter
-    twitter_result = await auto_post_to_twitter(content_id, db)
+    twitter_result = await auto_post_to_twitter(content_id, db, image_path=image_path)
 
     # Step 3: Post to Facebook
-    facebook_result = await auto_post_to_facebook(content_id, db)
+    facebook_result = await auto_post_to_facebook(content_id, db, image_path=image_path)
 
     # Check for delivery failures and alert
     failures = []
@@ -467,11 +471,15 @@ async def post_existing_content(content_id: str, db: AsyncSession) -> dict:
     if content.status not in (ContentStatus.APPROVED.value, ContentStatus.APPROVED):
         return {"status": "error", "message": f"Content not approved: {content.status}"}
 
+    # Get rotating promo image for social posts
+    from punty.delivery.images import get_next_image
+    image_path = get_next_image()
+
     # Post to Twitter
-    twitter_result = await auto_post_to_twitter(content_id, db)
+    twitter_result = await auto_post_to_twitter(content_id, db, image_path=image_path)
 
     # Post to Facebook
-    facebook_result = await auto_post_to_facebook(content_id, db)
+    facebook_result = await auto_post_to_facebook(content_id, db, image_path=image_path)
 
     # Check for delivery failures and alert
     failures = []
