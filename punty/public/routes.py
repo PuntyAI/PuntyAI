@@ -518,6 +518,8 @@ async def homepage(request: Request):
 
     pnl_30d = sum(d["pnl"] for d in perf_history)
     pnl_7d = sum(d["pnl"] for d in perf_7d)
+    staked_7d = sum(d.get("staked", 0) for d in perf_7d)
+    roi_7d = round(pnl_7d / staked_7d * 100, 1) if staked_7d else 0
     bets_30d = sum(d["bets"] for d in perf_history)
     hits_30d = sum(d.get("hits", 0) for d in perf_history)
     strike_30d = round(hits_30d / bets_30d * 100, 1) if bets_30d else 0
@@ -572,8 +574,7 @@ async def homepage(request: Request):
             "request": request,
             "stats": stats,
             "meetings": meetings,
-            "pnl_30d": round(pnl_30d, 2),
-            "pnl_7d": round(pnl_7d, 2),
+            "roi_7d": roi_7d,
             "strike_30d": strike_30d,
             "next_race": next_race_data,
         }
