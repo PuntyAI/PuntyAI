@@ -449,6 +449,52 @@ async def auto_approve_and_post(content_id: str, db: AsyncSession) -> dict:
     }
 
 
+async def post_existing_content(content_id: str, db: AsyncSession) -> dict:
+    """Post already-approved content to socials without re-approval.
+
+    Used by the two-phase early mail flow: morning generates + approves,
+    pre-race job posts if no material changes detected.
+    """
+    from punty.scheduler.activity_log import log_system
+
+    # Verify content exists and is approved
+    result = await db.execute(select(Content).where(Content.id == content_id))
+    content = result.scalar_one_or_none()
+
+    if not content:
+        return {"status": "error", "message": f"Content not found: {content_id}"}
+
+    if content.status not in (ContentStatus.APPROVED.value, ContentStatus.APPROVED):
+        return {"status": "error", "message": f"Content not approved: {content.status}"}
+
+    # Post to Twitter
+    twitter_result = await auto_post_to_twitter(content_id, db)
+
+    # Post to Facebook
+    facebook_result = await auto_post_to_facebook(content_id, db)
+
+    # Check for delivery failures and alert
+    failures = []
+    if twitter_result.get("status") == "error":
+        failures.append(f"Twitter: {twitter_result.get('message', 'unknown error')}")
+    if facebook_result.get("status") == "error":
+        failures.append(f"Facebook: {facebook_result.get('message', 'unknown error')}")
+
+    if failures:
+        failure_msg = "; ".join(failures)
+        log_system(f"Posted existing {content_id} but delivery failed — {failure_msg}", status="warning")
+        await _send_delivery_failure_alert(db, content_id, failures)
+    else:
+        log_system(f"Posted existing content (no regen needed): {content_id}", status="success")
+
+    return {
+        "status": "complete",
+        "content_id": content_id,
+        "twitter": twitter_result,
+        "facebook": facebook_result,
+    }
+
+
 async def _send_delivery_failure_alert(db: AsyncSession, content_id: str, failures: list[str]):
     """Send a Telegram alert when auto-delivery fails."""
     try:

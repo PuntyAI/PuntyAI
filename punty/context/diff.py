@@ -47,6 +47,14 @@ def detect_significant_changes(
         speed_map_changes = _detect_speed_map_changes(old_race, new_race, race_num)
         changes.extend(speed_map_changes)
 
+        # Check for jockey changes
+        jockey_changes = _detect_jockey_changes(old_race, new_race, race_num)
+        changes.extend(jockey_changes)
+
+        # Check for gear changes
+        gear_changes = _detect_gear_changes(old_race, new_race, race_num)
+        changes.extend(gear_changes)
+
     # Check track condition changes
     old_track = old_context.get("meeting", {}).get("track_condition")
     new_track = new_context.get("meeting", {}).get("track_condition")
@@ -203,5 +211,75 @@ def _detect_speed_map_changes(
                     "new_position": new_pos,
                     "description": f"R{race_num}: {horse_name} position changed {old_pos} -> {new_pos}",
                 })
+
+    return changes
+
+
+def _detect_jockey_changes(
+    old_race: dict,
+    new_race: dict,
+    race_num: int,
+) -> list[dict]:
+    """Detect jockey changes on non-scratched runners."""
+    changes = []
+
+    old_runners = {r["horse_name"]: r for r in old_race.get("runners", [])}
+    new_runners = {r["horse_name"]: r for r in new_race.get("runners", [])}
+
+    for horse_name, new_runner in new_runners.items():
+        if new_runner.get("scratched"):
+            continue
+
+        old_runner = old_runners.get(horse_name)
+        if not old_runner:
+            continue
+
+        old_jockey = old_runner.get("jockey")
+        new_jockey = new_runner.get("jockey")
+
+        if old_jockey and new_jockey and old_jockey != new_jockey:
+            changes.append({
+                "type": "jockey_change",
+                "race": race_num,
+                "horse": horse_name,
+                "old_jockey": old_jockey,
+                "new_jockey": new_jockey,
+                "description": f"R{race_num}: {horse_name} jockey changed {old_jockey} -> {new_jockey}",
+            })
+
+    return changes
+
+
+def _detect_gear_changes(
+    old_race: dict,
+    new_race: dict,
+    race_num: int,
+) -> list[dict]:
+    """Detect gear changes (blinkers, tongue tie, etc.) on non-scratched runners."""
+    changes = []
+
+    old_runners = {r["horse_name"]: r for r in old_race.get("runners", [])}
+    new_runners = {r["horse_name"]: r for r in new_race.get("runners", [])}
+
+    for horse_name, new_runner in new_runners.items():
+        if new_runner.get("scratched"):
+            continue
+
+        old_runner = old_runners.get(horse_name)
+        if not old_runner:
+            continue
+
+        old_gear = old_runner.get("gear") or ""
+        new_gear = new_runner.get("gear") or ""
+
+        if old_gear != new_gear and new_gear:
+            changes.append({
+                "type": "gear_change",
+                "race": race_num,
+                "horse": horse_name,
+                "old_gear": old_gear,
+                "new_gear": new_gear,
+                "description": f"R{race_num}: {horse_name} gear changed {old_gear!r} -> {new_gear!r}",
+            })
 
     return changes

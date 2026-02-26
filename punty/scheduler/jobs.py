@@ -443,18 +443,138 @@ async def daily_morning_scrape() -> dict:
                 logger.error(f"Speed maps failed for {meeting.venue}: {e}")
                 results["errors"].append(f"speed_maps {meeting.venue}: {str(e)}")
 
+    # Step 3: Generate early mail for all meetings (approve only, no social post)
+    try:
+        gen_results = await morning_generate_all()
+        results["generation"] = gen_results
+    except Exception as e:
+        logger.error(f"Morning generation failed: {e}")
+        results["errors"].append(f"morning_generate: {str(e)}")
+
     results["completed_at"] = melb_now().isoformat()
 
     # Log completion
     scraped = len(results["meetings_scraped"])
     speed_maps = len(results["speed_maps_done"])
+    generated = len(results.get("generation", {}).get("generated", []))
     errors = len(results["errors"])
     if errors:
-        log_system(f"Morning scrape complete: {scraped} scraped, {speed_maps} speed maps, {errors} errors", status="warning")
+        log_system(
+            f"Morning scrape complete: {scraped} scraped, {speed_maps} speed maps, "
+            f"{generated} generated, {errors} errors",
+            status="warning",
+        )
     else:
-        log_system(f"Morning scrape complete: {scraped} scraped, {speed_maps} speed maps", status="success")
+        log_system(
+            f"Morning scrape complete: {scraped} scraped, {speed_maps} speed maps, "
+            f"{generated} generated",
+            status="success",
+        )
 
     logger.info(f"Daily morning scrape complete: {results}")
+    return results
+
+
+async def morning_generate_all() -> dict:
+    """Generate and approve early mail for all selected meetings today.
+
+    Called at the end of the morning scrape (~05:30). Content is approved
+    but NOT posted to socials — the pre-race job handles posting later,
+    regenerating only if material changes are detected.
+
+    Returns: summary dict with generated/skipped/failed lists
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting
+    from punty.config import melb_today, melb_now
+    from punty.ai.generator import ContentGenerator
+    from punty.context.versioning import create_context_snapshot
+    from punty.scheduler.automation import validate_meeting_readiness, auto_approve_content
+    from punty.scheduler.activity_log import log_system
+    from sqlalchemy import select, or_
+
+    results = {
+        "started_at": melb_now().isoformat(),
+        "generated": [],
+        "skipped": [],
+        "failed": [],
+    }
+
+    async with async_session() as db:
+        # Get all selected meetings for today
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.date == melb_today(),
+                Meeting.selected == True,
+                or_(Meeting.meeting_type == None, Meeting.meeting_type == "race"),
+            ).order_by(Meeting.venue)
+        )
+        meetings = result.scalars().all()
+
+        if not meetings:
+            logger.info("No selected meetings for morning generation")
+            return results
+
+        logger.info(f"Morning generation starting for {len(meetings)} meetings")
+
+        for meeting in meetings:
+            venue = meeting.venue
+            meeting_id = meeting.id
+
+            try:
+                # Check readiness
+                is_ready, issues = await validate_meeting_readiness(meeting_id, db)
+                if not is_ready:
+                    logger.warning(f"Skipping {venue} — not ready: {issues}")
+                    results["skipped"].append({"venue": venue, "reason": "; ".join(issues)})
+                    continue
+
+                # Create baseline context snapshot for later comparison
+                await create_context_snapshot(db, meeting_id, force=True)
+
+                # Generate early mail
+                content_id = None
+                generator = ContentGenerator(db)
+                async for event in generator.generate_early_mail_stream(meeting_id):
+                    if event.get("status") == "error":
+                        raise Exception(event.get("label", "Unknown error"))
+                    if event.get("content_id"):
+                        content_id = event.get("content_id")
+                    elif event.get("result", {}).get("content_id"):
+                        content_id = event["result"]["content_id"]
+
+                if not content_id:
+                    raise Exception("No content_id returned from generation")
+
+                # Auto-approve (no social post)
+                approve_result = await auto_approve_content(content_id, db)
+                if approve_result["status"] != "approved":
+                    logger.warning(f"Morning approval failed for {venue}: {approve_result}")
+                    results["failed"].append({
+                        "venue": venue,
+                        "reason": f"approval: {approve_result.get('issues', [])}",
+                    })
+                    continue
+
+                results["generated"].append(venue)
+                logger.info(f"Morning generation complete for {venue}: {content_id}")
+
+            except Exception as e:
+                logger.error(f"Morning generation failed for {venue}: {e}")
+                results["failed"].append({"venue": venue, "reason": str(e)})
+
+                # Rate limit handling: pause before next meeting
+                error_str = str(e).lower()
+                if "rate limit" in error_str or "429" in error_str:
+                    logger.warning(f"Rate limited — pausing {RATE_LIMIT_QUEUE_PAUSE}s before next meeting")
+                    await asyncio.sleep(RATE_LIMIT_QUEUE_PAUSE)
+
+    results["completed_at"] = melb_now().isoformat()
+    gen_count = len(results["generated"])
+    skip_count = len(results["skipped"])
+    fail_count = len(results["failed"])
+    logger.info(f"Morning generation complete: {gen_count} generated, {skip_count} skipped, {fail_count} failed")
+
     return results
 
 
@@ -703,20 +823,23 @@ async def check_context_changes(
 
 
 async def meeting_pre_race_job(meeting_id: str) -> dict:
-    """Run 2 hours before first race for a meeting.
+    """Run 90 minutes before first race for a meeting.
 
-    This is a lightweight update pass — the heavy scrape was done at 5:00 AM
-    by daily_morning_scrape. This job just applies final updates before
-    generating the early mail.
+    Two-phase flow: morning_generate_all() already generated + approved
+    content at ~05:30. This job refreshes data, compares snapshots, and
+    either posts the existing content or regenerates if material changes
+    (scratchings, track condition, jockey/gear, speed map flips) are detected.
 
     Steps:
     1. Refresh odds + scratchings (TAB)
-    2. Refresh track conditions + weather (racingaustralia.horse)
+    2. Refresh track conditions + weather
     3. Check jockey/gear changes (racing.com field check)
     4. Refresh speed maps
-    5. Generate early mail
-    6. Auto-approve if valid
-    7. Post to Twitter + Facebook
+    5. Check for existing morning content
+    6. Compare context snapshots — detect material changes
+    7. If material changes: regenerate → approve → post
+       If no changes: post existing content
+       If no morning content: full generate → approve → post (fallback)
 
     Returns: job result dict
     """
@@ -727,7 +850,8 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
     from punty.scrapers.orchestrator import refresh_odds, scrape_speed_maps_stream
     from punty.ai.generator import ContentGenerator
     from punty.scheduler.activity_log import log_scheduler_job, log_system
-    from punty.scheduler.automation import auto_approve_and_post
+    from punty.scheduler.automation import auto_approve_and_post, post_existing_content
+    from punty.context.versioning import create_context_snapshot
     from sqlalchemy import select
 
     logger.info(f"Starting pre-race job for {meeting_id}")
@@ -955,43 +1079,114 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
 
         results["steps"].append("readiness_check: passed")
 
-        # Step 5: Generate early mail
-        content_id = None
-        try:
-            logger.info(f"Step 5: Generating early mail for {venue}...")
-            generator = ContentGenerator(db)
+        # Step 5: Check for existing morning-generated content
+        existing_result = await db.execute(
+            select(Content).where(
+                Content.meeting_id == meeting_id,
+                Content.content_type == "early_mail",
+                Content.status.in_(["approved", "sent"]),
+            ).order_by(Content.created_at.desc()).limit(1)
+        )
+        morning_content = existing_result.scalar_one_or_none()
 
-            async for event in generator.generate_early_mail_stream(meeting_id):
-                if event.get("status") == "error":
-                    raise Exception(event.get("label", "Unknown error"))
-                # content_id is nested inside event["result"]
-                if event.get("content_id"):
-                    content_id = event.get("content_id")
-                elif event.get("result", {}).get("content_id"):
-                    content_id = event["result"]["content_id"]
-
-            results["steps"].append("generate_early_mail: success")
-            results["content_id"] = content_id
-        except Exception as e:
-            logger.error(f"Early mail generation failed for {venue}: {e}")
-            results["errors"].append(f"generate_early_mail: {str(e)}")
-
-            # If rate limited, note it
-            error_str = str(e).lower()
-            if "rate limit" in error_str or "429" in error_str:
-                logger.warning(f"Rate limit detected for {venue}")
-                results["rate_limited"] = True
-
-        # Step 6 & 7: Auto-approve and post to Twitter + Facebook
-        if content_id:
+        if morning_content:
+            # Step 6: Create fresh snapshot and compare to morning baseline
+            needs_regen = False
             try:
-                logger.info(f"Step 6-7: Auto-approving and posting for {venue}...")
-                post_result = await auto_approve_and_post(content_id, db)
-                results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
-                results["post_result"] = post_result
+                snapshot = await create_context_snapshot(db, meeting_id, force=True)
+                if snapshot and snapshot.get("significant_changes"):
+                    MATERIAL_TYPES = {
+                        "scratching", "track_condition", "speed_map_change",
+                        "jockey_change", "gear_change",
+                    }
+                    material = [
+                        c for c in snapshot["significant_changes"]
+                        if c["type"] in MATERIAL_TYPES
+                    ]
+                    if material:
+                        needs_regen = True
+                        descriptions = [c["description"] for c in material]
+                        logger.info(f"Material changes for {venue}: {descriptions}")
+                        results["steps"].append(f"snapshot_compare: material changes ({len(material)})")
+                    else:
+                        results["steps"].append("snapshot_compare: no material changes")
+                else:
+                    results["steps"].append("snapshot_compare: no changes")
             except Exception as e:
-                logger.error(f"Auto-approve/post failed for {venue}: {e}")
-                results["errors"].append(f"auto_approve_post: {str(e)}")
+                logger.error(f"Snapshot comparison failed for {venue}: {e}")
+                results["errors"].append(f"snapshot_compare: {str(e)}")
+                # On snapshot failure, fall through to regen for safety
+                needs_regen = True
+
+            if needs_regen:
+                # Step 7a: Regenerate — material changes detected
+                logger.info(f"Regenerating early mail for {venue} due to material changes...")
+                content_id = None
+                try:
+                    generator = ContentGenerator(db)
+                    async for event in generator.generate_early_mail_stream(meeting_id):
+                        if event.get("status") == "error":
+                            raise Exception(event.get("label", "Unknown error"))
+                        if event.get("content_id"):
+                            content_id = event.get("content_id")
+                        elif event.get("result", {}).get("content_id"):
+                            content_id = event["result"]["content_id"]
+
+                    if content_id:
+                        post_result = await auto_approve_and_post(content_id, db)
+                        results["steps"].append(f"regen_approve_post: {post_result.get('status')}")
+                        results["post_result"] = post_result
+                        results["content_id"] = content_id
+                    else:
+                        results["errors"].append("regen: no content_id returned")
+                except Exception as e:
+                    logger.error(f"Regeneration failed for {venue}: {e}")
+                    results["errors"].append(f"regen: {str(e)}")
+                    error_str = str(e).lower()
+                    if "rate limit" in error_str or "429" in error_str:
+                        results["rate_limited"] = True
+            else:
+                # Step 7b: No material changes — post existing content to socials
+                logger.info(f"No material changes for {venue} — posting existing content")
+                try:
+                    post_result = await post_existing_content(morning_content.id, db)
+                    results["steps"].append(f"post_existing: {post_result.get('status')}")
+                    results["post_result"] = post_result
+                    results["content_id"] = morning_content.id
+                except Exception as e:
+                    logger.error(f"Post existing failed for {venue}: {e}")
+                    results["errors"].append(f"post_existing: {str(e)}")
+        else:
+            # No morning content: full generate → approve → post (fallback)
+            logger.info(f"No morning content for {venue} — full generation")
+            content_id = None
+            try:
+                generator = ContentGenerator(db)
+                async for event in generator.generate_early_mail_stream(meeting_id):
+                    if event.get("status") == "error":
+                        raise Exception(event.get("label", "Unknown error"))
+                    if event.get("content_id"):
+                        content_id = event.get("content_id")
+                    elif event.get("result", {}).get("content_id"):
+                        content_id = event["result"]["content_id"]
+
+                results["steps"].append("generate_early_mail: success")
+                results["content_id"] = content_id
+            except Exception as e:
+                logger.error(f"Early mail generation failed for {venue}: {e}")
+                results["errors"].append(f"generate_early_mail: {str(e)}")
+                error_str = str(e).lower()
+                if "rate limit" in error_str or "429" in error_str:
+                    results["rate_limited"] = True
+
+            if content_id:
+                try:
+                    post_result = await auto_approve_and_post(content_id, db)
+                    results["steps"].append(f"auto_approve_post: {post_result.get('status')}")
+                    results["post_result"] = post_result
+                except Exception as e:
+                    logger.error(f"Auto-approve/post failed for {venue}: {e}")
+                    results["errors"].append(f"auto_approve_post: {str(e)}")
 
     results["completed_at"] = melb_now().isoformat()
 
