@@ -35,7 +35,7 @@
                             <span class="rank-badge rank-{{ pick.tip_rank }}">{{ pick.tip_rank }}</span>
                             {% endif %}
                             <div class="flex-1 min-w-0">
-                                {% set nr_scr = next_race_scratched if next_race_scratched is defined else set() %}
+                                {% set nr_scr = next_race_scratched if next_race_scratched is defined else [] %}
                                 {% set pick_is_scratched = pick.saddlecloth is defined and pick.saddlecloth in nr_scr %}
                                 <span class="font-heading font-bold text-white truncate{% if pick_is_scratched %} line-through opacity-50{% endif %}">{{ pick.name }}</span>
                                 {% if pick_is_scratched %}
