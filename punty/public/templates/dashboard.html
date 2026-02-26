@@ -217,13 +217,13 @@
                 <span class="perf-chip-label">P&L</span>
                 {% set total_pnl = perf.total_pnl|default(0) %}
                 <span class="perf-chip-value {% if total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
-                    {{ '%+.0f'|format(total_pnl) }}
+                    {{ '%+.0f'|format(total_pnl) | replace('+', '+$') | replace('-', '-$') }}
                 </span>
             </a>
             <a href="/stats" class="perf-chip">
                 <span class="perf-chip-label">7-Day</span>
                 <span class="perf-chip-value {% if seven_day_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
-                    {{ '%+.0f'|format(seven_day_pnl) }}
+                    {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
                 </span>
             </a>
         </div>
@@ -236,19 +236,19 @@
         {# ════════════════════════════════════
            ZONE C: Strategy & Depth (Accordions)
            ════════════════════════════════════ #}
-        <div class="space-y-4 mb-6" x-data="{ openSection: 'best_of' }">
+        <div class="space-y-4 mb-6" x-data="{ open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false } }">
 
             {# Best Bet of Each Meet — default OPEN #}
             {% if best_of %}
             <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
-                <div class="dash-accordion-header" @click="openSection = openSection === 'best_of' ? '' : 'best_of'" style="border: none; border-radius: 12px 12px 0 0;">
+                <div class="dash-accordion-header" @click="open.best_of = !open.best_of" style="border: none; border-radius: 12px 12px 0 0;">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5" style="color: var(--yellow);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
                         <span class="font-heading font-bold text-white text-sm uppercase tracking-wider">Best Of Each Meet</span>
                     </div>
-                    <svg class="w-5 h-5 transition-transform" :class="openSection === 'best_of' && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    <svg class="w-5 h-5 transition-transform" :class="open.best_of && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </div>
-                <div x-show="openSection === 'best_of'" x-collapse class="px-4 pb-4">
+                <div x-show="open.best_of" x-collapse class="px-4 pb-4">
                     {% include "partials/best_of_meet.html" %}
                 </div>
             </div>
@@ -257,15 +257,15 @@
             {# Sequence Bets — default CLOSED #}
             {% if sequences|default([])|length > 0 %}
             <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
-                <div class="dash-accordion-header" @click="openSection = openSection === 'sequences' ? '' : 'sequences'" style="border: none;">
+                <div class="dash-accordion-header" @click="open.sequences = !open.sequences" style="border: none;">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                         <span class="font-heading font-bold text-white text-sm uppercase tracking-wider">Sequence Bets</span>
                         <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(255, 107, 53, 0.12); color: var(--orange);">{{ sequences|length }}</span>
                     </div>
-                    <svg class="w-5 h-5 transition-transform" :class="openSection === 'sequences' && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    <svg class="w-5 h-5 transition-transform" :class="open.sequences && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </div>
-                <div x-show="openSection === 'sequences'" x-collapse class="px-4 pb-4">
+                <div x-show="open.sequences" x-collapse class="px-4 pb-4">
                     {% include "partials/sequence_bets.html" %}
                 </div>
             </div>
@@ -274,8 +274,7 @@
             {# Results & Wins — open if big_wins non-empty #}
             <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
                 <div class="dash-accordion-header"
-                     @click="openSection = openSection === 'results' ? '' : 'results'"
-                     x-init="{% if dashboard.big_wins|default([])|length > 0 %}openSection = 'results'{% endif %}"
+                     @click="open.results = !open.results"
                      style="border: none;">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -284,28 +283,28 @@
                         <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(74, 222, 128, 0.12); color: #4ade80;">{{ dashboard.big_wins|length }}</span>
                         {% endif %}
                     </div>
-                    <svg class="w-5 h-5 transition-transform" :class="openSection === 'results' && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    <svg class="w-5 h-5 transition-transform" :class="open.results && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </div>
-                <div x-show="openSection === 'results'" x-collapse>
+                <div x-show="open.results" x-collapse>
                     <div class="px-4 pb-4" id="results-feed"
                          hx-get="/tips/_results-feed"
                          hx-trigger="every 120s [document.visibilityState === 'visible']"
                          hx-swap="innerHTML">
-                        {% include "partials/results_feed.html" %}
+                        {% with hide_heading=true %}{% include "partials/results_feed.html" %}{% endwith %}
                     </div>
                 </div>
             </div>
 
             {# Performance Breakdown — default CLOSED #}
             <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
-                <div class="dash-accordion-header" @click="openSection = openSection === 'perf' ? '' : 'perf'" style="border: none;">
+                <div class="dash-accordion-header" @click="open.performance = !open.performance" style="border: none;">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                         <span class="font-heading font-bold text-white text-sm uppercase tracking-wider">Performance Breakdown</span>
                     </div>
-                    <svg class="w-5 h-5 transition-transform" :class="openSection === 'perf' && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    <svg class="w-5 h-5 transition-transform" :class="open.performance && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </div>
-                <div x-show="openSection === 'perf'" x-collapse class="px-4 pb-4">
+                <div x-show="open.performance" x-collapse class="px-4 pb-4">
                     {% include "partials/performance_snapshot.html" %}
                 </div>
             </div>

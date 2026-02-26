@@ -11,7 +11,7 @@
             </span>
         </div>
         <div class="text-right">
-            <div class="countdown-fixed font-display font-bold text-lg" style="color: var(--magenta);" data-start="{{ next_race.start_time }}">--:--</div>
+            <div class="countdown-fixed font-display font-bold text-lg" style="color: var(--magenta);" data-start="{{ next_race.start_time_iso }}">--:--</div>
             <div class="text-xs" style="color: var(--text-muted);">until jump</div>
         </div>
     </div>
@@ -95,7 +95,7 @@
     <p class="font-heading font-semibold text-white mb-2">No Strong Play Right Now</p>
     <p class="text-sm mb-3" style="color: var(--text-secondary);">
         {{ next_race.venue }} R{{ next_race.race_number }} jumping in
-        <span class="countdown-fixed font-heading font-bold" style="color: var(--magenta);" data-start="{{ next_race.start_time }}">--:--</span>
+        <span class="countdown-fixed font-heading font-bold" style="color: var(--magenta);" data-start="{{ next_race.start_time_iso }}">--:--</span>
     </p>
 </div>
 

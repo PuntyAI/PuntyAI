@@ -2017,14 +2017,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 badge.appendChild(document.createTextNode(label));
 
-                // Insert after the BET line (after .sel-bet element)
+                // Insert inline after the BET line (after .sel-bet element)
                 if (betEl && betEl.nextSibling) {
-                    // Insert a line break then the badge after the bet element
-                    var br = document.createElement('br');
-                    betEl.parentNode.insertBefore(br, betEl.nextSibling);
-                    br.parentNode.insertBefore(badge, br.nextSibling);
+                    betEl.parentNode.insertBefore(badge, betEl.nextSibling);
                 } else if (betEl) {
-                    betEl.parentNode.appendChild(document.createElement('br'));
                     betEl.parentNode.appendChild(badge);
                 }
                 break; // Only one PP per race
