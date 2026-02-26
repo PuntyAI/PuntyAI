@@ -1417,10 +1417,17 @@ async def get_best_of_meets() -> dict:
 
         # Best Exotic: first exotic per meeting
         if pick.pick_type == "exotic" and not meets[mid]["exotic"]:
+            import json as _json3
+            runners = pick.exotic_runners
+            if isinstance(runners, str):
+                try:
+                    runners = _json3.loads(runners)
+                except (ValueError, TypeError):
+                    runners = []
             meets[mid]["exotic"] = {
                 "type": pick.exotic_type,
                 "race": pick.race_number,
-                "runners": pick.exotic_runners,
+                "runners": runners or [],
                 "stake": pick.exotic_stake,
             }
 
@@ -1979,6 +1986,21 @@ async def get_daily_dashboard() -> dict:
                 name = pick.horse_name or f"R{pick.race_number}"
 
             stake = pick.bet_stake or pick.exotic_stake or 0
+            # Probability: use place_prob for Place bets, win_prob otherwise
+            wp = round(pick.win_probability * 100, 1) if pick.win_probability else None
+            pp = round(pick.place_probability * 100, 1) if pick.place_probability else None
+            bt_lower = (pick.bet_type or "").lower()
+            show_prob = pp if bt_lower == "place" and pp else wp
+
+            # Exotic runners as list
+            exotic_runners = None
+            if pick.pick_type == "exotic" and pick.exotic_runners:
+                import json as _json2
+                try:
+                    exotic_runners = _json2.loads(pick.exotic_runners) if isinstance(pick.exotic_runners, str) else pick.exotic_runners
+                except (ValueError, TypeError):
+                    exotic_runners = None
+
             upcoming.append({
                 "name": name,
                 "venue": meeting.venue,
@@ -1986,11 +2008,15 @@ async def get_daily_dashboard() -> dict:
                 "race_number": pick.race_number,
                 "pick_type": pick.pick_type,
                 "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                "exotic_type": pick.exotic_type,
+                "exotic_runners": exotic_runners,
                 "odds": pick.odds_at_tip,
                 "stake": round(stake, 2),
                 "tip_rank": pick.tip_rank,
                 "value_rating": round(pick.value_rating, 2) if pick.value_rating else None,
-                "win_prob": round(pick.win_probability * 100, 1) if pick.win_probability else None,
+                "win_prob": wp,
+                "place_prob": pp,
+                "show_prob": show_prob,
                 "confidence": pick.confidence,
                 "is_puntys_pick": pick.is_puntys_pick or False,
                 "start_time": race.start_time.strftime("%H:%M") if race and race.start_time else None,
