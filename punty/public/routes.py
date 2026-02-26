@@ -958,9 +958,11 @@ def _compute_pick_data(all_picks: list) -> dict:
             bt_lower = (pick.bet_type or "").lower()
             model_prob = None
             if "place" in bt_lower and pick.place_probability:
-                model_prob = round(pick.place_probability * 100, 1)
+                raw_pp = pick.place_probability
+                model_prob = round(raw_pp * 100, 1) if raw_pp <= 1 else round(raw_pp, 1)
             elif pick.win_probability:
-                model_prob = round(pick.win_probability * 100, 1)
+                raw_wp = pick.win_probability
+                model_prob = round(raw_wp * 100, 1) if raw_wp <= 1 else round(raw_wp, 1)
             market_implied = round(100 / pick.odds_at_tip, 1) if pick.odds_at_tip else None
             edge_pct = round(model_prob - market_implied, 1) if model_prob and market_implied else None
             if edge_pct is not None:
