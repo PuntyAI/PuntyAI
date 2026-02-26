@@ -64,7 +64,7 @@
                             <span class="px-2 py-1 rounded text-sm font-heading font-semibold" style="background: rgba(233, 30, 140, 0.15); color: var(--magenta);">{{ meeting.weather }}</span>
                         </div>
                         {% endif %}
-                        {% if meeting.rail_position %}
+                        {% if meeting.rail_position and meeting.rail_position not in ('True', 'False', 'true', 'false', 'None') %}
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-heading font-semibold uppercase" style="color: var(--text-muted);">Rail</span>
                             <span class="text-sm" style="color: var(--text-secondary);">{{ meeting.rail_position }}</span>
@@ -2118,7 +2118,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 30000);
 
-    // Sidebar countdown timer (data-start attribute)
+});
+</script>
+
+{# Sidebar countdown — independent of early mail content processing #}
+<script>
+(function() {
     function pad(n) { return n < 10 ? '0' + n : n; }
     function updateSidebarCountdown() {
         document.querySelectorAll('.countdown-fixed[data-start]').forEach(function(el) {
@@ -2147,6 +2152,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     updateSidebarCountdown();
     setInterval(updateSidebarCountdown, 1000);
-});
+})();
 </script>
 {% endblock %}
