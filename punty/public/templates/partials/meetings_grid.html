@@ -18,14 +18,13 @@
             {% if meet.track_condition %}
             <div class="text-xs mb-2" style="color: var(--cyan);">{{ meet.track_condition }}</div>
             {% endif %}
-            {# Next race jump time #}
+            {# Next race jump time or completion status #}
             {% if meet.next_jump %}
-            <div class="flex items-center gap-1.5 text-xs">
-                <span style="color: var(--text-muted);">R{{ meet.next_race_num }}</span>
+            <div class="flex items-center justify-between text-xs">
+                <span class="font-heading font-semibold" style="color: var(--text-secondary);">R{{ meet.next_race_num }}</span>
                 <span class="countdown-fixed font-heading font-semibold" style="color: var(--magenta);" data-start="{{ meet.next_jump }}">--:--</span>
             </div>
             {% else %}
-            {# All races done #}
             {% set venue_data = dashboard.venues|selectattr('name', 'equalto', meet.venue)|first %}
             {% if venue_data and venue_data.pnl is not none and venue_data.bets > 0 %}
             <div class="flex items-center justify-between text-xs">

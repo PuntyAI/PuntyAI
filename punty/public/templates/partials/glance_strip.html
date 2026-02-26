@@ -40,8 +40,8 @@
             </span>
         </div>
 
-        {# Meetings Count — use meetings_list (always available) or fall back to tips #}
-        {% set meetings_count = meetings_list|default(stats.todays_tips|default([]))|length %}
+        {# Meetings Count — prefer explicit count, then meetings_list, then tips fallback #}
+        {% set meetings_count = meetings_count|default(meetings_list|default(stats.todays_tips|default([]))|length) %}
         <div class="glance-chip">
             <span class="glance-label">Meetings</span>
             <span class="glance-value">{{ meetings_count }}</span>

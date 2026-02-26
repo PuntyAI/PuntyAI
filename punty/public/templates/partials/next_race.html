@@ -4,7 +4,7 @@
     <div class="next-race-glow"></div>
     <div class="p-6 relative">
         <div class="flex flex-col md:flex-row md:items-start gap-4 md:gap-8">
-            {# Countdown #}
+            {# Countdown + race info #}
             <div class="text-center md:text-left flex-shrink-0" style="min-width: 180px;">
                 <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--magenta);">Next Race</div>
                 <div class="text-3xl md:text-4xl font-display font-black countdown-fixed" style="color: white;" id="next-race-countdown" data-start="{{ next_race.start_time_iso }}">
@@ -16,6 +16,10 @@
                 {% if next_race.race_name %}
                 <div class="text-sm" style="color: var(--text-muted);">{{ next_race.race_name }}</div>
                 {% endif %}
+                <a href="/tips/{{ next_race.meeting_id }}" class="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-lg font-heading font-bold text-xs uppercase tracking-wider transition-all hover:scale-105" style="background: var(--gradient-sunset); color: white;">
+                    Full Card
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
             </div>
 
             {# Picks for this race #}
@@ -52,14 +56,6 @@
                 {% else %}
                 <div class="text-sm" style="color: var(--text-muted);">No picks loaded for this race yet.</div>
                 {% endif %}
-            </div>
-
-            {# CTA #}
-            <div class="flex-shrink-0 self-start hidden md:block">
-                <a href="/tips/{{ next_race.meeting_id }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-heading font-bold text-sm uppercase tracking-wider transition-all hover:scale-105" style="background: var(--gradient-sunset); color: white;">
-                    Full Card
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                </a>
             </div>
         </div>
     </div>
