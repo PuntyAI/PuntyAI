@@ -306,7 +306,7 @@ async def _settle_picks_for_race_impl(
         has_result = runner and (runner.finish_position is not None or (race_final and results_populated))
 
         if has_result:
-            bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
+            bet_type = str(pick.bet_type or "win").lower().replace(" ", "_")
 
             # "Exotics only" or "no bet" picks have no straight bet — settle with $0 P&L
             if bet_type in ("exotics_only", "no_bet"):
@@ -455,7 +455,7 @@ async def _settle_picks_for_race_impl(
 
             # Settle Punty's Pick shadow result if bet type differs
             if pick.is_puntys_pick and pick.pp_bet_type and pick.pp_bet_type != bet_type:
-                pp_bt = pick.pp_bet_type.lower().replace(" ", "_")
+                pp_bt = str(pick.pp_bet_type).lower().replace(" ", "_")
                 pp_odds_val = pick.pp_odds or place_odds  # PP odds, fallback to place
                 if pp_bt in ("win", "saver_win"):
                     pick.pp_hit = won
@@ -603,7 +603,7 @@ async def _settle_picks_for_race_impl(
         try:
             exotic_runners = json.loads(pick.exotic_runners) if pick.exotic_runners else []
             stake = pick.exotic_stake or 1.0
-            exotic_type = (pick.exotic_type or "").lower()
+            exotic_type = str(pick.exotic_type or "").lower()
 
             # Get finish order
             finish_order = sorted(
@@ -894,7 +894,7 @@ async def _settle_picks_for_race_impl(
                     exotic_divs = json.loads(last_leg_race.exotic_results)
                 except (json.JSONDecodeError, TypeError):
                     exotic_divs = {}
-                seq_type = (pick.sequence_type or "").lower()
+                seq_type = str(pick.sequence_type or "").lower()
                 dividend = 0.0
                 for key in ("quaddie", "quadrella", "big6", "big 6"):
                     if key in seq_type or seq_type == "":

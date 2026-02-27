@@ -1742,6 +1742,19 @@ async def tips_live_edge(request: Request, exclude: str = "", offset: int = 0):
     )
 
 
+@router.get("/tips/api/dashboard/recent-results", response_class=HTMLResponse)
+async def tips_recent_results(request: Request):
+    """HTMX partial: Recent Results auto-refresh (last 3 settled races)."""
+    dashboard = await get_daily_dashboard()
+    return templates.TemplateResponse(
+        "partials/recent_results.html",
+        {
+            "request": request,
+            "recent_race_results": dashboard.get("recent_race_results", []),
+        }
+    )
+
+
 @router.get("/tips/_results-feed", response_class=HTMLResponse)
 async def tips_results_feed(request: Request):
     """HTMX partial: results feed refresh."""
@@ -2485,15 +2498,28 @@ async def get_daily_dashboard() -> dict:
         # ── Bet type breakdown (all settled picks, with ROI/SR) ──
         bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
         for pick, runner, race, meeting in settled_rows:
-            # Label by pick type: selections use bet_type, exotics use exotic_type, sequences use sequence_type
+            # Skip non-bet types and individual big3 legs (P&L tracked on multi)
+            if pick.pick_type == "big3":
+                continue
             if pick.pick_type == "selection":
-                bt = (pick.bet_type or "unknown").replace("_", " ").title()
+                raw_bt = str(pick.bet_type or "unknown").lower().replace("_", " ")
+                if raw_bt in ("no bet", "no_bet", "exotics only", "exotics_only"):
+                    continue
+                # Merge Saver Win → Win
+                if raw_bt == "saver win":
+                    bt = "Win"
+                else:
+                    bt = raw_bt.title()
             elif pick.pick_type == "exotic":
-                bt = (pick.exotic_type or "Exotic").replace("_", " ").title()
+                # Normalize: strip Box/Standout suffixes → base type
+                raw_et = str(pick.exotic_type or "Exotic").lower()
+                for suffix in (" standout", " box", " boxed"):
+                    raw_et = raw_et.replace(suffix, "")
+                bt = raw_et.strip().title()
             elif pick.pick_type in ("sequence", "big3_multi"):
-                bt = (pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
+                bt = str(pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
             else:
-                bt = (pick.pick_type or "unknown").replace("_", " ").title()
+                bt = str(pick.pick_type or "unknown").replace("_", " ").title()
             bt_stats[bt]["bets"] += 1
             stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
             bt_stats[bt]["staked"] += stake or 0

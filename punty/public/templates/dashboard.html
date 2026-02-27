@@ -537,94 +537,14 @@
                 </div>
                 {% endif %}
 
-                {# ── Recent Race Results ── #}
-                {% set race_results = dashboard.recent_race_results|default([]) %}
-                {% if race_results %}
-                <div class="sidebar-panel dash-sidebar-recent">
-                    <div class="sidebar-panel-title">Recent Results</div>
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        {% for race in race_results %}
-                        <a href="/tips/{{ race.meeting_id }}#race-{{ race.race_number }}" class="rr-race-card" style="text-decoration: none; display: block;">
-                            {# Race header #}
-                            <div class="flex items-center justify-between mb-1">
-                                <div class="flex items-center gap-1.5">
-                                    <span class="font-heading font-bold text-white text-xs">{{ race.venue }}</span>
-                                    <span class="font-heading font-semibold text-xs" style="color: var(--text-muted);">R{{ race.race_number }}</span>
-                                </div>
-                                <div class="flex items-center gap-1">
-                                    <span class="text-xs" style="color: var(--text-muted);">(${{ '%.0f'|format(race.total_staked) }})</span>
-                                    <span class="font-heading font-bold text-xs {% if race.total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
-                                        {{ '%+.0f'|format(race.total_pnl) | replace('+', '+$') | replace('-', '-$') }}
-                                    </span>
-                                </div>
-                            </div>
-                            {# Results table #}
-                            <table class="rr-table">
-                                <thead>
-                                    <tr>
-                                        <th class="rr-th-rank"></th>
-                                        <th class="rr-th-name">Horse</th>
-                                        <th class="rr-th-pos">Pos</th>
-                                        <th class="rr-th-pnl">P&amp;L</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for p in race.picks %}
-                                    <tr class="rr-row">
-                                        <td class="rr-td-rank"><span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span></td>
-                                        <td class="rr-td-name">
-                                            <span class="font-heading font-semibold" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
-                                                {{ p.name }}
-                                            </span>
-                                            {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.2rem;">PP</span>{% endif %}
-                                        </td>
-                                        <td class="rr-td-pos">
-                                            {% if p.finish_pos %}
-                                            <span style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %};">
-                                                {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
-                                            </span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="rr-td-pnl">
-                                            {% if not p.is_no_bet %}
-                                            <span style="color: {% if p.pnl > 0 %}#4ade80{% elif p.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %};">
-                                                {{ '%+.0f'|format(p.pnl) | replace('+', '+$') | replace('-', '-$') }}
-                                            </span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                    {# Exotic rows #}
-                                    {% for ex in race.exotics|default([]) %}
-                                    <tr class="rr-row rr-row-exotic">
-                                        <td class="rr-td-rank"><span class="rr-exotic-badge">E</span></td>
-                                        <td class="rr-td-name">
-                                            <span class="font-heading font-semibold" style="color: {% if ex.hit %}var(--cyan){% else %}var(--text-muted){% endif %};">{{ ex.exotic_type }}</span>
-                                        </td>
-                                        <td class="rr-td-pos">
-                                            {% if ex.hit %}
-                                            <span style="color: #4ade80;">HIT</span>
-                                            {% else %}
-                                            <span style="color: var(--text-muted); opacity: 0.5;">MISS</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="rr-td-pnl">
-                                            <span style="color: {% if ex.pnl > 0 %}#4ade80{% elif ex.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %};">
-                                                {{ '%+.0f'|format(ex.pnl) | replace('+', '+$') | replace('-', '-$') }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </a>
-                        {% if not loop.last %}
-                        <div style="border-top: 1px solid rgba(255,255,255,0.04);"></div>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
+                {# ── Recent Race Results (HTMX auto-refresh every 60s) ── #}
+                {% set recent_race_results = dashboard.recent_race_results|default([]) %}
+                <div id="recent-results"
+                     hx-get="/tips/api/dashboard/recent-results"
+                     hx-trigger="every 60s"
+                     hx-swap="innerHTML">
+                    {% include "partials/recent_results.html" %}
                 </div>
-                {% endif %}
 
                 {# ── Performance Snapshot (compact 2x2 grid) ── #}
                 {% set perf = dashboard.performance|default({}) %}
