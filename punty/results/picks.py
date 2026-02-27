@@ -999,6 +999,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date == target_date,
+            Meeting.selected == True,
             Pick.settled == True,
             Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
@@ -1021,6 +1022,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date == target_date,
+            Meeting.selected == True,
             Pick.settled == False,
             Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
@@ -1122,6 +1124,7 @@ async def get_performance_history(
         .where(
             Meeting.date >= start_date,
             Meeting.date <= end_date,
+            Meeting.selected == True,
             Pick.settled == True,
             Pick.pick_type != "big3",  # P&L tracked on multi row
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
@@ -1181,6 +1184,7 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .outerjoin(Race, (Race.meeting_id == Pick.meeting_id) & (Race.race_number == Pick.race_number))
         .where(
+            Meeting.selected == True,
             Pick.settled == True,
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
@@ -1604,6 +1608,7 @@ async def get_recent_wins(db: AsyncSession, limit: int = 20) -> list[dict]:
         select(Pick, Meeting)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
+            Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
             Pick.pnl > 0,  # Only profitable wins
@@ -1659,6 +1664,7 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
         select(func.count(Pick.id))
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
+            Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
             Meeting.date == today,
@@ -1671,7 +1677,10 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
 
     # All-time winners
     total_result = await db.execute(
-        select(func.count(Pick.id)).where(
+        select(func.count(Pick.id))
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
@@ -1686,7 +1695,10 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
         select(
             func.sum(Pick.bet_stake + Pick.pnl).filter(Pick.bet_stake.isnot(None)),
             func.sum(Pick.exotic_stake + Pick.pnl).filter(Pick.exotic_stake.isnot(None)),
-        ).where(
+        )
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .where(
+            Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),

@@ -2893,7 +2893,7 @@ def calculate_exotic_combinations(
     VALUE_THRESHOLDS = {
         "Quinella": 1.2,           # High-probability play, both runners in selections
         "Exacta": 1.2,
-        "Trifecta Box": 1.5,      # Raised from 1.2 — reduce frequency, keep for high-value spots
+        "Trifecta Box": 1.2,      # Lowered — always 4-horse box now (better hit rate, 24 combos)
         "Trifecta Standout": 1.2,
         "Trifecta Contrarian": 1.3,  # Higher threshold — contrarian approach needs stronger edge
         "First4": 1.2,            # Positional legs format — targeted, fewer combos
@@ -2996,30 +2996,9 @@ def calculate_exotic_combinations(
                     format="standout",
                 ))
 
-    # --- Trifecta Box: 3 runners from top 4 ---
+    # --- Trifecta Box: always 4-horse (better hit rate than 3-runner) ---
     # When favourite is odds-on, exclude from box (everyone includes them → crushed dividends)
     tri_box_pool = [r for r in top4 if not (fav_is_odds_on and r is fav)] if fav_is_odds_on else top4
-    for combo in combinations(tri_box_pool, 3):
-        our_probs = [r["win_prob"] for r in combo]
-        mkt_probs = [r["market_implied"] for r in combo]
-        our_prob = _box_probability(our_probs, 3)
-        mkt_prob = _box_probability(mkt_probs, 3)
-        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-
-        if value >= VALUE_THRESHOLDS["Trifecta Box"]:
-            results.append(ExoticCombination(
-                exotic_type="Trifecta Box",
-                runners=[r["saddlecloth"] for r in combo],
-                runner_names=[r.get("horse_name", "") for r in combo],
-                estimated_probability=round(our_prob, 6),
-                market_probability=round(mkt_prob, 6),
-                value_ratio=round(value, 3),
-                cost=stake,
-                num_combos=6,
-                format="boxed",
-            ))
-
-    # --- Trifecta Box: 4 runners from top 4 ---
     if len(tri_box_pool) >= 4:
         our_probs = [r["win_prob"] for r in tri_box_pool]
         mkt_probs = [r["market_implied"] for r in tri_box_pool]

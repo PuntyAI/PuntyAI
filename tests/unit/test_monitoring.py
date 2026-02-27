@@ -48,6 +48,7 @@ async def _seed_meeting_and_picks(db: AsyncSession, meeting_date: date, picks_da
             id=meeting_id,
             venue="Test Venue",
             date=meeting_date,
+            selected=True,
         )
         db.add(meeting)
 

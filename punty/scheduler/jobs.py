@@ -1266,23 +1266,22 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
 
 
 async def mid_morning_odds_refresh() -> dict:
-    """Run at 10:00 AM to refresh Betfair odds for all today's meetings.
+    """Run at 9:30 AM to refresh Betfair odds for all today's meetings.
 
     Bridges the gap between morning generation (~05:30) and pre-race (T-90min).
-    Updates runner.current_odds via Betfair and syncs odds_at_tip on existing picks.
+    Updates runner display odds only — does NOT touch pick odds_at_tip.
+    Pick odds are refreshed at T-90min when pre-race regeneration runs.
 
     Returns: job result dict
     """
     from punty.models.database import async_session
     from punty.models.meeting import Meeting, Race, Runner
-    from punty.models.content import Content
-    from punty.models.pick import Pick
     from punty.config import melb_now, melb_today
     from punty.scrapers.orchestrator import refresh_odds
     from punty.scheduler.activity_log import log_system
     from sqlalchemy import select
 
-    logger.info("Starting mid-morning odds refresh")
+    logger.info("Starting mid-morning odds refresh (display only, no pick updates)")
     log_system("Mid-morning odds refresh started", status="info")
 
     results = {
@@ -1357,64 +1356,7 @@ async def mid_morning_odds_refresh() -> dict:
                     logger.warning(f"Racing.com flucs fetch failed for {meeting.venue}: {e}")
                     meeting_info["flucs_error"] = str(e)
                 meeting_info["odds_refreshed"] = True
-
-                # Step 2: Update odds_at_tip on existing picks
-                content_result = await db.execute(
-                    select(Content).where(
-                        Content.meeting_id == meeting.id,
-                        Content.content_type == "early_mail",
-                        Content.status.in_(["approved", "sent"]),
-                    ).order_by(Content.created_at.desc()).limit(1)
-                )
-                content = content_result.scalar_one_or_none()
-
-                if content:
-                    pick_result = await db.execute(
-                        select(Pick).where(
-                            Pick.content_id == content.id,
-                            Pick.pick_type == "selection",
-                            Pick.settled == False,
-                        )
-                    )
-                    picks = pick_result.scalars().all()
-                    updated = 0
-                    drifts = []
-
-                    for pick in picks:
-                        if not pick.saddlecloth or not pick.race_number:
-                            continue
-                        race_id = f"{meeting.id}-r{pick.race_number}"
-                        runner_result = await db.execute(
-                            select(Runner).where(
-                                Runner.race_id == race_id,
-                                Runner.saddlecloth == pick.saddlecloth,
-                            ).limit(1)
-                        )
-                        runner = runner_result.scalar_one_or_none()
-                        if not runner or not runner.current_odds:
-                            continue
-
-                        old_odds = pick.odds_at_tip or 0
-                        new_odds = runner.current_odds
-                        if new_odds and new_odds != old_odds:
-                            pick.odds_at_tip = new_odds
-                            if runner.place_odds:
-                                pick.place_odds_at_tip = runner.place_odds
-                            elif new_odds:
-                                pick.place_odds_at_tip = round((new_odds - 1) / 3 + 1, 2)
-                            updated += 1
-
-                            if old_odds and old_odds > 0:
-                                pct = abs((new_odds - old_odds) / old_odds) * 100
-                                if pct >= 50:
-                                    drifts.append(f"{pick.horse_name} ${old_odds:.2f}→${new_odds:.2f} ({pct:.0f}%)")
-
-                    if updated:
-                        await db.commit()
-                    meeting_info["picks_updated"] = updated
-                    meeting_info["significant_drifts"] = drifts
-                    if drifts:
-                        logger.warning(f"Mid-morning drift in {meeting.venue}: {drifts}")
+                # Pick odds_at_tip NOT updated here — left for T-90min pre-race regeneration
 
             except Exception as e:
                 logger.error(f"Mid-morning refresh failed for {meeting.venue}: {e}")
@@ -1424,12 +1366,9 @@ async def mid_morning_odds_refresh() -> dict:
             results["meetings"].append(meeting_info)
 
     results["completed_at"] = melb_now().isoformat()
-    total_updated = sum(m.get("picks_updated", 0) for m in results["meetings"])
-    total_drifts = sum(len(m.get("significant_drifts", [])) for m in results["meetings"])
     log_system(
-        f"Mid-morning odds refresh complete: {len(meetings)} meetings, "
-        f"{total_updated} picks updated, {total_drifts} significant drifts",
-        status="warning" if total_drifts else "success",
+        f"Mid-morning odds refresh complete: {len(meetings)} meetings (display only)",
+        status="success",
     )
     logger.info(f"Mid-morning odds refresh complete: {results}")
     return results

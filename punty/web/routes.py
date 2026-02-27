@@ -60,6 +60,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Meeting).where(
             Meeting.date == today,
+            Meeting.selected == True,
             Meeting.meeting_type.in_(["race", None]),
         ).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
@@ -184,6 +185,7 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
     result = await db.execute(
         select(Meeting).where(
             Meeting.date == today,
+            Meeting.selected == True,
             Meeting.meeting_type.in_(["race", None]),
         ).options(selectinload(Meeting.races)).order_by(Meeting.venue)
     )
