@@ -391,7 +391,28 @@ class SchedulerManager:
                 existing_content = content_result.scalars().first()
 
                 if existing_content:
-                    logger.info(f"Pre-race time passed for {meeting.venue} — content already exists, skipping")
+                    # Content exists — but was it posted to socials?
+                    if existing_content.status in ("approved",) and not existing_content.twitter_id:
+                        logger.warning(
+                            f"Pre-race time passed for {meeting.venue} — content exists but NOT posted to socials, "
+                            f"running catch-up posting NOW"
+                        )
+                        import asyncio
+                        from punty.scheduler.automation import post_existing_content
+
+                        async def _catchup_post(cid=existing_content.id):
+                            from punty.models.database import async_session
+                            async with async_session() as post_db:
+                                await post_existing_content(cid, post_db)
+                                await post_db.commit()
+
+                        asyncio.create_task(_catchup_post())
+                        scheduled["jobs"].append({
+                            "type": "pre_race",
+                            "time": "catch-up-post",
+                        })
+                    else:
+                        logger.info(f"Pre-race time passed for {meeting.venue} — content already exists and posted, skipping")
                 else:
                     # Only catch up if the last race hasn't finished yet
                     if last_race_time > now:
