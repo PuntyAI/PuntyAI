@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from punty.config import melb_today, MELB_TZ
 from punty.models.meeting import Meeting
 from punty.models.pick import Pick
+from punty.models.settings import AppSettings
 from punty.results.picks import get_performance_summary, get_performance_history
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,6 @@ ROI_FLOOR = -15.0  # Alert if 7-day ROI below -15%
 STRIKE_RATE_DROP = 5.0  # Alert if SR drops 5+ pp week-over-week
 CONSECUTIVE_LOSS_DAYS = 3  # Alert after 3 consecutive losing days
 DAILY_LOSS_LIMIT = -200.0  # Alert if single day loss exceeds $200
-
-_loss_alert_sent_date: Optional[date] = None  # Only alert once per day
 
 
 async def compute_daily_digest(db: AsyncSession, target_date: date) -> dict:
@@ -164,12 +163,16 @@ async def check_intraday_loss(db: AsyncSession) -> Optional[str]:
     """Check if today's cumulative P&L has breached the daily loss limit.
 
     Called from monitor.py after each race settlement.
-    Only fires once per day to avoid alert spam.
+    Only fires once per day — persisted in DB so survives server restarts.
     """
-    global _loss_alert_sent_date
     today = melb_today()
 
-    if _loss_alert_sent_date == today:
+    # Check if we already sent a loss alert today (persisted in app_settings)
+    sent_row = await db.execute(
+        select(AppSettings.value).where(AppSettings.key == "loss_alert_sent_date")
+    )
+    sent_date_str = sent_row.scalar()
+    if sent_date_str == today.isoformat():
         return None
 
     result = await db.execute(
@@ -184,7 +187,16 @@ async def check_intraday_loss(db: AsyncSession) -> Optional[str]:
     total_pnl = float(result.scalar() or 0)
 
     if total_pnl < DAILY_LOSS_LIMIT:
-        _loss_alert_sent_date = today
+        # Persist that we sent the alert today
+        from sqlalchemy.dialects.sqlite import insert as sqlite_upsert
+        stmt = sqlite_upsert(AppSettings).values(
+            key="loss_alert_sent_date", value=today.isoformat()
+        ).on_conflict_do_update(
+            index_elements=[AppSettings.key],
+            set_={"value": today.isoformat()},
+        )
+        await db.execute(stmt)
+        await db.commit()
         return (
             f"\u26a0\ufe0f Daily loss alert: ${abs(total_pnl):.0f} lost today "
             f"(limit: ${abs(DAILY_LOSS_LIMIT):.0f})"
