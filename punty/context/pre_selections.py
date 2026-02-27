@@ -500,27 +500,22 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     # Place ROI by band: <$2 = +24%, $2-$4 = +20%, $4-$6 = +35%, $6-$10 = -0.3%
     # EW collect rate: $2.40-$3 = 94%, $3-$4 = 62%
 
-    # Very short-priced favourites (<$1.80): Place (edge gate will likely track it)
-    # Place odds ≈ $1.10-$1.25 — neither Win nor Place is worth staking here.
-    # Set to Place so the edge gate can properly evaluate place_prob.
-    if odds < 1.80 and not is_roughie:
-        return "Place"  # edge gate evaluates — likely tracked_only
-
-    # Short-priced favourites ($1.80-$2.00): Place only
-    # Win ROI at these odds is -38.9% historically.
-    if odds < 2.00 and not is_roughie:
+    # Very short-priced favourites (<$2.01): Place only
+    # Too short for Win — but edge gate relaxed for high place_prob picks.
+    if odds < 2.01 and not is_roughie:
         return "Place"
 
-    # $2.00-$2.40: Outside $4-$6 win zone — Place only
-    if odds < 2.40 and not is_roughie:
+    # $2.01-$3.00: Rank 1 can Win with strong conviction (wp >= 0.22, value >= 0.95)
+    # Higher threshold than $3-$4 since short odds need stronger conviction.
+    if 2.01 <= odds < 3.0 and not is_roughie:
+        if rank == 1 and win_prob >= 0.22 and value >= 0.95:
+            return "Win"
         return "Place"
 
-    # $2.40-$3.00: Outside $4-$6 win zone — Place only
-    if 2.40 <= odds < 3.0:
-        return "Place"
-
-    # $3.00-$4.00: Outside $4-$6 win zone — Place only
+    # $3.01-$4.00: Rank 1 can Win with moderate conviction (wp >= 0.20, value >= 0.95)
     if 3.0 <= odds < 4.0 and not is_roughie:
+        if rank == 1 and win_prob >= 0.20 and value >= 0.95:
+            return "Win"
         return "Place"
 
     # $4.00-$5.00: THE profit engine (+144.8% ROI, 54% win rate)
@@ -806,12 +801,20 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
                         return (False, f"Losing odds band (live ROI {cell['roi']:.0f}%)")
                 break
 
+    # --- High-probability universal override ---
+    # Any Place bet with place_prob >= 0.75 passes regardless of odds band.
+    # Catches short-priced favourites (e.g. $1.35-$2.60) with 0.80+ place_prob
+    # that were incorrectly getting no_bet under stricter thresholds.
+    # Only applies to Place — Win at short odds is still blocked below.
+    if bt == "Place" and place_prob >= 0.75:
+        return (True, None)
+
     # --- Win-first staking criteria ---
 
     # 1. Win/Saver at $2.00-$10.00 — wide Win zone (optimizer sets bet type)
     if bt in ("Win", "Saver Win") and 2.0 <= odds <= 10.0:
-        # $2.00-$4.00: needs reasonable conviction
-        if odds < 4.0 and win_prob >= 0.20:
+        # $2.00-$4.00: lowered conviction from 0.20 → 0.18 (expanded Win zone)
+        if odds < 4.0 and win_prob >= 0.18:
             return (True, None)
         # $4.00-$6.00: proven sweet spot
         if 4.0 <= odds <= 6.0:
@@ -822,6 +825,9 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
 
     # 2. Place with graduated prob threshold by odds band
     if bt == "Place":
+        # High collection confidence auto-pass (pp >= 0.70)
+        if place_prob >= 0.70:
+            return (True, None)
         # Short odds ($1.50-$3): needs high collection prob
         if odds < 3.0 and place_prob >= 0.55:
             return (True, None)
@@ -1053,14 +1059,12 @@ def _select_exotic(
             if top_pick_prob < 0.30 or not (8 <= field_size <= 12):
                 continue
 
-        # Trifecta Box: profitable only in narrow scenario (field 11-13,
-        # non-sprint, fav $2-$3.50, Good/Soft track). All other combos lose.
+        # Trifecta Box: always 4-horse now (better coverage).
+        # Relaxed filters: field 7-14, any distance, fav $1.50-$5.00.
         if ec_type == "Trifecta Box":
-            if not (11 <= field_size <= 13):
+            if not (7 <= field_size <= 14):
                 continue
-            if distance and distance <= 1200:
-                continue
-            if fav_price and not (2.01 <= fav_price <= 3.50):
+            if fav_price and not (1.50 <= fav_price <= 5.00):
                 continue
 
         # Exacta/Quinella fav_price guard: only profitable when fav $2-$3.50
@@ -1118,12 +1122,39 @@ def _select_exotic(
         # Tight cluster boost: prefer box exotics when picks are bunched
         if cluster_boost > 1.0:
             ec_format = ec.get("format", "")
-            ec_type = ec.get("type", "")
             if ec_format == "boxed":
                 score *= cluster_boost
             elif ec_format in ("flat", "standout") and ec_type != "Quinella":
                 # Quinella is inherently unordered (a "box" of 2) — no penalty
                 score *= 0.85  # slight penalty for directional in tight fields
+
+        # --- Scenario-based multipliers (stack with existing bonuses) ---
+        top_pick_wp = max((p.win_prob for p in picks if p.rank == 1), default=0) if picks else 0
+
+        # Dominant favourite: rank 1 wp >= 0.35 AND short-priced → directional exotics
+        if top_pick_wp >= 0.35 and fav_price and fav_price < 3.0:
+            if ec_type in ("Exacta Standout", "Trifecta Standout"):
+                score *= 1.25
+
+        # Short-priced fav in combos (< $2.01) → standout anchors on the fav
+        elif fav_price and fav_price < 2.01:
+            if ec_type == "Trifecta Standout":
+                score *= 1.20
+
+        # Open race: no runner > 0.25 wp → wider coverage exotics
+        if picks and all(p.win_prob < 0.25 for p in picks):
+            if ec_type in ("Trifecta Box", "First4", "First4 Box"):
+                score *= 1.20
+
+        # Small field (≤ 8): fewer runners → 2-runner exotics more predictable
+        if field_size and field_size <= 8:
+            if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
+                score *= 1.15
+
+        # Large field (12+): more chaos → wider box coverage preferred
+        if field_size and field_size >= 12:
+            if ec_type == "Trifecta Box":
+                score *= 1.15
 
         scored.append((score, ec))
 
