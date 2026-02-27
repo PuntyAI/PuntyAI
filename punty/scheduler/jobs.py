@@ -898,8 +898,20 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     cond = await pf.get_conditions_for_venue(venue)
                     if cond:
                         _apply_pf_conditions(meeting, cond)
-                        await db.commit()
-                        logger.info(f"Conditions for {venue}: {meeting.track_condition} | rain={cond.get('rainfall')}mm")
+                        logger.info(f"PF conditions for {venue}: {meeting.track_condition} | rain={cond.get('rainfall')}mm")
+
+                    # Racing Australia override (authoritative)
+                    try:
+                        from punty.scrapers.track_conditions import get_conditions_for_meeting
+                        from punty.scrapers.orchestrator import _apply_ra_conditions
+                        ra_cond = await get_conditions_for_meeting(venue)
+                        if ra_cond:
+                            _apply_ra_conditions(meeting, ra_cond)
+                            logger.info(f"RA conditions for {venue}: {meeting.track_condition}")
+                    except Exception as ra_err:
+                        logger.warning(f"RA conditions failed for {venue}: {ra_err}")
+
+                    await db.commit()
 
                 # 2b: Scratchings (catches scratchings TAB may have missed)
                 pf_meeting_id = await pf.resolve_meeting_id(venue, meeting.date)
