@@ -227,6 +227,7 @@ class SchedulerManager:
 
         - 00:05 AM: Calendar scrape (find meetings, auto-select, initial data load)
         - 05:00 AM: Morning scrape (full re-scrape + speed maps + generate early mail)
+        - 10:00 AM: Mid-morning Betfair odds refresh (updates picks' odds_at_tip)
         - Thursday 22:00: Weekly pattern refresh (patterns, awards, ledger, news)
         - Friday 08:00: Weekly blog generation
 
@@ -236,6 +237,7 @@ class SchedulerManager:
         """
         from punty.scheduler.jobs import daily_calendar_scrape, daily_morning_scrape
         from punty.scheduler.jobs import weekly_pattern_refresh, weekly_blog_job
+        from punty.scheduler.jobs import mid_morning_odds_refresh
         from punty.config import MELB_TZ
 
         logger.info("Scheduling daily calendar scrape job for 00:05 Melbourne time")
@@ -256,6 +258,17 @@ class SchedulerManager:
             daily_morning_scrape,
             trigger_type="cron",
             hour=5,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
+        # Mid-morning Betfair odds refresh at 10:00 AM
+        # Bridges the 5-hour gap between morning generation and pre-race jobs
+        self.add_job(
+            "mid-morning-odds-refresh",
+            mid_morning_odds_refresh,
+            trigger_type="cron",
+            hour=10,
             minute=0,
             timezone=MELB_TZ,
         )
@@ -284,6 +297,7 @@ class SchedulerManager:
 
         logger.info("Daily calendar scrape job configured")
         logger.info("Daily morning scrape job configured (05:00)")
+        logger.info("Mid-morning odds refresh job configured (10:00)")
         logger.info("Weekly pattern refresh job configured (Thu 22:00)")
         logger.info("Weekly blog job configured (Fri 08:00)")
 
