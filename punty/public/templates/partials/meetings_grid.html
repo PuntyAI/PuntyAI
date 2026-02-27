@@ -26,15 +26,47 @@
     </div>
 
     {# Filter pill bar — always show all venues (pills are small) #}
-    <div class="flex flex-wrap gap-1.5 mb-3" style="margin-top: 0.25rem;">
+    <div class="flex flex-wrap gap-2 mb-3" style="margin-top: 0.25rem;">
         {% for meet in meetings %}
         <button @click="toggleVenue('{{ meet.venue }}')"
-                class="font-heading font-semibold text-xs px-2.5 py-1 rounded-full transition-all"
-                :style="isActive('{{ meet.venue }}') ? 'background: rgba(233, 30, 140, 0.15); color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.3);' : 'background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06); opacity: 0.5;'">
+                class="venue-pill font-heading font-semibold text-xs rounded-full transition-all"
+                :class="isActive('{{ meet.venue }}') ? 'venue-pill-active' : 'venue-pill-inactive'">
             {{ meet.venue }}
         </button>
         {% endfor %}
     </div>
+
+    <style>
+    .venue-pill {
+        padding: 0.35rem 0.75rem;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+    }
+    .venue-pill-active {
+        background: rgba(233, 30, 140, 0.15);
+        color: var(--magenta);
+        border: 1px solid rgba(233, 30, 140, 0.4);
+        box-shadow: 0 0 8px rgba(233, 30, 140, 0.1);
+    }
+    .venue-pill-active:hover {
+        background: rgba(233, 30, 140, 0.25);
+        box-shadow: 0 0 12px rgba(233, 30, 140, 0.2);
+    }
+    .venue-pill-inactive {
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-muted);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        opacity: 0.55;
+    }
+    .venue-pill-inactive:hover {
+        opacity: 0.8;
+        border-color: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+    }
+    @media (max-width: 639px) {
+        .venue-pill { padding: 0.25rem 0.5rem; font-size: 0.65rem; }
+    }
+    </style>
 
     {# Meeting cards — clickable links to tips page #}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

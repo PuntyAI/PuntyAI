@@ -2629,6 +2629,55 @@ async def get_daily_dashboard() -> dict:
                 "pnl": round(v_pnl, 2),
             })
 
+        # ── Recent Race Results (last 3 settled races, all picks per race) ──
+        race_groups: dict[str, dict] = {}  # key = "venue-rN"
+        for pick, runner, race_obj, meeting in settled_rows:
+            if pick.pick_type not in ("selection",):
+                continue
+            rn = pick.race_number
+            if not rn:
+                continue
+            key = f"{meeting.id}-r{rn}"
+            if key not in race_groups:
+                race_groups[key] = {
+                    "venue": meeting.venue,
+                    "meeting_id": meeting.id,
+                    "race_number": rn,
+                    "race_name": race_obj.name if race_obj else None,
+                    "settled_at": pick.settled_at or pick.created_at,
+                    "picks": [],
+                    "total_pnl": 0.0,
+                }
+            rg = race_groups[key]
+            stake = pick.bet_stake or 0
+            pnl = pick.pnl or 0
+            rg["total_pnl"] += pnl
+            # Update settled_at to latest
+            ts = pick.settled_at or pick.created_at
+            if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
+                rg["settled_at"] = ts
+            rg["picks"].append({
+                "name": pick.horse_name or "Runner",
+                "saddlecloth": pick.saddlecloth,
+                "tip_rank": pick.tip_rank,
+                "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                "odds": pick.odds_at_tip,
+                "hit": bool(pick.hit),
+                "pnl": round(pnl, 2),
+                "is_puntys_pick": pick.is_puntys_pick or False,
+                "finish_pos": runner.finish_position if runner else None,
+            })
+        # Sort picks within each race by tip_rank
+        for rg in race_groups.values():
+            rg["picks"].sort(key=lambda x: x.get("tip_rank") or 99)
+            rg["total_pnl"] = round(rg["total_pnl"], 2)
+        # Take most recently settled 3 races
+        recent_race_results = sorted(
+            race_groups.values(),
+            key=lambda x: x["settled_at"] or now_naive,
+            reverse=True,
+        )[:3]
+
         # ── Summary counts for has_data logic ──
         total_picks = len(all_rows)
         total_settled = len(settled_rows)
@@ -2650,6 +2699,7 @@ async def get_daily_dashboard() -> dict:
             "total_upcoming": total_upcoming,
             "has_data": total_picks > 0,
             "has_settled": total_settled > 0,
+            "recent_race_results": recent_race_results,
         }
 
 

@@ -219,6 +219,19 @@
         margin-bottom: 0.75rem;
     }
 
+    /* ── Recent race result cards ── */
+    .rr-race-card {
+        padding: 0.5rem;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        transition: all 0.15s;
+    }
+    .rr-race-card:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(233, 30, 140, 0.2);
+    }
+
     /* ── Quick link buttons ── */
     .qlink {
         display: flex; align-items: center; gap: 0.5rem;
@@ -265,16 +278,17 @@
         .dash-grid > div { display: contents; }
         .dash-accordions { display: contents !important; }
         #live-edge { order: 1; }
-        .dash-sidebar-timer { order: 2; }
+        .dash-sidebar-trend { order: 2; }
         .dash-metrics { order: 3; }
         .dash-meetings { order: 4; }
         .dash-accordion-bestof { order: 5; }
         .dash-accordion-sequences { order: 6; }
-        .dash-sidebar-performance { order: 7; }
-        .dash-sidebar-bettype { order: 8; }
-        .dash-sidebar-tiprank { order: 9; }
-        .dash-accordion-results { order: 10; }
-        .dash-sidebar-links { order: 11; }
+        .dash-sidebar-recent { order: 7; }
+        .dash-sidebar-performance { order: 8; }
+        .dash-sidebar-bettype { order: 9; }
+        .dash-sidebar-tiprank { order: 10; }
+        .dash-accordion-results { order: 11; }
+        .dash-sidebar-links { order: 12; }
         .metric-value { font-size: 1.1rem; }
         .metric-value-pnl { font-size: 1.1rem; }
     }
@@ -300,7 +314,6 @@
         .le-col-model, .le-col-edge { display: none !important; }
         .le-col-odds { min-width: 0 !important; }
         .le-header { gap: 0.5rem; flex-wrap: wrap; }
-        .le-badge { padding: 0.15rem 0.5rem; font-size: 0.6rem; gap: 0.25rem; }
         .le-countdown { font-size: 1rem !important; }
         .le-row { gap: 0.75rem; padding: 0.35rem 0.5rem; }
         /* Cards tighter padding */
@@ -445,27 +458,77 @@
             {# ═══════ RIGHT COLUMN (35%) — Sidebar ═══════ #}
             <div class="dash-sidebar">
 
-                {# ── Next Race Timer ── #}
-                {% if next_race and next_race.has_next %}
-                {# Primary: show when next_race venue is active #}
-                <div class="sidebar-panel dash-sidebar-timer" style="text-align: center;" x-show="isActive('{{ next_race.venue }}')" x-transition>
-                    <div class="sidebar-panel-title">Next Jump</div>
-                    <a href="/tips/{{ next_race.meeting_id }}#race-{{ next_race.race_number }}" style="text-decoration: none; display: block;" class="hover:opacity-80 transition-opacity">
-                        <div class="countdown-fixed font-display font-bold" style="font-size: 1.75rem; color: var(--magenta);" data-start="{{ next_race.start_time_iso }}" id="sidebar-timer">--:--</div>
-                        <div class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem;">
-                            {{ next_race.venue }} &mdash; R{{ next_race.race_number }}
-                            {% if next_race.distance %} &middot; {{ next_race.distance }}m{% endif %}
+                {# ── 7-Day Trend ── #}
+                {% if perf_history|default([])|length > 0 %}
+                <div class="sidebar-panel dash-sidebar-trend">
+                    <div class="sidebar-panel-title">7-Day Trend</div>
+                    <div class="flex items-end justify-between gap-1" style="height: 48px; padding: 0 0.25rem;">
+                        {% for day in perf_history %}
+                        {% set bar_pnl = day.pnl|default(0) %}
+                        {% set max_abs = perf_history|map(attribute='pnl')|map('abs')|max %}
+                        {% set bar_h = ((bar_pnl|abs / max_abs) * 100)|round|int if max_abs > 0 else 10 %}
+                        {% set bar_h = [bar_h, 8]|max %}
+                        <div class="flex-1 flex flex-col items-center justify-end" style="height: 100%;">
+                            <div class="w-full rounded-sm" style="height: {{ bar_h }}%; min-height: 3px; max-height: 100%; background: {% if bar_pnl >= 0 %}rgba(74, 222, 128, 0.6){% else %}rgba(248, 113, 113, 0.5){% endif %};"></div>
                         </div>
-                    </a>
+                        {% endfor %}
+                    </div>
+                    <div class="flex items-center justify-between mt-2">
+                        <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">{{ perf_history|length }} days</span>
+                        <span class="font-heading font-bold text-sm" style="color: {% if seven_day_pnl >= 0 %}#4ade80{% else %}#f87171{% endif %};">
+                            {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                            <span class="text-xs" style="color: var(--text-muted);">({{ '%+.1f'|format(seven_day_roi) }}%)</span>
+                        </span>
+                    </div>
                 </div>
-                {# Fallback sidebar timer: show next visible meeting when primary is filtered #}
-                <div class="sidebar-panel dash-sidebar-timer" style="text-align: center; display: none;"
-                     x-show="fallbackMeeting" x-transition x-cloak>
-                    <div class="sidebar-panel-title">Next Jump</div>
-                    <a :href="fallbackMeeting ? '/tips/' + fallbackMeeting.meeting_id + '#race-' + fallbackMeeting.race_num : '#'" style="text-decoration: none; display: block;" class="hover:opacity-80 transition-opacity">
-                        <div class="countdown-fixed font-display font-bold" style="font-size: 1.75rem; color: var(--magenta);" x-bind:data-start="fallbackMeeting ? fallbackMeeting.jump : ''">--:--</div>
-                        <div class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem;" x-text="fallbackMeeting ? fallbackMeeting.venue + ' — R' + fallbackMeeting.race_num : ''"></div>
-                    </a>
+                {% endif %}
+
+                {# ── Recent Race Results ── #}
+                {% set race_results = dashboard.recent_race_results|default([]) %}
+                {% if race_results %}
+                <div class="sidebar-panel dash-sidebar-recent">
+                    <div class="sidebar-panel-title">Recent Results</div>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        {% for race in race_results %}
+                        <a href="/tips/{{ race.meeting_id }}#race-{{ race.race_number }}" class="rr-race-card" style="text-decoration: none; display: block;">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-heading font-bold text-white text-xs">{{ race.venue }}</span>
+                                    <span class="font-heading font-semibold text-xs" style="color: var(--text-muted);">R{{ race.race_number }}</span>
+                                </div>
+                                <span class="font-heading font-bold text-xs {% if race.total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                                    {{ '%+.0f'|format(race.total_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                </span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                {% for p in race.picks %}
+                                <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0;">
+                                    {# Rank indicator #}
+                                    <span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span>
+                                    {# Horse name #}
+                                    <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
+                                        {{ p.name }}
+                                        {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.25rem;">PP</span>{% endif %}
+                                    </span>
+                                    {# Finish position #}
+                                    {% if p.finish_pos %}
+                                    <span class="font-heading font-semibold" style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %}; font-size: 0.65rem;">
+                                        {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
+                                    </span>
+                                    {% endif %}
+                                    {# P&L #}
+                                    <span class="font-heading font-bold" style="color: {% if p.pnl > 0 %}#4ade80{% elif p.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %}; min-width: 2.5rem; text-align: right;">
+                                        {{ '%+.0f'|format(p.pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </a>
+                        {% if not loop.last %}
+                        <div style="border-top: 1px solid rgba(255,255,255,0.04);"></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
 
