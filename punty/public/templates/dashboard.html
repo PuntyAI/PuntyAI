@@ -647,12 +647,31 @@
 <script>
 // Alpine data for dashboard grid
 function dashData() {
+    // Restore showAll preference from localStorage (expires daily)
+    var savedShowAll = null;
+    try {
+        var stored = JSON.parse(localStorage.getItem('punty_showAll') || 'null');
+        if (stored && stored.date === new Date().toISOString().slice(0, 10)) {
+            savedShowAll = stored.value;
+        }
+    } catch(e) {}
+
     return {
         open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
+        showAll: savedShowAll !== null ? savedShowAll : true,
         hiddenVenues: [],
         meetings: window.__dashMeetings || [],
         primaryNextVenue: '{{ next_race.venue|default("") }}',
         fallbackMeeting: null,
+        toggleShowAll() {
+            this.showAll = !this.showAll;
+            try {
+                localStorage.setItem('punty_showAll', JSON.stringify({
+                    value: this.showAll,
+                    date: new Date().toISOString().slice(0, 10)
+                }));
+            } catch(e) {}
+        },
         toggleVenue(v) {
             var i = this.hiddenVenues.indexOf(v);
             if (i > -1) this.hiddenVenues.splice(i, 1);

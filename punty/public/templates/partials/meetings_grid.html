@@ -1,7 +1,7 @@
 {# Today's Meetings Grid — ordered by next jump time, metro first #}
 {% set meetings = meetings_list|default(stats.todays_tips|default([])) %}
 {% if meetings %}
-<div x-data="{ showAll: false }">
+<div>
     <div class="flex items-center justify-between mb-2 gap-2">
         <h2 class="section-heading mb-0 flex-shrink-0">
             <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -18,7 +18,7 @@
             </button>
             {% set has_regional = meetings|selectattr('is_metro', 'equalto', false)|list|length > 0 if meetings[0] is mapping and 'is_metro' in meetings[0]|default({}) else false %}
             {% if has_regional %}
-            <button @click="showAll = !showAll" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
+            <button @click="toggleShowAll()" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
                 <span x-text="showAll ? 'Metro Only' : 'Show All'">Show All</span>
             </button>
             {% endif %}

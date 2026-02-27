@@ -1001,6 +1001,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             Meeting.date == target_date,
             Pick.settled == True,
             Pick.pick_type == "sequence",
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
     )
     sequence_total_stake = float(seq_result.scalar() or 0)
@@ -1076,6 +1077,7 @@ async def get_performance_history(
             Meeting.date <= end_date,
             Pick.settled == True,
             Pick.pick_type != "big3",  # P&L tracked on multi row
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
         .group_by(Meeting.date)
         .order_by(Meeting.date)
@@ -1133,6 +1135,7 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         .where(
             Pick.settled == True,
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
     )
     rows = result.all()
@@ -1610,6 +1613,7 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
             Pick.settled == True,
             Pick.hit == True,
             Meeting.date == today,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
     )
     today_winners = today_result.scalar() or 0
@@ -1619,6 +1623,7 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
         select(func.count(Pick.id)).where(
             Pick.settled == True,
             Pick.hit == True,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
     )
     total_winners = total_result.scalar() or 0
@@ -1631,6 +1636,7 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
         ).where(
             Pick.settled == True,
             Pick.hit == True,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         )
     )
     row = collected_result.one()
