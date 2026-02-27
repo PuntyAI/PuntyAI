@@ -75,8 +75,11 @@ async def get_next_race(exclude_venues: list[str] | None = None, offset: int = 0
         )
         races = races_result.scalars().all()
 
-        # Find all upcoming races (start_time > now)
-        upcoming_races = [r for r in races if r.start_time and r.start_time > now_naive]
+        # Find all upcoming races (include races that started within the last 60s
+        # so the slider stays on a race for 1 minute after jump before advancing)
+        from datetime import timedelta as _td
+        cutoff = now_naive - _td(seconds=60)
+        upcoming_races = [r for r in races if r.start_time and r.start_time > cutoff]
 
         if not upcoming_races:
             return {"has_next": False, "all_done": True}
