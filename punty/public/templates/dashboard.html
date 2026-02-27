@@ -300,33 +300,8 @@
         {# ════════════════════════════════════
            2-COLUMN GRID LAYOUT
            ════════════════════════════════════ #}
-        <div class="dash-grid" x-data="{
-            open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
-            hiddenVenues: [],
-            meetings: {{ meetings_list|default([])|tojson }},
-            primaryNextVenue: '{{ next_race.venue|default("") }}',
-            fallbackMeeting: null,
-            toggleVenue(v) {
-                var i = this.hiddenVenues.indexOf(v);
-                if (i > -1) this.hiddenVenues.splice(i, 1);
-                else this.hiddenVenues.push(v);
-                this._refreshFallback();
-            },
-            isActive(v) { return this.hiddenVenues.indexOf(v) === -1; },
-            _refreshFallback() {
-                if (this.isActive(this.primaryNextVenue)) { this.fallbackMeeting = null; return; }
-                var now = Date.now();
-                var best = null;
-                for (var i = 0; i < this.meetings.length; i++) {
-                    var m = this.meetings[i];
-                    if (!m.next_jump || !this.isActive(m.venue)) continue;
-                    if (m.venue === this.primaryNextVenue) continue;
-                    var t = new Date(m.next_jump).getTime();
-                    if (t > now && (!best || t < best._t)) { best = { venue: m.venue, meeting_id: m.meeting_id, race_num: m.next_race_num, jump: m.next_jump, _t: t }; }
-                }
-                this.fallbackMeeting = best;
-            }
-        }">
+        <script>window.__dashMeetings = {{ meetings_list|default([])|tojson }};</script>
+        <div class="dash-grid" x-data="dashData()">
 
             {# ═══════ LEFT COLUMN (65%) ═══════ #}
             <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -576,6 +551,37 @@
 
 {% block scripts %}
 <script>
+// Alpine data for dashboard grid
+function dashData() {
+    return {
+        open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
+        hiddenVenues: [],
+        meetings: window.__dashMeetings || [],
+        primaryNextVenue: '{{ next_race.venue|default("") }}',
+        fallbackMeeting: null,
+        toggleVenue(v) {
+            var i = this.hiddenVenues.indexOf(v);
+            if (i > -1) this.hiddenVenues.splice(i, 1);
+            else this.hiddenVenues.push(v);
+            this._refreshFallback();
+        },
+        isActive(v) { return this.hiddenVenues.indexOf(v) === -1; },
+        _refreshFallback() {
+            if (this.isActive(this.primaryNextVenue)) { this.fallbackMeeting = null; return; }
+            var now = Date.now();
+            var best = null;
+            for (var i = 0; i < this.meetings.length; i++) {
+                var m = this.meetings[i];
+                if (!m.next_jump || !this.isActive(m.venue)) continue;
+                if (m.venue === this.primaryNextVenue) continue;
+                var t = new Date(m.next_jump).getTime();
+                if (t > now && (!best || t < best._t)) { best = { venue: m.venue, meeting_id: m.meeting_id, race_num: m.next_race_num, jump: m.next_jump, _t: t }; }
+            }
+            this.fallbackMeeting = best;
+        }
+    };
+}
+
 // Countdown timer for next race / meetings
 (function() {
     function pad(n) { return n < 10 ? '0' + n : '' + n; }
