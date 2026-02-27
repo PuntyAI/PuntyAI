@@ -300,7 +300,27 @@
         {# ════════════════════════════════════
            2-COLUMN GRID LAYOUT
            ════════════════════════════════════ #}
-        <div class="dash-grid" x-data="{ open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false }, hiddenVenues: [], toggleVenue(v) { var i = this.hiddenVenues.indexOf(v); if (i > -1) this.hiddenVenues.splice(i, 1); else this.hiddenVenues.push(v); }, isActive(v) { return this.hiddenVenues.indexOf(v) === -1; } }">
+        <div class="dash-grid" x-data="{
+            open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
+            hiddenVenues: [],
+            meetings: {{ meetings_list|default([])|tojson }},
+            primaryNextVenue: '{{ next_race.venue|default("") }}',
+            toggleVenue(v) { var i = this.hiddenVenues.indexOf(v); if (i > -1) this.hiddenVenues.splice(i, 1); else this.hiddenVenues.push(v); },
+            isActive(v) { return this.hiddenVenues.indexOf(v) === -1; },
+            get nextVisibleMeeting() {
+                if (this.isActive(this.primaryNextVenue)) return null;
+                var now = Date.now();
+                var best = null;
+                for (var i = 0; i < this.meetings.length; i++) {
+                    var m = this.meetings[i];
+                    if (!m.next_jump || !this.isActive(m.venue)) continue;
+                    if (m.venue === this.primaryNextVenue) continue;
+                    var t = new Date(m.next_jump).getTime();
+                    if (t > now && (!best || t < best._t)) { best = { venue: m.venue, meeting_id: m.meeting_id, race_num: m.next_race_num, jump: m.next_jump, _t: t }; }
+                }
+                return best;
+            }
+        }">
 
             {# ═══════ LEFT COLUMN (65%) ═══════ #}
             <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -312,6 +332,27 @@
                      hx-swap="innerHTML">
                     {% include "partials/live_edge.html" %}
                 </div>
+
+                {# ── Fallback Next Up (shown when primary venue is filtered out) ── #}
+                <template x-if="nextVisibleMeeting">
+                    <div class="card p-4 text-center" style="border-color: var(--border-subtle);">
+                        <div class="flex items-center justify-center gap-2 mb-2">
+                            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-heading font-bold uppercase tracking-wider"
+                                  style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.2), rgba(255, 107, 53, 0.15)); color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.35);">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--magenta); display: inline-block; animation: live-dot 1.5s ease-in-out infinite;"></span>
+                                Next Up
+                            </span>
+                        </div>
+                        <a :href="'/tips/' + nextVisibleMeeting.meeting_id + '#race-' + nextVisibleMeeting.race_num"
+                           class="hover:opacity-80 transition-opacity" style="text-decoration: none;">
+                            <p class="font-heading font-semibold text-white mb-1" x-text="nextVisibleMeeting.venue + ' — R' + nextVisibleMeeting.race_num"></p>
+                            <p class="text-sm" style="color: var(--text-secondary);">
+                                <span class="countdown-fixed font-heading font-bold" style="color: var(--magenta);" :data-start="nextVisibleMeeting.jump">--:--</span>
+                                until jump
+                            </p>
+                        </a>
+                    </div>
+                </template>
 
                 {# ── Metrics Row ── #}
                 {% set perf = dashboard.performance|default({}) %}
@@ -417,7 +458,8 @@
 
                 {# ── Next Race Timer ── #}
                 {% if next_race and next_race.has_next %}
-                <div class="sidebar-panel dash-sidebar-timer" style="text-align: center;">
+                {# Primary: show when next_race venue is active #}
+                <div class="sidebar-panel dash-sidebar-timer" style="text-align: center;" x-show="isActive('{{ next_race.venue }}')" x-transition>
                     <div class="sidebar-panel-title">Next Jump</div>
                     <a href="/tips/{{ next_race.meeting_id }}#race-{{ next_race.race_number }}" style="text-decoration: none; display: block;" class="hover:opacity-80 transition-opacity">
                         <div class="countdown-fixed font-display font-bold" style="font-size: 1.75rem; color: var(--magenta);" data-start="{{ next_race.start_time_iso }}" id="sidebar-timer">--:--</div>
@@ -427,6 +469,16 @@
                         </div>
                     </a>
                 </div>
+                {# Fallback: show next visible meeting when primary is filtered #}
+                <template x-if="nextVisibleMeeting">
+                    <div class="sidebar-panel dash-sidebar-timer" style="text-align: center;">
+                        <div class="sidebar-panel-title">Next Jump</div>
+                        <a :href="'/tips/' + nextVisibleMeeting.meeting_id + '#race-' + nextVisibleMeeting.race_num" style="text-decoration: none; display: block;" class="hover:opacity-80 transition-opacity">
+                            <div class="countdown-fixed font-display font-bold" style="font-size: 1.75rem; color: var(--magenta);" :data-start="nextVisibleMeeting.jump">--:--</div>
+                            <div class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem;" x-text="nextVisibleMeeting.venue + ' — R' + nextVisibleMeeting.race_num"></div>
+                        </a>
+                    </div>
+                </template>
                 {% endif %}
 
                 {# ── Performance Snapshot (compact 2x2 grid) ── #}
