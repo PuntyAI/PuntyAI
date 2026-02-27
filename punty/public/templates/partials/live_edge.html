@@ -2,26 +2,25 @@
 {% if next_race_picks and next_race and next_race.has_next %}
 {% set selections = next_race_picks|selectattr("pick_type", "equalto", "selection")|list %}
 {% if selections %}
-<div class="card p-4 relative overflow-hidden"
+<div class="card le-card relative overflow-hidden"
      style="border-color: rgba(233, 30, 140, 0.3); background: linear-gradient(135deg, rgba(233, 30, 140, 0.05), rgba(255, 107, 53, 0.03));"
      data-next-venue="{{ next_race.venue }}">
     {# Header: badge + venue + countdown #}
-    <div class="flex items-center gap-3 mb-4">
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-heading font-bold uppercase tracking-wider flex-shrink-0"
+    <div class="le-header flex items-center gap-3 mb-4">
+        <span class="le-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-heading font-bold uppercase tracking-wider flex-shrink-0"
               style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.2), rgba(255, 107, 53, 0.15)); color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.35);">
-            <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--magenta); display: inline-block; animation: live-dot 1.5s ease-in-out infinite;"></span>
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--magenta); display: inline-block; animation: live-dot 1.5s ease-in-out infinite;"></span>
             Next Up
         </span>
         <div class="flex-1 min-w-0">
             <div class="font-heading font-bold text-white text-sm truncate">
-                {{ next_race.venue }} &mdash; R{{ next_race.race_number }}
+                {{ next_race.venue }} R{{ next_race.race_number }}
                 {% if next_race.distance %} &middot; {{ next_race.distance }}m{% endif %}
-                {% if next_race.class %} &middot; {{ next_race.class }}{% endif %}
             </div>
         </div>
         <div class="text-right flex-shrink-0">
-            <div class="countdown-fixed font-display font-bold text-lg" style="color: var(--magenta);" data-start="{{ next_race.start_time_iso }}">--:--</div>
-            <div class="text-xs" style="color: var(--text-muted);">until jump</div>
+            <div class="le-countdown countdown-fixed font-display font-bold" style="color: var(--magenta);" data-start="{{ next_race.start_time_iso }}">--:--</div>
+            <div class="le-until text-xs" style="color: var(--text-muted);">until jump</div>
         </div>
     </div>
 
@@ -42,7 +41,7 @@
         {% set is_bet = p.bet_type and 'no bet' not in p.bet_type|lower %}
         {% set is_pp = p.is_puntys_pick %}
 
-        <div class="flex items-center gap-3 p-2.5 rounded-lg {% if is_pp %}ring-1{% endif %}"
+        <div class="le-row flex items-center gap-3 p-2.5 rounded-lg {% if is_pp %}ring-1{% endif %}"
              style="background: rgba(255,255,255,0.03); {% if is_pp %}--tw-ring-color: var(--magenta); --tw-ring-opacity: 0.4;{% endif %}">
 
             {# Saddlecloth pill #}
@@ -69,18 +68,18 @@
             </div>
 
             {# Odds #}
-            <div class="text-right flex-shrink-0" style="min-width: 3.5rem;">
+            <div class="le-col-odds text-right flex-shrink-0">
                 <div class="font-display font-bold text-sm text-white">${{ '%.2f'|format(odds) if odds else '?' }}</div>
             </div>
 
-            {# Model prob #}
-            <div class="text-right flex-shrink-0" style="min-width: 3rem;">
+            {# Model prob — hidden on mobile via le-col-model #}
+            <div class="le-col-model text-right flex-shrink-0">
                 <div class="font-heading font-bold text-xs" style="color: var(--text-secondary);">{{ '%.0f'|format(model_pct) }}%</div>
                 <div class="text-xs" style="color: var(--text-muted); font-size: 0.6rem;">model</div>
             </div>
 
-            {# Edge #}
-            <div class="text-right flex-shrink-0" style="min-width: 3.5rem;">
+            {# Edge — hidden on mobile via le-col-edge #}
+            <div class="le-col-edge text-right flex-shrink-0">
                 {% if edge > 5 %}
                 <div class="font-heading font-bold text-xs" style="color: #4ade80;">+{{ '%.0f'|format(edge) }}%</div>
                 {% elif edge > 0 %}
@@ -130,4 +129,20 @@
 
 <style>
 @keyframes live-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+/* Live edge layout */
+.le-card { padding: 1rem; }
+.le-countdown { font-size: 1.125rem; }
+.le-col-odds { min-width: 3.5rem; }
+.le-col-model { min-width: 3rem; }
+.le-col-edge { min-width: 3.5rem; }
+@media (max-width: 639px) {
+    .le-card { padding: 0.625rem; }
+    .le-header { gap: 0.375rem; }
+    .le-badge { font-size: 0.6rem; padding: 0.2rem 0.5rem; }
+    .le-countdown { font-size: 0.85rem; }
+    .le-until { font-size: 0.55rem; }
+    .le-col-model, .le-col-edge { display: none !important; }
+    .le-col-odds { min-width: 0; }
+    .le-row { gap: 0.5rem; padding: 0.3rem 0.4rem; }
+}
 </style>
