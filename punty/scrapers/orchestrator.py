@@ -200,24 +200,17 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
                 logger.error(f"racing.com fallback also failed: {e2}")
                 errors.append(f"racing.com_fallback: {e2}")
 
-    # Conditions (uses session-level cache — one API call for all meetings)
-    if not meeting.track_condition_locked:
-        try:
-            cond = await pf_scraper.get_conditions_for_venue(venue)
-            if cond:
-                _apply_pf_conditions(meeting, cond)
-        except Exception as e:
-            logger.error(f"Conditions failed for {venue}: {e}")
-            errors.append(f"conditions: {e}")
-
-        # Racing Australia — authoritative override
-        try:
-            from punty.scrapers.track_conditions import get_conditions_for_meeting
-            ra_cond = await get_conditions_for_meeting(venue)
-            if ra_cond:
-                _apply_ra_conditions(meeting, ra_cond)
-        except Exception as e:
-            logger.error(f"RA conditions failed for {venue}: {e}")
+    # Conditions — single gatekeeper (RA authoritative, PF supplementary)
+    try:
+        pf_cond = await pf_scraper.get_conditions_for_venue(venue)
+    except Exception as e:
+        logger.error(f"PF conditions failed for {venue}: {e}")
+        errors.append(f"conditions: {e}")
+        pf_cond = None
+    try:
+        await refresh_track_conditions(meeting, pf_cond=pf_cond, source="fields_only")
+    except Exception as e:
+        logger.error(f"Conditions gatekeeper failed for {venue}: {e}")
 
     # RA Free Fields cross-check (only when PF succeeded)
     pf_failed = any("fields_only" in e for e in errors)
@@ -327,27 +320,20 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
                     logger.error(f"racing.com fallback also failed: {e2}")
                     errors.append(f"racing.com_fallback: {e2}")
 
-        # Step 2: Conditions — track/weather data
-        if not meeting.track_condition_locked:
-            try:
-                if pf_scraper is None:
-                    from punty.scrapers.punting_form import PuntingFormScraper
-                    pf_scraper = await PuntingFormScraper.from_settings(db)
-                cond = await pf_scraper.get_conditions_for_venue(venue)
-                if cond:
-                    _apply_pf_conditions(meeting, cond)
-            except Exception as e:
-                logger.error(f"Conditions failed: {e}")
-                errors.append(f"conditions: {e}")
-
-            # Step 2b: Racing Australia — authoritative override
-            try:
-                from punty.scrapers.track_conditions import get_conditions_for_meeting
-                ra_cond = await get_conditions_for_meeting(venue)
-                if ra_cond:
-                    _apply_ra_conditions(meeting, ra_cond)
-            except Exception as e:
-                logger.error(f"RA conditions failed for {venue}: {e}")
+        # Step 2: Conditions — single gatekeeper (RA authoritative, PF supplementary)
+        pf_cond = None
+        try:
+            if pf_scraper is None:
+                from punty.scrapers.punting_form import PuntingFormScraper
+                pf_scraper = await PuntingFormScraper.from_settings(db)
+            pf_cond = await pf_scraper.get_conditions_for_venue(venue)
+        except Exception as e:
+            logger.error(f"PF conditions failed: {e}")
+            errors.append(f"conditions: {e}")
+        try:
+            await refresh_track_conditions(meeting, pf_cond=pf_cond, source="scrape_meeting")
+        except Exception as e:
+            logger.error(f"Conditions gatekeeper failed for {venue}: {e}")
 
         # Step 2c: HKJC track info for HK venues (RA/PF have no HK data)
         from punty.venues import is_international_venue, guess_state
@@ -564,40 +550,26 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                     logger.error(f"racing.com fallback also failed: {e2}")
                     errors.append(f"racing.com_fallback: {e2}")
 
-        # Step 2: Conditions + weather
+        # Step 2: Conditions + weather — single gatekeeper (RA authoritative)
         yield {"step": 1, "total": total_steps, "label": "Fetching conditions/weather...", "status": "running"}
         try:
-            if meeting.track_condition_locked:
-                logger.info(f"Track condition locked for {venue}: {meeting.track_condition!r} (manual override)")
-                yield {"step": 2, "total": total_steps, "label": f"Track conditions: {meeting.track_condition} (locked)", "status": "done"}
-            else:
+            pf_cond = None
+            if not meeting.track_condition_locked:
                 if pf_scraper is None:
                     from punty.scrapers.punting_form import PuntingFormScraper
                     pf_scraper = await PuntingFormScraper.from_settings(db)
-                cond = await pf_scraper.get_conditions_for_venue(venue)
-                if cond:
-                    _apply_pf_conditions(meeting, cond)
-                    yield {"step": 2, "total": total_steps,
-                           "label": f"Conditions: {meeting.track_condition or 'N/A'} | Rain: {cond.get('rainfall', 'N/A')}mm",
-                           "status": "done"}
-                elif meeting.track_condition:
-                    yield {"step": 2, "total": total_steps, "label": f"Conditions: {meeting.track_condition} (from fields)", "status": "done"}
-                else:
-                    yield {"step": 2, "total": total_steps, "label": "Conditions: not available", "status": "done"}
+                pf_cond = await pf_scraper.get_conditions_for_venue(venue)
+            await refresh_track_conditions(meeting, pf_cond=pf_cond, source="full_scrape")
+            if meeting.track_condition:
+                yield {"step": 2, "total": total_steps,
+                       "label": f"Conditions: {meeting.track_condition}" + (f" | Rain: {pf_cond.get('rainfall', 'N/A')}mm" if pf_cond else ""),
+                       "status": "done"}
+            else:
+                yield {"step": 2, "total": total_steps, "label": "Conditions: not available", "status": "done"}
         except Exception as e:
             logger.error(f"Conditions failed: {e}")
             errors.append(f"conditions: {e}")
             yield {"step": 2, "total": total_steps, "label": f"Conditions failed: {e}", "status": "error"}
-
-        # Racing Australia — authoritative conditions override
-        if not meeting.track_condition_locked:
-            try:
-                from punty.scrapers.track_conditions import get_conditions_for_meeting
-                ra_cond = await get_conditions_for_meeting(venue)
-                if ra_cond:
-                    _apply_ra_conditions(meeting, ra_cond)
-            except Exception as e:
-                logger.error(f"RA conditions failed for {venue}: {e}")
 
         # HKJC track info for HK venues
         from punty.venues import is_international_venue, guess_state
@@ -967,10 +939,9 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         pf = await PuntingFormScraper.from_settings(db)
         if pf:
             try:
-                # Refresh conditions (track, rail, weather, penetrometer)
-                cond = await pf.get_conditions_for_venue(meeting.venue)
-                if cond:
-                    _apply_pf_conditions(meeting, cond)
+                # Refresh conditions — single gatekeeper (RA authoritative)
+                pf_cond = await pf.get_conditions_for_venue(meeting.venue)
+                await refresh_track_conditions(meeting, pf_cond=pf_cond, source="refresh_odds")
 
                 # Refresh scratchings
                 pf_meeting_id = await pf.resolve_meeting_id(meeting.venue, meeting.date)
@@ -994,16 +965,6 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                                     logger.info(f"Scratched {r.horse_name} (R{race_num} #{tab_no}) via PF API")
             finally:
                 await pf.close()
-
-        # Racing Australia — authoritative conditions override (same as full scrape)
-        if not meeting.track_condition_locked:
-            try:
-                from punty.scrapers.track_conditions import get_conditions_for_meeting
-                ra_cond = await get_conditions_for_meeting(meeting.venue)
-                if ra_cond:
-                    _apply_ra_conditions(meeting, ra_cond)
-            except Exception as e:
-                logger.warning(f"RA conditions failed during refresh for {meeting.venue}: {e}")
 
         # Commit conditions/scratchings before odds fetch
         await db.commit()
@@ -1167,8 +1128,99 @@ async def _upsert_meeting_data(db: AsyncSession, meeting: Meeting, data: dict) -
     await db.flush()
 
 
+async def refresh_track_conditions(
+    meeting: Meeting,
+    pf_cond: dict | None = None,
+    source: str = "unknown",
+) -> str | None:
+    """Single gatekeeper for all track condition updates.
+
+    Racing Australia is the single source of truth. PuntingForm provides
+    supplementary fields (weather details, going stick) but RA always wins
+    for track_condition, rail, and weather when available.
+
+    Args:
+        meeting: Meeting object to update (mutated in place).
+        pf_cond: Optional pre-fetched PuntingForm conditions dict.
+        source: Caller label for logging (e.g. "pre_race", "monitor").
+
+    Returns:
+        Final track_condition value or None if locked/unchanged.
+    """
+    if meeting.track_condition_locked:
+        logger.info(f"[{source}] Track condition locked for {meeting.venue}: {meeting.track_condition!r}")
+        return meeting.track_condition
+
+    old_tc = meeting.track_condition
+
+    # Step 1: Apply PF supplementary fields (weather details, going stick, etc.)
+    if pf_cond:
+        _apply_supplementary_fields(meeting, pf_cond)
+
+    # Step 2: Try Racing Australia (authoritative for track_condition, rail, weather)
+    ra_cond = None
+    try:
+        from punty.scrapers.track_conditions import get_conditions_for_meeting
+        ra_cond = await get_conditions_for_meeting(meeting.venue)
+    except Exception as e:
+        logger.warning(f"[{source}] RA fetch failed for {meeting.venue}: {e}")
+
+    if ra_cond:
+        # RA is authoritative — apply track_condition, rail, weather, penetrometer
+        new_cond = ra_cond.get("condition")
+        if new_cond:
+            meeting.track_condition = new_cond
+        if ra_cond.get("rail"):
+            meeting.rail_position = ra_cond["rail"]
+        if ra_cond.get("weather"):
+            meeting.weather = ra_cond["weather"]
+        if ra_cond.get("penetrometer") is not None:
+            meeting.penetrometer = ra_cond["penetrometer"]
+        _apply_irrigation(meeting, ra_cond)
+        if ra_cond.get("rainfall") is not None:
+            meeting.rainfall = ra_cond["rainfall"]
+        logger.info(f"[{source}] RA conditions for {meeting.venue}: {old_tc!r} → {meeting.track_condition!r}")
+    elif pf_cond:
+        # RA unavailable — fall back to PF for track_condition
+        new_cond = pf_cond.get("condition")
+        if new_cond and _should_update_condition(new_cond, meeting.track_condition):
+            meeting.track_condition = new_cond
+        meeting.rail_position = pf_cond.get("rail") or meeting.rail_position
+        meeting.weather = pf_cond.get("weather") or meeting.weather
+        if pf_cond.get("penetrometer") is not None:
+            meeting.penetrometer = pf_cond["penetrometer"]
+        _apply_irrigation(meeting, pf_cond)
+        if pf_cond.get("rainfall") is not None:
+            meeting.rainfall = pf_cond["rainfall"]
+        logger.info(f"[{source}] PF conditions for {meeting.venue} (RA unavailable): {old_tc!r} → {meeting.track_condition!r}")
+
+    return meeting.track_condition
+
+
+def _apply_supplementary_fields(meeting: Meeting, cond: dict) -> None:
+    """Apply PuntingForm supplementary weather fields (not track_condition)."""
+    if cond.get("wind_speed") is not None:
+        meeting.weather_wind_speed = cond["wind_speed"]
+    if cond.get("wind_direction"):
+        meeting.weather_wind_dir = cond["wind_direction"]
+    if cond.get("humidity") is not None:
+        meeting.weather_humidity = cond["humidity"]
+    if cond.get("going_stick") is not None:
+        meeting.going_stick = cond["going_stick"]
+
+
+def _apply_irrigation(meeting: Meeting, cond: dict) -> None:
+    """Apply irrigation field from any source."""
+    if cond.get("irrigation") is not None:
+        irr = cond["irrigation"]
+        if isinstance(irr, str):
+            meeting.irrigation = bool(irr and "nil" not in irr.lower() and irr.strip() != "0")
+        else:
+            meeting.irrigation = bool(irr)
+
+
 def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
-    """Apply conditions data to a Meeting object."""
+    """Legacy: Apply PF conditions directly. Prefer refresh_track_conditions()."""
     new_cond = cond.get("condition")
     if new_cond and _should_update_condition(new_cond, meeting.track_condition):
         logger.info(f"Condition for {meeting.venue}: {meeting.track_condition!r} → {new_cond!r}")
@@ -1177,26 +1229,14 @@ def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
     meeting.weather = cond.get("weather") or meeting.weather
     if cond.get("penetrometer") is not None:
         meeting.penetrometer = cond["penetrometer"]
-    if cond.get("wind_speed") is not None:
-        meeting.weather_wind_speed = cond["wind_speed"]
-    if cond.get("wind_direction"):
-        meeting.weather_wind_dir = cond["wind_direction"]
-    if cond.get("humidity") is not None:
-        meeting.weather_humidity = cond["humidity"]
+    _apply_supplementary_fields(meeting, cond)
+    _apply_irrigation(meeting, cond)
     if cond.get("rainfall") is not None:
         meeting.rainfall = cond["rainfall"]
-    if cond.get("irrigation") is not None:
-        irr = cond["irrigation"]
-        if isinstance(irr, str):
-            meeting.irrigation = bool(irr and "nil" not in irr.lower() and irr.strip() != "0")
-        else:
-            meeting.irrigation = bool(irr)
-    if cond.get("going_stick") is not None:
-        meeting.going_stick = cond["going_stick"]
 
 
 def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
-    """Apply Racing Australia conditions — authoritative source, always overwrites."""
+    """Legacy: Apply RA conditions directly. Prefer refresh_track_conditions()."""
     new_cond = cond.get("condition")
     if new_cond:
         logger.info(
@@ -1212,12 +1252,7 @@ def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
         meeting.penetrometer = cond["penetrometer"]
     if cond.get("rainfall") is not None:
         meeting.rainfall = cond["rainfall"]
-    if cond.get("irrigation") is not None:
-        irr = cond["irrigation"]
-        if isinstance(irr, str):
-            meeting.irrigation = bool(irr and "nil" not in irr.lower() and irr.strip() != "0")
-        else:
-            meeting.irrigation = bool(irr)
+    _apply_irrigation(meeting, cond)
 
 
 def _apply_hkjc_conditions(meeting: Meeting, info: dict) -> None:
