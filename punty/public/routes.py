@@ -28,11 +28,12 @@ from punty.config import settings as _app_settings
 templates.env.globals["is_staging"] = _app_settings.is_staging
 
 
-async def get_next_race(exclude_venues: list[str] | None = None) -> dict:
+async def get_next_race(exclude_venues: list[str] | None = None, offset: int = 0) -> dict:
     """Get the next upcoming race for countdown display.
 
     Args:
         exclude_venues: Optional list of venue names to skip (for venue filtering).
+        offset: Number of races to skip forward from the next one (0 = very next race).
     """
     async with async_session() as db:
         today = melb_today()
@@ -74,15 +75,16 @@ async def get_next_race(exclude_venues: list[str] | None = None) -> dict:
         )
         races = races_result.scalars().all()
 
-        # Find the next race (first one with start_time > now)
-        next_race = None
-        for race in races:
-            if race.start_time and race.start_time > now_naive:
-                next_race = race
-                break
+        # Find all upcoming races (start_time > now)
+        upcoming_races = [r for r in races if r.start_time and r.start_time > now_naive]
 
-        if not next_race:
+        if not upcoming_races:
             return {"has_next": False, "all_done": True}
+
+        # Apply offset (clamp to valid range)
+        idx = min(offset, len(upcoming_races) - 1)
+        idx = max(0, idx)
+        next_race = upcoming_races[idx]
 
         meeting = meetings.get(next_race.meeting_id)
         # Add timezone info for JavaScript
@@ -98,6 +100,8 @@ async def get_next_race(exclude_venues: list[str] | None = None) -> dict:
             "class": next_race.class_,
             "start_time_iso": start_time_aware.isoformat(),
             "start_time_formatted": next_race.start_time.strftime("%H:%M"),
+            "race_offset": idx,
+            "total_upcoming": len(upcoming_races),
         }
 
 
@@ -1666,11 +1670,12 @@ async def tips_next_race(request: Request):
 
 
 @router.get("/tips/_live-edge", response_class=HTMLResponse)
-async def tips_live_edge(request: Request, exclude: str = ""):
+async def tips_live_edge(request: Request, exclude: str = "", offset: int = 0):
     """HTMX partial: Live Edge Zone refresh.
 
     Args:
         exclude: Comma-separated venue names to skip (for venue filter).
+        offset: Race offset from next upcoming (0 = very next race).
     """
     import asyncio
 
@@ -1678,7 +1683,7 @@ async def tips_live_edge(request: Request, exclude: str = ""):
 
     dashboard, next_race_data = await asyncio.gather(
         get_daily_dashboard(),
-        get_next_race(exclude_venues=exclude_venues),
+        get_next_race(exclude_venues=exclude_venues, offset=max(0, offset)),
     )
 
     next_race_picks = []

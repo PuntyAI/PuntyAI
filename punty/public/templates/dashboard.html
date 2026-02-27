@@ -310,15 +310,10 @@
         .sidebar-panel { padding: 0.75rem; }
         .stat-cell-value { font-size: 0.9rem; }
         .section-heading { font-size: 0.8rem; }
-        /* Live edge: hide model% and edge%, tighten layout */
-        .le-col-model, .le-col-edge { display: none !important; }
-        .le-col-odds { min-width: 0 !important; }
-        .le-header { gap: 0.5rem; flex-wrap: wrap; }
-        .le-countdown { font-size: 1rem !important; }
-        .le-row { gap: 0.75rem; padding: 0.35rem 0.5rem; }
+        /* Live edge responsive handled in partial */
         /* Cards tighter padding */
         .card { padding: 0.75rem; }
-        #live-edge .card { padding: 0.75rem; }
+        #live-edge .le-card { padding: 0.75rem; }
     }
     @media (max-width: 374px) {
         .metric-value, .metric-value-pnl { font-size: 0.6rem; }
@@ -352,7 +347,8 @@
                 <div id="live-edge"
                      hx-get="/tips/_live-edge"
                      hx-trigger="every 30s [document.visibilityState === 'visible']"
-                     hx-swap="innerHTML">
+                     hx-swap="innerHTML"
+                     hx-vals="js:{offset: parseInt(document.querySelector('#live-edge [data-race-offset]')?.dataset?.raceOffset || '0')}">
                     {% include "partials/live_edge.html" %}
                 </div>
 
@@ -507,13 +503,13 @@
                             {# Selection picks #}
                             <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                                 {% for p in race.picks %}
-                                <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0; {% if p.is_no_bet %}opacity: 0.4;{% endif %}">
+                                <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0;">
                                     <span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span>
-                                    <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.is_no_bet %}var(--text-muted){% elif p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
+                                    <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
                                         {{ p.name }}
                                         {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.25rem;">PP</span>{% endif %}
                                     </span>
-                                    {% if p.finish_pos and not p.is_no_bet %}
+                                    {% if p.finish_pos %}
                                     <span class="font-heading font-semibold" style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %}; font-size: 0.65rem;">
                                         {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
                                     </span>
@@ -698,9 +694,10 @@ function dashData() {
         _refreshLiveEdge() {
             var el = document.getElementById('live-edge');
             if (!el) return;
-            var url = '/tips/_live-edge';
+            var offset = parseInt(el.querySelector('[data-race-offset]')?.dataset?.raceOffset || '0');
+            var url = '/tips/_live-edge?offset=' + offset;
             if (this.hiddenVenues.length > 0) {
-                url += '?exclude=' + encodeURIComponent(this.hiddenVenues.join(','));
+                url += '&exclude=' + encodeURIComponent(this.hiddenVenues.join(','));
             }
             el.setAttribute('hx-get', url);
             htmx.ajax('GET', url, {target: '#live-edge', swap: 'innerHTML'});

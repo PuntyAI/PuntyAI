@@ -987,6 +987,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         .where(
             Meeting.date == target_date,
             Pick.settled == True,
+            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             # Exclude no_bet selections (tracked only, $0 stake) and big3 individual legs
             Pick.pick_type != "big3",
