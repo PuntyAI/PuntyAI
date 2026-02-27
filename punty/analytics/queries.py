@@ -4,6 +4,10 @@ All filter values are passed via DuckDB's $variable parameterization
 to prevent SQL injection. The _where_clauses() builder converts a
 filter dict into a (sql_fragment, params) tuple that gets appended
 to any base query.
+
+Picks-only mode: when backtest.db hasn't been loaded (no runners table),
+queries gracefully fall back to picks-based analytics. The filter_options()
+and summary() functions detect this and return production pick data instead.
 """
 
 from __future__ import annotations

@@ -1041,6 +1041,9 @@ def _select_exotic(
         for p in picks:
             rank_map[p.saddlecloth] = p.rank
 
+    # Pre-compute top pick win probability (used for scenario detection)
+    top_pick_wp = max((p.win_prob for p in picks if p.rank == 1), default=0) if picks else 0
+
     # Score all combos by expected value: probability × value_ratio
     # Higher EV = better mix of probability and payout
     scored = []
@@ -1068,7 +1071,10 @@ def _select_exotic(
                 continue
 
         # Exacta/Quinella fav_price guard: only profitable when fav $2-$3.50
-        if fav_price and ec_type in ("Exacta", "Quinella"):
+        # EXCEPTION: dominant favourite (wp >= 0.35, fav < $3) — short-priced
+        # favs anchor high-probability Exactas (e.g. $1.87 fav → $20.60 Exacta)
+        dominant_fav = top_pick_wp >= 0.35 and fav_price and fav_price < 3.0
+        if fav_price and ec_type in ("Exacta", "Quinella") and not dominant_fav:
             if fav_price <= 2.0 or fav_price > 3.50:
                 continue
 
@@ -1129,16 +1135,16 @@ def _select_exotic(
                 score *= 0.85  # slight penalty for directional in tight fields
 
         # --- Scenario-based multipliers (stack with existing bonuses) ---
-        top_pick_wp = max((p.win_prob for p in picks if p.rank == 1), default=0) if picks else 0
 
         # Dominant favourite: rank 1 wp >= 0.35 AND short-priced → directional exotics
+        # Includes Exacta/Quinella since fav_price guard is bypassed for dominant favs
         if top_pick_wp >= 0.35 and fav_price and fav_price < 3.0:
-            if ec_type in ("Exacta Standout", "Trifecta Standout"):
+            if ec_type in ("Exacta", "Exacta Standout", "Quinella", "Trifecta Standout"):
                 score *= 1.25
 
         # Short-priced fav in combos (< $2.01) → standout anchors on the fav
         elif fav_price and fav_price < 2.01:
-            if ec_type == "Trifecta Standout":
+            if ec_type in ("Trifecta Standout", "Exacta Standout"):
                 score *= 1.20
 
         # Open race: no runner > 0.25 wp → wider coverage exotics
