@@ -28,8 +28,12 @@ from punty.config import settings as _app_settings
 templates.env.globals["is_staging"] = _app_settings.is_staging
 
 
-async def get_next_race() -> dict:
-    """Get the next upcoming race for countdown display."""
+async def get_next_race(exclude_venues: list[str] | None = None) -> dict:
+    """Get the next upcoming race for countdown display.
+
+    Args:
+        exclude_venues: Optional list of venue names to skip (for venue filtering).
+    """
     async with async_session() as db:
         today = melb_today()
         now = melb_now()
@@ -46,6 +50,10 @@ async def get_next_race() -> dict:
             )
         )
         meetings = {m.id: m for m in meetings_result.scalars().all()}
+
+        # Filter out excluded venues
+        if exclude_venues:
+            meetings = {mid: m for mid, m in meetings.items() if m.venue not in exclude_venues}
 
         if not meetings:
             return {"has_next": False}
@@ -1658,13 +1666,19 @@ async def tips_next_race(request: Request):
 
 
 @router.get("/tips/_live-edge", response_class=HTMLResponse)
-async def tips_live_edge(request: Request):
-    """HTMX partial: Live Edge Zone refresh."""
+async def tips_live_edge(request: Request, exclude: str = ""):
+    """HTMX partial: Live Edge Zone refresh.
+
+    Args:
+        exclude: Comma-separated venue names to skip (for venue filter).
+    """
     import asyncio
+
+    exclude_venues = [v.strip() for v in exclude.split(",") if v.strip()] if exclude else None
 
     dashboard, next_race_data = await asyncio.gather(
         get_daily_dashboard(),
-        get_next_race(),
+        get_next_race(exclude_venues=exclude_venues),
     )
 
     next_race_picks = []
