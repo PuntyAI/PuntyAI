@@ -2495,37 +2495,53 @@ async def get_daily_dashboard() -> dict:
         edge_picks = [u for u in upcoming if u.get("is_edge")]
         edge_picks.sort(key=lambda x: x.get("value_rating") or 0, reverse=True)
 
-        # ── Bet type breakdown (all settled picks, with ROI/SR) ──
+        # ── Bet type breakdown (all picks: settled use actual P&L, unsettled deduct stake) ──
         bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
-        for pick, runner, race, meeting in settled_rows:
-            # Skip non-bet types and individual big3 legs (P&L tracked on multi)
+
+        def _classify_bt(pick):
+            """Classify pick into normalized bet type label, or None to skip."""
             if pick.pick_type == "big3":
-                continue
+                return None
             if pick.pick_type == "selection":
                 raw_bt = str(pick.bet_type or "unknown").lower().replace("_", " ")
                 if raw_bt in ("no bet", "no_bet", "exotics only", "exotics_only"):
-                    continue
-                # Merge Saver Win → Win
-                if raw_bt == "saver win":
-                    bt = "Win"
-                else:
-                    bt = raw_bt.title()
-            elif pick.pick_type == "exotic":
-                # Normalize: strip Box/Standout suffixes → base type
+                    return None
+                return "Win" if raw_bt == "saver win" else raw_bt.title()
+            if pick.pick_type == "exotic":
                 raw_et = str(pick.exotic_type or "Exotic").lower()
                 for suffix in (" standout", " box", " boxed"):
                     raw_et = raw_et.replace(suffix, "")
-                bt = raw_et.strip().title()
-            elif pick.pick_type in ("sequence", "big3_multi"):
-                bt = str(pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
-            else:
-                bt = str(pick.pick_type or "unknown").replace("_", " ").title()
+                return raw_et.strip().title()
+            if pick.pick_type in ("sequence", "big3_multi"):
+                return str(pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
+            return str(pick.pick_type or "unknown").replace("_", " ").title()
+
+        # Settled picks: actual P&L and wins
+        for pick, runner, race, meeting in settled_rows:
+            bt = _classify_bt(pick)
+            if not bt:
+                continue
             bt_stats[bt]["bets"] += 1
             stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
             bt_stats[bt]["staked"] += stake or 0
             bt_stats[bt]["pnl"] += pick.pnl or 0
             if pick.hit:
                 bt_stats[bt]["winners"] += 1
+
+        # Unsettled picks: deduct stake, 0 wins
+        for pick, runner, race, meeting in unsettled_rows:
+            bt = _classify_bt(pick)
+            if not bt:
+                continue
+            # Skip tracked-only (no actual money at risk)
+            if pick.tracked_only:
+                continue
+            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            if not stake or stake <= 0:
+                continue
+            bt_stats[bt]["bets"] += 1
+            bt_stats[bt]["staked"] += stake
+            bt_stats[bt]["pnl"] -= stake  # Deduct stake at bet time
         bet_types = []
         for bt, data in sorted(bt_stats.items()):
             data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0
