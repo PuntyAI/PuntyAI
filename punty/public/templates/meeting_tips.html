@@ -1777,7 +1777,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var hasLosing = loseExotics && Object.keys(loseExotics).length;
     var hasSequences = winSequences && winSequences.length;
 
-    if (!hasSelections && !hasExotics && !hasLosing && !hasSequences) return;
+    var hasScratchedPicks = scratchedPicks && Object.keys(scratchedPicks).length;
+    if (!hasSelections && !hasExotics && !hasLosing && !hasSequences && !hasScratchedPicks) return;
 
     // After accordion restructuring, headings are inside .race-accordion-header (not h2/h3).
     // Iterate per-accordion so we know which race each element belongs to.
