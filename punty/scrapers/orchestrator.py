@@ -1012,17 +1012,35 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                                 )
                             continue
                         if runner:
-                            runner.current_odds = od["odds_betfair"]
+                            bf_price = od["odds_betfair"]
+                            # Reject suspiciously low Betfair odds (thin liquidity)
+                            if bf_price < 1.10:
+                                logger.warning(
+                                    f"Betfair odds rejected: {runner.horse_name} "
+                                    f"({od['race_id']}) at ${bf_price:.2f} — below $1.10 floor"
+                                )
+                                continue
+                            # Reject extreme divergence from opening odds (>5x ratio)
+                            if runner.opening_odds and runner.opening_odds > 1.5:
+                                ratio = runner.opening_odds / bf_price
+                                if ratio > 5.0:
+                                    logger.warning(
+                                        f"Betfair odds rejected: {runner.horse_name} "
+                                        f"({od['race_id']}) ${bf_price:.2f} vs opening "
+                                        f"${runner.opening_odds:.2f} — {ratio:.1f}x divergence"
+                                    )
+                                    continue
+                            runner.current_odds = bf_price
                             odds_updated += 1
                             if not runner.opening_odds:
-                                runner.opening_odds = od["odds_betfair"]
+                                runner.opening_odds = bf_price
                             # Use real Betfair PLACE odds if available, else estimate
                             place_key = (od["race_id"], od["horse_name"])
                             real_place = bf_place_odds.get(place_key)
                             if real_place and real_place > 1.0:
                                 runner.place_odds = real_place
                             else:
-                                runner.place_odds = round((od["odds_betfair"] - 1) / 3 + 1, 2)
+                                runner.place_odds = round((bf_price - 1) / 3 + 1, 2)
                     logger.info(
                         f"Odds refresh for {meeting_id}: updated {odds_updated} "
                         f"runners from Betfair ({len(bf_place_odds)} with real place odds)"
@@ -1534,6 +1552,13 @@ async def _merge_betfair_odds(db: AsyncSession, meeting_id: str, odds_data: list
         if not runner:
             continue
 
+        # Reject suspiciously low Betfair odds (thin liquidity)
+        if price < 1.10:
+            logger.warning(
+                f"Betfair merge rejected: {horse_name} ({race_id}) "
+                f"at ${price:.2f} — below $1.10 floor"
+            )
+            continue
         runner.odds_betfair = price
         matched += 1
 
