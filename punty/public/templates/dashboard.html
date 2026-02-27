@@ -488,9 +488,10 @@
                              style="border: none;">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Results & Wins</span>
-                                {% if dashboard.big_wins|default([])|length > 0 %}
-                                <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(74, 222, 128, 0.12); color: #4ade80;">{{ dashboard.big_wins|length }}</span>
+                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Top Wins</span>
+                                {% set win_count = [dashboard.big_wins|default([])|length, 5]|min %}
+                                {% if win_count > 0 %}
+                                <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(74, 222, 128, 0.12); color: #4ade80;">{{ win_count }}</span>
                                 {% endif %}
                             </div>
                             <svg class="w-4 h-4 transition-transform" :class="open.results && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
