@@ -256,11 +256,19 @@ async def get_winner_stats(today: bool = False) -> dict:
         today_winners = today_result.scalar() or 0
 
         # Check if all races today are complete
+        # Include meetings with approved content (e.g. abandoned meetings still have tips)
+        meetings_with_content = select(Content.meeting_id).where(
+            Content.content_type == "early_mail",
+            Content.status.in_(["approved", "sent"]),
+        ).scalar_subquery()
         today_meetings_result = await db.execute(
             select(Meeting).where(
                 and_(
                     Meeting.date == today_date,
-                    Meeting.selected == True,
+                    or_(
+                        Meeting.selected == True,
+                        Meeting.id.in_(meetings_with_content),
+                    ),
                 )
             )
         )
