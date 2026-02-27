@@ -308,8 +308,8 @@ async def _settle_picks_for_race_impl(
         if has_result:
             bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
 
-            # "Exotics only" picks have no straight bet — settle with $0 P&L
-            if bet_type == "exotics_only":
+            # "Exotics only" or "no bet" picks have no straight bet — settle with $0 P&L
+            if bet_type in ("exotics_only", "no_bet"):
                 pick.hit = runner.finish_position == 1
                 pick.pnl = 0.0
                 pick.settled = True
@@ -335,7 +335,7 @@ async def _settle_picks_for_race_impl(
                 settled_count += 1
                 continue
 
-            stake = pick.bet_stake or 1.0
+            stake = pick.bet_stake if pick.bet_stake is not None and pick.bet_stake > 0 else 1.0
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= num_places
 
@@ -988,6 +988,9 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             Meeting.date == target_date,
             Pick.settled == True,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            # Exclude no_bet selections (tracked only, $0 stake) and big3 individual legs
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
         .group_by(Pick.pick_type)
     )
@@ -1078,6 +1081,7 @@ async def get_performance_history(
             Pick.settled == True,
             Pick.pick_type != "big3",  # P&L tracked on multi row
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
         .group_by(Meeting.date)
         .order_by(Meeting.date)
@@ -1136,6 +1140,7 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             Pick.settled == True,
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     rows = result.all()
@@ -1614,6 +1619,8 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
             Pick.hit == True,
             Meeting.date == today,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     today_winners = today_result.scalar() or 0
@@ -1624,6 +1631,8 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
             Pick.settled == True,
             Pick.hit == True,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     total_winners = total_result.scalar() or 0
@@ -1637,6 +1646,8 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
             Pick.settled == True,
             Pick.hit == True,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     row = collected_result.one()

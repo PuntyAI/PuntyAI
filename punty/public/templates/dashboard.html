@@ -507,20 +507,22 @@
                             {# Selection picks #}
                             <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                                 {% for p in race.picks %}
-                                <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0;">
+                                <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0; {% if p.is_no_bet %}opacity: 0.4;{% endif %}">
                                     <span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span>
-                                    <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
+                                    <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.is_no_bet %}var(--text-muted){% elif p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
                                         {{ p.name }}
                                         {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.25rem;">PP</span>{% endif %}
                                     </span>
-                                    {% if p.finish_pos %}
+                                    {% if p.finish_pos and not p.is_no_bet %}
                                     <span class="font-heading font-semibold" style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %}; font-size: 0.65rem;">
                                         {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
                                     </span>
                                     {% endif %}
+                                    {% if not p.is_no_bet %}
                                     <span class="font-heading font-bold" style="color: {% if p.pnl > 0 %}#4ade80{% elif p.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %}; min-width: 2.5rem; text-align: right;">
                                         {{ '%+.0f'|format(p.pnl) | replace('+', '+$') | replace('-', '-$') }}
                                     </span>
+                                    {% endif %}
                                 </div>
                                 {% endfor %}
                             </div>

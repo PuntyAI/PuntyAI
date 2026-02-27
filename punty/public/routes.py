@@ -2651,13 +2651,17 @@ async def get_daily_dashboard() -> dict:
                     "total_staked": 0.0,
                 }
             rg = race_groups[key]
-            pnl = pick.pnl or 0
-            rg["total_pnl"] += pnl
+            raw_pnl = pick.pnl or 0
 
             if pick.pick_type == "selection":
+                bt_lower = (pick.bet_type or "").lower()
+                is_no_bet = bt_lower == "no_bet"
+                # no_bet picks: zero out phantom PNL from settlement bug
+                pnl = 0.0 if is_no_bet else raw_pnl
                 stake = pick.bet_stake or 0
-                rg["total_staked"] += stake
-                # Update settled_at to latest
+                if not is_no_bet:
+                    rg["total_staked"] += stake
+                    rg["total_pnl"] += pnl
                 ts = pick.settled_at or pick.created_at
                 if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
                     rg["settled_at"] = ts
@@ -2669,19 +2673,21 @@ async def get_daily_dashboard() -> dict:
                     "odds": pick.odds_at_tip,
                     "hit": bool(pick.hit),
                     "pnl": round(pnl, 2),
+                    "is_no_bet": is_no_bet,
                     "is_puntys_pick": pick.is_puntys_pick or False,
                     "finish_pos": runner.finish_position if runner else None,
                 })
             elif pick.pick_type == "exotic":
                 stake = pick.exotic_stake or 0
                 rg["total_staked"] += stake
+                rg["total_pnl"] += raw_pnl
                 ts = pick.settled_at or pick.created_at
                 if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
                     rg["settled_at"] = ts
                 rg["exotics"].append({
                     "exotic_type": (pick.exotic_type or "Exotic").replace("_", " "),
                     "hit": bool(pick.hit),
-                    "pnl": round(pnl, 2),
+                    "pnl": round(raw_pnl, 2),
                     "stake": round(stake, 2),
                 })
 
