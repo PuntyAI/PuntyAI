@@ -231,6 +231,63 @@
         background: rgba(255, 255, 255, 0.04);
         border-color: rgba(233, 30, 140, 0.2);
     }
+    /* ── Recent results table ── */
+    .rr-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.7rem;
+    }
+    .rr-table thead { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .rr-th-rank, .rr-th-name, .rr-th-pos, .rr-th-pnl {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.55rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        padding: 0.2rem 0;
+        text-align: left;
+    }
+    .rr-th-rank { width: 22px; }
+    .rr-th-pos { width: 2.5rem; text-align: right; }
+    .rr-th-pnl { width: 3rem; text-align: right; }
+    .rr-td-rank { vertical-align: middle; padding: 0.2rem 0; }
+    .rr-td-name {
+        vertical-align: middle;
+        padding: 0.2rem 0.25rem;
+        max-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rr-td-pos {
+        vertical-align: middle;
+        padding: 0.2rem 0;
+        text-align: right;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.65rem;
+    }
+    .rr-td-pnl {
+        vertical-align: middle;
+        padding: 0.2rem 0;
+        text-align: right;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.7rem;
+    }
+    .rr-row-exotic td { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+    .rr-exotic-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px; height: 16px;
+        border-radius: 4px;
+        font-size: 0.5rem;
+        font-weight: 700;
+        background: rgba(0, 212, 255, 0.15);
+        color: var(--cyan);
+    }
 
     /* ── Quick link buttons ── */
     .qlink {
@@ -487,62 +544,78 @@
                     <div style="display: flex; flex-direction: column; gap: 0.75rem;">
                         {% for race in race_results %}
                         <a href="/tips/{{ race.meeting_id }}#race-{{ race.race_number }}" class="rr-race-card" style="text-decoration: none; display: block;">
-                            <div class="flex items-center justify-between mb-1.5">
+                            {# Race header #}
+                            <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-heading font-bold text-white text-xs">{{ race.venue }}</span>
                                     <span class="font-heading font-semibold text-xs" style="color: var(--text-muted);">R{{ race.race_number }}</span>
                                 </div>
                                 <div class="flex items-center gap-1">
                                     <span class="text-xs" style="color: var(--text-muted);">(${{ '%.0f'|format(race.total_staked) }})</span>
-                                    {% set total_won = race.total_pnl + race.total_staked %}
                                     <span class="font-heading font-bold text-xs {% if race.total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
                                         {{ '%+.0f'|format(race.total_pnl) | replace('+', '+$') | replace('-', '-$') }}
                                     </span>
                                 </div>
                             </div>
-                            {# Selection picks #}
-                            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                {% for p in race.picks %}
-                                <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0;">
-                                    <span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span>
-                                    <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
-                                        {{ p.name }}
-                                        {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.25rem;">PP</span>{% endif %}
-                                    </span>
-                                    {% if p.finish_pos %}
-                                    <span class="font-heading font-semibold" style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %}; font-size: 0.65rem;">
-                                        {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
-                                    </span>
-                                    {% endif %}
-                                    {% if not p.is_no_bet %}
-                                    <span class="font-heading font-bold" style="color: {% if p.pnl > 0 %}#4ade80{% elif p.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %}; min-width: 2.5rem; text-align: right;">
-                                        {{ '%+.0f'|format(p.pnl) | replace('+', '+$') | replace('-', '-$') }}
-                                    </span>
-                                    {% endif %}
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {# Exotic bets #}
-                            {% if race.exotics %}
-                            <div style="margin-top: 0.35rem; padding-top: 0.35rem; border-top: 1px solid rgba(255,255,255,0.04);">
-                                {% for ex in race.exotics %}
-                                <div class="flex items-center gap-2 text-xs" style="padding: 0.15rem 0;">
-                                    <span class="inline-flex items-center justify-center rounded" style="width: 16px; height: 16px; font-size: 0.5rem; background: rgba(0, 212, 255, 0.15); color: var(--cyan);">E</span>
-                                    <span class="font-heading font-semibold flex-1" style="color: {% if ex.hit %}var(--cyan){% else %}var(--text-muted){% endif %};">
-                                        {{ ex.exotic_type }}
-                                    </span>
-                                    {% if ex.hit %}
-                                    <span class="font-heading font-bold text-xs" style="color: #4ade80;">HIT</span>
-                                    {% else %}
-                                    <span class="font-heading font-bold text-xs" style="color: var(--text-muted); opacity: 0.5;">MISS</span>
-                                    {% endif %}
-                                    <span class="font-heading font-bold" style="color: {% if ex.pnl > 0 %}#4ade80{% elif ex.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %}; min-width: 2.5rem; text-align: right;">
-                                        {{ '%+.0f'|format(ex.pnl) | replace('+', '+$') | replace('-', '-$') }}
-                                    </span>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
+                            {# Results table #}
+                            <table class="rr-table">
+                                <thead>
+                                    <tr>
+                                        <th class="rr-th-rank"></th>
+                                        <th class="rr-th-name">Horse</th>
+                                        <th class="rr-th-pos">Pos</th>
+                                        <th class="rr-th-pnl">P&amp;L</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for p in race.picks %}
+                                    <tr class="rr-row">
+                                        <td class="rr-td-rank"><span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span></td>
+                                        <td class="rr-td-name">
+                                            <span class="font-heading font-semibold" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
+                                                {{ p.name }}
+                                            </span>
+                                            {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.2rem;">PP</span>{% endif %}
+                                        </td>
+                                        <td class="rr-td-pos">
+                                            {% if p.finish_pos %}
+                                            <span style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %};">
+                                                {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
+                                            </span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="rr-td-pnl">
+                                            {% if not p.is_no_bet %}
+                                            <span style="color: {% if p.pnl > 0 %}#4ade80{% elif p.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %};">
+                                                {{ '%+.0f'|format(p.pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                            </span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                    {# Exotic rows #}
+                                    {% for ex in race.exotics|default([]) %}
+                                    <tr class="rr-row rr-row-exotic">
+                                        <td class="rr-td-rank"><span class="rr-exotic-badge">E</span></td>
+                                        <td class="rr-td-name">
+                                            <span class="font-heading font-semibold" style="color: {% if ex.hit %}var(--cyan){% else %}var(--text-muted){% endif %};">{{ ex.exotic_type }}</span>
+                                        </td>
+                                        <td class="rr-td-pos">
+                                            {% if ex.hit %}
+                                            <span style="color: #4ade80;">HIT</span>
+                                            {% else %}
+                                            <span style="color: var(--text-muted); opacity: 0.5;">MISS</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="rr-td-pnl">
+                                            <span style="color: {% if ex.pnl > 0 %}#4ade80{% elif ex.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %};">
+                                                {{ '%+.0f'|format(ex.pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </a>
                         {% if not loop.last %}
                         <div style="border-top: 1px solid rgba(255,255,255,0.04);"></div>
