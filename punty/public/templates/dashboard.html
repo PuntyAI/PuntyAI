@@ -309,7 +309,7 @@
                 {# ── Live Edge Zone ── #}
                 <div id="live-edge"
                      hx-get="/tips/_live-edge"
-                     hx-trigger="every 30s [document.visibilityState === 'visible'], liveEdgeRefresh"
+                     hx-trigger="every 30s [document.visibilityState === 'visible']"
                      hx-swap="innerHTML">
                     {% include "partials/live_edge.html" %}
                 </div>
@@ -568,7 +568,7 @@ function dashData() {
                 url += '?exclude=' + encodeURIComponent(this.hiddenVenues.join(','));
             }
             el.setAttribute('hx-get', url);
-            htmx.trigger(el, 'liveEdgeRefresh');
+            htmx.ajax('GET', url, {target: '#live-edge', swap: 'innerHTML'});
         }
     };
 }
