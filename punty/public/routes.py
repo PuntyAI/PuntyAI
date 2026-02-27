@@ -28,8 +28,13 @@ from punty.config import settings as _app_settings
 templates.env.globals["is_staging"] = _app_settings.is_staging
 
 
-async def get_next_race() -> dict:
-    """Get the next upcoming race for countdown display."""
+async def get_next_race(exclude_venues: list[str] | None = None, offset: int = 0) -> dict:
+    """Get the next upcoming race for countdown display.
+
+    Args:
+        exclude_venues: Optional list of venue names to skip (for venue filtering).
+        offset: Number of races to skip forward from the next one (0 = very next race).
+    """
     async with async_session() as db:
         today = melb_today()
         now = melb_now()
@@ -46,6 +51,10 @@ async def get_next_race() -> dict:
             )
         )
         meetings = {m.id: m for m in meetings_result.scalars().all()}
+
+        # Filter out excluded venues
+        if exclude_venues:
+            meetings = {mid: m for mid, m in meetings.items() if m.venue not in exclude_venues}
 
         if not meetings:
             return {"has_next": False}
@@ -66,15 +75,16 @@ async def get_next_race() -> dict:
         )
         races = races_result.scalars().all()
 
-        # Find the next race (first one with start_time > now)
-        next_race = None
-        for race in races:
-            if race.start_time and race.start_time > now_naive:
-                next_race = race
-                break
+        # Find all upcoming races (start_time > now)
+        upcoming_races = [r for r in races if r.start_time and r.start_time > now_naive]
 
-        if not next_race:
+        if not upcoming_races:
             return {"has_next": False, "all_done": True}
+
+        # Apply offset (clamp to valid range)
+        idx = min(offset, len(upcoming_races) - 1)
+        idx = max(0, idx)
+        next_race = upcoming_races[idx]
 
         meeting = meetings.get(next_race.meeting_id)
         # Add timezone info for JavaScript
@@ -90,6 +100,8 @@ async def get_next_race() -> dict:
             "class": next_race.class_,
             "start_time_iso": start_time_aware.isoformat(),
             "start_time_formatted": next_race.start_time.strftime("%H:%M"),
+            "race_offset": idx,
+            "total_upcoming": len(upcoming_races),
         }
 
 
@@ -1658,13 +1670,20 @@ async def tips_next_race(request: Request):
 
 
 @router.get("/tips/_live-edge", response_class=HTMLResponse)
-async def tips_live_edge(request: Request):
-    """HTMX partial: Live Edge Zone refresh."""
+async def tips_live_edge(request: Request, exclude: str = "", offset: int = 0):
+    """HTMX partial: Live Edge Zone refresh.
+
+    Args:
+        exclude: Comma-separated venue names to skip (for venue filter).
+        offset: Race offset from next upcoming (0 = very next race).
+    """
     import asyncio
+
+    exclude_venues = [v.strip() for v in exclude.split(",") if v.strip()] if exclude else None
 
     dashboard, next_race_data = await asyncio.gather(
         get_daily_dashboard(),
-        get_next_race(),
+        get_next_race(exclude_venues=exclude_venues, offset=max(0, offset)),
     )
 
     next_race_picks = []
@@ -1719,6 +1738,19 @@ async def tips_live_edge(request: Request):
             "next_race": next_race_data,
             "next_race_picks": next_race_picks,
             "primary_play": primary_play,
+        }
+    )
+
+
+@router.get("/tips/api/dashboard/recent-results", response_class=HTMLResponse)
+async def tips_recent_results(request: Request):
+    """HTMX partial: Recent Results auto-refresh (last 3 settled races)."""
+    dashboard = await get_daily_dashboard()
+    return templates.TemplateResponse(
+        "partials/recent_results.html",
+        {
+            "request": request,
+            "recent_race_results": dashboard.get("recent_race_results", []),
         }
     )
 
@@ -2463,24 +2495,53 @@ async def get_daily_dashboard() -> dict:
         edge_picks = [u for u in upcoming if u.get("is_edge")]
         edge_picks.sort(key=lambda x: x.get("value_rating") or 0, reverse=True)
 
-        # ── Bet type breakdown (all settled picks, with ROI/SR) ──
+        # ── Bet type breakdown (all picks: settled use actual P&L, unsettled deduct stake) ──
         bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
-        for pick, runner, race, meeting in settled_rows:
-            # Label by pick type: selections use bet_type, exotics use exotic_type, sequences use sequence_type
+
+        def _classify_bt(pick):
+            """Classify pick into normalized bet type label, or None to skip."""
+            if pick.pick_type == "big3":
+                return None
             if pick.pick_type == "selection":
-                bt = (pick.bet_type or "unknown").replace("_", " ").title()
-            elif pick.pick_type == "exotic":
-                bt = (pick.exotic_type or "Exotic").replace("_", " ").title()
-            elif pick.pick_type in ("sequence", "big3_multi"):
-                bt = (pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
-            else:
-                bt = (pick.pick_type or "unknown").replace("_", " ").title()
+                raw_bt = str(pick.bet_type or "unknown").lower().replace("_", " ")
+                if raw_bt in ("no bet", "no_bet", "exotics only", "exotics_only"):
+                    return None
+                return "Win" if raw_bt == "saver win" else raw_bt.title()
+            if pick.pick_type == "exotic":
+                raw_et = str(pick.exotic_type or "Exotic").lower()
+                for suffix in (" standout", " box", " boxed"):
+                    raw_et = raw_et.replace(suffix, "")
+                return raw_et.strip().title()
+            if pick.pick_type in ("sequence", "big3_multi"):
+                return str(pick.sequence_type or pick.pick_type or "Sequence").replace("_", " ").title()
+            return str(pick.pick_type or "unknown").replace("_", " ").title()
+
+        # Settled picks: actual P&L and wins
+        for pick, runner, race, meeting in settled_rows:
+            bt = _classify_bt(pick)
+            if not bt:
+                continue
             bt_stats[bt]["bets"] += 1
             stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
             bt_stats[bt]["staked"] += stake or 0
             bt_stats[bt]["pnl"] += pick.pnl or 0
             if pick.hit:
                 bt_stats[bt]["winners"] += 1
+
+        # Unsettled picks: deduct stake, 0 wins
+        for pick, runner, race, meeting in unsettled_rows:
+            bt = _classify_bt(pick)
+            if not bt:
+                continue
+            # Skip tracked-only (no actual money at risk)
+            if pick.tracked_only:
+                continue
+            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            if not stake or stake <= 0:
+                continue
+            bt_stats[bt]["bets"] += 1
+            bt_stats[bt]["staked"] += stake
+            bt_stats[bt]["pnl"] -= stake  # Deduct stake at bet time
         bet_types = []
         for bt, data in sorted(bt_stats.items()):
             data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0
@@ -2615,6 +2676,80 @@ async def get_daily_dashboard() -> dict:
                 "pnl": round(v_pnl, 2),
             })
 
+        # ── Recent Race Results (last 3 settled races, all picks per race) ──
+        race_groups: dict[str, dict] = {}  # key = "venue-rN"
+        for pick, runner, race_obj, meeting in settled_rows:
+            if pick.pick_type not in ("selection", "exotic"):
+                continue
+            rn = pick.race_number
+            if not rn:
+                continue
+            key = f"{meeting.id}-r{rn}"
+            if key not in race_groups:
+                race_groups[key] = {
+                    "venue": meeting.venue,
+                    "meeting_id": meeting.id,
+                    "race_number": rn,
+                    "race_name": race_obj.name if race_obj else None,
+                    "settled_at": pick.settled_at or pick.created_at,
+                    "picks": [],
+                    "exotics": [],
+                    "total_pnl": 0.0,
+                    "total_staked": 0.0,
+                }
+            rg = race_groups[key]
+            raw_pnl = pick.pnl or 0
+
+            if pick.pick_type == "selection":
+                bt_lower = (pick.bet_type or "").lower()
+                is_no_bet = bt_lower == "no_bet"
+                # no_bet picks: zero out phantom PNL from settlement bug
+                pnl = 0.0 if is_no_bet else raw_pnl
+                stake = pick.bet_stake or 0
+                if not is_no_bet:
+                    rg["total_staked"] += stake
+                    rg["total_pnl"] += pnl
+                ts = pick.settled_at or pick.created_at
+                if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
+                    rg["settled_at"] = ts
+                rg["picks"].append({
+                    "name": pick.horse_name or "Runner",
+                    "saddlecloth": pick.saddlecloth,
+                    "tip_rank": pick.tip_rank,
+                    "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                    "odds": pick.odds_at_tip,
+                    "hit": bool(pick.hit),
+                    "pnl": round(pnl, 2),
+                    "is_no_bet": is_no_bet,
+                    "is_puntys_pick": pick.is_puntys_pick or False,
+                    "finish_pos": runner.finish_position if runner else None,
+                })
+            elif pick.pick_type == "exotic":
+                stake = pick.exotic_stake or 0
+                rg["total_staked"] += stake
+                rg["total_pnl"] += raw_pnl
+                ts = pick.settled_at or pick.created_at
+                if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
+                    rg["settled_at"] = ts
+                rg["exotics"].append({
+                    "exotic_type": (pick.exotic_type or "Exotic").replace("_", " "),
+                    "hit": bool(pick.hit),
+                    "pnl": round(raw_pnl, 2),
+                    "stake": round(stake, 2),
+                })
+
+        # Sort picks within each race by tip_rank; exotics by type
+        for rg in race_groups.values():
+            rg["picks"].sort(key=lambda x: x.get("tip_rank") or 99)
+            rg["total_pnl"] = round(rg["total_pnl"], 2)
+            rg["total_staked"] = round(rg["total_staked"], 2)
+        # Take most recently settled 3 races
+        recent_race_results = sorted(
+            race_groups.values(),
+            key=lambda x: x["settled_at"] or now_naive,
+            reverse=True,
+        )[:3]
+
         # ── Summary counts for has_data logic ──
         total_picks = len(all_rows)
         total_settled = len(settled_rows)
@@ -2636,6 +2771,7 @@ async def get_daily_dashboard() -> dict:
             "total_upcoming": total_upcoming,
             "has_data": total_picks > 0,
             "has_settled": total_settled > 0,
+            "recent_race_results": recent_race_results,
         }
 
 

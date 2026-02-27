@@ -21,6 +21,7 @@ RACE_POOL = POOL_STANDARD  # default (for backward compat)
 MIN_STAKE = 1.0        # minimum bet
 STAKE_STEP = 0.50      # round to nearest 50c
 SINGLE_PICK_CAP = 15.0 # max stake when only 1 pick passes edge gate
+MAX_STAKED_PICKS = 2   # max picks with real stakes per race (picks #3+ tracked only)
 
 # Bet type thresholds (defaults — can be overridden by tuned thresholds)
 WIN_MIN_PROB = 0.18          # 18% win prob minimum for Win bet
@@ -347,6 +348,16 @@ def calculate_pre_selections(
     # Cap win-exposed bets to avoid spreading win risk across too many horses
     win_capped = _cap_win_exposure(picks)
 
+    # Concentrate stakes: only top MAX_STAKED_PICKS get real money.
+    # Picks #3+ become tracked_only (shown for exotics/AI context, no stake).
+    # This prevents thin-margin 4-way splits that historically lose.
+    if not is_ntd:  # NTD already handles its own tracked_only logic
+        for pick in picks[MAX_STAKED_PICKS:]:
+            if not pick.tracked_only:
+                pick.tracked_only = True
+                pick.no_bet_reason = "Stake concentrated on top 2 picks"
+                pick.stake = 0.0
+
     # Determine race pool using 3-tier confidence system
     race_pool = _determine_race_pool(picks, classification)
 
@@ -653,16 +664,25 @@ def _estimate_place_odds(win_odds: float) -> float:
 
 
 def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
-    """Ensure at least one pick is Win or Saver Win (mandatory rule)."""
+    """Ensure at least one pick is Win or Saver Win if viable.
+
+    Only force Win on picks within the proven-profitable $2-$10 range.
+    Below $2.00 is historically -38.9% ROI on Win — leave as Place.
+    """
     has_win = any(p.bet_type in ("Win", "Saver Win") for p in picks)
     if has_win or not picks:
         return
 
-    # Upgrade the top pick to Win
-    picks[0].bet_type = "Win"
-    picks[0].expected_return = round(
-        picks[0].win_prob * picks[0].odds - 1, 2,
-    )
+    # Find best Win candidate: within $2-$10 odds range
+    for pick in picks:
+        if 2.0 <= pick.odds <= 10.0:
+            pick.bet_type = "Win"
+            pick.expected_return = round(
+                pick.win_prob * pick.odds - 1, 2,
+            )
+            return
+
+    # No viable Win candidate — all too short or too long. Stay all-Place.
 
 
 MAX_WIN_EXPOSED = 2  # Max bets with win exposure (Win/EW/Saver Win) per race
@@ -899,8 +919,9 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     if len(staked_picks) == 1:
         effective_pool = min(pool, SINGLE_PICK_CAP)
 
-    # Base allocation weights by rank
-    base_rank_weights = {1: 0.35, 2: 0.28, 3: 0.22, 4: 0.15}
+    # Base allocation weights by rank — top 2 picks get most capital
+    # With MAX_STAKED_PICKS=2, only ranks 1-2 normally get stakes
+    base_rank_weights = {1: 0.58, 2: 0.42, 3: 0.22, 4: 0.15}
 
     pick_weights: list[float] = []
     for pick in staked_picks:

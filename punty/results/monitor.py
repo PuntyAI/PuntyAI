@@ -7,6 +7,7 @@ from datetime import datetime, time, timedelta
 from typing import Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from punty.config import MELB_TZ, melb_now
 
@@ -558,7 +559,7 @@ class ResultsMonitor:
 
                 # Only check meetings that have races (have been scraped)
                 race_result = await db.execute(
-                    select(Race).where(Race.meeting_id == meeting.id)
+                    select(Race).where(Race.meeting_id == meeting.id).options(selectinload(Race.runners))
                 )
                 races = race_result.scalars().all()
                 if not races:
@@ -2278,7 +2279,7 @@ class ResultsMonitor:
                 raise ValueError(f"Meeting not found: {meeting_id}")
 
             race_result = await db.execute(
-                select(Race).where(Race.meeting_id == meeting_id)
+                select(Race).where(Race.meeting_id == meeting_id).options(selectinload(Race.runners))
             )
             races = race_result.scalars().all()
             if not races:

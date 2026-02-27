@@ -54,7 +54,7 @@
     /* ── Countdown stability ── */
     .countdown-fixed {
         font-variant-numeric: tabular-nums;
-        min-width: 10ch;
+        min-width: 7ch;
         display: inline-block;
     }
 
@@ -186,7 +186,9 @@
     .metric-value {
         font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 800;
         color: white; margin-top: 0.15rem; line-height: 1.2;
+        word-break: break-all;
     }
+    .metric-value-pnl { font-size: 1.6rem; }
 
     /* ── Accordion ── */
     .dash-accordion-header {
@@ -215,6 +217,76 @@
         letter-spacing: 0.08em;
         color: var(--text-muted);
         margin-bottom: 0.75rem;
+    }
+
+    /* ── Recent race result cards ── */
+    .rr-race-card {
+        padding: 0.5rem;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        transition: all 0.15s;
+    }
+    .rr-race-card:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(233, 30, 140, 0.2);
+    }
+    /* ── Recent results table ── */
+    .rr-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.7rem;
+    }
+    .rr-table thead { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .rr-th-rank, .rr-th-name, .rr-th-pos, .rr-th-pnl {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 0.55rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        padding: 0.2rem 0;
+        text-align: left;
+    }
+    .rr-th-rank { width: 22px; }
+    .rr-th-pos { width: 2.5rem; text-align: right; }
+    .rr-th-pnl { width: 3rem; text-align: right; }
+    .rr-td-rank { vertical-align: middle; padding: 0.2rem 0; }
+    .rr-td-name {
+        vertical-align: middle;
+        padding: 0.2rem 0.25rem;
+        max-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rr-td-pos {
+        vertical-align: middle;
+        padding: 0.2rem 0;
+        text-align: right;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.65rem;
+    }
+    .rr-td-pnl {
+        vertical-align: middle;
+        padding: 0.2rem 0;
+        text-align: right;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        font-size: 0.7rem;
+    }
+    .rr-row-exotic td { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+    .rr-exotic-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px; height: 16px;
+        border-radius: 4px;
+        font-size: 0.5rem;
+        font-weight: 700;
+        background: rgba(0, 212, 255, 0.15);
+        color: var(--cyan);
     }
 
     /* ── Quick link buttons ── */
@@ -263,24 +335,46 @@
         .dash-grid > div { display: contents; }
         .dash-accordions { display: contents !important; }
         #live-edge { order: 1; }
-        .dash-sidebar-timer { order: 2; }
+        .dash-sidebar-trend { order: 2; }
         .dash-metrics { order: 3; }
         .dash-meetings { order: 4; }
         .dash-accordion-bestof { order: 5; }
         .dash-accordion-sequences { order: 6; }
-        .dash-sidebar-performance { order: 7; }
-        .dash-sidebar-bettype { order: 8; }
-        .dash-sidebar-tiprank { order: 9; }
-        .dash-accordion-results { order: 10; }
-        .dash-sidebar-links { order: 11; }
+        .dash-sidebar-recent { order: 7; }
+        .dash-sidebar-performance { order: 8; }
+        .dash-sidebar-bettype { order: 9; }
+        .dash-sidebar-tiprank { order: 10; }
+        .dash-accordion-results { order: 11; }
+        .dash-sidebar-links { order: 12; }
         .metric-value { font-size: 1.1rem; }
+        .metric-value-pnl { font-size: 1.1rem; }
     }
     @media (max-width: 639px) {
-        .metric-cell { padding: 0.5rem 0.25rem; }
-        .metric-value { font-size: 0.85rem; }
-        .metric-label { font-size: 0.55rem; }
-        .metrics-row { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .countdown-fixed { min-width: 6ch; }
+        /* Container */
+        .dash-container { padding: 0 0.5rem; }
+        /* Title */
+        .dash-title { font-size: 1.1rem !important; }
+        .dash-subtitle { display: none; }
+        /* Metrics row — must fit 5 cells in ~375px */
+        .metric-cell { padding: 0.4rem 0.1rem; }
+        .metric-value { font-size: 0.7rem; }
+        .metric-value-pnl { font-size: 0.7rem; }
+        .metric-label { font-size: 0.5rem; letter-spacing: 0.01em; }
+        .metrics-row { min-width: 0; }
+        /* Countdown — no fixed minimum on mobile */
+        .countdown-fixed { min-width: auto; }
+        /* Sidebar panels */
+        .sidebar-panel { padding: 0.75rem; }
+        .stat-cell-value { font-size: 0.9rem; }
+        .section-heading { font-size: 0.8rem; }
+        /* Live edge responsive handled in partial */
+        /* Cards tighter padding */
+        .card { padding: 0.75rem; }
+        #live-edge .le-card { padding: 0.75rem; }
+    }
+    @media (max-width: 374px) {
+        .metric-value, .metric-value-pnl { font-size: 0.6rem; }
+        .metric-cell { padding: 0.3rem 0.05rem; }
     }
 </style>
 {% endblock %}
@@ -291,42 +385,17 @@
 
         {# ── Header (compact) ── #}
         <div class="flex items-center justify-between" style="margin-bottom: 1rem;">
-            <h1 class="font-display font-bold" style="font-size: 1.5rem;">
+            <h1 class="font-display font-bold dash-title" style="font-size: 1.5rem;">
                 <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Racing Dashboard</span>
             </h1>
-            <span class="text-xs" style="color: var(--text-muted);">Your one-stop shop for today's tips, results, and performance.</span>
+            <span class="text-xs dash-subtitle" style="color: var(--text-muted);">Your one-stop shop for today's tips, results, and performance.</span>
         </div>
 
         {# ════════════════════════════════════
            2-COLUMN GRID LAYOUT
            ════════════════════════════════════ #}
-        <div class="dash-grid" x-data="{
-            open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
-            hiddenVenues: [],
-            meetings: {{ meetings_list|default([])|tojson }},
-            primaryNextVenue: '{{ next_race.venue|default("") }}',
-            fallbackMeeting: null,
-            toggleVenue(v) {
-                var i = this.hiddenVenues.indexOf(v);
-                if (i > -1) this.hiddenVenues.splice(i, 1);
-                else this.hiddenVenues.push(v);
-                this._refreshFallback();
-            },
-            isActive(v) { return this.hiddenVenues.indexOf(v) === -1; },
-            _refreshFallback() {
-                if (this.isActive(this.primaryNextVenue)) { this.fallbackMeeting = null; return; }
-                var now = Date.now();
-                var best = null;
-                for (var i = 0; i < this.meetings.length; i++) {
-                    var m = this.meetings[i];
-                    if (!m.next_jump || !this.isActive(m.venue)) continue;
-                    if (m.venue === this.primaryNextVenue) continue;
-                    var t = new Date(m.next_jump).getTime();
-                    if (t > now && (!best || t < best._t)) { best = { venue: m.venue, meeting_id: m.meeting_id, race_num: m.next_race_num, jump: m.next_jump, _t: t }; }
-                }
-                this.fallbackMeeting = best;
-            }
-        }">
+        <script>window.__dashMeetings = {{ meetings_list|default([])|tojson }};</script>
+        <div class="dash-grid" x-data="dashData()">
 
             {# ═══════ LEFT COLUMN (65%) ═══════ #}
             <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -335,28 +404,9 @@
                 <div id="live-edge"
                      hx-get="/tips/_live-edge"
                      hx-trigger="every 30s [document.visibilityState === 'visible']"
-                     hx-swap="innerHTML">
+                     hx-swap="innerHTML"
+                     hx-vals="js:{offset: parseInt(document.querySelector('#live-edge [data-race-offset]')?.dataset?.raceOffset || '0')}">
                     {% include "partials/live_edge.html" %}
-                </div>
-
-                {# ── Fallback Next Up (shown when primary venue is filtered out) ── #}
-                <div class="card p-4 text-center" style="border-color: var(--border-subtle); display: none;"
-                     x-show="fallbackMeeting" x-transition x-cloak>
-                    <div class="flex items-center justify-center gap-2 mb-2">
-                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-heading font-bold uppercase tracking-wider"
-                              style="background: linear-gradient(135deg, rgba(233, 30, 140, 0.2), rgba(255, 107, 53, 0.15)); color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.35);">
-                            <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--magenta); display: inline-block; animation: live-dot 1.5s ease-in-out infinite;"></span>
-                            Next Up
-                        </span>
-                    </div>
-                    <a :href="fallbackMeeting ? '/tips/' + fallbackMeeting.meeting_id + '#race-' + fallbackMeeting.race_num : '#'"
-                       class="hover:opacity-80 transition-opacity" style="text-decoration: none;">
-                        <p class="font-heading font-semibold text-white mb-1" x-text="fallbackMeeting ? fallbackMeeting.venue + ' — R' + fallbackMeeting.race_num : ''"></p>
-                        <p class="text-sm" style="color: var(--text-secondary);">
-                            <span class="countdown-fixed font-heading font-bold" style="color: var(--magenta);" x-bind:data-start="fallbackMeeting ? fallbackMeeting.jump : ''">--:--</span>
-                            until jump
-                        </p>
-                    </a>
                 </div>
 
                 {# ── Metrics Row ── #}
@@ -378,7 +428,7 @@
                     <a href="/stats" class="metric-cell">
                         <div class="metric-label">P&L</div>
                         {% set total_pnl = perf.total_pnl|default(0) %}
-                        <div class="metric-value" style="color: {{ '#4ade80' if total_pnl >= 0 else '#ef4444' }}; font-size: 1.6rem;">
+                        <div class="metric-value metric-value-pnl" style="color: {{ '#4ade80' if total_pnl >= 0 else '#ef4444' }};">
                             {{ '%+.0f'|format(total_pnl) | replace('+', '+$') | replace('-', '-$') }}
                         </div>
                     </a>
@@ -438,9 +488,10 @@
                              style="border: none;">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Results & Wins</span>
-                                {% if dashboard.big_wins|default([])|length > 0 %}
-                                <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(74, 222, 128, 0.12); color: #4ade80;">{{ dashboard.big_wins|length }}</span>
+                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Top Wins</span>
+                                {% set win_count = [dashboard.big_wins|default([])|length, 5]|min %}
+                                {% if win_count > 0 %}
+                                <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(74, 222, 128, 0.12); color: #4ade80;">{{ win_count }}</span>
                                 {% endif %}
                             </div>
                             <svg class="w-4 h-4 transition-transform" :class="open.results && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -461,29 +512,39 @@
             {# ═══════ RIGHT COLUMN (35%) — Sidebar ═══════ #}
             <div class="dash-sidebar">
 
-                {# ── Next Race Timer ── #}
-                {% if next_race and next_race.has_next %}
-                {# Primary: show when next_race venue is active #}
-                <div class="sidebar-panel dash-sidebar-timer" style="text-align: center;" x-show="isActive('{{ next_race.venue }}')" x-transition>
-                    <div class="sidebar-panel-title">Next Jump</div>
-                    <a href="/tips/{{ next_race.meeting_id }}#race-{{ next_race.race_number }}" style="text-decoration: none; display: block;" class="hover:opacity-80 transition-opacity">
-                        <div class="countdown-fixed font-display font-bold" style="font-size: 1.75rem; color: var(--magenta);" data-start="{{ next_race.start_time_iso }}" id="sidebar-timer">--:--</div>
-                        <div class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem;">
-                            {{ next_race.venue }} &mdash; R{{ next_race.race_number }}
-                            {% if next_race.distance %} &middot; {{ next_race.distance }}m{% endif %}
+                {# ── 7-Day Trend ── #}
+                {% if perf_history|default([])|length > 0 %}
+                <div class="sidebar-panel dash-sidebar-trend">
+                    <div class="sidebar-panel-title">7-Day Trend</div>
+                    <div class="flex items-end justify-between gap-1" style="height: 48px; padding: 0 0.25rem;">
+                        {% for day in perf_history %}
+                        {% set bar_pnl = day.pnl|default(0) %}
+                        {% set max_abs = perf_history|map(attribute='pnl')|map('abs')|max %}
+                        {% set bar_h = ((bar_pnl|abs / max_abs) * 100)|round|int if max_abs > 0 else 10 %}
+                        {% set bar_h = [bar_h, 8]|max %}
+                        <div class="flex-1 flex flex-col items-center justify-end" style="height: 100%;">
+                            <div class="w-full rounded-sm" style="height: {{ bar_h }}%; min-height: 3px; max-height: 100%; background: {% if bar_pnl >= 0 %}rgba(74, 222, 128, 0.6){% else %}rgba(248, 113, 113, 0.5){% endif %};"></div>
                         </div>
-                    </a>
-                </div>
-                {# Fallback: show next visible meeting when primary is filtered #}
-                <div class="sidebar-panel dash-sidebar-timer" style="text-align: center; display: none;"
-                     x-show="fallbackMeeting" x-transition x-cloak>
-                    <div class="sidebar-panel-title">Next Jump</div>
-                    <a :href="fallbackMeeting ? '/tips/' + fallbackMeeting.meeting_id + '#race-' + fallbackMeeting.race_num : '#'" style="text-decoration: none; display: block;" class="hover:opacity-80 transition-opacity">
-                        <div class="countdown-fixed font-display font-bold" style="font-size: 1.75rem; color: var(--magenta);" x-bind:data-start="fallbackMeeting ? fallbackMeeting.jump : ''">--:--</div>
-                        <div class="text-xs" style="color: var(--text-muted); margin-top: 0.25rem;" x-text="fallbackMeeting ? fallbackMeeting.venue + ' — R' + fallbackMeeting.race_num : ''"></div>
-                    </a>
+                        {% endfor %}
+                    </div>
+                    <div class="flex items-center justify-between mt-2">
+                        <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">{{ perf_history|length }} days</span>
+                        <span class="font-heading font-bold text-sm" style="color: {% if seven_day_pnl >= 0 %}#4ade80{% else %}#f87171{% endif %};">
+                            {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                            <span class="text-xs" style="color: var(--text-muted);">({{ '%+.1f'|format(seven_day_roi) }}%)</span>
+                        </span>
+                    </div>
                 </div>
                 {% endif %}
+
+                {# ── Recent Race Results (HTMX auto-refresh every 60s) ── #}
+                {% set recent_race_results = dashboard.recent_race_results|default([]) %}
+                <div id="recent-results"
+                     hx-get="/tips/api/dashboard/recent-results"
+                     hx-trigger="every 60s"
+                     hx-swap="innerHTML">
+                    {% include "partials/recent_results.html" %}
+                </div>
 
                 {# ── Performance Snapshot (compact 2x2 grid) ── #}
                 {% set perf = dashboard.performance|default({}) %}
@@ -576,6 +637,68 @@
 
 {% block scripts %}
 <script>
+// Alpine data for dashboard grid
+function dashData() {
+    // Restore showAll preference from localStorage (expires daily)
+    var savedShowAll = null;
+    try {
+        var stored = JSON.parse(localStorage.getItem('punty_showAll') || 'null');
+        if (stored && stored.date === new Date().toISOString().slice(0, 10)) {
+            savedShowAll = stored.value;
+        }
+    } catch(e) {}
+
+    return {
+        open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
+        showAll: savedShowAll !== null ? savedShowAll : true,
+        hiddenVenues: [],
+        meetings: window.__dashMeetings || [],
+        primaryNextVenue: '{{ next_race.venue|default("") }}',
+        fallbackMeeting: null,
+        toggleShowAll() {
+            this.showAll = !this.showAll;
+            try {
+                localStorage.setItem('punty_showAll', JSON.stringify({
+                    value: this.showAll,
+                    date: new Date().toISOString().slice(0, 10)
+                }));
+            } catch(e) {}
+        },
+        toggleVenue(v) {
+            var i = this.hiddenVenues.indexOf(v);
+            if (i > -1) this.hiddenVenues.splice(i, 1);
+            else this.hiddenVenues.push(v);
+            this._refreshFallback();
+            this._refreshLiveEdge();
+        },
+        isActive(v) { return this.hiddenVenues.indexOf(v) === -1; },
+        _refreshFallback() {
+            if (this.isActive(this.primaryNextVenue)) { this.fallbackMeeting = null; return; }
+            var now = Date.now();
+            var best = null;
+            for (var i = 0; i < this.meetings.length; i++) {
+                var m = this.meetings[i];
+                if (!m.next_jump || !this.isActive(m.venue)) continue;
+                if (m.venue === this.primaryNextVenue) continue;
+                var t = new Date(m.next_jump).getTime();
+                if (t > now && (!best || t < best._t)) { best = { venue: m.venue, meeting_id: m.meeting_id, race_num: m.next_race_num, jump: m.next_jump, _t: t }; }
+            }
+            this.fallbackMeeting = best;
+        },
+        _refreshLiveEdge() {
+            var el = document.getElementById('live-edge');
+            if (!el) return;
+            var offset = parseInt(el.querySelector('[data-race-offset]')?.dataset?.raceOffset || '0');
+            var url = '/tips/_live-edge?offset=' + offset;
+            if (this.hiddenVenues.length > 0) {
+                url += '&exclude=' + encodeURIComponent(this.hiddenVenues.join(','));
+            }
+            el.setAttribute('hx-get', url);
+            htmx.ajax('GET', url, {target: '#live-edge', swap: 'innerHTML'});
+        }
+    };
+}
+
 // Countdown timer for next race / meetings
 (function() {
     function pad(n) { return n < 10 ? '0' + n : '' + n; }

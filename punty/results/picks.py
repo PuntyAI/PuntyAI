@@ -306,10 +306,10 @@ async def _settle_picks_for_race_impl(
         has_result = runner and (runner.finish_position is not None or (race_final and results_populated))
 
         if has_result:
-            bet_type = (pick.bet_type or "win").lower().replace(" ", "_")
+            bet_type = str(pick.bet_type or "win").lower().replace(" ", "_")
 
-            # "Exotics only" picks have no straight bet — settle with $0 P&L
-            if bet_type == "exotics_only":
+            # "Exotics only" or "no bet" picks have no straight bet — settle with $0 P&L
+            if bet_type in ("exotics_only", "no_bet"):
                 pick.hit = runner.finish_position == 1
                 pick.pnl = 0.0
                 pick.settled = True
@@ -335,7 +335,7 @@ async def _settle_picks_for_race_impl(
                 settled_count += 1
                 continue
 
-            stake = pick.bet_stake or 1.0
+            stake = pick.bet_stake if pick.bet_stake is not None and pick.bet_stake > 0 else 1.0
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= num_places
 
@@ -455,7 +455,7 @@ async def _settle_picks_for_race_impl(
 
             # Settle Punty's Pick shadow result if bet type differs
             if pick.is_puntys_pick and pick.pp_bet_type and pick.pp_bet_type != bet_type:
-                pp_bt = pick.pp_bet_type.lower().replace(" ", "_")
+                pp_bt = str(pick.pp_bet_type).lower().replace(" ", "_")
                 pp_odds_val = pick.pp_odds or place_odds  # PP odds, fallback to place
                 if pp_bt in ("win", "saver_win"):
                     pick.pp_hit = won
@@ -603,7 +603,7 @@ async def _settle_picks_for_race_impl(
         try:
             exotic_runners = json.loads(pick.exotic_runners) if pick.exotic_runners else []
             stake = pick.exotic_stake or 1.0
-            exotic_type = (pick.exotic_type or "").lower()
+            exotic_type = str(pick.exotic_type or "").lower()
 
             # Get finish order
             finish_order = sorted(
@@ -860,19 +860,26 @@ async def _settle_picks_for_race_impl(
                 all_resolved = False
                 break
 
+            # Normalize leg saddlecloths to a set of ints for reliable comparison
+            if isinstance(leg_saddlecloths, (list, tuple)):
+                leg_sc_set = {int(x) for x in leg_saddlecloths if str(x).isdigit()}
+            else:
+                leg_sc_set = set()
+
             # Find winner of this leg
             winner = seq_winner_map.get(leg_race_id)
+            winner_sc = int(winner.saddlecloth) if winner and winner.saddlecloth is not None else None
             if not winner:
                 all_hit = False
-            elif winner.saddlecloth not in leg_saddlecloths:
+            elif winner_sc not in leg_sc_set:
                 # Check if all our selections in this leg were scratched (free pass)
                 # Load scratched runners for this leg's race
                 leg_runners_result = await db.execute(
                     select(Runner).where(Runner.race_id == leg_race_id)
                 )
                 leg_runners = leg_runners_result.scalars().all()
-                leg_scratched = {r.saddlecloth for r in leg_runners if r.scratched and r.saddlecloth}
-                non_scratched_selections = [s for s in leg_saddlecloths if s not in leg_scratched]
+                leg_scratched = {int(r.saddlecloth) for r in leg_runners if r.scratched and r.saddlecloth}
+                non_scratched_selections = [s for s in leg_sc_set if s not in leg_scratched]
                 if not non_scratched_selections:
                     # All our selections scratched — free pass, leg counts as hit
                     pass
@@ -894,7 +901,7 @@ async def _settle_picks_for_race_impl(
                     exotic_divs = json.loads(last_leg_race.exotic_results)
                 except (json.JSONDecodeError, TypeError):
                     exotic_divs = {}
-                seq_type = (pick.sequence_type or "").lower()
+                seq_type = str(pick.sequence_type or "").lower()
                 dividend = 0.0
                 for key in ("quaddie", "quadrella", "big6", "big 6"):
                     if key in seq_type or seq_type == "":
@@ -972,8 +979,14 @@ def _find_dividend(exotic_divs: dict, exotic_key: str) -> float:
 
 
 async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
-    """Get P&L summary for a given date, grouped by pick_type."""
-    result = await db.execute(
+    """Get P&L summary for a given date, grouped by pick_type.
+
+    Reflects real betting cash-flow:
+    - Unsettled bets: counted as bets, stake deducted from P&L, 0 wins
+    - Settled bets: actual P&L and win count
+    """
+    # Settled picks — actual results
+    settled_result = await db.execute(
         select(
             Pick.pick_type,
             func.count(Pick.id).label("count"),
@@ -987,23 +1000,36 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         .where(
             Meeting.date == target_date,
             Pick.settled == True,
+            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
         .group_by(Pick.pick_type)
     )
-    rows = result.all()
+    settled_rows = settled_result.all()
 
-    # For sequences, exotic_stake already stores total outlay (parser.py:423)
-    seq_result = await db.execute(
-        select(func.sum(Pick.exotic_stake))
+    # Unsettled picks — deduct stake, 0 wins
+    unsettled_result = await db.execute(
+        select(
+            Pick.pick_type,
+            func.count(Pick.id).label("count"),
+            func.sum(Pick.exotic_stake).label("total_staked_exotic"),
+            func.sum(Pick.bet_stake).label("total_staked_bet"),
+        )
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date == target_date,
-            Pick.settled == True,
-            Pick.pick_type == "sequence",
+            Pick.settled == False,
+            Content.status.notin_(["superseded", "rejected"]),
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
+        .group_by(Pick.pick_type)
     )
-    sequence_total_stake = float(seq_result.scalar() or 0)
+    unsettled_rows = unsettled_result.all()
 
     by_product = {}
     total_bets = 0
@@ -1011,31 +1037,23 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     total_pnl = 0.0
     total_staked = 0.0
 
-    for row in rows:
+    # Process settled picks
+    for row in settled_rows:
         pick_type = row.pick_type
         count = row.count or 0
         pnl = float(row.total_pnl or 0)
         winners = int(row.winners or 0)
 
-        # Estimate stake: selections use bet_stake sum, exotics/big3_multi use exotic_stake
         if pick_type == "selection":
-            staked = float(row.total_staked_bet or count)  # sum of bet_stake, fallback to count
-        elif pick_type == "big3":
-            staked = 0.0  # P&L tracked on multi row
+            staked = float(row.total_staked_bet or count)
         elif pick_type == "big3_multi":
             staked = float(row.total_staked_exotic or 10.0)
-        elif pick_type == "sequence":
-            # exotic_stake already stores total outlay
-            staked = sequence_total_stake
         else:
             staked = float(row.total_staked_exotic or count)
-
-        strike_rate = (winners / count * 100) if count > 0 else 0.0
 
         by_product[pick_type] = {
             "bets": count,
             "winners": winners,
-            "strike_rate": round(strike_rate, 1),
             "staked": round(staked, 2),
             "pnl": round(pnl, 2),
         }
@@ -1043,6 +1061,33 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         total_winners += winners
         total_pnl += pnl
         total_staked += staked
+
+    # Merge unsettled picks: add to bet count + staked, deduct stake from P&L, 0 wins
+    for row in unsettled_rows:
+        pick_type = row.pick_type
+        count = row.count or 0
+
+        if pick_type == "selection":
+            staked = float(row.total_staked_bet or count)
+        elif pick_type == "big3_multi":
+            staked = float(row.total_staked_exotic or 10.0)
+        else:
+            staked = float(row.total_staked_exotic or count)
+
+        if pick_type not in by_product:
+            by_product[pick_type] = {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0}
+
+        by_product[pick_type]["bets"] += count
+        by_product[pick_type]["staked"] = round(by_product[pick_type]["staked"] + staked, 2)
+        by_product[pick_type]["pnl"] = round(by_product[pick_type]["pnl"] - staked, 2)
+
+        total_bets += count
+        total_pnl -= staked  # Deduct stake at bet time
+        total_staked += staked
+
+    # Calculate strike rates
+    for data in by_product.values():
+        data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0.0
 
     overall_strike = (total_winners / total_bets * 100) if total_bets > 0 else 0.0
 
@@ -1076,6 +1121,8 @@ async def get_performance_history(
             Meeting.date <= end_date,
             Pick.settled == True,
             Pick.pick_type != "big3",  # P&L tracked on multi row
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
         .group_by(Meeting.date)
         .order_by(Meeting.date)
@@ -1133,6 +1180,8 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         .where(
             Pick.settled == True,
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     rows = result.all()
@@ -1610,6 +1659,9 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
             Pick.settled == True,
             Pick.hit == True,
             Meeting.date == today,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     today_winners = today_result.scalar() or 0
@@ -1619,6 +1671,9 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
         select(func.count(Pick.id)).where(
             Pick.settled == True,
             Pick.hit == True,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     total_winners = total_result.scalar() or 0
@@ -1631,6 +1686,9 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
         ).where(
             Pick.settled == True,
             Pick.hit == True,
+            or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+            Pick.pick_type != "big3",
+            ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
         )
     )
     row = collected_result.one()

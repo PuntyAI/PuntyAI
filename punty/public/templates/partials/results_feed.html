@@ -46,19 +46,7 @@
         </div>
         {% endfor %}
 
-        {# Recent wins ticker #}
-        {% for w in wins[:10] %}
-        {% if w.horse_name and w.horse_name not in big_wins|map(attribute='display_name')|list %}
-        <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);" x-show="isActive('{{ w.venue }}')" x-transition>
-            <svg class="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-            <span class="font-heading font-semibold text-white text-sm">{{ w.horse_name }}</span>
-            <span class="text-xs" style="color: var(--text-muted);">{{ w.venue }} R{{ w.race_number }}</span>
-            {% if w.returned %}
-            <span class="ml-auto font-heading font-bold text-green-400 text-sm">${{ '%.2f'|format(w.returned) }}</span>
-            {% endif %}
-        </div>
-        {% endif %}
-        {% endfor %}
+        {# Top 5 wins only — no separate ticker #}
     </div>
 </div>
 {% else %}

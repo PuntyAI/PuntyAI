@@ -95,6 +95,11 @@
         border-bottom: 1px solid rgba(255,255,255,0.04);
     }
     .bt-row:last-child { border-bottom: none; }
+    @media (max-width: 480px) {
+        .bt-row { grid-template-columns: 70px 1fr 40px 40px 50px; gap: 0.25rem; font-size: 0.8rem; }
+        .upcoming-row { grid-template-columns: 1fr auto auto; gap: 0.35rem; }
+        .upcoming-row > :nth-child(3) { display: none; }
+    }
 
     /* ── Section nav tabs ── */
     .dash-tabs {

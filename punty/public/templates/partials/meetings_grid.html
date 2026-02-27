@@ -1,13 +1,13 @@
 {# Today's Meetings Grid — ordered by next jump time, metro first #}
 {% set meetings = meetings_list|default(stats.todays_tips|default([])) %}
 {% if meetings %}
-<div x-data="{ showAll: false }">
-    <div class="flex items-center justify-between mb-2">
-        <h2 class="section-heading mb-0">
+<div>
+    <div class="flex items-center justify-between mb-2 gap-2">
+        <h2 class="section-heading mb-0 flex-shrink-0">
             <svg class="w-5 h-5" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Today's Meetings
         </h2>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-shrink-0">
             {# Filter toggle #}
             <button @click="hiddenVenues.length ? (hiddenVenues = []) : null"
                     x-show="hiddenVenues.length > 0"
@@ -18,24 +18,55 @@
             </button>
             {% set has_regional = meetings|selectattr('is_metro', 'equalto', false)|list|length > 0 if meetings[0] is mapping and 'is_metro' in meetings[0]|default({}) else false %}
             {% if has_regional %}
-            <button @click="showAll = !showAll" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
+            <button @click="toggleShowAll()" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
                 <span x-text="showAll ? 'Metro Only' : 'Show All'">Show All</span>
             </button>
             {% endif %}
         </div>
     </div>
 
-    {# Filter pill bar — compact venue toggles #}
-    <div class="flex flex-wrap gap-1.5 mb-3" style="margin-top: 0.25rem;">
+    {# Filter pill bar — always show all venues (pills are small) #}
+    <div class="flex flex-wrap gap-2 mb-3" style="margin-top: 0.25rem;">
         {% for meet in meetings %}
         <button @click="toggleVenue('{{ meet.venue }}')"
-                {% if not meet.is_metro|default(true) %}x-show="showAll" x-transition{% endif %}
-                class="font-heading font-semibold text-xs px-2.5 py-1 rounded-full transition-all"
-                :style="isActive('{{ meet.venue }}') ? 'background: rgba(233, 30, 140, 0.15); color: var(--magenta); border: 1px solid rgba(233, 30, 140, 0.3);' : 'background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06); opacity: 0.5;'">
+                class="venue-pill font-heading font-semibold text-xs rounded-full transition-all"
+                :class="isActive('{{ meet.venue }}') ? 'venue-pill-active' : 'venue-pill-inactive'">
             {{ meet.venue }}
         </button>
         {% endfor %}
     </div>
+
+    <style>
+    .venue-pill {
+        padding: 0.35rem 0.75rem;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+    }
+    .venue-pill-active {
+        background: rgba(233, 30, 140, 0.15);
+        color: var(--magenta);
+        border: 1px solid rgba(233, 30, 140, 0.4);
+        box-shadow: 0 0 8px rgba(233, 30, 140, 0.1);
+    }
+    .venue-pill-active:hover {
+        background: rgba(233, 30, 140, 0.25);
+        box-shadow: 0 0 12px rgba(233, 30, 140, 0.2);
+    }
+    .venue-pill-inactive {
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-muted);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        opacity: 0.55;
+    }
+    .venue-pill-inactive:hover {
+        opacity: 0.8;
+        border-color: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+    }
+    @media (max-width: 639px) {
+        .venue-pill { padding: 0.25rem 0.5rem; font-size: 0.65rem; }
+    }
+    </style>
 
     {# Meeting cards — clickable links to tips page #}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
