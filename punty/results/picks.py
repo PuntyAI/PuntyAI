@@ -981,9 +981,9 @@ def _find_dividend(exotic_divs: dict, exotic_key: str) -> float:
 async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     """Get P&L summary for a given date, grouped by pick_type.
 
-    Reflects real betting cash-flow:
-    - Unsettled bets: counted as bets, stake deducted from P&L, 0 wins
-    - Settled bets: actual P&L and win count
+    P&L only reflects settled results (actual wins/losses).
+    Unsettled bets are included in bet count and staked totals
+    but do NOT affect P&L — they are pending, not losses.
     """
     # Settled picks — actual results
     settled_result = await db.execute(
@@ -1062,7 +1062,10 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         total_pnl += pnl
         total_staked += staked
 
-    # Merge unsettled picks: add to bet count + staked, deduct stake from P&L, 0 wins
+    # Merge unsettled picks: include in bet count + staked, but do NOT
+    # deduct from P&L — unsettled bets are pending, not losses.
+    # P&L only reflects actual settled results.
+    total_unsettled = 0
     for row in unsettled_rows:
         pick_type = row.pick_type
         count = row.count or 0
@@ -1079,11 +1082,10 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
 
         by_product[pick_type]["bets"] += count
         by_product[pick_type]["staked"] = round(by_product[pick_type]["staked"] + staked, 2)
-        by_product[pick_type]["pnl"] = round(by_product[pick_type]["pnl"] - staked, 2)
 
         total_bets += count
-        total_pnl -= staked  # Deduct stake at bet time
         total_staked += staked
+        total_unsettled += count
 
     # Calculate strike rates
     for data in by_product.values():
@@ -1095,6 +1097,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         "date": target_date.isoformat(),
         "total_bets": total_bets,
         "total_winners": total_winners,
+        "total_unsettled": total_unsettled,
         "total_strike_rate": round(overall_strike, 1),
         "total_staked": round(total_staked, 2),
         "total_returned": round(total_staked + total_pnl, 2),

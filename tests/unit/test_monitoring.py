@@ -109,8 +109,8 @@ class TestComputeDailyDigest:
         assert result["total_winners"] == 1
         assert result["total_pnl"] == 0.0
 
-    async def test_unsettled_deducts_stake(self, db_session):
-        """Unsettled picks count as bets with stake deducted from P&L."""
+    async def test_unsettled_included_in_count_not_pnl(self, db_session):
+        """Unsettled picks count as bets but do NOT affect P&L."""
         today = date(2026, 2, 23)
         await _seed_meeting_and_picks(db_session, today, [
             {"pnl": 10.0, "hit": True, "settled": True, "bet_stake": 5.0},
@@ -120,7 +120,7 @@ class TestComputeDailyDigest:
         result = await compute_daily_digest(db_session, today)
         assert result["total_bets"] == 2  # Both count as bets
         assert result["total_winners"] == 1  # Only settled winner counts
-        assert result["total_pnl"] == 5.0  # 10.0 settled - 5.0 unsettled stake
+        assert result["total_pnl"] == 10.0  # Only settled P&L (unsettled doesn't deduct)
 
 
 # --- Tests: compute_rolling_comparison ---

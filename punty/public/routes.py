@@ -2495,7 +2495,7 @@ async def get_daily_dashboard() -> dict:
         edge_picks = [u for u in upcoming if u.get("is_edge")]
         edge_picks.sort(key=lambda x: x.get("value_rating") or 0, reverse=True)
 
-        # ── Bet type breakdown (all picks: settled use actual P&L, unsettled deduct stake) ──
+        # ── Bet type breakdown (P&L from settled only; unsettled in count + staked) ──
         bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
 
         def _classify_bt(pick):
@@ -2528,12 +2528,11 @@ async def get_daily_dashboard() -> dict:
             if pick.hit:
                 bt_stats[bt]["winners"] += 1
 
-        # Unsettled picks: deduct stake, 0 wins
+        # Unsettled picks: include in bet count + staked, but NOT P&L
         for pick, runner, race, meeting in unsettled_rows:
             bt = _classify_bt(pick)
             if not bt:
                 continue
-            # Skip tracked-only (no actual money at risk)
             if pick.tracked_only:
                 continue
             stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
@@ -2541,7 +2540,6 @@ async def get_daily_dashboard() -> dict:
                 continue
             bt_stats[bt]["bets"] += 1
             bt_stats[bt]["staked"] += stake
-            bt_stats[bt]["pnl"] -= stake  # Deduct stake at bet time
         bet_types = []
         for bt, data in sorted(bt_stats.items()):
             data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0
