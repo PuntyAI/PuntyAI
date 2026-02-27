@@ -551,6 +551,61 @@ Trifecta Box: 1, 4, 7 — $15
         assert exotics[0].get("is_puntys_pick") is None  # Not a PP exotic
 
 
+class TestJsonParserPuntysPick:
+    """Tests for Punty's Pick in JSON parser path."""
+
+    def test_json_puntys_pick_selection(self):
+        """JSON path should set is_puntys_pick on matching selection."""
+        content = '''Some early mail text.
+
+```json
+{
+  "big3": [],
+  "races": {
+    "1": {
+      "selections": [
+        {"horse": "FAST ONE", "saddlecloth": 3, "rank": 1, "win_odds": 4.0, "place_odds": 1.60, "bet_type": "Win", "stake": 10, "probability": 35.0, "value": 1.2},
+        {"horse": "STEADY", "saddlecloth": 7, "rank": 2, "win_odds": 6.0, "place_odds": 2.00, "bet_type": "Place", "stake": 6, "probability": 25.0}
+      ],
+      "exotic": {"type": "Exacta", "runners": [3, 7], "stake": 20},
+      "puntys_pick": {"saddlecloth": 3, "bet_type": "Win", "odds": 4.0}
+    }
+  },
+  "sequences": []
+}
+```
+'''
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        selections = [p for p in picks if p["pick_type"] == "selection"]
+        pp = [p for p in selections if p.get("is_puntys_pick")]
+        assert len(pp) == 1
+        assert pp[0]["horse_name"] == "FAST ONE"
+        assert pp[0]["saddlecloth"] == 3
+
+    def test_json_win_probability_normalized(self):
+        """JSON parser should normalize win_probability from percentage to decimal."""
+        content = '''Some text.
+
+```json
+{
+  "big3": [],
+  "races": {
+    "1": {
+      "selections": [
+        {"horse": "SPEEDY", "saddlecloth": 1, "rank": 1, "win_odds": 3.0, "place_odds": 1.50, "bet_type": "Place", "stake": 10, "probability": 95.0}
+      ]
+    }
+  },
+  "sequences": []
+}
+```
+'''
+        picks = parse_early_mail(content, "test-content", "test-meeting")
+        sel = [p for p in picks if p["pick_type"] == "selection"]
+        assert len(sel) == 1
+        assert sel[0]["win_probability"] == 0.95  # Normalized from 95.0
+
+
 class TestParseEarlyMailIntegration:
     """Integration tests for full early mail parsing."""
 

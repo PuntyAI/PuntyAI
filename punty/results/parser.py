@@ -266,7 +266,9 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
             p["bet_type"] = _normalize_bet_type(sel.get("bet_type", "place"))
             p["bet_stake"] = sel.get("stake")
             p["confidence"] = sel.get("confidence")
-            p["win_probability"] = sel.get("probability")
+            raw_prob = sel.get("probability")
+            # Normalise to 0-1 decimal (AI JSON sends percentage e.g. 95.0)
+            p["win_probability"] = raw_prob / 100 if raw_prob and raw_prob > 1 else raw_prob
             p["value_rating"] = sel.get("value")
             picks.append(p)
 
@@ -299,6 +301,38 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
             p["exotic_runners"] = json.dumps(runners) if runners else None
             p["exotic_stake"] = exotic.get("stake")
             picks.append(p)
+
+        # Punty's Pick — mark the selection or create exotic PP
+        pp = race_data.get("puntys_pick")
+        if pp:
+            pp_sc = pp.get("saddlecloth")
+            pp_exotic_type = pp.get("exotic_type")
+            if pp_exotic_type:
+                # Exotic Punty's Pick — create a separate exotic pick marked as PP
+                ep = _pick_base()
+                ep["id"] = _next_id()
+                ep["pick_type"] = "exotic"
+                ep["race_number"] = race_num
+                ep["exotic_type"] = _normalize_exotic_type(pp_exotic_type)
+                ep_runners = pp.get("runners", [])
+                ep["exotic_runners"] = json.dumps(ep_runners) if ep_runners else None
+                ep["exotic_stake"] = pp.get("stake")
+                ep["is_puntys_pick"] = True
+                ep["value_rating"] = pp.get("value")
+                picks.append(ep)
+            elif pp_sc:
+                # Selection Punty's Pick — mark matching selection(s)
+                pp_bt = pp.get("bet_type")
+                pp_odds = pp.get("odds")
+                for p in picks:
+                    if (p.get("race_number") == race_num
+                            and p.get("pick_type") == "selection"
+                            and p.get("saddlecloth") == pp_sc):
+                        p["is_puntys_pick"] = True
+                        if pp_bt and _normalize_bet_type(pp_bt) != p.get("bet_type"):
+                            p["pp_bet_type"] = _normalize_bet_type(pp_bt)
+                            if pp_odds:
+                                p["pp_odds"] = pp_odds
 
     # --- Sequences ---
     for seq in data.get("sequences", []):

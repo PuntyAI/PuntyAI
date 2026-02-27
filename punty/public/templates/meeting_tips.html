@@ -1869,8 +1869,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     addBadgeAfterStrong(s, ordinal, 'position-badge');
                 }
             } else if (raceWinners && raceWinners.indexOf(sc) !== -1) {
-                // Staked pick that won
-                addBadgeAfterStrong(s, 'WINNER');
+                // Staked pick that won — show position + WINNER
+                var fp = fpMap[sc];
+                var posLabel = fp ? (fp === 1 ? '1ST' : fp === 2 ? '2ND' : fp === 3 ? '3RD' : fp + 'TH') + ' ' : '';
+                addBadgeAfterStrong(s, posLabel + 'WINNER');
+            } else {
+                // Staked pick that didn't win — show finish position if settled
+                var fp = fpMap[sc];
+                if (fp) {
+                    var ordinal = fp === 1 ? '1ST' : fp === 2 ? '2ND' : fp === 3 ? '3RD' : fp + 'TH';
+                    addBadgeAfterStrong(s, ordinal, 'position-badge');
+                }
             }
         });
 

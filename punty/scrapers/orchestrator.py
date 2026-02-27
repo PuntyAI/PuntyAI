@@ -1032,6 +1032,32 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         except Exception as e:
             logger.warning(f"Betfair odds refresh failed for {meeting_id}: {e}")
 
+        # Fallback: if Betfair had no markets, use PF assessed price for
+        # runners missing current_odds (e.g. Sunshine Coast, small regionals)
+        if odds_updated == 0:
+            pf_fallback = 0
+            all_runners = await db.execute(
+                select(Runner).where(
+                    Runner.race_id.like(f"{meeting_id}-r%"),
+                    Runner.scratched == False,
+                    Runner.current_odds.is_(None),
+                )
+            )
+            for runner in all_runners.scalars().all():
+                price = runner.pf_assessed_price or runner.pf_ai_price
+                if price and price > 1.0:
+                    runner.current_odds = round(price, 2)
+                    if not runner.opening_odds:
+                        runner.opening_odds = round(price, 2)
+                    runner.place_odds = round((price - 1) / 3 + 1, 2)
+                    pf_fallback += 1
+            if pf_fallback:
+                logger.info(
+                    f"No Betfair markets for {meeting_id} — "
+                    f"used PF assessed price for {pf_fallback} runners"
+                )
+                odds_updated = pf_fallback
+
         await db.commit()
         return {"meeting_id": meeting_id, "status": "ok", "odds_updated": odds_updated}
     except Exception as e:
