@@ -1393,14 +1393,16 @@ async def tips_dashboard(request: Request):
     seven_day_roi = round(seven_day_pnl / (seven_day_bets * 10) * 100, 1) if seven_day_bets else 0
 
     # Always fetch today's selected meetings with next-race jump times
-    from punty.venues import guess_state as get_state_for_track
+    from punty.venues import guess_state as get_state_for_track, is_metro
+    tips_meeting_ids = {t["meeting_id"] for t in stats.get("todays_tips", [])}
     async with async_session() as db:
         # Get meetings with their next un-run race start_time for sorting
+        # Two subqueries: one for min start_time, one for the race_number
+        # that corresponds to that start_time (can't get both in one GROUP BY)
         next_jump_sq = (
             select(
                 Race.meeting_id,
                 func.min(Race.start_time).label("next_jump"),
-                func.min(Race.race_number).label("next_race_num"),
             )
             .where(
                 or_(
@@ -1412,12 +1414,15 @@ async def tips_dashboard(request: Request):
             .subquery()
         )
         meetings_result = await db.execute(
-            select(Meeting, next_jump_sq.c.next_jump, next_jump_sq.c.next_race_num)
+            select(Meeting, next_jump_sq.c.next_jump)
             .outerjoin(next_jump_sq, Meeting.id == next_jump_sq.c.meeting_id)
             .where(
                 and_(
                     Meeting.date == today,
-                    Meeting.selected == True,
+                    or_(
+                        Meeting.selected == True,
+                        Meeting.id.in_(tips_meeting_ids),
+                    ),
                     Meeting.meeting_type.in_(["race", None]),
                 )
             )
@@ -1425,17 +1430,31 @@ async def tips_dashboard(request: Request):
         )
         today_meetings = meetings_result.all()
 
-    from punty.venues import is_metro
-    tips_meeting_ids = {t["meeting_id"] for t in stats.get("todays_tips", [])}
+        # Resolve race_number for each meeting's next jump time
+        next_race_nums: dict[str, int] = {}
+        for m, next_jump in today_meetings:
+            if next_jump:
+                rn_result = await db.execute(
+                    select(Race.race_number)
+                    .where(
+                        Race.meeting_id == m.id,
+                        Race.start_time == next_jump,
+                    )
+                    .limit(1)
+                )
+                rn = rn_result.scalar_one_or_none()
+                if rn:
+                    next_race_nums[m.id] = rn
+
     meetings_list = []
-    for m, next_jump, next_race_num in today_meetings:
+    for m, next_jump in today_meetings:
         meetings_list.append({
             "venue": m.venue,
             "meeting_id": m.id,
             "state": get_state_for_track(m.venue) or "AUS",
             "track_condition": m.track_condition,
             "next_jump": next_jump.isoformat() if next_jump else None,
-            "next_race_num": next_race_num,
+            "next_race_num": next_race_nums.get(m.id),
             "is_metro": is_metro(m.venue),
             "has_tips": m.id in tips_meeting_ids,
         })

@@ -888,30 +888,15 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
         try:
             logger.info(f"Step 2: Refreshing conditions/weather for {venue}...")
             from punty.scrapers.punting_form import PuntingFormScraper
-            from punty.scrapers.orchestrator import _apply_pf_conditions
+            from punty.scrapers.orchestrator import refresh_track_conditions
             from punty.models.meeting import Runner
 
             pf = await PuntingFormScraper.from_settings(db)
             try:
-                # 2a: Conditions/weather
-                if not meeting.track_condition_locked:
-                    cond = await pf.get_conditions_for_venue(venue)
-                    if cond:
-                        _apply_pf_conditions(meeting, cond)
-                        logger.info(f"PF conditions for {venue}: {meeting.track_condition} | rain={cond.get('rainfall')}mm")
-
-                    # Racing Australia override (authoritative)
-                    try:
-                        from punty.scrapers.track_conditions import get_conditions_for_meeting
-                        from punty.scrapers.orchestrator import _apply_ra_conditions
-                        ra_cond = await get_conditions_for_meeting(venue)
-                        if ra_cond:
-                            _apply_ra_conditions(meeting, ra_cond)
-                            logger.info(f"RA conditions for {venue}: {meeting.track_condition}")
-                    except Exception as ra_err:
-                        logger.warning(f"RA conditions failed for {venue}: {ra_err}")
-
-                    await db.commit()
+                # 2a: Conditions/weather — single gatekeeper
+                pf_cond = await pf.get_conditions_for_venue(venue)
+                await refresh_track_conditions(meeting, pf_cond=pf_cond, source="pre_race")
+                await db.commit()
 
                 # 2b: Scratchings (catches scratchings TAB may have missed)
                 pf_meeting_id = await pf.resolve_meeting_id(venue, meeting.date)
@@ -1051,15 +1036,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     if odds_updated:
                         logger.info(f"Updated odds for {odds_updated} runners in {venue}")
 
-                    # Update track condition if changed
-                    tc = field_data.get("meeting", {}).get("track_condition")
-                    if tc and not meeting.track_condition_locked:
-                        from punty.scrapers.orchestrator import _should_update_condition, _normalise_track
-                        if _normalise_track(tc) != _normalise_track(meeting.track_condition or ""):
-                            if _should_update_condition(tc, meeting.track_condition):
-                                logger.info(f"Track condition update: {meeting.track_condition!r} → {tc!r}")
-                                meeting.track_condition = tc
-
+                    # Track condition NOT updated here — handled by refresh_track_conditions() gatekeeper
                     await db.commit()
                 finally:
                     await field_scraper.close()
