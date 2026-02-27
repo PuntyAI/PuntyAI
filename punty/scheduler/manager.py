@@ -262,14 +262,15 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
-        # Mid-morning Betfair odds refresh at 10:00 AM
-        # Bridges the 5-hour gap between morning generation and pre-race jobs
+        # Mid-morning Betfair odds refresh at 9:30 AM
+        # Bridges the gap between morning generation and pre-race jobs
+        # Updates platform display odds only — does NOT touch pick odds_at_tip
         self.add_job(
             "mid-morning-odds-refresh",
             mid_morning_odds_refresh,
             trigger_type="cron",
-            hour=10,
-            minute=0,
+            hour=9,
+            minute=30,
             timezone=MELB_TZ,
         )
 
@@ -297,7 +298,7 @@ class SchedulerManager:
 
         logger.info("Daily calendar scrape job configured")
         logger.info("Daily morning scrape job configured (05:00)")
-        logger.info("Mid-morning odds refresh job configured (10:00)")
+        logger.info("Mid-morning odds refresh job configured (09:30)")
         logger.info("Weekly pattern refresh job configured (Thu 22:00)")
         logger.info("Weekly blog job configured (Fri 08:00)")
 
