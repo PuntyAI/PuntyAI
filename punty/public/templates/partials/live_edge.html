@@ -2,7 +2,9 @@
 {% if next_race_picks and next_race and next_race.has_next %}
 {% set selections = next_race_picks|selectattr("pick_type", "equalto", "selection")|list %}
 {% if selections %}
-<div class="card p-4 relative overflow-hidden" style="border-color: rgba(233, 30, 140, 0.3); background: linear-gradient(135deg, rgba(233, 30, 140, 0.05), rgba(255, 107, 53, 0.03));">
+<div class="card p-4 relative overflow-hidden" x-show="isActive('{{ next_race.venue }}')" x-transition
+     style="border-color: rgba(233, 30, 140, 0.3); background: linear-gradient(135deg, rgba(233, 30, 140, 0.05), rgba(255, 107, 53, 0.03));"
+     data-next-venue="{{ next_race.venue }}">
     {# Header: badge + venue + countdown #}
     <div class="flex items-center gap-3 mb-4">
         <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-heading font-bold uppercase tracking-wider flex-shrink-0"
@@ -95,7 +97,7 @@
 
 {% else %}
 {# Picks exist but no selections (only exotics) #}
-<div class="card p-4 text-center" style="border-color: var(--border-subtle);">
+<div class="card p-4 text-center" x-show="isActive('{{ next_race.venue }}')" x-transition style="border-color: var(--border-subtle);" data-next-venue="{{ next_race.venue }}">
     <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
     <p class="font-heading font-semibold text-white mb-1">{{ next_race.venue }} R{{ next_race.race_number }}</p>
     <p class="text-sm" style="color: var(--text-secondary);">
@@ -107,7 +109,7 @@
 
 {% elif next_race and next_race.has_next %}
 {# No picks but racing coming #}
-<div class="card p-4 text-center" style="border-color: var(--border-subtle);">
+<div class="card p-4 text-center" x-show="isActive('{{ next_race.venue }}')" x-transition style="border-color: var(--border-subtle);" data-next-venue="{{ next_race.venue }}">
     <div class="text-xs font-heading font-bold uppercase tracking-wider mb-1" style="color: var(--text-muted);">Next Up</div>
     <p class="font-heading font-semibold text-white mb-1">{{ next_race.venue }} R{{ next_race.race_number }}</p>
     <p class="text-sm" style="color: var(--text-secondary);">
