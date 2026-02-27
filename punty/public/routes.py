@@ -1014,9 +1014,14 @@ def _compute_pick_data(all_picks: list) -> dict:
                 "is_puntys_pick": bool(pick.is_puntys_pick),
                 "is_roughie": bool(pick.is_roughie) if hasattr(pick, 'is_roughie') else (pick.tip_rank == 4),
             }
-            # Track Punty's Pick per race
+            # Track Punty's Pick per race (only if horse has an actual bet)
             if pick.is_puntys_pick:
-                pp_picks[pick.race_number] = pick.saddlecloth
+                bt = (pick.bet_type or "").lower()
+                if bt and bt not in ("no_bet", "exotics_only") and pick.bet_stake and pick.bet_stake > 0:
+                    pp_picks[pick.race_number] = pick.saddlecloth
+                else:
+                    # PP on a no-bet pick — defer, will reassign below
+                    pp_picks.setdefault(pick.race_number, None)
 
         # --- Winners (settled + hit) ---
         if pick.settled and pick.hit:
@@ -1090,6 +1095,24 @@ def _compute_pick_data(all_picks: list) -> dict:
                 b3_stats["hits"] += 1
             b3_stats["pnl"] += float(pick.pnl or 0)
             b3_stats["staked"] += float(pick.exotic_stake or 0)
+
+    # --- Reassign Punty's Pick from no-bet picks to best staked pick ---
+    for rn, sc in list(pp_picks.items()):
+        if sc is None:
+            # Find highest-ranked staked selection in this race
+            race_picks = picks_lookup.get(rn, {})
+            best_sc, best_rank = None, 999
+            for s, info in race_picks.items():
+                bt = (info.get("bet_type") or "").lower()
+                if bt and bt not in ("no_bet", "exotics_only") and info.get("stake") and info["stake"] > 0:
+                    rank = info.get("tip_rank") or 999
+                    if rank < best_rank:
+                        best_rank = rank
+                        best_sc = s
+            if best_sc:
+                pp_picks[rn] = best_sc
+            else:
+                del pp_picks[rn]
 
     # --- Build meeting_stats list ---
     meeting_stats = []
@@ -1291,7 +1314,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         venue_stats = None
         if meeting.venue:
             venue_meetings = select(Meeting.id).where(
-                and_(Meeting.venue == meeting.venue, Meeting.id != meeting.id)
+                Meeting.venue == meeting.venue
             )
             venue_result = await db.execute(
                 select(
