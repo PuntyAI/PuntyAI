@@ -496,33 +496,55 @@
                                     <span class="font-heading font-bold text-white text-xs">{{ race.venue }}</span>
                                     <span class="font-heading font-semibold text-xs" style="color: var(--text-muted);">R{{ race.race_number }}</span>
                                 </div>
-                                <span class="font-heading font-bold text-xs {% if race.total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
-                                    {{ '%+.0f'|format(race.total_pnl) | replace('+', '+$') | replace('-', '-$') }}
-                                </span>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-xs" style="color: var(--text-muted);">(${{ '%.0f'|format(race.total_staked) }})</span>
+                                    {% set total_won = race.total_pnl + race.total_staked %}
+                                    <span class="font-heading font-bold text-xs {% if race.total_pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                                        {{ '%+.0f'|format(race.total_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                    </span>
+                                </div>
                             </div>
+                            {# Selection picks #}
                             <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                                 {% for p in race.picks %}
                                 <div class="flex items-center gap-2 text-xs" style="padding: 0.2rem 0;">
-                                    {# Rank indicator #}
                                     <span class="rank-badge rank-{{ p.tip_rank }}" style="width: 16px; height: 16px; font-size: 0.55rem;">{{ p.tip_rank }}</span>
-                                    {# Horse name #}
                                     <span class="font-heading font-semibold flex-1 truncate" style="color: {% if p.hit %}#4ade80{% else %}var(--text-secondary){% endif %};">
                                         {{ p.name }}
                                         {% if p.is_puntys_pick %}<span class="pp-badge" style="font-size: 0.45rem; padding: 0 0.2rem; margin-left: 0.25rem;">PP</span>{% endif %}
                                     </span>
-                                    {# Finish position #}
                                     {% if p.finish_pos %}
                                     <span class="font-heading font-semibold" style="color: {% if p.finish_pos == 1 %}#4ade80{% elif p.finish_pos <= 3 %}var(--cyan){% else %}var(--text-muted){% endif %}; font-size: 0.65rem;">
                                         {{ p.finish_pos }}{{ 'st' if p.finish_pos == 1 else ('nd' if p.finish_pos == 2 else ('rd' if p.finish_pos == 3 else 'th')) }}
                                     </span>
                                     {% endif %}
-                                    {# P&L #}
                                     <span class="font-heading font-bold" style="color: {% if p.pnl > 0 %}#4ade80{% elif p.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %}; min-width: 2.5rem; text-align: right;">
                                         {{ '%+.0f'|format(p.pnl) | replace('+', '+$') | replace('-', '-$') }}
                                     </span>
                                 </div>
                                 {% endfor %}
                             </div>
+                            {# Exotic bets #}
+                            {% if race.exotics %}
+                            <div style="margin-top: 0.35rem; padding-top: 0.35rem; border-top: 1px solid rgba(255,255,255,0.04);">
+                                {% for ex in race.exotics %}
+                                <div class="flex items-center gap-2 text-xs" style="padding: 0.15rem 0;">
+                                    <span class="inline-flex items-center justify-center rounded" style="width: 16px; height: 16px; font-size: 0.5rem; background: rgba(0, 212, 255, 0.15); color: var(--cyan);">E</span>
+                                    <span class="font-heading font-semibold flex-1" style="color: {% if ex.hit %}var(--cyan){% else %}var(--text-muted){% endif %};">
+                                        {{ ex.exotic_type }}
+                                    </span>
+                                    {% if ex.hit %}
+                                    <span class="font-heading font-bold text-xs" style="color: #4ade80;">HIT</span>
+                                    {% else %}
+                                    <span class="font-heading font-bold text-xs" style="color: var(--text-muted); opacity: 0.5;">MISS</span>
+                                    {% endif %}
+                                    <span class="font-heading font-bold" style="color: {% if ex.pnl > 0 %}#4ade80{% elif ex.pnl == 0 %}var(--text-muted){% else %}#f87171{% endif %}; min-width: 2.5rem; text-align: right;">
+                                        {{ '%+.0f'|format(ex.pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </a>
                         {% if not loop.last %}
                         <div style="border-top: 1px solid rgba(255,255,255,0.04);"></div>

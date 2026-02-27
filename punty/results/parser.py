@@ -177,7 +177,7 @@ def _normalize_exotic_type(raw: str) -> str:
         return "Trifecta Box"
     if "exacta" in t:
         if "standout" in t:
-            return "Exacta"  # Standout exacta is still a straight exacta
+            return "Exacta Standout"
         return "Exacta"
     if "quinella" in t or "quin" in t:
         return "Quinella"

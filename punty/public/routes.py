@@ -2632,7 +2632,7 @@ async def get_daily_dashboard() -> dict:
         # ── Recent Race Results (last 3 settled races, all picks per race) ──
         race_groups: dict[str, dict] = {}  # key = "venue-rN"
         for pick, runner, race_obj, meeting in settled_rows:
-            if pick.pick_type not in ("selection",):
+            if pick.pick_type not in ("selection", "exotic"):
                 continue
             rn = pick.race_number
             if not rn:
@@ -2646,31 +2646,50 @@ async def get_daily_dashboard() -> dict:
                     "race_name": race_obj.name if race_obj else None,
                     "settled_at": pick.settled_at or pick.created_at,
                     "picks": [],
+                    "exotics": [],
                     "total_pnl": 0.0,
+                    "total_staked": 0.0,
                 }
             rg = race_groups[key]
-            stake = pick.bet_stake or 0
             pnl = pick.pnl or 0
             rg["total_pnl"] += pnl
-            # Update settled_at to latest
-            ts = pick.settled_at or pick.created_at
-            if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
-                rg["settled_at"] = ts
-            rg["picks"].append({
-                "name": pick.horse_name or "Runner",
-                "saddlecloth": pick.saddlecloth,
-                "tip_rank": pick.tip_rank,
-                "bet_type": (pick.bet_type or "").replace("_", " ").title(),
-                "odds": pick.odds_at_tip,
-                "hit": bool(pick.hit),
-                "pnl": round(pnl, 2),
-                "is_puntys_pick": pick.is_puntys_pick or False,
-                "finish_pos": runner.finish_position if runner else None,
-            })
-        # Sort picks within each race by tip_rank
+
+            if pick.pick_type == "selection":
+                stake = pick.bet_stake or 0
+                rg["total_staked"] += stake
+                # Update settled_at to latest
+                ts = pick.settled_at or pick.created_at
+                if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
+                    rg["settled_at"] = ts
+                rg["picks"].append({
+                    "name": pick.horse_name or "Runner",
+                    "saddlecloth": pick.saddlecloth,
+                    "tip_rank": pick.tip_rank,
+                    "bet_type": (pick.bet_type or "").replace("_", " ").title(),
+                    "odds": pick.odds_at_tip,
+                    "hit": bool(pick.hit),
+                    "pnl": round(pnl, 2),
+                    "is_puntys_pick": pick.is_puntys_pick or False,
+                    "finish_pos": runner.finish_position if runner else None,
+                })
+            elif pick.pick_type == "exotic":
+                stake = pick.exotic_stake or 0
+                rg["total_staked"] += stake
+                ts = pick.settled_at or pick.created_at
+                if ts and (not rg["settled_at"] or ts > rg["settled_at"]):
+                    rg["settled_at"] = ts
+                rg["exotics"].append({
+                    "exotic_type": (pick.exotic_type or "Exotic").replace("_", " "),
+                    "hit": bool(pick.hit),
+                    "pnl": round(pnl, 2),
+                    "stake": round(stake, 2),
+                })
+
+        # Sort picks within each race by tip_rank; exotics by type
         for rg in race_groups.values():
             rg["picks"].sort(key=lambda x: x.get("tip_rank") or 99)
             rg["total_pnl"] = round(rg["total_pnl"], 2)
+            rg["total_staked"] = round(rg["total_staked"], 2)
         # Take most recently settled 3 races
         recent_race_results = sorted(
             race_groups.values(),
