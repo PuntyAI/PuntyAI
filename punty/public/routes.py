@@ -1314,7 +1314,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         venue_stats = None
         if meeting.venue:
             venue_meetings = select(Meeting.id).where(
-                and_(Meeting.venue == meeting.venue, Meeting.id != meeting.id)
+                Meeting.venue == meeting.venue
             )
             venue_result = await db.execute(
                 select(
