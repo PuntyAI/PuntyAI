@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, Integer
+from sqlalchemy import select, func, Integer, or_, and_
 from sqlalchemy.orm import selectinload
 
 from punty.config import melb_now
@@ -280,6 +280,29 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
             else:
                 pipeline_status[mid] = {"step": "scraped", "num": 1}
 
+    # P&L per meeting (settled picks only, exclude big3/no_bet)
+    meeting_pnl: dict[str, float] = {}
+    if meeting_ids:
+        from sqlalchemy import case as sa_case
+        pnl_result = await db.execute(
+            select(
+                Pick.meeting_id,
+                func.sum(Pick.pnl).label("pnl"),
+            )
+            .join(Content, Pick.content_id == Content.id)
+            .where(
+                Pick.meeting_id.in_(meeting_ids),
+                Pick.settled == True,
+                Content.status.notin_(["superseded", "rejected"]),
+                or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
+                Pick.pick_type != "big3",
+                ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
+            )
+            .group_by(Pick.meeting_id)
+        )
+        for row in pnl_result.all():
+            meeting_pnl[row.meeting_id] = round(float(row.pnl or 0), 2)
+
     return templates.TemplateResponse(
         "meets.html",
         {
@@ -288,6 +311,7 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
             "past_meetings": past_meetings,
             "meeting_progress": meeting_progress,
             "pipeline_status": pipeline_status,
+            "meeting_pnl": meeting_pnl,
             "page": page,
             "total_pages": total_pages,
             "total_past": total_past,
