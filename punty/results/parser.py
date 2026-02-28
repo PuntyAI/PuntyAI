@@ -345,8 +345,20 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
             p["pick_type"] = "sequence"
             p["sequence_type"] = "quaddie" if "quad" in seq_type else "big6"
             p["sequence_variant"] = var.get("name", "").lower()
-            legs_str = var.get("legs", "")
-            p["sequence_legs"] = json.dumps(legs_str) if legs_str else None
+            legs_raw = var.get("legs", "")
+            # Parse "3,4,9/3,2,1/10,4,12,8" into [[3,4,9],[3,2,1],[10,4,12,8]]
+            if isinstance(legs_raw, list):
+                # Already a list of lists from AI JSON
+                legs_parsed = legs_raw
+            elif isinstance(legs_raw, str) and "/" in legs_raw:
+                legs_parsed = []
+                for leg in legs_raw.split("/"):
+                    saddlecloths = [int(x.strip()) for x in leg.split(",") if x.strip().isdigit()]
+                    if saddlecloths:
+                        legs_parsed.append(saddlecloths)
+            else:
+                legs_parsed = None
+            p["sequence_legs"] = json.dumps(legs_parsed) if legs_parsed else None
             p["sequence_start_race"] = start_race
             p["exotic_stake"] = var.get("total")
             p["estimated_return_pct"] = var.get("est_return")
