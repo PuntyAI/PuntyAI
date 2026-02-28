@@ -1,7 +1,7 @@
 """Web routes for the dashboard."""
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Depends
@@ -195,10 +195,12 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
     per_page = 20
     offset = (page - 1) * per_page
 
-    # Count total past meetings
+    # Count total past meetings (only from Feb 17 when pick tracking started)
+    ARCHIVE_START = date(2026, 2, 17)
     count_result = await db.execute(
         select(func.count(Meeting.id)).where(
             Meeting.date < today,
+            Meeting.date >= ARCHIVE_START,
             Meeting.meeting_type.in_(["race", None]),
         )
     )
@@ -209,6 +211,7 @@ async def meets_page(request: Request, page: int = 1, db: AsyncSession = Depends
     past_result = await db.execute(
         select(Meeting).where(
             Meeting.date < today,
+            Meeting.date >= ARCHIVE_START,
             Meeting.meeting_type.in_(["race", None]),
         ).options(selectinload(Meeting.races))
         .order_by(Meeting.date.desc(), Meeting.venue)
