@@ -263,6 +263,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                     Pick.hit == True,
                     Pick.settled == True,
                     Meeting.date == today_date,
+                    Meeting.selected == True,
                     Pick.content_id.in_(active_content),
                     or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                 )
@@ -280,10 +281,7 @@ async def get_winner_stats(today: bool = False) -> dict:
             select(Meeting).where(
                 and_(
                     Meeting.date == today_date,
-                    or_(
-                        Meeting.selected == True,
-                        Meeting.id.in_(meetings_with_content),
-                    ),
+                    Meeting.selected == True,
                 )
             )
         )
@@ -306,10 +304,13 @@ async def get_winner_stats(today: bool = False) -> dict:
 
         # All-time winners (all pick types, excluding tracked-only)
         alltime_result = await db.execute(
-            select(func.count(Pick.id)).where(
+            select(func.count(Pick.id))
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .where(
                 and_(
                     Pick.hit == True,
                     Pick.settled == True,
+                    Meeting.selected == True,
                     Pick.content_id.in_(active_content),
                     or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                 )
@@ -322,10 +323,13 @@ async def get_winner_stats(today: bool = False) -> dict:
             select(
                 func.sum(Pick.bet_stake + Pick.pnl).filter(Pick.bet_stake.isnot(None)),
                 func.sum(Pick.exotic_stake + Pick.pnl).filter(Pick.exotic_stake.isnot(None)),
-            ).where(
+            )
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .where(
                 and_(
                     Pick.hit == True,
                     Pick.settled == True,
+                    Meeting.selected == True,
                 )
             )
         )
@@ -364,6 +368,7 @@ async def get_winner_stats(today: bool = False) -> dict:
             Pick.settled == True,
             Pick.pick_type == "selection",
             Pick.bet_type != "exotics_only",
+            Meeting.selected == True,
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
         ]
         if today:
@@ -374,9 +379,7 @@ async def get_winner_stats(today: bool = False) -> dict:
                 func.sum(case((Pick.hit == True, 1), else_=0)),
                 func.sum(Pick.pnl),
                 func.sum(Pick.bet_stake),
-            ).where(and_(*rank_conds, Pick.tip_rank == rank))
-            if today:
-                q = q.join(Meeting, Pick.meeting_id == Meeting.id)
+            ).join(Meeting, Pick.meeting_id == Meeting.id).where(and_(*rank_conds, Pick.tip_rank == rank))
             sr_result = await db.execute(q)
             row = sr_result.one()
             total = row[0] or 0
@@ -540,8 +543,11 @@ async def homepage(request: Request):
             select(
                 func.count(Pick.id).label("total"),
                 func.sum(case((Pick.hit == True, 1), else_=0)).label("hits"),
-            ).where(
+            )
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .where(
                 Pick.settled == True,
+                Meeting.selected == True,
                 or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
                 Pick.pick_type == "selection",
             )
@@ -840,6 +846,7 @@ async def get_tips_calendar(
         filters = [
             Content.content_type == "early_mail",
             Content.status.in_(["approved", "sent"]),
+            Meeting.selected == True,
             Meeting.date.isnot(None),
             Meeting.date >= effective_from,
         ]
@@ -884,6 +891,7 @@ async def get_tips_calendar(
         meeting_filters = [
             Content.content_type == "early_mail",
             Content.status.in_(["approved", "sent"]),
+            Meeting.selected == True,
             Meeting.date.in_(page_dates),
         ]
         if venue:
@@ -1188,7 +1196,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             select(Meeting).where(Meeting.id == meeting_id)
         )
         meeting = meeting_result.scalar_one_or_none()
-        if not meeting:
+        if not meeting or not meeting.selected:
             return None
 
         # Get early mail + wrapup in one query (2 content rows max)
@@ -3013,6 +3021,7 @@ async def sitemap_tips():
                 and_(
                     Content.content_type == "early_mail",
                     Content.status.in_(["approved", "sent"]),
+                    Meeting.selected == True,
                     Meeting.date >= date(2026, 2, 17),
                 )
             ).order_by(Meeting.date.desc()).limit(500)
