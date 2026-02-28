@@ -155,7 +155,11 @@
             </h1>
             {% if has_data %}
             <p class="text-sm" style="color: var(--text-secondary);">
-                {{ total_settled }} settled &middot; {{ total_upcoming }} upcoming &middot; {{ total_picks }} total bets
+                {% if total_settled > 0 %}
+                {{ total_settled }} settled &middot; {{ total_upcoming }} upcoming &middot; {{ total_picks }} total
+                {% else %}
+                {{ total_upcoming }} bets lined up &middot; Racing hasn't started yet
+                {% endif %}
             </p>
             {% endif %}
         </div>
@@ -165,9 +169,11 @@
         {% set roi = (perf.total_pnl / perf.total_staked * 100) if perf.total_staked else 0 %}
 
         <!-- ═══ A. Hero Stats Strip ═══ -->
+        {% if perf.total_bets > 0 %}
+        {# Settled bets exist — show full P&L strip #}
         <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
             <div class="text-center rounded-xl py-3 px-2" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-[10px] font-heading font-bold uppercase tracking-widest" style="color: var(--text-muted);">Bets</div>
+                <div class="text-[10px] font-heading font-bold uppercase tracking-widest" style="color: var(--text-muted);">Settled</div>
                 <div class="text-2xl sm:text-3xl font-display font-bold" style="color: var(--text-primary);">{{ perf.total_bets }}</div>
             </div>
             <div class="text-center rounded-xl py-3 px-2" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
@@ -190,6 +196,23 @@
                 <div class="text-[10px] font-heading" style="color: {% if roi >= 0 %}#4ade80{% else %}#f87171{% endif %};">{{ '%+.1f'|format(roi) }}% ROI</div>
             </div>
         </div>
+        {% else %}
+        {# No settled bets yet — show pre-race summary #}
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+            <div class="text-center rounded-xl py-3 px-2" style="background: var(--bg-card-alt); border: 1px solid rgba(0, 212, 255, 0.2);">
+                <div class="text-[10px] font-heading font-bold uppercase tracking-widest" style="color: var(--text-muted);">Upcoming Bets</div>
+                <div class="text-2xl sm:text-3xl font-display font-bold" style="color: var(--cyan);">{{ perf.total_unsettled }}</div>
+            </div>
+            <div class="text-center rounded-xl py-3 px-2" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                <div class="text-[10px] font-heading font-bold uppercase tracking-widest" style="color: var(--text-muted);">Outlay</div>
+                <div class="text-2xl sm:text-3xl font-display font-bold" style="color: var(--text-primary);">${{ '%.0f'|format(perf.unsettled_staked) }}</div>
+            </div>
+            <div class="text-center rounded-xl py-3 px-2 col-span-2 sm:col-span-1" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                <div class="text-[10px] font-heading font-bold uppercase tracking-widest" style="color: var(--text-muted);">Status</div>
+                <div class="text-lg sm:text-xl font-heading font-bold" style="color: var(--yellow);">Awaiting first race</div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- ═══ Section Nav Tabs ═══ -->
         <div class="dash-tabs mb-6">
