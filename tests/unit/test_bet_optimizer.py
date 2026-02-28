@@ -387,6 +387,50 @@ class TestBetRecommendation:
         win_count = sum(1 for r in recs if r.bet_type in win_types)
         assert win_count <= 3
 
+    # ── Rank 2 Overlay Dual-Bet ──
+
+    def test_rank2_overlay_compressed_saver_win(self):
+        """Rank 2 at $4.50 with VR=1.1 in COMPRESSED → Saver Win."""
+        c = _candidate(2, "Overlay", 4.50, 0.20, 0.50, value_rating=1.1)
+        # win_edge = 0.20 - 1/4.5 ≈ -0.022 < WIN_EDGE_MIN → skips first branch
+        rec = recommend_bet(c, COMPRESSED_VALUE, rank=2, field_size=10, candidates=[c])
+        assert rec.bet_type == "Saver Win"
+        assert rec.stake_pct == 0.22
+        assert "overlay" in rec.reasoning.lower()
+
+    def test_rank2_overlay_dominant_saver_win(self):
+        """Rank 2 at $5.00 with VR=1.05 in DOMINANT → Saver Win."""
+        c = _candidate(2, "Overlay", 5.0, 0.15, 0.45, value_rating=1.05)
+        # win_edge = 0.15 - 0.20 = -0.05 → no win edge
+        rec = recommend_bet(c, DOMINANT_EDGE, rank=2, field_size=10)
+        assert rec.bet_type == "Saver Win"
+        assert rec.stake_pct == 0.22
+
+    def test_rank2_overlay_place_leverage_saver_win(self):
+        """Rank 2 at $4.00 with VR=1.2 and positive ev_place in PLACE_LEVERAGE → Saver Win."""
+        c = _candidate(2, "Overlay", 4.0, 0.20, 0.55, place_odds=2.0, value_rating=1.2)
+        # ev_place = 0.55*2.0 - 1 = 0.10 > 0 ✓
+        rec = recommend_bet(c, PLACE_LEVERAGE, rank=2, field_size=10)
+        assert rec.bet_type == "Saver Win"
+
+    def test_rank2_overlay_chaos_stays_place(self):
+        """Rank 2 at $4.50 with VR=1.1 in CHAOS → stays Place (too unpredictable)."""
+        c = _candidate(2, "Overlay", 4.50, 0.20, 0.50, value_rating=1.1)
+        rec = recommend_bet(c, CHAOS_HANDICAP, rank=2, field_size=14)
+        assert rec.bet_type == "Place"
+
+    def test_rank2_no_overlay_below_vr1(self):
+        """Rank 2 at $4.50 with VR=0.9 → stays Place (no overlay)."""
+        c = _candidate(2, "NoOverlay", 4.50, 0.20, 0.50, value_rating=0.9)
+        rec = recommend_bet(c, COMPRESSED_VALUE, rank=2, field_size=10, candidates=[c])
+        assert rec.bet_type == "Place"
+
+    def test_rank2_no_overlay_outside_odds_range(self):
+        """Rank 2 at $8.00 with VR=1.1 → stays Place (outside $3-$6)."""
+        c = _candidate(2, "Outside", 8.0, 0.15, 0.45, value_rating=1.1)
+        rec = recommend_bet(c, COMPRESSED_VALUE, rank=2, field_size=10, candidates=[c])
+        assert rec.bet_type == "Place"
+
 
 # ──────────────────────────────────────────────
 # TestOddsMovement
