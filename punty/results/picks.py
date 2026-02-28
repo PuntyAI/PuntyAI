@@ -276,16 +276,19 @@ async def _settle_picks_for_race_impl(
     if dead_heat_divisors:
         logger.info(f"Dead heat detected in {race_id}: positions {dead_heat_divisors}")
 
-    # --- Selections ---
-    result = await db.execute(
-        select(Pick).where(
-            Pick.meeting_id == meeting_id,
-            Pick.race_number == race_number,
-            Pick.pick_type == "selection",
-            Pick.settled == False,
+    # --- Selections --- (skip if race not finished)
+    selection_picks = []
+    if race_final:
+        result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.pick_type == "selection",
+                Pick.settled == False,
+            )
         )
-    )
-    for pick in result.scalars().all():
+        selection_picks = result.scalars().all()
+    for pick in selection_picks:
         runner = None
         if pick.saddlecloth and pick.saddlecloth in runners_by_saddlecloth:
             runner = runners_by_saddlecloth[pick.saddlecloth]
@@ -481,16 +484,19 @@ async def _settle_picks_for_race_impl(
             pick.settled_at = now
             settled_count += 1
 
-    # --- Big3 individual horses ---
-    result = await db.execute(
-        select(Pick).where(
-            Pick.meeting_id == meeting_id,
-            Pick.race_number == race_number,
-            Pick.pick_type == "big3",
-            Pick.settled == False,
+    # --- Big3 individual horses --- (skip if race not finished)
+    big3_picks_list = []
+    if race_final:
+        result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.pick_type == "big3",
+                Pick.settled == False,
+            )
         )
-    )
-    for pick in result.scalars().all():
+        big3_picks_list = result.scalars().all()
+    for pick in big3_picks_list:
         runner = None
         if pick.saddlecloth and pick.saddlecloth in runners_by_saddlecloth:
             runner = runners_by_saddlecloth[pick.saddlecloth]
@@ -584,22 +590,24 @@ async def _settle_picks_for_race_impl(
         multi_pick.settled_at = now
         settled_count += 1
 
-    # --- Exotics ---
-    # Build set of scratched saddlecloths for exotic adjustment
+    # --- Exotics --- (skip if race not finished)
     scratched_saddlecloths = {
         r.saddlecloth for r in runners
         if r.scratched and r.saddlecloth
     }
 
-    result = await db.execute(
-        select(Pick).where(
-            Pick.meeting_id == meeting_id,
-            Pick.race_number == race_number,
-            Pick.pick_type == "exotic",
-            Pick.settled == False,
+    exotic_picks = []
+    if race_final:
+        result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.pick_type == "exotic",
+                Pick.settled == False,
+            )
         )
-    )
-    for pick in result.scalars().all():
+        exotic_picks = result.scalars().all()
+    for pick in exotic_picks:
         try:
             exotic_runners = json.loads(pick.exotic_runners) if pick.exotic_runners else []
             stake = pick.exotic_stake or 1.0
