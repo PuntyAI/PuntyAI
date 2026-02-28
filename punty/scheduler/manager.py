@@ -408,24 +408,62 @@ class SchedulerManager:
                 if existing_content:
                     # Content exists — but was it posted to socials?
                     if existing_content.status in ("approved",) and not existing_content.twitter_id:
-                        logger.warning(
-                            f"Pre-race time passed for {meeting.venue} — content exists but NOT posted to socials, "
-                            f"running catch-up posting NOW"
+                        # Check if content references scratched runners (stale from interrupted regen)
+                        from punty.models.pick import Pick
+                        from punty.models.meeting import Runner
+                        pick_result = await db.execute(
+                            select(Pick.race_number, Pick.saddlecloth).where(
+                                Pick.content_id == existing_content.id,
+                                Pick.pick_type == "selection",
+                                Pick.saddlecloth.isnot(None),
+                            )
                         )
-                        import asyncio
-                        from punty.scheduler.automation import post_existing_content
+                        has_scratched_picks = False
+                        for rn, sc in pick_result.all():
+                            if rn and sc:
+                                race_id = f"{meeting_id}-r{rn}"
+                                scr_result = await db.execute(
+                                    select(Runner.id).where(
+                                        Runner.race_id == race_id,
+                                        Runner.saddlecloth == sc,
+                                        Runner.scratched == True,
+                                    ).limit(1)
+                                )
+                                if scr_result.scalar_one_or_none() is not None:
+                                    has_scratched_picks = True
+                                    break
 
-                        async def _catchup_post(cid=existing_content.id):
-                            from punty.models.database import async_session
-                            async with async_session() as post_db:
-                                await post_existing_content(cid, post_db)
-                                await post_db.commit()
+                        if has_scratched_picks:
+                            # Stale content — picks reference scratched runners, regenerate instead
+                            logger.warning(
+                                f"Pre-race time passed for {meeting.venue} — content has scratched picks, "
+                                f"running catch-up REGENERATION instead of posting stale content"
+                            )
+                            import asyncio
+                            asyncio.create_task(meeting_pre_race_job(meeting_id))
+                            scheduled["jobs"].append({
+                                "type": "pre_race",
+                                "time": "catch-up-regen",
+                            })
+                        else:
+                            logger.warning(
+                                f"Pre-race time passed for {meeting.venue} — content exists but NOT posted to socials, "
+                                f"running catch-up posting NOW"
+                            )
+                            import asyncio
+                            from punty.scheduler.automation import post_existing_content
 
-                        asyncio.create_task(_catchup_post())
-                        scheduled["jobs"].append({
-                            "type": "pre_race",
-                            "time": "catch-up-post",
-                        })
+                            async def _catchup_post(cid=existing_content.id):
+                                from punty.models.database import async_session
+                                async with async_session() as post_db:
+                                    await post_existing_content(cid, post_db)
+                                    await post_db.commit()
+
+                            asyncio.create_task(_catchup_post())
+                            scheduled["jobs"].append({
+                                "type": "pre_race",
+                                "time": "catch-up-post",
+                            })
                     else:
                         logger.info(f"Pre-race time passed for {meeting.venue} — content already exists and posted, skipping")
                 else:
