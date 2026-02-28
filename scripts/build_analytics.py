@@ -144,18 +144,27 @@ def _build_venue_state_table(conn: duckdb.DuckDBPyConnection, backtest_path: str
 
 
 def build_core_tables(conn: duckdb.DuckDBPyConnection):
-    """Load meetings, races, runners from backtest.db via SQLite scanner.
+    """Load meetings, races, runners from backtest.db (or punty.db fallback).
 
     All computed columns (state, distance_category, odds_band) are done in
     pure SQL CASE expressions — no Python loops over 222K rows.
-    """
-    logger.info("Loading core tables from backtest.db...")
 
-    if not BACKTEST_DB.exists():
-        logger.error("backtest.db not found at %s", BACKTEST_DB)
+    When backtest.db doesn't exist, falls back to punty.db for core tables,
+    filtered to meetings with approved/sent content (i.e. meetings we tipped on).
+    """
+    if BACKTEST_DB.exists():
+        source_path = str(BACKTEST_DB.resolve()).replace("\\", "/")
+        logger.info("Loading core tables from backtest.db...")
+        content_filter = False
+    elif PUNTY_DB.exists():
+        source_path = str(PUNTY_DB.resolve()).replace("\\", "/")
+        logger.info("backtest.db not found — using punty.db for core tables")
+        content_filter = True
+    else:
+        logger.error("Neither backtest.db nor punty.db found")
         return
 
-    backtest_path = str(BACKTEST_DB.resolve()).replace("\\", "/")
+    backtest_path = source_path
 
     conn.execute("INSTALL sqlite; LOAD sqlite;")
 
@@ -163,6 +172,16 @@ def build_core_tables(conn: duckdb.DuckDBPyConnection):
     _build_venue_state_table(conn, backtest_path)
 
     # Meetings — join with venue_state for state column
+    # When using punty.db, filter to meetings with approved/sent content only
+    content_join = ""
+    if content_filter:
+        content_join = f"""
+        INNER JOIN (
+            SELECT DISTINCT meeting_id
+            FROM sqlite_scan('{backtest_path}', 'content')
+            WHERE status IN ('approved', 'sent')
+        ) c ON c.meeting_id = m.id"""
+
     conn.execute(f"""
     CREATE OR REPLACE TABLE meetings AS
     SELECT
@@ -177,6 +196,7 @@ def build_core_tables(conn: duckdb.DuckDBPyConnection):
         COALESCE(vs.state, 'VIC') AS state
     FROM sqlite_scan('{backtest_path}', 'meetings') m
     LEFT JOIN _venue_state vs ON vs.venue = m.venue
+    {content_join}
     """)
     meeting_count = conn.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
     logger.info("  Meetings: %d", meeting_count)

@@ -406,6 +406,9 @@ def _recommend_bet_dominant(c: dict, rank: int, field_size: int) -> tuple[str, f
     if rank == 2:
         if c["win_edge"] > WIN_EDGE_MIN and 2.0 <= c["odds"] <= 10.0:
             return "Win", 0.25, "Secondary pick with win edge"
+        # Overlay dual-bet: Rank 2 at $3-$6 with value overlay → Saver Win
+        if 3.0 <= c["odds"] <= 6.0 and c.get("value_rating", 0) >= 1.0:
+            return "Saver Win", 0.22, "Rank 2 overlay dual-bet"
         return "Place", 0.25, "Secondary pick, place protection"
     if rank == 3:
         return "Place", 0.20, "Third pick, place-only"
@@ -430,6 +433,9 @@ def _recommend_bet_compressed(
     if rank == 2:
         if c["win_edge"] >= WIN_EDGE_MIN and 2.0 <= c["odds"] <= 10.0:
             return "Saver Win", 0.20, "Second pick with win edge"
+        # Overlay dual-bet: Rank 2 at $3-$6 with value overlay → Saver Win
+        if 3.0 <= c["odds"] <= 6.0 and c.get("value_rating", 0) >= 1.0:
+            return "Saver Win", 0.22, "Rank 2 overlay dual-bet"
         return "Place", 0.25, "Place, modest edge"
 
     if rank == 3:
@@ -450,6 +456,9 @@ def _recommend_bet_place_leverage(c: dict, rank: int, field_size: int) -> tuple[
         return "Place", 0.30, "Place, leveraging place edge"
     if rank == 2:
         if c["ev_place"] > 0:
+            # Overlay dual-bet: Rank 2 at $3-$6 with value overlay → Saver Win
+            if 3.0 <= c["odds"] <= 6.0 and c.get("value_rating", 0) >= 1.0:
+                return "Saver Win", 0.22, "Rank 2 overlay dual-bet"
             return "Place", 0.30, "Strong place edge"
         return "Place", 0.25, "Place fallback"
     if rank == 3:
