@@ -152,7 +152,7 @@ def build_core_tables(conn: duckdb.DuckDBPyConnection):
     When backtest.db doesn't exist, falls back to punty.db for core tables,
     filtered to meetings with approved/sent content (i.e. meetings we tipped on).
     """
-    if BACKTEST_DB.exists():
+    if BACKTEST_DB.exists() and BACKTEST_DB.stat().st_size > 0:
         source_path = str(BACKTEST_DB.resolve()).replace("\\", "/")
         logger.info("Loading core tables from backtest.db...")
         content_filter = False
