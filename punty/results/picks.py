@@ -842,6 +842,13 @@ async def _settle_picks_for_race_impl(
             continue
 
         legs = json.loads(pick.sequence_legs)
+        # Handle legacy string format "3,4,9/3,2,1/10,4,12,8" from JSON parser
+        if isinstance(legs, str) and "/" in legs:
+            legs = [
+                [int(x.strip()) for x in leg.split(",") if x.strip().isdigit()]
+                for leg in legs.split("/")
+            ]
+            legs = [l for l in legs if l]  # drop empty legs
         start = pick.sequence_start_race
         num_legs = len(legs)
 
