@@ -1465,10 +1465,7 @@ async def tips_dashboard(request: Request):
             .where(
                 and_(
                     Meeting.date == today,
-                    or_(
-                        Meeting.selected == True,
-                        Meeting.id.in_(tips_meeting_ids),
-                    ),
+                    Meeting.selected == True,
                     Meeting.meeting_type.in_(["race", None]),
                 )
             )
