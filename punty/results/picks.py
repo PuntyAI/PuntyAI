@@ -1039,7 +1039,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     total_pnl = 0.0
     total_staked = 0.0
 
-    # Process settled picks
+    # Process settled picks — these drive the headline P&L figures
     for row in settled_rows:
         pick_type = row.pick_type
         count = row.count or 0
@@ -1064,10 +1064,10 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         total_pnl += pnl
         total_staked += staked
 
-    # Merge unsettled picks: include in bet count + staked, but do NOT
-    # deduct from P&L — unsettled bets are pending, not losses.
-    # P&L only reflects actual settled results.
+    # Unsettled picks: track separately for upcoming display.
+    # Do NOT inflate headline totals — those should reflect settled reality.
     total_unsettled = 0
+    unsettled_staked = 0.0
     for row in unsettled_rows:
         pick_type = row.pick_type
         count = row.count or 0
@@ -1085,9 +1085,8 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         by_product[pick_type]["bets"] += count
         by_product[pick_type]["staked"] = round(by_product[pick_type]["staked"] + staked, 2)
 
-        total_bets += count
-        total_staked += staked
         total_unsettled += count
+        unsettled_staked += staked
 
     # Calculate strike rates
     for data in by_product.values():
@@ -1100,6 +1099,7 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
         "total_bets": total_bets,
         "total_winners": total_winners,
         "total_unsettled": total_unsettled,
+        "unsettled_staked": round(unsettled_staked, 2),
         "total_strike_rate": round(overall_strike, 1),
         "total_staked": round(total_staked, 2),
         "total_returned": round(total_staked + total_pnl, 2),
