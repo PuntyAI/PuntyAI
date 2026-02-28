@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import duckdb
+import pandas as pd
 
 from punty.venues import guess_state, normalize_venue
 
@@ -124,6 +125,349 @@ def _speed_map_category(avg_settle: float, field_size: int) -> str | None:
         return "midfield"
     else:
         return "backmarker"
+
+
+PROFORM_MONTHS = [
+    "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
+
+def _cols_dict(keys: list[str]) -> dict[str, list]:
+    """Create an empty dict-of-lists for DuckDB bulk ingestion."""
+    return {k: [] for k in keys}
+
+
+_MEETING_COLS = ["id", "venue", "date", "track_condition", "weather_condition",
+                 "weather_temp", "rail_position", "meeting_type", "state"]
+_RACE_COLS = ["id", "meeting_id", "race_number", "race_name", "distance",
+              "race_class", "prize_money", "field_size", "track_condition",
+              "results_status", "venue", "state", "date"]
+_RUNNER_COLS = ["id", "race_id", "horse_name", "saddlecloth", "barrier", "weight",
+                "jockey", "trainer", "current_odds", "opening_odds", "place_odds",
+                "finish_position", "win_dividend", "place_dividend",
+                "speed_map_position", "horse_age", "horse_sex", "last_five",
+                "days_since_last_run", "handicap_rating", "scratched",
+                "venue", "state", "date", "distance", "race_class",
+                "field_size", "track_condition", "race_number"]
+
+
+def build_proform_core_tables(conn: duckdb.DuckDBPyConnection):
+    """Load meetings/races/runners from Proform JSON (Feb-Dec 2025) + punty.db.
+
+    Reads meetings.json + results.json per month, skips barrier trials and jumps,
+    prefixes all IDs with 'pf-' to avoid collision with punty.db IDs.
+    Uses dict-of-columns for fast DuckDB bulk ingestion (~200K runners in seconds).
+    """
+    logger.info("Building core tables from Proform data (Feb-Dec 2025)...")
+
+    conn.execute("INSTALL sqlite; LOAD sqlite;")
+
+    meetings = _cols_dict(_MEETING_COLS)
+    races = _cols_dict(_RACE_COLS)
+    runners = _cols_dict(_RUNNER_COLS)
+
+    proform_year_dir = PROFORM_BASE / "2025"
+
+    for month_name in PROFORM_MONTHS:
+        month_dir = proform_year_dir / month_name
+        if not month_dir.exists():
+            logger.warning("  Missing month dir: %s", month_dir)
+            continue
+
+        meetings_file = month_dir / "meetings.json"
+        results_file = month_dir / "results.json"
+        if not meetings_file.exists():
+            logger.warning("  Missing meetings.json in %s", month_dir)
+            continue
+
+        # Build track condition lookup from results.json
+        track_conditions = {}  # (MeetingId, RaceNumber) → TrackConditionLabel
+        if results_file.exists():
+            with open(results_file, "r", encoding="utf-8") as f:
+                results_data = json.load(f)
+            for result_meeting in results_data:
+                mid = str(result_meeting.get("MeetingId", ""))
+                for rr in result_meeting.get("RaceResults", []):
+                    rnum = rr.get("RaceNumber")
+                    cond = rr.get("TrackConditionLabel")
+                    if mid and rnum and cond:
+                        track_conditions[(mid, rnum)] = cond
+
+        # Load meetings
+        with open(meetings_file, "r", encoding="utf-8") as f:
+            meetings_data = json.load(f)
+
+        for meeting in meetings_data:
+            if meeting.get("IsBarrierTrial") or meeting.get("IsJumps"):
+                continue
+
+            track = meeting.get("Track", {})
+            meeting_id = f"pf-{meeting['MeetingId']}"
+            venue = track.get("Name", "")
+            state = track.get("State", "") or guess_state(venue)
+            meeting_date_raw = meeting.get("MeetingDate", "")
+            meeting_date = meeting_date_raw[:10] if meeting_date_raw else None
+            rail_pos = meeting.get("RailPosition", "")
+            expected_cond = meeting.get("ExpectedCondition")
+
+            meetings["id"].append(meeting_id)
+            meetings["venue"].append(venue)
+            meetings["date"].append(meeting_date)
+            meetings["track_condition"].append(expected_cond)
+            meetings["weather_condition"].append(None)
+            meetings["weather_temp"].append(None)
+            meetings["rail_position"].append(rail_pos)
+            meetings["meeting_type"].append("R")
+            meetings["state"].append(state)
+
+            for race in meeting.get("Races", []):
+                race_id = f"pf-{race['RaceId']}"
+                race_number = race.get("Number")
+                raw_mid = str(meeting["MeetingId"])
+                race_cond = track_conditions.get((raw_mid, race_number), expected_cond)
+
+                runners_list = race.get("Runners", [])
+                non_emergency = [r for r in runners_list
+                                 if not r.get("EmergencyIndicator")]
+                field_size = len(non_emergency)
+
+                races["id"].append(race_id)
+                races["meeting_id"].append(meeting_id)
+                races["race_number"].append(race_number)
+                races["race_name"].append(race.get("Name", ""))
+                races["distance"].append(race.get("Distance"))
+                races["race_class"].append(race.get("RaceClass", ""))
+                races["prize_money"].append(str(race.get("PrizeMoney", "")))
+                races["field_size"].append(field_size)
+                races["track_condition"].append(race_cond)
+                races["results_status"].append("Closed")
+                races["venue"].append(venue)
+                races["state"].append(state)
+                races["date"].append(meeting_date)
+
+                for runner in runners_list:
+                    if runner.get("EmergencyIndicator"):
+                        continue
+                    position = runner.get("Position", 0)
+                    if position == 0:
+                        continue  # scratched
+
+                    jockey_data = runner.get("Jockey", {}) or {}
+                    trainer_data = runner.get("Trainer", {}) or {}
+                    odds = runner.get("PriceSP")
+                    if odds and odds <= 0:
+                        odds = None
+
+                    runners["id"].append(f"pf-{runner['RunnerId']}_{race['RaceId']}")
+                    runners["race_id"].append(race_id)
+                    runners["horse_name"].append(runner.get("Name", ""))
+                    runners["saddlecloth"].append(runner.get("TabNo"))
+                    runners["barrier"].append(runner.get("Barrier"))
+                    runners["weight"].append(runner.get("Weight"))
+                    runners["jockey"].append(jockey_data.get("FullName", ""))
+                    runners["trainer"].append(trainer_data.get("FullName", ""))
+                    runners["current_odds"].append(odds)
+                    runners["opening_odds"].append(odds)
+                    runners["place_odds"].append(None)
+                    runners["finish_position"].append(position)
+                    runners["win_dividend"].append(None)
+                    runners["place_dividend"].append(None)
+                    runners["speed_map_position"].append(None)
+                    runners["horse_age"].append(runner.get("Age"))
+                    runners["horse_sex"].append(runner.get("Sex", ""))
+                    runners["last_five"].append(runner.get("Last10", ""))
+                    runners["days_since_last_run"].append(None)
+                    runners["handicap_rating"].append(runner.get("HandicapRating"))
+                    runners["scratched"].append(False)
+                    runners["venue"].append(venue)
+                    runners["state"].append(state)
+                    runners["date"].append(meeting_date)
+                    runners["distance"].append(race.get("Distance"))
+                    runners["race_class"].append(race.get("RaceClass", ""))
+                    runners["field_size"].append(field_size)
+                    runners["track_condition"].append(race_cond)
+                    runners["race_number"].append(race_number)
+
+        logger.info("  %s: %d meetings, %d races, %d runners",
+                     month_name, len(meetings["id"]),
+                     len(races["id"]), len(runners["id"]))
+
+    # Bulk-create tables via pandas DataFrames (fast columnar ingestion)
+    meetings_df = pd.DataFrame(meetings)  # noqa: F841
+    conn.execute("CREATE OR REPLACE TABLE meetings AS SELECT * FROM meetings_df")
+    logger.info("  Proform meetings: %d", len(meetings["id"]))
+
+    races_df = pd.DataFrame(races)  # noqa: F841
+    conn.execute("""
+    CREATE OR REPLACE TABLE races AS
+    SELECT *, CASE
+        WHEN distance < 1100 THEN 'sprint'
+        WHEN distance < 1400 THEN 'short'
+        WHEN distance < 1800 THEN 'middle'
+        WHEN distance < 2200 THEN 'classic'
+        WHEN distance >= 2200 THEN 'staying'
+        ELSE NULL
+    END AS distance_category
+    FROM races_df
+    """)
+    logger.info("  Proform races: %d", len(races["id"]))
+
+    runners_df = pd.DataFrame(runners)  # noqa: F841
+    conn.execute("""
+    CREATE OR REPLACE TABLE runners AS
+    SELECT *,
+        CASE
+            WHEN distance < 1100 THEN 'sprint'
+            WHEN distance < 1400 THEN 'short'
+            WHEN distance < 1800 THEN 'middle'
+            WHEN distance < 2200 THEN 'classic'
+            WHEN distance >= 2200 THEN 'staying'
+            ELSE NULL
+        END AS distance_category,
+        CASE WHEN finish_position = 1 THEN true ELSE false END AS is_winner,
+        CASE WHEN finish_position <= 3 AND finish_position > 0
+             THEN true ELSE false END AS is_placed,
+        CASE WHEN current_odds > 0 THEN ROUND(1.0 / current_odds, 4)
+             ELSE NULL END AS implied_prob,
+        CASE
+            WHEN current_odds IS NULL OR current_odds <= 0 THEN NULL
+            WHEN current_odds <= 2 THEN '$1-$2'
+            WHEN current_odds <= 4 THEN '$2-$4'
+            WHEN current_odds <= 6 THEN '$4-$6'
+            WHEN current_odds <= 10 THEN '$6-$10'
+            WHEN current_odds <= 20 THEN '$10-$20'
+            WHEN current_odds <= 50 THEN '$20-$50'
+            ELSE '$50+'
+        END AS odds_band
+    FROM runners_df
+    """)
+    logger.info("  Proform runners: %d (non-scratched)", len(runners["id"]))
+
+    # --- Merge punty.db production data (2026 meetings) ---
+    _merge_punty_db(conn)
+
+
+def _merge_punty_db(conn: duckdb.DuckDBPyConnection):
+    """Append punty.db meetings/races/runners to existing Proform tables."""
+    if not PUNTY_DB.exists():
+        logger.info("  No punty.db found — Proform-only mode")
+        return
+
+    punty_path = str(PUNTY_DB.resolve()).replace("\\", "/")
+    logger.info("  Merging punty.db production data...")
+
+    # Build venue→state for punty venues
+    punty_venues = conn.execute(f"""
+        SELECT DISTINCT venue FROM sqlite_scan('{punty_path}', 'meetings')
+        WHERE venue IS NOT NULL
+    """).fetchall()
+    venue_states = {v: guess_state(v) for (v,) in punty_venues}
+
+    # Insert punty meetings (only those with approved/sent content)
+    punty_meetings = conn.execute(f"""
+        SELECT m.id, m.venue, m.date, m.track_condition,
+               m.weather_condition, m.weather_temp, m.rail_position, m.meeting_type
+        FROM sqlite_scan('{punty_path}', 'meetings') m
+        INNER JOIN (
+            SELECT DISTINCT meeting_id
+            FROM sqlite_scan('{punty_path}', 'content')
+            WHERE status IN ('approved', 'sent')
+        ) c ON c.meeting_id = m.id
+    """).fetchall()
+
+    for row in punty_meetings:
+        mid, venue = row[0], row[1]
+        state = venue_states.get(venue, "VIC")
+        conn.execute(
+            "INSERT INTO meetings VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            [*row, state],
+        )
+
+    punty_count = len(punty_meetings)
+    logger.info("    punty.db meetings: %d", punty_count)
+
+    if punty_count == 0:
+        return
+
+    # Get punty meeting IDs for filtering races/runners
+    punty_mids = {row[0] for row in punty_meetings}
+
+    # Insert punty races
+    punty_races = conn.execute(f"""
+        SELECT rc.id, rc.meeting_id, rc.race_number, rc.name, rc.distance,
+               rc."class", rc.prize_money, rc.field_size, rc.track_condition,
+               rc.results_status
+        FROM sqlite_scan('{punty_path}', 'races') rc
+    """).fetchall()
+
+    race_count = 0
+    for row in punty_races:
+        if row[1] not in punty_mids:
+            continue
+        meeting = next((m for m in punty_meetings if m[0] == row[1]), None)
+        if not meeting:
+            continue
+        venue = meeting[1]
+        state = venue_states.get(venue, "VIC")
+        date_val = meeting[2]
+        conn.execute(
+            "INSERT INTO races VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NULL)",
+            [*row, venue, state, date_val],
+        )
+        race_count += 1
+
+    # Compute distance_category for newly inserted races
+    conn.execute("""
+    UPDATE races SET distance_category = CASE
+        WHEN distance < 1100 THEN 'sprint'
+        WHEN distance < 1400 THEN 'short'
+        WHEN distance < 1800 THEN 'middle'
+        WHEN distance < 2200 THEN 'classic'
+        WHEN distance >= 2200 THEN 'staying'
+        ELSE NULL
+    END
+    WHERE distance_category IS NULL
+    """)
+    logger.info("    punty.db races: %d", race_count)
+
+    # Insert punty runners via join with races table (only races we inserted)
+    conn.execute(f"""
+    INSERT INTO runners
+    SELECT
+        ru.id, ru.race_id, ru.horse_name, ru.saddlecloth, ru.barrier, ru.weight,
+        ru.jockey, ru.trainer, ru.current_odds, ru.opening_odds, ru.place_odds,
+        ru.finish_position, ru.win_dividend, ru.place_dividend, ru.speed_map_position,
+        ru.horse_age, ru.horse_sex, ru.last_five, ru.days_since_last_run,
+        ru.handicap_rating, ru.scratched,
+        rc.venue, rc.state, rc.date, rc.distance, rc.distance_category,
+        rc.race_class, rc.field_size, rc.track_condition, rc.race_number,
+        CASE WHEN ru.finish_position = 1 AND (ru.scratched = false OR ru.scratched IS NULL)
+             THEN true ELSE false END,
+        CASE WHEN ru.finish_position <= 3 AND ru.finish_position > 0
+             AND (ru.scratched = false OR ru.scratched IS NULL)
+             THEN true ELSE false END,
+        CASE WHEN ru.current_odds > 0 THEN ROUND(1.0 / ru.current_odds, 4) ELSE NULL END,
+        CASE
+            WHEN ru.current_odds IS NULL OR ru.current_odds <= 0 THEN NULL
+            WHEN ru.current_odds <= 2 THEN '$1-$2'
+            WHEN ru.current_odds <= 4 THEN '$2-$4'
+            WHEN ru.current_odds <= 6 THEN '$4-$6'
+            WHEN ru.current_odds <= 10 THEN '$6-$10'
+            WHEN ru.current_odds <= 20 THEN '$10-$20'
+            WHEN ru.current_odds <= 50 THEN '$20-$50'
+            ELSE '$50+'
+        END
+    FROM sqlite_scan('{punty_path}', 'runners') ru
+    JOIN races rc ON rc.id = ru.race_id
+    WHERE (ru.scratched = false OR ru.scratched IS NULL)
+    AND rc.id LIKE '%'
+    AND rc.id NOT LIKE 'pf-%'
+    """)
+    punty_runner_count = conn.execute(
+        "SELECT COUNT(*) FROM runners WHERE id NOT LIKE 'pf-%'"
+    ).fetchone()[0]
+    logger.info("    punty.db runners: %d", punty_runner_count)
 
 
 def _build_venue_state_table(conn: duckdb.DuckDBPyConnection, backtest_path: str):
@@ -759,7 +1103,14 @@ def main():
         if args.picks_only:
             build_picks_table(conn)
         else:
-            build_core_tables(conn)
+            # Priority: backtest.db > Proform JSON > punty.db-only
+            if BACKTEST_DB.exists() and BACKTEST_DB.stat().st_size > 0:
+                build_core_tables(conn)
+            elif PROFORM_BASE.exists() and (PROFORM_BASE / "2025" / "February").exists():
+                build_proform_core_tables(conn)
+            else:
+                build_core_tables(conn)  # punty.db fallback
+
             build_picks_table(conn)
 
             if not args.no_proform:
