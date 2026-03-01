@@ -700,19 +700,25 @@ class HKJCOddsScraper:
                             }
 
                             // Look for odds values (decimal numbers in cells)
+                            // Skip the saddlecloth cell (numEl) to avoid treating
+                            // the runner number as a win odds value
                             const oddsValues = [];
                             for (const cell of cells) {
+                                if (cell === numEl || cell === nameEl) continue;
                                 const val = parseFloat(cell.textContent.trim());
                                 if (!isNaN(val) && val > 1.0 && val < 999) {
                                     oddsValues.push(val);
                                 }
                             }
 
-                            if (oddsValues.length >= 1) {
-                                winOdds = oddsValues[0];
-                            }
+                            // Take last two numeric values — HKJC tables have
+                            // non-odds numeric cells (weight, draw) before the odds
+                            // columns which are always rightmost
                             if (oddsValues.length >= 2) {
-                                placeOdds = oddsValues[1];
+                                winOdds = oddsValues[oddsValues.length - 2];
+                                placeOdds = oddsValues[oddsValues.length - 1];
+                            } else if (oddsValues.length === 1) {
+                                winOdds = oddsValues[0];
                             }
 
                             // Check for scratched indicators
