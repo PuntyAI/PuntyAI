@@ -105,8 +105,8 @@ async def scrape_calendar(db: AsyncSession) -> list[dict]:
 
     for m in raw_meetings:
         venue = m["venue"]
-        from punty.venues import normalize_venue
-        venue_slug = normalize_venue(venue) or venue.lower().replace(" ", "-")
+        from punty.venues import venue_slug as _venue_slug
+        venue_slug = _venue_slug(venue) or venue.lower().replace(" ", "-")
         meeting_id = f"{venue_slug}-{today.isoformat()}"
 
         existing = await db.get(Meeting, meeting_id)
