@@ -243,8 +243,8 @@ def get_tab_mnemonic(venue: str) -> tuple[str, str, str] | None:
 # PointsBet venue mapping for SPA URL construction
 # Format: normalized_venue -> (country_slug, venue_slug)
 POINTSBET_VENUE_MAP: dict[str, tuple[str, str]] = {
-    "sha tin": ("HKG", "Sha-Tin"),
-    "happy valley": ("HKG", "Happy-Valley"),
+    "sha tin": ("HKG", "Sha Tin"),
+    "happy valley": ("HKG", "Happy Valley"),
 }
 
 
