@@ -1050,6 +1050,44 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         except Exception as e:
             logger.warning(f"Betfair odds refresh failed for {meeting_id}: {e}")
 
+        # International venues (HK etc): TAB Playwright → HKJC fallback
+        # Betfair is AU-only so never returns odds for these venues.
+        from punty.venues import get_tab_mnemonic, guess_state
+        tab_info = get_tab_mnemonic(meeting.venue)
+        if tab_info and odds_updated == 0:
+            race_result = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id)
+            )
+            intl_race_count = len(race_result.scalars().all())
+            intl_odds = []
+
+            try:
+                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                tab_pw = TabPlaywrightScraper()
+                intl_odds = await tab_pw.scrape_odds_for_meeting(
+                    meeting.venue, meeting.date, meeting_id, intl_race_count
+                )
+                if intl_odds:
+                    logger.info(f"[refresh_odds] TAB Playwright: {len(intl_odds)} runners for {meeting.venue}")
+            except Exception as e:
+                logger.warning(f"[refresh_odds] TAB Playwright failed for {meeting.venue}: {e}")
+
+            if not intl_odds and guess_state(meeting.venue) == "HK":
+                try:
+                    from punty.scrapers.tab_playwright import HKJCOddsScraper
+                    hkjc_odds_scraper = HKJCOddsScraper()
+                    intl_odds = await hkjc_odds_scraper.scrape_odds_for_meeting(
+                        meeting.venue, meeting.date, intl_race_count
+                    )
+                    if intl_odds:
+                        logger.info(f"[refresh_odds] HKJC odds fallback: {len(intl_odds)} runners for {meeting.venue}")
+                except Exception as e:
+                    logger.warning(f"[refresh_odds] HKJC odds fallback failed for {meeting.venue}: {e}")
+
+            if intl_odds:
+                await _merge_tab_odds(db, meeting_id, intl_odds)
+                odds_updated = len(intl_odds)
+
         # Fallback: if Betfair had no markets, use PF assessed price for
         # runners missing current_odds (e.g. Sunshine Coast, small regionals)
         if odds_updated == 0:
