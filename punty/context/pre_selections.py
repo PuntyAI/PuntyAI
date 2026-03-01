@@ -348,6 +348,13 @@ def calculate_pre_selections(
     # Cap win-exposed bets to avoid spreading win risk across too many horses
     win_capped = _cap_win_exposure(picks)
 
+    # Ultra-small fields (≤4): force ALL staked picks to Win — place divs too thin
+    if field_size <= 4:
+        for pick in picks:
+            if pick.bet_type in ("Place", "Each Way") and not pick.tracked_only:
+                pick.bet_type = "Win"
+                pick.expected_return = round(pick.win_prob * pick.odds - 1, 2)
+
     # Concentrate stakes: only top MAX_STAKED_PICKS get real money.
     # Picks #3+ become tracked_only (shown for exotics/AI context, no stake).
     # This prevents thin-margin 4-way splits that historically lose.
