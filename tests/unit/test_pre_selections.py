@@ -1142,11 +1142,20 @@ class TestEdgeGatedAllocation:
 # ──────────────────────────────────────────────
 
 class TestSubTwoDollarBetType:
-    def test_sub_180_gets_place(self):
-        """Sub-$1.80 should get Place (not Win as before)."""
+    def test_sub_180_rank1_gets_no_bet(self):
+        """Sub-$1.80 rank 1 should get no_bet (stake redistributed to rank 2-3)."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "no_bet"
+
+    def test_sub_180_small_field_gets_place(self):
+        """Sub-$1.80 in small field (≤8, >7 so 3 places paid) should get Place (exception)."""
+        c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
+             "value_rating": 0.95, "place_value_rating": 1.00}
+        # field_size=8 → 3 places paid, hits the <$2.01 small field exception
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
+        # field_size=7 → only 2 places, hits num_places==2 path first → Win (NTD logic)
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=7) == "Win"
 
     def test_180_to_200_gets_place(self):
         """$1.80-$2.00 should get Place (not Win as before)."""
@@ -1278,19 +1287,23 @@ class TestExoticFilters:
         assert result is not None
 
     def test_trifecta_box_scenario_filter(self):
-        """Trifecta Box: field 7-14, fav $1.50-$5.00 (relaxed for 4-horse box)."""
+        """Trifecta Box: field 7+, fav $1.50-$5.00 (15+ now allowed for huge dividends)."""
         tri_combos = [{"type": "Trifecta Box", "runners": [1, 2, 3],
                         "runner_names": ["A", "B", "C"],
                         "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"}]
-        # Blocked: field too small (< 7) or too large (> 14)
-        for fs in [5, 6, 15, 16]:
+        # Blocked: field too small (< 7)
+        for fs in [5, 6]:
             result = _select_exotic(tri_combos, {1, 2, 3}, field_size=fs,
                                     track_condition="Good 4", fav_price=2.80, distance=1600)
             assert result is None, f"Trifecta Box should be blocked in {fs}-field"
-        # Blocked: fav too short (< $1.50)
+        # Allowed: 15+ fields (now promoted — avg div $3,090 in 15+ fields)
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=15,
+                                track_condition="Good 4", fav_price=2.80, distance=1600)
+        assert result is not None, "Trifecta Box should be allowed in 15+ field (big dividends)"
+        # Allowed: fav < $1.50 (odds-on) — now allowed, routed to standout via scoring
         result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
                                 track_condition="Good 4", fav_price=1.30, distance=1600)
-        assert result is None, "Trifecta Box should be blocked when fav < $1.50"
+        assert result is not None, "Trifecta Box should be allowed when fav is odds-on"
         # Blocked: fav too long (> $5.00)
         result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
                                 track_condition="Good 4", fav_price=5.50, distance=1600)
