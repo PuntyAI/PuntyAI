@@ -1009,8 +1009,35 @@ class HKJCResultsScraper:
                         r["place_dividend"] = pl_div
                         break
 
-        logger.info(f"HKJC results for R{race_number}: {len(results)} runners")
-        return {"results": results}
+        # ── Exotic dividends ────────────────────────────────────────────
+        # HKJC names → our canonical types
+        _HKJC_EXOTIC_MAP = {
+            "QUINELLA": "quinella",
+            "FORECAST": "exacta",
+            "TIERCE": "trifecta",
+            "TRIO": "trio",
+            "FIRST 4": "first4",
+            "QUARTET": "quartet",
+        }
+        exotics: dict[str, float] = {}
+        for hkjc_name, our_type in _HKJC_EXOTIC_MAP.items():
+            pattern = re.compile(
+                r'>' + re.escape(hkjc_name) + r'</td>\s*<td[^>]*>[^<]*</td>\s*<td[^>]*>\s*([\d,.]+)',
+                re.DOTALL | re.IGNORECASE,
+            )
+            match = pattern.search(html)
+            if match:
+                try:
+                    div_raw = float(match.group(1).replace(',', ''))
+                    exotics[our_type] = round(div_raw / 10.0, 2)
+                except (ValueError, TypeError):
+                    pass
+
+        logger.info(f"HKJC results for R{race_number}: {len(results)} runners, {len(exotics)} exotics")
+        result_data: dict = {"results": results}
+        if exotics:
+            result_data["exotics"] = exotics
+        return result_data
 
 
 # ============ HKJC JOCKEY / TRAINER RANKINGS ============

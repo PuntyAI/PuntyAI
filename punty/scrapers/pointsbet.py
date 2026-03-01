@@ -135,6 +135,272 @@ class PointsBetScraper:
 
         return captured_odds
 
+    async def scrape_results_for_race(
+        self,
+        venue: str,
+        race_date: date,
+        race_number: int,
+    ) -> dict:
+        """Scrape PointsBet race results (positions + exotic dividends).
+
+        Uses Playwright API interception to capture JSON responses from the
+        PointsBet results page.  Returns standardised format:
+            {"results": [...], "exotics": {"exacta": 78.5, ...}}
+        """
+        slug_info = get_pointsbet_slug(venue)
+        if not slug_info:
+            logger.info(f"No PointsBet slug for {venue} — skipping results")
+            return {"results": []}
+
+        country, venue_slug = slug_info
+
+        captured_results: list[dict] = []
+        captured_exotics: dict[str, float] = {}
+        capture_done = asyncio.Event()
+
+        async def capture_api(response):
+            url = response.url
+            if response.status != 200:
+                return
+            content_type = response.headers.get("content-type", "")
+            if "json" not in content_type:
+                return
+
+            try:
+                body = await response.text()
+                data = json.loads(body)
+            except Exception:
+                return
+
+            # Extract results from intercepted JSON
+            found = _extract_results(
+                data, race_number, captured_results, captured_exotics
+            )
+            if found:
+                logger.info(
+                    f"PointsBet results API intercepted: {found} runners "
+                    f"for R{race_number}"
+                )
+                capture_done.set()
+
+        from punty.scrapers.playwright_base import new_page
+
+        async with new_page(timeout=30000) as page:
+            page.on("response", capture_api)
+
+            # PointsBet results URL pattern
+            url = (
+                f"{self.BASE_URL}/racing/Thoroughbred/{country}/{venue_slug}"
+                f"?race={race_number}"
+            )
+            logger.info(f"PointsBet results: navigating to {url}")
+
+            try:
+                await page.goto(url, wait_until="domcontentloaded")
+                await asyncio.sleep(3)
+            except Exception as e:
+                logger.error(f"PointsBet results navigation failed: {e}")
+                return {"results": []}
+
+            try:
+                await asyncio.wait_for(capture_done.wait(), timeout=15)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"PointsBet results API not captured within 15s "
+                    f"for {venue} R{race_number}"
+                )
+
+        result_data: dict = {"results": captured_results}
+        if captured_exotics:
+            result_data["exotics"] = captured_exotics
+
+        logger.info(
+            f"PointsBet results for {venue} R{race_number}: "
+            f"{len(captured_results)} runners, {len(captured_exotics)} exotics"
+        )
+        return result_data
+
+
+def _extract_results(
+    data: dict | list,
+    target_race: int,
+    captured_results: list[dict],
+    captured_exotics: dict[str, float],
+) -> int:
+    """Extract race results and exotic dividends from a PointsBet API response.
+
+    Looks for finish positions, dividends, and exotic payout data.
+    Returns number of result runners found.
+    """
+    if not isinstance(data, dict):
+        return 0
+
+    count = 0
+
+    # Look for race-level objects containing results
+    for key in ("races", "events", "results", "raceResults"):
+        items = data.get(key)
+        if not isinstance(items, list):
+            continue
+        for race_obj in items:
+            if not isinstance(race_obj, dict):
+                continue
+            race_num = (
+                race_obj.get("raceNumber")
+                or race_obj.get("race_number")
+                or race_obj.get("number")
+            )
+            if race_num and int(race_num) != target_race:
+                continue
+
+            # Extract runners with positions
+            for runner_key in ("runners", "results", "competitors",
+                               "entries", "selections"):
+                runners = race_obj.get(runner_key, [])
+                if not isinstance(runners, list):
+                    continue
+                for runner in runners:
+                    if not isinstance(runner, dict):
+                        continue
+                    parsed = _parse_result_runner(runner)
+                    if parsed:
+                        captured_results.append(parsed)
+                        count += 1
+
+            # Extract exotic dividends
+            _extract_exotic_dividends(race_obj, captured_exotics)
+
+    # Also check top-level structure (single race response)
+    if not count:
+        for runner_key in ("runners", "results", "competitors", "entries"):
+            runners = data.get(runner_key, [])
+            if not isinstance(runners, list):
+                continue
+            for runner in runners:
+                if not isinstance(runner, dict):
+                    continue
+                parsed = _parse_result_runner(runner)
+                if parsed:
+                    captured_results.append(parsed)
+                    count += 1
+        if count:
+            _extract_exotic_dividends(data, captured_exotics)
+
+    return count
+
+
+def _parse_result_runner(runner: dict) -> dict | None:
+    """Parse a single runner dict into our result format."""
+    name = (
+        runner.get("name")
+        or runner.get("runnerName")
+        or runner.get("runner_name")
+        or runner.get("horseName")
+        or ""
+    )
+    if not name or len(name) < 2:
+        return None
+
+    position = (
+        runner.get("finishPosition")
+        or runner.get("finish_position")
+        or runner.get("position")
+        or runner.get("place")
+    )
+    if not position:
+        return None
+    try:
+        position = int(position)
+    except (ValueError, TypeError):
+        return None
+
+    number = (
+        runner.get("number")
+        or runner.get("runnerNumber")
+        or runner.get("saddleCloth")
+        or runner.get("tabNo")
+    )
+    try:
+        number = int(number) if number else None
+    except (ValueError, TypeError):
+        number = None
+
+    win_div = runner.get("winDividend") or runner.get("win_dividend")
+    place_div = runner.get("placeDividend") or runner.get("place_dividend")
+
+    try:
+        win_div = float(win_div) if win_div else None
+    except (ValueError, TypeError):
+        win_div = None
+    try:
+        place_div = float(place_div) if place_div else None
+    except (ValueError, TypeError):
+        place_div = None
+
+    return {
+        "horse_name": name.strip().title(),
+        "saddlecloth": number,
+        "position": position,
+        "win_dividend": win_div,
+        "place_dividend": place_div,
+        "margin": runner.get("margin"),
+    }
+
+
+def _extract_exotic_dividends(obj: dict, exotics: dict[str, float]) -> None:
+    """Extract exotic dividend data from a race object."""
+    # PointsBet exotic type names → our canonical types
+    _PB_EXOTIC_MAP = {
+        "exacta": "exacta",
+        "quinella": "quinella",
+        "trifecta": "trifecta",
+        "first4": "first4",
+        "first_4": "first4",
+        "firstfour": "first4",
+        "first four": "first4",
+        "quadrella": "quaddie",
+        "quaddie": "quaddie",
+        "duo": "quinella",
+    }
+
+    for key in ("exotics", "exoticResults", "exotic_results", "dividends",
+                "pools", "exoticDividends"):
+        items = obj.get(key)
+        if isinstance(items, dict):
+            # Direct mapping: {"exacta": 45.20, "trifecta": 120.50}
+            for etype, div in items.items():
+                canonical = _PB_EXOTIC_MAP.get(etype.lower(), etype.lower())
+                try:
+                    exotics[canonical] = round(float(div), 2)
+                except (ValueError, TypeError):
+                    pass
+        elif isinstance(items, list):
+            # Array of objects: [{"type": "exacta", "dividend": 45.20}, ...]
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                etype = (
+                    item.get("type")
+                    or item.get("poolType")
+                    or item.get("pool_type")
+                    or item.get("name")
+                    or ""
+                )
+                div = (
+                    item.get("dividend")
+                    or item.get("amount")
+                    or item.get("payout")
+                    or item.get("returnAmount")
+                )
+                if etype and div:
+                    canonical = _PB_EXOTIC_MAP.get(
+                        etype.lower(), etype.lower()
+                    )
+                    try:
+                        exotics[canonical] = round(float(div), 2)
+                    except (ValueError, TypeError):
+                        pass
+
 
 def _extract_runners(
     data: dict | list,

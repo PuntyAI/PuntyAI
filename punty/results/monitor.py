@@ -910,6 +910,25 @@ class ResultsMonitor:
                             results_data = await hkjc.scrape_race_result(
                                 meeting.venue, meeting.date, race_num
                             )
+                            # Fallback: if HKJC didn't return exotics, try PointsBet
+                            if not results_data.get("exotics"):
+                                try:
+                                    from punty.scrapers.pointsbet import PointsBetScraper
+                                    pb = PointsBetScraper()
+                                    pb_data = await pb.scrape_results_for_race(
+                                        meeting.venue, meeting.date, race_num
+                                    )
+                                    if pb_data.get("exotics"):
+                                        results_data["exotics"] = pb_data["exotics"]
+                                        logger.info(
+                                            f"PointsBet backfilled {len(pb_data['exotics'])} "
+                                            f"exotics for {meeting.venue} R{race_num}"
+                                        )
+                                except Exception as e:
+                                    logger.debug(
+                                        f"PointsBet exotic fallback failed for "
+                                        f"{meeting.venue} R{race_num}: {e}"
+                                    )
                         else:
                             from punty.scrapers.tab_playwright import TabPlaywrightScraper
                             tab_pw = TabPlaywrightScraper()
@@ -1590,7 +1609,7 @@ class ResultsMonitor:
                 logger.debug(f"Sectional backfill failed for {meeting.venue} R{race.race_number}: {e}")
 
     async def _backfill_tabtouch_exotics(self, db, meeting, statuses):
-        """Fetch exotic dividends from TabTouch for races that are missing them."""
+        """Fetch exotic dividends from TabTouch (AU) or PointsBet (HK) for races missing them."""
         import json as _json
         from punty.models.meeting import Race
 
@@ -1608,6 +1627,12 @@ class ResultsMonitor:
                 missing.append(rn)
 
         if not missing:
+            return
+
+        # HK venues: use PointsBet instead of TabTouch (TabTouch is AU-only)
+        from punty.venues import is_international_venue, guess_state
+        if is_international_venue(meeting.venue) and guess_state(meeting.venue) == "HK":
+            await self._backfill_pointsbet_exotics(db, meeting, missing)
             return
 
         try:
@@ -1658,6 +1683,63 @@ class ResultsMonitor:
 
         except Exception as e:
             logger.debug(f"TabTouch exotic backfill failed for {meeting.venue}: {e}")
+
+    async def _backfill_pointsbet_exotics(self, db, meeting, missing_races: list[int]):
+        """Fetch exotic dividends from PointsBet for HK races missing them."""
+        import json as _json
+        from punty.models.meeting import Race
+
+        try:
+            from punty.scrapers.pointsbet import PointsBetScraper
+            pb = PointsBetScraper()
+
+            updated = 0
+            for rn in missing_races:
+                try:
+                    pb_data = await pb.scrape_results_for_race(
+                        meeting.venue, meeting.date, rn
+                    )
+                    exotics = pb_data.get("exotics")
+                    if exotics:
+                        race_id = f"{meeting.id}-r{rn}"
+                        race = await db.get(Race, race_id)
+                        if race and not race.exotic_results:
+                            race.exotic_results = _json.dumps(exotics)
+                            updated += 1
+                except Exception as e:
+                    logger.debug(f"PointsBet exotic backfill failed for R{rn}: {e}")
+
+            if updated:
+                await db.flush()
+                logger.info(
+                    f"PointsBet backfilled exotics for {updated} races at {meeting.venue}"
+                )
+
+                # Re-settle exotic/sequence picks that were hit but got $0 pnl
+                from punty.models.pick import Pick
+                from sqlalchemy import update
+                await db.execute(
+                    update(Pick).where(
+                        Pick.meeting_id == meeting.id,
+                        Pick.pick_type.in_(["exotic", "sequence"]),
+                        Pick.settled == True,
+                        Pick.hit == True,
+                        Pick.pnl == 0.0,
+                    ).values(settled=False, settled_at=None)
+                )
+                await db.flush()
+
+                from punty.results.picks import settle_picks_for_race
+                for rn in missing_races:
+                    try:
+                        await settle_picks_for_race(db, meeting.id, rn)
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to re-settle picks after PointsBet backfill R{rn}: {e}"
+                        )
+
+        except Exception as e:
+            logger.debug(f"PointsBet exotic backfill failed for {meeting.venue}: {e}")
 
     async def _backfill_place_dividends(self, db, meeting, statuses):
         """Re-scrape races where placed runners are missing place dividends.
