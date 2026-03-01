@@ -500,6 +500,21 @@ def recommend_bet(
     # RULE 7: EW odds filter — applied as post-check
     # RULE 8: Capital efficiency — handled in optimize_race()
 
+    # Small fields (≤4 runners): Win only — place dividends too thin
+    if field_size <= 4:
+        pct = 0.35 if rank <= 2 else 0.20
+        return BetRecommendation(
+            saddlecloth=candidate["saddlecloth"],
+            horse_name=candidate["horse_name"],
+            bet_type="Win",
+            stake_pct=pct,
+            ev_win=round(candidate["ev_win"], 4),
+            ev_place=round(candidate["ev_place"], 4),
+            win_edge=round(candidate["win_edge"], 4),
+            place_edge=round(candidate["place_edge"], 4),
+            reasoning=f"Win, small field ({field_size} runners) — place divs too thin",
+        )
+
     # Short-priced guard: under $2.00, Win ROI is -38.9% historically.
     # Place for edge gate evaluation — likely tracked_only.
     if candidate["odds"] < 2.00 and rank <= 3:
