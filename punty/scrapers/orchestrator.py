@@ -1862,14 +1862,13 @@ async def _merge_tab_odds(db: AsyncSession, meeting_id: str, odds_data: list[dic
         matched += 1
 
         # Apply odds (with MAX_VALID_ODDS guard)
+        # For international venues, TAB/PointsBet/HKJC are the only real
+        # odds sources — always overwrite current_odds (may be stale/wrong)
         if win_odds and 1.0 < win_odds <= MAX_VALID_ODDS:
             runner.odds_tab = win_odds
             if not runner.current_odds or runner.current_odds <= 1.0:
-                runner.current_odds = win_odds
                 filled += 1
-            # For HK venues, TAB is often the only source — always set current_odds
-            if not runner.current_odds:
-                runner.current_odds = win_odds
+            runner.current_odds = win_odds
 
         if opening_odds and 1.0 < opening_odds <= MAX_VALID_ODDS:
             if not runner.opening_odds:
