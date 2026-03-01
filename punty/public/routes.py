@@ -1061,6 +1061,7 @@ def _compute_pick_data(all_picks: list) -> dict:
                 "hit": bool(pick.hit),
                 "pnl": float(pick.pnl) if pick.pnl is not None else 0.0,
                 "stake": float(pick.exotic_stake or pick.bet_stake or 0),
+                "start_race": pick.sequence_start_race,
             })
 
         # --- Stats accumulators (settled only) ---

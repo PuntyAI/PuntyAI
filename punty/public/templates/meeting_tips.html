@@ -936,6 +936,10 @@
         border-color: rgba(255, 107, 53, 0.25);
         background: linear-gradient(135deg, rgba(255, 107, 53, 0.06), rgba(255, 107, 53, 0.02));
     }
+    .seq-variant-smart {
+        border-color: rgba(255, 215, 0, 0.30);
+        background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(255, 215, 0, 0.02));
+    }
     .seq-variant-badge {
         display: inline-flex; align-items: center;
         font-family: 'Orbitron', sans-serif; font-weight: 800;
@@ -950,6 +954,9 @@
     }
     .seq-variant-wide .seq-variant-badge {
         background: rgba(255, 107, 53, 0.15); color: var(--orange);
+    }
+    .seq-variant-smart .seq-variant-badge {
+        background: rgba(255, 215, 0, 0.18); color: #ffd700;
     }
     .seq-variant-cost {
         font-family: 'Orbitron', sans-serif; font-weight: 700;
@@ -1596,9 +1603,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (seqResults && seqResults.length > 0) {
                 var headingText = (sec.heading.textContent || '').toLowerCase();
                 // Find matching results for this section
+                // Extract start race from heading (e.g. "Races 1–4" → 1)
+                var headingRaceMatch = headingText.match(/races?\s*(\d+)/i);
+                var headingStartRace = headingRaceMatch ? parseInt(headingRaceMatch[1]) : null;
                 var matchedResults = seqResults.filter(function(sr) {
                     var sType = (sr.type || '').toLowerCase();
-                    if (/early\s*quaddie/i.test(headingText)) return sType === 'early_quaddie';
+                    // Use start_race for precise matching when available
+                    if (sType === 'quaddie' && sr.start_race && headingStartRace) {
+                        return /quaddie/i.test(headingText) && sr.start_race === headingStartRace;
+                    }
+                    if (/early\s*quaddie/i.test(headingText)) return sType === 'early_quaddie' || sType === 'quaddie';
                     if (/quaddie/i.test(headingText) && !/early/i.test(headingText)) return sType === 'quaddie';
                     if (/big\s*6/i.test(headingText)) return sType === 'big6';
                     if (/multi/i.test(headingText) || /big\s*3/i.test(headingText)) return sType === 'big3_multi';
@@ -1639,21 +1653,25 @@ document.addEventListener('DOMContentLoaded', function() {
     function styleSequenceVariants(body) {
         var allParas = Array.from(body.querySelectorAll('p'));
         var variantRe = /^(Skinny|Balanced|Wide)\s*\(\$([\d.]+)\):\s*/i;
+        var smartRe = /^(Smart)\s*:\s*/i;
         var costingRe = /\((\d+)\s*combos?\s*[×x]\s*\$([\d.]+)\s*=\s*\$([\d.]+)\)/;
+        var flexiRe = /[—–-]\s*(\d+(?:\.\d+)?)%\s*flexi/i;
         var returnRe = /est\.\s*return:\s*(\d+(?:\.\d+)?)%/i;
 
         function buildVariantCard(text) {
             var vm = text.match(variantRe);
-            if (!vm) return null;
-            var variant = vm[1].toLowerCase();
-            var totalCost = vm[2];
+            var sm = !vm ? text.match(smartRe) : null;
+            if (!vm && !sm) return null;
+            var variant = (vm ? vm[1] : sm[1]).toLowerCase();
+            var totalCost = vm ? vm[2] : null;
             var cm = text.match(costingRe);
             var combos = cm ? cm[1] : '';
             var unitPrice = cm ? cm[2] : '';
             var costDisplay = cm ? cm[3] : totalCost;
             var rm = text.match(returnRe);
-            var returnPct = rm ? rm[1] : null;
-            var afterColon = text.replace(variantRe, '');
+            var fm = text.match(flexiRe);
+            var returnPct = rm ? rm[1] : (fm ? fm[1] : null);
+            var afterColon = text.replace(vm ? variantRe : smartRe, '');
             var legsStr = cm ? afterColon.substring(0, afterColon.indexOf('(' + cm[1])).trim() : afterColon.trim();
 
             var card = document.createElement('div');
@@ -1661,11 +1679,11 @@ document.addEventListener('DOMContentLoaded', function() {
             var headerHtml = '<div class="flex items-center justify-between flex-wrap gap-2">';
             headerHtml += '<div class="flex items-center">';
             headerHtml += '<span class="seq-variant-badge">' + variant.charAt(0).toUpperCase() + variant.slice(1) + '</span>';
-            headerHtml += '<span class="seq-variant-cost">$' + costDisplay + '</span>';
+            if (costDisplay) headerHtml += '<span class="seq-variant-cost">$' + costDisplay + '</span>';
             headerHtml += '</div>';
             headerHtml += '<div class="flex items-center gap-2">';
             if (combos) headerHtml += '<span class="seq-combos">' + combos + ' combos @ $' + unitPrice + '</span>';
-            if (returnPct) headerHtml += '<span class="seq-return">' + returnPct + '%</span>';
+            if (returnPct) headerHtml += '<span class="seq-return">' + returnPct + (fm && !rm ? '% flexi' : '%') + '</span>';
             headerHtml += '</div></div>';
             var legsHtml = '<div class="seq-legs">';
             var legs = legsStr.split('/');
@@ -1966,7 +1984,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var seqEls = puntsContainer.querySelectorAll('.seq-variant-card, p, li, strong');
         seqEls.forEach(function(el) {
             var text = el.textContent || '';
-            var variantMatch = text.match(/^(Skinny|Balanced|Wide)\s*\(/i);
+            var variantMatch = text.match(/^(Skinny|Balanced|Wide|Smart)\s*[\(:]/i);
             if (variantMatch) {
                 var variant = variantMatch[1].toLowerCase();
                 for (var si = 0; si < winSequences.length; si++) {
