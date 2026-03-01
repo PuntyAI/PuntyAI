@@ -1603,9 +1603,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (seqResults && seqResults.length > 0) {
                 var headingText = (sec.heading.textContent || '').toLowerCase();
                 // Find matching results for this section
+                // Extract start race from heading (e.g. "Races 1–4" → 1)
+                var headingRaceMatch = headingText.match(/races?\s*(\d+)/i);
+                var headingStartRace = headingRaceMatch ? parseInt(headingRaceMatch[1]) : null;
                 var matchedResults = seqResults.filter(function(sr) {
                     var sType = (sr.type || '').toLowerCase();
-                    if (/early\s*quaddie/i.test(headingText)) return sType === 'early_quaddie';
+                    // Use start_race for precise matching when available
+                    if (sType === 'quaddie' && sr.start_race && headingStartRace) {
+                        return /quaddie/i.test(headingText) && sr.start_race === headingStartRace;
+                    }
+                    if (/early\s*quaddie/i.test(headingText)) return sType === 'early_quaddie' || sType === 'quaddie';
                     if (/quaddie/i.test(headingText) && !/early/i.test(headingText)) return sType === 'quaddie';
                     if (/big\s*6/i.test(headingText)) return sType === 'big6';
                     if (/multi/i.test(headingText) || /big\s*3/i.test(headingText)) return sType === 'big3_multi';
