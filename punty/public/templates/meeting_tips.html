@@ -1442,11 +1442,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Remove standalone PP paragraph (badge is now inline on staked picks)
+            // Remove Punty's Pick content (badge is now inline on staked picks)
             var pickEls = body.querySelectorAll('.puntys-pick');
             for (var pi = 0; pi < pickEls.length; pi++) {
                 var pickP = pickEls[pi].closest('p') || pickEls[pi].parentElement;
-                if (pickP) pickP.remove();
+                if (!pickP) continue;
+                // Check if this <p> also contains exotic content (merged by <br>)
+                var hasExotic = /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*/i.test(pickP.textContent.trim());
+                if (hasExotic) {
+                    // Only strip PP nodes from the shared paragraph, keep exotic
+                    var ppSpan = pickEls[pi];
+                    // Remove everything from the <br> before PP span to end of paragraph
+                    var toRemove = [];
+                    var foundPP = false;
+                    var children = Array.from(pickP.childNodes);
+                    for (var ci = children.length - 1; ci >= 0; ci--) {
+                        var child = children[ci];
+                        if (child === ppSpan || (child.contains && child.contains(ppSpan))) { foundPP = true; }
+                        if (foundPP) {
+                            toRemove.push(child);
+                            // Stop at the <br> before the PP line
+                            if (child.nodeName === 'BR') break;
+                        }
+                    }
+                    toRemove.forEach(function(n) { n.remove(); });
+                } else {
+                    pickP.remove();
+                }
             }
         }
 
