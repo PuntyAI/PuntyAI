@@ -667,6 +667,7 @@ class ContextBuilder:
                         "win_prob": rp.win_probability,
                         "market_implied": rp.market_implied,
                         "value_rating": rp.value_rating,
+                        "speed_map_position": runner_data.get("speed_map_position"),
                     })
 
             # Build sorted probability ranking and value plays for AI

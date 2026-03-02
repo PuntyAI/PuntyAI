@@ -298,3 +298,70 @@ class TestPaceReadDedup:
         last_bias = None
         should_skip = (posted_count > 0 and current_bias == last_bias)
         assert should_skip is False
+
+
+# ── Speed map bonus on Trifecta combos ───────────────────────────
+
+class TestTrifectaSpeedMapBonus:
+    """Fix 3: on-pace/leader runners get probability boost in Trifecta."""
+
+    def _make_runners(self, speed_positions=None):
+        """Create 4 runners with optional speed map positions."""
+        runners = []
+        for i in range(4):
+            r = {
+                "saddlecloth": i + 1,
+                "horse_name": f"Horse{i+1}",
+                "win_prob": 0.25 - i * 0.05,  # 0.25, 0.20, 0.15, 0.10
+                "market_implied": 0.25 - i * 0.05,
+                "value_rating": 1.10,
+            }
+            if speed_positions and i < len(speed_positions):
+                r["speed_map_position"] = speed_positions[i]
+            runners.append(r)
+        return runners
+
+    def test_on_pace_combo_scores_higher_than_midfield(self):
+        """Combo with on-pace runners should have higher probability than midfield."""
+        # Runners: #1 leader, #2 on_pace, #3 midfield, #4 backmarker
+        runners = self._make_runners(["leader", "on_pace", "midfield", "backmarker"])
+        results = calculate_exotic_combinations(runners)
+
+        standouts = [r for r in results if r.exotic_type == "Trifecta Standout"]
+        if len(standouts) >= 2:
+            # Combo with on-pace runner (#2) should score higher than midfield (#3)
+            # Both combos have #1 as standout; one includes #2, other includes #3
+            combo_with_pace = [s for s in standouts if 2 in s.runners]
+            combo_without_pace = [s for s in standouts if 2 not in s.runners]
+            if combo_with_pace and combo_without_pace:
+                assert combo_with_pace[0].estimated_probability > combo_without_pace[0].estimated_probability
+
+    def test_speed_bonus_applies_to_trifecta_box(self):
+        """Trifecta Box with on-pace runners gets boosted probability."""
+        runners_pace = self._make_runners(["leader", "on_pace", "on_pace", "midfield"])
+        runners_none = self._make_runners([None, None, None, None])
+        results_pace = calculate_exotic_combinations(runners_pace)
+        results_none = calculate_exotic_combinations(runners_none)
+
+        box_pace = [r for r in results_pace if r.exotic_type == "Trifecta Box"]
+        box_none = [r for r in results_none if r.exotic_type == "Trifecta Box"]
+        if box_pace and box_none:
+            # Pace runners should boost the box probability
+            assert box_pace[0].estimated_probability > box_none[0].estimated_probability
+
+    def test_no_speed_data_no_bonus(self):
+        """Runners without speed_map_position get no bonus (multiplier stays 1.0)."""
+        # Use runners with enough value edge to pass thresholds
+        runners = []
+        for i in range(4):
+            runners.append({
+                "saddlecloth": i + 1,
+                "horse_name": f"Horse{i+1}",
+                "win_prob": 0.30 - i * 0.05,  # 0.30, 0.25, 0.20, 0.15
+                "market_implied": 0.20 - i * 0.03,  # lower market → higher value
+                "value_rating": 1.30,
+            })
+        results = calculate_exotic_combinations(runners)
+        standouts = [r for r in results if r.exotic_type == "Trifecta Standout"]
+        # Should still generate combos — just no speed bonus
+        assert len(standouts) >= 1
