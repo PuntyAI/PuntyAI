@@ -2,6 +2,10 @@
 
 {% block title %}Betfair Auto-Bet — PuntyAI{% endblock %}
 
+{% block head %}
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-6" x-data="betfairApp()" x-init="init()">
 
