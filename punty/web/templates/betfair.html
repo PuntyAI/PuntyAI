@@ -147,7 +147,9 @@
                             :style="{ opacity: bet.enabled || bet.status !== 'queued' ? 1 : 0.5 }">
                             <td class="px-4 py-2">
                                 <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold"
-                                      style="background: var(--gradient-sunset); color: #fff;">
+                                      :style="bet.settled
+                                          ? (bet.hit ? 'background: rgba(0,255,136,0.2); color: #00ff88;' : 'background: rgba(255,68,102,0.2); color: #ff4466;')
+                                          : 'background: var(--gradient-sunset); color: #fff;'">
                                     <span x-text="'R' + bet.race_number"></span>
                                 </span>
                                 <span class="ml-2 text-xs" style="color: var(--text-muted);" x-text="formatMeetingId(bet.meeting_id)"></span>
@@ -199,9 +201,19 @@
                                 x-text="bet.scheduled_at ? new Date(bet.scheduled_at).toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '—'">
                             </td>
                             <td class="px-4 py-2 text-center">
-                                <span class="px-2 py-0.5 rounded-full text-xs font-bold"
-                                      :style="statusStyle(bet.status)" x-text="bet.status.toUpperCase()">
-                                </span>
+                                <template x-if="bet.settled">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-bold"
+                                          :style="bet.hit
+                                              ? 'background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);'
+                                              : 'background: rgba(255,68,102,0.2); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);'"
+                                          x-text="bet.hit ? 'WON' : 'LOST'">
+                                    </span>
+                                </template>
+                                <template x-if="!bet.settled">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-bold"
+                                          :style="statusStyle(bet.status)" x-text="bet.status.toUpperCase()">
+                                    </span>
+                                </template>
                             </td>
                             <td class="px-4 py-2 text-center font-bold" style="font-family: 'Rajdhani', sans-serif;"
                                 :style="{ color: bet.pnl > 0 ? '#00ff88' : bet.pnl < 0 ? '#ff4466' : 'var(--text-muted)' }">
@@ -223,22 +235,28 @@
                             </td>
                         </tr>
                     </template>
-                    <!-- Settled/cancelled bets (collapsible) -->
+                    <!-- W/L tally row for settled bets -->
+                    <template x-if="activeBets.filter(b => b.settled).length > 0">
+                        <tr style="border-top: 2px solid var(--border-subtle); background: rgba(255,255,255,0.02);">
+                            <td colspan="8" class="px-4 py-2">
+                                <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
+                                    Results:
+                                    <span style="color: #00ff88;" x-text="activeBets.filter(b => b.hit).length + 'W'"></span>
+                                    / <span style="color: #ff4466;" x-text="activeBets.filter(b => b.settled && !b.hit).length + 'L'"></span>
+                                    <span class="ml-1" :style="{ color: todayPnl >= 0 ? '#00ff88' : '#ff4466' }"
+                                          x-text="'(' + (todayPnl >= 0 ? '+$' : '-$') + Math.abs(todayPnl).toFixed(2) + ')'"></span>
+                                </span>
+                            </td>
+                        </tr>
+                    </template>
+                    <!-- Cancelled/failed bets (collapsible) -->
                     <template x-if="settledBets.length > 0">
                         <tr>
                             <td colspan="8" class="px-4 py-2 cursor-pointer" style="border-top: 2px solid var(--border-subtle);"
                                 @click="showSettled = !showSettled">
                                 <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
                                     <span x-text="showSettled ? '▼' : '▶'"></span>
-                                    Settled / Cancelled (<span x-text="settledBets.length"></span>)
-                                    <template x-if="settledBets.filter(b => b.settled).length > 0">
-                                        <span class="ml-2 normal-case">
-                                            — <span style="color: #00ff88;" x-text="settledBets.filter(b => b.hit).length + 'W'"></span>
-                                            / <span style="color: #ff4466;" x-text="settledBets.filter(b => b.settled && !b.hit).length + 'L'"></span>
-                                            <span class="ml-1" :style="{ color: todayPnl >= 0 ? '#00ff88' : '#ff4466' }"
-                                                  x-text="'(' + (todayPnl >= 0 ? '+$' : '-$') + Math.abs(todayPnl).toFixed(2) + ')'"></span>
-                                        </span>
-                                    </template>
+                                    Cancelled / Failed (<span x-text="settledBets.length"></span>)
                                 </span>
                             </td>
                         </tr>
@@ -413,11 +431,12 @@ function betfairApp() {
         _knownSettled: new Set(),
 
         get activeBets() {
-            return this.todayBets.filter(b => ['queued', 'placing', 'placed'].includes(b.status));
+            // Show all non-cancelled bets in main list (including settled with WON/LOST)
+            return this.todayBets.filter(b => b.status !== 'cancelled' && b.status !== 'failed' && b.status !== 'lapsed');
         },
 
         get settledBets() {
-            return this.todayBets.filter(b => !['queued', 'placing', 'placed'].includes(b.status));
+            return this.todayBets.filter(b => ['cancelled', 'failed', 'lapsed'].includes(b.status));
         },
 
         get stakeTiers() {
