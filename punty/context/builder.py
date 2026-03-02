@@ -19,6 +19,17 @@ class ContextBuilder:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Initialize attributes that build_meeting_context sets;
+        # needed for standalone build_race_context calls
+        self._probability_weights = None
+        self._dl_patterns: list = []
+        self._sel_thresholds = None
+        self._venue_name: str = ""
+        self._standard_times: dict = {}
+        self._jockey_strike_rates: dict = {}
+        self._trainer_strike_rates: dict = {}
+        self._hkjc_jockeys: dict = {}
+        self._hkjc_trainers: dict = {}
 
     async def build_meeting_context(
         self,
@@ -703,6 +714,7 @@ class ContextBuilder:
             return {
                 "probability_ranked": [
                     {"horse": name, "win_prob": f"{data['win_prob'] * 100:.1f}%",
+                     "place_value_rating": data.get("place_value_rating", 1.0),
                      "saddlecloth": data.get("saddlecloth")}
                     for name, data in ranked
                 ],

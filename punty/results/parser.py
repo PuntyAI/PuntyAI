@@ -17,7 +17,7 @@ _BIG3_HORSE = re.compile(
     #   Old: 1) *HORSE* (Race 2, No.8) — $2.80
     #   New: *1 - HORSE* (Race 2, No.8) — $2.80
     # Saddlecloth accepts: No.X, No X, #X
-    r"(?:(?P<rank_old>\d)\)\s*\*(?P<name_old>[A-Z][A-Z\s'\u2019\-]+?)\*|\*(?P<rank_new>\d)\s*[-–—]\s*(?P<name_new>[A-Z][A-Z\s'\u2019\-]+?)\*)\s*\(Race\s*(?P<race>\d+),\s*(?:No\.?\s*|#)(?P<saddle>\d+)\)\s*.*?\$(?P<odds>\d+\.?\d*)",
+    r"(?:(?P<rank_old>\d)\)\s*\*(?P<name_old>[A-Z][A-Z0-9\s'\u2019\-]+?)\*|\*(?P<rank_new>\d)\s*[-–—]\s*(?P<name_new>[A-Z][A-Z0-9\s'\u2019\-]+?)\*)\s*\(Race\s*(?P<race>\d+),\s*(?:No\.?\s*|#)(?P<saddle>\d+)\)\s*.*?\$(?P<odds>\d+\.?\d*)",
     re.IGNORECASE,
 )
 _BIG3_MULTI = re.compile(
@@ -33,14 +33,14 @@ _RACE_HEADER = re.compile(
 #   Old: 1. *HORSE* (No.1) — $3.50 / $1.45
 #   New: *1. HORSE* (No.1) — $3.50 / $1.45
 _SELECTION = re.compile(
-    r"(?:(\d)\.\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*(\d)\.\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\((?:No\.?\s*|#)(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
+    r"(?:(\d)\.\s*\*([A-Z][A-Z0-9\s'\u2019\-]+?)\*|\*(\d)\.\s*([A-Z][A-Z0-9\s'\u2019\-]+?)\*)\s*\((?:No\.?\s*|#)(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 # Matches both formats:
 #   Old: Roughie: *HORSE* (No.1) — $3.50 / $1.45
 #   New: *Roughie: HORSE* (No.1) — $3.50 / $1.45
 _ROUGHIE = re.compile(
-    r"(?:Roughie:\s*\*([A-Z][A-Z\s'\u2019\-]+?)\*|\*Roughie:\s*([A-Z][A-Z\s'\u2019\-]+?)\*)\s*\((?:No\.?\s*|#)(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
+    r"(?:Roughie:\s*\*([A-Z][A-Z0-9\s'\u2019\-]+?)\*|\*Roughie:\s*([A-Z][A-Z0-9\s'\u2019\-]+?)\*)\s*\((?:No\.?\s*|#)(\d+)\)\s*.*?\$(\d+\.?\d*)(?:\s*/\s*\$(\d+\.?\d*))?",
     re.IGNORECASE,
 )
 
@@ -251,7 +251,11 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
 
     # --- Race selections + exotics ---
     for race_key, race_data in data.get("races", {}).items():
-        race_num = int(race_key)
+        try:
+            race_num = int(race_key)
+        except (ValueError, TypeError):
+            logger.warning(f"Skipping non-numeric race key: {race_key}")
+            continue
 
         for sel in race_data.get("selections", []):
             p = _pick_base()
@@ -432,12 +436,18 @@ def validate_parsed_picks(parsed_picks: list[dict], pre_selections: dict) -> lis
     logging any silent failures where picks were expected but not parsed.
     """
     warnings = []
-    expected_races = set(pre_selections.get("races", {}).keys())
+    # Coerce both to int for reliable comparison (JSON keys are strings, parsed are ints)
+    expected_races = set()
+    for k in pre_selections.get("races", {}).keys():
+        try:
+            expected_races.add(int(k))
+        except (ValueError, TypeError):
+            pass
     parsed_races = set(p.get("race_number") for p in parsed_picks if p.get("pick_type") == "selection")
 
     missing_races = expected_races - parsed_races
     for race_num in sorted(missing_races):
-        race_data = pre_selections.get("races", {}).get(race_num, {})
+        race_data = pre_selections.get("races", {}).get(str(race_num), {})
         expected_count = len(race_data.get("picks", []))
         warnings.append(
             f"Race {race_num}: no picks parsed (expected {expected_count} selections)"
@@ -866,8 +876,6 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
 
             # Parse costing info if present
             costing_m = _SEQ_COSTING.search(legs_raw)
-            combo_count = int(costing_m.group(1)) if costing_m else None
-            unit_price = float(costing_m.group(2)) if costing_m else None
             # Store total outlay (not unit price) for accurate settlement
             total_outlay = float(costing_m.group(3)) if costing_m else None
             est_return_pct = float(costing_m.group(4)) if costing_m and costing_m.group(4) else None

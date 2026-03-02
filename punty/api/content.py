@@ -2,7 +2,7 @@
 
 import json
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -374,7 +374,7 @@ async def review_content(
 
 @router.put("/{content_id}")
 async def update_content(
-    content_id: str, raw_content: str, db: AsyncSession = Depends(get_db)
+    content_id: str, raw_content: str = Body(..., embed=True), db: AsyncSession = Depends(get_db)
 ):
     """Update content manually."""
     from punty.models.content import Content

@@ -294,55 +294,6 @@ class ContentGenerator:
             log_generate_error(venue_name, str(e))
             yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
-    async def generate_initialise(
-        self,
-        meeting_id: str,
-        save: bool = True,
-    ) -> dict[str, Any]:
-        """Generate meeting initialisation content."""
-        await self._ensure_openai_key()
-        logger.info(f"Generating Initialise for {meeting_id}")
-
-        # Build context
-        context = await self.context_builder.build_meeting_context(meeting_id)
-        if not context:
-            raise ValueError(f"Meeting not found: {meeting_id}")
-
-        # Load prompts
-        personality = load_prompt("personality")
-        initialise_prompt = load_prompt("initialise")
-
-        # Get analysis weights
-        analysis_weights = await self.get_analysis_weights()
-        initialise_prompt = initialise_prompt.replace("{ANALYSIS_WEIGHTS}", analysis_weights)
-
-        # Format context
-        context_str = self._format_context_for_prompt(context)
-
-        # Generate
-        raw_content = await self.ai_client.generate_with_context(
-            system_prompt=personality,
-            context=context_str,
-            instruction=initialise_prompt + f"\n\nInitialise meeting for {context['meeting']['venue']} on {context['meeting']['date']}",
-            temperature=0.7,
-        )
-        if not raw_content or not raw_content.strip():
-            raise Exception("AI generation failed - no content returned")
-        await self._log_token_usage("initialise", meeting_id)
-
-        result = {
-            "raw_content": raw_content,
-            "meeting_id": meeting_id,
-            "content_type": "initialise",
-        }
-
-        if save:
-            content = await self._save_content(result, requires_review=True)
-            result["content_id"] = content.id
-            result["status"] = content.status
-
-        return result
-
     async def _build_learning_context(self, context: dict) -> str:
         """Build learning context from past predictions for inclusion in prompt.
 
@@ -749,6 +700,8 @@ class ContentGenerator:
         context = await self.context_builder.build_wrapup_context(meeting_id)
         if not context:
             raise ValueError(f"Meeting not found: {meeting_id}")
+        if not context.get("race_summaries"):
+            raise ValueError("No completed races yet — check results first")
 
         personality = load_prompt("personality")
         wrapup_prompt = load_prompt("wrap_up")

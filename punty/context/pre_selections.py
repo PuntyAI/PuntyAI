@@ -496,11 +496,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     if num_places == 2:
         # Only 2 places paid — Place is much harder to collect.
-        # Prefer Win over straight Place.
-        if rank <= 2 and win_prob >= 0.25:
-            return "Win"
+        # Prefer Win over straight Place in small fields.
         if rank <= 2:
-            return "Win"  # small fields (≤7) still need Win exposure
+            return "Win"
         # Lower ranks: only Place if very high place probability
         if place_prob >= 0.55 and place_value >= 1.0:
             return "Place"
@@ -808,10 +806,7 @@ def _determine_race_pool(
         return POOL_STANDARD
 
     # Only 1 pick with marginal edge → low pool
-    if positive_ev_count <= 1:
-        return POOL_LOW
-
-    return POOL_STANDARD
+    return POOL_LOW
 
 
 def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -> tuple[bool, str | None]:
@@ -1075,10 +1070,9 @@ def _select_exotic(
     # -59.1% without. Quinella with fav +89.7%, without -72.3%.
     fav_saddlecloth = None
     if picks:
-        # Fav = runner with lowest odds among our picks
-        staked = [p for p in picks if not p.tracked_only]
-        if staked:
-            fav_saddlecloth = min(staked, key=lambda p: p.odds).saddlecloth
+        # Fav = runner with lowest odds among ALL our picks (including tracked_only/no_bet,
+        # since a short-priced favourite is still the market fav for exotic anchoring)
+        fav_saddlecloth = min(picks, key=lambda p: p.odds).saddlecloth
 
     # --- Cluster / tightness detection ---
     # Tight race: spread between rank 1-4 tips <$3. Wide race: spread $6+.

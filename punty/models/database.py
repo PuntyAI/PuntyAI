@@ -50,12 +50,7 @@ async def init_db() -> None:
     from punty.memory import models as memory_models  # noqa: F401  # registers memory models
 
     async with engine.begin() as conn:
-        _text = __import__("sqlalchemy").text
-
-        # Enable WAL mode and busy timeout for concurrent access
-        await conn.execute(_text("PRAGMA journal_mode=WAL"))
-        await conn.execute(_text("PRAGMA busy_timeout=30000"))
-
+        # WAL mode and busy_timeout are set per-connection by _set_sqlite_pragmas listener
         await conn.run_sync(Base.metadata.create_all)
 
         # Create memory tables if they don't exist (for existing databases)
@@ -94,19 +89,6 @@ async def init_db() -> None:
                 conditions_json TEXT DEFAULT '{}',
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL
-            )""",
-            """CREATE TABLE IF NOT EXISTS live_updates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                meeting_id VARCHAR(64) NOT NULL REFERENCES meetings(id),
-                race_number INTEGER,
-                update_type VARCHAR(20) NOT NULL,
-                content TEXT NOT NULL,
-                tweet_id VARCHAR(64),
-                parent_tweet_id VARCHAR(64),
-                horse_name VARCHAR(100),
-                odds FLOAT,
-                pnl FLOAT,
-                created_at DATETIME NOT NULL
             )""",
             """CREATE TABLE IF NOT EXISTS race_assessments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
