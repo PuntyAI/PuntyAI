@@ -50,10 +50,13 @@ class BetfairBetScheduler:
             await asyncio.sleep(30)
 
     async def _tick(self):
-        from punty.betting.queue import execute_due_bets
+        from punty.betting.queue import execute_due_bets, refresh_bet_selections
 
         self.last_check = melb_now_naive()
         async with async_session() as db:
+            swaps = await refresh_bet_selections(db)
+            if swaps:
+                logger.info(f"BetfairBetScheduler: {swaps} bet swap(s) this tick")
             placed = await execute_due_bets(db)
             if placed:
                 self.bets_placed_today += placed

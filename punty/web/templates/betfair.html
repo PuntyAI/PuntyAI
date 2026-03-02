@@ -119,7 +119,14 @@
                                 </span>
                                 <span class="ml-2 text-xs" style="color: var(--text-muted);" x-text="formatMeetingId(bet.meeting_id)"></span>
                             </td>
-                            <td class="px-4 py-2 font-bold" x-text="bet.horse_name"></td>
+                            <td class="px-4 py-2 font-bold">
+                                <span x-text="bet.horse_name"></span>
+                                <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
+                                      :style="(bet.bet_type || 'place') === 'win'
+                                          ? 'background: rgba(255,170,0,0.2); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3);'
+                                          : 'background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);'"
+                                      x-text="(bet.bet_type || 'place').toUpperCase()"></span>
+                            </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <!-- Editable stake for queued bets -->
                                 <template x-if="bet.status === 'queued' && bet._editing">
@@ -193,7 +200,14 @@
                                 </span>
                                 <span class="ml-2 text-xs" style="color: var(--text-muted);" x-text="formatMeetingId(bet.meeting_id)"></span>
                             </td>
-                            <td class="px-4 py-2" x-text="bet.horse_name"></td>
+                            <td class="px-4 py-2">
+                                <span x-text="bet.horse_name"></span>
+                                <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
+                                      :style="(bet.bet_type || 'place') === 'win'
+                                          ? 'background: rgba(255,170,0,0.15); color: #ffaa00;'
+                                          : 'background: rgba(0,212,255,0.1); color: rgba(0,212,255,0.6);'"
+                                      x-text="(bet.bet_type || 'place').toUpperCase()"></span>
+                            </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 $<span x-text="bet.stake.toFixed(2)"></span>
                             </td>

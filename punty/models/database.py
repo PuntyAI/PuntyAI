@@ -147,6 +147,7 @@ async def init_db() -> None:
                 saddlecloth INTEGER,
                 market_id VARCHAR(64),
                 selection_id INTEGER,
+                bet_type VARCHAR(10) DEFAULT 'place',
                 stake FLOAT DEFAULT 2.00,
                 requested_odds FLOAT,
                 matched_odds FLOAT,
@@ -266,6 +267,8 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN tracked_only BOOLEAN DEFAULT 0",
             # Human-readable reason for No Bet (tracked_only) picks
             "ALTER TABLE picks ADD COLUMN no_bet_reason VARCHAR(200)",
+            # Betfair bet type: place (default) or win (for odds-on horses)
+            "ALTER TABLE betfair_bets ADD COLUMN bet_type VARCHAR(10) DEFAULT 'place'",
         ]:
             try:
                 await conn.execute(_text(col))
