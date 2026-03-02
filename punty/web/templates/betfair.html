@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block title %}Betfair Auto-Bet — PuntyAI{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6" x-data="betfairApp()" x-init="init()">
+
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold" style="font-family: 'Orbitron', sans-serif; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                BETFAIR AUTO-BET
+            </h1>
+            <p class="text-sm mt-1" style="color: var(--text-muted);">Automated $<span x-text="currentStake.toFixed(2)">2.00</span> place bets on rank 1 picks</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- Balance Badge -->
+            <div class="px-4 py-2 rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <span class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">Balance</span>
+                <div class="text-xl font-bold" style="font-family: 'Orbitron', sans-serif; color: var(--cyan);">
+                    $<span x-text="balance.toFixed(2)">50.00</span>
+                </div>
+            </div>
+            <!-- Today P&L -->
+            <div class="px-4 py-2 rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <span class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">Today P&L</span>
+                <div class="text-xl font-bold" style="font-family: 'Orbitron', sans-serif;"
+                     :style="{ color: todayPnl >= 0 ? '#00ff88' : '#ff4466' }">
+                    <span x-text="(todayPnl >= 0 ? '+$' : '-$') + Math.abs(todayPnl).toFixed(2)">$0.00</span>
+                </div>
+            </div>
+            <!-- Scheduler Toggle -->
+            <button @click="toggleScheduler()"
+                    class="px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                    :style="schedulerRunning
+                        ? 'background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);'
+                        : 'background: rgba(255,68,102,0.15); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);'">
+                <span x-text="schedulerRunning ? '● RUNNING' : '○ STOPPED'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <template x-for="stat in [
+            { label: 'Total Bets', value: totalBets, fmt: 'int' },
+            { label: 'Strike Rate', value: strikeRate, fmt: 'pct' },
+            { label: 'Total P&L', value: totalPnl, fmt: 'pnl' },
+            { label: 'ROI', value: roi, fmt: 'pct' },
+            { label: 'Current Stake', value: currentStake, fmt: 'dollar' },
+        ]">
+            <div class="px-3 py-2 rounded-lg text-center" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <div class="text-xs uppercase tracking-wider" style="color: var(--text-muted);" x-text="stat.label"></div>
+                <div class="text-lg font-bold mt-1" style="font-family: 'Rajdhani', sans-serif;"
+                     :style="{ color: stat.fmt === 'pnl' ? (stat.value >= 0 ? '#00ff88' : '#ff4466') : 'var(--text-primary)' }">
+                    <span x-show="stat.fmt === 'int'" x-text="stat.value"></span>
+                    <span x-show="stat.fmt === 'pct'" x-text="stat.value.toFixed(1) + '%'"></span>
+                    <span x-show="stat.fmt === 'pnl'" x-text="(stat.value >= 0 ? '+$' : '-$') + Math.abs(stat.value).toFixed(2)"></span>
+                    <span x-show="stat.fmt === 'dollar'" x-text="'$' + stat.value.toFixed(2)"></span>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Queue Table -->
+    <div class="rounded-xl overflow-hidden" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+        <div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--border-subtle);">
+            <h2 class="text-lg font-bold" style="font-family: 'Rajdhani', sans-serif;">Today's Queue</h2>
+            <div class="flex gap-2">
+                <button @click="toggleAll(true)"
+                        class="px-3 py-1 rounded text-xs font-bold"
+                        style="background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.3);">
+                    Enable All
+                </button>
+                <button @click="toggleAll(false)"
+                        class="px-3 py-1 rounded text-xs font-bold"
+                        style="background: rgba(255,68,102,0.15); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);">
+                    Disable All
+                </button>
+            </div>
+        </div>
+
+        <template x-if="todayBets.length === 0">
+            <div class="px-4 py-8 text-center" style="color: var(--text-muted);">
+                No bets queued for today. Approve a meeting's early mail to populate the queue.
+            </div>
+        </template>
+
+        <div class="overflow-x-auto">
+            <table x-show="todayBets.length > 0" class="w-full text-sm">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                        <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Race</th>
+                        <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Horse</th>
+                        <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Stake</th>
+                        <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Odds</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Scheduled</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Status</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">P&L</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Toggle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="bet in todayBets" :key="bet.id">
+                        <tr style="border-bottom: 1px solid var(--border-subtle);"
+                            :style="{ opacity: bet.enabled || bet.status !== 'queued' ? 1 : 0.5 }">
+                            <td class="px-4 py-2">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold"
+                                      style="background: var(--gradient-sunset); color: #fff;">
+                                    <span x-text="'R' + bet.race_number"></span>
+                                </span>
+                                <span class="ml-2 text-xs" style="color: var(--text-muted);" x-text="formatMeetingId(bet.meeting_id)"></span>
+                            </td>
+                            <td class="px-4 py-2 font-bold" x-text="bet.horse_name"></td>
+                            <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
+                                $<span x-text="bet.stake.toFixed(2)"></span>
+                            </td>
+                            <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
+                                <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : (bet.requested_odds ? '$' + bet.requested_odds.toFixed(2) : '—')"></span>
+                            </td>
+                            <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);"
+                                x-text="bet.scheduled_at ? new Date(bet.scheduled_at).toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '—'">
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-bold"
+                                      :style="statusStyle(bet.status)" x-text="bet.status.toUpperCase()">
+                                </span>
+                            </td>
+                            <td class="px-4 py-2 text-center font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                :style="{ color: bet.pnl > 0 ? '#00ff88' : bet.pnl < 0 ? '#ff4466' : 'var(--text-muted)' }">
+                                <span x-text="bet.settled ? ((bet.pnl >= 0 ? '+$' : '-$') + Math.abs(bet.pnl).toFixed(2)) : '—'"></span>
+                            </td>
+                            <td class="px-4 py-2 text-center">
+                                <button x-show="bet.status === 'queued'" @click="toggleBet(bet)"
+                                        class="w-10 h-5 rounded-full relative transition-all cursor-pointer"
+                                        :style="bet.enabled
+                                            ? 'background: rgba(0,212,255,0.3); border: 1px solid var(--cyan);'
+                                            : 'background: rgba(128,128,144,0.2); border: 1px solid rgba(128,128,144,0.3);'">
+                                    <span class="absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all"
+                                          :style="bet.enabled
+                                              ? 'left: calc(100% - 18px); background: var(--cyan);'
+                                              : 'left: 2px; background: #808090;'">
+                                    </span>
+                                </button>
+                                <span x-show="bet.status !== 'queued'" class="text-xs" style="color: var(--text-muted);">—</span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Balance Management -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 rounded-xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Balance Management</h3>
+            <div class="flex gap-2">
+                <input type="number" x-model="newBalance" step="0.01" min="0"
+                       class="flex-1 px-3 py-2 rounded text-sm"
+                       style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--border-subtle);"
+                       placeholder="New balance">
+                <button @click="updateBalance()"
+                        class="px-4 py-2 rounded text-sm font-bold"
+                        style="background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.3);">
+                    Set
+                </button>
+            </div>
+            <p class="mt-2 text-xs" style="color: var(--text-muted);">
+                Stake doubles every time balance doubles from initial $<span x-text="initialBalance.toFixed(0)"></span>
+            </p>
+        </div>
+
+        <div class="p-4 rounded-xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Stake Progression</h3>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <template x-for="tier in stakeTiers">
+                    <div class="flex justify-between px-2 py-1 rounded"
+                         :style="tier.active ? 'background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2);' : 'background: var(--bg-card-alt);'">
+                        <span style="color: var(--text-muted);" x-text="'$' + tier.from + '-$' + tier.to"></span>
+                        <span class="font-bold" :style="{ color: tier.active ? 'var(--cyan)' : 'var(--text-secondary)' }"
+                              x-text="'$' + tier.stake.toFixed(2)"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function betfairApp() {
+    return {
+        balance: 50,
+        initialBalance: 50,
+        currentStake: 2,
+        todayPnl: 0,
+        todayBets: [],
+        totalBets: 0,
+        totalPnl: 0,
+        totalHits: 0,
+        strikeRate: 0,
+        roi: 0,
+        schedulerRunning: false,
+        newBalance: '',
+
+        get stakeTiers() {
+            const tiers = [];
+            for (let i = 0; i < 6; i++) {
+                const from = this.initialBalance * Math.pow(2, i);
+                const to = from * 2 - 1;
+                const stake = 2 * Math.pow(2, i);
+                tiers.push({
+                    from: Math.round(from),
+                    to: Math.round(to),
+                    stake: stake,
+                    active: this.balance >= from && this.balance < from * 2,
+                });
+            }
+            return tiers;
+        },
+
+        async init() {
+            await this.refresh();
+            await this.refreshStatus();
+            setInterval(() => this.refresh(), 30000);
+        },
+
+        async refresh() {
+            try {
+                const resp = await fetch('/api/betfair/queue');
+                const data = await resp.json();
+                this.balance = data.balance || 0;
+                this.initialBalance = data.initial_balance || 50;
+                this.currentStake = data.current_stake || 2;
+                this.todayPnl = data.today_pnl || 0;
+                this.todayBets = data.today_bets || [];
+                this.totalBets = data.total_bets || 0;
+                this.totalPnl = data.total_pnl || 0;
+                this.totalHits = data.total_hits || 0;
+                this.strikeRate = data.strike_rate || 0;
+                this.roi = data.roi || 0;
+            } catch (e) { console.error('Failed to refresh queue:', e); }
+        },
+
+        async refreshStatus() {
+            try {
+                const resp = await fetch('/api/betfair/status');
+                const data = await resp.json();
+                this.schedulerRunning = data.running;
+            } catch (e) { console.error('Failed to get status:', e); }
+        },
+
+        async toggleScheduler() {
+            const action = this.schedulerRunning ? 'stop' : 'start';
+            await fetch(`/api/betfair/scheduler/${action}`, { method: 'POST' });
+            await this.refreshStatus();
+        },
+
+        async toggleBet(bet) {
+            try {
+                const resp = await fetch(`/api/betfair/queue/${bet.id}/toggle`, { method: 'PUT' });
+                const data = await resp.json();
+                bet.enabled = data.enabled;
+            } catch (e) { console.error('Toggle failed:', e); }
+        },
+
+        async toggleAll(enabled) {
+            await fetch('/api/betfair/queue/toggle-all', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled }),
+            });
+            await this.refresh();
+        },
+
+        async updateBalance() {
+            if (!this.newBalance || isNaN(this.newBalance)) return;
+            await fetch('/api/betfair/balance', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ balance: parseFloat(this.newBalance) }),
+            });
+            this.newBalance = '';
+            await this.refresh();
+        },
+
+        formatMeetingId(id) {
+            // "sale-2026-03-02" → "Sale"
+            const parts = id.split('-');
+            if (parts.length >= 4) {
+                return parts.slice(0, -3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            }
+            return id;
+        },
+
+        statusStyle(status) {
+            const styles = {
+                queued: 'background: rgba(0,212,255,0.15); color: #00d4ff;',
+                placing: 'background: rgba(255,193,7,0.15); color: #ffc107;',
+                placed: 'background: rgba(0,255,136,0.15); color: #00ff88;',
+                settled: 'background: rgba(157,78,221,0.15); color: #9d4edd;',
+                failed: 'background: rgba(255,68,102,0.15); color: #ff4466;',
+                cancelled: 'background: rgba(128,128,144,0.15); color: #808090;',
+                lapsed: 'background: rgba(128,128,144,0.15); color: #808090;',
+            };
+            return styles[status] || 'color: var(--text-muted);';
+        },
+    };
+}
+</script>
+{% endblock %}

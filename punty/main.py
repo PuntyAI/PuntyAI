@@ -16,7 +16,7 @@ from punty.rate_limit import RateLimitMiddleware
 from punty.models.database import init_db
 from punty.web.routes import router as web_router
 from punty.public.routes import router as public_router
-from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api, weather as weather_api, analytics as analytics_api
+from punty.api import meets, content, scheduler, delivery, settings as settings_api, results as results_api, weather as weather_api, analytics as analytics_api, betfair as betfair_api
 from punty.results.monitor import ResultsMonitor
 
 
@@ -186,6 +186,22 @@ async def lifespan(app: FastAPI):
         # if the app launched before the first race (e.g. 5am morning restart).
         monitor.start()
         logger.info("Results monitor started (will idle until racing window)")
+
+        # Start Betfair auto-bet scheduler
+        from punty.betting.scheduler import betfair_scheduler
+        # Only auto-start if enabled in settings
+        try:
+            from punty.models.settings import AppSettings
+            async with async_session() as bf_db:
+                bf_result = await bf_db.execute(
+                    sa_select(AppSettings).where(AppSettings.key == "betfair_auto_bet_enabled")
+                )
+                bf_setting = bf_result.scalar_one_or_none()
+                if bf_setting and bf_setting.value == "true":
+                    betfair_scheduler.start()
+                    logger.info("Betfair auto-bet scheduler started")
+        except Exception as e:
+            logger.debug(f"Betfair scheduler startup: {e}")
     else:
         app.state.telegram_bot = None
         app.state.results_monitor = None
@@ -199,6 +215,12 @@ async def lifespan(app: FastAPI):
         await app.state.telegram_bot.stop()
     if app.state.results_monitor:
         app.state.results_monitor.stop()
+    # Stop Betfair scheduler
+    try:
+        from punty.betting.scheduler import betfair_scheduler
+        betfair_scheduler.stop()
+    except Exception:
+        pass
     if not settings.disable_background:
         from punty.scheduler.manager import scheduler_manager
         await scheduler_manager.stop()
@@ -260,6 +282,7 @@ app.include_router(settings_api.router, prefix="/api/settings", tags=["settings"
 app.include_router(results_api.router, prefix="/api/results", tags=["results"])
 app.include_router(weather_api.router, prefix="/api/weather", tags=["weather"])
 app.include_router(analytics_api.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(betfair_api.router, prefix="/api/betfair", tags=["betfair"])
 
 
 @app.get("/health")

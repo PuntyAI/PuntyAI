@@ -415,6 +415,72 @@
                 </div>
 
             </div>
+
+            <!-- Betfair Auto-Bet -->
+            <div class="pt-4 mt-4" style="border-top: 1px solid rgba(255,255,255,0.08);">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Betfair Auto-Bet</label>
+
+                <!-- Enable toggle -->
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <span class="text-sm text-gray-600">Auto-bet enabled</span>
+                        <p class="text-xs text-gray-500">Place $2+ bets on rank 1 picks, 5 min before each race</p>
+                    </div>
+                    <button id="bf-toggle"
+                            onclick="toggleBetfairEnabled()"
+                            class="px-3 py-1 rounded text-xs font-bold"
+                            style="{{ 'background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);' if api_key_status.betfair_enabled else 'background: rgba(255,68,102,0.15); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);' }}">
+                        {{ 'ENABLED' if api_key_status.betfair_enabled else 'DISABLED' }}
+                    </button>
+                </div>
+
+                <div id="bf-settings" class="{{ '' if api_key_status.betfair_enabled else 'hidden' }}">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Balance ($)</label>
+                            <input type="number" id="bf_balance" step="0.01" min="0"
+                                   value="{{ settings.get('betfair_balance', {}).get('value', '50') }}"
+                                   class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Initial Balance ($)</label>
+                            <input type="number" id="bf_initial_balance" step="1" min="1"
+                                   value="{{ settings.get('betfair_initial_balance', {}).get('value', '50') }}"
+                                   class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Base Stake ($)</label>
+                            <input type="number" id="bf_stake" step="0.50" min="0.50"
+                                   value="{{ settings.get('betfair_stake', {}).get('value', '2') }}"
+                                   class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Min Odds</label>
+                            <input type="number" id="bf_min_odds" step="0.01" min="1.01"
+                                   value="{{ settings.get('betfair_min_odds', {}).get('value', '1.10') }}"
+                                   class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Commission Rate</label>
+                            <input type="number" id="bf_commission" step="0.01" min="0" max="1"
+                                   value="{{ settings.get('betfair_commission_rate', {}).get('value', '0.05') }}"
+                                   class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Max Daily Loss ($)</label>
+                            <input type="number" id="bf_max_loss" step="1"
+                                   value="{{ settings.get('betfair_max_daily_loss', {}).get('value', '-20') }}"
+                                   class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="flex space-x-2 mt-3">
+                        <button onclick="saveBetfairSettings()"
+                                class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save Betfair Settings</button>
+                        <a href="/betfair" class="text-punty-cyan hover:underline text-sm py-1">View Queue →</a>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Content Generation -->
@@ -1101,6 +1167,29 @@ async function cleanupDatabase() {
         statusEl.style.color = '#dc2626';
         showToast('Cleanup failed', 'error');
     }
+}
+
+async function toggleBetfairEnabled() {
+    const btn = document.getElementById('bf-toggle');
+    const isEnabled = btn.textContent.trim() === 'ENABLED';
+    const newValue = isEnabled ? 'false' : 'true';
+    await saveApiKeys('betfair', {betfair_auto_bet_enabled: newValue});
+    btn.textContent = newValue === 'true' ? 'ENABLED' : 'DISABLED';
+    btn.style = newValue === 'true'
+        ? 'background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);'
+        : 'background: rgba(255,68,102,0.15); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);';
+    document.getElementById('bf-settings').classList.toggle('hidden', newValue !== 'true');
+}
+
+async function saveBetfairSettings() {
+    await saveApiKeys('betfair', {
+        betfair_balance: document.getElementById('bf_balance').value,
+        betfair_initial_balance: document.getElementById('bf_initial_balance').value,
+        betfair_stake: document.getElementById('bf_stake').value,
+        betfair_min_odds: document.getElementById('bf_min_odds').value,
+        betfair_commission_rate: document.getElementById('bf_commission').value,
+        betfair_max_daily_loss: document.getElementById('bf_max_loss').value,
+    });
 }
 </script>
 {% endblock %}

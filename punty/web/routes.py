@@ -635,6 +635,12 @@ async def probability_dashboard(request: Request, db: AsyncSession = Depends(get
     )
 
 
+@router.get("/betfair", response_class=HTMLResponse)
+async def betfair_page(request: Request):
+    """Betfair auto-bet queue management page."""
+    return templates.TemplateResponse("betfair.html", {"request": request})
+
+
 @router.get("/analytics", response_class=HTMLResponse)
 async def analytics_page(request: Request):
     """Backtest analytics dashboard."""
@@ -684,6 +690,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     anthropic_key = await get_api_key(db, "anthropic_api_key")
     pf_api_key = await get_api_key(db, "punting_form_api_key")
     ww_api_key = await get_api_key(db, "willyweather_api_key")
+    bf_enabled = await get_api_key(db, "betfair_auto_bet_enabled")
     # Only pass masked values to template — never expose full keys in HTML
     api_key_status = {
         "openai": ("..." + openai_key[-4:]) if openai_key else "",
@@ -693,6 +700,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         "anthropic": ("..." + anthropic_key[-4:]) if anthropic_key else "",
         "punting_form": ("..." + pf_api_key[-4:]) if pf_api_key else "",
         "willyweather": ("..." + ww_api_key[-4:]) if ww_api_key else "",
+        "betfair_enabled": bf_enabled == "true",
     }
 
     # Load personality prompt (DB first, then file fallback)

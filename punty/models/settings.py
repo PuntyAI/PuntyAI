@@ -214,6 +214,34 @@ class AppSettings(Base):
             "value": "",
             "description": "Anthropic API key for Claude",
         },
+        "betfair_balance": {
+            "value": "50",
+            "description": "Betfair auto-bet tracked balance",
+        },
+        "betfair_initial_balance": {
+            "value": "50",
+            "description": "Betfair initial deposit (stake doubles each time balance doubles from this)",
+        },
+        "betfair_auto_bet_enabled": {
+            "value": "false",
+            "description": "Enable Betfair auto-bet queue population on content approval",
+        },
+        "betfair_stake": {
+            "value": "2",
+            "description": "Betfair base stake per bet (doubles with balance growth)",
+        },
+        "betfair_min_odds": {
+            "value": "1.10",
+            "description": "Minimum Betfair place odds to accept (below = dead money)",
+        },
+        "betfair_commission_rate": {
+            "value": "0.05",
+            "description": "Betfair commission rate on net winnings (5% default)",
+        },
+        "betfair_max_daily_loss": {
+            "value": "-20",
+            "description": "Maximum daily loss before pausing auto-bets",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:

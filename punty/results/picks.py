@@ -994,6 +994,13 @@ async def _settle_picks_for_race_impl(
         except Exception as e:
             logger.warning(f"Failed to refresh strategy insights: {e}")
 
+        # Settle Betfair auto-bets for this race
+        try:
+            from punty.betting.queue import settle_betfair_bets
+            await settle_betfair_bets(db, meeting_id, race_number)
+        except Exception as e:
+            logger.warning(f"Betfair settlement for {meeting_id} R{race_number}: {e}")
+
     return settled_count
 
 
