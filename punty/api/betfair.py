@@ -20,6 +20,10 @@ class BalanceUpdate(BaseModel):
     balance: float
 
 
+class StakeUpdate(BaseModel):
+    stake: float
+
+
 class ToggleAll(BaseModel):
     enabled: bool
     meeting_id: str | None = None
@@ -44,6 +48,35 @@ async def toggle_bet(bet_id: str, db: AsyncSession = Depends(get_db)):
     bet.enabled = not bet.enabled
     await db.commit()
     return bet.to_dict()
+
+
+@router.put("/queue/{bet_id}/stake")
+async def update_bet_stake(bet_id: str, body: StakeUpdate, db: AsyncSession = Depends(get_db)):
+    """Update stake for a single queued bet."""
+    result = await db.execute(select(BetfairBet).where(BetfairBet.id == bet_id))
+    bet = result.scalar_one_or_none()
+    if not bet:
+        raise HTTPException(status_code=404, detail="Bet not found")
+    if bet.status != "queued":
+        raise HTTPException(status_code=400, detail=f"Cannot edit bet in '{bet.status}' status")
+    if body.stake < 0.50:
+        raise HTTPException(status_code=400, detail="Minimum stake is $0.50")
+    bet.stake = round(body.stake, 2)
+    await db.commit()
+    return bet.to_dict()
+
+
+@router.put("/queue/stake-all")
+async def update_all_stakes(body: StakeUpdate, db: AsyncSession = Depends(get_db)):
+    """Set stake for all queued bets."""
+    if body.stake < 0.50:
+        raise HTTPException(status_code=400, detail="Minimum stake is $0.50")
+    result = await db.execute(select(BetfairBet).where(BetfairBet.status == "queued"))
+    bets = result.scalars().all()
+    for bet in bets:
+        bet.stake = round(body.stake, 2)
+    await db.commit()
+    return {"updated": len(bets), "stake": body.stake}
 
 
 @router.put("/queue/toggle-all")

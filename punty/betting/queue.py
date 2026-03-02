@@ -5,7 +5,7 @@ import math
 from datetime import timedelta
 from typing import Optional
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.config import melb_now_naive, melb_now
@@ -65,6 +65,24 @@ def calculate_stake(balance: float, initial_balance: float = DEFAULT_INITIAL_BAL
     return base_stake * (2 ** doublings)
 
 
+async def get_current_stake(db: AsyncSession) -> float:
+    """Get current stake based on mode setting.
+
+    If mode is 'auto', uses doubling formula. Otherwise treats mode value as fixed stake.
+    """
+    mode = await _get_setting(db, "betfair_stake_mode", "auto")
+    if mode.lower() == "auto":
+        balance = await get_balance(db)
+        initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
+        base_stake = float(await _get_setting(db, "betfair_stake", str(DEFAULT_BASE_STAKE)))
+        return calculate_stake(balance, initial_balance, base_stake)
+    else:
+        try:
+            return max(0.50, float(mode))
+        except ValueError:
+            return DEFAULT_BASE_STAKE
+
+
 async def populate_bet_queue(
     db: AsyncSession,
     meeting_id: str,
@@ -99,11 +117,8 @@ async def populate_bet_queue(
     )
     races_by_num = {r.race_number: r for r in race_result.scalars().all()}
 
-    # Get current balance for stake calculation
-    balance = await get_balance(db)
-    initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
-    base_stake = float(await _get_setting(db, "betfair_stake", str(DEFAULT_BASE_STAKE)))
-    stake = calculate_stake(balance, initial_balance, base_stake)
+    # Get current stake (auto-doubling or manual fixed)
+    stake = await get_current_stake(db)
 
     queued = 0
     for pick in rank1_picks:
@@ -400,7 +415,8 @@ async def get_queue_summary(db: AsyncSession) -> dict:
 
     balance = await get_balance(db)
     initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
-    stake = calculate_stake(balance, initial_balance)
+    stake = await get_current_stake(db)
+    stake_mode = await _get_setting(db, "betfair_stake_mode", "auto")
 
     return {
         "balance": balance,
@@ -415,4 +431,5 @@ async def get_queue_summary(db: AsyncSession) -> dict:
         "total_hits": total_hits,
         "strike_rate": round(total_hits / total_bets * 100, 1) if total_bets else 0,
         "roi": round(total_pnl / (total_bets * 2) * 100, 1) if total_bets else 0,  # Approximate
+        "stake_mode": stake_mode,
     }

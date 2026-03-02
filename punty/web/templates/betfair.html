@@ -11,7 +11,10 @@
             <h1 class="text-2xl font-bold" style="font-family: 'Orbitron', sans-serif; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 BETFAIR AUTO-BET
             </h1>
-            <p class="text-sm mt-1" style="color: var(--text-muted);">Automated $<span x-text="currentStake.toFixed(2)">2.00</span> place bets on rank 1 picks</p>
+            <p class="text-sm mt-1" style="color: var(--text-muted);">
+                <span x-text="stakeMode === 'auto' ? 'Auto $' + currentStake.toFixed(2) + ' (doubles with balance)' : 'Manual $' + currentStake.toFixed(2) + ' fixed'"></span>
+                place bets on rank 1 picks
+            </p>
         </div>
         <div class="flex items-center gap-4">
             <!-- Balance Badge -->
@@ -113,7 +116,25 @@
                             </td>
                             <td class="px-4 py-2 font-bold" x-text="bet.horse_name"></td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
-                                $<span x-text="bet.stake.toFixed(2)"></span>
+                                <!-- Editable stake for queued bets -->
+                                <template x-if="bet.status === 'queued' && bet._editing">
+                                    <span class="inline-flex items-center gap-1">
+                                        <input type="number" :value="bet.stake" step="0.50" min="0.50"
+                                               @keydown.enter="saveStake(bet, $event.target.value)"
+                                               @keydown.escape="bet._editing = false"
+                                               @blur="saveStake(bet, $event.target.value)"
+                                               class="w-16 px-1 py-0.5 rounded text-right text-sm"
+                                               style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--cyan);"
+                                               x-ref="stakeInput">
+                                    </span>
+                                </template>
+                                <template x-if="!(bet.status === 'queued' && bet._editing)">
+                                    <span @click="bet.status === 'queued' && (bet._editing = true)"
+                                          :class="bet.status === 'queued' ? 'cursor-pointer hover:underline' : ''"
+                                          :style="bet.status === 'queued' ? 'color: var(--cyan); text-decoration-style: dotted;' : ''">
+                                        $<span x-text="bet.stake.toFixed(2)"></span>
+                                    </span>
+                                </template>
                             </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : (bet.requested_odds ? '$' + bet.requested_odds.toFixed(2) : '—')"></span>
@@ -151,10 +172,50 @@
         </div>
     </div>
 
-    <!-- Balance Management -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Bottom panels -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Stake Control -->
         <div class="p-4 rounded-xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Balance Management</h3>
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Stake Control</h3>
+            <div class="space-y-3">
+                <div class="flex gap-2">
+                    <button @click="setStakeMode('auto')"
+                            class="flex-1 px-3 py-2 rounded text-xs font-bold transition-all"
+                            :style="stakeMode === 'auto'
+                                ? 'background: rgba(0,212,255,0.2); color: var(--cyan); border: 1px solid var(--cyan);'
+                                : 'background: var(--bg-card-alt); color: var(--text-muted); border: 1px solid var(--border-subtle);'">
+                        AUTO
+                    </button>
+                    <button @click="setStakeMode('manual')"
+                            class="flex-1 px-3 py-2 rounded text-xs font-bold transition-all"
+                            :style="stakeMode !== 'auto'
+                                ? 'background: rgba(233,30,140,0.2); color: var(--magenta); border: 1px solid var(--magenta);'
+                                : 'background: var(--bg-card-alt); color: var(--text-muted); border: 1px solid var(--border-subtle);'">
+                        MANUAL
+                    </button>
+                </div>
+                <!-- Manual stake input -->
+                <div x-show="stakeMode !== 'auto'" class="flex gap-2">
+                    <input type="number" x-model="manualStake" step="0.50" min="0.50"
+                           class="flex-1 px-3 py-2 rounded text-sm"
+                           style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--border-subtle);"
+                           placeholder="Fixed stake">
+                    <button @click="applyManualStake()"
+                            class="px-4 py-2 rounded text-sm font-bold"
+                            style="background: rgba(233,30,140,0.15); color: var(--magenta); border: 1px solid rgba(233,30,140,0.3);">
+                        Apply All
+                    </button>
+                </div>
+                <p class="text-xs" style="color: var(--text-muted);">
+                    <span x-show="stakeMode === 'auto'">Stake doubles every time balance doubles from $<span x-text="initialBalance.toFixed(0)"></span></span>
+                    <span x-show="stakeMode !== 'auto'">Fixed stake — click any queued bet's stake to edit individually</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Balance Management -->
+        <div class="p-4 rounded-xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Balance</h3>
             <div class="flex gap-2">
                 <input type="number" x-model="newBalance" step="0.01" min="0"
                        class="flex-1 px-3 py-2 rounded text-sm"
@@ -166,14 +227,14 @@
                     Set
                 </button>
             </div>
-            <p class="mt-2 text-xs" style="color: var(--text-muted);">
-                Stake doubles every time balance doubles from initial $<span x-text="initialBalance.toFixed(0)"></span>
-            </p>
         </div>
 
+        <!-- Stake Progression (only visible in auto mode) -->
         <div class="p-4 rounded-xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Stake Progression</h3>
-            <div class="grid grid-cols-2 gap-2 text-xs">
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted);">
+                <span x-text="stakeMode === 'auto' ? 'Stake Progression' : 'Quick Stakes'"></span>
+            </h3>
+            <div x-show="stakeMode === 'auto'" class="grid grid-cols-2 gap-2 text-xs">
                 <template x-for="tier in stakeTiers">
                     <div class="flex justify-between px-2 py-1 rounded"
                          :style="tier.active ? 'background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2);' : 'background: var(--bg-card-alt);'">
@@ -181,6 +242,16 @@
                         <span class="font-bold" :style="{ color: tier.active ? 'var(--cyan)' : 'var(--text-secondary)' }"
                               x-text="'$' + tier.stake.toFixed(2)"></span>
                     </div>
+                </template>
+            </div>
+            <div x-show="stakeMode !== 'auto'" class="grid grid-cols-3 gap-2 text-xs">
+                <template x-for="amt in [1, 2, 3, 5, 10, 20]">
+                    <button @click="manualStake = amt; applyManualStake()"
+                            class="px-2 py-2 rounded font-bold transition-all"
+                            :style="currentStake == amt
+                                ? 'background: rgba(233,30,140,0.2); color: var(--magenta); border: 1px solid var(--magenta);'
+                                : 'background: var(--bg-card-alt); color: var(--text-secondary); border: 1px solid var(--border-subtle);'"
+                            x-text="'$' + amt"></button>
                 </template>
             </div>
         </div>
@@ -194,6 +265,7 @@ function betfairApp() {
         balance: 50,
         initialBalance: 50,
         currentStake: 2,
+        stakeMode: 'auto',
         todayPnl: 0,
         todayBets: [],
         totalBets: 0,
@@ -203,6 +275,7 @@ function betfairApp() {
         roi: 0,
         schedulerRunning: false,
         newBalance: '',
+        manualStake: '2',
 
         get stakeTiers() {
             const tiers = [];
@@ -233,13 +306,18 @@ function betfairApp() {
                 this.balance = data.balance || 0;
                 this.initialBalance = data.initial_balance || 50;
                 this.currentStake = data.current_stake || 2;
+                this.stakeMode = data.stake_mode || 'auto';
                 this.todayPnl = data.today_pnl || 0;
-                this.todayBets = data.today_bets || [];
+                // Preserve _editing state across refreshes
+                const oldEditing = {};
+                this.todayBets.forEach(b => { if (b._editing) oldEditing[b.id] = true; });
+                this.todayBets = (data.today_bets || []).map(b => ({...b, _editing: !!oldEditing[b.id]}));
                 this.totalBets = data.total_bets || 0;
                 this.totalPnl = data.total_pnl || 0;
                 this.totalHits = data.total_hits || 0;
                 this.strikeRate = data.strike_rate || 0;
                 this.roi = data.roi || 0;
+                if (this.stakeMode !== 'auto') this.manualStake = this.currentStake;
             } catch (e) { console.error('Failed to refresh queue:', e); }
         },
 
@@ -274,6 +352,50 @@ function betfairApp() {
             await this.refresh();
         },
 
+        async saveStake(bet, value) {
+            bet._editing = false;
+            const stake = parseFloat(value);
+            if (isNaN(stake) || stake < 0.50) return;
+            if (stake === bet.stake) return;
+            try {
+                const resp = await fetch(`/api/betfair/queue/${bet.id}/stake`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stake }),
+                });
+                const data = await resp.json();
+                bet.stake = data.stake;
+            } catch (e) { console.error('Stake update failed:', e); }
+        },
+
+        async setStakeMode(mode) {
+            const value = mode === 'auto' ? 'auto' : String(this.manualStake || 2);
+            await fetch('/api/settings/api-keys/betfair', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys: { betfair_stake_mode: value } }),
+            });
+            await this.refresh();
+        },
+
+        async applyManualStake() {
+            const stake = parseFloat(this.manualStake);
+            if (isNaN(stake) || stake < 0.50) return;
+            // Save mode as the fixed amount
+            await fetch('/api/settings/api-keys/betfair', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys: { betfair_stake_mode: String(stake) } }),
+            });
+            // Update all queued bets
+            await fetch('/api/betfair/queue/stake-all', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stake }),
+            });
+            await this.refresh();
+        },
+
         async updateBalance() {
             if (!this.newBalance || isNaN(this.newBalance)) return;
             await fetch('/api/betfair/balance', {
@@ -286,7 +408,6 @@ function betfairApp() {
         },
 
         formatMeetingId(id) {
-            // "sale-2026-03-02" → "Sale"
             const parts = id.split('-');
             if (parts.length >= 4) {
                 return parts.slice(0, -3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
