@@ -22,6 +22,7 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
 DEFAULT_COMMISSION_RATE = 0.05  # 5% Betfair commission
 DEFAULT_MAX_DAILY_LOSS = -20.0
+DEFAULT_MIN_PLACE_PROB = 0.60  # 60% minimum place probability
 
 
 async def _get_setting(db: AsyncSession, key: str, default: str = "") -> str:
@@ -119,12 +120,21 @@ async def populate_bet_queue(
 
     # Get current stake (auto-doubling or manual fixed)
     stake = await get_current_stake(db)
+    min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
 
     queued = 0
     for pick in rank1_picks:
         race = races_by_num.get(pick.race_number)
         if not race or not race.start_time:
             logger.debug(f"Skipping bet for {meeting_id} R{pick.race_number}: no start time")
+            continue
+
+        # Filter by place probability — only bet on high-confidence selections
+        if pick.place_probability is not None and pick.place_probability < min_place_prob:
+            logger.info(
+                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                f"place_prob {pick.place_probability:.1%} < {min_place_prob:.0%} threshold"
+            )
             continue
 
         # Check if already queued (unique constraint)
@@ -185,6 +195,21 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
     now = melb_now_naive()
     cutoff = now - timedelta(minutes=10)
+
+    # Auto-cancel bets that missed their window (scheduled_at + 10min < now)
+    expired_result = await db.execute(
+        select(BetfairBet).where(
+            BetfairBet.status == "queued",
+            BetfairBet.scheduled_at <= cutoff,
+        )
+    )
+    expired = expired_result.scalars().all()
+    for bet in expired:
+        bet.status = "cancelled"
+        bet.error_message = "Missed betting window"
+        logger.info(f"Betfair: auto-cancelled {bet.id} — missed window")
+    if expired:
+        await db.commit()
 
     result = await db.execute(
         select(BetfairBet).where(

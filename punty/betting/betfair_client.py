@@ -72,28 +72,68 @@ async def resolve_place_market(
         return None
 
     if not catalogue:
+        logger.debug(f"Betfair: no PLACE catalogue for {venue}")
         return None
 
-    # Find the market matching our race number
-    for market in catalogue:
-        market_name = market.get("marketName", "")
-        race_num = scraper._extract_race_number(market_name, market)
-        if race_num == race_number:
-            runners = []
-            for runner in market.get("runners", []):
-                name = runner.get("runnerName", "")
-                name = re.sub(r"^\d+\.\s*", "", name)  # strip saddlecloth prefix
-                runners.append({
-                    "selection_id": runner["selectionId"],
-                    "horse_name": name,
-                })
-            return {
-                "market_id": market["marketId"],
-                "runners": runners,
-            }
+    # PLACE markets are all named "To Be Placed" — no race number in the name.
+    # Match by cross-referencing our Race start_time with market start times.
+    from punty.models.meeting import Race
+    from sqlalchemy import select as sa_select
+    race_result = await db.execute(
+        sa_select(Race).where(
+            Race.meeting_id == meeting_id,
+            Race.race_number == race_number,
+        )
+    )
+    race = race_result.scalar_one_or_none()
 
-    logger.debug(f"Betfair: no PLACE market found for {venue} R{race_number}")
-    return None
+    target_market = None
+    if race and race.start_time:
+        # Match by closest start time (within 5 min tolerance)
+        race_utc = race.start_time
+        # start_time is stored as naive Melbourne time; Betfair returns UTC
+        # Convert Melbourne naive → UTC by subtracting ~11h (AEDT) or ~10h (AEST)
+        import zoneinfo
+        melb_tz = zoneinfo.ZoneInfo("Australia/Melbourne")
+        race_aware = race_utc.replace(tzinfo=melb_tz)
+        race_utc_dt = race_aware.astimezone(timezone.utc)
+
+        best_diff = None
+        for market in catalogue:
+            ms = market.get("marketStartTime", "")
+            if not ms:
+                continue
+            # Parse Betfair ISO time "2026-03-02T06:34:00.000Z"
+            market_dt = datetime.fromisoformat(ms.replace("Z", "+00:00"))
+            diff = abs((market_dt - race_utc_dt).total_seconds())
+            if diff < 300 and (best_diff is None or diff < best_diff):  # within 5 min
+                best_diff = diff
+                target_market = market
+
+    if not target_market:
+        # Fallback: sorted FIRST_TO_START, so Nth market = race N
+        # Only works when catalogue has all races for the meeting
+        idx = race_number - 1
+        if idx < len(catalogue):
+            target_market = catalogue[idx]
+            logger.info(f"Betfair: matched {venue} R{race_number} by position (index {idx})")
+
+    if not target_market:
+        logger.debug(f"Betfair: no PLACE market found for {venue} R{race_number}")
+        return None
+
+    runners = []
+    for runner in target_market.get("runners", []):
+        name = runner.get("runnerName", "")
+        name = re.sub(r"^\d+\.\s*", "", name)  # strip saddlecloth prefix
+        runners.append({
+            "selection_id": runner["selectionId"],
+            "horse_name": name,
+        })
+    return {
+        "market_id": target_market["marketId"],
+        "runners": runners,
+    }
 
 
 async def get_place_odds(
