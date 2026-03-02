@@ -420,6 +420,10 @@ PROVIDER_KEYS = {
     "anthropic": ["anthropic_api_key"],
     "punting_form": ["punting_form_api_key"],
     "willyweather": ["willyweather_api_key"],
+    "betfair": [
+        "betfair_auto_bet_enabled", "betfair_balance", "betfair_initial_balance",
+        "betfair_stake", "betfair_min_odds", "betfair_commission_rate", "betfair_max_daily_loss",
+    ],
 }
 
 

@@ -46,7 +46,7 @@ async_session = async_sessionmaker(
 async def init_db() -> None:
     """Initialize the database, creating all tables."""
     # Import models to ensure they're registered with Base
-    from punty.models import meeting, content, settings, pick, live_update  # noqa: F401
+    from punty.models import meeting, content, settings, pick, live_update, betfair_bet  # noqa: F401
     from punty.memory import models as memory_models  # noqa: F401  # registers memory models
 
     async with engine.begin() as conn:
@@ -137,6 +137,33 @@ async def init_db() -> None:
                 reason VARCHAR(20) DEFAULT 'auto_tune',
                 picks_analyzed INTEGER DEFAULT 0,
                 created_at DATETIME NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS betfair_bets (
+                id VARCHAR(128) PRIMARY KEY,
+                pick_id VARCHAR(16) REFERENCES picks(id),
+                meeting_id VARCHAR(64) NOT NULL REFERENCES meetings(id),
+                race_number INTEGER NOT NULL,
+                horse_name VARCHAR(100) NOT NULL,
+                saddlecloth INTEGER,
+                market_id VARCHAR(64),
+                selection_id INTEGER,
+                stake FLOAT DEFAULT 2.00,
+                requested_odds FLOAT,
+                matched_odds FLOAT,
+                enabled BOOLEAN DEFAULT 1,
+                status VARCHAR(20) DEFAULT 'queued',
+                bet_id VARCHAR(64),
+                size_matched FLOAT,
+                average_price_matched FLOAT,
+                error_message TEXT,
+                hit BOOLEAN,
+                pnl FLOAT,
+                settled BOOLEAN DEFAULT 0,
+                settled_at DATETIME,
+                scheduled_at DATETIME,
+                placed_at DATETIME,
+                created_at DATETIME NOT NULL,
+                UNIQUE(meeting_id, race_number)
             )""",
             """CREATE TABLE IF NOT EXISTS token_usage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -327,6 +354,9 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_token_usage_created ON token_usage(created_at)",
             "CREATE INDEX IF NOT EXISTS ix_token_usage_content_type ON token_usage(content_type)",
             # Composite indexes for frequently queried patterns
+            "CREATE INDEX IF NOT EXISTS ix_betfair_bets_meeting ON betfair_bets(meeting_id)",
+            "CREATE INDEX IF NOT EXISTS ix_betfair_bets_status ON betfair_bets(status)",
+            "CREATE INDEX IF NOT EXISTS ix_betfair_bets_scheduled ON betfair_bets(scheduled_at)",
             "CREATE INDEX IF NOT EXISTS ix_picks_settled_hit ON picks(settled, hit)",
             "CREATE INDEX IF NOT EXISTS ix_picks_settled_at ON picks(settled_at)",
             "CREATE INDEX IF NOT EXISTS ix_content_meeting_type_status ON content(meeting_id, content_type, status)",

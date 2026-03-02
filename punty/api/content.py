@@ -311,6 +311,13 @@ async def review_content(
                 await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)
                 # Store picks as memories for learning system
                 await store_picks_as_memories(db, content.meeting_id, content.id)
+                # Populate Betfair auto-bet queue
+                try:
+                    from punty.betting.queue import populate_bet_queue
+                    await populate_bet_queue(db, content.meeting_id, content.id)
+                except Exception as bf_e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Betfair queue populate: {bf_e}")
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(f"Failed to store picks/memories: {e}")
