@@ -246,6 +246,10 @@ class AppSettings(Base):
             "value": "-20",
             "description": "Maximum daily loss before pausing auto-bets",
         },
+        "betfair_min_place_prob": {
+            "value": "0.50",
+            "description": "Minimum place probability (0-1) to queue a bet — only high-confidence selections",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:
