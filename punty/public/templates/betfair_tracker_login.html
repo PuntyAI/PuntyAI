@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Betfair Tracker — PuntyAI{% endblock %}
+
+{% block content %}
+<div class="min-h-[60vh] flex items-center justify-center">
+    <div class="w-full max-w-sm p-6 rounded-xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+        <h1 class="text-xl font-bold text-center mb-6" style="font-family: 'Orbitron', sans-serif; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+            BETFAIR TRACKER
+        </h1>
+        <form method="post" class="space-y-4">
+            <div>
+                <label class="block text-xs uppercase tracking-wider mb-1" style="color: var(--text-muted);">Password</label>
+                <input type="password" name="password" autofocus required
+                       class="w-full px-3 py-2 rounded text-sm"
+                       style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--border-subtle);"
+                       placeholder="Enter password">
+            </div>
+            {% if error %}
+            <p class="text-xs font-bold" style="color: #ff4466;">{{ error }}</p>
+            {% endif %}
+            <button type="submit" class="w-full px-4 py-2 rounded font-bold text-sm transition-all"
+                    style="background: rgba(233,30,140,0.2); color: var(--magenta); border: 1px solid rgba(233,30,140,0.4);">
+                Enter
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
