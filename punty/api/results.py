@@ -29,7 +29,7 @@ async def start_monitor(request: Request):
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     monitor = getattr(request.app.state, "results_monitor", None)
     if not monitor:
-        return {"error": "Monitor not initialized"}
+        raise HTTPException(status_code=503, detail="Monitor not initialized")
     monitor.start()
     return {"status": "started"}
 
@@ -41,7 +41,7 @@ async def stop_monitor(request: Request):
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     monitor = getattr(request.app.state, "results_monitor", None)
     if not monitor:
-        return {"error": "Monitor not initialized"}
+        raise HTTPException(status_code=503, detail="Monitor not initialized")
     monitor.stop()
     return {"status": "stopped"}
 
@@ -55,13 +55,13 @@ async def check_meeting(meeting_id: str, request: Request, db: AsyncSession = De
         raise HTTPException(status_code=404, detail=f"Meeting not found: {meeting_id}")
     monitor = getattr(request.app.state, "results_monitor", None)
     if not monitor:
-        return {"error": "Monitor not initialized"}
+        raise HTTPException(status_code=503, detail="Monitor not initialized")
     try:
         await monitor.check_single_meeting(meeting_id)
         return {"status": "checked", "meeting_id": meeting_id}
     except Exception as e:
         logger.error(f"Manual check failed: {e}")
-        return {"status": "error", "error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/performance")
@@ -77,7 +77,7 @@ async def performance_summary(
         try:
             target = date_type.fromisoformat(date)
         except ValueError:
-            return {"error": "Invalid date format, use YYYY-MM-DD"}
+            raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
     else:
         from punty.config import melb_today
         target = melb_today()
@@ -86,7 +86,7 @@ async def performance_summary(
         return await get_performance_summary(db, target)
     except Exception as e:
         logger.error(f"Performance summary failed: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/performance/history")
@@ -105,7 +105,7 @@ async def performance_history(
         try:
             end_date = date_type.fromisoformat(end)
         except ValueError:
-            return {"error": "Invalid end date format, use YYYY-MM-DD"}
+            raise HTTPException(status_code=400, detail="Invalid end date format, use YYYY-MM-DD")
     else:
         end_date = today
 
@@ -113,7 +113,7 @@ async def performance_history(
         try:
             start_date = date_type.fromisoformat(start)
         except ValueError:
-            return {"error": "Invalid start date format, use YYYY-MM-DD"}
+            raise HTTPException(status_code=400, detail="Invalid start date format, use YYYY-MM-DD")
     else:
         start_date = end_date - timedelta(days=7)
 
@@ -122,7 +122,7 @@ async def performance_history(
         return {"start": start_date.isoformat(), "end": end_date.isoformat(), "days": days}
     except Exception as e:
         logger.error(f"Performance history failed: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{meeting_id}/summary")
@@ -138,7 +138,7 @@ async def meeting_summary(meeting_id: str, db: AsyncSession = Depends(get_db)):
         return summary
     except Exception as e:
         logger.error(f"Summary failed: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{meeting_id}/race/{race_number}/sectionals")

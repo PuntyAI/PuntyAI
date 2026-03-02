@@ -499,13 +499,6 @@ DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
     },
 }
 
-# Legacy aliases
-WEIGHT_MARKET = DEFAULT_WEIGHTS["market"]
-WEIGHT_FORM = DEFAULT_WEIGHTS["form"]
-WEIGHT_PACE = DEFAULT_WEIGHTS["pace"]
-WEIGHT_MOVEMENT = DEFAULT_WEIGHTS["movement"]
-WEIGHT_CLASS = DEFAULT_WEIGHTS["class_fitness"]
-
 # Baseline win rate for an average runner (1/field_size fallback)
 DEFAULT_BASELINE = 0.10
 
@@ -1676,7 +1669,7 @@ def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
 
     # Days since last run — fitness curve
     days = _get(runner, "days_since_last_run")
-    if days and isinstance(days, int):
+    if days and isinstance(days, (int, float)):
         if 14 <= days <= 28:
             score += 0.05  # sweet spot
         elif 7 <= days <= 13:

@@ -41,6 +41,9 @@ class ContextSnapshot(Base):
     """A snapshot of data context at a point in time."""
 
     __tablename__ = "context_snapshots"
+    __table_args__ = (
+        Index("ix_context_snapshots_meeting_id", "meeting_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     meeting_id: Mapped[str] = mapped_column(String(64), ForeignKey("meetings.id"))
@@ -166,6 +169,10 @@ class ScheduledJob(Base):
     """Scheduled background job configuration."""
 
     __tablename__ = "scheduled_jobs"
+    __table_args__ = (
+        Index("ix_scheduled_jobs_meeting_id", "meeting_id"),
+        Index("ix_scheduled_jobs_enabled", "enabled"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     meeting_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

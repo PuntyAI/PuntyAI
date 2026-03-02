@@ -513,7 +513,7 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
         yield {"step": 0, "total": 1, "label": f"Failed to acquire scrape lock: {e}", "status": "error"}
         return
 
-    try:
+    try:  # noqa: SIM117 — separate try for lock release safety
         pf_scraper = None
 
         # Step 1: Primary API — runner/race data
@@ -1356,25 +1356,6 @@ def _apply_pf_conditions(meeting: Meeting, cond: dict) -> None:
     if cond.get("rainfall") is not None:
         meeting.rainfall = cond["rainfall"]
 
-
-def _apply_ra_conditions(meeting: Meeting, cond: dict) -> None:
-    """Legacy: Apply RA conditions directly. Prefer refresh_track_conditions()."""
-    new_cond = cond.get("condition")
-    if new_cond:
-        logger.info(
-            f"RA condition for {meeting.venue}: "
-            f"{meeting.track_condition!r} → {new_cond!r}"
-        )
-        meeting.track_condition = new_cond
-    if cond.get("rail"):
-        meeting.rail_position = cond["rail"]
-    if cond.get("weather"):
-        meeting.weather = cond["weather"]
-    if cond.get("penetrometer") is not None:
-        meeting.penetrometer = cond["penetrometer"]
-    if cond.get("rainfall") is not None:
-        meeting.rainfall = cond["rainfall"]
-    _apply_irrigation(meeting, cond)
 
 
 def _apply_hkjc_conditions(meeting: Meeting, info: dict) -> None:

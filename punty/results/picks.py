@@ -231,8 +231,9 @@ async def _settle_picks_for_race_impl(
     #
     # Hong Kong (HKJC): Always 3 places paid regardless of field size.
     from punty.venues import is_international_venue
-    meeting_id = race_id.rsplit("-r", 1)[0]  # e.g. "sha-tin-2026-02-22-r1" → "sha-tin-2026-02-22"
     # Extract venue from meeting_id (everything before the date portion)
+    # NOTE: Do NOT reassign meeting_id here — the parameter is correct.
+    # rsplit("-r", 1) would corrupt venues with "-r" in slug (e.g. "mount-barker").
     import re as _re
     _venue_match = _re.match(r"^(.+?)-\d{4}-\d{2}-\d{2}$", meeting_id)
     venue_from_id = _venue_match.group(1).replace("-", " ") if _venue_match else ""
@@ -504,7 +505,6 @@ async def _settle_picks_for_race_impl(
             runner = runners_by_name.get(pick.horse_name.upper())
 
         # Settle if runner has finish position, OR if race is paying/closed (unplaced = loss)
-        race_final = race and race.results_status in ("Paying", "Closed")
         has_result = runner and (runner.finish_position is not None or race_final)
 
         if has_result:
@@ -592,8 +592,8 @@ async def _settle_picks_for_race_impl(
 
     # --- Exotics --- (skip if race not finished)
     scratched_saddlecloths = {
-        r.saddlecloth for r in runners
-        if r.scratched and r.saddlecloth
+        int(r.saddlecloth) for r in runners
+        if r.scratched and r.saddlecloth is not None
     }
 
     exotic_picks = []
@@ -838,12 +838,24 @@ async def _settle_picks_for_race_impl(
                 )
             )
             seq_winner_map = {r.race_id: r for r in seq_winners_result.scalars().all()}
+
+            # Batch-load all runners for scratch checks (avoids N+1 per-leg queries)
+            seq_all_runners_result = await db.execute(
+                select(Runner).where(Runner.race_id.in_(seq_race_ids))
+            )
+            _all_seq_runners = seq_all_runners_result.scalars().all()
+            seq_scratched_map: dict[str, set[int]] = {}
+            for r in _all_seq_runners:
+                if r.scratched and r.saddlecloth is not None:
+                    seq_scratched_map.setdefault(r.race_id, set()).add(int(r.saddlecloth))
         else:
             seq_race_map = {}
             seq_winner_map = {}
+            seq_scratched_map = {}
     else:
         seq_race_map = {}
         seq_winner_map = {}
+        seq_scratched_map = {}
 
     for pick in sequence_picks:
         if not pick.sequence_legs or not pick.sequence_start_race:
@@ -888,12 +900,7 @@ async def _settle_picks_for_race_impl(
                 all_hit = False
             elif winner_sc not in leg_sc_set:
                 # Check if all our selections in this leg were scratched (free pass)
-                # Load scratched runners for this leg's race
-                leg_runners_result = await db.execute(
-                    select(Runner).where(Runner.race_id == leg_race_id)
-                )
-                leg_runners = leg_runners_result.scalars().all()
-                leg_scratched = {int(r.saddlecloth) for r in leg_runners if r.scratched and r.saddlecloth}
+                leg_scratched = seq_scratched_map.get(leg_race_id, set())
                 non_scratched_selections = [s for s in leg_sc_set if s not in leg_scratched]
                 if not non_scratched_selections:
                     # All our selections scratched — free pass, leg counts as hit
@@ -939,9 +946,9 @@ async def _settle_picks_for_race_impl(
                 if dividend > 0:
                     # exotic_stake stores total outlay directly
                     # Calculate flexi return: dividend × (stake / num_combos)
-                    legs_data = json.loads(pick.sequence_legs) if pick.sequence_legs else []
+                    # Use already-processed `legs` (handles legacy "/" format)
                     num_combos = 1
-                    for leg in legs_data:
+                    for leg in legs:
                         num_combos *= len(leg)
                     total_stake = pick.exotic_stake or 1.0
                     flexi_pct = total_stake / num_combos if num_combos > 0 else 1.0
@@ -1247,6 +1254,21 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
             key = (race_row.meeting_id, race_row.race_number)
             race_times_cache[key] = race_row.start_time
 
+    # Batch-load big3 max race numbers to avoid N+1 queries
+    big3_multi_content_ids = {r[0].content_id for r in rows if r[0].pick_type == "big3_multi" and r[0].content_id}
+    big3_max_race_map: dict[int, int] = {}
+    if big3_multi_content_ids:
+        big3_result = await db.execute(
+            select(Pick.content_id, func.max(Pick.race_number))
+            .where(
+                Pick.content_id.in_(big3_multi_content_ids),
+                Pick.pick_type == "big3",
+            )
+            .group_by(Pick.content_id)
+        )
+        for content_id, max_race in big3_result.all():
+            big3_max_race_map[content_id] = max_race
+
     # Process each pick and determine its effective race time
     pick_events = []
     for pick, race_start_time, meeting_date in rows:
@@ -1256,23 +1278,15 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
         if pick.pick_type == "sequence" and pick.sequence_start_race and pick.sequence_legs:
             # Concluding race = start_race + num_legs - 1
             try:
-                legs = _json.loads(pick.sequence_legs)
+                legs = json.loads(pick.sequence_legs)
                 concluding_race = pick.sequence_start_race + len(legs) - 1
                 effective_race_num = concluding_race
                 effective_time = race_times_cache.get((pick.meeting_id, concluding_race))
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 pass
 
         elif pick.pick_type == "big3_multi":
-            # Find the max race number among the big3 picks for this content
-            big3_result = await db.execute(
-                select(func.max(Pick.race_number))
-                .where(
-                    Pick.content_id == pick.content_id,
-                    Pick.pick_type == "big3",
-                )
-            )
-            max_race = big3_result.scalar()
+            max_race = big3_max_race_map.get(pick.content_id)
             if max_race:
                 effective_race_num = max_race
                 effective_time = race_times_cache.get((pick.meeting_id, max_race))
