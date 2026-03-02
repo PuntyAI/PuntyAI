@@ -631,8 +631,31 @@ async def settle_betfair_bets(
         )
     )
     runner = runner_result.scalar_one_or_none()
-    if not runner or runner.finish_position is None:
-        return 0  # Results not in yet
+    if not runner:
+        return 0  # Runner not found
+
+    # Check if race has results via results_status
+    from punty.models.meeting import Race
+    race_result = await db.execute(
+        select(Race.results_status).where(Race.id == race_id)
+    )
+    race_status = race_result.scalar_one_or_none()
+
+    # Determine finish position — use actual position, or infer from dividends
+    finish_pos = runner.finish_position
+    if finish_pos is None:
+        if race_status in ("Paying", "Closed"):
+            # Infer from dividends: win_dividend > 0 = 1st, place_dividend > 0 = top 3
+            if runner.win_dividend and runner.win_dividend > 0:
+                finish_pos = 1
+            elif runner.place_dividend and runner.place_dividend > 0:
+                finish_pos = 3  # placed (top 3), exact position unknown
+            elif race_status == "Closed":
+                finish_pos = 99  # race over, no dividend = didn't place
+            else:
+                return 0  # Paying but no dividend data yet — wait
+        else:
+            return 0  # Results not in yet
 
     commission_rate = float(await _get_setting(db, "betfair_commission_rate", str(DEFAULT_COMMISSION_RATE)))
     odds = bet.matched_odds or bet.requested_odds or 0
@@ -641,7 +664,7 @@ async def settle_betfair_bets(
     is_win_bet = getattr(bet, "bet_type", "place") == "win"
     hit_threshold = 1 if is_win_bet else 3  # win = 1st only, place = top 3
 
-    if runner.finish_position <= hit_threshold:
+    if finish_pos <= hit_threshold:
         gross_profit = (odds - 1) * bet.stake
         commission = gross_profit * commission_rate
         bet.pnl = round(gross_profit - commission, 2)
