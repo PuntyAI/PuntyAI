@@ -136,6 +136,148 @@ async def resolve_place_market(
     }
 
 
+async def resolve_win_market(
+    db: AsyncSession,
+    venue: str,
+    race_date: date,
+    meeting_id: str,
+    race_number: int,
+) -> Optional[dict[str, Any]]:
+    """Resolve a Betfair WIN market for a specific race.
+
+    Returns: {market_id, runners: [{selection_id, horse_name}]} or None
+    """
+    if settings.mock_external:
+        logger.info(f"[MOCK] resolve_win_market: {venue} R{race_number}")
+        return {
+            "market_id": f"mock-win-{meeting_id}-r{race_number}",
+            "runners": [{"selection_id": 12345, "horse_name": "Mock Horse"}],
+        }
+
+    scraper = await _get_scraper(db)
+    if not scraper:
+        logger.warning("Betfair not configured — cannot resolve win market")
+        return None
+
+    from punty.scrapers.betfair import _strip_venue_prefix
+
+    search_venue = _strip_venue_prefix(venue)
+    date_from = datetime(race_date.year, race_date.month, race_date.day,
+                         tzinfo=timezone.utc).isoformat()
+    date_to = datetime(race_date.year, race_date.month, race_date.day,
+                       23, 59, 59, tzinfo=timezone.utc).isoformat()
+
+    try:
+        catalogue = await scraper._api_call("listMarketCatalogue", {
+            "filter": {
+                "eventTypeIds": ["7"],
+                "marketCountries": ["AU"],
+                "marketTypeCodes": ["WIN"],
+                "venues": [search_venue],
+                "marketStartTime": {"from": date_from, "to": date_to},
+            },
+            "marketProjection": [
+                "RUNNER_DESCRIPTION",
+                "RUNNER_METADATA",
+                "EVENT",
+                "MARKET_START_TIME",
+            ],
+            "maxResults": "25",
+            "sort": "FIRST_TO_START",
+        })
+    except Exception as e:
+        logger.error(f"Betfair listMarketCatalogue (WIN) failed: {e}")
+        return None
+
+    if not catalogue:
+        logger.debug(f"Betfair: no WIN catalogue for {venue}")
+        return None
+
+    # Match by start time (same logic as resolve_place_market)
+    from punty.models.meeting import Race
+    from sqlalchemy import select as sa_select
+    race_result = await db.execute(
+        sa_select(Race).where(
+            Race.meeting_id == meeting_id,
+            Race.race_number == race_number,
+        )
+    )
+    race = race_result.scalar_one_or_none()
+
+    target_market = None
+    if race and race.start_time:
+        import zoneinfo
+        melb_tz = zoneinfo.ZoneInfo("Australia/Melbourne")
+        race_aware = race.start_time.replace(tzinfo=melb_tz)
+        race_utc_dt = race_aware.astimezone(timezone.utc)
+
+        best_diff = None
+        for market in catalogue:
+            ms = market.get("marketStartTime", "")
+            if not ms:
+                continue
+            market_dt = datetime.fromisoformat(ms.replace("Z", "+00:00"))
+            diff = abs((market_dt - race_utc_dt).total_seconds())
+            if diff < 300 and (best_diff is None or diff < best_diff):
+                best_diff = diff
+                target_market = market
+
+    if not target_market:
+        idx = race_number - 1
+        if idx < len(catalogue):
+            target_market = catalogue[idx]
+            logger.info(f"Betfair: matched WIN {venue} R{race_number} by position (index {idx})")
+
+    if not target_market:
+        logger.debug(f"Betfair: no WIN market found for {venue} R{race_number}")
+        return None
+
+    runners = []
+    for runner in target_market.get("runners", []):
+        name = runner.get("runnerName", "")
+        name = re.sub(r"^\d+\.\s*", "", name)
+        runners.append({
+            "selection_id": runner["selectionId"],
+            "horse_name": name,
+        })
+    return {
+        "market_id": target_market["marketId"],
+        "runners": runners,
+    }
+
+
+async def get_win_odds(
+    db: AsyncSession,
+    market_id: str,
+    selection_id: int,
+) -> Optional[float]:
+    """Get current best back price for a selection in a WIN market."""
+    if settings.mock_external:
+        return 1.80
+
+    scraper = await _get_scraper(db)
+    if not scraper:
+        return None
+
+    try:
+        books = await scraper._api_call("listMarketBook", {
+            "marketIds": [market_id],
+            "priceProjection": {"priceData": ["EX_BEST_OFFERS"]},
+        })
+    except Exception as e:
+        logger.error(f"Betfair listMarketBook (WIN) failed: {e}")
+        return None
+
+    if not books:
+        return None
+
+    for book in books:
+        for runner in book.get("runners", []):
+            if runner.get("selectionId") == selection_id:
+                return scraper._get_best_back(runner)
+    return None
+
+
 async def get_place_odds(
     db: AsyncSession,
     market_id: str,

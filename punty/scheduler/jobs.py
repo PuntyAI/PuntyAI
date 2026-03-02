@@ -1218,6 +1218,15 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     results["steps"].append(f"post_existing: {post_result.get('status')}")
                     results["post_result"] = post_result
                     results["content_id"] = morning_content.id
+                    # Populate Betfair bet queue (regen/full-gen paths do this
+                    # via auto_approve_and_post, but post-existing skipped it)
+                    try:
+                        from punty.betting.queue import populate_bet_queue
+                        queued = await populate_bet_queue(db, morning_content.meeting_id, morning_content.id)
+                        if queued:
+                            results["steps"].append(f"betfair_queue: {queued} bets")
+                    except Exception as eq:
+                        logger.error(f"Betfair queue failed for {venue}: {eq}")
                 except Exception as e:
                     logger.error(f"Post existing failed for {venue}: {e}")
                     results["errors"].append(f"post_existing: {str(e)}")

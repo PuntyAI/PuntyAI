@@ -193,6 +193,145 @@ async def populate_bet_queue(
     return queued
 
 
+SWAP_THRESHOLD = 0.03  # 3 percentage-point gap required to swap picks
+ODDS_ON_THRESHOLD = 2.00  # Below this → switch to win bet
+
+
+async def refresh_bet_selections(db: AsyncSession) -> int:
+    """Re-evaluate queued bets: swap scratched horses, upgrade to higher place_prob,
+    and flip odds-on horses to win bets.
+
+    Called every 30s by the scheduler, before execute_due_bets.
+    Only touches queued + enabled bets — never placed/settled/cancelled.
+
+    Returns count of swaps + cancellations performed.
+    """
+    result = await db.execute(
+        select(BetfairBet).where(
+            BetfairBet.status == "queued",
+            BetfairBet.enabled == True,
+        )
+    )
+    queued_bets = result.scalars().all()
+    if not queued_bets:
+        return 0
+
+    min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
+    changes = 0
+
+    for bet in queued_bets:
+        race_id = f"{bet.meeting_id}-r{bet.race_number}"
+
+        # Load all selection picks for this race's content
+        pick_result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == bet.meeting_id,
+                Pick.race_number == bet.race_number,
+                Pick.pick_type == "selection",
+                Pick.tracked_only != True,
+            )
+        )
+        candidates = pick_result.scalars().all()
+        if not candidates:
+            continue
+
+        # Check if current horse is scratched
+        current_runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.saddlecloth == bet.saddlecloth,
+            )
+        )
+        current_runner = current_runner_result.scalar_one_or_none()
+        current_scratched = current_runner.scratched if current_runner else False
+
+        # Find best non-scratched candidate above min_place_prob
+        best_pick = None
+        best_pp = 0.0
+        for pick in candidates:
+            runner_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.saddlecloth == pick.saddlecloth,
+                )
+            )
+            runner = runner_result.scalar_one_or_none()
+            if runner and runner.scratched:
+                continue
+            pp = pick.place_probability or 0
+            if pp >= min_place_prob and pp > best_pp:
+                best_pp = pp
+                best_pick = pick
+
+        if current_scratched:
+            if best_pick and best_pick.id != bet.pick_id:
+                # Swap to best available
+                old_name = bet.horse_name
+                bet.pick_id = best_pick.id
+                bet.horse_name = best_pick.horse_name or "Unknown"
+                bet.saddlecloth = best_pick.saddlecloth
+                bet.requested_odds = best_pick.place_odds_at_tip
+                changes += 1
+                logger.info(
+                    f"Swapped {bet.id}: {old_name} (scratched) → "
+                    f"{bet.horse_name} ({best_pp:.0%}pp)"
+                )
+            else:
+                # No viable replacement — cancel
+                bet.status = "cancelled"
+                bet.error_message = "All candidates scratched/below threshold"
+                changes += 1
+                logger.info(f"Cancelled {bet.id}: {bet.horse_name} scratched, no replacement")
+        elif best_pick and best_pick.id != bet.pick_id:
+            # Current horse not scratched — only swap if replacement is significantly better
+            current_pp = 0.0
+            for pick in candidates:
+                if pick.id == bet.pick_id:
+                    current_pp = pick.place_probability or 0
+                    break
+            if best_pp - current_pp >= SWAP_THRESHOLD:
+                old_name = bet.horse_name
+                bet.pick_id = best_pick.id
+                bet.horse_name = best_pick.horse_name or "Unknown"
+                bet.saddlecloth = best_pick.saddlecloth
+                bet.requested_odds = best_pick.place_odds_at_tip
+                changes += 1
+                logger.info(
+                    f"Swapped {bet.id}: {old_name} ({current_pp:.0%}pp) → "
+                    f"{bet.horse_name} ({best_pp:.0%}pp)"
+                )
+
+        # Odds-on detection: if current horse is < $2.00 → switch to win bet
+        if bet.status == "queued":
+            active_runner_result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.saddlecloth == bet.saddlecloth,
+                )
+            )
+            active_runner = active_runner_result.scalar_one_or_none()
+            current_odds = (active_runner.current_odds if active_runner else None) or 0
+            current_bet_type = getattr(bet, "bet_type", "place")
+
+            if current_odds > 0 and current_odds < ODDS_ON_THRESHOLD and current_bet_type != "win":
+                bet.bet_type = "win"
+                changes += 1
+                logger.info(
+                    f"Odds-on flip {bet.id}: {bet.horse_name} ${current_odds:.2f} → WIN bet"
+                )
+            elif current_odds >= ODDS_ON_THRESHOLD and current_bet_type == "win":
+                # Drifted back above $2 — revert to place
+                bet.bet_type = "place"
+                changes += 1
+                logger.info(
+                    f"Odds drift {bet.id}: {bet.horse_name} ${current_odds:.2f} → PLACE bet"
+                )
+
+    if changes:
+        await db.commit()
+    return changes
+
+
 async def execute_due_bets(db: AsyncSession) -> int:
     """Find and execute bets whose scheduled_at has arrived.
 
@@ -202,7 +341,10 @@ async def execute_due_bets(db: AsyncSession) -> int:
     - scheduled_at <= now
     - scheduled_at > now - 10min (don't bet on races that started 5+ min ago)
     """
-    from punty.betting.betfair_client import resolve_place_market, get_place_odds, place_bet
+    from punty.betting.betfair_client import (
+        resolve_place_market, resolve_win_market,
+        get_place_odds, get_win_odds, place_bet,
+    )
 
     now = melb_now_naive()
     cutoff = now - timedelta(minutes=10)
@@ -278,12 +420,19 @@ async def execute_due_bets(db: AsyncSession) -> int:
         bet.status = "placing"
         await db.commit()
 
-        market = await resolve_place_market(
-            db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
-        )
+        # Resolve market based on bet_type (win or place)
+        is_win = getattr(bet, "bet_type", "place") == "win"
+        if is_win:
+            market = await resolve_win_market(
+                db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
+            )
+        else:
+            market = await resolve_place_market(
+                db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
+            )
         if not market:
             bet.status = "failed"
-            bet.error_message = "Could not resolve Betfair place market"
+            bet.error_message = f"Could not resolve Betfair {'win' if is_win else 'place'} market"
             await db.commit()
             continue
 
@@ -306,8 +455,11 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         bet.selection_id = selection_id
 
-        # Get current odds
-        current_odds = await get_place_odds(db, market["market_id"], selection_id)
+        # Get current odds from the appropriate market
+        if is_win:
+            current_odds = await get_win_odds(db, market["market_id"], selection_id)
+        else:
+            current_odds = await get_place_odds(db, market["market_id"], selection_id)
         if not current_odds or current_odds < min_odds:
             bet.status = "cancelled"
             bet.error_message = f"Odds too low: ${current_odds}" if current_odds else "No odds available"
@@ -350,7 +502,10 @@ async def settle_betfair_bets(
 ) -> int:
     """Settle Betfair bets after race results are in.
 
-    Hit = finish position 1-3 (place). P&L accounts for 5% Betfair commission.
+    Hit condition depends on bet_type:
+    - place: finish position 1-3
+    - win: finish position 1 only
+    P&L accounts for 5% Betfair commission.
     """
     result = await db.execute(
         select(BetfairBet).where(
@@ -380,14 +535,15 @@ async def settle_betfair_bets(
     odds = bet.matched_odds or bet.requested_odds or 0
 
     now = melb_now_naive()
-    if runner.finish_position <= 3:
-        # Place hit — profit after commission
+    is_win_bet = getattr(bet, "bet_type", "place") == "win"
+    hit_threshold = 1 if is_win_bet else 3  # win = 1st only, place = top 3
+
+    if runner.finish_position <= hit_threshold:
         gross_profit = (odds - 1) * bet.stake
         commission = gross_profit * commission_rate
         bet.pnl = round(gross_profit - commission, 2)
         bet.hit = True
     else:
-        # Miss — lose stake (already deducted)
         bet.pnl = round(-bet.stake, 2)
         bet.hit = False
 

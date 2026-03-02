@@ -31,6 +31,7 @@ class BetfairBet(Base):
     selection_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Bet parameters
+    bet_type: Mapped[str] = mapped_column(String(10), default="place")  # "place" or "win"
     stake: Mapped[float] = mapped_column(Float, default=2.00)
     requested_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     matched_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -72,6 +73,7 @@ class BetfairBet(Base):
             "saddlecloth": self.saddlecloth,
             "market_id": self.market_id,
             "selection_id": self.selection_id,
+            "bet_type": self.bet_type,
             "stake": self.stake,
             "requested_odds": self.requested_odds,
             "matched_odds": self.matched_odds,
