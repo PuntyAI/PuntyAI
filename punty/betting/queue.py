@@ -197,6 +197,109 @@ SWAP_THRESHOLD = 0.03  # 3 percentage-point gap required to swap picks
 ODDS_ON_THRESHOLD = 2.00  # Below this → switch to win bet
 
 
+async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
+    """Manually cycle a queued bet to the next-best pick for that race.
+
+    Each call moves to the next pick by place_probability, skipping
+    scratched runners and the current selection. Wraps around to the
+    best pick after exhausting all candidates.
+
+    Returns: {swapped: bool, horse_name, saddlecloth, place_probability, message}
+    """
+    result = await db.execute(select(BetfairBet).where(BetfairBet.id == bet_id))
+    bet = result.scalar_one_or_none()
+    if not bet:
+        return {"swapped": False, "message": "Bet not found"}
+    if bet.status != "queued":
+        return {"swapped": False, "message": f"Cannot cycle bet in '{bet.status}' status"}
+
+    race_id = f"{bet.meeting_id}-r{bet.race_number}"
+
+    # Load all selection picks for this race, sorted by place_probability descending
+    pick_result = await db.execute(
+        select(Pick).where(
+            Pick.meeting_id == bet.meeting_id,
+            Pick.race_number == bet.race_number,
+            Pick.pick_type == "selection",
+            Pick.tracked_only != True,
+        ).order_by(Pick.place_probability.desc())
+    )
+    candidates = pick_result.scalars().all()
+
+    # Filter out scratched runners
+    valid = []
+    for pick in candidates:
+        runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.saddlecloth == pick.saddlecloth,
+            )
+        )
+        runner = runner_result.scalar_one_or_none()
+        if runner and runner.scratched:
+            continue
+        valid.append(pick)
+
+    if not valid:
+        return {"swapped": False, "message": "No valid candidates (all scratched)"}
+
+    # Find current pick's position and select the next one
+    current_idx = None
+    for i, pick in enumerate(valid):
+        if pick.id == bet.pick_id:
+            current_idx = i
+            break
+
+    if current_idx is not None:
+        next_idx = (current_idx + 1) % len(valid)
+    else:
+        next_idx = 0  # Current pick not found — start from best
+
+    next_pick = valid[next_idx]
+    if next_pick.id == bet.pick_id:
+        return {
+            "swapped": False,
+            "message": "Only one valid candidate available",
+            "horse_name": bet.horse_name,
+            "saddlecloth": bet.saddlecloth,
+            "place_probability": next_pick.place_probability,
+        }
+
+    old_name = bet.horse_name
+    bet.pick_id = next_pick.id
+    bet.horse_name = next_pick.horse_name or "Unknown"
+    bet.saddlecloth = next_pick.saddlecloth
+    bet.requested_odds = next_pick.place_odds_at_tip
+
+    # Check odds-on → flip bet_type
+    runner_result = await db.execute(
+        select(Runner).where(
+            Runner.race_id == race_id,
+            Runner.saddlecloth == next_pick.saddlecloth,
+        )
+    )
+    runner = runner_result.scalar_one_or_none()
+    current_odds = (runner.current_odds if runner else None) or 0
+    bet.bet_type = "win" if 0 < current_odds < ODDS_ON_THRESHOLD else "place"
+
+    await db.commit()
+    rank = next_idx + 1
+    logger.info(
+        f"Manual cycle {bet.id}: {old_name} → {bet.horse_name} "
+        f"(#{rank}/{len(valid)}, {next_pick.place_probability:.0%}pp)"
+    )
+    return {
+        "swapped": True,
+        "horse_name": bet.horse_name,
+        "saddlecloth": bet.saddlecloth,
+        "place_probability": next_pick.place_probability,
+        "bet_type": bet.bet_type,
+        "rank": rank,
+        "total": len(valid),
+        "message": f"Cycled to #{rank}: {bet.horse_name}",
+    }
+
+
 async def refresh_bet_selections(db: AsyncSession) -> int:
     """Re-evaluate queued bets: swap scratched horses, upgrade to higher place_prob,
     and flip odds-on horses to win bets.

@@ -120,12 +120,23 @@
                                 <span class="ml-2 text-xs" style="color: var(--text-muted);" x-text="formatMeetingId(bet.meeting_id)"></span>
                             </td>
                             <td class="px-4 py-2 font-bold">
-                                <span x-text="bet.horse_name"></span>
-                                <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
-                                      :style="(bet.bet_type || 'place') === 'win'
-                                          ? 'background: rgba(255,170,0,0.2); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3);'
-                                          : 'background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);'"
-                                      x-text="(bet.bet_type || 'place').toUpperCase()"></span>
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span x-text="bet.horse_name"></span>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
+                                          :style="(bet.bet_type || 'place') === 'win'
+                                              ? 'background: rgba(255,170,0,0.2); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3);'
+                                              : 'background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);'"
+                                          x-text="(bet.bet_type || 'place').toUpperCase()"></span>
+                                    <button x-show="bet.status === 'queued'"
+                                            @click="cycleBet(bet)"
+                                            :disabled="bet._cycling"
+                                            class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[10px] transition-all cursor-pointer"
+                                            style="background: rgba(233,30,140,0.15); color: var(--magenta); border: 1px solid rgba(233,30,140,0.3);"
+                                            title="Cycle to next pick">
+                                        <span x-show="!bet._cycling">↻</span>
+                                        <span x-show="bet._cycling" class="animate-spin">⟳</span>
+                                    </button>
+                                </span>
                             </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <!-- Editable stake for queued bets -->
@@ -429,6 +440,21 @@ function betfairApp() {
             const action = this.schedulerRunning ? 'stop' : 'start';
             await fetch(`/api/betfair/scheduler/${action}`, { method: 'POST' });
             await this.refreshStatus();
+        },
+
+        async cycleBet(bet) {
+            bet._cycling = true;
+            try {
+                const resp = await fetch(`/api/betfair/queue/${bet.id}/cycle`, { method: 'PUT' });
+                const data = await resp.json();
+                if (data.swapped) {
+                    bet.horse_name = data.horse_name;
+                    bet.saddlecloth = data.saddlecloth;
+                    bet.bet_type = data.bet_type || 'place';
+                    bet.requested_odds = null; // Will refresh on next tick
+                }
+            } catch (e) { console.error('Cycle failed:', e); }
+            bet._cycling = false;
         },
 
         async toggleBet(bet) {
