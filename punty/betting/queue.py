@@ -89,28 +89,39 @@ async def populate_bet_queue(
     meeting_id: str,
     content_id: str,
 ) -> int:
-    """Create BetfairBet entries for rank 1 selection picks from approved content.
+    """Create BetfairBet entries for the highest place-probability pick per race.
 
-    Called after content approval. Creates one bet per race for the top-ranked pick.
+    Called after content approval. Selects the pick with the best place_probability
+    from each race's selections — pure probability, no value weighting.
     Returns count of bets queued.
     """
     auto_enabled = await _get_setting(db, "betfair_auto_bet_enabled", "true")
     if auto_enabled.lower() != "true":
         return 0
 
-    # Get rank 1 selection picks for this content (non-tracked-only)
+    # Get ALL selection picks for this content (non-tracked-only)
+    # We'll select the highest place_probability per race for Betfair place bets
     result = await db.execute(
         select(Pick).where(
             Pick.content_id == content_id,
             Pick.meeting_id == meeting_id,
             Pick.pick_type == "selection",
-            Pick.tip_rank == 1,
             Pick.tracked_only != True,
-        )
+        ).order_by(Pick.race_number, Pick.place_probability.desc())
     )
-    rank1_picks = result.scalars().all()
-    if not rank1_picks:
+    all_picks = result.scalars().all()
+    if not all_picks:
         return 0
+
+    # Select the pick with highest place_probability per race
+    best_per_race: dict[int, Pick] = {}
+    for pick in all_picks:
+        rn = pick.race_number
+        if rn not in best_per_race:
+            best_per_race[rn] = pick
+        elif (pick.place_probability or 0) > (best_per_race[rn].place_probability or 0):
+            best_per_race[rn] = pick
+    rank1_picks = list(best_per_race.values())
 
     # Load races to get start times
     race_result = await db.execute(
