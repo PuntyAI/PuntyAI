@@ -727,3 +727,34 @@ class TestScratchedSelectionVoiding:
         for bt in ("win", "place", "saver_win", "each_way"):
             _, pnl, _ = self._settle_scratched(bt, stake=20.0, odds=5.0)
             assert pnl == 0.0, f"Scratched {bt} bet should have pnl=0, got {pnl}"
+
+
+class TestFindDividend:
+    """Tests for _find_dividend helper with exclude parameter."""
+
+    def test_find_quaddie_dividend(self):
+        from punty.results.picks import _find_dividend
+        divs = {"quaddie": "105.70", "early quaddie": "23.40"}
+        # Main quaddie should find quaddie but exclude early
+        assert _find_dividend(divs, "quaddie", exclude=["early"]) == 105.70
+
+    def test_find_early_quaddie_dividend(self):
+        from punty.results.picks import _find_dividend
+        divs = {"quaddie": "105.70", "early quaddie": "23.40"}
+        assert _find_dividend(divs, "early quaddie") == 23.40
+
+    def test_main_quaddie_not_confused_with_early(self):
+        from punty.results.picks import _find_dividend
+        divs = {"early quaddie": "23.40"}
+        # Main quaddie with exclude should NOT match early quaddie
+        assert _find_dividend(divs, "quaddie", exclude=["early"]) == 0.0
+
+    def test_find_dividend_numeric(self):
+        from punty.results.picks import _find_dividend
+        divs = {"trifecta": 102.0}
+        assert _find_dividend(divs, "trifecta") == 102.0
+
+    def test_find_dividend_no_match(self):
+        from punty.results.picks import _find_dividend
+        divs = {"quinella": "4.60"}
+        assert _find_dividend(divs, "exacta") == 0.0

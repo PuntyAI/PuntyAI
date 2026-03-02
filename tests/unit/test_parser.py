@@ -259,14 +259,23 @@ Wide ($100): 1, 2, 3 / 3, 4, 5 / 5, 6, 7 / 2, 7, 8 (81 combos × $1.23 = $99.63)
 
         assert len(picks) == 3  # Skinny, Balanced, Wide
 
-        # Check skinny
+        # Check skinny — first variant is the actual bet
         skinny = [p for p in picks if p["sequence_variant"] == "skinny"][0]
         assert skinny["sequence_type"] == "quaddie"
         assert skinny["sequence_start_race"] == 5
+        assert skinny.get("tracked_only") is not True
+        assert skinny["exotic_stake"] == 10.0
 
-        # Check balanced
+        # Check balanced — subsequent variants are tracked_only
         balanced = [p for p in picks if p["sequence_variant"] == "balanced"][0]
         assert balanced["sequence_type"] == "quaddie"
+        assert balanced.get("tracked_only") is True
+        assert balanced["exotic_stake"] == 0.0
+
+        # Check wide — also tracked_only
+        wide = [p for p in picks if p["sequence_variant"] == "wide"][0]
+        assert wide.get("tracked_only") is True
+        assert wide["exotic_stake"] == 0.0
 
     def test_parse_big6(self):
         content = """
