@@ -918,9 +918,22 @@ async def _settle_picks_for_race_impl(
                     exotic_divs = {}
                 seq_type = str(pick.sequence_type or "").lower()
                 dividend = 0.0
-                for key in ("quaddie", "quadrella", "big6", "big 6"):
-                    if key in seq_type or seq_type == "":
+                # Route dividend lookup by explicit sequence_type to prevent
+                # "quaddie" matching "early_quaddie" (and vice versa)
+                if "early" in seq_type:
+                    for key in ("early quaddie", "early_quaddie", "early quadrella"):
                         dividend = _find_dividend(exotic_divs, key)
+                        if dividend > 0:
+                            break
+                elif "big" in seq_type or "6" in seq_type:
+                    for key in ("big6", "big 6"):
+                        dividend = _find_dividend(exotic_divs, key)
+                        if dividend > 0:
+                            break
+                else:
+                    # Main quaddie — match "quaddie"/"quadrella" but exclude "early"
+                    for key in ("quaddie", "quadrella"):
+                        dividend = _find_dividend(exotic_divs, key, exclude=["early"])
                         if dividend > 0:
                             break
                 if dividend > 0:
@@ -977,10 +990,22 @@ async def _settle_picks_for_race_impl(
     return settled_count
 
 
-def _find_dividend(exotic_divs: dict, exotic_key: str) -> float:
-    """Search exotic results dict for a dividend matching the key."""
+def _find_dividend(exotic_divs: dict, exotic_key: str, exclude: list[str] | None = None) -> float:
+    """Search exotic results dict for a dividend matching the key.
+
+    Args:
+        exotic_divs: Dict of exotic results from race data.
+        exotic_key: Substring to match in dict keys (e.g. "quaddie").
+        exclude: List of substrings that must NOT appear in the key.
+            Prevents e.g. "quaddie" matching "early quaddie".
+    """
+    exclude = exclude or []
     for key, val in exotic_divs.items():
-        if exotic_key in key.lower():
+        key_lower = key.lower()
+        if exotic_key in key_lower:
+            # Skip keys containing any excluded substring
+            if any(ex in key_lower for ex in exclude):
+                continue
             if isinstance(val, (int, float)):
                 return float(val)
             if isinstance(val, dict) and "dividend" in val:

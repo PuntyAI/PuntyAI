@@ -668,6 +668,22 @@
     .race-accordion.open .accordion-chevron { transform: rotate(180deg); }
     .race-accordion-body { display: none; padding: 0 1.25rem 1.25rem; }
     .race-accordion.open .race-accordion-body { display: block; }
+
+    /* Two-column grid for race accordions on desktop */
+    .races-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    @media (min-width: 1024px) {
+        .races-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .races-grid .race-accordion { margin-bottom: 0; }
+        /* Sequence dividers and Big 3 span full width */
+        .races-grid .full-width { grid-column: 1 / -1; }
+    }
+
     .race-nav {
         display: flex; flex-wrap: nowrap; gap: 0.3rem; align-items: center;
         padding: 0.25rem 0 0.4rem;
@@ -1351,12 +1367,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Use puntsBody as the target for race accordions
     var puntsContainer = puntsBody;
 
+    // Create two-column grid wrapper for race accordions (desktop ≥1024px)
+    var racesGrid = document.createElement('div');
+    racesGrid.className = 'races-grid';
+    puntsContainer.appendChild(racesGrid);
+
     // Race and sequence sections
     sections.forEach(function(sec, idx) {
         // "SEQUENCE LANES" becomes a styled section divider, not an accordion
         if (!sec.isRace && /SEQUENCE\s+LANES/i.test(sec.heading.textContent)) {
             var divider = document.createElement('div');
-            divider.className = 'sequence-divider';
+            divider.className = 'sequence-divider full-width';
             var line1 = document.createElement('div');
             line1.className = 'sequence-divider-line';
             var label = document.createElement('span');
@@ -1367,7 +1388,7 @@ document.addEventListener('DOMContentLoaded', function() {
             divider.appendChild(line1);
             divider.appendChild(label);
             divider.appendChild(line2);
-            puntsContainer.appendChild(divider);
+            racesGrid.appendChild(divider);
             return;
         }
 
@@ -1663,12 +1684,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
         accordion.appendChild(header);
         accordion.appendChild(body);
-        puntsContainer.appendChild(accordion);
+        // Non-race sections (sequences) span full width in grid
+        if (!sec.isRace) {
+            accordion.classList.add('full-width');
+        }
+        racesGrid.appendChild(accordion);
     });
 
-    // Append Big 3 & Multi accordion after all race/sequence sections
+    // Append Big 3 & Multi accordion after all race/sequence sections (full width)
     if (big3Acc) {
-        puntsContainer.appendChild(big3Acc);
+        big3Acc.classList.add('full-width');
+        racesGrid.appendChild(big3Acc);
     }
 
     // --- Style Sequence Variant Cards ---

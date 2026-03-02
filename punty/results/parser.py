@@ -835,6 +835,11 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
 
     # Find each sequence block
     headers = list(_SEQ_HEADER.finditer(seq_text))
+    # Track which sequence types have had their first (wagered) variant seen.
+    # Only the first variant per sequence type is the actual bet — the rest
+    # are tracked_only (displayed but not settled/staked).
+    seen_seq_types: set[str] = set()
+
     for idx, hdr in enumerate(headers):
         seq_name = hdr.group(1).strip().upper()
         start_race = int(hdr.group(2) or hdr.group(4))
@@ -877,7 +882,13 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
                 if saddlecloths:
                     legs.append(saddlecloths)
 
-            picks.append({
+            # First variant per sequence type is the actual bet.
+            # Subsequent variants (e.g. balanced, wide after skinny) are
+            # tracked_only — displayed but not settled or staked.
+            is_first_variant = seq_type not in seen_seq_types
+            seen_seq_types.add(seq_type)
+
+            pick_dict = {
                 "id": next_id(),
                 "content_id": content_id,
                 "meeting_id": meeting_id,
@@ -892,14 +903,18 @@ def _parse_sequences(raw_content: str, content_id: str, meeting_id: str, next_id
                 "bet_stake": None,
                 "exotic_type": None,
                 "exotic_runners": None,
-                "exotic_stake": total_outlay,  # Store total outlay, not unit price
+                "exotic_stake": total_outlay if is_first_variant else 0.0,
                 "estimated_return_pct": est_return_pct,
                 "sequence_type": seq_type,
                 "sequence_variant": variant,
                 "sequence_legs": json.dumps(legs),
                 "sequence_start_race": start_race,
                 "multi_odds": None,
-            })
+            }
+            if not is_first_variant:
+                pick_dict["tracked_only"] = True
+                pick_dict["no_bet_reason"] = "Alternative variant — first variant is the wagered bet"
+            picks.append(pick_dict)
 
     return picks
 

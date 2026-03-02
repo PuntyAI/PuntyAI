@@ -221,8 +221,13 @@ def calculate_pre_selections(
     # Remaining picks still tracked (displayed, not staked) for accuracy tracking.
     is_ntd = 5 <= field_size <= 7
 
-    # Sort by pure probability (for #1 and #2 pick selection)
-    candidates.sort(key=lambda c: c["win_prob"], reverse=True)
+    # Sort by probability with value tiebreaker: when two candidates have
+    # win_prob within 2% of each other, prefer higher value_rating.
+    # Bucket win_prob to 0.02 granularity so close probabilities are treated equal.
+    candidates.sort(
+        key=lambda c: (round(c["win_prob"] / 0.02) * 0.02, c["value_rating"]),
+        reverse=True,
+    )
 
     # Separate roughie candidates (odds >= $8, value >= 1.1)
     roughie_pool = [
@@ -385,6 +390,7 @@ def calculate_pre_selections(
         is_hk=(race_context.get("state") == "HK"),
         fav_price=fav_price,
         distance=race_context.get("distance", 0),
+        prize_money=race_context.get("prize_money", 0),
     )
 
     # Calculate Punty's Pick
@@ -507,9 +513,19 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     # Place ROI by band: <$2 = +24%, $2-$4 = +20%, $4-$6 = +35%, $6-$10 = -0.3%
     # EW collect rate: $2.40-$3 = 94%, $3-$4 = 62%
 
-    # Very short-priced favourites (<$2.01): Place only
-    # Too short for Win — but edge gate relaxed for high place_prob picks.
+    # Very short-priced favourites (<$2.01): routing depends on price + field
+    # Place on $1.40 fav returns almost nothing — redistribute to other picks.
     if odds < 2.01 and not is_roughie:
+        # Small field exception (≤8): allow Place on short fav (fewer runners
+        # = Place dividend still worth it, and only 2-3 places paid)
+        if field_size and field_size <= 8:
+            return "Place"
+        # Rank 1 at <$1.80: mark as no_bet. Stake redistributed to rank 2-3.
+        if odds < 1.80 and rank == 1:
+            return "no_bet"
+        # Rank 1 $1.80-$2.00: Place only with very high place confidence
+        if rank == 1 and place_prob < 0.70:
+            return "no_bet"
         return "Place"
 
     # $2.01-$3.00: Rank 1 can Win with strong conviction (wp >= 0.22, value >= 0.95)
@@ -581,6 +597,15 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12) -> RecommendedPick:
     """Create a RecommendedPick from candidate data (legacy path)."""
     bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
+
+    # Short-priced fav no_bet: mark tracked_only, display as Place for accuracy
+    tracked_only = False
+    no_bet_reason = None
+    if bet_type == "no_bet":
+        tracked_only = True
+        no_bet_reason = "Short-priced favourite — stake redistributed"
+        bet_type = "Place"  # display as Place for accuracy tracking
+
     expected_return = _expected_return(c, bet_type)
 
     return RecommendedPick(
@@ -597,6 +622,8 @@ def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = N
         place_value_rating=c["place_value_rating"],
         expected_return=round(expected_return, 2),
         is_roughie=is_roughie,
+        tracked_only=tracked_only,
+        no_bet_reason=no_bet_reason,
     )
 
 
@@ -620,6 +647,14 @@ def _make_pick_from_optimizer(
         # Fallback to legacy
         bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
 
+    # Short-priced fav no_bet: mark tracked_only, display as Place for accuracy
+    tracked_only = False
+    no_bet_reason = None
+    if bet_type == "no_bet":
+        tracked_only = True
+        no_bet_reason = "Short-priced favourite — stake redistributed"
+        bet_type = "Place"
+
     expected_return = _expected_return(c, bet_type)
 
     return RecommendedPick(
@@ -636,6 +671,8 @@ def _make_pick_from_optimizer(
         place_value_rating=c["place_value_rating"],
         expected_return=round(expected_return, 2),
         is_roughie=is_roughie,
+        tracked_only=tracked_only,
+        no_bet_reason=no_bet_reason,
     )
 
 
@@ -1001,18 +1038,22 @@ def _select_exotic(
     is_hk: bool = False,
     fav_price: float = 0.0,
     distance: int = 0,
+    prize_money: int | float = 0,
 ) -> RecommendedExotic | None:
-    """Select the best exotic bet based on probability × value (EV).
+    """Select the best exotic bet using scenario-based routing.
 
-    All exotic types compete on equal footing — Quinella, Exacta,
-    Trifecta Box, Trifecta Standout, First4, First4 Box.
-    The Harville model probabilities and value ratios drive the selection.
+    Every exotic type stays alive but is routed to its best scenario via
+    score multipliers. Data-driven from 625 production bets + 19K historical
+    races.
 
-    When top picks are tightly clustered in probability, box exotics get
-    a scoring boost (any ordering is equally likely, so covering all
-    orderings de-risks the bet).
-
-    Overlap rules: ALL exotic runners MUST be from our selections.
+    Key rules:
+    1. Favourite inclusion: market fav saddlecloth MUST be in exotic runners
+    2. Fav price zones: route by $<2 / $2-$4 / $4+
+    3. Field-size routing: ≤8 → Quinella; 9-11 → Exacta; 12+ → Tri/F4 promoted
+    4. Odds-on fav → anchor exotics (Standout formats)
+    5. Race tightness: tight → box/Quinella; wide → directional Exacta
+    6. Big race boost ($75K+ prize)
+    7. Sprint preference (≤1200m)
     """
     if not exotic_combos:
         return None
@@ -1029,18 +1070,34 @@ def _select_exotic(
     if field_size and field_size <= 6:
         return None  # All types losing in ≤6 fields
 
-    # --- Tight cluster detection ---
-    # When top 3 non-roughie picks are within 8% win probability,
-    # box exotics become much more attractive (any order equally likely).
+    # --- RULE 1: Identify market favourite saddlecloth ---
+    # ALL exotics must include the market fav. Production: +78.6% ROI with fav,
+    # -59.1% without. Quinella with fav +89.7%, without -72.3%.
+    fav_saddlecloth = None
+    if picks:
+        # Fav = runner with lowest odds among our picks
+        staked = [p for p in picks if not p.tracked_only]
+        if staked:
+            fav_saddlecloth = min(staked, key=lambda p: p.odds).saddlecloth
+
+    # --- Cluster / tightness detection ---
+    # Tight race: spread between rank 1-4 tips <$3. Wide race: spread $6+.
+    odds_spread = 0.0
     cluster_boost = 1.0
     if picks:
         top_probs = [p.win_prob for p in picks if not p.is_roughie][:3]
+        tip_odds = [p.odds for p in picks if not p.is_roughie][:4]
+        if len(tip_odds) >= 2:
+            odds_spread = max(tip_odds) - min(tip_odds)
         if len(top_probs) >= 3:
             spread = max(top_probs) - min(top_probs)
             if spread <= 0.05:
-                cluster_boost = 1.2   # very tight — prefer boxes (dampened from 1.5)
+                cluster_boost = 1.20
             elif spread <= 0.08:
-                cluster_boost = 1.1   # tight — slight box preference (dampened from 1.25)
+                cluster_boost = 1.10
+
+    is_tight_race = odds_spread < 3.0 and odds_spread > 0
+    is_wide_race = odds_spread >= 6.0
 
     # Build rank map: saddlecloth → tip_rank (1=best, 4=roughie)
     rank_map: dict[int, int] = {}
@@ -1048,82 +1105,98 @@ def _select_exotic(
         for p in picks:
             rank_map[p.saddlecloth] = p.rank
 
-    # Pre-compute top pick win probability (used for scenario detection)
+    # Pre-compute top pick win probability
     top_pick_wp = max((p.win_prob for p in picks if p.rank == 1), default=0) if picks else 0
 
-    # Score all combos by expected value: probability × value_ratio
-    # Higher EV = better mix of probability and payout
+    # Scenario flags
+    is_big_race = prize_money and prize_money >= 75000
+    is_sprint = distance and distance <= 1200
+    is_staying = distance and distance >= 2000
+    is_odds_on_fav = fav_price and fav_price < 2.0
+    dominant_fav = top_pick_wp >= 0.35 and fav_price and fav_price < 3.0
+
     scored = []
     for ec in exotic_combos:
         runners = set(ec.get("runners", []))
         n_runners = len(runners)
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
-
         ec_type = ec.get("type", "")
 
-        # Trifecta Standout: only when #1 pick is dominant (win_prob >= 0.30)
-        # AND field size 8-12 (not too open, not too small)
-        if ec_type == "Trifecta Standout":
-            top_pick_prob = max((p.win_prob for p in picks if p.rank == 1), default=0)
-            if top_pick_prob < 0.30 or not (8 <= field_size <= 12):
-                continue
+        # --- RULE 1 enforcement: favourite must be in exotic runners ---
+        if fav_saddlecloth and fav_saddlecloth not in runners:
+            continue
 
-        # Trifecta Box: always 4-horse now (better coverage).
-        # Relaxed filters: field 7-14, any distance, fav $1.50-$5.00.
-        if ec_type == "Trifecta Box":
-            if not (7 <= field_size <= 14):
-                continue
-            if fav_price and not (1.50 <= fav_price <= 5.00):
-                continue
-
-        # Exacta/Quinella fav_price guard: only profitable when fav $2-$3.50
-        # EXCEPTION: dominant favourite (wp >= 0.35, fav < $3) — short-priced
-        # favs anchor high-probability Exactas (e.g. $1.87 fav → $20.60 Exacta)
-        dominant_fav = top_pick_wp >= 0.35 and fav_price and fav_price < 3.0
-        if fav_price and ec_type in ("Exacta", "Quinella") and not dominant_fav:
-            if fav_price <= 2.0 or fav_price > 3.50:
-                continue
-
-        # Overlap rules by exotic type:
-        # Quinella/Exacta: ALL runners must be from our picks (strict 2-runner bets)
-        # Trifecta/First4: at least 2 runners from picks (allow ranking runners
-        # in trailing positions — 3rd for tri, 4th+ for First4)
+        # --- Overlap rules ---
+        # Quinella/Exacta: ALL runners must be from our picks
+        # Trifecta/First4: at least 2 runners from picks
         if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
             if overlap_ratio < 1.0:
                 continue
         else:
-            # Trifecta, First4, etc: require at least 2 from picks
             if overlap < min(2, n_runners):
                 continue
+
+        # --- RULE 2: Fav price zone gates ---
+        if ec_type in ("Exacta", "Quinella"):
+            if is_odds_on_fav and not dominant_fav:
+                # Odds-on fav without dominance → skip flat Exacta/Quinella,
+                # route to standout formats instead (RULE 4)
+                continue
+            if fav_price and fav_price > 4.0:
+                # Fav >$4: reduce score (not hard block) — applied below as multiplier
+                pass
+            # Widen upper bound: fav $2-$4 allowed (was $2-$3.50)
+            # No hard gate here — scoring handles preference
+
+        # --- RULE 3: Field-size routing ---
+        if ec_type == "Trifecta Standout":
+            # Allow in wider field range when dominant fav or odds-on
+            if dominant_fav or is_odds_on_fav:
+                if field_size < 7:
+                    continue
+            else:
+                if top_pick_wp < 0.30 or not (7 <= field_size <= 14):
+                    continue
+
+        if ec_type == "Trifecta Box":
+            if not (7 <= field_size):
+                continue
+            # Relaxed upper bound — allow in 15+ fields (huge dividends)
+            if fav_price and not (1.50 <= fav_price <= 5.00) and not is_odds_on_fav:
+                continue
+
+        if ec_type in ("First4", "First4 Box"):
+            # First4 only viable in 12+ fields (big dividends) or ≤8 (predictable)
+            if field_size and 9 <= field_size <= 11:
+                continue  # Dead zone for First4
+            if field_size and field_size <= 8:
+                # Small field: skip First4 (small pool dividends)
+                continue
+
+        # Quinella in 15+ fields: too random (skip)
+        if ec_type == "Quinella" and field_size and field_size >= 15:
+            continue
 
         # Quinella 2-runner in small fields: -73% ROI, skip
         if ec_type == "Quinella" and n_runners == 2 and field_size and field_size <= 10:
             continue
 
-        # Parse probability
+        # --- Parse probability and value ---
         raw_prob = ec.get("probability", 0)
         if isinstance(raw_prob, str):
             raw_prob = float(raw_prob.rstrip("%")) / 100
-
         value = ec.get("value", 1.0)
 
-        # EV score: probability × value_ratio
-        # This naturally favours combos where both probability AND value are good
-        # A 10% prob × 2.0 value (EV 0.20) beats 5% prob × 3.0 value (EV 0.15)
+        # Base EV score
         ev_score = raw_prob * value
 
-        # Small combo efficiency bonus: fewer combos = higher unit stake = bigger payout
-        # Normalise: 1 combo = +10%, 24 combos = +0%
+        # Efficiency bonus for fewer combos
         combos = max(1, ec.get("combos", 1))
         efficiency_bonus = max(0, (1 - combos / 24)) * 0.1 * ev_score
-
         score = ev_score + efficiency_bonus
 
-        # Top-pick bonus: exotics should anchor on our best selections.
-        # Combos with pick #1 get a 30% boost, pick #2 gets 15%.
-        # This prevents the exotic from skipping our strongest horse
-        # in favour of a roughie-heavy combo with marginally higher raw EV.
+        # --- Top-pick bonus ---
         if rank_map:
             runner_ranks = [rank_map.get(r, 99) for r in runners]
             best_rank = min(runner_ranks)
@@ -1132,42 +1205,86 @@ def _select_exotic(
             elif best_rank == 2:
                 score *= 1.15
 
-        # Tight cluster boost: prefer box exotics when picks are bunched
+        # --- Tight cluster boost ---
         if cluster_boost > 1.0:
             ec_format = ec.get("format", "")
             if ec_format == "boxed":
                 score *= cluster_boost
             elif ec_format in ("flat", "standout") and ec_type != "Quinella":
-                # Quinella is inherently unordered (a "box" of 2) — no penalty
-                score *= 0.85  # slight penalty for directional in tight fields
+                score *= 0.85
 
-        # --- Scenario-based multipliers (stack with existing bonuses) ---
+        # --- RULE 4: Odds-on favourite → anchor exotics ---
+        # Fav <$2: route to standout formats (42.2% anchor hit rate in 12+ fields)
+        if is_odds_on_fav:
+            if ec_type in ("Exacta Standout", "Trifecta Standout"):
+                score *= 1.30
 
-        # Dominant favourite: rank 1 wp >= 0.35 AND short-priced → directional exotics
-        # Includes Exacta/Quinella since fav_price guard is bypassed for dominant favs
-        if top_pick_wp >= 0.35 and fav_price and fav_price < 3.0:
+        # Dominant favourite: directional exotics get boost
+        if dominant_fav:
             if ec_type in ("Exacta", "Exacta Standout", "Quinella", "Trifecta Standout"):
                 score *= 1.25
 
-        # Short-priced fav in combos (< $2.01) → standout anchors on the fav
-        elif fav_price and fav_price < 2.01:
-            if ec_type in ("Trifecta Standout", "Exacta Standout"):
+        # --- RULE 5: Race tightness routing ---
+        if is_tight_race:
+            # Tight race: prefer order-independent (Quinella, Trifecta Box)
+            if ec_type in ("Quinella", "Trifecta Box"):
+                score *= 1.15
+            elif ec_type in ("Exacta", "Exacta Standout") and ec_type != "Quinella":
+                score *= 0.90  # Penalise directional in tight fields
+        if is_wide_race:
+            # Wide race: prefer directional (Exacta, standout formats)
+            # Production: +92.4% ROI on Exacta in wide races
+            if ec_type in ("Exacta", "Exacta Standout"):
                 score *= 1.20
+            if ec_type in ("Trifecta Standout",):
+                score *= 1.15
 
-        # Open race: no runner > 0.25 wp → wider coverage exotics
+        # --- RULE 3 continued: Field-size scoring ---
+        if field_size and field_size <= 8:
+            # Small field: 2-runner exotics most predictable (24.5% Quin base rate)
+            if ec_type in ("Quinella", "Exacta Standout"):
+                score *= 1.15
+            # Trifecta Box has 44.8% base rate in ≤8 fields!
+            if ec_type == "Trifecta Box":
+                score *= 1.10
+        elif field_size and 9 <= field_size <= 11:
+            # Mid field: Exacta sweet spot (12.4% strike, +30% ROI)
+            if ec_type == "Exacta":
+                score *= 1.10
+        elif field_size and field_size >= 12:
+            # Big field: promote Trifecta Box + First4 (enormous dividends)
+            # Trifecta avg div $1,538 in 12-14 fields, $3,090 in 15+
+            # First4 avg div $732 in 12-14 fields
+            if ec_type == "Trifecta Box":
+                score *= 1.20
+            if ec_type in ("First4", "First4 Box"):
+                score *= 1.15
+            # Exacta still strong in big fields (+$1,519 P&L, avg div $741)
+            if ec_type == "Exacta":
+                score *= 1.10
+
+        # --- RULE 2 continued: Fav >$4 penalty ---
+        if fav_price and fav_price > 4.0:
+            if ec_type in ("Exacta", "Quinella"):
+                score *= 0.85  # Reduce but don't block
+
+        # Open race: wider coverage exotics
         if picks and all(p.win_prob < 0.25 for p in picks):
             if ec_type in ("Trifecta Box", "First4", "First4 Box"):
                 score *= 1.20
 
-        # Small field (≤ 8): fewer runners → 2-runner exotics more predictable
-        if field_size and field_size <= 8:
-            if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
-                score *= 1.15
+        # --- RULE 6: Big race boost ($75K+ prize) ---
+        # More liquidity = bigger pools = bigger dividends
+        # Exacta: 14.0% strike, +$1,738 P&L, avg div $355 in big races
+        if is_big_race:
+            score *= 1.20
 
-        # Large field (12+): more chaos → wider box coverage preferred
-        if field_size and field_size >= 12:
-            if ec_type == "Trifecta Box":
-                score *= 1.15
+        # --- RULE 7: Distance preference ---
+        # Sprints most predictable (36.7% fav wins, 34.0% tri-4box)
+        if is_sprint:
+            score *= 1.10
+        elif is_staying:
+            score *= 0.90  # Less predictable (23.6% fav wins in big fields)
 
         scored.append((score, ec))
 
