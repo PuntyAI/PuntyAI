@@ -669,19 +669,11 @@
     .race-accordion-body { display: none; padding: 0 1.25rem 1.25rem; }
     .race-accordion.open .race-accordion-body { display: block; }
 
-    /* Two-column grid for race accordions on desktop */
+    /* Race accordions container */
     .races-grid {
-        display: grid;
-        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
         gap: 0.75rem;
-    }
-    @media (min-width: 1024px) {
-        .races-grid {
-            grid-template-columns: 1fr 1fr;
-        }
-        .races-grid .race-accordion { margin-bottom: 0; }
-        /* Sequence dividers and Big 3 span full width */
-        .races-grid .full-width { grid-column: 1 / -1; }
     }
 
     .race-nav {
