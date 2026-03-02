@@ -1148,9 +1148,16 @@ class TestSubTwoDollarBetType:
              "value_rating": 0.95, "place_value_rating": 1.00}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "no_bet"
 
-    def test_sub_180_small_field_gets_place(self):
-        """Sub-$1.80 in small field (≤8, >7 so 3 places paid) should get Place (exception)."""
-        c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
+    def test_sub_150_small_field_gets_no_bet(self):
+        """Sub-$1.50 rank 1 in small field (≤8) should get no_bet — tote place ≈$1.04."""
+        c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.12,
+             "value_rating": 0.95, "place_value_rating": 1.00}
+        # Ultra-short fav: no_bet even in small fields (DuckDB: Place ROI -0.9%)
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "no_bet"
+
+    def test_150_to_180_small_field_gets_place(self):
+        """$1.50-$1.80 in small field (≤8, >7 so 3 places paid) should get Place (exception)."""
+        c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.60,
              "value_rating": 0.95, "place_value_rating": 1.00}
         # field_size=8 → 3 places paid, hits the <$2.01 small field exception
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
@@ -1179,6 +1186,83 @@ class TestSubTwoDollarBetType:
         c3 = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.50,
               "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c3, rank=2, is_roughie=False) == "Place"
+
+
+# ──────────────────────────────────────────────
+# Tests: Ultra-short fav no_bet + dominant fav Saver→Place
+# ──────────────────────────────────────────────
+
+class TestUltraShortFavNoBet:
+    """Fix 1: <$1.50 rank 1 → no_bet even in small fields."""
+
+    def test_sub_150_rank1_small_field_no_bet(self):
+        """$1.12 fav in 8-runner field: no_bet (tote place ≈$1.04, dead money)."""
+        c = {"win_prob": 0.55, "place_prob": 0.85, "odds": 1.12,
+             "value_rating": 0.90, "place_value_rating": 0.95}
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "no_bet"
+
+    def test_sub_150_rank1_large_field_no_bet(self):
+        """$1.30 fav in 12-runner field: no_bet."""
+        c = {"win_prob": 0.50, "place_prob": 0.80, "odds": 1.30,
+             "value_rating": 0.92, "place_value_rating": 0.98}
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=12) == "no_bet"
+
+    def test_160_rank1_small_field_gets_place(self):
+        """$1.60 fav in 8-runner field: Place (small field exception still works)."""
+        c = {"win_prob": 0.42, "place_prob": 0.72, "odds": 1.60,
+             "value_rating": 0.95, "place_value_rating": 1.00}
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
+
+    def test_sub_150_rank2_small_field_gets_place(self):
+        """Rank 2 at $1.40 in small field: Place (ultra-short guard only affects rank 1)."""
+        c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 1.40,
+             "value_rating": 0.95, "place_value_rating": 1.00}
+        assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=8) == "Place"
+
+    def test_exactly_150_is_not_ultra_short(self):
+        """$1.50 exactly: NOT ultra-short, hits small field exception → Place."""
+        c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
+             "value_rating": 0.95, "place_value_rating": 1.00}
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
+
+
+class TestDominantFavSaverToPlace:
+    """Fix 2: Saver Win → Place for rank 2+ when fav <$2."""
+
+    def test_rank2_saver_becomes_place_with_dom_fav(self):
+        """Rank 3 at $4.50 with value=1.10 and dom fav $1.50 → Place (not Saver Win)."""
+        c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=1.50)
+        assert result == "Place"
+
+    def test_rank3_saver_without_dom_fav_stays_saver(self):
+        """Rank 3 at $4.50 with value=1.10 and fav $3.50 → Saver Win (no dom fav)."""
+        c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=3.50)
+        assert result == "Saver Win"
+
+    def test_rank1_saver_unaffected_by_dom_fav(self):
+        """Rank 1 at $4.50 with dom fav $1.50 → Win (rank 1 not affected by dom fav guard)."""
+        c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        result = _determine_bet_type(c, rank=1, is_roughie=False, fav_price=1.50)
+        assert result == "Win"
+
+    def test_no_fav_price_saver_unaffected(self):
+        """No fav_price passed → Saver Win still returned (backward compatible)."""
+        c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
+             "value_rating": 1.10, "place_value_rating": 1.05}
+        result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=None)
+        assert result == "Saver Win"
+
+    def test_third_pick_saver_becomes_place_with_dom_fav(self):
+        """Third pick (#3) at $8 with high value and dom fav → Place (not Saver)."""
+        c = {"win_prob": 0.18, "place_prob": 0.38, "odds": 8.0,
+             "value_rating": 1.15, "place_value_rating": 1.05}
+        result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=1.80)
+        assert result == "Place"
 
 
 # ──────────────────────────────────────────────

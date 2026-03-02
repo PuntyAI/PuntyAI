@@ -2997,6 +2997,14 @@ def calculate_exotic_combinations(
         mkt_probs = [r["market_implied"] for r in tri_box_pool]
         our_prob = _box_probability(our_probs, 3)
         mkt_prob = _box_probability(mkt_probs, 3)
+        # Speed map bonus: on-pace/leader runners place more often
+        # DuckDB: 40.7% top-3 (on-pace) vs 24.4% (midfield) when dom fav wins
+        speed_bonus = 1.0
+        for r in tri_box_pool:
+            pos = r.get("speed_map_position", "") or ""
+            if pos in ("leader", "on_pace"):
+                speed_bonus *= 1.08
+        our_prob *= speed_bonus
         value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
 
         if value >= VALUE_THRESHOLDS["Trifecta Box"]:
@@ -3028,6 +3036,14 @@ def calculate_exotic_combinations(
                 mkt_prob += _harville_probability(
                     [standout["market_implied"]] + [r["market_implied"] for r in perm]
                 )
+            # Speed map bonus: on-pace/leader runners fill places more often
+            # DuckDB: 40.7% top-3 (on-pace) vs 24.4% (midfield) when dom fav wins
+            speed_bonus = 1.0
+            for r in all_runners:
+                pos = r.get("speed_map_position", "") or ""
+                if pos in ("leader", "on_pace"):
+                    speed_bonus *= 1.08
+            our_prob *= speed_bonus
             value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
 
             if value >= VALUE_THRESHOLDS["Trifecta Standout"]:

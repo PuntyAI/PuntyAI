@@ -229,6 +229,9 @@ def calculate_pre_selections(
         reverse=True,
     )
 
+    # Determine favourite price (lowest odds) for dominant fav logic
+    fav_price = min((c["odds"] for c in candidates), default=None)
+
     # Separate roughie candidates (odds >= $8, value >= 1.1)
     roughie_pool = [
         c for c in candidates
@@ -256,7 +259,7 @@ def calculate_pre_selections(
         for c in ntd_candidates[:2]:
             picks.append(_make_pick_from_optimizer(
                 c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
-                thresholds=thresholds, field_size=field_size,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
             ))
             used_saddlecloths.add(c["saddlecloth"])
 
@@ -277,7 +280,7 @@ def calculate_pre_selections(
                 break
             pick = _make_pick_from_optimizer(
                 c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
-                thresholds=thresholds, field_size=field_size,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
             )
             pick.tracked_only = True
             pick.no_bet_reason = "NTD field — only 2 staked picks"
@@ -289,7 +292,7 @@ def calculate_pre_selections(
         if roughie and roughie["saddlecloth"] not in used_saddlecloths:
             pick = _make_pick_from_optimizer(
                 roughie, 4, is_roughie=True, rec_lookup=rec_lookup,
-                thresholds=thresholds, field_size=field_size,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
             )
             pick.tracked_only = True
             pick.no_bet_reason = "NTD field — only 2 staked picks"
@@ -308,7 +311,7 @@ def calculate_pre_selections(
                 continue
             picks.append(_make_pick_from_optimizer(
                 c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
-                thresholds=thresholds, field_size=field_size,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
             ))
             used_saddlecloths.add(c["saddlecloth"])
 
@@ -323,7 +326,7 @@ def calculate_pre_selections(
         if remaining:
             picks.append(_make_pick_from_optimizer(
                 remaining[0], 3, is_roughie=False, rec_lookup=rec_lookup,
-                thresholds=thresholds, field_size=field_size,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
             ))
             used_saddlecloths.add(remaining[0]["saddlecloth"])
 
@@ -331,7 +334,7 @@ def calculate_pre_selections(
         if roughie and roughie["saddlecloth"] not in used_saddlecloths:
             picks.append(_make_pick_from_optimizer(
                 roughie, 4, is_roughie=True, rec_lookup=rec_lookup,
-                thresholds=thresholds, field_size=field_size,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
             ))
             used_saddlecloths.add(roughie["saddlecloth"])
         elif len(picks) < 4:
@@ -340,7 +343,7 @@ def calculate_pre_selections(
                 if c["saddlecloth"] not in used_saddlecloths:
                     picks.append(_make_pick_from_optimizer(
                         c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
-                        thresholds=thresholds, field_size=field_size,
+                        thresholds=thresholds, field_size=field_size, fav_price=fav_price,
                     ))
                     used_saddlecloths.add(c["saddlecloth"])
                     break
@@ -468,7 +471,7 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
     return candidates
 
 
-def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12) -> str:
+def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None) -> str:
     """Determine optimal bet type for a runner based on probability profile.
 
     Edge-aware logic validated on historical performance data:
@@ -514,7 +517,12 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     # Very short-priced favourites (<$2.01): routing depends on price + field
     # Place on $1.40 fav returns almost nothing — redistribute to other picks.
     if odds < 2.01 and not is_roughie:
-        # Small field exception (≤8): allow Place on short fav (fewer runners
+        # Ultra-short fav (<$1.50): always no_bet, even in small fields.
+        # DuckDB: Place ROI -0.9% at <$1.50 — tote place div ≈ $1.04.
+        # Stake redirected to rank 2-3 Place bets + exotics.
+        if odds < 1.50 and rank == 1:
+            return "no_bet"
+        # Small field exception (≤8): allow Place on $1.50-$2.00 fav (fewer runners
         # = Place dividend still worth it, and only 2-3 places paid)
         if field_size and field_size <= 8:
             return "Place"
@@ -548,6 +556,9 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             if rank == 2:
                 return "Place"  # E/W killed — rank 2 $4-5 → Place
             if value >= 1.05:
+                # Dominant fav present: Saver Win -38.6% ROI vs Place +19.2%
+                if fav_price and fav_price < 2.0 and rank >= 2:
+                    return "Place"
                 return "Saver Win"
         # Low-prob fallback: good odds but not enough conviction → Place
         return "Place"
@@ -588,13 +599,16 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
         return "Place"
     if win_prob >= t["win_min_prob"] and value >= 1.10:
+        # Dominant fav present: Saver Win -38.6% ROI vs Place +19.2%
+        if fav_price and fav_price < 2.0 and rank >= 2:
+            return "Place"
         return "Saver Win"
     return "Place"
 
 
-def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12) -> RecommendedPick:
+def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None) -> RecommendedPick:
     """Create a RecommendedPick from candidate data (legacy path)."""
-    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
+    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
 
     # Short-priced fav no_bet: mark tracked_only, display as Place for accuracy
     tracked_only = False
@@ -632,6 +646,7 @@ def _make_pick_from_optimizer(
     rec_lookup: dict,
     thresholds: dict | None = None,
     field_size: int = 12,
+    fav_price: float | None = None,
 ) -> RecommendedPick:
     """Create a RecommendedPick using optimizer recommendation when available.
 
@@ -643,7 +658,7 @@ def _make_pick_from_optimizer(
         bet_type = rec.bet_type
     else:
         # Fallback to legacy
-        bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size)
+        bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
 
     # Short-priced fav no_bet: mark tracked_only, display as Place for accuracy
     tracked_only = False
