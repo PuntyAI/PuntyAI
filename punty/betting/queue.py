@@ -22,7 +22,7 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
 DEFAULT_COMMISSION_RATE = 0.05  # 5% Betfair commission
 DEFAULT_MAX_DAILY_LOSS = -20.0
-DEFAULT_MIN_PLACE_PROB = 0.60  # 60% minimum place probability
+DEFAULT_MIN_PLACE_PROB = 0.50  # 50% minimum place probability
 
 
 async def _get_setting(db: AsyncSession, key: str, default: str = "") -> str:
