@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 
 from punty.betting.queue import (
     calculate_stake, populate_bet_queue, settle_betfair_bets,
-    execute_due_bets, refresh_bet_selections, SWAP_THRESHOLD, ODDS_ON_THRESHOLD,
+    execute_due_bets, refresh_bet_selections, cycle_bet_selection,
+    SWAP_THRESHOLD, ODDS_ON_THRESHOLD,
 )
 
 
@@ -357,3 +358,144 @@ class TestSettlementBetType:
         assert 2 <= 3
         assert 3 <= 3
         assert not (4 <= 3)
+
+
+class TestCycleBetSelection:
+    """Test manual bet cycling through picks."""
+
+    @pytest.fixture
+    def mock_db(self):
+        db = AsyncMock()
+        db.commit = AsyncMock()
+        return db
+
+    @pytest.mark.asyncio
+    async def test_cycle_to_next_pick(self, mock_db):
+        """Cycling from pick 1 → pick 2."""
+        bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
+        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.60)
+
+        runner_a = _make_mock_runner(1, current_odds=5.0)
+        runner_b = _make_mock_runner(2, current_odds=5.0)
+        runner_odds = _make_mock_runner(2, current_odds=5.0)
+
+        # Call order: select bet, select picks, runner_a check, runner_b check, runner odds-on check
+        bet_result = MagicMock()
+        bet_result.scalar_one_or_none.return_value = bet
+        picks_result = MagicMock()
+        picks_result.scalars.return_value.all.return_value = [pick_a, pick_b]
+        runner_a_result = MagicMock()
+        runner_a_result.scalar_one_or_none.return_value = runner_a
+        runner_b_result = MagicMock()
+        runner_b_result.scalar_one_or_none.return_value = runner_b
+        runner_odds_result = MagicMock()
+        runner_odds_result.scalar_one_or_none.return_value = runner_odds
+
+        mock_db.execute = AsyncMock(
+            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result, runner_odds_result]
+        )
+
+        result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
+        assert result["swapped"] is True
+        assert bet.horse_name == "Horse B"
+        assert bet.pick_id == "p2"
+        assert result["rank"] == 2
+
+    @pytest.mark.asyncio
+    async def test_cycle_wraps_around(self, mock_db):
+        """Cycling from last pick wraps to first."""
+        bet = _make_mock_bet(pick_id="p2", horse_name="Horse B", saddlecloth=2)
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
+        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.60)
+
+        runner_a = _make_mock_runner(1, current_odds=5.0)
+        runner_b = _make_mock_runner(2, current_odds=5.0)
+        runner_odds = _make_mock_runner(1, current_odds=5.0)
+
+        bet_result = MagicMock()
+        bet_result.scalar_one_or_none.return_value = bet
+        picks_result = MagicMock()
+        picks_result.scalars.return_value.all.return_value = [pick_a, pick_b]
+        runner_a_result = MagicMock()
+        runner_a_result.scalar_one_or_none.return_value = runner_a
+        runner_b_result = MagicMock()
+        runner_b_result.scalar_one_or_none.return_value = runner_b
+        runner_odds_result = MagicMock()
+        runner_odds_result.scalar_one_or_none.return_value = runner_odds
+
+        mock_db.execute = AsyncMock(
+            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result, runner_odds_result]
+        )
+
+        result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
+        assert result["swapped"] is True
+        assert bet.horse_name == "Horse A"
+        assert result["rank"] == 1
+
+    @pytest.mark.asyncio
+    async def test_cycle_single_candidate(self, mock_db):
+        """Only one valid pick → no swap."""
+        bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
+
+        runner_a = _make_mock_runner(1, current_odds=5.0)
+
+        bet_result = MagicMock()
+        bet_result.scalar_one_or_none.return_value = bet
+        picks_result = MagicMock()
+        picks_result.scalars.return_value.all.return_value = [pick_a]
+        runner_result = MagicMock()
+        runner_result.scalar_one_or_none.return_value = runner_a
+
+        mock_db.execute = AsyncMock(
+            side_effect=[bet_result, picks_result, runner_result]
+        )
+
+        result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
+        assert result["swapped"] is False
+        assert "one valid" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_cycle_not_queued(self, mock_db):
+        """Cannot cycle a placed bet."""
+        bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
+        bet.status = "placed"
+
+        bet_result = MagicMock()
+        bet_result.scalar_one_or_none.return_value = bet
+        mock_db.execute = AsyncMock(return_value=bet_result)
+
+        result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
+        assert result["swapped"] is False
+        assert "placed" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_cycle_odds_on_flips_to_win(self, mock_db):
+        """Cycling to an odds-on horse sets bet_type to win."""
+        bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1, bet_type="place")
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
+        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.60)
+
+        runner_a = _make_mock_runner(1, current_odds=5.0)
+        runner_b = _make_mock_runner(2, current_odds=1.50)  # Odds-on
+        runner_odds = _make_mock_runner(2, current_odds=1.50)
+
+        bet_result = MagicMock()
+        bet_result.scalar_one_or_none.return_value = bet
+        picks_result = MagicMock()
+        picks_result.scalars.return_value.all.return_value = [pick_a, pick_b]
+        runner_a_result = MagicMock()
+        runner_a_result.scalar_one_or_none.return_value = runner_a
+        runner_b_result = MagicMock()
+        runner_b_result.scalar_one_or_none.return_value = runner_b
+        runner_odds_result = MagicMock()
+        runner_odds_result.scalar_one_or_none.return_value = runner_odds
+
+        mock_db.execute = AsyncMock(
+            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result, runner_odds_result]
+        )
+
+        result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
+        assert result["swapped"] is True
+        assert bet.bet_type == "win"

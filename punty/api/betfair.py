@@ -50,6 +50,16 @@ async def toggle_bet(bet_id: str, db: AsyncSession = Depends(get_db)):
     return bet.to_dict()
 
 
+@router.put("/queue/{bet_id}/cycle")
+async def cycle_bet(bet_id: str, db: AsyncSession = Depends(get_db)):
+    """Cycle a queued bet to the next-best pick for the race."""
+    from punty.betting.queue import cycle_bet_selection
+    result = await cycle_bet_selection(db, bet_id)
+    if not result.get("swapped") and result.get("message") == "Bet not found":
+        raise HTTPException(status_code=404, detail="Bet not found")
+    return result
+
+
 @router.put("/queue/{bet_id}/stake")
 async def update_bet_stake(bet_id: str, body: StakeUpdate, db: AsyncSession = Depends(get_db)):
     """Update stake for a single queued bet."""
