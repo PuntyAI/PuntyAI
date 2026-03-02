@@ -422,7 +422,7 @@ PROVIDER_KEYS = {
     "willyweather": ["willyweather_api_key"],
     "betfair": [
         "betfair_auto_bet_enabled", "betfair_balance", "betfair_initial_balance",
-        "betfair_stake", "betfair_min_odds", "betfair_commission_rate", "betfair_max_daily_loss",
+        "betfair_stake", "betfair_stake_mode", "betfair_min_odds", "betfair_commission_rate", "betfair_max_daily_loss",
     ],
 }
 

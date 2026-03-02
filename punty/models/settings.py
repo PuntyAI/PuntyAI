@@ -228,7 +228,11 @@ class AppSettings(Base):
         },
         "betfair_stake": {
             "value": "2",
-            "description": "Betfair base stake per bet (doubles with balance growth)",
+            "description": "Betfair base stake per bet (doubles with balance growth in auto mode)",
+        },
+        "betfair_stake_mode": {
+            "value": "auto",
+            "description": "Stake mode: 'auto' (doubles with balance) or a fixed dollar amount e.g. '3.50'",
         },
         "betfair_min_odds": {
             "value": "1.10",
