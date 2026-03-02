@@ -3,8 +3,8 @@
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, FileResponse, Response
+from fastapi import APIRouter, Request, Form
+from fastapi.responses import HTMLResponse, FileResponse, Response, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, and_, or_, text
 
@@ -3042,3 +3042,120 @@ async def sitemap_tips():
         xml += f'  </url>\n'
     xml += '</urlset>'
     return Response(content=xml, media_type="application/xml")
+
+
+# ---------------------------------------------------------------------------
+# Betfair Tracker — password-protected public view
+# ---------------------------------------------------------------------------
+
+_BF_TRACKER_PASSWORD = "PuntyCumInU_69"
+_BF_TRACKER_COOKIE = "bf_tracker_auth"
+
+
+def _bf_make_token() -> str:
+    """Create HMAC token for the betfair tracker cookie."""
+    import hmac
+    import hashlib
+    from punty.config import settings
+    return hmac.new(settings.secret_key.encode(), _BF_TRACKER_PASSWORD.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _bf_check_auth(request: Request) -> bool:
+    """Check if the betfair tracker cookie is valid."""
+    token = request.cookies.get(_BF_TRACKER_COOKIE, "")
+    return token == _bf_make_token()
+
+
+@router.get("/betfair-tracker", response_class=HTMLResponse)
+async def betfair_tracker(request: Request):
+    """Public betfair tracker — shows password gate or tracker page."""
+    if not _bf_check_auth(request):
+        return templates.TemplateResponse("betfair_tracker_login.html", {"request": request, "error": ""})
+    return templates.TemplateResponse("betfair_tracker.html", {"request": request})
+
+
+@router.post("/betfair-tracker", response_class=HTMLResponse)
+async def betfair_tracker_login(request: Request, password: str = Form(...)):
+    """Verify password and set auth cookie."""
+    if password != _BF_TRACKER_PASSWORD:
+        return templates.TemplateResponse("betfair_tracker_login.html", {"request": request, "error": "Wrong password"})
+    response = RedirectResponse(url="/betfair-tracker", status_code=303)
+    response.set_cookie(
+        _BF_TRACKER_COOKIE,
+        _bf_make_token(),
+        max_age=90 * 86400,  # 90 days
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@router.get("/api/betfair-tracker/queue")
+async def bf_tracker_queue(request: Request):
+    """Public read-only betfair queue — today's bets + stats."""
+    if not _bf_check_auth(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from punty.betting.queue import get_queue_summary
+    async with async_session() as db:
+        return await get_queue_summary(db)
+
+
+@router.get("/api/betfair-tracker/history")
+async def bf_tracker_history(request: Request, days: int = 30, status: str = "all", venue: str = ""):
+    """Public read-only betfair history."""
+    if not _bf_check_auth(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from datetime import timedelta
+    from punty.models.betfair_bet import BetfairBet
+    cutoff_date = melb_today() - timedelta(days=days) if days > 0 else None
+    async with async_session() as db:
+        result = await db.execute(
+            select(BetfairBet).where(BetfairBet.settled == True).order_by(BetfairBet.settled_at.desc())
+        )
+        bets = result.scalars().all()
+    filtered = []
+    for b in bets:
+        if cutoff_date:
+            try:
+                parts = b.meeting_id.rsplit("-", 3)
+                if len(parts) >= 4:
+                    bet_date = date(int(parts[-3]), int(parts[-2]), int(parts[-1]))
+                    if bet_date < cutoff_date:
+                        continue
+            except (ValueError, IndexError):
+                pass
+        if status == "won" and not b.hit:
+            continue
+        if status == "lost" and b.hit:
+            continue
+        if venue:
+            venue_part = b.meeting_id.rsplit("-", 3)[0] if len(b.meeting_id.rsplit("-", 3)) >= 4 else b.meeting_id
+            if venue.lower() not in venue_part.lower():
+                continue
+        filtered.append(b.to_dict())
+    total = len(filtered)
+    wins = sum(1 for b in filtered if b.get("hit"))
+    total_pnl = sum(b.get("pnl") or 0 for b in filtered)
+    total_staked = sum(b.get("stake") or 0 for b in filtered)
+    summary = {
+        "total": total,
+        "wins": wins,
+        "losses": total - wins,
+        "pnl": round(total_pnl, 2),
+        "roi": round((total_pnl / total_staked * 100) if total_staked > 0 else 0, 1),
+        "strike_rate": round((wins / total * 100) if total > 0 else 0, 1),
+        "avg_stake": round((total_staked / total) if total > 0 else 0, 2),
+    }
+    return {"bets": filtered, "summary": summary}
+
+
+@router.get("/api/betfair-tracker/balance")
+async def bf_tracker_balance(request: Request):
+    """Public read-only balance."""
+    if not _bf_check_auth(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from punty.betting.queue import get_balance, calculate_stake, _get_setting, DEFAULT_INITIAL_BALANCE
+    async with async_session() as db:
+        balance = await get_balance(db)
+        initial = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
+    return {"balance": balance, "initial_balance": initial, "current_stake": calculate_stake(balance, initial)}

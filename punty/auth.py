@@ -41,9 +41,9 @@ PUBLIC_PATHS = {"/login", "/login/google", "/auth/callback", "/health"}
 PUBLIC_PREFIXES = ("/static/", "/api/webhook/", "/api/public/", "/public", "/social-img/")
 
 # Public site paths (served on punty.ai, not app.punty.ai)
-PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/glossary", "/calculator", "/terms", "/privacy", "/data-deletion", "/tips", "/stats", "/blog", "/sitemap.xml", "/sitemap-static.xml", "/sitemap-blog.xml", "/sitemap-tips.xml", "/robots.txt", "/llms.txt"}
+PUBLIC_SITE_PATHS = {"/", "/about", "/how-it-works", "/contact", "/glossary", "/calculator", "/terms", "/privacy", "/data-deletion", "/tips", "/stats", "/blog", "/sitemap.xml", "/sitemap-static.xml", "/sitemap-blog.xml", "/sitemap-tips.xml", "/robots.txt", "/llms.txt", "/betfair-tracker"}
 # Also allow /tips/* and /blog/* paths for individual pages
-PUBLIC_SITE_PREFIXES_EXTRA = ("/tips/", "/blog/")
+PUBLIC_SITE_PREFIXES_EXTRA = ("/tips/", "/blog/", "/api/betfair-tracker/")
 PUBLIC_SITE_HOSTS = {"punty.ai", "www.punty.ai", "localhost:8000", "127.0.0.1:8000"}
 
 
@@ -97,7 +97,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # --- CSRF middleware ----------------------------------------------------------
 
 CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-CSRF_EXEMPT_PREFIXES = ("/api/webhook/",)
+CSRF_EXEMPT_PREFIXES = ("/api/webhook/", "/public/betfair-tracker")
 
 
 def _get_session_csrf_secret(request) -> str:

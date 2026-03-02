@@ -113,11 +113,13 @@ async def get_summary(db: AsyncSession = Depends(get_db)):
 @router.get("/history")
 async def get_history(
     days: int = 30,
+    status: str = "all",
+    venue: str = "",
     db: AsyncSession = Depends(get_db),
 ):
-    """Get settled bet history."""
+    """Get settled bet history with filters and summary stats."""
     from datetime import timedelta
-    cutoff_date = melb_today() - timedelta(days=days)
+    cutoff_date = melb_today() - timedelta(days=days) if days > 0 else None
     result = await db.execute(
         select(BetfairBet).where(
             BetfairBet.settled == True,
@@ -127,16 +129,44 @@ async def get_history(
     # Filter by date from meeting_id (contains date string)
     filtered = []
     for b in bets:
-        try:
-            # Extract date from meeting_id like "sale-2026-03-02"
-            parts = b.meeting_id.rsplit("-", 3)
-            if len(parts) >= 4:
-                bet_date = date(int(parts[-3]), int(parts[-2]), int(parts[-1]))
-                if bet_date >= cutoff_date:
-                    filtered.append(b.to_dict())
-        except (ValueError, IndexError):
-            filtered.append(b.to_dict())
-    return {"bets": filtered}
+        # Date filter
+        if cutoff_date:
+            try:
+                parts = b.meeting_id.rsplit("-", 3)
+                if len(parts) >= 4:
+                    bet_date = date(int(parts[-3]), int(parts[-2]), int(parts[-1]))
+                    if bet_date < cutoff_date:
+                        continue
+            except (ValueError, IndexError):
+                pass
+        # Status filter
+        if status == "won" and not b.hit:
+            continue
+        if status == "lost" and b.hit:
+            continue
+        # Venue filter (match against meeting_id prefix before date)
+        if venue:
+            venue_part = b.meeting_id.rsplit("-", 3)[0] if len(b.meeting_id.rsplit("-", 3)) >= 4 else b.meeting_id
+            if venue.lower() not in venue_part.lower():
+                continue
+        filtered.append(b.to_dict())
+
+    # Summary stats
+    total = len(filtered)
+    wins = sum(1 for b in filtered if b.get("hit"))
+    losses = total - wins
+    total_pnl = sum(b.get("pnl") or 0 for b in filtered)
+    total_staked = sum(b.get("stake") or 0 for b in filtered)
+    summary = {
+        "total": total,
+        "wins": wins,
+        "losses": losses,
+        "pnl": round(total_pnl, 2),
+        "roi": round((total_pnl / total_staked * 100) if total_staked > 0 else 0, 1),
+        "strike_rate": round((wins / total * 100) if total > 0 else 0, 1),
+        "avg_stake": round((total_staked / total) if total > 0 else 0, 2),
+    }
+    return {"bets": filtered, "summary": summary}
 
 
 @router.get("/status")

@@ -321,6 +321,152 @@
         </div>
     </div>
 
+    <!-- Bet History (collapsible, loads on demand) -->
+    <div class="rounded-xl overflow-hidden" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+        <div class="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
+             style="border-bottom: 1px solid var(--border-subtle);"
+             @click="toggleHistory()">
+            <h2 class="text-lg font-bold" style="font-family: 'Rajdhani', sans-serif;">
+                <span x-text="showHistory ? '▼' : '▶'" class="mr-1"></span>
+                BET HISTORY
+                <span class="text-xs font-normal ml-2" style="color: var(--text-muted);"
+                      x-show="historySummary.total" x-text="historySummary.total + ' bets'"></span>
+            </h2>
+            <span class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">
+                <span x-show="!showHistory">Click to expand</span>
+                <span x-show="historyLoading" class="animate-pulse">Loading...</span>
+            </span>
+        </div>
+
+        <div x-show="showHistory" x-transition>
+            <!-- Filter bar -->
+            <div class="flex flex-wrap items-center gap-3 px-4 py-3" style="border-bottom: 1px solid var(--border-subtle); background: rgba(255,255,255,0.02);">
+                <div class="flex items-center gap-1.5">
+                    <label class="text-xs uppercase" style="color: var(--text-muted);">Period</label>
+                    <select x-model="historyFilters.days" @change="loadHistory()"
+                            class="px-2 py-1 rounded text-xs"
+                            style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--border-subtle);">
+                        <option value="7">7 days</option>
+                        <option value="14">14 days</option>
+                        <option value="30">30 days</option>
+                        <option value="90">90 days</option>
+                        <option value="0">All time</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <label class="text-xs uppercase" style="color: var(--text-muted);">Status</label>
+                    <select x-model="historyFilters.status" @change="loadHistory()"
+                            class="px-2 py-1 rounded text-xs"
+                            style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--border-subtle);">
+                        <option value="all">All</option>
+                        <option value="won">Won</option>
+                        <option value="lost">Lost</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <label class="text-xs uppercase" style="color: var(--text-muted);">Venue</label>
+                    <input type="text" x-model="historyFilters.venue" placeholder="e.g. sale"
+                           @keydown.enter="loadHistory()"
+                           class="px-2 py-1 rounded text-xs w-28"
+                           style="background: var(--bg-card-alt); color: var(--text-primary); border: 1px solid var(--border-subtle);">
+                </div>
+                <button @click="loadHistory()" class="px-3 py-1 rounded text-xs font-bold"
+                        style="background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.3);">
+                    Apply
+                </button>
+            </div>
+
+            <!-- Summary cards -->
+            <div x-show="historySummary.total !== undefined" class="grid grid-cols-2 md:grid-cols-5 gap-3 px-4 py-3">
+                <template x-for="stat in [
+                    { label: 'Total Bets', value: historySummary.total, fmt: 'int' },
+                    { label: 'Strike Rate', value: historySummary.strike_rate, fmt: 'pct' },
+                    { label: 'P&L', value: historySummary.pnl, fmt: 'pnl' },
+                    { label: 'ROI', value: historySummary.roi, fmt: 'pct' },
+                    { label: 'Avg Stake', value: historySummary.avg_stake, fmt: 'dollar' },
+                ]">
+                    <div class="px-3 py-2 rounded-lg text-center" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                        <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted);" x-text="stat.label"></div>
+                        <div class="text-base font-bold mt-0.5" style="font-family: 'Rajdhani', sans-serif;"
+                             :style="{ color: stat.fmt === 'pnl' ? ((stat.value || 0) >= 0 ? '#00ff88' : '#ff4466') : 'var(--text-primary)' }">
+                            <span x-show="stat.fmt === 'int'" x-text="stat.value || 0"></span>
+                            <span x-show="stat.fmt === 'pct'" x-text="(stat.value || 0).toFixed(1) + '%'"></span>
+                            <span x-show="stat.fmt === 'pnl'" x-text="((stat.value || 0) >= 0 ? '+$' : '-$') + Math.abs(stat.value || 0).toFixed(2)"></span>
+                            <span x-show="stat.fmt === 'dollar'" x-text="'$' + (stat.value || 0).toFixed(2)"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- History table -->
+            <div class="overflow-x-auto">
+                <template x-if="historyBets.length === 0 && !historyLoading">
+                    <div class="px-4 py-8 text-center" style="color: var(--text-muted);">
+                        No settled bets in this period.
+                    </div>
+                </template>
+                <table x-show="historyBets.length > 0" class="w-full text-sm">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-subtle);">
+                            <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Race</th>
+                            <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Horse</th>
+                            <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Stake</th>
+                            <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Odds</th>
+                            <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Date</th>
+                            <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Result</th>
+                            <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="bet in historyBets" :key="bet.id">
+                            <tr style="border-bottom: 1px solid var(--border-subtle);"
+                                :style="bet.hit ? 'border-left: 3px solid #00ff88;' : 'border-left: 3px solid #ff4466;'">
+                                <td class="px-4 py-2">
+                                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold"
+                                          :style="bet.hit
+                                              ? 'background: rgba(0,255,136,0.2); color: #00ff88;'
+                                              : 'background: rgba(255,68,102,0.2); color: #ff4466;'">
+                                        <span x-text="'R' + bet.race_number"></span>
+                                    </span>
+                                    <span class="ml-2 text-xs" style="color: var(--text-muted);" x-text="formatMeetingId(bet.meeting_id)"></span>
+                                </td>
+                                <td class="px-4 py-2 font-bold">
+                                    <span x-text="bet.horse_name"></span>
+                                    <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
+                                          :style="(bet.bet_type || 'place') === 'win'
+                                              ? 'background: rgba(255,170,0,0.2); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3);'
+                                              : 'background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);'"
+                                          x-text="(bet.bet_type || 'place').toUpperCase()"></span>
+                                </td>
+                                <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
+                                    $<span x-text="bet.stake.toFixed(2)"></span>
+                                </td>
+                                <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
+                                    <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : '—'"></span>
+                                </td>
+                                <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);">
+                                    <span x-text="bet.settled_at ? new Date(bet.settled_at).toLocaleDateString('en-AU', {day:'2-digit', month:'short'}) : '—'"></span>
+                                </td>
+                                <td class="px-4 py-2 text-center">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-bold"
+                                          :style="bet.hit
+                                              ? 'background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);'
+                                              : 'background: rgba(255,68,102,0.2); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);'"
+                                          x-text="bet.hit ? 'WON' : 'LOST'">
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2 text-center font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                    :style="{ color: bet.pnl > 0 ? '#00ff88' : bet.pnl < 0 ? '#ff4466' : 'var(--text-muted)' }">
+                                    <span x-text="(bet.pnl >= 0 ? '+$' : '-$') + Math.abs(bet.pnl || 0).toFixed(2)"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Bottom panels -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <!-- Stake Control -->
@@ -426,6 +572,11 @@ function betfairApp() {
         newBalance: '',
         manualStake: '2',
         showSettled: false,
+        showHistory: false,
+        historyBets: [],
+        historyLoading: false,
+        historyFilters: { days: 30, status: 'all', venue: '' },
+        historySummary: {},
         toasts: [],
         _toastId: 0,
         _knownSettled: new Set(),
@@ -622,6 +773,28 @@ function betfairApp() {
             });
             this.newBalance = '';
             await this.refresh();
+        },
+
+        async toggleHistory() {
+            this.showHistory = !this.showHistory;
+            if (this.showHistory && this.historyBets.length === 0) {
+                await this.loadHistory();
+            }
+        },
+
+        async loadHistory() {
+            this.historyLoading = true;
+            try {
+                const params = new URLSearchParams();
+                params.set('days', this.historyFilters.days);
+                params.set('status', this.historyFilters.status);
+                if (this.historyFilters.venue) params.set('venue', this.historyFilters.venue);
+                const resp = await fetch(`/api/betfair/history?${params}`);
+                const data = await resp.json();
+                this.historyBets = data.bets || [];
+                this.historySummary = data.summary || {};
+            } catch (e) { console.error('Failed to load history:', e); }
+            this.historyLoading = false;
         },
 
         formatMeetingId(id) {
