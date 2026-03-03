@@ -170,18 +170,34 @@
         <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
             Cumulative P&L
         </h3>
-        <div class="h-24 flex items-end gap-px" x-show="runningPnl.length > 0">
+        <div class="relative h-24 flex gap-px" x-show="runningPnl.length > 0"
+             x-data="{ get maxAbs() { return Math.max(...$store?.x || [1], ...runningPnl.map(p => Math.abs(p.pnl)), 1); },
+                        get maxPos() { return Math.max(...runningPnl.map(p => p.pnl), 0); },
+                        get maxNeg() { return Math.min(...runningPnl.map(p => p.pnl), 0); },
+                        get topPct() { return this.maxPos > 0 ? (this.maxPos / (this.maxPos - this.maxNeg) * 100) : 0; },
+                        get botPct() { return this.maxNeg < 0 ? (-this.maxNeg / (this.maxPos - this.maxNeg) * 100) : 0; },
+                        barPct(pnl) { const range = Math.max(this.maxPos - this.maxNeg, 0.01); return Math.max(2, Math.abs(pnl) / range * 100); }
+                      }">
+            <!-- Zero line -->
+            <div class="absolute left-0 right-0 h-px" style="background: rgba(255,255,255,0.15);"
+                 :style="{ top: topPct + '%' }"></div>
             <template x-for="(point, i) in runningPnl" :key="i">
-                <div class="flex-1 transition-all relative group"
-                     :style="{
-                         height: pnlBarHeight(point.pnl) + '%',
-                         background: point.pnl >= 0
-                             ? 'linear-gradient(180deg, rgba(0,255,136,0.8), rgba(0,255,136,0.2))'
-                             : 'linear-gradient(180deg, rgba(255,68,102,0.8), rgba(255,68,102,0.2))',
-                         alignSelf: point.pnl >= 0 ? 'flex-end' : 'flex-start',
-                         minHeight: '2px',
-                         borderRadius: '1px',
-                     }">
+                <div class="flex-1 relative group" style="display: flex; flex-direction: column;">
+                    <!-- Positive region (top half) -->
+                    <div :style="{ flex: topPct + ' 0 0%' }" class="flex items-end">
+                        <div x-show="point.pnl >= 0" class="w-full"
+                             :style="{ height: barPct(point.pnl) + '%', minHeight: point.pnl > 0 ? '2px' : '0',
+                                       background: 'linear-gradient(180deg, rgba(0,255,136,0.8), rgba(0,255,136,0.2))',
+                                       borderRadius: '1px' }"></div>
+                    </div>
+                    <!-- Negative region (bottom half) -->
+                    <div :style="{ flex: botPct + ' 0 0%' }" class="flex items-start">
+                        <div x-show="point.pnl < 0" class="w-full"
+                             :style="{ height: barPct(point.pnl) + '%', minHeight: point.pnl < 0 ? '2px' : '0',
+                                       background: 'linear-gradient(0deg, rgba(255,68,102,0.8), rgba(255,68,102,0.2))',
+                                       borderRadius: '1px' }"></div>
+                    </div>
+                    <!-- Tooltip -->
                     <div class="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-[10px] whitespace-nowrap z-10"
                          style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);"
                          :style="{ color: point.pnl >= 0 ? '#00ff88' : '#ff4466' }"
@@ -189,6 +205,9 @@
                     </div>
                 </div>
             </template>
+        </div>
+        <div x-show="runningPnl.length === 0" class="text-center py-4 text-xs" style="color: var(--text-muted);">
+            No bets in this period
         </div>
     </div>
 
@@ -442,10 +461,7 @@ function trackerApp() {
         activePeriod: 'today',
         periods: { today: {}, yesterday: {}, week: {}, month: {}, all_time: {} },
         daily: [],
-        byType: { win: { bets: 0, pnl: 0, strike_rate: 0 }, place: { bets: 0, pnl: 0, strike_rate: 0 } },
-        bestBet: null,
-        worstBet: null,
-        runningPnl: [],
+        _defaultByType: { win: { bets: 0, pnl: 0, strike_rate: 0 }, place: { bets: 0, pnl: 0, strike_rate: 0 } },
 
         // History
         showHistory: false,
@@ -456,6 +472,22 @@ function trackerApp() {
 
         get currentPeriod() {
             return this.periods[this.activePeriod] || { bets: 0, wins: 0, losses: 0, pnl: 0, roi: 0, strike_rate: 0 };
+        },
+
+        get byType() {
+            return (this.periods[this.activePeriod] || {}).by_type || this._defaultByType;
+        },
+
+        get bestBet() {
+            return (this.periods[this.activePeriod] || {}).best_bet || null;
+        },
+
+        get worstBet() {
+            return (this.periods[this.activePeriod] || {}).worst_bet || null;
+        },
+
+        get runningPnl() {
+            return (this.periods[this.activePeriod] || {}).running_pnl || [];
         },
 
         get maxDailyPnl() {
@@ -494,10 +526,6 @@ function trackerApp() {
                 const data = await resp.json();
                 this.periods = data.periods || this.periods;
                 this.daily = data.daily || [];
-                this.byType = data.by_type || this.byType;
-                this.bestBet = data.best_bet;
-                this.worstBet = data.worst_bet;
-                this.runningPnl = data.running_pnl || [];
             } catch (e) { console.error('Failed to load dashboard:', e); }
         },
 

@@ -3198,6 +3198,29 @@ async def bf_tracker_dashboard(request: Request):
             "staked": round(total_staked, 2),
         }
 
+    def _calc_period(bets_list):
+        """Calculate stats + by_type + best/worst for a period."""
+        stats = _calc_stats(bets_list)
+        win_bets = [b for b in bets_list if (b.bet_type or "place") == "win"]
+        place_bets = [b for b in bets_list if (b.bet_type or "place") == "place"]
+        stats["by_type"] = {"win": _calc_stats(win_bets), "place": _calc_stats(place_bets)}
+        if bets_list:
+            best = max(bets_list, key=lambda b: b.pnl or 0)
+            worst = min(bets_list, key=lambda b: b.pnl or 0)
+            stats["best_bet"] = {"horse": best.horse_name, "pnl": best.pnl, "meeting": best.meeting_id}
+            stats["worst_bet"] = {"horse": worst.horse_name, "pnl": worst.pnl, "meeting": worst.meeting_id}
+        else:
+            stats["best_bet"] = None
+            stats["worst_bet"] = None
+        # Running P&L for this period
+        running = []
+        cumulative = 0
+        for b in sorted(bets_list, key=lambda b: b.settled_at or b.created_at):
+            cumulative += b.pnl or 0
+            running.append({"id": b.id, "pnl": round(cumulative, 2), "date": _bet_date(b).isoformat() if _bet_date(b) else ""})
+        stats["running_pnl"] = running
+        return stats
+
     # Bucket bets by period
     today_bets = [b for b in all_bets if _bet_date(b) == today]
     yesterday_bets = [b for b in all_bets if _bet_date(b) == today - timedelta(days=1)]
@@ -3214,40 +3237,21 @@ async def bf_tracker_dashboard(request: Request):
         stats["label"] = d.strftime("%d %b")
         daily.append(stats)
 
-    # Win/Place type breakdown
-    win_bets = [b for b in all_bets if (b.bet_type or "place") == "win"]
-    place_bets = [b for b in all_bets if (b.bet_type or "place") == "place"]
-
-    # Best/worst single bet
-    best_bet = max(all_bets, key=lambda b: b.pnl or 0) if all_bets else None
-    worst_bet = min(all_bets, key=lambda b: b.pnl or 0) if all_bets else None
-
-    # Running P&L (cumulative)
-    running_pnl = []
-    cumulative = 0
-    for b in reversed(all_bets):  # oldest first
-        cumulative += b.pnl or 0
-        running_pnl.append({"id": b.id, "pnl": round(cumulative, 2), "date": _bet_date(b).isoformat() if _bet_date(b) else ""})
+    # Each period includes by_type, best/worst, running_pnl
+    periods = {
+        "today": _calc_period(today_bets),
+        "yesterday": _calc_period(yesterday_bets),
+        "week": _calc_period(week_bets),
+        "month": _calc_period(month_bets),
+        "all_time": _calc_period(all_bets),
+    }
 
     return {
         "balance": balance,
         "initial_balance": initial,
         "current_stake": stake,
-        "periods": {
-            "today": _calc_stats(today_bets),
-            "yesterday": _calc_stats(yesterday_bets),
-            "week": _calc_stats(week_bets),
-            "month": _calc_stats(month_bets),
-            "all_time": _calc_stats(all_bets),
-        },
+        "periods": periods,
         "daily": daily,
-        "by_type": {
-            "win": _calc_stats(win_bets),
-            "place": _calc_stats(place_bets),
-        },
-        "best_bet": {"horse": best_bet.horse_name, "pnl": best_bet.pnl, "meeting": best_bet.meeting_id} if best_bet else None,
-        "worst_bet": {"horse": worst_bet.horse_name, "pnl": worst_bet.pnl, "meeting": worst_bet.meeting_id} if worst_bet else None,
-        "running_pnl": running_pnl,
     }
 
 
