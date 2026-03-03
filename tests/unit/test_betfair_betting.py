@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta
 
 from punty.betting.queue import (
-    calculate_stake, populate_bet_queue, settle_betfair_bets,
-    execute_due_bets, refresh_bet_selections, cycle_bet_selection,
-    SWAP_THRESHOLD, ODDS_ON_THRESHOLD,
+    calculate_stake, calculate_kelly_stake, populate_bet_queue,
+    settle_betfair_bets, execute_due_bets, refresh_bet_selections,
+    cycle_bet_selection, SWAP_THRESHOLD,
 )
 
 
@@ -49,6 +49,52 @@ class TestCalculateStake:
     def test_large_growth(self):
         # $50 → $3200 = 6 doublings → $2 * 64 = $128
         assert calculate_stake(3200, 50, 2) == 128.0
+
+
+class TestCalculateKellyStake:
+    """Test the Kelly-proportional staking logic."""
+
+    def test_positive_edge_produces_stake(self):
+        """10% edge at $2.00 odds → kelly = 0.10/1.0 = 0.10, capped at 0.08."""
+        stake = calculate_kelly_stake(balance=50.0, place_probability=0.60, odds=2.00)
+        # edge = 0.60 - 0.50 = 0.10, kelly = 0.10/1.0 = 0.10, capped 0.08
+        assert stake == 0.08 * 50.0  # $4.00
+
+    def test_no_edge_returns_min(self):
+        """Zero edge → minimum stake."""
+        stake = calculate_kelly_stake(balance=50.0, place_probability=0.50, odds=2.00)
+        # edge = 0.50 - 0.50 = 0, so min stake
+        assert stake == 0.50
+
+    def test_negative_edge_returns_min(self):
+        """Negative edge → minimum stake."""
+        stake = calculate_kelly_stake(balance=50.0, place_probability=0.30, odds=2.00)
+        assert stake == 0.50
+
+    def test_large_balance_scales(self):
+        """Kelly scales with balance."""
+        stake = calculate_kelly_stake(balance=1000.0, place_probability=0.70, odds=3.00)
+        # edge = 0.70 - 0.333 = 0.367, kelly = 0.367/2.0 = 0.183, capped 0.08
+        assert stake == 0.08 * 1000.0  # $80.00
+
+    def test_small_edge_small_stake(self):
+        """Small edge → floored to min_stake."""
+        stake = calculate_kelly_stake(balance=50.0, place_probability=0.56, odds=1.80)
+        # edge = 0.56 - 0.556 = 0.004, kelly = 0.004/0.80 = 0.005
+        # 0.005 * 50 = $0.25 → floored to $0.50 min_stake
+        assert stake == 0.50
+
+    def test_floor_applied(self):
+        """Stake never goes below min_stake."""
+        stake = calculate_kelly_stake(balance=10.0, place_probability=0.56, odds=1.80)
+        assert stake >= 0.50
+
+    def test_zero_balance(self):
+        assert calculate_kelly_stake(0, 0.70, 2.00) == 0.50
+
+    def test_invalid_odds(self):
+        assert calculate_kelly_stake(50.0, 0.70, 1.00) == 0.50
+        assert calculate_kelly_stake(50.0, 0.70, 0.50) == 0.50
 
 
 class TestPopulateBetQueue:
@@ -182,7 +228,6 @@ class TestRefreshBetSelections:
         3. select(Pick) → candidate picks for the race
         4. select(Runner) → current horse runner (scratched check)
         5..N. select(Runner) → one per candidate pick
-        N+1. select(Runner) → odds-on check runner
         """
         # Build result mocks
         bets_result = MagicMock()
@@ -227,12 +272,11 @@ class TestRefreshBetSelections:
         runner_a_scratched = _make_mock_runner(1, scratched=True, current_odds=5.0)
         runner_a_for_pick = _make_mock_runner(1, scratched=True, current_odds=5.0)
         runner_b = _make_mock_runner(2, scratched=False, current_odds=5.0)
-        runner_odds_check = _make_mock_runner(2, scratched=False, current_odds=5.0)
 
-        # Runners: current check (scratched), then per-pick (a=scratched, b=ok), then odds-on check
+        # Runners: current check (scratched), then per-pick (a=scratched, b=ok)
         self._setup_db_responses(
-            mock_db, [bet], "0.50", [pick_a, pick_b],
-            [runner_a_scratched, runner_a_for_pick, runner_b, runner_odds_check]
+            mock_db, [bet], "0.55", [pick_a, pick_b],
+            [runner_a_scratched, runner_a_for_pick, runner_b]
         )
 
         count = await refresh_bet_selections(mock_db)
@@ -270,11 +314,10 @@ class TestRefreshBetSelections:
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_a_pick = _make_mock_runner(1, current_odds=5.0)
         runner_b_pick = _make_mock_runner(2, current_odds=5.0)
-        runner_odds_check = _make_mock_runner(2, current_odds=5.0)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.50", [pick_a, pick_b],
-            [runner_a, runner_a_pick, runner_b_pick, runner_odds_check]
+            mock_db, [bet], "0.55", [pick_a, pick_b],
+            [runner_a, runner_a_pick, runner_b_pick]
         )
 
         count = await refresh_bet_selections(mock_db)
@@ -292,11 +335,10 @@ class TestRefreshBetSelections:
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_a_pick = _make_mock_runner(1, current_odds=5.0)
         runner_b_pick = _make_mock_runner(2, current_odds=5.0)
-        runner_odds_check = _make_mock_runner(1, current_odds=5.0)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.50", [pick_a, pick_b],
-            [runner_a, runner_a_pick, runner_b_pick, runner_odds_check]
+            mock_db, [bet], "0.55", [pick_a, pick_b],
+            [runner_a, runner_a_pick, runner_b_pick]
         )
 
         count = await refresh_bet_selections(mock_db)
@@ -304,41 +346,21 @@ class TestRefreshBetSelections:
         assert bet.pick_id == "p1"  # unchanged
 
     @pytest.mark.asyncio
-    async def test_odds_on_flips_to_win(self, mock_db):
-        """Horse < $2.00 → bet_type flipped to 'win'."""
+    async def test_odds_on_stays_place(self, mock_db):
+        """Horse < $2.00 → bet_type stays 'place' (no win flipping)."""
         bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1, bet_type="place")
         pick_a = _make_mock_pick("p1", "Horse A", 1, 0.80)
 
-        runner_a = _make_mock_runner(1, current_odds=1.80)  # Odds-on
+        runner_a = _make_mock_runner(1, current_odds=1.80)
         runner_a_pick = _make_mock_runner(1, current_odds=1.80)
-        runner_odds_check = _make_mock_runner(1, current_odds=1.80)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.50", [pick_a],
-            [runner_a, runner_a_pick, runner_odds_check]
+            mock_db, [bet], "0.55", [pick_a],
+            [runner_a, runner_a_pick]
         )
 
         count = await refresh_bet_selections(mock_db)
-        assert count >= 1
-        assert bet.bet_type == "win"
-
-    @pytest.mark.asyncio
-    async def test_odds_drift_reverts_to_place(self, mock_db):
-        """Horse drifts above $2.00 → bet_type reverted to 'place'."""
-        bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1, bet_type="win")
-        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
-
-        runner_a = _make_mock_runner(1, current_odds=2.50)  # Drifted
-        runner_a_pick = _make_mock_runner(1, current_odds=2.50)
-        runner_odds_check = _make_mock_runner(1, current_odds=2.50)
-
-        self._setup_db_responses(
-            mock_db, [bet], "0.50", [pick_a],
-            [runner_a, runner_a_pick, runner_odds_check]
-        )
-
-        count = await refresh_bet_selections(mock_db)
-        assert count >= 1
+        assert count == 0  # No changes — stays place
         assert bet.bet_type == "place"
 
 
@@ -378,9 +400,8 @@ class TestCycleBetSelection:
 
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_b = _make_mock_runner(2, current_odds=5.0)
-        runner_odds = _make_mock_runner(2, current_odds=5.0)
 
-        # Call order: select bet, select picks, runner_a check, runner_b check, runner odds-on check
+        # Call order: select bet, select picks, runner_a check, runner_b check
         bet_result = MagicMock()
         bet_result.scalar_one_or_none.return_value = bet
         picks_result = MagicMock()
@@ -389,11 +410,9 @@ class TestCycleBetSelection:
         runner_a_result.scalar_one_or_none.return_value = runner_a
         runner_b_result = MagicMock()
         runner_b_result.scalar_one_or_none.return_value = runner_b
-        runner_odds_result = MagicMock()
-        runner_odds_result.scalar_one_or_none.return_value = runner_odds
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result, runner_odds_result]
+            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -411,7 +430,6 @@ class TestCycleBetSelection:
 
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_b = _make_mock_runner(2, current_odds=5.0)
-        runner_odds = _make_mock_runner(1, current_odds=5.0)
 
         bet_result = MagicMock()
         bet_result.scalar_one_or_none.return_value = bet
@@ -421,11 +439,9 @@ class TestCycleBetSelection:
         runner_a_result.scalar_one_or_none.return_value = runner_a
         runner_b_result = MagicMock()
         runner_b_result.scalar_one_or_none.return_value = runner_b
-        runner_odds_result = MagicMock()
-        runner_odds_result.scalar_one_or_none.return_value = runner_odds
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result, runner_odds_result]
+            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -471,15 +487,14 @@ class TestCycleBetSelection:
         assert "placed" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_cycle_odds_on_flips_to_win(self, mock_db):
-        """Cycling to an odds-on horse sets bet_type to win."""
+    async def test_cycle_odds_on_stays_place(self, mock_db):
+        """Cycling to an odds-on horse still sets bet_type to place (no win bets)."""
         bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1, bet_type="place")
         pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
         pick_b = _make_mock_pick("p2", "Horse B", 2, 0.60)
 
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_b = _make_mock_runner(2, current_odds=1.50)  # Odds-on
-        runner_odds = _make_mock_runner(2, current_odds=1.50)
 
         bet_result = MagicMock()
         bet_result.scalar_one_or_none.return_value = bet
@@ -489,13 +504,11 @@ class TestCycleBetSelection:
         runner_a_result.scalar_one_or_none.return_value = runner_a
         runner_b_result = MagicMock()
         runner_b_result.scalar_one_or_none.return_value = runner_b
-        runner_odds_result = MagicMock()
-        runner_odds_result.scalar_one_or_none.return_value = runner_odds
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result, runner_odds_result]
+            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
         assert result["swapped"] is True
-        assert bet.bet_type == "win"
+        assert bet.bet_type == "place"

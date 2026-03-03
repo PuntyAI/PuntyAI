@@ -22,7 +22,12 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
 DEFAULT_COMMISSION_RATE = 0.05  # 5% Betfair commission
 DEFAULT_MAX_DAILY_LOSS = -20.0
-DEFAULT_MIN_PLACE_PROB = 0.50  # 50% minimum place probability
+DEFAULT_MIN_PLACE_PROB = 0.55  # 55% minimum place probability
+DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
+DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
+DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
+DEFAULT_MAX_KELLY_FRACTION = 0.08  # Cap Kelly fraction at 8%
+DEFAULT_MIN_KELLY_STAKE = 0.50  # Minimum stake floor
 
 
 async def _get_setting(db: AsyncSession, key: str, default: str = "") -> str:
@@ -49,21 +54,41 @@ async def set_balance(db: AsyncSession, balance: float) -> None:
 
 def calculate_stake(balance: float, initial_balance: float = DEFAULT_INITIAL_BALANCE,
                     base_stake: float = DEFAULT_BASE_STAKE) -> float:
-    """Calculate current stake based on balance growth.
+    """Calculate current stake based on balance growth (legacy doubling formula).
 
-    Doubles stake every time balance doubles from initial:
-    - $50-99: $2
-    - $100-199: $4
-    - $200-399: $8
-    - etc.
+    Used only as default/fallback when Kelly parameters aren't available.
+    Doubles stake every time balance doubles from initial.
     """
     if balance <= 0 or initial_balance <= 0:
         return base_stake
     ratio = balance / initial_balance
     if ratio < 1:
-        return base_stake  # Don't reduce below base when in drawdown
+        return base_stake
     doublings = int(math.log2(ratio))
     return base_stake * (2 ** doublings)
+
+
+def calculate_kelly_stake(
+    balance: float,
+    place_probability: float,
+    odds: float,
+    max_fraction: float = DEFAULT_MAX_KELLY_FRACTION,
+    min_stake: float = DEFAULT_MIN_KELLY_STAKE,
+) -> float:
+    """Kelly-proportional staking: bet more when edge is larger.
+
+    Kelly fraction = edge / (odds - 1), capped at max_fraction.
+    Stake = kelly_fraction * balance, floored at min_stake.
+    """
+    if odds <= 1 or balance <= 0 or place_probability <= 0:
+        return min_stake
+    implied_prob = 1.0 / odds
+    edge = place_probability - implied_prob
+    if edge <= 0:
+        return min_stake
+    kelly = edge / (odds - 1)
+    kelly = min(kelly, max_fraction)
+    return max(kelly * balance, min_stake)
 
 
 async def get_current_stake(db: AsyncSession) -> float:
@@ -194,7 +219,6 @@ async def populate_bet_queue(
 
 
 SWAP_THRESHOLD = 0.03  # 3 percentage-point gap required to swap picks
-ODDS_ON_THRESHOLD = 2.00  # Below this → switch to win bet
 
 
 async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
@@ -271,16 +295,7 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
     bet.saddlecloth = next_pick.saddlecloth
     bet.requested_odds = next_pick.place_odds_at_tip
 
-    # Check odds-on → flip bet_type
-    runner_result = await db.execute(
-        select(Runner).where(
-            Runner.race_id == race_id,
-            Runner.saddlecloth == next_pick.saddlecloth,
-        )
-    )
-    runner = runner_result.scalar_one_or_none()
-    current_odds = (runner.current_odds if runner else None) or 0
-    bet.bet_type = "win" if 0 < current_odds < ODDS_ON_THRESHOLD else "place"
+    bet.bet_type = "place"  # Always place — no win bets
 
     await db.commit()
     rank = next_idx + 1
@@ -404,32 +419,6 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                     f"{bet.horse_name} ({best_pp:.0%}pp)"
                 )
 
-        # Odds-on detection: if current horse is < $2.00 → switch to win bet
-        if bet.status == "queued":
-            active_runner_result = await db.execute(
-                select(Runner).where(
-                    Runner.race_id == race_id,
-                    Runner.saddlecloth == bet.saddlecloth,
-                )
-            )
-            active_runner = active_runner_result.scalar_one_or_none()
-            current_odds = (active_runner.current_odds if active_runner else None) or 0
-            current_bet_type = getattr(bet, "bet_type", "place")
-
-            if current_odds > 0 and current_odds < ODDS_ON_THRESHOLD and current_bet_type != "win":
-                bet.bet_type = "win"
-                changes += 1
-                logger.info(
-                    f"Odds-on flip {bet.id}: {bet.horse_name} ${current_odds:.2f} → WIN bet"
-                )
-            elif current_odds >= ODDS_ON_THRESHOLD and current_bet_type == "win":
-                # Drifted back above $2 — revert to place
-                bet.bet_type = "place"
-                changes += 1
-                logger.info(
-                    f"Odds drift {bet.id}: {bet.horse_name} ${current_odds:.2f} → PLACE bet"
-                )
-
     if changes:
         await db.commit()
     return changes
@@ -445,8 +434,7 @@ async def execute_due_bets(db: AsyncSession) -> int:
     - scheduled_at > now - 10min (don't bet on races that started 5+ min ago)
     """
     from punty.betting.betfair_client import (
-        resolve_place_market, resolve_win_market,
-        get_place_odds, get_win_odds, place_bet,
+        resolve_place_market, get_place_odds, place_bet,
     )
 
     now = melb_now_naive()
@@ -489,10 +477,13 @@ async def execute_due_bets(db: AsyncSession) -> int:
     # Safety: check balance
     balance = await get_balance(db)
     min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
+    edge_multiplier = float(await _get_setting(db, "betfair_edge_multiplier", str(DEFAULT_EDGE_MULTIPLIER)))
+    dead_zone_low = float(await _get_setting(db, "betfair_dead_zone_low", str(DEFAULT_DEAD_ZONE_LOW)))
+    dead_zone_high = float(await _get_setting(db, "betfair_dead_zone_high", str(DEFAULT_DEAD_ZONE_HIGH)))
 
     placed = 0
     for bet in due_bets:
-        if balance < bet.stake:
+        if balance < DEFAULT_MIN_KELLY_STAKE:
             bet.status = "cancelled"
             bet.error_message = f"Insufficient balance (${balance:.2f} < ${bet.stake:.2f})"
             logger.warning(f"Betfair: skipping {bet.id} — insufficient balance")
@@ -512,7 +503,12 @@ async def execute_due_bets(db: AsyncSession) -> int:
             logger.info(f"Betfair: {bet.id} cancelled — {bet.horse_name} scratched")
             continue
 
-        # Resolve market
+        # Load pick to get place_probability for edge gate + Kelly staking
+        pick_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
+        pick = pick_result.scalar_one_or_none()
+        place_prob = (pick.place_probability if pick else None) or 0
+
+        # Resolve meeting
         meeting_result = await db.execute(select(Meeting).where(Meeting.id == bet.meeting_id))
         meeting = meeting_result.scalar_one_or_none()
         if not meeting:
@@ -523,19 +519,14 @@ async def execute_due_bets(db: AsyncSession) -> int:
         bet.status = "placing"
         await db.commit()
 
-        # Resolve market based on bet_type (win or place)
-        is_win = getattr(bet, "bet_type", "place") == "win"
-        if is_win:
-            market = await resolve_win_market(
-                db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
-            )
-        else:
-            market = await resolve_place_market(
-                db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
-            )
+        # Always place market — no win bets
+        bet.bet_type = "place"
+        market = await resolve_place_market(
+            db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
+        )
         if not market:
             bet.status = "failed"
-            bet.error_message = f"Could not resolve Betfair {'win' if is_win else 'place'} market"
+            bet.error_message = "Could not resolve Betfair place market"
             await db.commit()
             continue
 
@@ -558,18 +549,47 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         bet.selection_id = selection_id
 
-        # Get current odds from the appropriate market
-        if is_win:
-            current_odds = await get_win_odds(db, market["market_id"], selection_id)
-        else:
-            current_odds = await get_place_odds(db, market["market_id"], selection_id)
+        # Get live Betfair place odds
+        current_odds = await get_place_odds(db, market["market_id"], selection_id)
         if not current_odds or current_odds < min_odds:
             bet.status = "cancelled"
             bet.error_message = f"Odds too low: ${current_odds}" if current_odds else "No odds available"
             await db.commit()
             continue
 
+        # Dead zone filter: skip $1.60-$2.00 (33% SR historically, needs 58.5%)
+        if dead_zone_low <= current_odds < dead_zone_high:
+            bet.status = "cancelled"
+            bet.error_message = f"Dead zone odds: ${current_odds:.2f} (${dead_zone_low}-${dead_zone_high})"
+            logger.info(f"Betfair: {bet.id} cancelled — dead zone ${current_odds:.2f}")
+            await db.commit()
+            continue
+
+        # Edge gate: only bet when place_prob > implied_prob * edge_multiplier
+        if current_odds > 1 and place_prob > 0:
+            implied_prob = 1.0 / current_odds
+            required_prob = implied_prob * edge_multiplier
+            if place_prob < required_prob:
+                bet.status = "cancelled"
+                bet.error_message = (
+                    f"Insufficient edge: PP={place_prob:.1%} < "
+                    f"required {required_prob:.1%} (implied {implied_prob:.1%} x {edge_multiplier})"
+                )
+                logger.info(f"Betfair: {bet.id} cancelled — no edge ({place_prob:.1%} < {required_prob:.1%})")
+                await db.commit()
+                continue
+
+        # Kelly-proportional staking: bet more when edge is larger
+        stake = calculate_kelly_stake(balance, place_prob, current_odds)
+        bet.stake = round(stake, 2)
         bet.requested_odds = current_odds
+
+        if balance < bet.stake:
+            bet.status = "cancelled"
+            bet.error_message = f"Insufficient balance (${balance:.2f} < ${bet.stake:.2f})"
+            logger.warning(f"Betfair: skipping {bet.id} — insufficient balance")
+            await db.commit()
+            continue
 
         # Place the bet
         result = await place_bet(db, market["market_id"], selection_id, bet.stake, current_odds)
@@ -585,9 +605,11 @@ async def execute_due_bets(db: AsyncSession) -> int:
             # Deduct stake from tracked balance
             balance -= bet.stake
             await set_balance(db, balance)
+            edge_pct = (place_prob - 1.0 / current_odds) * 100 if current_odds > 1 else 0
             logger.info(
-                f"Betfair: placed {bet.id} — {bet.horse_name} ${bet.stake} "
-                f"@ {bet.matched_odds} (balance: ${balance:.2f})"
+                f"Betfair: placed {bet.id} — {bet.horse_name} ${bet.stake:.2f} "
+                f"@ {bet.matched_odds} PP={place_prob:.0%} edge={edge_pct:+.1f}% "
+                f"(balance: ${balance:.2f})"
             )
         else:
             bet.status = "failed"
