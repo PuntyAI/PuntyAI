@@ -808,6 +808,9 @@ class HKJCResultsScraper:
         track_condition = None
 
         # Check each race — httpx is fast, no browser overhead
+        # IMPORTANT: HKJC silently redirects to the LAST meeting with results
+        # when no results exist for the requested date. We must detect this
+        # by checking the final URL to avoid importing stale results.
         async with httpx.AsyncClient(
             timeout=15.0,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
@@ -824,6 +827,16 @@ class HKJCResultsScraper:
                         },
                     )
                     resp.raise_for_status()
+
+                    # Detect HKJC redirect to a different date (stale results)
+                    final_url = str(resp.url)
+                    compact_date = race_date.strftime("%Y/%m/%d")
+                    if compact_date not in final_url and date_str not in final_url:
+                        if race_num == 1:
+                            logger.info(f"HKJC redirected to different date for {venue} — no results yet")
+                        statuses[race_num] = "Open"
+                        continue
+
                     html = resp.text
 
                     # If the page has a results tbody, race is done
@@ -885,6 +898,17 @@ class HKJCResultsScraper:
                     },
                 )
                 resp.raise_for_status()
+
+                # Detect HKJC redirect to a different date (stale results)
+                final_url = str(resp.url)
+                compact_date = race_date.strftime("%Y/%m/%d")
+                if compact_date not in final_url and date_str not in final_url:
+                    logger.warning(
+                        f"HKJC results redirect detected for R{race_number}: "
+                        f"requested {date_str}, got {final_url} — ignoring stale data"
+                    )
+                    return {"results": []}
+
                 html = resp.text
         except Exception as e:
             logger.warning(f"HKJC results fetch failed for R{race_number}: {e}")
