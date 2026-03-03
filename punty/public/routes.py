@@ -3048,7 +3048,7 @@ async def sitemap_tips():
 # Betfair Tracker — password-protected public view
 # ---------------------------------------------------------------------------
 
-_BF_TRACKER_PASSWORD = "PuntyCumInU_69"
+_BF_TRACKER_PASSWORD = "Spanks31+"
 _BF_TRACKER_COOKIE = "bf_tracker_auth"
 
 
@@ -3147,6 +3147,108 @@ async def bf_tracker_history(request: Request, days: int = 30, status: str = "al
         "avg_stake": round((total_staked / total) if total > 0 else 0, 2),
     }
     return {"bets": filtered, "summary": summary}
+
+
+@router.get("/api/betfair-tracker/dashboard")
+async def bf_tracker_dashboard(request: Request):
+    """Public read-only dashboard stats — time-period breakdowns."""
+    if not _bf_check_auth(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from datetime import timedelta, datetime
+    from punty.models.betfair_bet import BetfairBet
+    from punty.betting.queue import get_balance, calculate_stake, _get_setting, DEFAULT_INITIAL_BALANCE
+
+    today = melb_today()
+    now = datetime.now()
+
+    async with async_session() as db:
+        # All settled bets
+        result = await db.execute(
+            select(BetfairBet).where(BetfairBet.settled == True).order_by(BetfairBet.settled_at.desc())
+        )
+        all_bets = result.scalars().all()
+
+        balance = await get_balance(db)
+        initial = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
+        stake = calculate_stake(balance, initial)
+
+    def _bet_date(b):
+        try:
+            parts = b.meeting_id.rsplit("-", 3)
+            if len(parts) >= 4:
+                return date(int(parts[-3]), int(parts[-2]), int(parts[-1]))
+        except (ValueError, IndexError):
+            pass
+        return None
+
+    def _calc_stats(bets_list):
+        total = len(bets_list)
+        if total == 0:
+            return {"bets": 0, "wins": 0, "losses": 0, "pnl": 0, "roi": 0, "strike_rate": 0, "staked": 0}
+        wins = sum(1 for b in bets_list if b.hit)
+        total_pnl = sum(b.pnl or 0 for b in bets_list)
+        total_staked = sum(b.stake or 0 for b in bets_list)
+        return {
+            "bets": total,
+            "wins": wins,
+            "losses": total - wins,
+            "pnl": round(total_pnl, 2),
+            "roi": round((total_pnl / total_staked * 100) if total_staked > 0 else 0, 1),
+            "strike_rate": round((wins / total * 100) if total > 0 else 0, 1),
+            "staked": round(total_staked, 2),
+        }
+
+    # Bucket bets by period
+    today_bets = [b for b in all_bets if _bet_date(b) == today]
+    yesterday_bets = [b for b in all_bets if _bet_date(b) == today - timedelta(days=1)]
+    week_bets = [b for b in all_bets if _bet_date(b) and _bet_date(b) >= today - timedelta(days=7)]
+    month_bets = [b for b in all_bets if _bet_date(b) and _bet_date(b) >= today - timedelta(days=30)]
+
+    # Daily breakdown for chart (last 14 days)
+    daily = []
+    for i in range(13, -1, -1):
+        d = today - timedelta(days=i)
+        day_bets = [b for b in all_bets if _bet_date(b) == d]
+        stats = _calc_stats(day_bets)
+        stats["date"] = d.isoformat()
+        stats["label"] = d.strftime("%d %b")
+        daily.append(stats)
+
+    # Win/Place type breakdown
+    win_bets = [b for b in all_bets if (b.bet_type or "place") == "win"]
+    place_bets = [b for b in all_bets if (b.bet_type or "place") == "place"]
+
+    # Best/worst single bet
+    best_bet = max(all_bets, key=lambda b: b.pnl or 0) if all_bets else None
+    worst_bet = min(all_bets, key=lambda b: b.pnl or 0) if all_bets else None
+
+    # Running P&L (cumulative)
+    running_pnl = []
+    cumulative = 0
+    for b in reversed(all_bets):  # oldest first
+        cumulative += b.pnl or 0
+        running_pnl.append({"id": b.id, "pnl": round(cumulative, 2), "date": _bet_date(b).isoformat() if _bet_date(b) else ""})
+
+    return {
+        "balance": balance,
+        "initial_balance": initial,
+        "current_stake": stake,
+        "periods": {
+            "today": _calc_stats(today_bets),
+            "yesterday": _calc_stats(yesterday_bets),
+            "week": _calc_stats(week_bets),
+            "month": _calc_stats(month_bets),
+            "all_time": _calc_stats(all_bets),
+        },
+        "daily": daily,
+        "by_type": {
+            "win": _calc_stats(win_bets),
+            "place": _calc_stats(place_bets),
+        },
+        "best_bet": {"horse": best_bet.horse_name, "pnl": best_bet.pnl, "meeting": best_bet.meeting_id} if best_bet else None,
+        "worst_bet": {"horse": worst_bet.horse_name, "pnl": worst_bet.pnl, "meeting": worst_bet.meeting_id} if worst_bet else None,
+        "running_pnl": running_pnl,
+    }
 
 
 @router.get("/api/betfair-tracker/balance")
