@@ -77,7 +77,7 @@
                               hx-trigger="blur changed delay:500ms"
                               hx-vals="js:{raw_content: document.getElementById('raw-content').value}"
                               hx-swap="none"
-                              name="raw_content">{{ content.raw_content or '' }}</textarea>
+                              name="raw_content">{{ (content.raw_content or '')|strip_json }}</textarea>
                 </div>
             </div>
 
