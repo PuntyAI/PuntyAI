@@ -7,63 +7,203 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-6" x-data="trackerApp()" x-init="init()">
+<div class="max-w-7xl mx-auto space-y-6" x-data="trackerApp()" x-init="init()">
 
-    <!-- Header -->
+    <!-- Header Row -->
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold" style="font-family: 'Orbitron', sans-serif; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 BETFAIR TRACKER
             </h1>
             <p class="text-sm mt-1" style="color: var(--text-muted);">
-                Live bet tracking &amp; performance
+                Live bet tracking &amp; performance dashboard
             </p>
         </div>
-        <div class="flex items-center gap-4">
-            <!-- Balance Badge -->
+        <div class="flex items-center gap-3">
+            <!-- Balance -->
             <div class="px-4 py-2 rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-                <span class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">Balance</span>
+                <span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted);">Balance</span>
                 <div class="text-xl font-bold" style="font-family: 'Orbitron', sans-serif; color: var(--cyan);">
                     $<span x-text="balance.toFixed(2)">0.00</span>
                 </div>
             </div>
-            <!-- Today P&L -->
+            <!-- Stake -->
             <div class="px-4 py-2 rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-                <span class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">Today P&L</span>
-                <div class="text-xl font-bold" style="font-family: 'Orbitron', sans-serif;"
-                     :style="{ color: todayPnl >= 0 ? '#00ff88' : '#ff4466' }">
-                    <span x-text="(todayPnl >= 0 ? '+$' : '-$') + Math.abs(todayPnl).toFixed(2)">$0.00</span>
+                <span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted);">Stake</span>
+                <div class="text-xl font-bold" style="font-family: 'Orbitron', sans-serif; color: var(--text-primary);">
+                    $<span x-text="currentStake.toFixed(2)">2.00</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Stats Row -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <!-- Period Tabs -->
+    <div class="flex gap-2 flex-wrap">
+        <template x-for="tab in ['today', 'yesterday', 'week', 'month', 'all_time']" :key="tab">
+            <button @click="activePeriod = tab"
+                    class="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
+                    :style="activePeriod === tab
+                        ? 'background: linear-gradient(135deg, rgba(255,0,128,0.3), rgba(0,212,255,0.3)); color: #fff; border: 1px solid rgba(255,0,128,0.5);'
+                        : 'background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-subtle);'"
+                    x-text="tab === 'all_time' ? 'All Time' : tab.charAt(0).toUpperCase() + tab.slice(1)">
+            </button>
+        </template>
+    </div>
+
+    <!-- Period Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
         <template x-for="stat in [
-            { label: 'Total Bets', value: totalBets, fmt: 'int' },
-            { label: 'Strike Rate', value: strikeRate, fmt: 'pct' },
-            { label: 'Total P&L', value: totalPnl, fmt: 'pnl' },
-            { label: 'ROI', value: roi, fmt: 'pct' },
-            { label: 'Current Stake', value: currentStake, fmt: 'dollar' },
+            { label: 'Bets', value: currentPeriod.bets, fmt: 'int' },
+            { label: 'Wins', value: currentPeriod.wins, fmt: 'int', color: '#00ff88' },
+            { label: 'Losses', value: currentPeriod.losses, fmt: 'int', color: '#ff4466' },
+            { label: 'P&L', value: currentPeriod.pnl, fmt: 'pnl' },
+            { label: 'ROI', value: currentPeriod.roi, fmt: 'pct' },
+            { label: 'Strike Rate', value: currentPeriod.strike_rate, fmt: 'pct' },
         ]">
-            <div class="px-3 py-2 rounded-lg text-center" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-                <div class="text-xs uppercase tracking-wider" style="color: var(--text-muted);" x-text="stat.label"></div>
-                <div class="text-lg font-bold mt-1" style="font-family: 'Rajdhani', sans-serif;"
-                     :style="{ color: stat.fmt === 'pnl' ? (stat.value >= 0 ? '#00ff88' : '#ff4466') : 'var(--text-primary)' }">
+            <div class="px-3 py-3 rounded-lg text-center" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <div class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted);" x-text="stat.label"></div>
+                <div class="text-xl font-bold mt-1" style="font-family: 'Rajdhani', sans-serif;"
+                     :style="{
+                         color: stat.fmt === 'pnl' ? (stat.value >= 0 ? '#00ff88' : '#ff4466')
+                              : stat.fmt === 'pct' ? (stat.label === 'ROI' ? (stat.value >= 0 ? '#00ff88' : '#ff4466') : 'var(--text-primary)')
+                              : (stat.color || 'var(--text-primary)')
+                     }">
                     <span x-show="stat.fmt === 'int'" x-text="stat.value"></span>
                     <span x-show="stat.fmt === 'pct'" x-text="stat.value.toFixed(1) + '%'"></span>
                     <span x-show="stat.fmt === 'pnl'" x-text="(stat.value >= 0 ? '+$' : '-$') + Math.abs(stat.value).toFixed(2)"></span>
-                    <span x-show="stat.fmt === 'dollar'" x-text="'$' + stat.value.toFixed(2)"></span>
                 </div>
             </div>
         </template>
     </div>
 
+    <!-- Two Column: Daily Chart + Bet Type Breakdown -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Daily P&L Chart (bar chart via CSS) -->
+        <div class="lg:col-span-2 rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
+                Daily P&L (Last 14 Days)
+            </h3>
+            <div class="flex items-end gap-1 h-40">
+                <template x-for="day in daily" :key="day.date">
+                    <div class="flex-1 flex flex-col items-center justify-end h-full relative group">
+                        <!-- Bar -->
+                        <div class="w-full rounded-t-sm transition-all"
+                             :style="{
+                                 height: day.bets === 0 ? '2px' : Math.max(8, Math.min(100, Math.abs(day.pnl) / maxDailyPnl * 100)) + '%',
+                                 background: day.pnl >= 0 ? 'linear-gradient(180deg, #00ff88, rgba(0,255,136,0.3))' : 'linear-gradient(180deg, #ff4466, rgba(255,68,102,0.3))',
+                                 opacity: day.bets === 0 ? 0.2 : 1,
+                             }">
+                        </div>
+                        <!-- Label -->
+                        <div class="text-[9px] mt-1 whitespace-nowrap" style="color: var(--text-muted);"
+                             x-text="day.label.split(' ')[0]"></div>
+                        <!-- Tooltip -->
+                        <div class="hidden group-hover:block absolute bottom-full mb-2 px-2 py-1 rounded text-[10px] whitespace-nowrap z-10"
+                             style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                            <div x-text="day.label"></div>
+                            <div :style="{ color: day.pnl >= 0 ? '#00ff88' : '#ff4466' }"
+                                 x-text="(day.pnl >= 0 ? '+$' : '-$') + Math.abs(day.pnl).toFixed(2) + ' (' + day.bets + ' bets)'"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Type Breakdown + Best/Worst -->
+        <div class="space-y-4">
+            <!-- Win vs Place -->
+            <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
+                    By Bet Type
+                </h3>
+                <template x-for="[type, stats] of Object.entries(byType)" :key="type">
+                    <div class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                                  :style="type === 'win'
+                                      ? 'background: rgba(255,170,0,0.2); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3);'
+                                      : 'background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);'"
+                                  x-text="type.toUpperCase()"></span>
+                            <span class="text-xs" style="color: var(--text-muted);" x-text="stats.bets + ' bets'"></span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                 :style="{ color: stats.pnl >= 0 ? '#00ff88' : '#ff4466' }"
+                                 x-text="(stats.pnl >= 0 ? '+$' : '-$') + Math.abs(stats.pnl).toFixed(2)"></div>
+                            <div class="text-[10px]" style="color: var(--text-muted);" x-text="stats.strike_rate.toFixed(1) + '% SR'"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Best / Worst -->
+            <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
+                    Notable Bets
+                </h3>
+                <template x-if="bestBet">
+                    <div class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                        <div>
+                            <div class="text-[10px] uppercase" style="color: #00ff88;">Best Win</div>
+                            <div class="text-sm font-bold" x-text="bestBet.horse"></div>
+                        </div>
+                        <div class="text-lg font-bold" style="color: #00ff88; font-family: 'Rajdhani', sans-serif;"
+                             x-text="'+$' + bestBet.pnl.toFixed(2)"></div>
+                    </div>
+                </template>
+                <template x-if="worstBet">
+                    <div class="flex items-center justify-between py-2">
+                        <div>
+                            <div class="text-[10px] uppercase" style="color: #ff4466;">Worst Loss</div>
+                            <div class="text-sm font-bold" x-text="worstBet.horse"></div>
+                        </div>
+                        <div class="text-lg font-bold" style="color: #ff4466; font-family: 'Rajdhani', sans-serif;"
+                             x-text="'-$' + Math.abs(worstBet.pnl).toFixed(2)"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Running P&L Mini Chart -->
+    <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+        <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
+            Cumulative P&L
+        </h3>
+        <div class="h-24 flex items-end gap-px" x-show="runningPnl.length > 0">
+            <template x-for="(point, i) in runningPnl" :key="i">
+                <div class="flex-1 transition-all relative group"
+                     :style="{
+                         height: pnlBarHeight(point.pnl) + '%',
+                         background: point.pnl >= 0
+                             ? 'linear-gradient(180deg, rgba(0,255,136,0.8), rgba(0,255,136,0.2))'
+                             : 'linear-gradient(180deg, rgba(255,68,102,0.8), rgba(255,68,102,0.2))',
+                         alignSelf: point.pnl >= 0 ? 'flex-end' : 'flex-start',
+                         minHeight: '2px',
+                         borderRadius: '1px',
+                     }">
+                    <div class="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-[10px] whitespace-nowrap z-10"
+                         style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);"
+                         :style="{ color: point.pnl >= 0 ? '#00ff88' : '#ff4466' }"
+                         x-text="(point.pnl >= 0 ? '+$' : '-$') + Math.abs(point.pnl).toFixed(2)">
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- Today's Bets Table -->
     <div class="rounded-xl overflow-hidden" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-        <div class="px-4 py-3" style="border-bottom: 1px solid var(--border-subtle);">
+        <div class="px-4 py-3 flex items-center justify-between" style="border-bottom: 1px solid var(--border-subtle);">
             <h2 class="text-lg font-bold" style="font-family: 'Rajdhani', sans-serif;">Today's Bets</h2>
+            <template x-if="todayBets.filter(b => b.settled).length > 0">
+                <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
+                    <span style="color: #00ff88;" x-text="todayBets.filter(b => b.hit).length + 'W'"></span>
+                    / <span style="color: #ff4466;" x-text="todayBets.filter(b => b.settled && !b.hit).length + 'L'"></span>
+                    <span class="ml-1" :style="{ color: todayPnl >= 0 ? '#00ff88' : '#ff4466' }"
+                          x-text="'(' + (todayPnl >= 0 ? '+$' : '-$') + Math.abs(todayPnl).toFixed(2) + ')'"></span>
+                </span>
+            </template>
         </div>
 
         <template x-if="todayBets.length === 0">
@@ -136,20 +276,6 @@
                             </td>
                         </tr>
                     </template>
-                    <!-- W/L tally row -->
-                    <template x-if="todayBets.filter(b => b.settled).length > 0">
-                        <tr style="border-top: 2px solid var(--border-subtle); background: rgba(255,255,255,0.02);">
-                            <td colspan="7" class="px-4 py-2">
-                                <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
-                                    Results:
-                                    <span style="color: #00ff88;" x-text="todayBets.filter(b => b.hit).length + 'W'"></span>
-                                    / <span style="color: #ff4466;" x-text="todayBets.filter(b => b.settled && !b.hit).length + 'L'"></span>
-                                    <span class="ml-1" :style="{ color: todayPnl >= 0 ? '#00ff88' : '#ff4466' }"
-                                          x-text="'(' + (todayPnl >= 0 ? '+$' : '-$') + Math.abs(todayPnl).toFixed(2) + ')'"></span>
-                                </span>
-                            </td>
-                        </tr>
-                    </template>
                 </tbody>
             </table>
         </div>
@@ -162,7 +288,7 @@
              @click="toggleHistory()">
             <h2 class="text-lg font-bold" style="font-family: 'Rajdhani', sans-serif;">
                 <span x-text="showHistory ? '▼' : '▶'" class="mr-1"></span>
-                BET HISTORY
+                FULL BET HISTORY
                 <span class="text-xs font-normal ml-2" style="color: var(--text-muted);"
                       x-show="historySummary.total" x-text="historySummary.total + ' bets'"></span>
             </h2>
@@ -311,20 +437,41 @@ function trackerApp() {
         currentStake: 2,
         todayPnl: 0,
         todayBets: [],
-        totalBets: 0,
-        totalPnl: 0,
-        strikeRate: 0,
-        roi: 0,
 
+        // Dashboard data
+        activePeriod: 'today',
+        periods: { today: {}, yesterday: {}, week: {}, month: {}, all_time: {} },
+        daily: [],
+        byType: { win: { bets: 0, pnl: 0, strike_rate: 0 }, place: { bets: 0, pnl: 0, strike_rate: 0 } },
+        bestBet: null,
+        worstBet: null,
+        runningPnl: [],
+
+        // History
         showHistory: false,
         historyBets: [],
         historyLoading: false,
         historyFilters: { days: 30, status: 'all', venue: '' },
         historySummary: {},
 
+        get currentPeriod() {
+            return this.periods[this.activePeriod] || { bets: 0, wins: 0, losses: 0, pnl: 0, roi: 0, strike_rate: 0 };
+        },
+
+        get maxDailyPnl() {
+            const max = Math.max(...this.daily.map(d => Math.abs(d.pnl || 0)), 1);
+            return max;
+        },
+
+        pnlBarHeight(pnl) {
+            if (this.runningPnl.length === 0) return 0;
+            const maxAbs = Math.max(...this.runningPnl.map(p => Math.abs(p.pnl)), 1);
+            return Math.max(5, Math.abs(pnl) / maxAbs * 100);
+        },
+
         async init() {
-            await this.refresh();
-            setInterval(() => this.refresh(), 30000);
+            await Promise.all([this.refresh(), this.loadDashboard()]);
+            setInterval(() => { this.refresh(); this.loadDashboard(); }, 30000);
         },
 
         async refresh() {
@@ -337,11 +484,21 @@ function trackerApp() {
                 this.currentStake = data.current_stake || 2;
                 this.todayPnl = data.today_pnl || 0;
                 this.todayBets = data.today_bets || [];
-                this.totalBets = data.total_bets || 0;
-                this.totalPnl = data.total_pnl || 0;
-                this.strikeRate = data.strike_rate || 0;
-                this.roi = data.roi || 0;
             } catch (e) { console.error('Failed to refresh:', e); }
+        },
+
+        async loadDashboard() {
+            try {
+                const resp = await fetch('/api/betfair-tracker/dashboard');
+                if (resp.status === 401) return;
+                const data = await resp.json();
+                this.periods = data.periods || this.periods;
+                this.daily = data.daily || [];
+                this.byType = data.by_type || this.byType;
+                this.bestBet = data.best_bet;
+                this.worstBet = data.worst_bet;
+                this.runningPnl = data.running_pnl || [];
+            } catch (e) { console.error('Failed to load dashboard:', e); }
         },
 
         async toggleHistory() {

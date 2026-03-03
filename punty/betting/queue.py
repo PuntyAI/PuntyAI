@@ -641,19 +641,41 @@ async def settle_betfair_bets(
     )
     race_status = race_result.scalar_one_or_none()
 
-    # Determine finish position — use actual position, or infer from dividends
+    # Determine finish position — use actual position, or infer from other runners
+    # NOTE: win_dividend/place_dividend are tote odds stored on ALL runners,
+    # NOT result indicators — cannot be used to infer finish position.
+    is_win_bet = getattr(bet, "bet_type", "place") == "win"
     finish_pos = runner.finish_position
     if finish_pos is None:
         if race_status in ("Paying", "Closed"):
-            # Infer from dividends: win_dividend > 0 = 1st, place_dividend > 0 = top 3
-            if runner.win_dividend and runner.win_dividend > 0:
-                finish_pos = 1
-            elif runner.place_dividend and runner.place_dividend > 0:
-                finish_pos = 3  # placed (top 3), exact position unknown
+            # Check if the top positions are filled by OTHER runners
+            needed_positions = [1] if is_win_bet else [1, 2, 3]
+            filled_result = await db.execute(
+                select(func.count(Runner.id)).where(
+                    Runner.race_id == race_id,
+                    Runner.finish_position.in_(needed_positions),
+                    Runner.saddlecloth != bet.saddlecloth,
+                )
+            )
+            filled_count = filled_result.scalar()
+            if filled_count >= len(needed_positions):
+                # All required positions taken by other runners — our horse missed
+                finish_pos = 99
             elif race_status == "Closed":
-                finish_pos = 99  # race over, no dividend = didn't place
+                # Race closed but positions incomplete — wait for data backfill
+                # unless at least 1st place is filled (then we know enough)
+                first_result = await db.execute(
+                    select(func.count(Runner.id)).where(
+                        Runner.race_id == race_id,
+                        Runner.finish_position == 1,
+                    )
+                )
+                if first_result.scalar() > 0:
+                    finish_pos = 99  # 1st is known, our horse isn't in it
+                else:
+                    return 0  # No finish data at all yet
             else:
-                return 0  # Paying but no dividend data yet — wait
+                return 0  # Paying but positions not filled yet — wait
         else:
             return 0  # Results not in yet
 
@@ -661,7 +683,6 @@ async def settle_betfair_bets(
     odds = bet.matched_odds or bet.requested_odds or 0
 
     now = melb_now_naive()
-    is_win_bet = getattr(bet, "bet_type", "place") == "win"
     hit_threshold = 1 if is_win_bet else 3  # win = 1st only, place = top 3
 
     if finish_pos <= hit_threshold:
