@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
-DEFAULT_COMMISSION_RATE = 0.05  # 5% Betfair commission
+DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
 DEFAULT_MIN_PLACE_PROB = 0.50  # 50% minimum place probability
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
@@ -730,14 +730,16 @@ async def execute_due_bets(db: AsyncSession) -> int:
             bet.matched_odds = result.get("average_price_matched", current_odds)
             bet.placed_at = melb_now_naive()
             placed += 1
-            # Deduct stake from tracked balance
+            # Use actual matched amount for balance tracking (partial matches possible)
+            actual_stake = bet.size_matched if bet.size_matched > 0 else bet.stake
+            bet.stake = round(actual_stake, 2)  # Update to actual matched amount
             balance -= bet.stake
             await set_balance(db, balance)
             edge_pct = (place_prob - 1.0 / current_odds) * 100 if current_odds > 1 else 0
             logger.info(
                 f"Betfair: placed {bet.id} — {bet.horse_name} ${bet.stake:.2f} "
-                f"@ {bet.matched_odds} PP={place_prob:.0%} edge={edge_pct:+.1f}% "
-                f"(balance: ${balance:.2f})"
+                f"(matched ${bet.size_matched:.2f}) @ {bet.matched_odds} "
+                f"PP={place_prob:.0%} edge={edge_pct:+.1f}% (balance: ${balance:.2f})"
             )
         else:
             bet.status = "failed"
