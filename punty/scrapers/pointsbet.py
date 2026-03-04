@@ -313,11 +313,15 @@ def _parse_v2_outcome(outcome: dict, race_num: int) -> dict | None:
 
 
 def _parse_v2_results(data: dict) -> dict:
-    """Parse v2 race response for results (post-race)."""
+    """Parse v2 race response for results (post-race).
+
+    PB v2 API structure:
+      results.winners[]: {finalPlacing, outcome: {outcomeId, outcomeName, ...}, straightDividends: [...]}
+      results.exoticDividends[]: {exoticType, dividends: [{dividendTypeCode, dividend}]}
+    """
     results: list[dict] = []
     exotics: dict[str, float] = {}
 
-    # Check if race has results
     results_obj = data.get("results", {})
     if not isinstance(results_obj, dict):
         return {"results": []}
@@ -326,42 +330,44 @@ def _parse_v2_results(data: dict) -> dict:
     if not winners:
         return {"results": []}
 
-    # Build position map from winners array
-    position_map: dict[int, int] = {}
-    for i, winner in enumerate(winners):
-        if isinstance(winner, dict):
-            oid = winner.get("outcomeId")
-            if oid:
-                position_map[int(oid)] = i + 1
-
-    # Parse outcomes with positions
-    for outcome in data.get("outcomes", []):
-        if not isinstance(outcome, dict):
+    for winner in winners:
+        if not isinstance(winner, dict):
             continue
+        position = winner.get("finalPlacing")
+        outcome = winner.get("outcome", {})
+        if not isinstance(outcome, dict) or not position:
+            continue
+
         oid = outcome.get("outcomeId")
+        name = outcome.get("outcomeName", "").strip().title()
         if not oid:
             continue
 
-        position = position_map.get(int(oid))
-        if not position:
-            continue
-
-        # Get tote dividends for settlement
+        # Extract dividends from straightDividends on the winner entry
         win_div = None
         place_div = None
-        for tp in outcome.get("toteWinPrices", []):
-            if isinstance(tp, dict):
-                win_div = tp.get("price")
-        for tp in outcome.get("totePlacePrices", []):
-            if isinstance(tp, dict):
-                place_div = tp.get("price")
+        for sd in winner.get("straightDividends", []):
+            if not isinstance(sd, dict):
+                continue
+            mtype = sd.get("marketType", "")
+            div_code = sd.get("dividendTypeCode", "")
+            div_val = sd.get("dividend")
+            if not div_val:
+                continue
+            # Prefer BT+SP or VIC dividends (most common for AU racing)
+            if mtype == "WIN" and div_code in ("BT+SP", "VIC", "NSW", "MIDDIV"):
+                if win_div is None or div_code == "BT+SP":
+                    win_div = float(div_val)
+            elif mtype == "PLC" and div_code in ("MIDDIV", "BT+SP", "VIC", "NSW"):
+                if place_div is None or div_code == "MIDDIV":
+                    place_div = float(div_val)
 
         results.append({
-            "horse_name": outcome.get("outcomeName", "").strip().title(),
+            "horse_name": name,
             "saddlecloth": int(oid),
-            "position": position,
-            "win_dividend": float(win_div) if win_div else None,
-            "place_dividend": float(place_div) if place_div else None,
+            "position": int(position),
+            "win_dividend": win_div,
+            "place_dividend": place_div,
             "margin": None,
         })
 
@@ -369,21 +375,30 @@ def _parse_v2_results(data: dict) -> dict:
     _PB_EXOTIC_MAP = {
         "exacta": "exacta", "quinella": "quinella",
         "trifecta": "trifecta", "first4": "first4",
-        "firstfour": "first4", "quadrella": "quaddie",
+        "firstfour": "first4", "first 4": "first4",
+        "quadrella": "quaddie",
     }
-    for div_type in ("exoticDividends", "exoticDividendTypes"):
-        divs = results_obj.get(div_type)
-        if isinstance(divs, list):
-            for item in divs:
-                if isinstance(item, dict):
-                    etype = (item.get("type") or item.get("name") or "").lower()
-                    div = item.get("dividend") or item.get("amount")
-                    if etype and div:
-                        canonical = _PB_EXOTIC_MAP.get(etype, etype)
-                        try:
-                            exotics[canonical] = round(float(div), 2)
-                        except (ValueError, TypeError):
-                            pass
+    for item in results_obj.get("exoticDividends", []):
+        if not isinstance(item, dict):
+            continue
+        etype = (item.get("exoticType") or item.get("type") or item.get("name") or "").lower().strip()
+        canonical = _PB_EXOTIC_MAP.get(etype, etype)
+        # Pick best dividend from jurisdictions (prefer VIC/BT+SP)
+        best_div = None
+        for d in item.get("dividends", []):
+            if isinstance(d, dict):
+                dv = d.get("dividend")
+                dc = d.get("dividendTypeCode", "")
+                if dv:
+                    if best_div is None or dc in ("BT+SP", "VIC"):
+                        best_div = float(dv)
+        # Fallback: dividend directly on item
+        if best_div is None:
+            dv = item.get("dividend") or item.get("amount")
+            if dv:
+                best_div = float(dv)
+        if canonical and best_div:
+            exotics[canonical] = round(best_div, 2)
 
     result_data: dict = {"results": results}
     if exotics:
