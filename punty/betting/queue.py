@@ -22,12 +22,27 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
 DEFAULT_COMMISSION_RATE = 0.05  # 5% Betfair commission
 DEFAULT_MAX_DAILY_LOSS = -20.0
-DEFAULT_MIN_PLACE_PROB = 0.55  # 55% minimum place probability
+DEFAULT_MIN_PLACE_PROB = 0.50  # 50% minimum place probability
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
 DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
 DEFAULT_MAX_KELLY_FRACTION = 0.08  # Cap Kelly fraction at 8%
 DEFAULT_MIN_KELLY_STAKE = 0.50  # Minimum stake floor
+DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
+DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
+DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
+MAIDEN_CLASSES = {"Maiden", "Maiden Plate", "Maiden Handicap"}
+
+
+async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
+    """Count non-scratched runners in a race."""
+    result = await db.execute(
+        select(func.count(Runner.id)).where(
+            Runner.race_id == race_id,
+            Runner.scratched != True,
+        )
+    )
+    return result.scalar() or 0
 
 
 async def _get_setting(db: AsyncSession, key: str, default: str = "") -> str:
@@ -124,29 +139,19 @@ async def populate_bet_queue(
     if auto_enabled.lower() != "true":
         return 0
 
-    # Get ALL selection picks for this content (non-tracked-only)
-    # We'll select the highest place_probability per race for Betfair place bets
+    # Get rank 1 selection picks only — strike rate certainties, not value hunts
     result = await db.execute(
         select(Pick).where(
             Pick.content_id == content_id,
             Pick.meeting_id == meeting_id,
             Pick.pick_type == "selection",
+            Pick.tip_rank == 1,
             Pick.tracked_only != True,
-        ).order_by(Pick.race_number, Pick.place_probability.desc())
+        ).order_by(Pick.race_number)
     )
-    all_picks = result.scalars().all()
-    if not all_picks:
+    rank1_picks = result.scalars().all()
+    if not rank1_picks:
         return 0
-
-    # Select the pick with highest place_probability per race
-    best_per_race: dict[int, Pick] = {}
-    for pick in all_picks:
-        rn = pick.race_number
-        if rn not in best_per_race:
-            best_per_race[rn] = pick
-        elif (pick.place_probability or 0) > (best_per_race[rn].place_probability or 0):
-            best_per_race[rn] = pick
-    rank1_picks = list(best_per_race.values())
 
     # Load races to get start times
     race_result = await db.execute(
@@ -157,6 +162,8 @@ async def populate_bet_queue(
     # Get current stake (auto-doubling or manual fixed)
     stake = await get_current_stake(db)
     min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
+    max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
+    skip_maidens = (await _get_setting(db, "betfair_skip_maidens", "true")).lower() == "true"
 
     queued = 0
     for pick in rank1_picks:
@@ -164,6 +171,47 @@ async def populate_bet_queue(
         if not race or not race.start_time:
             logger.debug(f"Skipping bet for {meeting_id} R{pick.race_number}: no start time")
             continue
+
+        # Filter by odds ceiling — reject longshots
+        if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
+            logger.info(
+                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                f"place_odds ${pick.place_odds_at_tip:.2f} > ${max_place_odds:.2f} ceiling"
+            )
+            continue
+
+        # Filter maiden races — less form data, lower prediction confidence
+        if skip_maidens and race:
+            race_class = race.class_ or ""
+            if race_class in MAIDEN_CLASSES:
+                logger.info(
+                    f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                    f"maiden race ({race_class})"
+                )
+                continue
+
+        # NTD filter — need 8+ runners for 3 place dividends
+        # Allow 5-7 runners if place_probability is very high (>= 70%)
+        race_id = f"{meeting_id}-r{race.race_number}"
+        runner_count = await _count_active_runners(db, race_id)
+        if runner_count < DEFAULT_MIN_RUNNERS:
+            pp = pick.place_probability or 0
+            if runner_count < 5:
+                logger.info(
+                    f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                    f"NTD — {runner_count} runners (too few for place betting)"
+                )
+                continue
+            if pp < DEFAULT_NTD_HIGH_PP:
+                logger.info(
+                    f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                    f"NTD — {runner_count} runners, PP {pp:.0%} < {DEFAULT_NTD_HIGH_PP:.0%} threshold"
+                )
+                continue
+            logger.info(
+                f"NTD override for {pick.horse_name} R{pick.race_number}: "
+                f"{runner_count} runners but PP {pp:.0%} >= {DEFAULT_NTD_HIGH_PP:.0%}"
+            )
 
         # Filter by place probability — only bet on high-confidence selections
         if pick.place_probability is not None and pick.place_probability < min_place_prob:
@@ -239,18 +287,20 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
 
     race_id = f"{bet.meeting_id}-r{bet.race_number}"
 
-    # Load all selection picks for this race, sorted by place_probability descending
+    max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
+
+    # Load all selection picks for this race, sorted by tip_rank (rank 1 first)
     pick_result = await db.execute(
         select(Pick).where(
             Pick.meeting_id == bet.meeting_id,
             Pick.race_number == bet.race_number,
             Pick.pick_type == "selection",
             Pick.tracked_only != True,
-        ).order_by(Pick.place_probability.desc())
+        ).order_by(Pick.tip_rank)
     )
     candidates = pick_result.scalars().all()
 
-    # Filter out scratched runners
+    # Filter out scratched runners and longshots
     valid = []
     for pick in candidates:
         runner_result = await db.execute(
@@ -262,10 +312,12 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
         runner = runner_result.scalar_one_or_none()
         if runner and runner.scratched:
             continue
+        if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
+            continue
         valid.append(pick)
 
     if not valid:
-        return {"swapped": False, "message": "No valid candidates (all scratched)"}
+        return {"swapped": False, "message": "No valid candidates (all scratched or filtered)"}
 
     # Find current pick's position and select the next one
     current_idx = None
@@ -335,17 +387,50 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         return 0
 
     min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
+    max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
+    skip_maidens = (await _get_setting(db, "betfair_skip_maidens", "true")).lower() == "true"
     changes = 0
 
     for bet in queued_bets:
         race_id = f"{bet.meeting_id}-r{bet.race_number}"
 
-        # Load all selection picks for this race's content
+        # NTD check — cancel if scratchings dropped field below threshold
+        # Allow 5-7 runners if the pick's PP >= 70%
+        runner_count = await _count_active_runners(db, race_id)
+        if runner_count < DEFAULT_MIN_RUNNERS:
+            # Look up current pick's place_probability
+            pick_pp_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
+            current_pick = pick_pp_result.scalar_one_or_none()
+            pp = (current_pick.place_probability if current_pick else None) or 0
+            if runner_count < 5 or pp < DEFAULT_NTD_HIGH_PP:
+                bet.status = "cancelled"
+                reason = f"NTD — {runner_count} runners" + (f", PP {pp:.0%} < {DEFAULT_NTD_HIGH_PP:.0%}" if runner_count >= 5 else "")
+                bet.error_message = reason
+                changes += 1
+                logger.info(f"Cancelled {bet.id}: {reason}")
+                continue
+
+        # Check maiden race — cancel if setting enabled
+        if skip_maidens:
+            race_result = await db.execute(
+                select(Race).where(Race.id == race_id)
+            )
+            race = race_result.scalar_one_or_none()
+            race_class = (race.class_ if race else None) or ""
+            if race_class in MAIDEN_CLASSES:
+                bet.status = "cancelled"
+                bet.error_message = f"Maiden race ({race_class})"
+                changes += 1
+                logger.info(f"Cancelled {bet.id}: maiden race ({race_class})")
+                continue
+
+        # Load rank 1 selection picks only for automatic swap candidates
         pick_result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == bet.meeting_id,
                 Pick.race_number == bet.race_number,
                 Pick.pick_type == "selection",
+                Pick.tip_rank == 1,
                 Pick.tracked_only != True,
             )
         )
@@ -363,7 +448,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         current_runner = current_runner_result.scalar_one_or_none()
         current_scratched = current_runner.scratched if current_runner else False
 
-        # Find best non-scratched candidate above min_place_prob
+        # Find best non-scratched candidate above min_place_prob and below odds ceiling
         best_pick = None
         best_pp = 0.0
         for pick in candidates:
@@ -376,14 +461,20 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
             runner = runner_result.scalar_one_or_none()
             if runner and runner.scratched:
                 continue
+            if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
+                continue
             pp = pick.place_probability or 0
             if pp >= min_place_prob and pp > best_pp:
                 best_pp = pp
                 best_pick = pick
 
-        if current_scratched:
+        # Check if current bet is on a non-rank-1 pick (legacy queue or manual cycle)
+        current_is_rank1 = any(p.id == bet.pick_id for p in candidates)
+
+        if current_scratched or not current_is_rank1:
+            # Must swap: horse scratched or not rank 1
+            reason = "scratched" if current_scratched else "not rank 1"
             if best_pick and best_pick.id != bet.pick_id:
-                # Swap to best available
                 old_name = bet.horse_name
                 bet.pick_id = best_pick.id
                 bet.horse_name = best_pick.horse_name or "Unknown"
@@ -391,17 +482,17 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 bet.requested_odds = best_pick.place_odds_at_tip
                 changes += 1
                 logger.info(
-                    f"Swapped {bet.id}: {old_name} (scratched) → "
+                    f"Swapped {bet.id}: {old_name} ({reason}) → "
                     f"{bet.horse_name} ({best_pp:.0%}pp)"
                 )
             else:
-                # No viable replacement — cancel
+                # No viable rank 1 replacement — cancel
                 bet.status = "cancelled"
-                bet.error_message = "All candidates scratched/below threshold"
+                bet.error_message = f"No eligible rank 1 pick ({reason})"
                 changes += 1
-                logger.info(f"Cancelled {bet.id}: {bet.horse_name} scratched, no replacement")
+                logger.info(f"Cancelled {bet.id}: {bet.horse_name} {reason}, no rank 1 replacement")
         elif best_pick and best_pick.id != bet.pick_id:
-            # Current horse not scratched — only swap if replacement is significantly better
+            # Current horse is rank 1, not scratched — only swap if replacement is significantly better
             current_pp = 0.0
             for pick in candidates:
                 if pick.id == bet.pick_id:
@@ -779,11 +870,19 @@ async def get_queue_summary(db: AsyncSession) -> dict:
     stake = await get_current_stake(db)
     stake_mode = await _get_setting(db, "betfair_stake_mode", "auto")
 
+    # Enrich bets with runner counts
+    enriched_bets = []
+    for b in today_bets:
+        d = b.to_dict()
+        race_id = f"{b.meeting_id}-r{b.race_number}"
+        d["runners"] = await _count_active_runners(db, race_id)
+        enriched_bets.append(d)
+
     return {
         "balance": balance,
         "initial_balance": initial_balance,
         "current_stake": stake,
-        "today_bets": [b.to_dict() for b in today_bets],
+        "today_bets": enriched_bets,
         "today_pnl": sum(b.pnl or 0 for b in today_bets if b.settled),
         "today_placed": sum(1 for b in today_bets if b.status in ("placed", "settled")),
         "today_queued": sum(1 for b in today_bets if b.status == "queued"),
