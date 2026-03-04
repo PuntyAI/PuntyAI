@@ -254,10 +254,13 @@ async def detect_jockey_gear_changes(
             horse = runner.horse_name or "Unknown"
             sc = runner.saddlecloth or 0
 
-            # Check jockey change
+            # Check jockey change — skip if either name has no real content
+            # after cleaning (e.g. "(late alt)" → "" is not a real jockey)
             if (
                 prev.jockey
                 and runner.jockey
+                and _clean_jockey_name(prev.jockey)
+                and _clean_jockey_name(runner.jockey)
                 and not _same_jockey(prev.jockey, runner.jockey)
             ):
                 picks = await find_impacted_picks(db, meeting_id, race_num, horse, sc)
@@ -382,6 +385,8 @@ def _same_jockey(name_a: str, name_b: str) -> bool:
     """
     a = _clean_jockey_name(name_a).split()
     b = _clean_jockey_name(name_b).split()
+    if not a and not b:
+        return True  # Both empty after cleaning (e.g. both "(late alt)") — same
     if not a or not b:
         return False
 
@@ -709,6 +714,16 @@ def compose_track_alert(
     return msg
 
 
+def _display_jockey_name(raw: str) -> str:
+    """Clean jockey name for display — strip (late alt), claim weights, titles."""
+    import re
+    # Strip parenthesised content (claim weights, late alt, etc.)
+    name = re.sub(r"\([^)]*\)", "", raw).strip()
+    # Strip trailing commas left after removing parenthesised content
+    name = name.rstrip(",").strip()
+    return name or raw  # Fall back to raw if nothing left
+
+
 def compose_jockey_alert(
     horse_name: str,
     race_number: int,
@@ -718,7 +733,9 @@ def compose_jockey_alert(
 ) -> str:
     """Compose a jockey change alert."""
     rank_str = f", our #{tip_rank} pick" if tip_rank else ""
-    msg = f"JOCKEY CHANGE: {horse_name} (R{race_number}{rank_str}) \u2014 {old_jockey} off, {new_jockey} on"
+    old_display = _display_jockey_name(old_jockey)
+    new_display = _display_jockey_name(new_jockey)
+    msg = f"JOCKEY CHANGE: {horse_name} (R{race_number}{rank_str}) \u2014 {old_display} off, {new_display} on"
 
     if len(msg) > 275:
         msg = msg[:272] + "..."
