@@ -1128,6 +1128,29 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                 await _merge_tab_odds(db, meeting_id, intl_odds)
                 odds_updated = len(intl_odds)
 
+        # Domestic fallback: PointsBet when Betfair has no markets
+        # (e.g. small WA/regional venues not on Betfair Exchange)
+        if odds_updated == 0 and not tab_info:
+            try:
+                from punty.scrapers.pointsbet import PointsBetScraper
+                pb = PointsBetScraper()
+                race_result_pb = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting_id)
+                )
+                pb_race_count = len(race_result_pb.scalars().all())
+                pb_odds = await pb.scrape_odds_for_meeting(
+                    meeting.venue, meeting.date, meeting_id, pb_race_count
+                )
+                if pb_odds:
+                    await _merge_tab_odds(db, meeting_id, pb_odds)
+                    odds_updated = len(pb_odds)
+                    logger.info(
+                        f"[refresh_odds] PointsBet domestic fallback: "
+                        f"{odds_updated} runners for {meeting.venue}"
+                    )
+            except Exception as e:
+                logger.warning(f"[refresh_odds] PointsBet domestic fallback failed for {meeting.venue}: {e}")
+
         # Fallback: if Betfair had no markets, use PF assessed price for
         # runners missing current_odds (e.g. Sunshine Coast, small regionals)
         if odds_updated == 0:
