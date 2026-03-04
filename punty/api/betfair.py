@@ -249,6 +249,81 @@ async def get_chart_data(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/chart-data/today")
+async def get_chart_data_today(db: AsyncSession = Depends(get_db)):
+    """Return today's intraday P&L for the 1D chart view.
+
+    Returns individual settled bets as data points, plus pending bets
+    for projection. Cumulative P&L builds from each settled result.
+    """
+    from punty.betting.queue import get_balance
+
+    today = melb_today().isoformat()
+
+    # All today's bets (settled and pending), ordered by scheduled time
+    result = await db.execute(
+        select(BetfairBet).where(
+            BetfairBet.meeting_id.like(f"%-{today}%"),
+        ).order_by(BetfairBet.scheduled_at.asc().nullslast(), BetfairBet.id)
+    )
+    all_bets = result.scalars().all()
+
+    settled = []
+    pending = []
+    cumulative = 0.0
+    staked = 0.0
+
+    for b in all_bets:
+        if b.settled:
+            pnl = b.pnl or 0
+            cumulative += pnl
+            staked += b.stake or 0
+            time_str = ""
+            if b.settled_at:
+                time_str = b.settled_at.strftime("%H:%M") if hasattr(b.settled_at, "strftime") else str(b.settled_at)[-8:-3]
+            elif b.scheduled_at:
+                time_str = b.scheduled_at.strftime("%H:%M") if hasattr(b.scheduled_at, "strftime") else str(b.scheduled_at)[-8:-3]
+            settled.append({
+                "time": time_str,
+                "horse": b.horse_name or "?",
+                "race": f"R{b.race_number}",
+                "pnl": round(pnl, 2),
+                "cumulative_pnl": round(cumulative, 2),
+                "hit": bool(b.hit),
+                "odds": b.matched_odds or b.requested_odds or 0,
+                "stake": b.stake or 0,
+            })
+        else:
+            time_str = ""
+            if b.scheduled_at:
+                time_str = b.scheduled_at.strftime("%H:%M") if hasattr(b.scheduled_at, "strftime") else str(b.scheduled_at)[-8:-3]
+            pending.append({
+                "time": time_str,
+                "horse": b.horse_name or "?",
+                "race": f"R{b.race_number}",
+                "stake": b.stake or 0,
+                "odds": b.requested_odds or 0,
+                "enabled": bool(b.enabled),
+            })
+
+    wins = sum(1 for s in settled if s["hit"])
+    sr = round(wins / len(settled) * 100, 1) if settled else 0
+    balance = await get_balance(db)
+
+    return {
+        "settled": settled,
+        "pending": pending,
+        "total_pnl": round(cumulative, 2),
+        "total_staked": round(staked, 2),
+        "wins": wins,
+        "losses": len(settled) - wins,
+        "strike_rate": sr,
+        "balance": balance,
+        "pending_count": len(pending),
+        "pending_staked": round(sum(p["stake"] for p in pending), 2),
+    }
+
+
 @router.get("/status")
 async def get_scheduler_status():
     """Get scheduler running/stopped status."""

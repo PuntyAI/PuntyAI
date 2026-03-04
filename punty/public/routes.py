@@ -3107,12 +3107,21 @@ async def bf_tracker_history(request: Request, days: int = 30, status: str = "al
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     from datetime import timedelta
     from punty.models.betfair_bet import BetfairBet
+    from punty.models.pick import Pick
     cutoff_date = melb_today() - timedelta(days=days) if days > 0 else None
     async with async_session() as db:
         result = await db.execute(
             select(BetfairBet).where(BetfairBet.settled == True).order_by(BetfairBet.settled_at.desc())
         )
         bets = result.scalars().all()
+
+        # Batch load picks for PP enrichment
+        pick_ids = [b.pick_id for b in bets if b.pick_id]
+        pp_map = {}
+        if pick_ids:
+            pick_result = await db.execute(select(Pick.id, Pick.place_probability).where(Pick.id.in_(pick_ids)))
+            pp_map = {row[0]: row[1] for row in pick_result.all()}
+
     filtered = []
     for b in bets:
         if cutoff_date:
@@ -3132,7 +3141,9 @@ async def bf_tracker_history(request: Request, days: int = 30, status: str = "al
             venue_part = b.meeting_id.rsplit("-", 3)[0] if len(b.meeting_id.rsplit("-", 3)) >= 4 else b.meeting_id
             if venue.lower() not in venue_part.lower():
                 continue
-        filtered.append(b.to_dict())
+        d = b.to_dict()
+        d["place_probability"] = pp_map.get(b.pick_id)
+        filtered.append(d)
     total = len(filtered)
     wins = sum(1 for b in filtered if b.get("hit"))
     total_pnl = sum(b.get("pnl") or 0 for b in filtered)
@@ -3199,18 +3210,20 @@ async def bf_tracker_dashboard(request: Request):
         }
 
     def _calc_period(bets_list):
-        """Calculate stats + by_type + best/worst for a period."""
+        """Calculate stats + best/worst for a period."""
         stats = _calc_stats(bets_list)
-        win_bets = [b for b in bets_list if (b.bet_type or "place") == "win"]
-        place_bets = [b for b in bets_list if (b.bet_type or "place") == "place"]
-        stats["by_type"] = {"win": _calc_stats(win_bets), "place": _calc_stats(place_bets)}
-        if bets_list:
-            best = max(bets_list, key=lambda b: b.pnl or 0)
-            worst = min(bets_list, key=lambda b: b.pnl or 0)
+        # Best win: highest positive P&L; Worst loss: most negative P&L
+        winners = [b for b in bets_list if (b.pnl or 0) > 0]
+        losers = [b for b in bets_list if (b.pnl or 0) < 0]
+        if winners:
+            best = max(winners, key=lambda b: b.pnl)
             stats["best_bet"] = {"horse": best.horse_name, "pnl": best.pnl, "meeting": best.meeting_id}
-            stats["worst_bet"] = {"horse": worst.horse_name, "pnl": worst.pnl, "meeting": worst.meeting_id}
         else:
             stats["best_bet"] = None
+        if losers:
+            worst = min(losers, key=lambda b: b.pnl)
+            stats["worst_bet"] = {"horse": worst.horse_name, "pnl": worst.pnl, "meeting": worst.meeting_id}
+        else:
             stats["worst_bet"] = None
         # Running P&L for this period
         running = []

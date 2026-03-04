@@ -109,7 +109,7 @@
         <div class="flex items-center justify-between mb-3">
             <h2 class="text-lg font-bold" style="font-family: 'Rajdhani', sans-serif;">P&L TRACKER</h2>
             <div class="flex gap-2">
-                <template x-for="range in [{label:'7D',val:7},{label:'14D',val:14},{label:'30D',val:30},{label:'ALL',val:0}]">
+                <template x-for="range in [{label:'1D',val:1},{label:'7D',val:7},{label:'14D',val:14},{label:'30D',val:30},{label:'ALL',val:0}]">
                     <button @click="chartRange = range.val; loadChart()"
                             class="px-2 py-0.5 rounded text-xs font-bold transition-all"
                             :style="chartRange === range.val
@@ -259,20 +259,20 @@
                                 <span x-text="bet.settled ? ((bet.pnl >= 0 ? '+$' : '-$') + Math.abs(bet.pnl).toFixed(2)) : '—'"></span>
                             </td>
                             <td class="px-4 py-2 text-center">
-                                <button x-show="bet.status === 'queued'" @click="toggleBet(bet)"
-                                        class="relative inline-block transition-all cursor-pointer"
-                                        style="width: 36px; height: 20px; border-radius: 10px; padding: 0; flex-shrink: 0; min-width: 36px; min-height: 20px;"
-                                        :style="bet.enabled
-                                            ? 'background: rgba(0,212,255,0.3); border: 1px solid var(--cyan);'
-                                            : 'background: rgba(128,128,144,0.2); border: 1px solid rgba(128,128,144,0.3);'">
-                                    <span class="absolute rounded-full transition-all"
-                                          style="width: 14px; height: 14px; top: 2px;"
-                                          :style="bet.enabled
-                                              ? 'left: 18px; background: var(--cyan);'
-                                              : 'left: 2px; background: #808090;'">
-                                    </span>
-                                </button>
-                                <span x-show="bet.status !== 'queued'" class="text-xs" style="color: var(--text-muted);">—</span>
+                                <template x-if="bet.status === 'queued'">
+                                    <svg @click="toggleBet(bet)" width="36" height="20" viewBox="0 0 36 20"
+                                         class="cursor-pointer" style="display: inline-block; vertical-align: middle;">
+                                        <rect x="0.5" y="0.5" width="35" height="19" rx="9.5"
+                                              :fill="bet.enabled ? 'rgba(0,212,255,0.3)' : 'rgba(128,128,144,0.2)'"
+                                              :stroke="bet.enabled ? '#00d4ff' : 'rgba(128,128,144,0.4)'" stroke-width="1"/>
+                                        <circle :cx="bet.enabled ? 25 : 11" cy="10" r="7"
+                                                :fill="bet.enabled ? '#00d4ff' : '#808090'"
+                                                style="transition: cx 0.2s ease;"/>
+                                    </svg>
+                                </template>
+                                <template x-if="bet.status !== 'queued'">
+                                    <span class="text-xs" style="color: var(--text-muted);">—</span>
+                                </template>
                             </td>
                         </tr>
                     </template>
@@ -713,10 +713,162 @@ function betfairApp() {
 
         async loadChart() {
             try {
-                const resp = await fetch('/api/betfair/chart-data');
-                const data = await resp.json();
-                this.renderChart(data);
+                if (this.chartRange === 1) {
+                    const resp = await fetch('/api/betfair/chart-data/today');
+                    const data = await resp.json();
+                    this.renderTodayChart(data);
+                } else {
+                    const resp = await fetch('/api/betfair/chart-data');
+                    const data = await resp.json();
+                    this.renderChart(data);
+                }
             } catch (e) { console.error('Chart load failed:', e); }
+        },
+
+        renderTodayChart(data) {
+            const canvas = document.getElementById('pnlChart');
+            if (!canvas) return;
+            if (this._chart) this._chart.destroy();
+
+            const settled = data.settled || [];
+            const pending = data.pending || [];
+
+            if (settled.length === 0 && pending.length === 0) {
+                // Empty state — show message
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(128,128,160,0.5)';
+                ctx.font = '14px Rajdhani, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No bets settled yet today', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // Build labels & data: start at $0, then each settled result
+            const labels = ['Start'];
+            const cumLine = [0];
+            const barData = [0];
+            const barColors = ['transparent'];
+            const barBorders = ['transparent'];
+            const pointColors = ['rgba(128,128,160,0.5)'];
+
+            settled.forEach(s => {
+                labels.push(s.time + ' ' + s.horse.split(' ')[0]);
+                cumLine.push(s.cumulative_pnl);
+                barData.push(s.pnl);
+                barColors.push(s.hit ? 'rgba(0,255,136,0.5)' : 'rgba(255,68,102,0.5)');
+                barBorders.push(s.hit ? 'rgba(0,255,136,0.8)' : 'rgba(255,68,102,0.8)');
+                pointColors.push(s.hit ? '#00ff88' : '#ff4466');
+            });
+
+            // Add pending projection
+            if (pending.length > 0) {
+                const lastCum = cumLine[cumLine.length - 1];
+                const pendingProfit = pending.reduce((sum, p) => sum + p.stake * ((p.odds || 1) - 1) * 0.95, 0);
+                labels.push('Pending (' + pending.length + ')');
+                cumLine.push(null); // gap in line
+                barData.push(null);
+                barColors.push('transparent');
+                barBorders.push('transparent');
+                pointColors.push('transparent');
+            }
+
+            const gridColor = 'rgba(128,128,160,0.1)';
+            const tickColor = 'rgba(128,128,160,0.5)';
+
+            // Projection dataset — dashed line from last settled to best case
+            const projData = new Array(labels.length).fill(null);
+            if (settled.length > 0 && pending.length > 0) {
+                const lastIdx = settled.length; // index in arrays (settled.length because of "Start" at 0)
+                const pendingProfit = pending.reduce((sum, p) => sum + p.stake * ((p.odds || 1) - 1) * 0.95, 0);
+                projData[lastIdx] = cumLine[lastIdx];
+                projData[labels.length - 1] = cumLine[lastIdx] + pendingProfit;
+            }
+
+            this._chart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Cumulative P&L',
+                            data: cumLine,
+                            borderColor: '#00d4ff',
+                            backgroundColor: 'rgba(0,212,255,0.08)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBackgroundColor: pointColors,
+                            pointBorderColor: pointColors,
+                            order: 1,
+                        },
+                        {
+                            label: 'Bet P&L',
+                            data: barData,
+                            type: 'bar',
+                            backgroundColor: barColors,
+                            borderColor: barBorders,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            order: 2,
+                        },
+                        {
+                            label: 'Best Case',
+                            data: projData,
+                            borderColor: 'rgba(0,255,136,0.5)',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: projData.map(v => v !== null ? 5 : 0),
+                            pointStyle: 'star',
+                            pointBackgroundColor: '#00ff88',
+                            spanGaps: true,
+                            order: 0,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: tickColor, font: { size: 10 }, boxWidth: 12, padding: 8 },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(10,10,20,0.95)',
+                            borderColor: 'rgba(0,212,255,0.3)',
+                            borderWidth: 1,
+                            titleFont: { family: 'Rajdhani' },
+                            callbacks: {
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (v === null) return null;
+                                    const sign = v >= 0 ? '+$' : '-$';
+                                    return ctx.dataset.label + ': ' + sign + Math.abs(v).toFixed(2);
+                                }
+                            }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: gridColor },
+                            ticks: { color: tickColor, font: { size: 9 }, maxRotation: 45 },
+                        },
+                        y: {
+                            grid: { color: gridColor },
+                            ticks: {
+                                color: tickColor, font: { size: 10 },
+                                callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0),
+                            },
+                            title: { display: true, text: 'P&L', color: tickColor, font: { size: 10 } },
+                        },
+                    },
+                },
+            });
         },
 
         renderChart(data) {
@@ -730,6 +882,19 @@ function betfairApp() {
                 // Recalculate cumulative from slice start
                 const offset = series.length > 0 ? series[0].cumulative_pnl - series[0].pnl : 0;
                 series = series.map(s => ({...s, cumulative_pnl: s.cumulative_pnl - offset}));
+            }
+
+            if (series.length === 0) {
+                // Empty state
+                if (this._chart) this._chart.destroy();
+                this._chart = null;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(128,128,160,0.5)';
+                ctx.font = '14px Rajdhani, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No Betfair data yet', canvas.width / 2, canvas.height / 2);
+                return;
             }
 
             const today = data.today;
