@@ -132,6 +132,67 @@ class PointsBetScraper:
 
         return sorted(race_ids, key=lambda x: x[0])
 
+    async def scrape_race_statuses(
+        self, venue: str, race_date: date
+    ) -> dict:
+        """Get race statuses from PointsBet meetings API.
+
+        Maps PB resultStatus to standard status strings:
+          resultStatus 2 → "Paying"
+          tradingStatus 3 + resultStatus 0 → "Open" (in progress)
+          tradingStatus 1 + resultStatus 0 → "Open" (not started)
+
+        Returns: {"statuses": {1: "Paying", 2: "Open", ...}}
+        """
+        venue_norm = normalize_venue(venue)
+        dt = datetime(race_date.year, race_date.month, race_date.day, tzinfo=timezone.utc)
+        date_str = dt.strftime("%Y-%m-%dT01:00:00.000Z")
+        url = f"{API_BASE}/api/racing/v4/meetings"
+        params = {"startDate": date_str, "endDate": date_str}
+
+        try:
+            async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as e:
+            logger.warning(f"PointsBet status API failed: {e}")
+            return {"statuses": {}}
+
+        all_meetings: list[dict] = []
+        if isinstance(data, list):
+            for group in data:
+                if isinstance(group, dict) and "meetings" in group:
+                    all_meetings.extend(group.get("meetings", []))
+                elif isinstance(group, dict) and "venue" in group:
+                    all_meetings.append(group)
+
+        statuses: dict[int, str] = {}
+        for meeting in all_meetings:
+            if not isinstance(meeting, dict):
+                continue
+            if meeting.get("racingType") not in ("Thoroughbred", 1):
+                continue
+            pb_venue = normalize_venue(meeting.get("venue") or "")
+            if pb_venue != venue_norm and venue_norm not in pb_venue and pb_venue not in venue_norm:
+                continue
+
+            for race in meeting.get("races", []):
+                if not isinstance(race, dict):
+                    continue
+                race_num = race.get("raceNumber") or race.get("number")
+                if not race_num:
+                    continue
+                result_status = race.get("resultStatus", 0)
+                if result_status == 2:
+                    statuses[int(race_num)] = "Paying"
+                else:
+                    statuses[int(race_num)] = "Open"
+            if statuses:
+                break
+
+        return {"statuses": statuses}
+
     async def _fetch_race_odds(
         self, client: httpx.AsyncClient, event_id: str, race_num: int
     ) -> list[dict]:

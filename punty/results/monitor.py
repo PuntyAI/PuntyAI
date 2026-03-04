@@ -658,6 +658,25 @@ class ResultsMonitor:
                 except Exception as e:
                     logger.warning(f"PuntingForm status fallback failed for {meeting.venue}: {e}")
 
+            # If PuntingForm returned all "Open" (common for WA/SA/QLD finished races),
+            # try PointsBet as a second status fallback — PB has resultStatus=2 for finished races
+            all_pf_open = statuses and all(s == "Open" for s in statuses.values())
+            if all_pf_open:
+                try:
+                    from punty.scrapers.pointsbet import PointsBetScraper
+                    pb = PointsBetScraper()
+                    pb_status_data = await pb.scrape_race_statuses(meeting.venue, meeting.date)
+                    pb_statuses = pb_status_data.get("statuses", {})
+                    has_paying = any(s == "Paying" for s in pb_statuses.values())
+                    if has_paying:
+                        logger.info(
+                            f"PuntingForm all Open for {meeting.venue} — "
+                            f"using PointsBet statuses: {pb_statuses}"
+                        )
+                        statuses = pb_statuses
+                except Exception as e:
+                    logger.warning(f"PointsBet status fallback failed for {meeting.venue}: {e}")
+
         # ── Abandonment detection ───────────────────────────────────────
         # If ALL races are "Abandoned", post alert, void picks, deselect meeting.
         # Also detect timeout: all races have no results 6+ hours past last start_time.
