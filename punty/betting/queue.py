@@ -31,7 +31,7 @@ DEFAULT_MIN_KELLY_STAKE = 0.50  # Minimum stake floor
 DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
 DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
 DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
-MAIDEN_CLASSES = {"Maiden", "Maiden Plate", "Maiden Handicap"}
+MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
 
 
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
@@ -182,11 +182,11 @@ async def populate_bet_queue(
 
         # Filter maiden races — less form data, lower prediction confidence
         if skip_maidens and race:
-            race_class = race.class_ or ""
-            if race_class in MAIDEN_CLASSES:
+            race_class = (race.class_ or "").lower().rstrip(";").strip()
+            if race_class.startswith(MAIDEN_PREFIXES):
                 logger.info(
                     f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                    f"maiden race ({race_class})"
+                    f"maiden race ({race.class_})"
                 )
                 continue
 
@@ -416,12 +416,12 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 select(Race).where(Race.id == race_id)
             )
             race = race_result.scalar_one_or_none()
-            race_class = (race.class_ if race else None) or ""
-            if race_class in MAIDEN_CLASSES:
+            race_class_raw = (race.class_ if race else None) or ""
+            if race_class_raw.lower().rstrip(";").strip().startswith(MAIDEN_PREFIXES):
                 bet.status = "cancelled"
-                bet.error_message = f"Maiden race ({race_class})"
+                bet.error_message = f"Maiden race ({race_class_raw})"
                 changes += 1
-                logger.info(f"Cancelled {bet.id}: maiden race ({race_class})")
+                logger.info(f"Cancelled {bet.id}: maiden race ({race_class_raw})")
                 continue
 
         # Load rank 1 selection picks only for automatic swap candidates
