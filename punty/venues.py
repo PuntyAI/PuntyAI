@@ -32,6 +32,8 @@ VENUE_ALIASES = {
     "cheltenham park": "morphettville",
     "cannon park": "cairns",
     "ladbrokes cannon park": "cairns",
+    # PointsBet aliases
+    "caulfield heath": "caulfield",
     # PF-specific aliases
     "beaumont newcastle": "newcastle",
     # Southside = synthetic track at same venue
