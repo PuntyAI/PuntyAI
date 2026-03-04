@@ -27,7 +27,7 @@ DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
 DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
 DEFAULT_MAX_KELLY_FRACTION = 0.08  # Cap Kelly fraction at 8%
-DEFAULT_MIN_KELLY_STAKE = 0.50  # Minimum stake floor
+DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
 DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
 DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
 DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
@@ -97,14 +97,17 @@ def calculate_kelly_stake(
     Stake = kelly_fraction * balance, floored at min_stake.
     """
     if odds <= 1 or balance <= 0 or place_probability <= 0:
-        return min_stake
+        return 0  # No valid bet
     implied_prob = 1.0 / odds
     edge = place_probability - implied_prob
     if edge <= 0:
-        return min_stake
+        return 0  # Negative edge — don't bet
     kelly = edge / (odds - 1)
     kelly = min(kelly, max_fraction)
-    return max(kelly * balance, min_stake)
+    stake = kelly * balance
+    if stake < min_stake:
+        return min_stake  # Round up to Betfair minimum if edge exists
+    return stake
 
 
 async def get_current_stake(db: AsyncSession) -> float:
@@ -697,6 +700,12 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         # Kelly-proportional staking: bet more when edge is larger
         stake = calculate_kelly_stake(balance, place_prob, current_odds)
+        if stake <= 0:
+            bet.status = "cancelled"
+            bet.error_message = f"No Kelly edge: PP={place_prob:.1%} < implied {1/current_odds:.1%} @ ${current_odds:.2f}"
+            logger.info(f"Betfair: {bet.id} cancelled — Kelly says no edge")
+            await db.commit()
+            continue
         bet.stake = round(stake, 2)
         bet.requested_odds = current_odds
 

@@ -56,20 +56,19 @@ class TestCalculateKellyStake:
 
     def test_positive_edge_produces_stake(self):
         """10% edge at $2.00 odds → kelly = 0.10/1.0 = 0.10, capped at 0.08."""
-        stake = calculate_kelly_stake(balance=50.0, place_probability=0.60, odds=2.00)
+        stake = calculate_kelly_stake(balance=200.0, place_probability=0.60, odds=2.00)
         # edge = 0.60 - 0.50 = 0.10, kelly = 0.10/1.0 = 0.10, capped 0.08
-        assert stake == 0.08 * 50.0  # $4.00
+        assert stake == 0.08 * 200.0  # $16.00
 
-    def test_no_edge_returns_min(self):
-        """Zero edge → minimum stake."""
+    def test_no_edge_returns_zero(self):
+        """Zero edge → no bet."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.50, odds=2.00)
-        # edge = 0.50 - 0.50 = 0, so min stake
-        assert stake == 0.50
+        assert stake == 0
 
-    def test_negative_edge_returns_min(self):
-        """Negative edge → minimum stake."""
+    def test_negative_edge_returns_zero(self):
+        """Negative edge → no bet."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.30, odds=2.00)
-        assert stake == 0.50
+        assert stake == 0
 
     def test_large_balance_scales(self):
         """Kelly scales with balance."""
@@ -77,24 +76,24 @@ class TestCalculateKellyStake:
         # edge = 0.70 - 0.333 = 0.367, kelly = 0.367/2.0 = 0.183, capped 0.08
         assert stake == 0.08 * 1000.0  # $80.00
 
-    def test_small_edge_small_stake(self):
-        """Small edge → floored to min_stake."""
+    def test_small_edge_floors_to_min(self):
+        """Small but positive edge → floored to $5 Betfair minimum."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.56, odds=1.80)
         # edge = 0.56 - 0.556 = 0.004, kelly = 0.004/0.80 = 0.005
-        # 0.005 * 50 = $0.25 → floored to $0.50 min_stake
-        assert stake == 0.50
+        # 0.005 * 50 = $0.25 < $5 min → rounds up to $5
+        assert stake == 5.00
 
     def test_floor_applied(self):
-        """Stake never goes below min_stake."""
+        """Small edge floors to Betfair minimum."""
         stake = calculate_kelly_stake(balance=10.0, place_probability=0.56, odds=1.80)
-        assert stake >= 0.50
+        assert stake >= 5.00  # Betfair min
 
     def test_zero_balance(self):
-        assert calculate_kelly_stake(0, 0.70, 2.00) == 0.50
+        assert calculate_kelly_stake(0, 0.70, 2.00) == 0
 
     def test_invalid_odds(self):
-        assert calculate_kelly_stake(50.0, 0.70, 1.00) == 0.50
-        assert calculate_kelly_stake(50.0, 0.70, 0.50) == 0.50
+        assert calculate_kelly_stake(50.0, 0.70, 1.00) == 0
+        assert calculate_kelly_stake(50.0, 0.70, 0.50) == 0
 
 
 class TestPopulateBetQueue:
