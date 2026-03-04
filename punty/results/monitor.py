@@ -632,7 +632,13 @@ class ResultsMonitor:
             if not statuses:
                 try:
                     from punty.scrapers.punting_form import PuntingFormScraper
-                    pf = PuntingFormScraper()
+                    from punty.models.settings import AppSettings
+                    pf_key_result = await db.execute(
+                        select(AppSettings).where(AppSettings.key == "punting_form_api_key")
+                    )
+                    pf_key_setting = pf_key_result.scalar_one_or_none()
+                    pf_key = pf_key_setting.value if pf_key_setting else ""
+                    pf = PuntingFormScraper(api_key=pf_key)
                     try:
                         pf_status_data = await pf.scrape_race_statuses(
                             meeting.venue, meeting.date
