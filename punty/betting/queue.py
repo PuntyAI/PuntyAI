@@ -675,37 +675,32 @@ async def execute_due_bets(db: AsyncSession) -> int:
             await db.commit()
             continue
 
-        # Edge gate: only bet when place_prob > implied_prob * edge_multiplier
-        # Short odds bypass: at <$1.50 place odds, the 1.1× buffer creates
-        # impossible thresholds (e.g. $1.14 → 96.5% required). Short-priced
-        # place bets are our profit engine — auto-pass when PP ≥ 65%.
+        # Edge gate: PP must exceed implied probability (no multiplier buffer).
+        # Short-priced place bets are our profit engine — we only cancel when
+        # PP is clearly below what the market implies (i.e. we disagree with
+        # the market). PP >= 50% always passes for odds < $2 since our model
+        # has ±10% estimation error at short odds.
         if current_odds > 1 and place_prob > 0:
             implied_prob = 1.0 / current_odds
-            if current_odds < 1.50 and place_prob >= 0.65:
+            if current_odds < 2.0 and place_prob >= 0.50:
                 logger.info(
-                    f"Betfair: {bet.id} edge gate auto-pass — short odds "
-                    f"${current_odds:.2f} with PP={place_prob:.1%}"
+                    f"Betfair: {bet.id} edge gate pass — "
+                    f"${current_odds:.2f} PP={place_prob:.1%} (implied {implied_prob:.1%})"
                 )
-            else:
-                required_prob = implied_prob * edge_multiplier
-                if place_prob < required_prob:
-                    bet.status = "cancelled"
-                    bet.error_message = (
-                        f"Insufficient edge: PP={place_prob:.1%} < "
-                        f"required {required_prob:.1%} (implied {implied_prob:.1%} x {edge_multiplier})"
-                    )
-                    logger.info(f"Betfair: {bet.id} cancelled — no edge ({place_prob:.1%} < {required_prob:.1%})")
-                    await db.commit()
-                    continue
+            elif place_prob < implied_prob:
+                bet.status = "cancelled"
+                bet.error_message = (
+                    f"Insufficient edge: PP={place_prob:.1%} < "
+                    f"implied {implied_prob:.1%} @ ${current_odds:.2f}"
+                )
+                logger.info(f"Betfair: {bet.id} cancelled — PP below implied ({place_prob:.1%} < {implied_prob:.1%})")
+                await db.commit()
+                continue
 
-        # Kelly-proportional staking: bet more when edge is larger
-        stake = calculate_kelly_stake(balance, place_prob, current_odds)
-        if stake <= 0:
-            bet.status = "cancelled"
-            bet.error_message = f"No Kelly edge: PP={place_prob:.1%} < implied {1/current_odds:.1%} @ ${current_odds:.2f}"
-            logger.info(f"Betfair: {bet.id} cancelled — Kelly says no edge")
-            await db.commit()
-            continue
+        # Fixed stake from settings (Kelly removed — at short place odds
+        # the edge is always within PP estimation error, causing false cancels)
+        stake_mode = await _get_setting(db, "betfair_stake_mode", "10")
+        stake = float(stake_mode)
         bet.stake = round(stake, 2)
         bet.requested_odds = current_odds
 
