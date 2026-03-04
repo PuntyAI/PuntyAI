@@ -143,17 +143,25 @@ async def populate_bet_queue(
     if auto_enabled.lower() != "true":
         return 0
 
-    # Get rank 1 selection picks only — strike rate certainties, not value hunts
+    # Get best pick per race by PP — for place bets, PP matters more than tip rank
     result = await db.execute(
         select(Pick).where(
             Pick.content_id == content_id,
             Pick.meeting_id == meeting_id,
             Pick.pick_type == "selection",
-            Pick.tip_rank == 1,
+            Pick.tip_rank.in_([1, 2, 3, 4]),
             Pick.tracked_only != True,
         ).order_by(Pick.race_number)
     )
-    rank1_picks = result.scalars().all()
+    all_picks = result.scalars().all()
+    # Select highest PP pick per race
+    best_by_race: dict[int, Pick] = {}
+    for pick in all_picks:
+        pp = pick.place_probability or 0
+        rn = pick.race_number
+        if rn not in best_by_race or pp > (best_by_race[rn].place_probability or 0):
+            best_by_race[rn] = pick
+    rank1_picks = list(best_by_race.values())
     if not rank1_picks:
         return 0
 
@@ -439,13 +447,13 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 logger.info(f"Cancelled {bet.id}: maiden odds ${place_odds:.2f} above ceiling")
                 continue
 
-        # Load rank 1 selection picks only for automatic swap candidates
+        # Load all selection picks for this race — pick by best PP for place bets
         pick_result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == bet.meeting_id,
                 Pick.race_number == bet.race_number,
                 Pick.pick_type == "selection",
-                Pick.tip_rank == 1,
+                Pick.tip_rank.in_([1, 2, 3, 4]),
                 Pick.tracked_only != True,
             )
         )
@@ -487,12 +495,12 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 best_pp = pp
                 best_pick = pick
 
-        # Check if current bet is on a non-rank-1 pick (legacy queue or manual cycle)
-        current_is_rank1 = any(p.id == bet.pick_id for p in candidates)
+        # Check if current bet's pick is still a valid candidate
+        current_is_valid = any(p.id == bet.pick_id for p in candidates)
 
-        if current_scratched or not current_is_rank1:
-            # Must swap: horse scratched or not rank 1
-            reason = "scratched" if current_scratched else "not rank 1"
+        if current_scratched or not current_is_valid:
+            # Must swap: horse scratched or pick no longer valid
+            reason = "scratched" if current_scratched else "pick removed"
             if best_pick and best_pick.id != bet.pick_id:
                 old_name = bet.horse_name
                 bet.pick_id = best_pick.id
@@ -505,11 +513,11 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                     f"{bet.horse_name} ({best_pp:.0%}pp)"
                 )
             else:
-                # No viable rank 1 replacement — cancel
+                # No viable replacement — cancel
                 bet.status = "cancelled"
-                bet.error_message = f"No eligible rank 1 pick ({reason})"
+                bet.error_message = f"No eligible pick ({reason})"
                 changes += 1
-                logger.info(f"Cancelled {bet.id}: {bet.horse_name} {reason}, no rank 1 replacement")
+                logger.info(f"Cancelled {bet.id}: {bet.horse_name} {reason}, no replacement")
         elif best_pick and best_pick.id != bet.pick_id:
             # Current horse is rank 1, not scratched — only swap if replacement is significantly better
             current_pp = 0.0
