@@ -1330,11 +1330,16 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
                     func.count(Pick.id),
                     func.sum(case((Pick.hit == True, 1), else_=0)),
                     func.sum(Pick.pnl),
-                    func.sum(Pick.bet_stake),
+                    func.sum(
+                        case(
+                            (Pick.pick_type == "exotic", Pick.exotic_stake),
+                            else_=Pick.bet_stake,
+                        )
+                    ),
                     func.count(func.distinct(Pick.meeting_id)),
                 ).where(and_(
                     Pick.settled == True,
-                    Pick.pick_type == "selection",
+                    Pick.pick_type.in_(["selection", "exotic", "sequence"]),
                     Pick.meeting_id.in_(venue_meetings),
                 ))
             )
@@ -3048,7 +3053,7 @@ async def sitemap_tips():
 # Betfair Tracker — password-protected public view
 # ---------------------------------------------------------------------------
 
-_BF_TRACKER_PASSWORD = "Spanks31+"
+_BF_TRACKER_PASSWORD = "RightioCunts69"
 _BF_TRACKER_COOKIE = "bf_tracker_auth"
 
 
