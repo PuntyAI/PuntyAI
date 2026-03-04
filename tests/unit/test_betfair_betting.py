@@ -218,25 +218,43 @@ class TestRefreshBetSelections:
         db.commit = AsyncMock()
         return db
 
-    def _setup_db_responses(self, mock_db, queued_bets, setting_value, picks, runners):
+    def _setup_db_responses(self, mock_db, queued_bets, setting_value, picks, runners,
+                             race_class="Class 1"):
         """Configure mock_db.execute to return the right objects in sequence.
 
         Call order in refresh_bet_selections:
         1. select(BetfairBet) → queued bets
-        2. select(AppSettings) → min_place_prob setting
+        2-3. select(AppSettings) × 2 → min_place_prob, max_place_odds
         Then per bet:
-        3. select(Pick) → candidate picks for the race
-        4. select(Runner) → current horse runner (scratched check)
-        5..N. select(Runner) → one per candidate pick
+        4. select(count(Runner)) → NTD runner count check
+        5. select(Race) → maiden odds gate check
+        6. select(Pick) → candidate picks for the race
+        7. select(Runner) → current horse runner (scratched check)
+        8..N. select(Runner) → one per candidate pick
         """
         # Build result mocks
         bets_result = MagicMock()
         bets_result.scalars.return_value.all.return_value = queued_bets
 
-        setting_mock = MagicMock()
-        setting_mock.value = setting_value
-        setting_result = MagicMock()
-        setting_result.scalar_one_or_none.return_value = setting_mock
+        def _make_setting_result(val):
+            m = MagicMock()
+            m.value = val
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = m
+            return r
+
+        setting_prob = _make_setting_result(setting_value)
+        setting_odds = _make_setting_result("6.0")
+
+        # Runner count mock for NTD check (default 10 = safe)
+        runner_count_result = MagicMock()
+        runner_count_result.scalar.return_value = 10
+
+        # Race mock for maiden check
+        race_mock = MagicMock()
+        race_mock.class_ = race_class
+        race_result = MagicMock()
+        race_result.scalar_one_or_none.return_value = race_mock
 
         picks_result = MagicMock()
         picks_result.scalars.return_value.all.return_value = picks
@@ -248,7 +266,8 @@ class TestRefreshBetSelections:
             runner_results.append(rr)
 
         mock_db.execute = AsyncMock(
-            side_effect=[bets_result, setting_result, picks_result] + runner_results
+            side_effect=[bets_result, setting_prob, setting_odds,
+                         runner_count_result, race_result, picks_result] + runner_results
         )
 
     @pytest.mark.asyncio
@@ -391,6 +410,14 @@ class TestCycleBetSelection:
         db.commit = AsyncMock()
         return db
 
+    def _odds_setting_result(self):
+        """Mock for betfair_max_place_odds setting query."""
+        setting_mock = MagicMock()
+        setting_mock.value = "6.0"
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = setting_mock
+        return result
+
     @pytest.mark.asyncio
     async def test_cycle_to_next_pick(self, mock_db):
         """Cycling from pick 1 → pick 2."""
@@ -401,7 +428,7 @@ class TestCycleBetSelection:
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_b = _make_mock_runner(2, current_odds=5.0)
 
-        # Call order: select bet, select picks, runner_a check, runner_b check
+        # Call order: select bet, max_place_odds setting, select picks, runner checks
         bet_result = MagicMock()
         bet_result.scalar_one_or_none.return_value = bet
         picks_result = MagicMock()
@@ -412,7 +439,8 @@ class TestCycleBetSelection:
         runner_b_result.scalar_one_or_none.return_value = runner_b
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -441,7 +469,8 @@ class TestCycleBetSelection:
         runner_b_result.scalar_one_or_none.return_value = runner_b
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -465,7 +494,8 @@ class TestCycleBetSelection:
         runner_result.scalar_one_or_none.return_value = runner_a
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -506,7 +536,8 @@ class TestCycleBetSelection:
         runner_b_result.scalar_one_or_none.return_value = runner_b
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")

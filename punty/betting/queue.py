@@ -32,6 +32,7 @@ DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
 DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
 DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
 MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
+DEFAULT_MAIDEN_MAX_PLACE_ODDS = 1.75  # Tighter ceiling for maiden races (≈$3 win)
 
 
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
@@ -163,7 +164,6 @@ async def populate_bet_queue(
     stake = await get_current_stake(db)
     min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
     max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
-    skip_maidens = (await _get_setting(db, "betfair_skip_maidens", "true")).lower() == "true"
 
     queued = 0
     for pick in rank1_picks:
@@ -180,15 +180,18 @@ async def populate_bet_queue(
             )
             continue
 
-        # Filter maiden races — less form data, lower prediction confidence
-        if skip_maidens and race:
+        # Maiden races — allow only short-priced favourites (place odds <= $1.75)
+        if race:
             race_class = (race.class_ or "").lower().rstrip(";").strip()
             if race_class.startswith(MAIDEN_PREFIXES):
-                logger.info(
-                    f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                    f"maiden race ({race.class_})"
-                )
-                continue
+                maiden_ceiling = DEFAULT_MAIDEN_MAX_PLACE_ODDS
+                place_odds = pick.place_odds_at_tip or 999
+                if place_odds > maiden_ceiling:
+                    logger.info(
+                        f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                        f"maiden race, place odds ${place_odds:.2f} > ${maiden_ceiling:.2f} ceiling"
+                    )
+                    continue
 
         # NTD filter — need 8+ runners for 3 place dividends
         # Allow 5-7 runners if place_probability is very high (>= 70%)
@@ -388,7 +391,6 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
 
     min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
     max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
-    skip_maidens = (await _get_setting(db, "betfair_skip_maidens", "true")).lower() == "true"
     changes = 0
 
     for bet in queued_bets:
@@ -410,18 +412,19 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 logger.info(f"Cancelled {bet.id}: {reason}")
                 continue
 
-        # Check maiden race — cancel if setting enabled
-        if skip_maidens:
-            race_result = await db.execute(
-                select(Race).where(Race.id == race_id)
-            )
-            race = race_result.scalar_one_or_none()
-            race_class_raw = (race.class_ if race else None) or ""
-            if race_class_raw.lower().rstrip(";").strip().startswith(MAIDEN_PREFIXES):
+        # Check maiden race — cancel if odds drifted above maiden ceiling
+        race_result = await db.execute(
+            select(Race).where(Race.id == race_id)
+        )
+        race = race_result.scalar_one_or_none()
+        race_class_raw = (race.class_ if race else None) or ""
+        if race_class_raw.lower().rstrip(";").strip().startswith(MAIDEN_PREFIXES):
+            place_odds = bet.requested_odds or 999
+            if place_odds > DEFAULT_MAIDEN_MAX_PLACE_ODDS:
                 bet.status = "cancelled"
-                bet.error_message = f"Maiden race ({race_class_raw})"
+                bet.error_message = f"Maiden race, odds ${place_odds:.2f} > ${DEFAULT_MAIDEN_MAX_PLACE_ODDS:.2f}"
                 changes += 1
-                logger.info(f"Cancelled {bet.id}: maiden race ({race_class_raw})")
+                logger.info(f"Cancelled {bet.id}: maiden odds ${place_odds:.2f} above ceiling")
                 continue
 
         # Load rank 1 selection picks only for automatic swap candidates
