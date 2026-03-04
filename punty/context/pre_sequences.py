@@ -27,7 +27,7 @@ ENABLE_MAIN_QUADDIE = True
 
 # Minimum estimated return % thresholds — skip sequences below these
 MIN_RETURN_PCT = {
-    "early_quaddie": 30.0,  # Raised from 20% — early races have worse data quality
+    "early_quaddie": 60.0,  # Data: Early Quad -52% ROI — require high return to proceed
     "quaddie": 20.0,
     "big6": 5.0,
 }

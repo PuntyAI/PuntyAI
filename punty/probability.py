@@ -624,7 +624,7 @@ def _calculate_lgbm_probabilities(
     place_count = 2 if field_size <= 7 else 3
     place_total = sum(pp for _, pp in raw_preds.values())
     if place_total > 0:
-        lgbm_place_probs = {rid: min(0.95, pp / place_total * place_count)
+        lgbm_place_probs = {rid: min(0.75, pp / place_total * place_count)
                             for rid, (_, pp) in raw_preds.items()}
     else:
         lgbm_place_probs = {rid: _place_probability(lgbm_win_probs.get(rid, baseline), field_size)
@@ -657,7 +657,7 @@ def _calculate_lgbm_probabilities(
     # Re-normalize blended place probs to sum to place_count
     bp_total = sum(blended_place.values())
     if bp_total > 0:
-        blended_place = {rid: min(0.95, p / bp_total * place_count)
+        blended_place = {rid: min(0.75, p / bp_total * place_count)
                          for rid, p in blended_place.items()}
 
     # Calculate market-implied probabilities (reuse existing logic)
@@ -1093,7 +1093,7 @@ def calculate_race_probabilities(
         if ps_total > 0:
             # Scale so probs sum to place_count (e.g. 3 for 8+ fields)
             for rid in place_sharp:
-                place_probs[rid] = min(0.95, (place_sharp[rid] / ps_total) * place_count)
+                place_probs[rid] = min(0.75, (place_sharp[rid] / ps_total) * place_count)
 
     results: dict[str, RunnerProbability] = {}
 
@@ -1125,7 +1125,7 @@ def calculate_race_probabilities(
             if mkt_p and mkt_p > 0:
                 blended = 0.50 * blended + 0.50 * mkt_p
 
-            place_probs[rid_h] = min(0.95, blended)
+            place_probs[rid_h] = min(0.75, blended)
 
     for runner in active:
         rid = _get(runner, "id", "")
@@ -2456,7 +2456,7 @@ def _place_probability(win_prob: float, field_size: int) -> float:
     Australian place terms: fields <= 7 pay 2 places, 8+ pay 3.
     """
     if field_size <= 1:
-        return min(0.95, win_prob)
+        return min(0.75, win_prob)
 
     place_count = 2 if field_size <= 7 else 3
 
@@ -2472,7 +2472,7 @@ def _place_probability(win_prob: float, field_size: int) -> float:
         # 3-place fields: lerp from 2.5 (fs=8) to 3.2 (fs=16+)
         factor = 2.5 + (min(field_size, 16) - 8) / 8.0 * 0.7
 
-    return min(0.95, win_prob * factor)
+    return min(0.75, win_prob * factor)
 
 
 def _harville_place_probability(
@@ -2522,7 +2522,7 @@ def _harville_place_probability(
         p_second += p_j * (p_i / remainder)
 
     if place_count <= 2:
-        return min(0.95, p_first + p_second)
+        return min(0.75, p_first + p_second)
 
     # p(3rd) = sum over (j, k) pairs: p(j 1st) * p(k 2nd|j) * p(i 3rd|j,k)
     p_third = 0.0
@@ -2542,7 +2542,7 @@ def _harville_place_probability(
             p_i_given_jk = p_i / rem_jk
             p_third += p_j * p_k_given_j * p_i_given_jk
 
-    return min(0.95, p_first + p_second + p_third)
+    return min(0.75, p_first + p_second + p_third)
 
 
 # ──────────────────────────────────────────────

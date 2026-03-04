@@ -144,8 +144,8 @@ class TestDetermineBetType:
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_top_pick_win_in_sweet_spot(self):
-        """$4-$6 with good prob/value should be Win (edge: +60.8% ROI)."""
-        c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 6.0,
+        """$3-$4 with good prob/value should be Win (only profitable Win zone)."""
+        c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 3.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
@@ -155,12 +155,12 @@ class TestDetermineBetType:
              "value_rating": 0.95, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
-    def test_top_pick_win_at_2_50_with_conviction(self):
-        """$2.50 rank 1 with wp=0.30, value=1.10 → Win (expanded zone, wp >= 0.22)."""
+    def test_top_pick_place_at_2_50(self):
+        """$2.50 rank 1 → Place (data: $2-$3 Win -24% ROI, always Place now)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False)
-        assert result == "Win"
+        assert result == "Place"
 
     def test_top_pick_place_at_2_50_low_value(self):
         """$2.50 rank 1 with value=0.90 (below 0.95 threshold) → Place."""
@@ -1161,8 +1161,8 @@ class TestSubTwoDollarBetType:
              "value_rating": 0.95, "place_value_rating": 1.00}
         # field_size=8 → 3 places paid, hits the <$2.01 small field exception
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
-        # field_size=7 → only 2 places, hits num_places==2 path first → Win (NTD logic)
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=7) == "Win"
+        # field_size=7, pp=0.75 >= 0.55 → Place (data: 5-7 field +11.5% ROI on Place)
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=7) == "Place"
 
     def test_180_to_200_gets_place(self):
         """$1.80-$2.00 should get Place (not Win as before)."""
@@ -1243,12 +1243,12 @@ class TestDominantFavSaverToPlace:
         result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=3.50)
         assert result == "Saver Win"
 
-    def test_rank1_saver_unaffected_by_dom_fav(self):
-        """Rank 1 at $4.50 with dom fav $1.50 → Win (rank 1 not affected by dom fav guard)."""
+    def test_rank1_place_in_4_to_5_band(self):
+        """Rank 1 at $4.50 → Place (data: $4-$5 Win -30% ROI, Win zone tightened to $3-$4)."""
         c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False, fav_price=1.50)
-        assert result == "Win"
+        assert result == "Place"
 
     def test_no_fav_price_saver_unaffected(self):
         """No fav_price passed → Saver Win still returned (backward compatible)."""
@@ -1306,11 +1306,11 @@ class TestWinToPlaceGuard:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_rank1_win_stays_in_sweet_spot(self):
-        """$4.50 is in proven sweet spot — Win stays."""
+    def test_rank1_place_at_4_50(self):
+        """$4.50 → Place (Win zone tightened to $3-$4 only)."""
         c = {"win_prob": 0.25, "place_prob": 0.55, "odds": 4.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_rank1_win_at_3_50_with_conviction(self):
         """$3.50 rank 1 with wp=0.30 and value=1.15 → Win (expanded zone)."""
@@ -1318,11 +1318,11 @@ class TestWinToPlaceGuard:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_rank1_win_at_2_60_expanded_zone(self):
-        """$2.60, rank 1, wp=0.30, value=1.10 → Win (expanded $2.01-$3 zone, wp >= 0.22)."""
+    def test_rank1_place_at_2_60(self):
+        """$2.60, rank 1 → Place ($2-$3 band always Place now, -24% Win ROI)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.6,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_rank2_place_at_2_60(self):
         """$2.60 rank 2 → Place (only rank 1 gets Win in expanded zone)."""
@@ -1375,31 +1375,25 @@ class TestExoticFilters:
         tri_combos = [{"type": "Trifecta Box", "runners": [1, 2, 3],
                         "runner_names": ["A", "B", "C"],
                         "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"}]
-        # Blocked: field too small (< 7)
-        for fs in [5, 6]:
+        # Blocked: field too small (< 8)
+        for fs in [5, 6, 7]:
             result = _select_exotic(tri_combos, {1, 2, 3}, field_size=fs,
                                     track_condition="Good 4", fav_price=2.80, distance=1600)
             assert result is None, f"Trifecta Box should be blocked in {fs}-field"
-        # Allowed: 15+ fields (now promoted — avg div $3,090 in 15+ fields)
+        # Blocked: field too large (> 10) — data: -50% to -86% outside 8-10
         result = _select_exotic(tri_combos, {1, 2, 3}, field_size=15,
                                 track_condition="Good 4", fav_price=2.80, distance=1600)
-        assert result is not None, "Trifecta Box should be allowed in 15+ field (big dividends)"
-        # Allowed: fav < $1.50 (odds-on) — now allowed, routed to standout via scoring
+        assert result is None, "Trifecta Box should be blocked in 15+ field"
+        # Blocked: anchor > $3 — data: only $1-3 anchor profitable
         result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
-                                track_condition="Good 4", fav_price=1.30, distance=1600)
-        assert result is not None, "Trifecta Box should be allowed when fav is odds-on"
-        # Blocked: fav too long (> $5.00)
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
-                                track_condition="Good 4", fav_price=5.50, distance=1600)
-        assert result is None, "Trifecta Box should be blocked when fav > $5.00"
-        # Allowed: sprint distance (no longer blocked)
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
-                                track_condition="Good 4", fav_price=2.80, distance=1100)
-        assert result is not None, "Trifecta Box should be allowed in sprint"
-        # Allowed: field 7-14, fav $1.50-$5.00
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=12,
-                                track_condition="Good 4", fav_price=2.80, distance=1600)
-        assert result is not None, "Trifecta Box should be allowed in qualifying scenario"
+                                track_condition="Good 4", fav_price=3.50, distance=1600,
+                                anchor_odds=3.50)
+        assert result is None, "Trifecta Box should be blocked when anchor > $3"
+        # Allowed: 8-10 field, $1-3 anchor
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=9,
+                                track_condition="Good 4", fav_price=2.80, distance=1600,
+                                anchor_odds=2.80)
+        assert result is not None, "Trifecta Box should be allowed in 8-10 field with $1-3 anchor"
         assert result.exotic_type == "Trifecta Box"
 
 

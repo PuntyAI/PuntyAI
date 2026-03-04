@@ -216,6 +216,15 @@ async def populate_bet_queue(
                 f"{runner_count} runners but PP {pp:.0%} >= {DEFAULT_NTD_HIGH_PP:.0%}"
             )
 
+        # VR ceiling — Data: VR 1.5+ unprofitable across all bet types
+        vr = getattr(pick, "value_rating", None)
+        if isinstance(vr, (int, float)) and vr >= 1.5:
+            logger.info(
+                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                f"VR {vr:.2f} >= 1.5 ceiling"
+            )
+            continue
+
         # Filter by place probability — only bet on high-confidence selections
         if pick.place_probability is not None and pick.place_probability < min_place_prob:
             logger.info(
@@ -293,12 +302,12 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
     max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
 
     # Load all selection picks for this race, sorted by tip_rank (rank 1 first)
+    # Include tracked_only picks — manual cycle is an explicit override
     pick_result = await db.execute(
         select(Pick).where(
             Pick.meeting_id == bet.meeting_id,
             Pick.race_number == bet.race_number,
             Pick.pick_type == "selection",
-            Pick.tracked_only != True,
         ).order_by(Pick.tip_rank)
     )
     candidates = pick_result.scalars().all()
@@ -465,6 +474,10 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
             if runner and runner.scratched:
                 continue
             if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
+                continue
+            # VR ceiling — Data: VR 1.5+ unprofitable
+            vr = getattr(pick, "value_rating", None)
+            if isinstance(vr, (int, float)) and vr >= 1.5:
                 continue
             pp = pick.place_probability or 0
             if pp >= min_place_prob and pp > best_pp:
@@ -873,12 +886,19 @@ async def get_queue_summary(db: AsyncSession) -> dict:
     stake = await get_current_stake(db)
     stake_mode = await _get_setting(db, "betfair_stake_mode", "auto")
 
-    # Enrich bets with runner counts
+    # Enrich bets with runner counts and place probability from linked pick
     enriched_bets = []
     for b in today_bets:
         d = b.to_dict()
         race_id = f"{b.meeting_id}-r{b.race_number}"
         d["runners"] = await _count_active_runners(db, race_id)
+        # Attach place_probability from the linked pick
+        if b.pick_id:
+            pick_result = await db.execute(select(Pick).where(Pick.id == b.pick_id))
+            pick = pick_result.scalar_one_or_none()
+            d["place_probability"] = pick.place_probability if pick else None
+        else:
+            d["place_probability"] = None
         enriched_bets.append(d)
 
     return {

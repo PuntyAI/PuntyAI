@@ -169,6 +169,86 @@ async def get_history(
     return {"bets": filtered, "summary": summary}
 
 
+@router.get("/chart-data")
+async def get_chart_data(db: AsyncSession = Depends(get_db)):
+    """Return daily aggregated data for the Betfair P&L chart.
+
+    Returns per-day: date, daily P&L, cumulative P&L, bets, wins, strike rate,
+    balance snapshot. Also returns today's unsettled queue for projection.
+    """
+    from collections import defaultdict
+    from punty.betting.queue import get_balance, _get_setting, DEFAULT_INITIAL_BALANCE
+
+    result = await db.execute(
+        select(BetfairBet).where(BetfairBet.settled == True).order_by(BetfairBet.settled_at)
+    )
+    all_bets = result.scalars().all()
+
+    # Group by date extracted from meeting_id (e.g. "sale-2026-03-02" → "2026-03-02")
+    daily: dict[str, dict] = defaultdict(lambda: {"pnl": 0, "bets": 0, "wins": 0, "staked": 0})
+    for b in all_bets:
+        try:
+            parts = b.meeting_id.rsplit("-", 3)
+            if len(parts) >= 4:
+                d = f"{parts[-3]}-{parts[-2]}-{parts[-1]}"
+            else:
+                continue
+        except (ValueError, IndexError):
+            continue
+        daily[d]["pnl"] += b.pnl or 0
+        daily[d]["bets"] += 1
+        daily[d]["wins"] += 1 if b.hit else 0
+        daily[d]["staked"] += b.stake or 0
+
+    initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
+    balance = await get_balance(db)
+
+    # Build sorted daily series with cumulative P&L and balance
+    sorted_dates = sorted(daily.keys())
+    series = []
+    cumulative = 0
+    for d in sorted_dates:
+        day = daily[d]
+        cumulative += day["pnl"]
+        sr = round(day["wins"] / day["bets"] * 100, 1) if day["bets"] else 0
+        series.append({
+            "date": d,
+            "pnl": round(day["pnl"], 2),
+            "cumulative_pnl": round(cumulative, 2),
+            "balance": round(initial_balance + cumulative, 2),
+            "bets": day["bets"],
+            "wins": day["wins"],
+            "strike_rate": sr,
+            "staked": round(day["staked"], 2),
+        })
+
+    # Today's pending (queued + enabled) for projection
+    today = melb_today().isoformat()
+    today_result = await db.execute(
+        select(BetfairBet).where(
+            BetfairBet.meeting_id.like(f"%-{today}%"),
+            BetfairBet.status == "queued",
+            BetfairBet.enabled == True,
+        )
+    )
+    pending = today_result.scalars().all()
+    pending_profit = sum(
+        b.stake * ((b.requested_odds or 1) - 1) * 0.95
+        for b in pending if (b.requested_odds or 0) > 1
+    )
+    pending_staked = sum(b.stake for b in pending)
+
+    return {
+        "series": series,
+        "today": today,
+        "balance": balance,
+        "initial_balance": initial_balance,
+        "pending_profit": round(pending_profit, 2),
+        "pending_bets": len(pending),
+        "pending_staked": round(pending_staked, 2),
+    }
+
+
 @router.get("/status")
 async def get_scheduler_status():
     """Get scheduler running/stopped status."""
