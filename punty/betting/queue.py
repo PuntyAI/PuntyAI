@@ -420,10 +420,25 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         # Allow 5-7 runners if the pick's PP >= 70%
         runner_count = await _count_active_runners(db, race_id)
         if runner_count < DEFAULT_MIN_RUNNERS:
-            # Look up current pick's place_probability
+            # Look up PP from current active pick (handles superseded content)
             pick_pp_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
             current_pick = pick_pp_result.scalar_one_or_none()
             pp = (current_pick.place_probability if current_pick else None) or 0
+            # If PP is 0, try finding by horse name in active content
+            if pp == 0:
+                active_pick_result = await db.execute(
+                    select(Pick).where(
+                        Pick.meeting_id == bet.meeting_id,
+                        Pick.race_number == bet.race_number,
+                        Pick.horse_name == bet.horse_name,
+                        Pick.pick_type == "selection",
+                        Pick.place_probability > 0,
+                    ).order_by(Pick.place_probability.desc()).limit(1)
+                )
+                active_pick = active_pick_result.scalar_one_or_none()
+                if active_pick:
+                    pp = active_pick.place_probability or 0
+                    bet.pick_id = active_pick.id  # Re-link to active pick
             if runner_count < 5 or pp < DEFAULT_NTD_HIGH_PP:
                 bet.status = "cancelled"
                 reason = f"NTD — {runner_count} runners" + (f", PP {pp:.0%} < {DEFAULT_NTD_HIGH_PP:.0%}" if runner_count >= 5 else "")
@@ -448,6 +463,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 continue
 
         # Load all selection picks for this race — pick by best PP for place bets
+        # Filter to picks with PP data (excludes stale picks from superseded content)
         pick_result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == bet.meeting_id,
@@ -455,6 +471,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 Pick.pick_type == "selection",
                 Pick.tip_rank.in_([1, 2, 3, 4]),
                 Pick.tracked_only != True,
+                Pick.place_probability > 0,
             )
         )
         candidates = pick_result.scalars().all()
