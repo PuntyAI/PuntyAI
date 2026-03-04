@@ -372,17 +372,24 @@ def _parse_v2_results(data: dict) -> dict:
         })
 
     # Extract exotic dividends
+    # PB exoticType can be string ("Exacta") or int (enum). Map both.
     _PB_EXOTIC_MAP = {
         "exacta": "exacta", "quinella": "quinella",
         "trifecta": "trifecta", "first4": "first4",
         "firstfour": "first4", "first 4": "first4",
         "quadrella": "quaddie",
     }
+    _PB_EXOTIC_INT_MAP = {1: "quinella", 2: "exacta", 3: "trifecta", 4: "first4", 5: "quaddie"}
     for item in results_obj.get("exoticDividends", []):
         if not isinstance(item, dict):
             continue
-        etype = (item.get("exoticType") or item.get("type") or item.get("name") or "").lower().strip()
-        canonical = _PB_EXOTIC_MAP.get(etype, etype)
+        raw_type = item.get("exoticType") or item.get("type") or item.get("name") or ""
+        if isinstance(raw_type, int):
+            canonical = _PB_EXOTIC_INT_MAP.get(raw_type, "")
+        else:
+            canonical = _PB_EXOTIC_MAP.get(str(raw_type).lower().strip(), str(raw_type).lower().strip())
+        if not canonical:
+            continue
         # Pick best dividend from jurisdictions (prefer VIC/BT+SP)
         best_div = None
         for d in item.get("dividends", []):
