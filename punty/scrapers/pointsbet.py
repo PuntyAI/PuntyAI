@@ -34,6 +34,10 @@ class PointsBetScraper:
     ) -> list[dict]:
         """Scrape PointsBet odds for all races at a venue.
 
+        Navigates to the PB racing landing page, intercepts API responses
+        to find race IDs for the target venue, then loads each race page
+        to capture runner odds.
+
         Returns list of dicts: {race_number, horse_name, saddlecloth,
         current_odds, opening_odds, place_odds, scratched}
         """
@@ -48,29 +52,19 @@ class PointsBetScraper:
         captured_odds: list[dict] = []
         seen_keys: set[str] = set()  # Deduplicate across multiple API responses
         capture_done = asyncio.Event()
+        # Track race URLs discovered from the landing page
+        race_urls: list[str] = []
+        venue_lower = normalize_venue(venue)
 
         async def capture_api(response):
             """Intercept PointsBet API responses containing runner/odds data."""
             url = response.url
 
-            # Only process JSON responses from PointsBet domains
             if response.status != 200:
                 return
             content_type = response.headers.get("content-type", "")
             if "json" not in content_type:
                 return
-
-            # Log all JSON responses for discovery (helps narrow filter later)
-            try:
-                from urllib.parse import urlparse
-                parsed = urlparse(url)
-                host = parsed.hostname or ""
-                path = parsed.path or ""
-            except Exception:
-                host, path = "", ""
-
-            if "pointsbet" in host or "pointsbet" in url:
-                logger.debug(f"PointsBet API response: {host}{path[:150]}")
 
             try:
                 body = await response.text()
@@ -78,7 +72,7 @@ class PointsBetScraper:
             except Exception:
                 return
 
-            # Try to extract runner/odds data from various possible structures
+            # Try to extract runner/odds data
             runners_found = _extract_runners(data, captured_odds, seen_keys)
             if runners_found:
                 logger.info(
@@ -87,40 +81,77 @@ class PointsBetScraper:
                 )
                 capture_done.set()
 
+            # Also look for race links/IDs in meeting-level API responses
+            _extract_race_urls(data, venue_lower, race_urls)
+
         from punty.scrapers.playwright_base import new_page
 
-        async with new_page(timeout=30000) as page:
+        async with new_page(timeout=45000) as page:
             page.on("response", capture_api)
 
-            # Navigate to the venue's racing page
+            # Try venue-specific URL first (works for some venues)
             url = f"{self.BASE_URL}/racing/Thoroughbred/{country}/{venue_slug}"
-            logger.info(f"PointsBet: navigating to {url}")
+            logger.info(f"PointsBet: trying {url}")
 
             try:
                 await page.goto(url, wait_until="domcontentloaded")
-                # Give SPA time to hydrate and fire API calls
-                await asyncio.sleep(3)
+                await asyncio.sleep(4)
             except Exception as e:
-                logger.error(f"PointsBet navigation failed: {e}")
-                return []
+                logger.warning(f"PointsBet venue page failed: {e}")
 
-            # Wait for API response to be captured
-            try:
-                await asyncio.wait_for(capture_done.wait(), timeout=15)
-            except asyncio.TimeoutError:
+            # Check if venue page worked (got odds from API interception)
+            if captured_odds:
+                logger.info(f"PointsBet: venue page worked — {len(captured_odds)} runners")
+            else:
+                # Venue page 404'd or no data — try racing landing page
+                logger.info("PointsBet: venue page had no data, trying racing landing")
                 try:
-                    title = await page.title()
-                    snippet = await page.evaluate(
-                        "() => document.body?.innerText?.substring(0, 300) || ''"
+                    await page.goto(
+                        f"{self.BASE_URL}/racing", wait_until="domcontentloaded"
                     )
-                    logger.warning(
-                        f"PointsBet API not captured within 15s. "
-                        f"Title: {title!r}, snippet: {snippet[:200]!r}"
-                    )
-                except Exception:
-                    logger.warning("PointsBet API not captured within 15s")
+                    await asyncio.sleep(4)
+                except Exception as e:
+                    logger.error(f"PointsBet racing page failed: {e}")
+                    return []
 
-            # DOM fallback: if API interception got nothing, try extracting from page
+                # Wait for API responses
+                try:
+                    await asyncio.wait_for(capture_done.wait(), timeout=12)
+                except asyncio.TimeoutError:
+                    pass
+
+                # If we found race URLs for our venue, navigate to each
+                if race_urls and not captured_odds:
+                    logger.info(
+                        f"PointsBet: found {len(race_urls)} race URLs for {venue}"
+                    )
+                    for race_url in race_urls[:race_count]:
+                        try:
+                            await page.goto(race_url, wait_until="domcontentloaded")
+                            await asyncio.sleep(3)
+                        except Exception:
+                            continue
+
+                # DOM fallback if still nothing
+                if not captured_odds:
+                    # Try clicking venue in the racing landing
+                    try:
+                        link = await page.query_selector(
+                            f'a[href*="{venue_slug}" i], '
+                            f'a:has-text("{venue_slug}")'
+                        )
+                        if link:
+                            await link.click()
+                            await asyncio.sleep(4)
+                            try:
+                                await asyncio.wait_for(
+                                    capture_done.wait(), timeout=10
+                                )
+                            except asyncio.TimeoutError:
+                                pass
+                    except Exception as e:
+                        logger.debug(f"PointsBet click fallback failed: {e}")
+
             if not captured_odds:
                 logger.info("PointsBet: trying DOM fallback extraction")
                 dom_odds = await _extract_from_dom(page, race_count)
@@ -400,6 +431,65 @@ def _extract_exotic_dividends(obj: dict, exotics: dict[str, float]) -> None:
                         exotics[canonical] = round(float(div), 2)
                     except (ValueError, TypeError):
                         pass
+
+
+def _extract_race_urls(
+    data: dict | list,
+    venue_lower: str,
+    race_urls: list[str],
+) -> None:
+    """Extract race page URLs for a venue from PB API meeting data."""
+    if not isinstance(data, dict):
+        return
+    # PB meeting-level API may include race objects with URLs or IDs
+    for key in ("races", "events", "meetings", "categories"):
+        items = data.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            # Check if this item matches our venue
+            item_venue = (
+                item.get("venue", "")
+                or item.get("venueName", "")
+                or item.get("meetingName", "")
+                or item.get("name", "")
+                or ""
+            )
+            if venue_lower not in item_venue.lower():
+                # Check nested races within meetings
+                for sub_key in ("races", "events"):
+                    sub_items = item.get(sub_key, [])
+                    if isinstance(sub_items, list):
+                        for sub in sub_items:
+                            if isinstance(sub, dict):
+                                _check_race_url(sub, race_urls)
+                continue
+            # This item matches our venue — extract race URLs
+            for sub_key in ("races", "events"):
+                sub_items = item.get(sub_key, [])
+                if isinstance(sub_items, list):
+                    for sub in sub_items:
+                        if isinstance(sub, dict):
+                            _check_race_url(sub, race_urls)
+            # Or this item IS a race
+            _check_race_url(item, race_urls)
+
+
+def _check_race_url(obj: dict, race_urls: list[str]) -> None:
+    """Extract a race URL/link from a race object."""
+    url = obj.get("url") or obj.get("link") or obj.get("raceUrl") or ""
+    if url and url not in race_urls:
+        if not url.startswith("http"):
+            url = f"https://pointsbet.com.au{url}"
+        race_urls.append(url)
+    # Also try to build URL from race ID
+    race_id = obj.get("id") or obj.get("raceId") or obj.get("eventId")
+    if race_id:
+        built_url = f"https://pointsbet.com.au/racing/Thoroughbred/AUS/race/{race_id}"
+        if built_url not in race_urls:
+            race_urls.append(built_url)
 
 
 def _extract_runners(
