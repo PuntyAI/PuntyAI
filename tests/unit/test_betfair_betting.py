@@ -284,8 +284,8 @@ class TestRefreshBetSelections:
     async def test_scratched_horse_swapped(self, mock_db):
         """Scratched current horse → swap to best alternative."""
         bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
-        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.65)
-        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.60)
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.75)
+        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.70)
 
         runner_a_scratched = _make_mock_runner(1, scratched=True, current_odds=5.0)
         runner_a_for_pick = _make_mock_runner(1, scratched=True, current_odds=5.0)
@@ -293,7 +293,7 @@ class TestRefreshBetSelections:
 
         # Runners: current check (scratched), then per-pick (a=scratched, b=ok)
         self._setup_db_responses(
-            mock_db, [bet], "0.55", [pick_a, pick_b],
+            mock_db, [bet], "0.65", [pick_a, pick_b],
             [runner_a_scratched, runner_a_for_pick, runner_b]
         )
 
@@ -307,13 +307,13 @@ class TestRefreshBetSelections:
     async def test_scratched_no_replacement_cancels(self, mock_db):
         """All candidates scratched → cancel bet."""
         bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
-        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.65)
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.75)
 
         runner_a_scratched = _make_mock_runner(1, scratched=True)
         runner_a_for_pick = _make_mock_runner(1, scratched=True)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.50", [pick_a],
+            mock_db, [bet], "0.65", [pick_a],
             [runner_a_scratched, runner_a_for_pick]
         )
 
@@ -326,15 +326,15 @@ class TestRefreshBetSelections:
     async def test_higher_prob_swap_above_threshold(self, mock_db):
         """Better candidate > 3pp higher → swap."""
         bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
-        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.60)
-        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.64)  # 4pp > threshold
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
+        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.74)  # 4pp > threshold
 
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_a_pick = _make_mock_runner(1, current_odds=5.0)
         runner_b_pick = _make_mock_runner(2, current_odds=5.0)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.55", [pick_a, pick_b],
+            mock_db, [bet], "0.65", [pick_a, pick_b],
             [runner_a, runner_a_pick, runner_b_pick]
         )
 
@@ -347,15 +347,15 @@ class TestRefreshBetSelections:
     async def test_no_swap_below_threshold(self, mock_db):
         """Better candidate < 3pp → no swap."""
         bet = _make_mock_bet(pick_id="p1", horse_name="Horse A", saddlecloth=1)
-        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.60)
-        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.62)  # 2pp < threshold
+        pick_a = _make_mock_pick("p1", "Horse A", 1, 0.70)
+        pick_b = _make_mock_pick("p2", "Horse B", 2, 0.72)  # 2pp < threshold
 
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_a_pick = _make_mock_runner(1, current_odds=5.0)
         runner_b_pick = _make_mock_runner(2, current_odds=5.0)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.55", [pick_a, pick_b],
+            mock_db, [bet], "0.65", [pick_a, pick_b],
             [runner_a, runner_a_pick, runner_b_pick]
         )
 
@@ -373,7 +373,7 @@ class TestRefreshBetSelections:
         runner_a_pick = _make_mock_runner(1, current_odds=1.80)
 
         self._setup_db_responses(
-            mock_db, [bet], "0.55", [pick_a],
+            mock_db, [bet], "0.65", [pick_a],
             [runner_a, runner_a_pick]
         )
 
