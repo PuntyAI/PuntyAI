@@ -3,7 +3,7 @@
 {% block title %}Betfair Auto-Bet — PuntyAI{% endblock %}
 
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script data-cfasync="false" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 {% endblock %}
 
@@ -119,8 +119,22 @@
                 </template>
             </div>
         </div>
-        <div style="height: 280px; position: relative;">
-            <canvas id="pnlChart"></canvas>
+        <div style="height: 280px; position: relative; width: 100%;" id="pnlChartContainer">
+            <canvas id="pnlChart" style="width: 100%; height: 100%;"></canvas>
+            <div x-show="chartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466;">
+                <span x-text="chartError"></span>
+            </div>
+            <!-- Fallback HTML chart when Chart.js fails silently -->
+            <div x-show="chartFallback && !chartError" class="absolute inset-0 flex items-end gap-1 px-4 pb-8 pt-4">
+                <template x-for="(bar, i) in chartFallbackBars" :key="i">
+                    <div class="flex-1 flex flex-col items-center gap-1">
+                        <span class="text-[10px]" :style="'color:' + (bar.pnl >= 0 ? '#00ff88' : '#ff4466')"
+                              x-text="(bar.pnl >= 0 ? '+$' : '-$') + Math.abs(bar.pnl).toFixed(0)"></span>
+                        <div :style="'height:' + bar.height + '%;background:' + (bar.pnl >= 0 ? 'rgba(0,255,136,0.5)' : 'rgba(255,68,102,0.5)') + ';border:1px solid ' + (bar.pnl >= 0 ? 'rgba(0,255,136,0.8)' : 'rgba(255,68,102,0.8)') + ';border-radius:4px;width:100%;min-height:4px;'"></div>
+                        <span class="text-[9px]" style="color: var(--text-muted);" x-text="bar.label"></span>
+                    </div>
+                </template>
+            </div>
         </div>
     </div>
 
@@ -636,6 +650,9 @@ function betfairApp() {
         _toastId: 0,
         _knownSettled: new Set(),
         chartRange: 30,
+        chartError: '',
+        chartFallback: false,
+        chartFallbackBars: [],
         _chart: null,
 
         get activeBets() {
@@ -666,6 +683,10 @@ function betfairApp() {
         async init() {
             await this.refresh();
             await this.refreshStatus();
+            // Wait for Chart.js to load (Cloudflare Rocket Loader can defer it)
+            for (let i = 0; i < 20 && typeof Chart === 'undefined'; i++) {
+                await new Promise(r => setTimeout(r, 250));
+            }
             await this.loadChart();
             setInterval(() => this.refresh(), 30000);
             setInterval(() => this.loadChart(), 60000);
@@ -713,21 +734,61 @@ function betfairApp() {
 
         async loadChart() {
             try {
+                this.chartError = '';
+                this.chartFallback = false;
+                const useChartJs = typeof Chart !== 'undefined';
+
                 if (this.chartRange === 1) {
                     const resp = await fetch('/api/betfair/chart-data/today');
                     const data = await resp.json();
-                    this.renderTodayChart(data);
+                    if (useChartJs) {
+                        try { this.renderTodayChart(data); } catch (e) {
+                            console.error('Chart.js render failed, using fallback:', e);
+                            this.buildTodayFallback(data);
+                        }
+                    } else {
+                        this.buildTodayFallback(data);
+                    }
                 } else {
                     const resp = await fetch('/api/betfair/chart-data');
+                    if (!resp.ok) { this.chartError = `API error: ${resp.status}`; return; }
                     const data = await resp.json();
-                    this.renderChart(data);
+                    if (useChartJs) {
+                        try { this.renderChart(data); } catch (e) {
+                            console.error('Chart.js render failed, using fallback:', e);
+                            this.buildFallback(data);
+                        }
+                    } else {
+                        this.buildFallback(data);
+                    }
                 }
-            } catch (e) { console.error('Chart load failed:', e); }
+                // Check if Chart.js rendered to canvas — if canvas is still blank, use fallback
+                if (useChartJs && !this.chartFallback) {
+                    await new Promise(r => setTimeout(r, 500));
+                    const canvas = document.getElementById('pnlChart');
+                    if (canvas) {
+                        const ctx = canvas.getContext('2d');
+                        const px = ctx.getImageData(0, 0, Math.max(1, canvas.width), 1).data;
+                        const hasContent = px.some(v => v > 0);
+                        if (!hasContent) {
+                            console.warn('Chart.js rendered empty canvas — switching to fallback');
+                            if (this._chart) { this._chart.destroy(); this._chart = null; }
+                            if (this.chartRange === 1) {
+                                const r2 = await fetch('/api/betfair/chart-data/today');
+                                this.buildTodayFallback(await r2.json());
+                            } else {
+                                const r2 = await fetch('/api/betfair/chart-data');
+                                this.buildFallback(await r2.json());
+                            }
+                        }
+                    }
+                }
+            } catch (e) { this.chartError = `Chart error: ${e.message}`; console.error('Chart load failed:', e); }
         },
 
         renderTodayChart(data) {
             const canvas = document.getElementById('pnlChart');
-            if (!canvas) return;
+            if (!canvas) { this.chartError = 'Canvas element not found'; return; }
             if (this._chart) this._chart.destroy();
 
             const settled = data.settled || [];
@@ -873,7 +934,7 @@ function betfairApp() {
 
         renderChart(data) {
             const canvas = document.getElementById('pnlChart');
-            if (!canvas) return;
+            if (!canvas) { this.chartError = 'Canvas element not found'; return; }
 
             // Filter series by range
             let series = data.series || [];
@@ -1047,6 +1108,35 @@ function betfairApp() {
                     },
                 },
             });
+        },
+
+        buildFallback(data) {
+            const series = data.series || [];
+            if (series.length === 0) { this.chartError = 'No Betfair data yet'; return; }
+            const maxPnl = Math.max(...series.map(s => Math.abs(s.pnl)), 1);
+            this.chartFallbackBars = series.map(s => ({
+                label: s.date.slice(5),
+                pnl: s.pnl,
+                height: Math.max(8, Math.abs(s.pnl) / maxPnl * 80),
+            }));
+            this.chartFallback = true;
+            // Hide the canvas so it doesn't overlap
+            const canvas = document.getElementById('pnlChart');
+            if (canvas) canvas.style.display = 'none';
+        },
+
+        buildTodayFallback(data) {
+            const settled = data.settled || [];
+            if (settled.length === 0) { this.chartError = 'No bets settled yet today'; return; }
+            const maxPnl = Math.max(...settled.map(s => Math.abs(s.pnl)), 1);
+            this.chartFallbackBars = settled.map(s => ({
+                label: s.time + ' ' + (s.horse || '').split(' ')[0],
+                pnl: s.pnl,
+                height: Math.max(8, Math.abs(s.pnl) / maxPnl * 80),
+            }));
+            this.chartFallback = true;
+            const canvas = document.getElementById('pnlChart');
+            if (canvas) canvas.style.display = 'none';
         },
 
         showToast(bet) {
