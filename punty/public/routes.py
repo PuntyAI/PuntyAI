@@ -3053,7 +3053,7 @@ async def sitemap_tips():
 # Betfair Tracker — password-protected public view
 # ---------------------------------------------------------------------------
 
-_BF_TRACKER_PASSWORD = "RightioCunts69"
+_BF_TRACKER_PASSWORD = "Spanks31+"
 _BF_TRACKER_COOKIE = "bf_tracker_auth"
 
 

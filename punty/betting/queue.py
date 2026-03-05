@@ -22,7 +22,7 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
-DEFAULT_MIN_PLACE_PROB = 0.50  # 50% minimum place probability
+DEFAULT_MIN_PLACE_PROB = 0.65  # 65% minimum place probability (90% strike at this threshold)
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
 DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
@@ -144,13 +144,14 @@ async def populate_bet_queue(
         return 0
 
     # Get best pick per race by PP — for place bets, PP matters more than tip rank
+    # Include tracked_only picks — short-priced favs marked tracked_only by the
+    # standard system are exactly the highest-PP picks Betfair should bet on
     result = await db.execute(
         select(Pick).where(
             Pick.content_id == content_id,
             Pick.meeting_id == meeting_id,
             Pick.pick_type == "selection",
             Pick.tip_rank.in_([1, 2, 3, 4]),
-            Pick.tracked_only != True,
         ).order_by(Pick.race_number)
     )
     all_picks = result.scalars().all()
@@ -267,7 +268,7 @@ async def populate_bet_queue(
             continue
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
-        scheduled_at = race.start_time - timedelta(minutes=5)
+        scheduled_at = race.start_time - timedelta(minutes=10)
 
         bet = BetfairBet(
             id=bet_id,
@@ -463,14 +464,13 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 continue
 
         # Load all selection picks for this race — pick by best PP for place bets
-        # Filter to picks with PP data (excludes stale picks from superseded content)
+        # Include tracked_only — short-priced favs are our best Betfair candidates
         pick_result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == bet.meeting_id,
                 Pick.race_number == bet.race_number,
                 Pick.pick_type == "selection",
                 Pick.tip_rank.in_([1, 2, 3, 4]),
-                Pick.tracked_only != True,
                 Pick.place_probability > 0,
             )
         )
@@ -566,14 +566,14 @@ async def execute_due_bets(db: AsyncSession) -> int:
     - status = 'queued'
     - enabled = True
     - scheduled_at <= now
-    - scheduled_at > now - 10min (don't bet on races that started 5+ min ago)
+    - scheduled_at > now - 15min (don't bet on races that started long ago)
     """
     from punty.betting.betfair_client import (
         resolve_place_market, get_place_odds, place_bet,
     )
 
     now = melb_now_naive()
-    cutoff = now - timedelta(minutes=10)
+    cutoff = now - timedelta(minutes=15)
 
     # Auto-cancel bets that missed their window (scheduled_at + 10min < now)
     expired_result = await db.execute(
@@ -612,7 +612,7 @@ async def execute_due_bets(db: AsyncSession) -> int:
     # Safety: check balance
     balance = await get_balance(db)
     min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
-    edge_multiplier = float(await _get_setting(db, "betfair_edge_multiplier", str(DEFAULT_EDGE_MULTIPLIER)))
+    min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
     dead_zone_low = float(await _get_setting(db, "betfair_dead_zone_low", str(DEFAULT_DEAD_ZONE_LOW)))
     dead_zone_high = float(await _get_setting(db, "betfair_dead_zone_high", str(DEFAULT_DEAD_ZONE_HIGH)))
 
@@ -692,35 +692,25 @@ async def execute_due_bets(db: AsyncSession) -> int:
             await db.commit()
             continue
 
-        # Dead zone filter: skip $1.60-$2.00 (33% SR historically, needs 58.5%)
-        if dead_zone_low <= current_odds < dead_zone_high:
+        # Dead zone filter: skip $1.60-$2.00 for low-confidence bets only
+        # High-PP picks (>= 60%) are confident enough to bet through the dead zone
+        if dead_zone_low <= current_odds < dead_zone_high and place_prob < 0.60:
             bet.status = "cancelled"
-            bet.error_message = f"Dead zone odds: ${current_odds:.2f} (${dead_zone_low}-${dead_zone_high})"
-            logger.info(f"Betfair: {bet.id} cancelled — dead zone ${current_odds:.2f}")
+            bet.error_message = f"Dead zone odds: ${current_odds:.2f} (${dead_zone_low}-${dead_zone_high}), PP {place_prob:.0%} < 60%"
+            logger.info(f"Betfair: {bet.id} cancelled — dead zone ${current_odds:.2f}, PP {place_prob:.0%}")
             await db.commit()
             continue
 
-        # Edge gate: PP must exceed implied probability (no multiplier buffer).
-        # Short-priced place bets are our profit engine — we only cancel when
-        # PP is clearly below what the market implies (i.e. we disagree with
-        # the market). PP >= 50% always passes for odds < $2 since our model
-        # has ±10% estimation error at short odds.
-        if current_odds > 1 and place_prob > 0:
-            implied_prob = 1.0 / current_odds
-            if current_odds < 2.0 and place_prob >= 0.50:
-                logger.info(
-                    f"Betfair: {bet.id} edge gate pass — "
-                    f"${current_odds:.2f} PP={place_prob:.1%} (implied {implied_prob:.1%})"
-                )
-            elif place_prob < implied_prob:
-                bet.status = "cancelled"
-                bet.error_message = (
-                    f"Insufficient edge: PP={place_prob:.1%} < "
-                    f"implied {implied_prob:.1%} @ ${current_odds:.2f}"
-                )
-                logger.info(f"Betfair: {bet.id} cancelled — PP below implied ({place_prob:.1%} < {implied_prob:.1%})")
-                await db.commit()
-                continue
+        # Edge gate simplified: PP floor is the only gate needed.
+        # The min_place_prob threshold (65%) guarantees high strike rate by design.
+        # Previous edge multiplier logic killed winners like Just Maz (PP=83% but
+        # needed 96.5% at $1.14 implied × 1.1).
+        if place_prob > 0 and place_prob < min_place_prob:
+            bet.status = "cancelled"
+            bet.error_message = f"PP {place_prob:.1%} below {min_place_prob:.0%} floor"
+            logger.info(f"Betfair: {bet.id} cancelled — PP {place_prob:.1%} < {min_place_prob:.0%}")
+            await db.commit()
+            continue
 
         # Fixed stake from settings (Kelly removed — at short place odds
         # the edge is always within PP estimation error, causing false cancels)
