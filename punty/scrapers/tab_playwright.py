@@ -785,6 +785,33 @@ class HKJCResultsScraper:
         v = normalize_venue(venue)
         return self.VENUE_CODES.get(v)
 
+    @staticmethod
+    def _url_matches_date(url: str, expected_date: date) -> bool:
+        """Check if the final URL contains the expected race date.
+
+        HKJC redirects from old ASP.NET URL to new format:
+        /en-us/local/information/localresults?racedate=YYYY/MM/DD
+        Parse query params properly instead of substring matching.
+        """
+        from urllib.parse import urlparse, parse_qs
+        expected_str = expected_date.strftime("%Y/%m/%d")
+        # Quick string check first (covers both old and new URL formats)
+        if expected_str in url:
+            return True
+        # Parse query params for racedate/RaceDate
+        try:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query, keep_blank_values=True)
+            for key in ("racedate", "RaceDate", "raceDate"):
+                values = params.get(key, [])
+                for v in values:
+                    # Compare dates: strip slashes and compare YYYYMMDD
+                    if v.replace("/", "").replace("-", "") == expected_date.strftime("%Y%m%d"):
+                        return True
+        except Exception:
+            pass
+        return False
+
     async def scrape_race_statuses(
         self,
         venue: str,
@@ -808,6 +835,9 @@ class HKJCResultsScraper:
         track_condition = None
 
         # Check each race — httpx is fast, no browser overhead
+        # IMPORTANT: HKJC silently redirects to the LAST meeting with results
+        # when no results exist for the requested date. We must detect this
+        # by checking the final URL to avoid importing stale results.
         async with httpx.AsyncClient(
             timeout=15.0,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
@@ -824,12 +854,27 @@ class HKJCResultsScraper:
                         },
                     )
                     resp.raise_for_status()
+
+                    # Detect HKJC redirect to a different date (stale results)
+                    # HKJC now redirects to /en-us/local/information/localresults?racedate=YYYY/MM/DD
+                    # so we parse the query param instead of string matching the URL path
+                    final_url = str(resp.url)
+                    if not self._url_matches_date(final_url, race_date):
+                        if race_num == 1:
+                            logger.info(f"HKJC redirected to different date for {venue} — no results yet (url: {final_url})")
+                        statuses[race_num] = "Open"
+                        continue
+
                     html = resp.text
 
-                    # If the page has a results tbody, race is done
-                    if 'class="f_fs12"' in html and '>WIN</td>' in html:
+                    # HKJC now uses class="performance" for results table
+                    # and class="dividend_tab" for dividends (was class="f_fs12" + ">WIN</td>")
+                    has_results = 'class="performance"' in html or 'class="f_fs12"' in html
+                    has_dividends = 'class="dividend_tab"' in html or '>WIN</td>' in html
+
+                    if has_results and has_dividends:
                         statuses[race_num] = "Paying"
-                    elif 'class="f_fs12"' in html:
+                    elif has_results:
                         statuses[race_num] = "Interim"
                     else:
                         statuses[race_num] = "Open"
@@ -885,6 +930,16 @@ class HKJCResultsScraper:
                     },
                 )
                 resp.raise_for_status()
+
+                # Detect HKJC redirect to a different date (stale results)
+                final_url = str(resp.url)
+                if not self._url_matches_date(final_url, race_date):
+                    logger.warning(
+                        f"HKJC results redirect detected for R{race_number}: "
+                        f"requested {date_str}, got {final_url} — ignoring stale data"
+                    )
+                    return {"results": []}
+
                 html = resp.text
         except Exception as e:
             logger.warning(f"HKJC results fetch failed for R{race_number}: {e}")
@@ -895,23 +950,30 @@ class HKJCResultsScraper:
     def _parse_results_html(self, html: str, race_number: int) -> dict:
         """Parse HKJC results HTML into structured results list.
 
-        HKJC results table structure:
-        - Runner rows inside <tbody class="f_fs12">
+        HKJC results table structure (new format uses class="performance"):
+        - Runner rows inside <table class="performance"> or legacy <tbody class="f_fs12">
         - Columns: Pla | Horse No | Horse | Jockey | Trainer | Act.Wt | Horse Wt | Dr | LBW | Running Pos | Time | Win Odds
         - Horse name includes ID suffix like "(L126)" to strip
-        - Dividends per HK$10 unit
+        - Dividends per HK$10 unit, now in <table class="dividend_tab">
         """
         results: list[dict] = []
 
         def clean(s):
             return re.sub(r'<[^>]+>', '', s).strip()
 
-        # Extract runner rows from <tbody class="f_fs12">
+        # Extract runner rows — try new format first, then legacy
         tbody_match = re.search(
-            r'<tbody\s+class="f_fs12">(.*?)</tbody>',
+            r'<table\s+class="performance"[^>]*>(.*?)</table>',
             html,
             re.DOTALL,
         )
+        if not tbody_match:
+            # Legacy format fallback
+            tbody_match = re.search(
+                r'<tbody\s+class="f_fs12">(.*?)</tbody>',
+                html,
+                re.DOTALL,
+            )
         if tbody_match:
             tbody_html = tbody_match.group(1)
             row_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL)
@@ -975,11 +1037,21 @@ class HKJCResultsScraper:
                     "win_odds": win_odds,
                 })
 
-        # Extract dividends — structure: <td>WIN</td><td>5</td><td>30.00</td>
+        # Extract dividends — new format uses <table class="dividend_tab">
+        # Structure: <td>WIN</td><td>5</td><td>30.00</td>
+        # Try to extract dividend section first for more targeted matching
+        div_section = html
+        div_tab_match = re.search(
+            r'<table\s+class="dividend_tab"[^>]*>(.*?)</table>',
+            html, re.DOTALL,
+        )
+        if div_tab_match:
+            div_section = div_tab_match.group(1)
+
         # Win dividend
         win_match = re.search(
             r'>WIN</td>\s*<td[^>]*>\s*(\d+)\s*</td>\s*<td[^>]*>\s*([\d,.]+)',
-            html,
+            div_section,
             re.DOTALL | re.IGNORECASE,
         )
         if win_match and results:
@@ -994,7 +1066,7 @@ class HKJCResultsScraper:
 
         # Place dividends — multiple PLACE rows, or continuation rows without label
         # Pattern: PLACE | saddlecloth | dividend  or  (empty) | saddlecloth | dividend
-        place_section = re.search(r'>PLACE</td>(.*?)(?:>QUINELLA|>FORECAST|</table>)', html, re.DOTALL | re.IGNORECASE)
+        place_section = re.search(r'>PLACE</td>(.*?)(?:>QUINELLA|>FORECAST|</table>)', div_section, re.DOTALL | re.IGNORECASE)
         if place_section and results:
             place_html = ">PLACE</td>" + place_section.group(1)
             pl_rows = re.findall(
@@ -1025,7 +1097,7 @@ class HKJCResultsScraper:
                 r'>' + re.escape(hkjc_name) + r'</td>\s*<td[^>]*>[^<]*</td>\s*<td[^>]*>\s*([\d,.]+)',
                 re.DOTALL | re.IGNORECASE,
             )
-            match = pattern.search(html)
+            match = pattern.search(div_section)
             if match:
                 try:
                     div_raw = float(match.group(1).replace(',', ''))

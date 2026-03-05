@@ -632,7 +632,13 @@ class ResultsMonitor:
             if not statuses:
                 try:
                     from punty.scrapers.punting_form import PuntingFormScraper
-                    pf = PuntingFormScraper()
+                    from punty.models.settings import AppSettings
+                    pf_key_result = await db.execute(
+                        select(AppSettings).where(AppSettings.key == "punting_form_api_key")
+                    )
+                    pf_key_setting = pf_key_result.scalar_one_or_none()
+                    pf_key = pf_key_setting.value if pf_key_setting else ""
+                    pf = PuntingFormScraper(api_key=pf_key)
                     try:
                         pf_status_data = await pf.scrape_race_statuses(
                             meeting.venue, meeting.date
@@ -651,6 +657,25 @@ class ResultsMonitor:
                         await pf.close()
                 except Exception as e:
                     logger.warning(f"PuntingForm status fallback failed for {meeting.venue}: {e}")
+
+            # If PuntingForm returned all "Open" (common for WA/SA/QLD finished races),
+            # try PointsBet as a second status fallback — PB has resultStatus=2 for finished races
+            all_pf_open = statuses and all(s == "Open" for s in statuses.values())
+            if all_pf_open:
+                try:
+                    from punty.scrapers.pointsbet import PointsBetScraper
+                    pb = PointsBetScraper()
+                    pb_status_data = await pb.scrape_race_statuses(meeting.venue, meeting.date)
+                    pb_statuses = pb_status_data.get("statuses", {})
+                    has_paying = any(s == "Paying" for s in pb_statuses.values())
+                    if has_paying:
+                        logger.info(
+                            f"PuntingForm all Open for {meeting.venue} — "
+                            f"using PointsBet statuses: {pb_statuses}"
+                        )
+                        statuses = pb_statuses
+                except Exception as e:
+                    logger.warning(f"PointsBet status fallback failed for {meeting.venue}: {e}")
 
         # ── Abandonment detection ───────────────────────────────────────
         # If ALL races are "Abandoned", post alert, void picks, deselect meeting.
@@ -944,16 +969,48 @@ class ResultsMonitor:
                         finally:
                             await scraper2.close()
 
-                        # Fallback: if racing.com returned no results (common for
-                        # WA/SA/QLD venues), try PuntingForm API
+                        # Fallback chain: if racing.com returned no results (common
+                        # for WA/SA/QLD venues), try PointsBet → PuntingForm
                         has_positions = any(
                             r.get("position") is not None
                             for r in results_data.get("results", [])
                         )
                         if not has_positions:
+                            # Try PointsBet first (fast HTTP, good for AU venues)
+                            try:
+                                from punty.scrapers.pointsbet import PointsBetScraper
+                                pb = PointsBetScraper()
+                                pb_results = await pb.scrape_results_for_race(
+                                    meeting.venue, meeting.date, race_num
+                                )
+                                pb_has_pos = any(
+                                    r.get("position") is not None
+                                    for r in pb_results.get("results", [])
+                                )
+                                if pb_has_pos:
+                                    logger.info(
+                                        f"Racing.com empty for {meeting.venue} R{race_num} — "
+                                        f"using PointsBet results"
+                                    )
+                                    results_data = pb_results
+                                    has_positions = True
+                            except Exception as e:
+                                logger.debug(
+                                    f"PointsBet result fallback failed for "
+                                    f"{meeting.venue} R{race_num}: {e}"
+                                )
+
+                        if not has_positions:
+                            # Try PuntingForm as final fallback
                             try:
                                 from punty.scrapers.punting_form import PuntingFormScraper
-                                pf = PuntingFormScraper()
+                                from punty.models.settings import AppSettings
+                                pf_key_result = await db.execute(
+                                    select(AppSettings).where(AppSettings.key == "punting_form_api_key")
+                                )
+                                pf_key_setting = pf_key_result.scalar_one_or_none()
+                                pf_key = pf_key_setting.value if pf_key_setting else ""
+                                pf = PuntingFormScraper(api_key=pf_key)
                                 try:
                                     pf_results = await pf.scrape_race_result(
                                         meeting.venue, meeting.date, race_num

@@ -56,20 +56,19 @@ class TestCalculateKellyStake:
 
     def test_positive_edge_produces_stake(self):
         """10% edge at $2.00 odds → kelly = 0.10/1.0 = 0.10, capped at 0.08."""
-        stake = calculate_kelly_stake(balance=50.0, place_probability=0.60, odds=2.00)
+        stake = calculate_kelly_stake(balance=200.0, place_probability=0.60, odds=2.00)
         # edge = 0.60 - 0.50 = 0.10, kelly = 0.10/1.0 = 0.10, capped 0.08
-        assert stake == 0.08 * 50.0  # $4.00
+        assert stake == 0.08 * 200.0  # $16.00
 
-    def test_no_edge_returns_min(self):
-        """Zero edge → minimum stake."""
+    def test_no_edge_returns_zero(self):
+        """Zero edge → no bet."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.50, odds=2.00)
-        # edge = 0.50 - 0.50 = 0, so min stake
-        assert stake == 0.50
+        assert stake == 0
 
-    def test_negative_edge_returns_min(self):
-        """Negative edge → minimum stake."""
+    def test_negative_edge_returns_zero(self):
+        """Negative edge → no bet."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.30, odds=2.00)
-        assert stake == 0.50
+        assert stake == 0
 
     def test_large_balance_scales(self):
         """Kelly scales with balance."""
@@ -77,24 +76,24 @@ class TestCalculateKellyStake:
         # edge = 0.70 - 0.333 = 0.367, kelly = 0.367/2.0 = 0.183, capped 0.08
         assert stake == 0.08 * 1000.0  # $80.00
 
-    def test_small_edge_small_stake(self):
-        """Small edge → floored to min_stake."""
+    def test_small_edge_floors_to_min(self):
+        """Small but positive edge → floored to $5 Betfair minimum."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.56, odds=1.80)
         # edge = 0.56 - 0.556 = 0.004, kelly = 0.004/0.80 = 0.005
-        # 0.005 * 50 = $0.25 → floored to $0.50 min_stake
-        assert stake == 0.50
+        # 0.005 * 50 = $0.25 < $5 min → rounds up to $5
+        assert stake == 5.00
 
     def test_floor_applied(self):
-        """Stake never goes below min_stake."""
+        """Small edge floors to Betfair minimum."""
         stake = calculate_kelly_stake(balance=10.0, place_probability=0.56, odds=1.80)
-        assert stake >= 0.50
+        assert stake >= 5.00  # Betfair min
 
     def test_zero_balance(self):
-        assert calculate_kelly_stake(0, 0.70, 2.00) == 0.50
+        assert calculate_kelly_stake(0, 0.70, 2.00) == 0
 
     def test_invalid_odds(self):
-        assert calculate_kelly_stake(50.0, 0.70, 1.00) == 0.50
-        assert calculate_kelly_stake(50.0, 0.70, 0.50) == 0.50
+        assert calculate_kelly_stake(50.0, 0.70, 1.00) == 0
+        assert calculate_kelly_stake(50.0, 0.70, 0.50) == 0
 
 
 class TestPopulateBetQueue:
@@ -218,25 +217,43 @@ class TestRefreshBetSelections:
         db.commit = AsyncMock()
         return db
 
-    def _setup_db_responses(self, mock_db, queued_bets, setting_value, picks, runners):
+    def _setup_db_responses(self, mock_db, queued_bets, setting_value, picks, runners,
+                             race_class="Class 1"):
         """Configure mock_db.execute to return the right objects in sequence.
 
         Call order in refresh_bet_selections:
         1. select(BetfairBet) → queued bets
-        2. select(AppSettings) → min_place_prob setting
+        2-3. select(AppSettings) × 2 → min_place_prob, max_place_odds
         Then per bet:
-        3. select(Pick) → candidate picks for the race
-        4. select(Runner) → current horse runner (scratched check)
-        5..N. select(Runner) → one per candidate pick
+        4. select(count(Runner)) → NTD runner count check
+        5. select(Race) → maiden odds gate check
+        6. select(Pick) → candidate picks for the race
+        7. select(Runner) → current horse runner (scratched check)
+        8..N. select(Runner) → one per candidate pick
         """
         # Build result mocks
         bets_result = MagicMock()
         bets_result.scalars.return_value.all.return_value = queued_bets
 
-        setting_mock = MagicMock()
-        setting_mock.value = setting_value
-        setting_result = MagicMock()
-        setting_result.scalar_one_or_none.return_value = setting_mock
+        def _make_setting_result(val):
+            m = MagicMock()
+            m.value = val
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = m
+            return r
+
+        setting_prob = _make_setting_result(setting_value)
+        setting_odds = _make_setting_result("6.0")
+
+        # Runner count mock for NTD check (default 10 = safe)
+        runner_count_result = MagicMock()
+        runner_count_result.scalar.return_value = 10
+
+        # Race mock for maiden check
+        race_mock = MagicMock()
+        race_mock.class_ = race_class
+        race_result = MagicMock()
+        race_result.scalar_one_or_none.return_value = race_mock
 
         picks_result = MagicMock()
         picks_result.scalars.return_value.all.return_value = picks
@@ -248,7 +265,8 @@ class TestRefreshBetSelections:
             runner_results.append(rr)
 
         mock_db.execute = AsyncMock(
-            side_effect=[bets_result, setting_result, picks_result] + runner_results
+            side_effect=[bets_result, setting_prob, setting_odds,
+                         runner_count_result, race_result, picks_result] + runner_results
         )
 
     @pytest.mark.asyncio
@@ -391,6 +409,14 @@ class TestCycleBetSelection:
         db.commit = AsyncMock()
         return db
 
+    def _odds_setting_result(self):
+        """Mock for betfair_max_place_odds setting query."""
+        setting_mock = MagicMock()
+        setting_mock.value = "6.0"
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = setting_mock
+        return result
+
     @pytest.mark.asyncio
     async def test_cycle_to_next_pick(self, mock_db):
         """Cycling from pick 1 → pick 2."""
@@ -401,7 +427,7 @@ class TestCycleBetSelection:
         runner_a = _make_mock_runner(1, current_odds=5.0)
         runner_b = _make_mock_runner(2, current_odds=5.0)
 
-        # Call order: select bet, select picks, runner_a check, runner_b check
+        # Call order: select bet, max_place_odds setting, select picks, runner checks
         bet_result = MagicMock()
         bet_result.scalar_one_or_none.return_value = bet
         picks_result = MagicMock()
@@ -412,7 +438,8 @@ class TestCycleBetSelection:
         runner_b_result.scalar_one_or_none.return_value = runner_b
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -441,7 +468,8 @@ class TestCycleBetSelection:
         runner_b_result.scalar_one_or_none.return_value = runner_b
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -465,7 +493,8 @@ class TestCycleBetSelection:
         runner_result.scalar_one_or_none.return_value = runner_a
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
@@ -506,7 +535,8 @@ class TestCycleBetSelection:
         runner_b_result.scalar_one_or_none.return_value = runner_b
 
         mock_db.execute = AsyncMock(
-            side_effect=[bet_result, picks_result, runner_a_result, runner_b_result]
+            side_effect=[bet_result, self._odds_setting_result(),
+                         picks_result, runner_a_result, runner_b_result]
         )
 
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")

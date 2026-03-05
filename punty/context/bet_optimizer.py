@@ -398,18 +398,15 @@ def classify_race(
 # ──────────────────────────────────────────────
 
 def _recommend_bet_dominant(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
-    """Bet recommendation for DOMINANT_EDGE race."""
+    """Bet recommendation for DOMINANT_EDGE race.
+
+    Rank 1 always gets Win — Punty's top tip backs best horse to win.
+    Rank 2+ → Place (rank 2 Win: -78.4% ROI).
+    """
     if rank == 1:
-        if 2.0 <= c["odds"] <= 10.0:
-            return "Win", 0.40, "Clear standout, back to win"
-        return "Place", 0.35, "Standout but odds outside $2-$10 range"
+        return "Win", 0.40, "Win — Punty's top probability pick"
     if rank == 2:
-        if c["win_edge"] > WIN_EDGE_MIN and 2.0 <= c["odds"] <= 10.0:
-            return "Win", 0.25, "Secondary pick with win edge"
-        # Overlay dual-bet: Rank 2 at $3-$6 with value overlay → Saver Win
-        if 3.0 <= c["odds"] <= 6.0 and c.get("value_rating", 0) >= 1.0:
-            return "Saver Win", 0.22, "Rank 2 overlay dual-bet"
-        return "Place", 0.25, "Secondary pick, place protection"
+        return "Place", 0.25, "Place — rank 2 Win -78.4% ROI"
     if rank == 3:
         return "Place", 0.20, "Third pick, place-only"
     # Rank 4 (roughie)
@@ -419,29 +416,18 @@ def _recommend_bet_dominant(c: dict, rank: int, field_size: int) -> tuple[str, f
 def _recommend_bet_compressed(
     c: dict, rank: int, field_size: int, candidates: list[dict],
 ) -> tuple[str, float, str]:
-    """Bet recommendation for COMPRESSED_VALUE race."""
-    # Check if 2+ runners have win overlay
-    overlays = [ca for ca in candidates[:3] if ca["win_edge"] >= WIN_EDGE_MIN]
+    """Bet recommendation for COMPRESSED_VALUE race.
 
+    Rank 1 always gets Win — Punty's top tip backs best horse to win.
+    Rank 2+ → Place (rank 2 Win: -78.4% ROI).
+    """
     if rank == 1:
-        if 2.0 <= c["odds"] <= 10.0:
-            return "Win", 0.35, "Win, back top pick"
-        if c["ev_place"] > 0.03 and c["place_odds"] >= 2.0:
-            return "Place", 0.30, "Place edge"
-        return "Place", 0.30, "Default place, no clear win edge"
+        return "Win", 0.35, "Win — Punty's top probability pick"
 
     if rank == 2:
-        if c["win_edge"] >= WIN_EDGE_MIN and 2.0 <= c["odds"] <= 10.0:
-            return "Saver Win", 0.20, "Second pick with win edge"
-        # Overlay dual-bet: Rank 2 at $3-$6 with value overlay → Saver Win
-        if 3.0 <= c["odds"] <= 6.0 and c.get("value_rating", 0) >= 1.0:
-            return "Saver Win", 0.22, "Rank 2 overlay dual-bet"
-        return "Place", 0.25, "Place, modest edge"
+        return "Place", 0.25, "Place — rank 2 Win -78.4% ROI"
 
     if rank == 3:
-        # RULE 4: Place-only edge
-        if c["ev_win"] <= 0 and c["ev_place"] > 0.03 and c["place_odds"] >= 2.0:
-            return "Place", 0.20, "Place-only edge, EV_win negative"
         return "Place", 0.20, "Third pick, place default"
 
     # Rank 4 (roughie) — RULE 5
@@ -449,18 +435,15 @@ def _recommend_bet_compressed(
 
 
 def _recommend_bet_place_leverage(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
-    """Bet recommendation for PLACE_LEVERAGE race."""
+    """Bet recommendation for PLACE_LEVERAGE race.
+
+    Rank 1 always gets Win — Punty's top tip backs best horse to win.
+    Leverage races are place-dominant for ranks 2+.
+    """
     if rank == 1:
-        if 2.5 <= c["odds"] <= 8.0 and c.get("win_prob", 0) >= 0.15:
-            return "Win", 0.30, "Win, confident enough in leverage race"
-        return "Place", 0.30, "Place, leveraging place edge"
+        return "Win", 0.30, "Win — Punty's top probability pick"
     if rank == 2:
-        if c["ev_place"] > 0:
-            # Overlay dual-bet: Rank 2 at $3-$6 with value overlay → Saver Win
-            if 3.0 <= c["odds"] <= 6.0 and c.get("value_rating", 0) >= 1.0:
-                return "Saver Win", 0.22, "Rank 2 overlay dual-bet"
-            return "Place", 0.30, "Strong place edge"
-        return "Place", 0.25, "Place fallback"
+        return "Place", 0.25, "Place — rank 2 Win -78.4% ROI"
     if rank == 3:
         return "Place", 0.25, "Place, consistent with leverage strategy"
     # Rank 4
@@ -468,13 +451,15 @@ def _recommend_bet_place_leverage(c: dict, rank: int, field_size: int) -> tuple[
 
 
 def _recommend_bet_chaos(c: dict, rank: int, field_size: int) -> tuple[str, float, str]:
-    """Bet recommendation for CHAOS_HANDICAP race."""
+    """Bet recommendation for CHAOS_HANDICAP race.
+
+    Rank 1 always gets Win — Punty's top tip backs best horse to win.
+    Chaos races lean Place for ranks 2+.
+    """
     if rank == 1:
-        if c["win_edge"] > WIN_EDGE_MIN and 2.5 <= c["odds"] <= 10.0:
-            return "Win", 0.30, "Best overlay in chaos race"
-        return "Place", 0.25, "Place, no strong win overlay in chaos"
+        return "Win", 0.30, "Win — Punty's top probability pick"
     if rank == 2:
-        return "Place", 0.25, "Place, chaos race — avoid EW spread"
+        return "Place", 0.25, "Place, chaos race"
     if rank == 3:
         return "Place", 0.25, "Place, chaos race"
     # Rank 4 — in chaos, roughie is high risk
@@ -603,32 +588,12 @@ def _cover_short_price_fav(
     recommendations: list[BetRecommendation],
     selected: list[tuple[dict, int]],
 ) -> None:
-    """When #1 is a sub-$2 Win, upgrade #2 to EW/Saver Win for coverage.
+    """Short-priced fav coverage — no longer upgrades to Saver Win.
 
-    If the short-priced fav loses we want upside from #2 — straight Place
-    at $3-6 wastes the opportunity when the fav falls over.
+    Data: Rank 2 Saver Win had -78.4% ROI. Keep #2 as Place.
+    This function is now a no-op but kept for API compatibility.
     """
-    if len(recommendations) < 2 or len(selected) < 2:
-        return
-
-    r1 = recommendations[0]
-    r2 = recommendations[1]
-    cand2 = selected[1][0]  # candidate dict for #2 (has odds)
-    odds2 = cand2.get("odds", 0)
-
-    # Only trigger when #1 is a short-priced Win
-    if r1.bet_type != "Win" or "short-priced" not in r1.reasoning:
-        return
-
-    # #2 must currently be Place to upgrade — don't downgrade Win/EW
-    if r2.bet_type != "Place":
-        return
-
-    # Upgrade to Saver Win for coverage when short-priced fav in play
-    if r2.ev_win > -0.05:
-        r2.bet_type = "Saver Win"
-        r2.stake_pct = 0.25
-        r2.reasoning += " (upgraded: Saver coverage for short-priced fav)"
+    return
 
 
 def _enforce_capital_efficiency(recommendations: list[BetRecommendation]) -> None:

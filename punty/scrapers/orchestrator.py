@@ -392,30 +392,30 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             intl_race_count = len(race_result.scalars().all())
             intl_odds = []
 
-            # Try TAB first
+            # Try PointsBet first (fast httpx API, no browser)
             try:
-                from punty.scrapers.tab_playwright import TabPlaywrightScraper
-                tab_pw = TabPlaywrightScraper()
-                intl_odds = await tab_pw.scrape_odds_for_meeting(
+                from punty.scrapers.pointsbet import PointsBetScraper
+                pb = PointsBetScraper()
+                intl_odds = await pb.scrape_odds_for_meeting(
                     venue, race_date, meeting_id, intl_race_count
                 )
                 if intl_odds:
-                    logger.info(f"TAB Playwright odds: {len(intl_odds)} runners for {venue}")
+                    logger.info(f"PointsBet odds: {len(intl_odds)} runners for {venue}")
             except Exception as e:
-                logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
+                logger.warning(f"PointsBet odds failed for {venue}: {e}")
 
-            # Fallback to PointsBet if TAB returned nothing
+            # Fallback to TAB Playwright if PointsBet returned nothing
             if not intl_odds:
                 try:
-                    from punty.scrapers.pointsbet import PointsBetScraper
-                    pb = PointsBetScraper()
-                    intl_odds = await pb.scrape_odds_for_meeting(
+                    from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                    tab_pw = TabPlaywrightScraper()
+                    intl_odds = await tab_pw.scrape_odds_for_meeting(
                         venue, race_date, meeting_id, intl_race_count
                     )
                     if intl_odds:
-                        logger.info(f"PointsBet odds: {len(intl_odds)} runners for {venue}")
+                        logger.info(f"TAB Playwright odds: {len(intl_odds)} runners for {venue}")
                 except Exception as e:
-                    logger.warning(f"PointsBet odds failed for {venue}: {e}")
+                    logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
 
             # Fallback to HKJC if still nothing (HK venues only)
             if not intl_odds and guess_state(venue) == "HK":
@@ -670,30 +670,30 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             intl_race_count = len(race_result.scalars().all())
             intl_odds = []
 
-            # Try TAB first
+            # Try PointsBet first (fast httpx API, no browser)
             try:
-                from punty.scrapers.tab_playwright import TabPlaywrightScraper
-                tab_pw = TabPlaywrightScraper()
-                intl_odds = await tab_pw.scrape_odds_for_meeting(
+                from punty.scrapers.pointsbet import PointsBetScraper
+                pb = PointsBetScraper()
+                intl_odds = await pb.scrape_odds_for_meeting(
                     venue, race_date, meeting_id, intl_race_count
                 )
                 if intl_odds:
-                    logger.info(f"TAB Playwright odds: {len(intl_odds)} runners for {venue}")
+                    logger.info(f"PointsBet odds: {len(intl_odds)} runners for {venue}")
             except Exception as e:
-                logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
+                logger.warning(f"PointsBet odds failed for {venue}: {e}")
 
-            # Fallback to PointsBet if TAB returned nothing
+            # Fallback to TAB Playwright if PointsBet returned nothing
             if not intl_odds:
                 try:
-                    from punty.scrapers.pointsbet import PointsBetScraper
-                    pb = PointsBetScraper()
-                    intl_odds = await pb.scrape_odds_for_meeting(
+                    from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                    tab_pw = TabPlaywrightScraper()
+                    intl_odds = await tab_pw.scrape_odds_for_meeting(
                         venue, race_date, meeting_id, intl_race_count
                     )
                     if intl_odds:
-                        logger.info(f"PointsBet odds: {len(intl_odds)} runners for {venue}")
+                        logger.info(f"TAB Playwright odds: {len(intl_odds)} runners for {venue}")
                 except Exception as e:
-                    logger.warning(f"PointsBet odds failed for {venue}: {e}")
+                    logger.warning(f"TAB Playwright odds failed for {venue}: {e}")
 
             # Fallback to HKJC if still nothing (HK venues only)
             if not intl_odds and guess_state(venue) == "HK":
@@ -1076,7 +1076,7 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         except Exception as e:
             logger.warning(f"Betfair odds refresh failed for {meeting_id}: {e}")
 
-        # International venues (HK etc): TAB Playwright → HKJC fallback
+        # International venues (HK etc): PointsBet → TAB Playwright → HKJC fallback
         # Betfair is AU-only so never returns odds for these venues.
         from punty.venues import get_tab_mnemonic, guess_state
         tab_info = get_tab_mnemonic(meeting.venue)
@@ -1087,29 +1087,30 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             intl_race_count = len(race_result.scalars().all())
             intl_odds = []
 
+            # Try PointsBet first (fast httpx API, no browser)
             try:
-                from punty.scrapers.tab_playwright import TabPlaywrightScraper
-                tab_pw = TabPlaywrightScraper()
-                intl_odds = await tab_pw.scrape_odds_for_meeting(
+                from punty.scrapers.pointsbet import PointsBetScraper
+                pb = PointsBetScraper()
+                intl_odds = await pb.scrape_odds_for_meeting(
                     meeting.venue, meeting.date, meeting_id, intl_race_count
                 )
                 if intl_odds:
-                    logger.info(f"[refresh_odds] TAB Playwright: {len(intl_odds)} runners for {meeting.venue}")
+                    logger.info(f"[refresh_odds] PointsBet: {len(intl_odds)} runners for {meeting.venue}")
             except Exception as e:
-                logger.warning(f"[refresh_odds] TAB Playwright failed for {meeting.venue}: {e}")
+                logger.warning(f"[refresh_odds] PointsBet failed for {meeting.venue}: {e}")
 
-            # Fallback to PointsBet if TAB returned nothing
+            # Fallback to TAB Playwright if PointsBet returned nothing
             if not intl_odds:
                 try:
-                    from punty.scrapers.pointsbet import PointsBetScraper
-                    pb = PointsBetScraper()
-                    intl_odds = await pb.scrape_odds_for_meeting(
+                    from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                    tab_pw = TabPlaywrightScraper()
+                    intl_odds = await tab_pw.scrape_odds_for_meeting(
                         meeting.venue, meeting.date, meeting_id, intl_race_count
                     )
                     if intl_odds:
-                        logger.info(f"[refresh_odds] PointsBet: {len(intl_odds)} runners for {meeting.venue}")
+                        logger.info(f"[refresh_odds] TAB Playwright: {len(intl_odds)} runners for {meeting.venue}")
                 except Exception as e:
-                    logger.warning(f"[refresh_odds] PointsBet failed for {meeting.venue}: {e}")
+                    logger.warning(f"[refresh_odds] TAB Playwright failed for {meeting.venue}: {e}")
 
             # Fallback to HKJC if still nothing (HK venues only)
             if not intl_odds and guess_state(meeting.venue) == "HK":
@@ -1127,6 +1128,29 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             if intl_odds:
                 await _merge_tab_odds(db, meeting_id, intl_odds)
                 odds_updated = len(intl_odds)
+
+        # Domestic fallback: PointsBet when Betfair has no markets
+        # (e.g. small WA/regional venues not on Betfair Exchange)
+        if odds_updated == 0 and not tab_info:
+            try:
+                from punty.scrapers.pointsbet import PointsBetScraper
+                pb = PointsBetScraper()
+                race_result_pb = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting_id)
+                )
+                pb_race_count = len(race_result_pb.scalars().all())
+                pb_odds = await pb.scrape_odds_for_meeting(
+                    meeting.venue, meeting.date, meeting_id, pb_race_count
+                )
+                if pb_odds:
+                    await _merge_tab_odds(db, meeting_id, pb_odds)
+                    odds_updated = len(pb_odds)
+                    logger.info(
+                        f"[refresh_odds] PointsBet domestic fallback: "
+                        f"{odds_updated} runners for {meeting.venue}"
+                    )
+            except Exception as e:
+                logger.warning(f"[refresh_odds] PointsBet domestic fallback failed for {meeting.venue}: {e}")
 
         # Fallback: if Betfair had no markets, use PF assessed price for
         # runners missing current_odds (e.g. Sunshine Coast, small regionals)

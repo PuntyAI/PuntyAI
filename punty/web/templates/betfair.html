@@ -3,6 +3,7 @@
 {% block title %}Betfair Auto-Bet — PuntyAI{% endblock %}
 
 {% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 {% endblock %}
 
@@ -81,13 +82,14 @@
     </div>
 
     <!-- Stats Row -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
         <template x-for="stat in [
             { label: 'Total Bets', value: totalBets, fmt: 'int' },
             { label: 'Strike Rate', value: strikeRate, fmt: 'pct' },
             { label: 'Total P&L', value: totalPnl, fmt: 'pnl' },
             { label: 'ROI', value: roi, fmt: 'pct' },
             { label: 'Current Stake', value: currentStake, fmt: 'dollar' },
+            { label: 'Best Case Today', value: expectedReturn, fmt: 'pnl' },
         ]">
             <div class="px-3 py-2 rounded-lg text-center" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
                 <div class="text-xs uppercase tracking-wider" style="color: var(--text-muted);" x-text="stat.label"></div>
@@ -100,6 +102,26 @@
                 </div>
             </div>
         </template>
+    </div>
+
+    <!-- P&L Chart -->
+    <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-bold" style="font-family: 'Rajdhani', sans-serif;">P&L TRACKER</h2>
+            <div class="flex gap-2">
+                <template x-for="range in [{label:'1D',val:1},{label:'7D',val:7},{label:'14D',val:14},{label:'30D',val:30},{label:'ALL',val:0}]">
+                    <button @click="chartRange = range.val; loadChart()"
+                            class="px-2 py-0.5 rounded text-xs font-bold transition-all"
+                            :style="chartRange === range.val
+                                ? 'background: rgba(233,30,140,0.2); color: var(--magenta); border: 1px solid var(--magenta);'
+                                : 'background: var(--bg-card-alt); color: var(--text-muted); border: 1px solid var(--border-subtle);'"
+                            x-text="range.label"></button>
+                </template>
+            </div>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="pnlChart"></canvas>
+        </div>
     </div>
 
     <!-- Queue Table -->
@@ -132,8 +154,10 @@
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
                         <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Race</th>
                         <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Horse</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Field</th>
                         <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Stake</th>
                         <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Odds</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">PP</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Scheduled</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Status</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">P&L</th>
@@ -173,6 +197,15 @@
                                     </button>
                                 </span>
                             </td>
+                            <td class="px-4 py-2 text-center text-sm" style="font-family: 'Rajdhani', sans-serif;">
+                                <span :style="(bet.runners || 0) < 8
+                                    ? 'color: #ff4466;'
+                                    : (bet.runners || 0) >= 12 ? 'color: #00ff88;' : 'color: var(--text-secondary);'"
+                                    x-text="bet.runners || '—'"></span>
+                                <span x-show="bet.runners && bet.runners < 8"
+                                      class="text-[9px] font-bold ml-0.5"
+                                      style="color: #ff4466;">NTD</span>
+                            </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <!-- Editable stake for queued bets -->
                                 <template x-if="bet.status === 'queued' && bet._editing">
@@ -197,6 +230,12 @@
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : (bet.requested_odds ? '$' + bet.requested_odds.toFixed(2) : '—')"></span>
                             </td>
+                            <td class="px-4 py-2 text-center text-xs font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                :style="bet.place_probability >= 0.70 ? 'color: #00ff88;'
+                                    : bet.place_probability >= 0.55 ? 'color: var(--cyan);'
+                                    : 'color: var(--text-muted);'">
+                                <span x-text="bet.place_probability ? (bet.place_probability * 100).toFixed(0) + '%' : '—'"></span>
+                            </td>
                             <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);"
                                 x-text="bet.scheduled_at ? new Date(bet.scheduled_at).toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '—'">
                             </td>
@@ -220,25 +259,27 @@
                                 <span x-text="bet.settled ? ((bet.pnl >= 0 ? '+$' : '-$') + Math.abs(bet.pnl).toFixed(2)) : '—'"></span>
                             </td>
                             <td class="px-4 py-2 text-center">
-                                <button x-show="bet.status === 'queued'" @click="toggleBet(bet)"
-                                        class="w-10 h-5 rounded-full relative transition-all cursor-pointer"
-                                        :style="bet.enabled
-                                            ? 'background: rgba(0,212,255,0.3); border: 1px solid var(--cyan);'
-                                            : 'background: rgba(128,128,144,0.2); border: 1px solid rgba(128,128,144,0.3);'">
-                                    <span class="absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all"
-                                          :style="bet.enabled
-                                              ? 'left: calc(100% - 18px); background: var(--cyan);'
-                                              : 'left: 2px; background: #808090;'">
-                                    </span>
-                                </button>
-                                <span x-show="bet.status !== 'queued'" class="text-xs" style="color: var(--text-muted);">—</span>
+                                <template x-if="bet.status === 'queued'">
+                                    <svg @click="toggleBet(bet)" width="36" height="20" viewBox="0 0 36 20"
+                                         class="cursor-pointer" style="display: inline-block; vertical-align: middle;">
+                                        <rect x="0.5" y="0.5" width="35" height="19" rx="9.5"
+                                              :fill="bet.enabled ? 'rgba(0,212,255,0.3)' : 'rgba(128,128,144,0.2)'"
+                                              :stroke="bet.enabled ? '#00d4ff' : 'rgba(128,128,144,0.4)'" stroke-width="1"/>
+                                        <circle :cx="bet.enabled ? 25 : 11" cy="10" r="7"
+                                                :fill="bet.enabled ? '#00d4ff' : '#808090'"
+                                                style="transition: cx 0.2s ease;"/>
+                                    </svg>
+                                </template>
+                                <template x-if="bet.status !== 'queued'">
+                                    <span class="text-xs" style="color: var(--text-muted);">—</span>
+                                </template>
                             </td>
                         </tr>
                     </template>
                     <!-- W/L tally row for settled bets -->
                     <template x-if="activeBets.filter(b => b.settled).length > 0">
                         <tr style="border-top: 2px solid var(--border-subtle); background: rgba(255,255,255,0.02);">
-                            <td colspan="8" class="px-4 py-2">
+                            <td colspan="10" class="px-4 py-2">
                                 <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
                                     Results:
                                     <span style="color: #00ff88;" x-text="activeBets.filter(b => b.hit).length + 'W'"></span>
@@ -252,7 +293,7 @@
                     <!-- Cancelled/failed bets (collapsible) -->
                     <template x-if="settledBets.length > 0">
                         <tr>
-                            <td colspan="8" class="px-4 py-2 cursor-pointer" style="border-top: 2px solid var(--border-subtle);"
+                            <td colspan="10" class="px-4 py-2 cursor-pointer" style="border-top: 2px solid var(--border-subtle);"
                                 @click="showSettled = !showSettled">
                                 <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
                                     <span x-text="showSettled ? '▼' : '▶'"></span>
@@ -288,6 +329,13 @@
                             </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : (bet.requested_odds ? '$' + bet.requested_odds.toFixed(2) : '—')"></span>
+                            </td>
+                            <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);">—</td>
+                            <td class="px-4 py-2 text-center text-xs font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                :style="bet.place_probability >= 0.70 ? 'color: #00ff88;'
+                                    : bet.place_probability >= 0.55 ? 'color: var(--cyan);'
+                                    : 'color: var(--text-muted);'">
+                                <span x-text="bet.place_probability ? (bet.place_probability * 100).toFixed(0) + '%' : '—'"></span>
                             </td>
                             <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);"
                                 x-text="bet.scheduled_at ? new Date(bet.scheduled_at).toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '—'">
@@ -568,6 +616,13 @@ function betfairApp() {
         totalHits: 0,
         strikeRate: 0,
         roi: 0,
+        get expectedReturn() {
+            // Best case: all enabled queued bets win, plus already-banked P&L
+            const pendingProfit = this.todayBets
+                .filter(b => b.status === 'queued' && b.enabled && b.requested_odds > 1)
+                .reduce((sum, b) => sum + (b.stake * (b.requested_odds - 1) * 0.95), 0);
+            return this.todayPnl + pendingProfit;
+        },
         schedulerRunning: false,
         newBalance: '',
         manualStake: '2',
@@ -580,6 +635,8 @@ function betfairApp() {
         toasts: [],
         _toastId: 0,
         _knownSettled: new Set(),
+        chartRange: 30,
+        _chart: null,
 
         get activeBets() {
             // Show all non-cancelled bets in main list (including settled with WON/LOST)
@@ -609,7 +666,9 @@ function betfairApp() {
         async init() {
             await this.refresh();
             await this.refreshStatus();
+            await this.loadChart();
             setInterval(() => this.refresh(), 30000);
+            setInterval(() => this.loadChart(), 60000);
         },
 
         async refresh() {
@@ -652,6 +711,344 @@ function betfairApp() {
             } catch (e) { console.error('Failed to refresh queue:', e); }
         },
 
+        async loadChart() {
+            try {
+                if (this.chartRange === 1) {
+                    const resp = await fetch('/api/betfair/chart-data/today');
+                    const data = await resp.json();
+                    this.renderTodayChart(data);
+                } else {
+                    const resp = await fetch('/api/betfair/chart-data');
+                    const data = await resp.json();
+                    this.renderChart(data);
+                }
+            } catch (e) { console.error('Chart load failed:', e); }
+        },
+
+        renderTodayChart(data) {
+            const canvas = document.getElementById('pnlChart');
+            if (!canvas) return;
+            if (this._chart) this._chart.destroy();
+
+            const settled = data.settled || [];
+            const pending = data.pending || [];
+
+            if (settled.length === 0 && pending.length === 0) {
+                // Empty state — show message
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(128,128,160,0.5)';
+                ctx.font = '14px Rajdhani, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No bets settled yet today', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // Build labels & data: start at $0, then each settled result
+            const labels = ['Start'];
+            const cumLine = [0];
+            const barData = [0];
+            const barColors = ['transparent'];
+            const barBorders = ['transparent'];
+            const pointColors = ['rgba(128,128,160,0.5)'];
+
+            settled.forEach(s => {
+                labels.push(s.time + ' ' + s.horse.split(' ')[0]);
+                cumLine.push(s.cumulative_pnl);
+                barData.push(s.pnl);
+                barColors.push(s.hit ? 'rgba(0,255,136,0.5)' : 'rgba(255,68,102,0.5)');
+                barBorders.push(s.hit ? 'rgba(0,255,136,0.8)' : 'rgba(255,68,102,0.8)');
+                pointColors.push(s.hit ? '#00ff88' : '#ff4466');
+            });
+
+            // Add pending projection
+            if (pending.length > 0) {
+                const lastCum = cumLine[cumLine.length - 1];
+                const pendingProfit = pending.reduce((sum, p) => sum + p.stake * ((p.odds || 1) - 1) * 0.95, 0);
+                labels.push('Pending (' + pending.length + ')');
+                cumLine.push(null); // gap in line
+                barData.push(null);
+                barColors.push('transparent');
+                barBorders.push('transparent');
+                pointColors.push('transparent');
+            }
+
+            const gridColor = 'rgba(128,128,160,0.1)';
+            const tickColor = 'rgba(128,128,160,0.5)';
+
+            // Projection dataset — dashed line from last settled to best case
+            const projData = new Array(labels.length).fill(null);
+            if (settled.length > 0 && pending.length > 0) {
+                const lastIdx = settled.length; // index in arrays (settled.length because of "Start" at 0)
+                const pendingProfit = pending.reduce((sum, p) => sum + p.stake * ((p.odds || 1) - 1) * 0.95, 0);
+                projData[lastIdx] = cumLine[lastIdx];
+                projData[labels.length - 1] = cumLine[lastIdx] + pendingProfit;
+            }
+
+            this._chart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Cumulative P&L',
+                            data: cumLine,
+                            borderColor: '#00d4ff',
+                            backgroundColor: 'rgba(0,212,255,0.08)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBackgroundColor: pointColors,
+                            pointBorderColor: pointColors,
+                            order: 1,
+                        },
+                        {
+                            label: 'Bet P&L',
+                            data: barData,
+                            type: 'bar',
+                            backgroundColor: barColors,
+                            borderColor: barBorders,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            order: 2,
+                        },
+                        {
+                            label: 'Best Case',
+                            data: projData,
+                            borderColor: 'rgba(0,255,136,0.5)',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: projData.map(v => v !== null ? 5 : 0),
+                            pointStyle: 'star',
+                            pointBackgroundColor: '#00ff88',
+                            spanGaps: true,
+                            order: 0,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: tickColor, font: { size: 10 }, boxWidth: 12, padding: 8 },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(10,10,20,0.95)',
+                            borderColor: 'rgba(0,212,255,0.3)',
+                            borderWidth: 1,
+                            titleFont: { family: 'Rajdhani' },
+                            callbacks: {
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (v === null) return null;
+                                    const sign = v >= 0 ? '+$' : '-$';
+                                    return ctx.dataset.label + ': ' + sign + Math.abs(v).toFixed(2);
+                                }
+                            }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: gridColor },
+                            ticks: { color: tickColor, font: { size: 9 }, maxRotation: 45 },
+                        },
+                        y: {
+                            grid: { color: gridColor },
+                            ticks: {
+                                color: tickColor, font: { size: 10 },
+                                callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0),
+                            },
+                            title: { display: true, text: 'P&L', color: tickColor, font: { size: 10 } },
+                        },
+                    },
+                },
+            });
+        },
+
+        renderChart(data) {
+            const canvas = document.getElementById('pnlChart');
+            if (!canvas) return;
+
+            // Filter series by range
+            let series = data.series || [];
+            if (this.chartRange > 0 && series.length > this.chartRange) {
+                series = series.slice(-this.chartRange);
+                // Recalculate cumulative from slice start
+                const offset = series.length > 0 ? series[0].cumulative_pnl - series[0].pnl : 0;
+                series = series.map(s => ({...s, cumulative_pnl: s.cumulative_pnl - offset}));
+            }
+
+            if (series.length === 0) {
+                // Empty state
+                if (this._chart) this._chart.destroy();
+                this._chart = null;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(128,128,160,0.5)';
+                ctx.font = '14px Rajdhani, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No Betfair data yet', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            const today = data.today;
+            const todayEntry = series.find(s => s.date === today);
+            const todayActual = todayEntry ? todayEntry.cumulative_pnl : (series.length ? series[series.length - 1].cumulative_pnl : 0);
+
+            // Add today projection point if we have pending bets
+            const labels = series.map(s => s.date.slice(5)); // "MM-DD"
+            const cumPnl = series.map(s => s.cumulative_pnl);
+            const dailyPnl = series.map(s => s.pnl);
+            const balanceLine = series.map(s => s.balance);
+            const srLine = series.map(s => s.strike_rate);
+
+            // Best case projection: cumulative + pending profit
+            const bestCase = series.map((s, i) => {
+                if (i === series.length - 1 || s.date === today) return null;
+                return null;
+            });
+            // Set last point (or today) to show best case
+            if (series.length > 0) {
+                const lastIdx = series.length - 1;
+                const lastCum = series[lastIdx].cumulative_pnl;
+                bestCase[lastIdx] = lastCum + (data.pending_profit || 0);
+                // Also show the point before as null-bridge
+                if (lastIdx > 0) bestCase[lastIdx - 1] = series[lastIdx - 1].cumulative_pnl;
+            }
+
+            if (this._chart) this._chart.destroy();
+
+            const gridColor = 'rgba(128,128,160,0.1)';
+            const tickColor = 'rgba(128,128,160,0.5)';
+
+            this._chart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Cumulative P&L',
+                            data: cumPnl,
+                            borderColor: '#00d4ff',
+                            backgroundColor: 'rgba(0,212,255,0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            order: 2,
+                        },
+                        {
+                            label: 'Best Case',
+                            data: bestCase,
+                            borderColor: '#00ff88',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: 5,
+                            pointStyle: 'star',
+                            pointBackgroundColor: '#00ff88',
+                            spanGaps: true,
+                            order: 1,
+                        },
+                        {
+                            label: 'Daily P&L',
+                            data: dailyPnl,
+                            type: 'bar',
+                            backgroundColor: dailyPnl.map(v => v >= 0 ? 'rgba(0,255,136,0.4)' : 'rgba(255,68,102,0.4)'),
+                            borderColor: dailyPnl.map(v => v >= 0 ? 'rgba(0,255,136,0.7)' : 'rgba(255,68,102,0.7)'),
+                            borderWidth: 1,
+                            borderRadius: 3,
+                            yAxisID: 'y',
+                            order: 3,
+                        },
+                        {
+                            label: 'Balance',
+                            data: balanceLine,
+                            borderColor: 'rgba(233,30,140,0.6)',
+                            borderWidth: 1.5,
+                            borderDash: [3, 3],
+                            pointRadius: 0,
+                            tension: 0.3,
+                            yAxisID: 'y2',
+                            order: 4,
+                        },
+                        {
+                            label: 'Strike Rate %',
+                            data: srLine,
+                            borderColor: 'rgba(255,170,0,0.5)',
+                            borderWidth: 1,
+                            borderDash: [2, 2],
+                            pointRadius: 0,
+                            tension: 0.3,
+                            yAxisID: 'y3',
+                            order: 5,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: tickColor, font: { size: 10 }, boxWidth: 12, padding: 8 },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(10,10,20,0.95)',
+                            borderColor: 'rgba(0,212,255,0.3)',
+                            borderWidth: 1,
+                            titleFont: { family: 'Rajdhani' },
+                            callbacks: {
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (ctx.dataset.label === 'Strike Rate %') return `SR: ${v.toFixed(1)}%`;
+                                    if (ctx.dataset.label === 'Balance') return `Bal: $${v.toFixed(2)}`;
+                                    const sign = v >= 0 ? '+$' : '-$';
+                                    return `${ctx.dataset.label}: ${sign}${Math.abs(v).toFixed(2)}`;
+                                }
+                            }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: gridColor },
+                            ticks: { color: tickColor, font: { size: 10 }, maxRotation: 45 },
+                        },
+                        y: {
+                            position: 'left',
+                            grid: { color: gridColor },
+                            ticks: {
+                                color: tickColor, font: { size: 10 },
+                                callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0),
+                            },
+                            title: { display: true, text: 'P&L', color: tickColor, font: { size: 10 } },
+                        },
+                        y2: {
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: {
+                                color: 'rgba(233,30,140,0.5)', font: { size: 9 },
+                                callback: v => '$' + v.toFixed(0),
+                            },
+                            title: { display: true, text: 'Balance', color: 'rgba(233,30,140,0.5)', font: { size: 10 } },
+                        },
+                        y3: {
+                            display: false,
+                            min: 0, max: 100,
+                        },
+                    },
+                },
+            });
+        },
+
         showToast(bet) {
             const id = ++this._toastId;
             const meeting = this.formatMeetingId(bet.meeting_id);
@@ -688,35 +1085,64 @@ function betfairApp() {
             await this.refreshStatus();
         },
 
+        showErrorToast(msg) {
+            const id = ++this._toastId;
+            this.toasts.push({
+                id, visible: true, hit: false, horse: msg,
+                meeting: '', race: '', pnl: 0,
+            });
+            setTimeout(() => {
+                const t = this.toasts.find(t => t.id === id);
+                if (t) t.visible = false;
+                setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 300);
+            }, 4000);
+        },
+
         async cycleBet(bet) {
             bet._cycling = true;
             try {
                 const resp = await fetch(`/api/betfair/queue/${bet.id}/cycle`, { method: 'PUT' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
                 if (data.swapped) {
                     bet.horse_name = data.horse_name;
                     bet.saddlecloth = data.saddlecloth;
                     bet.bet_type = data.bet_type || 'place';
                     bet.requested_odds = null; // Will refresh on next tick
+                } else if (data.message) {
+                    this.showErrorToast(data.message);
                 }
-            } catch (e) { console.error('Cycle failed:', e); }
+            } catch (e) {
+                console.error('Cycle failed:', e);
+                this.showErrorToast('Cycle failed: ' + e.message);
+            }
             bet._cycling = false;
         },
 
         async toggleBet(bet) {
             try {
                 const resp = await fetch(`/api/betfair/queue/${bet.id}/toggle`, { method: 'PUT' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
                 bet.enabled = data.enabled;
-            } catch (e) { console.error('Toggle failed:', e); }
+            } catch (e) {
+                console.error('Toggle failed:', e);
+                this.showErrorToast('Toggle failed: ' + e.message);
+            }
         },
 
         async toggleAll(enabled) {
-            await fetch('/api/betfair/queue/toggle-all', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled }),
-            });
+            try {
+                const resp = await fetch('/api/betfair/queue/toggle-all', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled }),
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            } catch (e) {
+                console.error('Toggle all failed:', e);
+                this.showErrorToast('Toggle all failed: ' + e.message);
+            }
             await this.refresh();
         },
 

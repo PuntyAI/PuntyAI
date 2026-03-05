@@ -48,6 +48,9 @@ def _melb_iso(dt):
 templates.env.filters["melb"] = _melb
 templates.env.filters["melb_iso"] = _melb_iso
 
+from punty.formatters import strip_json_block
+templates.env.filters["strip_json"] = strip_json_block
+
 from punty.config import settings as _app_settings
 templates.env.globals["is_staging"] = _app_settings.is_staging
 

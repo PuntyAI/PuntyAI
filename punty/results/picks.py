@@ -1012,23 +1012,48 @@ def _find_dividend(exotic_divs: dict, exotic_key: str, exclude: list[str] | None
         exotic_key: Substring to match in dict keys (e.g. "quaddie").
         exclude: List of substrings that must NOT appear in the key.
             Prevents e.g. "quaddie" matching "early quaddie".
+
+    Prefers exact key matches over substring matches to avoid e.g.
+    "quinella place 1" matching before "quinella".
     """
     exclude = exclude or []
+
+    def _parse_val(val) -> float:
+        if isinstance(val, (int, float)):
+            return float(val)
+        if isinstance(val, dict) and "dividend" in val:
+            return float(val["dividend"])
+        if isinstance(val, str):
+            try:
+                return float(val.replace("$", "").replace(",", ""))
+            except ValueError:
+                pass
+        return 0.0
+
+    # Pass 1: exact key match (e.g. "quinella" matches "quinella" but not "quinella place 1")
+    for key, val in exotic_divs.items():
+        key_lower = key.lower().strip()
+        if key_lower == exotic_key:
+            if any(ex in key_lower for ex in exclude):
+                continue
+            result = _parse_val(val)
+            if result > 0:
+                return result
+
+    # Pass 2: substring match (fallback)
     for key, val in exotic_divs.items():
         key_lower = key.lower()
         if exotic_key in key_lower:
-            # Skip keys containing any excluded substring
             if any(ex in key_lower for ex in exclude):
                 continue
-            if isinstance(val, (int, float)):
-                return float(val)
-            if isinstance(val, dict) and "dividend" in val:
-                return float(val["dividend"])
-            if isinstance(val, str):
-                try:
-                    return float(val.replace("$", "").replace(",", ""))
-                except ValueError:
-                    pass
+            # Skip "place" variants when looking for the base exotic type
+            # e.g. "quinella place 1" should not match when looking for "quinella"
+            if "place" in key_lower and "place" not in exotic_key:
+                continue
+            result = _parse_val(val)
+            if result > 0:
+                return result
+
     return 0.0
 
 

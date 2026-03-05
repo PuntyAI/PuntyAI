@@ -501,7 +501,7 @@ class TestBuildSmartSequence:
 
 class TestBuildAllSequenceLanes:
     def test_8_race_meeting(self):
-        """8-race meeting should produce Early Quaddie, Quaddie, and Big 6."""
+        """8-race meeting should produce Early Quaddie and Quaddie (Big6 removed)."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 9)]
         race_contexts = [_race_ctx(r) for r in range(1, 9)]
 
@@ -509,7 +509,7 @@ class TestBuildAllSequenceLanes:
         types = {r.sequence_type for r in results}
         assert "Early Quaddie" in types
         assert "Quaddie" in types
-        assert "Big 6" in types
+        assert "Big 6" not in types
 
     def test_7_race_meeting_no_big6(self):
         """7-race meeting should NOT have Big 6."""

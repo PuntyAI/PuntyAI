@@ -377,7 +377,7 @@ def calculate_pre_selections(
     race_pool = _determine_race_pool(picks, classification)
 
     # Allocate stakes with edge gating
-    _allocate_stakes(picks, race_pool)
+    _allocate_stakes(picks, race_pool, field_size=field_size)
 
     # Select recommended exotic
     anchor_odds = picks[0].odds if picks else 0.0
@@ -499,110 +499,54 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
 
     if num_places == 2:
         # Only 2 places paid — Place is much harder to collect.
-        # Prefer Win over straight Place in small fields.
+        # Data: 1-6 runners = +11.5% ROI. For 5-7 field, rank ≤2 with
+        # pp >= 0.55 → Place instead of Win (better collection rate).
         if rank <= 2:
+            if field_size >= 5 and place_prob >= 0.55:
+                return "Place"
             return "Win"
         # Lower ranks: only Place if very high place probability
         if place_prob >= 0.55 and place_value >= 1.0:
             return "Place"
         return "Win"  # default to Win in small fields
 
-    # --- Edge-aware odds-band rules (validated on all settled bets) ---
-    #
-    # Win ROI by band: <$2 = -38.9%, $2.40-$3 = +21.3%, $3-$4 = -30.8%,
-    #   $4-$5 = +144.8%, $5-$6 = -100%, $6+ = -42%
-    # Place ROI by band: <$2 = +24%, $2-$4 = +20%, $4-$6 = +35%, $6-$10 = -0.3%
-    # EW collect rate: $2.40-$3 = 94%, $3-$4 = 62%
+    # --- Rank 1 always gets Win (Punty's top tip backs the best horse to win) ---
+    # Rank 2+ and roughies → Place (rank 2 Win: -78.4% ROI, roughie Win: -98.7%)
 
     # Very short-priced favourites (<$2.01): routing depends on price + field
-    # Place on $1.40 fav returns almost nothing — redistribute to other picks.
     if odds < 2.01 and not is_roughie:
         # Ultra-short fav (<$1.50): always no_bet, even in small fields.
-        # DuckDB: Place ROI -0.9% at <$1.50 — tote place div ≈ $1.04.
-        # Stake redirected to rank 2-3 Place bets + exotics.
         if odds < 1.50 and rank == 1:
             return "no_bet"
-        # Small field exception (≤8): allow Place on $1.50-$2.00 fav (fewer runners
-        # = Place dividend still worth it, and only 2-3 places paid)
+        # Small field exception (≤8): allow Place on $1.50-$2.00 fav
         if field_size and field_size <= 8:
+            if rank == 1:
+                return "Win"
             return "Place"
-        # Rank 1 at <$1.80: mark as no_bet. Stake redistributed to rank 2-3.
+        # Rank 1 at <$1.80: mark as no_bet. Stake redistributed.
         if odds < 1.80 and rank == 1:
             return "no_bet"
+        # High PP unlock: place_probability >= 0.60 always gets Place
+        if place_prob >= 0.60:
+            if rank == 1:
+                return "Win"
+            return "Place"
         # Rank 1 $1.80-$2.00: Place only with very high place confidence
         if rank == 1 and place_prob < 0.70:
             return "no_bet"
-        return "Place"
-
-    # $2.01-$3.00: Rank 1 can Win with strong conviction (wp >= 0.22, value >= 0.95)
-    # Higher threshold than $3-$4 since short odds need stronger conviction.
-    if 2.01 <= odds < 3.0 and not is_roughie:
-        if rank == 1 and win_prob >= 0.22 and value >= 0.95:
+        if rank == 1:
             return "Win"
         return "Place"
 
-    # $3.01-$4.00: Rank 1 can Win with moderate conviction (wp >= 0.20, value >= 0.95)
-    if 3.0 <= odds < 4.0 and not is_roughie:
-        if rank == 1 and win_prob >= 0.20 and value >= 0.95:
-            return "Win"
-        return "Place"
+    # Rank 1 always gets Win — Punty's best probability pick backs to win
+    if rank == 1 and not is_roughie:
+        return "Win"
 
-    # $4.00-$5.00: THE profit engine (+144.8% ROI, 54% win rate)
-    # #1 must be Win. #2 gets Each Way for upside + place protection.
-    if 4.0 <= odds < 5.0:
-        if win_prob >= t["win_min_prob"] and value >= 0.95:
-            if rank == 1:
-                return "Win"
-            if rank == 2:
-                return "Place"  # E/W killed — rank 2 $4-5 → Place
-            if value >= 1.05:
-                # Dominant fav present: Saver Win -38.6% ROI vs Place +19.2%
-                if fav_price and fav_price < 2.0 and rank >= 2:
-                    return "Place"
-                return "Saver Win"
-        # Low-prob fallback: good odds but not enough conviction → Place
-        return "Place"
-
-    # $5.00-$6.00: Mixed — Win data is thin (0/6), Place preferred
-    if 5.0 <= odds <= 6.0:
-        if win_prob >= t["win_min_prob"]:
-            if rank == 1:
-                if value >= 1.05:
-                    return "Win"  # only with clear value edge
-                return "Place"  # E/W killed — rank 1 $5-6 → Place
-            if rank == 2:
-                return "Place"  # was E/W — tighten to Place for rank 2
-        # Low-prob fallback
-        if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
-            return "Place"
-        return "Place"
-
-    # --- Roughie logic ---
-    # Rank 4 Win: 0/43 = -98.7% ROI. All roughies → Place.
+    # Roughie Win: 0/43 = -98.7% ROI. All roughies → Place.
     if is_roughie:
         return "Place"
 
-    # --- $6+ non-roughie: Place territory ---
-    if rank == 1:
-        if win_prob >= t["win_min_prob"] and value >= t["win_min_value"]:
-            return "Place"  # $6+ Win is -42% ROI, E/W too risky — prefer Place
-        if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
-            return "Place"
-        return "Place"
-
-    if rank == 2:
-        if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
-            return "Place"
-        return "Place"
-
-    # Third pick (#3): Place-focused
-    if place_prob >= t["place_min_prob"] and place_value >= t["place_min_value"]:
-        return "Place"
-    if win_prob >= t["win_min_prob"] and value >= 1.10:
-        # Dominant fav present: Saver Win -38.6% ROI vs Place +19.2%
-        if fav_price and fav_price < 2.0 and rank >= 2:
-            return "Place"
-        return "Saver Win"
+    # Rank 2+ → Place (rank 2 Win: -78.4% ROI)
     return "Place"
 
 
@@ -863,19 +807,13 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt == "Place" and place_prob >= 0.75:
         return (True, None)
 
-    # --- Win-first staking criteria ---
-
-    # 1. Win/Saver at $2.00-$10.00 — wide Win zone (optimizer sets bet type)
-    if bt in ("Win", "Saver Win") and 2.0 <= odds <= 10.0:
-        # $2.00-$4.00: lowered conviction from 0.20 → 0.18 (expanded Win zone)
-        if odds < 4.0 and win_prob >= 0.18:
+    # --- Win staking criteria ---
+    # Rank 1 always gets Win — Punty's top tip backs the best horse to win.
+    # Minimum win_prob threshold prevents backing no-hopers.
+    if bt in ("Win", "Saver Win"):
+        if win_prob >= 0.15:
             return (True, None)
-        # $4.00-$6.00: proven sweet spot
-        if 4.0 <= odds <= 6.0:
-            return (True, None)
-        # $6.00-$10.00: needs some model confidence
-        if odds > 6.0 and win_prob >= 0.15:
-            return (True, None)
+        return (False, f"Win prob too low ({win_prob * 100:.0f}% < 15%)")
 
     # 2. Place with graduated prob threshold by odds band
     if bt == "Place":
@@ -893,14 +831,6 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
             return (True, None)
 
     # --- No Bet (tracked) zones ---
-
-    # Win < $2.00: -38.9% ROI historically
-    if bt in ("Win", "Saver Win") and odds < 2.0:
-        return (False, f"Too short to back (Win < $2.00)")
-
-    # Win $2.00-$4.00 without sufficient conviction
-    if bt in ("Win", "Saver Win") and 2.0 <= odds < 4.0 and win_prob < 0.20:
-        return (False, f"Not enough conviction (Win ${odds:.0f}, {win_prob * 100:.0f}% win prob)")
 
     # Place with low collection probability — graduated by odds
     if bt == "Place":
@@ -928,7 +858,7 @@ _EDGE_ODDS_BANDS = [
 ]
 
 
-def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
+def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int = 0) -> None:
     """Allocate stakes from pool using edge-weighted sizing.
 
     Two-pass approach:
@@ -959,6 +889,11 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
             pick.tracked_only = True
             pick.no_bet_reason = reason or "No proven edge in this odds band"
             pick.stake = 0.0
+        # Place odds $10 cap — Data: 18.7% strike, -9% ROI at $10+
+        elif pick.bet_type == "Place" and pick.odds and pick.odds > 10.0:
+            pick.tracked_only = True
+            pick.no_bet_reason = "Place odds > $10 (-9% ROI historically)"
+            pick.stake = 0.0
 
     # Count staked picks
     staked_picks = [p for p in picks if not p.tracked_only]
@@ -987,9 +922,9 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
     for pick in staked_picks:
         base = base_rank_weights.get(pick.rank, 0.15)
 
-        # Win bonus — broader range now that Win is default
-        if pick.bet_type in ("Win", "Saver Win") and 2.5 <= pick.odds <= 8.0:
-            base *= 1.15  # 15% stake boost for Win bets in range
+        # Win bonus — rank 1 always gets Win, slight boost for conviction
+        if pick.bet_type in ("Win", "Saver Win") and pick.win_prob and pick.win_prob >= 0.20:
+            base *= 1.10  # 10% stake boost for high-conviction Win
 
         # Roughie $10-$20 bonus (+53% ROI sweet spot)
         if pick.is_roughie and 10.0 <= pick.odds <= 20.0:
@@ -1002,6 +937,17 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float) -> None:
         # High-confidence Place bonus — Place is our profit engine (+7.55% ROI)
         if pick.bet_type == "Place" and pick.place_prob >= 0.45:
             base *= 1.15  # 15% stake boost for high-confidence Place
+
+        # VR-based stake reduction — high VR = overvalued by market
+        # Data: VR 1.5-2.0: -28% ROI. VR 2.0+: -34%.
+        if pick.value_rating and pick.value_rating >= 2.0:
+            base *= 0.40  # 60% reduction
+        elif pick.value_rating and pick.value_rating >= 1.5:
+            base *= 0.60  # 40% reduction
+
+        # 9-10 runner defensive stake — Data: -$807, -20% ROI
+        if 9 <= field_size <= 10:
+            base *= 0.80  # 20% reduction
 
         # Place overlay stake modifier — reduce stake on thin-edge bets
         # Market place prob estimated as 3/odds (place pays ~1/3 of field)
@@ -1068,6 +1014,18 @@ def _select_exotic(
     if not exotic_combos:
         return None
 
+    # Kill Trifecta and First4 types — Data: Trifecta -$2,259, First4 losing
+    exotic_combos = [
+        ec for ec in exotic_combos
+        if not (ec.get("type", "").startswith("Trifecta") or ec.get("type", "").startswith("First4"))
+    ]
+    if not exotic_combos:
+        return None
+
+    # Fav < $2 guard — Data: Exacta -$239, Quinella -$29 when fav < $2
+    if fav_price and fav_price < 2.0:
+        return None
+
     # Data-driven filters (Feb 24 audit)
     tc = (track_condition or "").lower()
     if "heavy" in tc:
@@ -1075,10 +1033,15 @@ def _select_exotic(
     soft_match = re.search(r'soft\s*(\d+)', tc)
     if soft_match and int(soft_match.group(1)) >= 7:
         return None  # 0% strike on Soft 7+
+    # Soft track penalty — Data: Good/Firm +21% ROI, any Soft -37% ROI
+    soft_penalty = 0.50 if "soft" in tc else 1.0
     if is_hk:
         return None  # 0/11 exotic hits on HK races
     if field_size and field_size <= 6:
         return None  # All types losing in ≤6 fields
+    # Anchor odds hard gate — Data: $5+ anchor = -60% ROI
+    if anchor_odds and anchor_odds > 5.0:
+        return None
 
     # --- RULE 1: Identify market favourite saddlecloth ---
     # ALL exotics must include the market fav. Production: +78.6% ROI with fav,
@@ -1169,10 +1132,10 @@ def _select_exotic(
                     continue
 
         if ec_type == "Trifecta Box":
-            if not (7 <= field_size):
+            # Data: Tri Box $1-3 anchor + 8-10 field: +2.7%. All other: -50% to -86%.
+            if not (8 <= field_size <= 10):
                 continue
-            # Relaxed upper bound — allow in 15+ fields (huge dividends)
-            if fav_price and not (1.50 <= fav_price <= 5.00) and not is_odds_on_fav:
+            if anchor_odds and anchor_odds > 3.0:
                 continue
 
         if ec_type in ("First4", "First4 Box"):
@@ -1249,14 +1212,14 @@ def _select_exotic(
                 score *= 1.15
 
         # --- RULE 3 continued: Field-size scoring ---
-        if field_size and field_size <= 8:
-            # Small field: 2-runner exotics most predictable (24.5% Quin base rate)
+        if field_size and field_size <= 10:
+            # Small/mid field: Data: Quinella 8-10 = +68% ROI, 21.6% strike
             if ec_type in ("Quinella", "Exacta Standout"):
-                score *= 1.15
-            # Trifecta Box has 44.8% base rate in ≤8 fields!
+                score *= 1.25
+            # Trifecta Box has 44.8% base rate in ≤10 fields!
             if ec_type == "Trifecta Box":
                 score *= 1.10
-        elif field_size and 9 <= field_size <= 11:
+        elif field_size and 11 <= field_size <= 11:
             # Mid field: Exacta sweet spot (12.4% strike, +30% ROI)
             if ec_type == "Exacta":
                 score *= 1.10
@@ -1294,6 +1257,9 @@ def _select_exotic(
             score *= 1.10
         elif is_staying:
             score *= 0.90  # Less predictable (23.6% fav wins in big fields)
+
+        # Soft track penalty applied to all exotic scores
+        score *= soft_penalty
 
         scored.append((score, ec))
 

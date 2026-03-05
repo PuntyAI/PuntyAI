@@ -624,7 +624,7 @@ def _calculate_lgbm_probabilities(
     place_count = 2 if field_size <= 7 else 3
     place_total = sum(pp for _, pp in raw_preds.values())
     if place_total > 0:
-        lgbm_place_probs = {rid: min(0.95, pp / place_total * place_count)
+        lgbm_place_probs = {rid: min(0.75, pp / place_total * place_count)
                             for rid, (_, pp) in raw_preds.items()}
     else:
         lgbm_place_probs = {rid: _place_probability(lgbm_win_probs.get(rid, baseline), field_size)
@@ -657,7 +657,7 @@ def _calculate_lgbm_probabilities(
     # Re-normalize blended place probs to sum to place_count
     bp_total = sum(blended_place.values())
     if bp_total > 0:
-        blended_place = {rid: min(0.95, p / bp_total * place_count)
+        blended_place = {rid: min(0.75, p / bp_total * place_count)
                          for rid, p in blended_place.items()}
 
     # Calculate market-implied probabilities (reuse existing logic)
@@ -1093,7 +1093,7 @@ def calculate_race_probabilities(
         if ps_total > 0:
             # Scale so probs sum to place_count (e.g. 3 for 8+ fields)
             for rid in place_sharp:
-                place_probs[rid] = min(0.95, (place_sharp[rid] / ps_total) * place_count)
+                place_probs[rid] = min(0.75, (place_sharp[rid] / ps_total) * place_count)
 
     results: dict[str, RunnerProbability] = {}
 
@@ -1125,7 +1125,7 @@ def calculate_race_probabilities(
             if mkt_p and mkt_p > 0:
                 blended = 0.50 * blended + 0.50 * mkt_p
 
-            place_probs[rid_h] = min(0.95, blended)
+            place_probs[rid_h] = min(0.75, blended)
 
     for runner in active:
         rid = _get(runner, "id", "")
@@ -2456,7 +2456,7 @@ def _place_probability(win_prob: float, field_size: int) -> float:
     Australian place terms: fields <= 7 pay 2 places, 8+ pay 3.
     """
     if field_size <= 1:
-        return min(0.95, win_prob)
+        return min(0.75, win_prob)
 
     place_count = 2 if field_size <= 7 else 3
 
@@ -2472,7 +2472,7 @@ def _place_probability(win_prob: float, field_size: int) -> float:
         # 3-place fields: lerp from 2.5 (fs=8) to 3.2 (fs=16+)
         factor = 2.5 + (min(field_size, 16) - 8) / 8.0 * 0.7
 
-    return min(0.95, win_prob * factor)
+    return min(0.75, win_prob * factor)
 
 
 def _harville_place_probability(
@@ -2522,7 +2522,7 @@ def _harville_place_probability(
         p_second += p_j * (p_i / remainder)
 
     if place_count <= 2:
-        return min(0.95, p_first + p_second)
+        return min(0.75, p_first + p_second)
 
     # p(3rd) = sum over (j, k) pairs: p(j 1st) * p(k 2nd|j) * p(i 3rd|j,k)
     p_third = 0.0
@@ -2542,7 +2542,7 @@ def _harville_place_probability(
             p_i_given_jk = p_i / rem_jk
             p_third += p_j * p_k_given_j * p_i_given_jk
 
-    return min(0.95, p_first + p_second + p_third)
+    return min(0.75, p_first + p_second + p_third)
 
 
 # ──────────────────────────────────────────────
@@ -2989,203 +2989,9 @@ def calculate_exotic_combinations(
                     format="standout",
                 ))
 
-    # --- Trifecta Box: always 4-horse (better hit rate than 3-runner) ---
-    # When favourite is odds-on, exclude from box (everyone includes them → crushed dividends)
-    tri_box_pool = [r for r in top4 if not (fav_is_odds_on and r is fav)] if fav_is_odds_on else top4
-    if len(tri_box_pool) >= 4:
-        our_probs = [r["win_prob"] for r in tri_box_pool]
-        mkt_probs = [r["market_implied"] for r in tri_box_pool]
-        our_prob = _box_probability(our_probs, 3)
-        mkt_prob = _box_probability(mkt_probs, 3)
-        # Speed map bonus: on-pace/leader runners place more often
-        # DuckDB: 40.7% top-3 (on-pace) vs 24.4% (midfield) when dom fav wins
-        speed_bonus = 1.0
-        for r in tri_box_pool:
-            pos = r.get("speed_map_position", "") or ""
-            if pos in ("leader", "on_pace"):
-                speed_bonus *= 1.08
-        our_prob *= speed_bonus
-        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-
-        if value >= VALUE_THRESHOLDS["Trifecta Box"]:
-            results.append(ExoticCombination(
-                exotic_type="Trifecta Box",
-                runners=[r["saddlecloth"] for r in tri_box_pool],
-                runner_names=[r.get("horse_name", "") for r in tri_box_pool],
-                estimated_probability=round(our_prob, 6),
-                market_probability=round(mkt_prob, 6),
-                value_ratio=round(value, 3),
-                cost=stake,
-                num_combos=24,
-                format="boxed",
-            ))
-
-    # --- Trifecta Standout: top pick anchored 1st, others fill 2nd/3rd ---
-    if len(top4) >= 3:
-        standout = top4[0]
-        others = top4[1:4]
-        for combo in combinations(others, 2):
-            all_runners = [standout] + list(combo)
-            # Standout must win, other two fill 2nd/3rd in any order
-            our_prob = 0.0
-            mkt_prob = 0.0
-            for perm in permutations(combo):
-                our_prob += _harville_probability(
-                    [standout["win_prob"]] + [r["win_prob"] for r in perm]
-                )
-                mkt_prob += _harville_probability(
-                    [standout["market_implied"]] + [r["market_implied"] for r in perm]
-                )
-            # Speed map bonus: on-pace/leader runners fill places more often
-            # DuckDB: 40.7% top-3 (on-pace) vs 24.4% (midfield) when dom fav wins
-            speed_bonus = 1.0
-            for r in all_runners:
-                pos = r.get("speed_map_position", "") or ""
-                if pos in ("leader", "on_pace"):
-                    speed_bonus *= 1.08
-            our_prob *= speed_bonus
-            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-
-            if value >= VALUE_THRESHOLDS["Trifecta Standout"]:
-                results.append(ExoticCombination(
-                    exotic_type="Trifecta Standout",
-                    runners=[r["saddlecloth"] for r in all_runners],
-                    runner_names=[r.get("horse_name", "") for r in all_runners],
-                    estimated_probability=round(our_prob, 6),
-                    market_probability=round(mkt_prob, 6),
-                    value_ratio=round(value, 3),
-                    cost=stake,
-                    num_combos=2,
-                    format="flat",
-                ))
-
-    # --- Contrarian Trifecta: anchor fav to win, fill 2nd/3rd from value runners ---
-    # Trigger: top runner market_implied > 0.40 (< $2.50) AND field_size >= 10
-    if (fav and fav.get("market_implied", 0) > 0.40
-            and len(sorted_runners) >= 10):
-        # Exclude 2nd/3rd most popular from fill positions
-        excluded_sc = {r["saddlecloth"] for r in sorted_runners[1:3]}
-        # Contrarian pool: $12-$40 odds with win_prob >= 5%
-        contrarian_pool = [
-            r for r in sorted_runners[3:]
-            if (r.get("market_implied", 0) > 0
-                and 1.0 / r["market_implied"] >= 12
-                and 1.0 / r["market_implied"] <= 40
-                and r.get("win_prob", 0) >= 0.05
-                and r["saddlecloth"] not in excluded_sc)
-        ]
-        # Build contrarian trifectas: fav wins, 2 contrarian runners fill 2nd/3rd
-        for combo in combinations(contrarian_pool[:6], 2):
-            all_runners_ct = [fav] + list(combo)
-            our_prob = 0.0
-            mkt_prob = 0.0
-            for perm in permutations(combo):
-                our_prob += _harville_probability(
-                    [fav["win_prob"]] + [r["win_prob"] for r in perm]
-                )
-                mkt_prob += _harville_probability(
-                    [fav["market_implied"]] + [r["market_implied"] for r in perm]
-                )
-            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-
-            if value >= VALUE_THRESHOLDS["Trifecta Contrarian"]:
-                results.append(ExoticCombination(
-                    exotic_type="Trifecta Contrarian",
-                    runners=[r["saddlecloth"] for r in all_runners_ct],
-                    runner_names=[r.get("horse_name", "") for r in all_runners_ct],
-                    estimated_probability=round(our_prob, 6),
-                    market_probability=round(mkt_prob, 6),
-                    value_ratio=round(value, 3),
-                    cost=stake,
-                    num_combos=2,
-                    format="flat",
-                ))
-
-    # --- First4 positional (legs format): targeted positions ---
-    # Skip First4 entirely when favourite is odds-on (crushed dividends)
-    # 1st: [top1] / 2nd: [top1,top2] / 3rd: [top1,top2,top3] / 4th: [top3,top4,top5]
-    if len(top4) >= 4 and not fav_is_odds_on:
-        # Build positional legs using probability rankings
-        leg1 = top4[:1]    # anchor: best runner
-        leg2 = top4[:2]    # top 2
-        leg3 = top4[:3]    # top 3
-        leg4 = top5[2:5] if len(top5) >= 5 else top4[2:4]  # runners 3-5 for 4th place
-
-        # Calculate positional probability using Harville
-        our_prob = 0.0
-        mkt_prob = 0.0
-        for r1 in leg1:
-            for r2 in leg2:
-                if r2["saddlecloth"] == r1["saddlecloth"]:
-                    continue
-                for r3 in leg3:
-                    if r3["saddlecloth"] in (r1["saddlecloth"], r2["saddlecloth"]):
-                        continue
-                    for r4 in leg4:
-                        if r4["saddlecloth"] in (r1["saddlecloth"], r2["saddlecloth"], r3["saddlecloth"]):
-                            continue
-                        our_prob += _harville_probability([
-                            r1["win_prob"], r2["win_prob"],
-                            r3["win_prob"], r4["win_prob"],
-                        ])
-                        mkt_prob += _harville_probability([
-                            r1["market_implied"], r2["market_implied"],
-                            r3["market_implied"], r4["market_implied"],
-                        ])
-
-        if our_prob > 0:
-            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-            num_combos = len(leg1) * len(leg2) * len(leg3) * len(leg4)
-            # Subtract combos where same runner appears in multiple legs
-            # (already handled by the skip logic above, num_combos is approximate)
-            all_sc = [r["saddlecloth"] for r in leg1 + leg2 + leg3 + leg4]
-            all_names = [r.get("horse_name", "") for r in leg1 + leg2 + leg3 + leg4]
-            # Deduplicate for display
-            seen = set()
-            display_sc, display_names = [], []
-            for sc, nm in zip(all_sc, all_names):
-                if sc not in seen:
-                    display_sc.append(sc)
-                    display_names.append(nm)
-                    seen.add(sc)
-
-            if value >= VALUE_THRESHOLDS["First4"]:
-                results.append(ExoticCombination(
-                    exotic_type="First4",
-                    runners=display_sc,
-                    runner_names=display_names,
-                    estimated_probability=round(our_prob, 6),
-                    market_probability=round(mkt_prob, 6),
-                    value_ratio=round(value, 3),
-                    cost=stake,
-                    num_combos=max(1, num_combos - len(seen)),  # approximate
-                    format="legs",
-                ))
-
-    # --- First4 Box: RARE — only when genuine 5-way contention ---
-    # Only generate when 5+ runners each have >12% win prob (strong field)
-    # Skip when favourite is odds-on (same as First4 positional)
-    strong_runners = [r for r in sorted_runners if r.get("win_prob", 0) >= 0.12]
-    if len(strong_runners) >= 5 and not fav_is_odds_on:
-        for combo in combinations(strong_runners[:5], 4):
-            our_probs = [r["win_prob"] for r in combo]
-            mkt_probs = [r["market_implied"] for r in combo]
-            our_prob = _box_probability(our_probs, 4)
-            mkt_prob = _box_probability(mkt_probs, 4)
-            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-
-            if value >= VALUE_THRESHOLDS["First4 Box"]:
-                results.append(ExoticCombination(
-                    exotic_type="First4 Box",
-                    runners=[r["saddlecloth"] for r in combo],
-                    runner_names=[r.get("horse_name", "") for r in combo],
-                    estimated_probability=round(our_prob, 6),
-                    market_probability=round(mkt_prob, 6),
-                    value_ratio=round(value, 3),
-                    cost=stake,
-                    num_combos=24,
-                    format="boxed",
-                ))
+    # --- Trifecta Box/Standout/Contrarian + First4/First4 Box: REMOVED ---
+    # Data: Trifecta -$2,259 (30-day audit), First4 losing across all bands.
+    # Only Exacta + Quinella retained as profitable exotic types.
 
     # Sort by value ratio descending, then probability
     results.sort(key=lambda x: (-x.value_ratio, -x.estimated_probability))

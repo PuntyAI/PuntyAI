@@ -32,6 +32,8 @@ VENUE_ALIASES = {
     "cheltenham park": "morphettville",
     "cannon park": "cairns",
     "ladbrokes cannon park": "cairns",
+    # PointsBet aliases
+    "caulfield heath": "caulfield",
     # PF-specific aliases
     "beaumont newcastle": "newcastle",
     # Southside = synthetic track at same venue
@@ -243,15 +245,35 @@ def get_tab_mnemonic(venue: str) -> tuple[str, str, str] | None:
 # PointsBet venue mapping for SPA URL construction
 # Format: normalized_venue -> (country_slug, venue_slug)
 POINTSBET_VENUE_MAP: dict[str, tuple[str, str]] = {
+    # Explicit overrides for non-standard slugs
     "sha tin": ("HKG", "Sha-Tin"),
     "happy valley": ("HKG", "Happy-Valley"),
+    # Australian venues where PB slug differs from venue name
+    "belmont park": ("AUS", "Belmont"),
+    "belmont": ("AUS", "Belmont"),
+    "caulfield heath": ("AUS", "Caulfield"),
+    "morphettville parks": ("AUS", "Morphettville"),
 }
 
 
 def get_pointsbet_slug(venue: str) -> tuple[str, str] | None:
-    """Get PointsBet (country_slug, venue_slug) for a venue, or None if unmapped."""
+    """Get PointsBet (country_slug, venue_slug) for a venue, or None if unmapped.
+
+    Explicit map used for international/special venues. Australian venues
+    auto-generate slug from venue name: "belmont" → ("AUS", "Belmont"),
+    "warwick farm" → ("AUS", "Warwick-Farm").
+    """
     v = normalize_venue(venue)
-    return POINTSBET_VENUE_MAP.get(v)
+    # Check explicit map first (HK, special cases)
+    if v in POINTSBET_VENUE_MAP:
+        return POINTSBET_VENUE_MAP[v]
+    # Auto-generate for Australian venues
+    state = guess_state(venue)
+    if state and state not in ("HK", "SGP", "NZ", "JP", "UK"):
+        # Title-case each word, join with hyphens
+        slug = "-".join(word.capitalize() for word in v.split())
+        return ("AUS", slug)
+    return None
 
 
 def is_international_venue(venue: str) -> bool:

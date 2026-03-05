@@ -76,9 +76,9 @@
         </template>
     </div>
 
-    <!-- Two Column: Daily Chart + Bet Type Breakdown -->
+    <!-- Daily P&L Chart + Notable Bets -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Daily P&L Chart (bar chart via CSS) -->
+        <!-- Daily P&L Chart -->
         <div class="lg:col-span-2 rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
             <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
                 Daily P&L (Last 14 Days)
@@ -86,7 +86,6 @@
             <div class="flex items-end gap-1 h-40">
                 <template x-for="day in daily" :key="day.date">
                     <div class="flex-1 flex flex-col items-center justify-end h-full relative group">
-                        <!-- Bar -->
                         <div class="w-full rounded-t-sm transition-all"
                              :style="{
                                  height: day.bets === 0 ? '2px' : Math.max(8, Math.min(100, Math.abs(day.pnl) / maxDailyPnl * 100)) + '%',
@@ -94,10 +93,8 @@
                                  opacity: day.bets === 0 ? 0.2 : 1,
                              }">
                         </div>
-                        <!-- Label -->
                         <div class="text-[9px] mt-1 whitespace-nowrap" style="color: var(--text-muted);"
                              x-text="day.label.split(' ')[0]"></div>
-                        <!-- Tooltip -->
                         <div class="hidden group-hover:block absolute bottom-full mb-2 px-2 py-1 rounded text-[10px] whitespace-nowrap z-10"
                              style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle); color: var(--text-primary);">
                             <div x-text="day.label"></div>
@@ -109,102 +106,75 @@
             </div>
         </div>
 
-        <!-- Type Breakdown + Best/Worst -->
-        <div class="space-y-4">
-            <!-- Win vs Place -->
-            <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-                <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
-                    By Bet Type
-                </h3>
-                <template x-for="[type, stats] of Object.entries(byType)" :key="type">
-                    <div class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--border-subtle);">
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-                                  :style="type === 'win'
-                                      ? 'background: rgba(255,170,0,0.2); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3);'
-                                      : 'background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);'"
-                                  x-text="type.toUpperCase()"></span>
-                            <span class="text-xs" style="color: var(--text-muted);" x-text="stats.bets + ' bets'"></span>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-sm font-bold" style="font-family: 'Rajdhani', sans-serif;"
-                                 :style="{ color: stats.pnl >= 0 ? '#00ff88' : '#ff4466' }"
-                                 x-text="(stats.pnl >= 0 ? '+$' : '-$') + Math.abs(stats.pnl).toFixed(2)"></div>
-                            <div class="text-[10px]" style="color: var(--text-muted);" x-text="stats.strike_rate.toFixed(1) + '% SR'"></div>
-                        </div>
+        <!-- Notable Bets -->
+        <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+            <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
+                Notable Bets
+            </h3>
+            <template x-if="bestBet">
+                <div class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--border-subtle);">
+                    <div>
+                        <div class="text-[10px] uppercase" style="color: #00ff88;">Best Win</div>
+                        <div class="text-sm font-bold" x-text="bestBet.horse"></div>
                     </div>
-                </template>
-            </div>
-
-            <!-- Best / Worst -->
-            <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-                <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
-                    Notable Bets
-                </h3>
-                <template x-if="bestBet">
-                    <div class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--border-subtle);">
-                        <div>
-                            <div class="text-[10px] uppercase" style="color: #00ff88;">Best Win</div>
-                            <div class="text-sm font-bold" x-text="bestBet.horse"></div>
-                        </div>
-                        <div class="text-lg font-bold" style="color: #00ff88; font-family: 'Rajdhani', sans-serif;"
-                             x-text="'+$' + bestBet.pnl.toFixed(2)"></div>
+                    <div class="text-lg font-bold" style="color: #00ff88; font-family: 'Rajdhani', sans-serif;"
+                         x-text="'+$' + bestBet.pnl.toFixed(2)"></div>
+                </div>
+            </template>
+            <template x-if="worstBet">
+                <div class="flex items-center justify-between py-2">
+                    <div>
+                        <div class="text-[10px] uppercase" style="color: #ff4466;">Worst Loss</div>
+                        <div class="text-sm font-bold" x-text="worstBet.horse"></div>
                     </div>
-                </template>
-                <template x-if="worstBet">
-                    <div class="flex items-center justify-between py-2">
-                        <div>
-                            <div class="text-[10px] uppercase" style="color: #ff4466;">Worst Loss</div>
-                            <div class="text-sm font-bold" x-text="worstBet.horse"></div>
-                        </div>
-                        <div class="text-lg font-bold" style="color: #ff4466; font-family: 'Rajdhani', sans-serif;"
-                             x-text="'-$' + Math.abs(worstBet.pnl).toFixed(2)"></div>
-                    </div>
-                </template>
-            </div>
+                    <div class="text-lg font-bold" style="color: #ff4466; font-family: 'Rajdhani', sans-serif;"
+                         x-text="'-$' + Math.abs(worstBet.pnl).toFixed(2)"></div>
+                </div>
+            </template>
+            <template x-if="!bestBet && !worstBet">
+                <div class="text-center py-4 text-xs" style="color: var(--text-muted);">
+                    No settled bets in this period
+                </div>
+            </template>
         </div>
     </div>
 
-    <!-- Running P&L Mini Chart -->
+    <!-- Cumulative P&L -->
     <div class="rounded-xl p-4" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
-        <h3 class="text-sm font-bold uppercase tracking-wider mb-3" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
-            Cumulative P&L
-        </h3>
-        <div class="relative h-24 flex gap-px" x-show="runningPnl.length > 0"
-             x-data="{ get maxAbs() { return Math.max(...$store?.x || [1], ...runningPnl.map(p => Math.abs(p.pnl)), 1); },
-                        get maxPos() { return Math.max(...runningPnl.map(p => p.pnl), 0); },
-                        get maxNeg() { return Math.min(...runningPnl.map(p => p.pnl), 0); },
-                        get topPct() { return this.maxPos > 0 ? (this.maxPos / (this.maxPos - this.maxNeg) * 100) : 0; },
-                        get botPct() { return this.maxNeg < 0 ? (-this.maxNeg / (this.maxPos - this.maxNeg) * 100) : 0; },
-                        barPct(pnl) { const range = Math.max(this.maxPos - this.maxNeg, 0.01); return Math.max(2, Math.abs(pnl) / range * 100); }
-                      }">
-            <!-- Zero line -->
-            <div class="absolute left-0 right-0 h-px" style="background: rgba(255,255,255,0.15);"
-                 :style="{ top: topPct + '%' }"></div>
-            <template x-for="(point, i) in runningPnl" :key="i">
-                <div class="flex-1 relative group" style="display: flex; flex-direction: column;">
-                    <!-- Positive region (top half) -->
-                    <div :style="{ flex: topPct + ' 0 0%' }" class="flex items-end">
-                        <div x-show="point.pnl >= 0" class="w-full"
-                             :style="{ height: barPct(point.pnl) + '%', minHeight: point.pnl > 0 ? '2px' : '0',
-                                       background: 'linear-gradient(180deg, rgba(0,255,136,0.8), rgba(0,255,136,0.2))',
-                                       borderRadius: '1px' }"></div>
-                    </div>
-                    <!-- Negative region (bottom half) -->
-                    <div :style="{ flex: botPct + ' 0 0%' }" class="flex items-start">
-                        <div x-show="point.pnl < 0" class="w-full"
-                             :style="{ height: barPct(point.pnl) + '%', minHeight: point.pnl < 0 ? '2px' : '0',
-                                       background: 'linear-gradient(0deg, rgba(255,68,102,0.8), rgba(255,68,102,0.2))',
-                                       borderRadius: '1px' }"></div>
-                    </div>
-                    <!-- Tooltip -->
-                    <div class="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-[10px] whitespace-nowrap z-10"
-                         style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);"
-                         :style="{ color: point.pnl >= 0 ? '#00ff88' : '#ff4466' }"
-                         x-text="(point.pnl >= 0 ? '+$' : '-$') + Math.abs(point.pnl).toFixed(2)">
-                    </div>
-                </div>
-            </template>
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold uppercase tracking-wider" style="color: var(--text-muted); font-family: 'Rajdhani', sans-serif;">
+                Cumulative P&L
+            </h3>
+            <span class="text-sm font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                  :style="{ color: (runningPnl.length && runningPnl[runningPnl.length-1].pnl >= 0) ? '#00ff88' : '#ff4466' }"
+                  x-show="runningPnl.length > 0"
+                  x-text="((runningPnl.length && runningPnl[runningPnl.length-1].pnl >= 0) ? '+$' : '-$') + Math.abs(runningPnl.length ? runningPnl[runningPnl.length-1].pnl : 0).toFixed(2)">
+            </span>
+        </div>
+        <div class="relative h-32 flex items-end" x-show="runningPnl.length > 0">
+            <!-- SVG line chart -->
+            <svg width="100%" height="100%" :viewBox="'0 0 ' + Math.max(runningPnl.length * 2, 10) + ' 100'" preserveAspectRatio="none"
+                 style="overflow: visible;">
+                <!-- Zero line -->
+                <line x1="0" :y1="cumulativeZeroY" :x2="Math.max(runningPnl.length * 2, 10)" :y2="cumulativeZeroY"
+                      stroke="rgba(255,255,255,0.15)" stroke-width="0.3"/>
+                <!-- Fill area -->
+                <path :d="cumulativeFillPath" fill="url(#cumGradient)" opacity="0.3"/>
+                <!-- Line -->
+                <polyline :points="cumulativeLinePath" fill="none" stroke="#00d4ff" stroke-width="0.8"
+                          stroke-linejoin="round" stroke-linecap="round"/>
+                <!-- Dots for each point -->
+                <template x-for="(pt, i) in runningPnl" :key="i">
+                    <circle :cx="i * 2 + 1" :cy="cumulativeY(pt.pnl)" r="0.6"
+                            :fill="pt.pnl >= 0 ? '#00ff88' : '#ff4466'"/>
+                </template>
+                <defs>
+                    <linearGradient id="cumGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.4"/>
+                        <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+                    </linearGradient>
+                </defs>
+            </svg>
         </div>
         <div x-show="runningPnl.length === 0" class="text-center py-4 text-xs" style="color: var(--text-muted);">
             No bets in this period
@@ -239,6 +209,7 @@
                         <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Horse</th>
                         <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Stake</th>
                         <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Odds</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">PP</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Time</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Status</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">P&L</th>
@@ -270,6 +241,12 @@
                             </td>
                             <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                 <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : (bet.requested_odds ? '$' + bet.requested_odds.toFixed(2) : '—')"></span>
+                            </td>
+                            <td class="px-4 py-2 text-center text-xs font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                :style="(bet.place_probability || 0) >= 0.70 ? 'color: #00ff88;'
+                                    : (bet.place_probability || 0) >= 0.55 ? 'color: var(--cyan);'
+                                    : 'color: var(--text-muted);'">
+                                <span x-text="bet.place_probability ? (bet.place_probability * 100).toFixed(0) + '%' : '—'"></span>
                             </td>
                             <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);"
                                 x-text="bet.scheduled_at ? new Date(bet.scheduled_at).toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '—'">
@@ -391,6 +368,7 @@
                             <th class="px-4 py-2 text-left text-xs uppercase" style="color: var(--text-muted);">Horse</th>
                             <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Stake</th>
                             <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Odds</th>
+                            <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">PP</th>
                             <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Date</th>
                             <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Result</th>
                             <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">P&L</th>
@@ -422,6 +400,12 @@
                                 </td>
                                 <td class="px-4 py-2 text-right" style="font-family: 'Rajdhani', sans-serif;">
                                     <span x-text="bet.matched_odds ? '$' + bet.matched_odds.toFixed(2) : '—'"></span>
+                                </td>
+                                <td class="px-4 py-2 text-center text-xs font-bold" style="font-family: 'Rajdhani', sans-serif;"
+                                    :style="(bet.place_probability || 0) >= 0.70 ? 'color: #00ff88;'
+                                        : (bet.place_probability || 0) >= 0.55 ? 'color: var(--cyan);'
+                                        : 'color: var(--text-muted);'">
+                                    <span x-text="bet.place_probability ? (bet.place_probability * 100).toFixed(0) + '%' : '—'"></span>
                                 </td>
                                 <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);">
                                     <span x-text="bet.settled_at ? new Date(bet.settled_at).toLocaleDateString('en-AU', {day:'2-digit', month:'short'}) : '—'"></span>
@@ -461,7 +445,6 @@ function trackerApp() {
         activePeriod: 'today',
         periods: { today: {}, yesterday: {}, week: {}, month: {}, all_time: {} },
         daily: [],
-        _defaultByType: { win: { bets: 0, pnl: 0, strike_rate: 0 }, place: { bets: 0, pnl: 0, strike_rate: 0 } },
 
         // History
         showHistory: false,
@@ -472,10 +455,6 @@ function trackerApp() {
 
         get currentPeriod() {
             return this.periods[this.activePeriod] || { bets: 0, wins: 0, losses: 0, pnl: 0, roi: 0, strike_rate: 0 };
-        },
-
-        get byType() {
-            return (this.periods[this.activePeriod] || {}).by_type || this._defaultByType;
         },
 
         get bestBet() {
@@ -491,14 +470,36 @@ function trackerApp() {
         },
 
         get maxDailyPnl() {
-            const max = Math.max(...this.daily.map(d => Math.abs(d.pnl || 0)), 1);
-            return max;
+            return Math.max(...this.daily.map(d => Math.abs(d.pnl || 0)), 1);
         },
 
-        pnlBarHeight(pnl) {
-            if (this.runningPnl.length === 0) return 0;
-            const maxAbs = Math.max(...this.runningPnl.map(p => Math.abs(p.pnl)), 1);
-            return Math.max(5, Math.abs(pnl) / maxAbs * 100);
+        // Cumulative chart helpers
+        get cumulativeMax() {
+            if (!this.runningPnl.length) return 1;
+            return Math.max(...this.runningPnl.map(p => p.pnl), 0.01);
+        },
+        get cumulativeMin() {
+            if (!this.runningPnl.length) return 0;
+            return Math.min(...this.runningPnl.map(p => p.pnl), 0);
+        },
+        get cumulativeRange() {
+            return Math.max(this.cumulativeMax - this.cumulativeMin, 0.01);
+        },
+        get cumulativeZeroY() {
+            return ((this.cumulativeMax) / this.cumulativeRange * 100).toFixed(1);
+        },
+        cumulativeY(pnl) {
+            return ((this.cumulativeMax - pnl) / this.cumulativeRange * 100).toFixed(1);
+        },
+        get cumulativeLinePath() {
+            return this.runningPnl.map((pt, i) => `${i * 2 + 1},${this.cumulativeY(pt.pnl)}`).join(' ');
+        },
+        get cumulativeFillPath() {
+            if (!this.runningPnl.length) return '';
+            const pts = this.runningPnl.map((pt, i) => `${i * 2 + 1},${this.cumulativeY(pt.pnl)}`);
+            const w = this.runningPnl.length * 2;
+            const zeroY = this.cumulativeZeroY;
+            return `M1,${zeroY} L${pts.join(' L')} L${w - 1},${zeroY} Z`;
         },
 
         async init() {

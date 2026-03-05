@@ -21,6 +21,8 @@ MIN_WIN_PROB = 0.15
 MIN_MULTI_EV = 1.0
 # Pool takeout estimate for multi bets
 POOL_TAKEOUT = 0.85
+# Minimum combined decimal odds — Data: 0/35 at avg individual odds $3.78
+MIN_COMBINED_ODDS = 15.0
 
 
 @dataclass
@@ -166,6 +168,13 @@ def calculate_pre_big3(race_contexts: list[dict]) -> Big3Recommendation | None:
     multi_prob = top_horses[0].win_prob * top_horses[1].win_prob * top_horses[2].win_prob
     multi_odds = top_horses[0].win_odds * top_horses[1].win_odds * top_horses[2].win_odds
     ev = multi_prob * multi_odds * POOL_TAKEOUT
+
+    # Skip if combined odds too low — multi must pay enough to justify risk
+    if multi_odds < MIN_COMBINED_ODDS:
+        logger.info(
+            f"Big 3 skipped: combined odds ${multi_odds:.1f} < ${MIN_COMBINED_ODDS:.0f} minimum"
+        )
+        return None
 
     best = Big3Recommendation(
         horses=top_horses,
