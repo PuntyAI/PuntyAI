@@ -958,7 +958,7 @@ class ContentGenerator:
                     details.append(f"Dist: {runner['distance_stats']}")
 
                 # Track condition stats
-                track_cond = meeting.get("track_condition", "").lower()
+                track_cond = (meeting.get("track_condition") or "").lower()
                 if "heavy" in track_cond and runner.get("heavy_track_stats"):
                     details.append(f"Heavy: {runner['heavy_track_stats']}")
                 elif "soft" in track_cond and runner.get("soft_track_stats"):

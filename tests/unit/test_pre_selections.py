@@ -765,15 +765,16 @@ class TestCalculatePreSelections:
         assert result.picks == []
 
     def test_two_runner_race(self):
-        """Small field — should still produce picks. Pool may be $35 (DOMINANT_EDGE)."""
+        """2-runner field — no betting value, should no-bet entirely."""
         runners = [
             _runner(1, "A", 2.0, win_prob=0.55, place_prob=0.80, value=1.10),
             _runner(2, "B", 3.0, win_prob=0.35, place_prob=0.65, value=1.05),
         ]
         ctx = _race_context(runners)
         result = calculate_pre_selections(ctx)
-        assert len(result.picks) == 2
-        assert result.total_stake <= 25.5
+        assert len(result.picks) == 0
+        assert result.total_stake == 0.0
+        assert any("only 2 runner" in n for n in result.notes)
 
     def test_exotic_recommendation(self):
         runners = [

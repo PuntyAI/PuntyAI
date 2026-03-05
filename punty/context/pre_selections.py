@@ -180,6 +180,14 @@ def calculate_pre_selections(
     # Compute field size (active runners) for bet type and exotic decisions
     field_size = sum(1 for r in runners if not r.get("scratched"))
 
+    # Ultra-small field (≤2 runners): no bet — no value in any market
+    if field_size <= 2:
+        return RacePreSelections(
+            race_number=race_number, picks=[], exotic=None,
+            puntys_pick=None, total_stake=0.0,
+            notes=[f"NO BET — only {field_size} runner(s) after scratchings, no betting value"],
+        )
+
     # Run race-level optimizer for classification and bet type recommendations
     optimization = optimize_race(
         race_context, pool=pool, venue_type=venue_type,

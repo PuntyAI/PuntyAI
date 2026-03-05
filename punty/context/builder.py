@@ -331,21 +331,30 @@ class ContextBuilder:
             return None
 
     async def _fetch_willyweather(self, meeting) -> dict | None:
-        """Fetch live WillyWeather data for hourly forecasts.
+        """Fetch live weather data for hourly forecasts.
 
-        Returns the full weather dict with hourly_wind, hourly_rain_prob,
-        and observation data — or None if unavailable. Uses cached data
-        if the scraper has already fetched for this venue today.
+        Tries WillyWeather (AU venues) first, then falls back to
+        Open-Meteo (NZ venues). Returns the full weather dict with
+        hourly_wind, hourly_rain_prob, and observation data — or None.
         """
+        # Try WillyWeather first (AU venues)
         try:
             from punty.scrapers.willyweather import WillyWeatherScraper
             ww = await WillyWeatherScraper.from_settings(self.db)
-            if not ww:
-                return None
-            try:
-                return await ww.get_weather(meeting.venue, meeting.date)
-            finally:
-                await ww.close()
+            if ww:
+                try:
+                    result = await ww.get_weather(meeting.venue, meeting.date)
+                    if result:
+                        return result
+                finally:
+                    await ww.close()
+        except Exception:
+            pass
+
+        # Fallback: Open-Meteo for NZ venues
+        try:
+            from punty.scrapers.open_meteo import get_nz_weather
+            return await get_nz_weather(meeting.venue, meeting.date)
         except Exception:
             return None
 

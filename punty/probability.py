@@ -864,8 +864,8 @@ def calculate_race_probabilities(
         "heavy": {"form": -0.05, "barrier": +0.03, "horse_profile": +0.02},
         "soft":  {"form": -0.02, "barrier": +0.01, "horse_profile": +0.01},
     }
-    cond_key = "heavy" if "heavy" in track_condition.lower() else (
-        "soft" if "soft" in track_condition.lower() else None
+    cond_key = "heavy" if "heavy" in (track_condition or "").lower() else (
+        "soft" if "soft" in (track_condition or "").lower() else None
     )
     if cond_key and not weights:  # Only adjust auto-selected weights, not explicit overrides
         adj = _CONDITION_WEIGHT_ADJ[cond_key]
