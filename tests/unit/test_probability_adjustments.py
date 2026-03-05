@@ -204,35 +204,28 @@ class TestOddsOnExoticExclusion:
 
 class TestContrarianTrifecta:
     def test_generated_when_short_fav_big_field(self):
-        """Contrarian trifecta generated when top runner > 40% implied, field >= 10."""
+        """Trifecta Contrarian removed — should no longer be generated."""
         runners = []
-        # Strong favourite: 45% implied ($2.22)
         runners.append({
             "saddlecloth": 1, "horse_name": "StrongFav",
             "win_prob": 0.45, "market_implied": 0.45,
         })
-        # 2nd/3rd popular
         for i in range(2):
             runners.append({
                 "saddlecloth": i + 2, "horse_name": f"Popular{i+2}",
                 "win_prob": 0.15, "market_implied": 0.15,
             })
-        # Contrarian pool: $12-$40 range runners with >= 5% prob
         for i in range(7):
-            implied = 0.05 + i * 0.005  # 5-8.5% implied = $12-20 odds
+            implied = 0.05 + i * 0.005
             runners.append({
                 "saddlecloth": i + 4, "horse_name": f"Outsider{i+4}",
-                "win_prob": implied * 1.3,  # slight value edge
+                "win_prob": implied * 1.3,
                 "market_implied": implied,
             })
 
         results = calculate_exotic_combinations(runners)
         contrarian = [r for r in results if r.exotic_type == "Trifecta Contrarian"]
-        # Should generate at least one contrarian trifecta
-        assert len(contrarian) >= 1
-        # Fav should always be first runner (anchored to win)
-        for ct in contrarian:
-            assert ct.runners[0] == 1
+        assert len(contrarian) == 0
 
     def test_not_generated_for_open_race(self):
         """No contrarian trifecta when no dominant favourite."""
@@ -363,5 +356,5 @@ class TestTrifectaSpeedMapBonus:
             })
         results = calculate_exotic_combinations(runners)
         standouts = [r for r in results if r.exotic_type == "Trifecta Standout"]
-        # Should still generate combos — just no speed bonus
-        assert len(standouts) >= 1
+        # Trifecta Standout removed — should not be generated
+        assert len(standouts) == 0

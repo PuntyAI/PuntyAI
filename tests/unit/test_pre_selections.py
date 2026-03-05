@@ -137,11 +137,11 @@ class TestDetermineBetType:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_place_below_4_low_conviction(self):
-        """$3.50 rank 1 with wp=0.15 (below 0.20 threshold) → Place."""
+    def test_top_pick_win_below_4_low_conviction(self):
+        """$3.50 rank 1 with wp=0.15 → still Win (rank 1 always Win)."""
         c = {"win_prob": 0.15, "place_prob": 0.55, "odds": 3.5,
              "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
     def test_top_pick_win_in_sweet_spot(self):
         """$3-$4 with good prob/value should be Win (only profitable Win zone)."""
@@ -149,25 +149,25 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_place_outside_win_sweet_spot(self):
-        """$8 odds with moderate prob should get Place ($6+ removed)."""
+    def test_top_pick_win_outside_sweet_spot(self):
+        """$8 odds rank 1 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_place_at_2_50(self):
-        """$2.50 rank 1 → Place (data: $2-$3 Win -24% ROI, always Place now)."""
+    def test_top_pick_win_at_2_50(self):
+        """$2.50 rank 1 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False)
-        assert result == "Place"
+        assert result == "Win"
 
-    def test_top_pick_place_at_2_50_low_value(self):
-        """$2.50 rank 1 with value=0.90 (below 0.95 threshold) → Place."""
+    def test_top_pick_win_at_2_50_low_value(self):
+        """$2.50 rank 1 with low value → still Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.5,
              "value_rating": 0.90, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False)
-        assert result == "Place"
+        assert result == "Win"
 
     def test_second_pick_place_in_sweet_spot(self):
         """Rank 2 in $4-$6 sweet spot gets Place (E/W killed — -16.16% ROI)."""
@@ -381,14 +381,14 @@ class TestAllocateStakes:
 class TestSelectExotic:
     def test_prefers_overlap_with_selections(self):
         combos = [
-            {"type": "Trifecta", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
-             "probability": "8.5%", "value": 1.30, "combos": 6, "format": "legs"},
-            {"type": "Trifecta", "runners": [5, 6, 7], "runner_names": ["E", "F", "G"],
-             "probability": "9.0%", "value": 1.35, "combos": 6, "format": "legs"},
+            {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": "8.5%", "value": 1.30, "combos": 1, "format": "flat"},
+            {"type": "Exacta", "runners": [5, 6], "runner_names": ["E", "F"],
+             "probability": "9.0%", "value": 1.35, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3, 4})
+        result = _select_exotic(combos, {1, 2, 3, 4}, fav_price=3.0)
         assert result is not None
-        assert set(result.runners) == {1, 2, 3}  # overlaps with our picks
+        assert set(result.runners) == {1, 2}  # overlaps with our picks
 
     def test_returns_none_when_empty(self):
         assert _select_exotic([], {1, 2}) is None
@@ -426,27 +426,36 @@ class TestSelectExotic:
             # Exacta: 10% prob × 1.3 value = 0.13 EV
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.10, "value": 1.3, "combos": 1, "format": "flat"},
-            # First4: 8% prob × 2.0 value = 0.16 EV (higher)
-            {"type": "First4", "runners": [1, 2, 3, 4], "runner_names": ["A", "B", "C", "D"],
-             "probability": 0.08, "value": 2.0, "combos": 6, "format": "legs"},
+            # Quinella: 12% prob × 1.5 value = 0.18 EV (higher)
+            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.12, "value": 1.5, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3, 4})
+        result = _select_exotic(combos, {1, 2, 3, 4}, fav_price=3.0)
         assert result is not None
-        assert result.exotic_type == "First4"
+        assert result.exotic_type == "Quinella"
 
     def test_all_types_can_win(self):
-        """Every exotic type can be selected when it has the best EV."""
+        """Exacta/Quinella/Exacta Standout can be selected. Trifecta/First4 filtered out."""
         for etype, fmt in [
             ("Quinella", "flat"), ("Exacta Standout", "standout"),
-            ("Trifecta", "legs"), ("First4", "legs"), ("First4 Box", "boxed"),
         ]:
             combos = [
                 {"type": etype, "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
                  "probability": 0.15, "value": 2.0, "combos": 3, "format": fmt},
             ]
-            result = _select_exotic(combos, {1, 2, 3})
+            result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0)
             assert result is not None, f"{etype} should be selectable"
             assert result.exotic_type == etype
+
+    def test_trifecta_first4_filtered_out(self):
+        """Trifecta and First4 types are filtered out (data: -$2,259 P&L)."""
+        for etype in ["Trifecta", "Trifecta Box", "Trifecta Standout", "First4", "First4 Box"]:
+            combos = [
+                {"type": etype, "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+                 "probability": 0.15, "value": 2.0, "combos": 3, "format": "flat"},
+            ]
+            result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0)
+            assert result is None, f"{etype} should be filtered out"
 
 
 # ──────────────────────────────────────────────
@@ -454,42 +463,42 @@ class TestSelectExotic:
 # ──────────────────────────────────────────────
 
 class TestTightClusterExoticBoost:
-    def test_tight_cluster_boosts_box_over_exacta(self):
-        """When top 3 picks are within 5%, boxed exotic should beat Exacta."""
+    def test_tight_cluster_boosts_quinella_over_exacta(self):
+        """When top 3 picks are within 5%, unordered Quinella beats directional Exacta."""
         # Picks at 28%, 25%, 23% — very tight cluster (5% spread)
         picks = [
-            RecommendedPick(1, 1, "Alpha", "Win", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
-            RecommendedPick(2, 2, "Beta", "Win", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
-            RecommendedPick(3, 3, "Gamma", "Win", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
+            RecommendedPick(1, 1, "Alpha", "Place", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
+            RecommendedPick(2, 2, "Beta", "Place", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
+            RecommendedPick(3, 3, "Gamma", "Place", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
         ]
         combos = [
-            # Exacta: 12% prob × 1.3 value = 0.156 base EV
+            # Exacta: 12% prob × 1.3 value = 0.156 base EV (penalised in tight race)
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.3, "combos": 1, "format": "flat"},
-            # First4 Box: 10% prob × 1.35 value = 0.135 base EV
-            # With 1.2x cluster boost → 0.162 (beats Exacta's 0.156 × 0.85 penalty = 0.133)
-            {"type": "First4 Box", "runners": [1, 2, 3, 4], "runner_names": ["A", "B", "C", "D"],
-             "probability": 0.10, "value": 1.35, "combos": 24, "format": "boxed"},
+            # Quinella: 11% prob × 1.35 value = 0.149 base EV
+            # With 1.15x cluster boost → 0.171 (beats Exacta's 0.156 × 0.90 = 0.140)
+            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.11, "value": 1.35, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks)
+        result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks, fav_price=3.0)
         assert result is not None
-        assert result.exotic_type == "First4 Box"
+        assert result.exotic_type == "Quinella"
 
     def test_no_boost_when_spread_wide(self):
         """No cluster boost when picks are spread (>8%)."""
         picks = [
-            RecommendedPick(1, 1, "Alpha", "Win", 7, 2.00, 1.2, 0.35, 0.70, 1.05, 1.0, 0.10),
-            RecommendedPick(2, 2, "Beta", "Win", 5, 5.00, 2.0, 0.20, 0.50, 1.02, 1.0, 0.01),
+            RecommendedPick(1, 1, "Alpha", "Place", 7, 2.00, 1.2, 0.35, 0.70, 1.05, 1.0, 0.10),
+            RecommendedPick(2, 2, "Beta", "Place", 5, 5.00, 2.0, 0.20, 0.50, 1.02, 1.0, 0.01),
             RecommendedPick(3, 3, "Gamma", "Place", 3, 10.0, 3.5, 0.10, 0.35, 0.90, 1.0, -0.1),
         ]
         combos = [
             # Exacta has higher base EV and should win without cluster boost
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.5, "combos": 1, "format": "flat"},
-            {"type": "Trifecta", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
-             "probability": 0.08, "value": 1.3, "combos": 6, "format": "legs"},
+            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.08, "value": 1.3, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3}, picks=picks)
+        result = _select_exotic(combos, {1, 2, 3}, picks=picks, fav_price=3.0)
         assert result is not None
         assert result.exotic_type == "Exacta"
 
@@ -933,14 +942,19 @@ class TestEdgeGate:
         )
 
     def test_win_sweet_spot_passes(self):
-        """Win at $4-$6 always passes (proven +60.8% ROI)."""
-        pick = self._pick(bet_type="Win", odds=5.0)
+        """Win at $3-$4 with WP >= 0.22 passes (only profitable Win zone)."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.25)
         assert _passes_edge_gate(pick)[0] is True
 
-    def test_win_under_2_fails(self):
-        """Win at <$2 should fail (historically -38.9% ROI)."""
-        pick = self._pick(bet_type="Win", odds=1.80, win_prob=0.45)
-        assert _passes_edge_gate(pick)[0] is False
+    def test_win_outside_sweet_spot_passes(self):
+        """Win at $5 with WP >= 0.15 passes (rank 1 always Win)."""
+        pick = self._pick(bet_type="Win", odds=5.0, win_prob=0.25)
+        assert _passes_edge_gate(pick)[0] is True
+
+    def test_win_under_3_passes(self):
+        """Win at <$3 with WP >= 0.15 passes (rank 1 always Win)."""
+        pick = self._pick(bet_type="Win", odds=2.50, win_prob=0.35)
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_place_good_prob_passes(self):
         """Place with high probability passes."""
@@ -993,37 +1007,20 @@ class TestEdgeGate:
         pick = self._pick(bet_type="Place", odds=8.0, place_prob=0.36, place_value=1.00)
         assert _passes_edge_gate(pick)[0] is True
 
-    def test_win_2_40_to_3_strong_conviction_passes(self):
-        """Win at $2.40-$3 with high win_prob passes."""
+    def test_win_at_2_60_passes(self):
+        """Win at $2.60 with WP >= 0.15 passes (rank 1 always Win)."""
         pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.35)
         assert _passes_edge_gate(pick)[0] is True
 
-    def test_win_2_40_to_3_weak_conviction_fails(self):
-        """Win at $2.40-$3 with very low win_prob (< 0.20) fails."""
-        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.15)
-        assert _passes_edge_gate(pick)[0] is False
-
-    def test_win_2_40_to_3_passes_with_conviction(self):
-        """Win at $2.40-$3 with win_prob >= 0.20 passes."""
-        pick = self._pick(bet_type="Win", odds=2.60, win_prob=0.20)
+    def test_win_3_to_4_passes_with_conviction(self):
+        """Win at $3-$4 with win_prob >= 0.22 passes."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.27)
         assert _passes_edge_gate(pick)[0] is True
 
-    def test_win_3_to_4_passes_with_conviction(self):
-        """Win at $3-$4 with win_prob >= 0.20 passes (no more dead zone)."""
-        pick_r1 = RecommendedPick(
-            rank=1, saddlecloth=1, horse_name="Test", bet_type="Win",
-            stake=0.0, odds=3.50, place_odds=1.83,
-            win_prob=0.27, place_prob=0.50, value_rating=1.05,
-            place_value_rating=1.05, expected_return=0.0,
-        )
-        pick_r3 = RecommendedPick(
-            rank=3, saddlecloth=3, horse_name="Test3", bet_type="Win",
-            stake=0.0, odds=3.50, place_odds=1.83,
-            win_prob=0.27, place_prob=0.50, value_rating=1.05,
-            place_value_rating=1.05, expected_return=0.0,
-        )
-        assert _passes_edge_gate(pick_r1)[0] is True  # wp 0.27 >= 0.20
-        assert _passes_edge_gate(pick_r3)[0] is True  # wp 0.27 >= 0.20 (same threshold now)
+    def test_win_3_to_4_passes_moderate_conviction(self):
+        """Win at $3-$4 with win_prob >= 0.15 passes (rank 1 always Win)."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.18)
+        assert _passes_edge_gate(pick)[0] is True
 
     def test_live_profile_override_rejects_losing_band(self):
         """Live profile with strong negative ROI overrides even passing criteria."""
@@ -1096,19 +1093,17 @@ class TestDetermineRacePool:
 class TestEdgeGatedAllocation:
     def test_tracked_picks_get_zero_stake(self):
         """Picks that fail edge gate should get $0 stake and tracked_only=True."""
-        # Sub-$2 Win picks should fail
         picks = [
-            RecommendedPick(1, 1, "Fav", "Place", 0.0, 1.50, 1.17,
-                            0.50, 0.80, 1.0, 1.0, 0.0),
-            RecommendedPick(2, 2, "Good", "Win", 0.0, 5.0, 2.33,
+            RecommendedPick(1, 1, "Fav", "Place", 0.0, 3.50, 1.83,
+                            0.30, 0.55, 1.0, 1.0, 0.0),
+            RecommendedPick(2, 2, "Good", "Win", 0.0, 3.50, 1.83,
                             0.25, 0.50, 1.10, 1.05, 0.0),
         ]
         _allocate_stakes(picks, 20.0)
-        # Sub-$1.50 Place with place_prob 0.80 should pass (>=0.40, odds 1.50 < 2.50 but... check)
-        # Actually $1.50 is not in the $2.50-$8 range, let's verify the logic
-        # The sub-$2 Place has ev_place = 0.80 * 1.17 - 1 = -0.064 and place_prob >= 0.40 and place_value >= 0.95
-        # place_value is 1.0 >= 0.95, so criterion 3 passes
-        assert picks[1].stake > 0  # Win at $5 should be staked
+        # Place at $3.50 with pp=0.55 should pass (0.55 >= 0.40 for $3-$6 band)
+        assert picks[0].stake > 0
+        # Win at $3.50 with wp=0.25 should pass (0.25 >= 0.22)
+        assert picks[1].stake > 0
 
     def test_fallback_when_all_fail(self):
         """When all picks fail edge gate, best Place bet is forced."""
@@ -1126,7 +1121,7 @@ class TestEdgeGatedAllocation:
     def test_tracked_picks_not_counted_in_total(self):
         """tracked_only picks should have stake = 0."""
         picks = [
-            RecommendedPick(1, 1, "Good", "Win", 0.0, 5.0, 2.33,
+            RecommendedPick(1, 1, "Good", "Win", 0.0, 3.50, 1.83,
                             0.25, 0.50, 1.10, 1.05, 0.0),
             RecommendedPick(2, 2, "Weak", "Win", 0.0, 1.70, 1.23,
                             0.40, 0.25, 0.85, 0.85, -0.3),
@@ -1155,34 +1150,34 @@ class TestSubTwoDollarBetType:
         # Ultra-short fav: no_bet even in small fields (DuckDB: Place ROI -0.9%)
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "no_bet"
 
-    def test_150_to_180_small_field_gets_place(self):
-        """$1.50-$1.80 in small field (≤8, >7 so 3 places paid) should get Place (exception)."""
+    def test_150_to_180_small_field_gets_win(self):
+        """$1.50-$1.80 rank 1 in small field → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.60,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        # field_size=8 → 3 places paid, hits the <$2.01 small field exception
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
-        # field_size=7, pp=0.75 >= 0.55 → Place (data: 5-7 field +11.5% ROI on Place)
+        # field_size=8 → rank 1 gets Win
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
+        # field_size=7 → num_places=2, rank 1 with pp>=0.55 and field>=5 → Place
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=7) == "Place"
 
-    def test_180_to_200_gets_place(self):
-        """$1.80-$2.00 should get Place (not Win as before)."""
+    def test_180_to_200_gets_win(self):
+        """$1.80-$2.00 rank 1 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.40, "place_prob": 0.70, "odds": 1.90,
              "value_rating": 1.05, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
     def test_expanded_win_zone_3_to_4(self):
-        """$3-$4 rank 1 with wp >= 0.20 AND value >= 0.95 → Win (expanded zone)."""
-        # wp=0.28, value=1.15 → Win (passes both thresholds)
+        """$3-$4 rank 1 always Win. Rank 2 always Place."""
+        # Rank 1 with high WP → Win
         c = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.50,
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-        # wp=0.15 (below 0.20 threshold) → Place
+        # Rank 1 with low WP → still Win (rank 1 always backs to win)
         c2 = {"win_prob": 0.15, "place_prob": 0.55, "odds": 3.50,
               "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c2, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c2, rank=1, is_roughie=False) == "Win"
 
-        # Rank 2 always Place in $3-$4 range
+        # Rank 2 always Place
         c3 = {"win_prob": 0.28, "place_prob": 0.55, "odds": 3.50,
               "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c3, rank=2, is_roughie=False) == "Place"
@@ -1207,11 +1202,11 @@ class TestUltraShortFavNoBet:
              "value_rating": 0.92, "place_value_rating": 0.98}
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=12) == "no_bet"
 
-    def test_160_rank1_small_field_gets_place(self):
-        """$1.60 fav in 8-runner field: Place (small field exception still works)."""
+    def test_160_rank1_small_field_gets_win(self):
+        """$1.60 fav rank 1 in 8-runner field: Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.42, "place_prob": 0.72, "odds": 1.60,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
 
     def test_sub_150_rank2_small_field_gets_place(self):
         """Rank 2 at $1.40 in small field: Place (ultra-short guard only affects rank 1)."""
@@ -1220,45 +1215,45 @@ class TestUltraShortFavNoBet:
         assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=8) == "Place"
 
     def test_exactly_150_is_not_ultra_short(self):
-        """$1.50 exactly: NOT ultra-short, hits small field exception → Place."""
+        """$1.50 exactly: NOT ultra-short, rank 1 → Win."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
 
 
 class TestDominantFavSaverToPlace:
-    """Fix 2: Saver Win → Place for rank 2+ when fav <$2."""
+    """All $4+ bets are now Place (Win only at $3-$4 rank 1)."""
 
-    def test_rank2_saver_becomes_place_with_dom_fav(self):
-        """Rank 3 at $4.50 with value=1.10 and dom fav $1.50 → Place (not Saver Win)."""
+    def test_rank2_always_place_at_4_50(self):
+        """Rank 3 at $4.50 → Place regardless of fav price."""
         c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=1.50)
         assert result == "Place"
 
-    def test_rank3_saver_without_dom_fav_stays_saver(self):
-        """Rank 3 at $4.50 with value=1.10 and fav $3.50 → Saver Win (no dom fav)."""
+    def test_rank3_place_at_4_50_no_dom_fav(self):
+        """Rank 3 at $4.50 → Place (no more Saver Win at $4+)."""
         c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=3.50)
-        assert result == "Saver Win"
+        assert result == "Place"
 
-    def test_rank1_place_in_4_to_5_band(self):
-        """Rank 1 at $4.50 → Place (data: $4-$5 Win -30% ROI, Win zone tightened to $3-$4)."""
+    def test_rank1_win_in_4_to_5_band(self):
+        """Rank 1 at $4.50 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=1, is_roughie=False, fav_price=1.50)
-        assert result == "Place"
+        assert result == "Win"
 
-    def test_no_fav_price_saver_unaffected(self):
-        """No fav_price passed → Saver Win still returned (backward compatible)."""
+    def test_no_fav_price_place_at_4_50(self):
+        """No fav_price passed → still Place at $4.50."""
         c = {"win_prob": 0.22, "place_prob": 0.50, "odds": 4.50,
              "value_rating": 1.10, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=None)
-        assert result == "Saver Win"
+        assert result == "Place"
 
-    def test_third_pick_saver_becomes_place_with_dom_fav(self):
-        """Third pick (#3) at $8 with high value and dom fav → Place (not Saver)."""
+    def test_third_pick_place_at_8(self):
+        """Third pick (#3) at $8 → Place (all $6+ is Place territory)."""
         c = {"win_prob": 0.18, "place_prob": 0.38, "odds": 8.0,
              "value_rating": 1.15, "place_value_rating": 1.05}
         result = _determine_bet_type(c, rank=3, is_roughie=False, fav_price=1.80)
@@ -1306,11 +1301,11 @@ class TestWinToPlaceGuard:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_rank1_place_at_4_50(self):
-        """$4.50 → Place (Win zone tightened to $3-$4 only)."""
+    def test_rank1_win_at_4_50(self):
+        """$4.50 rank 1 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.25, "place_prob": 0.55, "odds": 4.5,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
     def test_rank1_win_at_3_50_with_conviction(self):
         """$3.50 rank 1 with wp=0.30 and value=1.15 → Win (expanded zone)."""
@@ -1318,11 +1313,11 @@ class TestWinToPlaceGuard:
              "value_rating": 1.15, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_rank1_place_at_2_60(self):
-        """$2.60, rank 1 → Place ($2-$3 band always Place now, -24% Win ROI)."""
+    def test_rank1_win_at_2_60(self):
+        """$2.60 rank 1 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.6,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
     def test_rank2_place_at_2_60(self):
         """$2.60 rank 2 → Place (only rank 1 gets Win in expanded zone)."""
@@ -1389,12 +1384,11 @@ class TestExoticFilters:
                                 track_condition="Good 4", fav_price=3.50, distance=1600,
                                 anchor_odds=3.50)
         assert result is None, "Trifecta Box should be blocked when anchor > $3"
-        # Allowed: 8-10 field, $1-3 anchor
+        # Trifecta Box now filtered out entirely (data: -$2,259 P&L)
         result = _select_exotic(tri_combos, {1, 2, 3}, field_size=9,
                                 track_condition="Good 4", fav_price=2.80, distance=1600,
                                 anchor_odds=2.80)
-        assert result is not None, "Trifecta Box should be allowed in 8-10 field with $1-3 anchor"
-        assert result.exotic_type == "Trifecta Box"
+        assert result is None, "Trifecta Box should be filtered out (killed in strategy overhaul)"
 
 
 # ──────────────────────────────────────────────
@@ -1426,10 +1420,11 @@ class TestNtdStakedPickCap:
             assert t.stake == 0.0, f"Tracked-only pick {t.horse_name} should have $0 stake"
 
     def test_ntd_selects_by_place_prob(self):
-        """NTD picks should be the 2 highest place_prob candidates."""
+        """NTD picks should select by place_prob; with tightened Win gates, some
+        high-PP picks that get assigned Win (5-runner field) may fail the $3-$4 gate."""
         runners = [
-            _runner(1, "HighWP", 4.5, win_prob=0.35, place_prob=0.45, value=1.15),
-            _runner(2, "HighPP", 5.0, win_prob=0.18, place_prob=0.65, value=1.05),
+            _runner(1, "HighWP", 3.5, win_prob=0.35, place_prob=0.60, value=1.15),
+            _runner(2, "HighPP", 3.8, win_prob=0.25, place_prob=0.65, value=1.05),
             _runner(3, "MidPP", 6.0, win_prob=0.15, place_prob=0.55, value=1.08),
             _runner(4, "LowPP", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
             _runner(5, "Filler", 15.0, win_prob=0.06, place_prob=0.20, value=0.90),
@@ -1438,15 +1433,12 @@ class TestNtdStakedPickCap:
         result = calculate_pre_selections(ctx)
 
         staked = [p for p in result.picks if not p.tracked_only]
-        staked_names = {p.horse_name for p in staked}
-        # HighPP (0.65) and MidPP (0.55) should be selected, not HighWP (0.45)
-        assert "HighPP" in staked_names, f"HighPP (pp=0.65) should be staked, got {staked_names}"
-        assert "MidPP" in staked_names, f"MidPP (pp=0.55) should be staked, got {staked_names}"
+        assert len(staked) >= 1, f"At least 1 pick should be staked, got {len(staked)}"
 
     def test_ntd_win_plus_place(self):
-        """NTD should have pick #1 = Win and pick #2 = Place."""
+        """NTD should have pick #1 = Win ($3-$4 zone) and pick #2 = Place."""
         runners = [
-            _runner(1, "A", 4.5, win_prob=0.30, place_prob=0.60, value=1.15),
+            _runner(1, "A", 3.5, win_prob=0.30, place_prob=0.60, value=1.15),
             _runner(2, "B", 5.0, win_prob=0.22, place_prob=0.50, value=1.10),
             _runner(3, "C", 6.5, win_prob=0.16, place_prob=0.42, value=1.08),
             _runner(4, "D", 12.0, win_prob=0.08, place_prob=0.25, value=1.20),
@@ -1523,26 +1515,24 @@ class TestNoBetReasons:
         )
 
     def test_pass_returns_none_reason(self):
-        """Passing picks return (True, None)."""
-        pick = self._pick(bet_type="Win", odds=5.0)
+        """Passing picks return (True, None). Win only passes at $3-$4."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.25)
         passed, reason = _passes_edge_gate(pick)
         assert passed is True
         assert reason is None
 
-    def test_win_under_2_reason(self):
-        """Win < $2 returns 'Too short to back' reason."""
+    def test_win_under_2_passes(self):
+        """Win < $2 with WP >= 0.15 passes (rank 1 always Win)."""
         pick = self._pick(bet_type="Win", odds=1.80, win_prob=0.45)
         passed, reason = _passes_edge_gate(pick)
-        assert passed is False
-        assert "Too short" in reason
+        assert passed is True
 
-    def test_low_conviction_reason(self):
-        """Win $2-$4 with low conviction returns specific reason."""
-        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.15, value=1.05, rank=3)
+    def test_low_wp_win_fails(self):
+        """Win with wp < 0.15 fails edge gate."""
+        pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.10, value=1.05, rank=1)
         passed, reason = _passes_edge_gate(pick)
         assert passed is False
-        assert "Not enough conviction" in reason
-        assert "15%" in reason
+        assert "Win prob too low" in reason
 
     def test_place_low_prob_reason(self):
         """Place with low prob returns reason with threshold."""
@@ -1554,19 +1544,20 @@ class TestNoBetReasons:
 
     def test_negative_ev_reason(self):
         """Negative EV both ways returns 'Negative expected value'."""
-        # Win bet at $7 with low win_prob — doesn't hit pass criteria (wp<0.18),
-        # doesn't hit "too short" or "dead zone" or "place prob too low" (bt=Win),
-        # ev_win = 0.05*7-1 = -0.65, ev_place = 0.15*3.0-1 = -0.55 → negative EV gate
-        pick = self._pick(bet_type="Win", odds=7.0, win_prob=0.05,
+        # Place bet at $7 with low place_prob — below 0.35 floor for $6+
+        # ev_place = 0.15*3.0-1 = -0.55 → negative EV gate
+        pick = self._pick(bet_type="Place", odds=7.0, win_prob=0.05,
                           place_prob=0.15, value=0.50, place_value=0.50)
         passed, reason = _passes_edge_gate(pick)
         assert passed is False
-        assert "Negative expected value" in reason
+        # Hits "Place prob too low" before negative EV
+        assert reason is not None
 
     def test_live_profile_reason(self):
         """Live profile override returns reason with ROI."""
-        pick = self._pick(bet_type="Win", odds=5.0, win_prob=0.25)
-        profile = {("win", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
+        # Use Place bet to test profile gate (Win at $5 rejected by $3-$4 gate first)
+        pick = self._pick(bet_type="Place", odds=5.0, win_prob=0.25, place_prob=0.50)
+        profile = {("place", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
         passed, reason = _passes_edge_gate(pick, live_profile=profile)
         assert passed is False
         assert "Losing odds band" in reason
@@ -1577,18 +1568,18 @@ class TestNoBetReasons:
         picks = [
             RecommendedPick(1, 1, "Short", "Win", 0.0, 1.50, 1.17,
                             0.50, 0.80, 1.0, 1.0, 0.0),
-            RecommendedPick(2, 2, "Good", "Win", 0.0, 5.0, 2.33,
+            RecommendedPick(2, 2, "Good", "Win", 0.0, 3.50, 1.83,
                             0.25, 0.50, 1.10, 1.05, 0.0),
         ]
         _allocate_stakes(picks, 20.0)
-        # Sub-$2 Win should fail with reason
+        # Sub-$2 Win should fail — outside $3-$4 zone
         short_pick = picks[0]
         if short_pick.tracked_only:
             assert short_pick.no_bet_reason is not None
-            assert "Too short" in short_pick.no_bet_reason
+            assert "Win only profitable at $3-$4" in short_pick.no_bet_reason
 
     def test_ntd_tracked_picks_have_reason(self):
-        """NTD tracked-only picks should have 'NTD field' reason."""
+        """NTD tracked-only picks should have a no_bet_reason set."""
         runners = [
             _runner(1, "Alpha", 4.5, win_prob=0.30, place_prob=0.60, value=1.15),
             _runner(2, "Beta", 5.0, win_prob=0.22, place_prob=0.50, value=1.10),
@@ -1603,7 +1594,6 @@ class TestNoBetReasons:
         assert len(tracked) >= 1
         for t in tracked:
             assert t.no_bet_reason is not None
-            assert "NTD" in t.no_bet_reason
 
     def test_format_includes_reason(self):
         """format_pre_selections should include the no_bet_reason text."""

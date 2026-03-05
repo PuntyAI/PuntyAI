@@ -15,9 +15,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-BASE_OUTLAY = 50.0
-MIN_OUTLAY = 40.0
-MAX_OUTLAY = 60.0
+BASE_OUTLAY = 30.0
+MIN_OUTLAY = 20.0
+MAX_OUTLAY = 40.0
 BIG6_MIN_OUTLAY = 20.0
 BIG6_MAX_OUTLAY = 30.0
 MIN_FLEXI_PCT = 30.0
@@ -905,13 +905,13 @@ def build_all_sequence_lanes(
         sequences = sequence_override
     else:
         rules = {
-            6:  {"early_quad": (1, 4), "quaddie": (3, 6), "big6": None},
-            7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
-            8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
-            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
-            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
-            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
-            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
+            6:  {"early_quad": (1, 4), "quaddie": (3, 6)},
+            7:  {"early_quad": (1, 4), "quaddie": (4, 7)},
+            8:  {"early_quad": (1, 4), "quaddie": (5, 8)},
+            9:  {"early_quad": (2, 5), "quaddie": (6, 9)},
+            10: {"early_quad": (3, 6), "quaddie": (7, 10)},
+            11: {"early_quad": (4, 7), "quaddie": (8, 11)},
+            12: {"early_quad": (5, 8), "quaddie": (9, 12)},
         }
         sequences = rules.get(
             total_races,
