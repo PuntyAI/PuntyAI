@@ -984,8 +984,8 @@ class HKJCResultsScraper:
                 if len(cells) < 5:
                     continue
 
-                place_str = clean(cells[0])
-                saddlecloth_str = clean(cells[1])
+                place_str = clean(cells[0]).replace('&nbsp;', '').replace('\xa0', '').strip()
+                saddlecloth_str = clean(cells[1]).replace('&nbsp;', '').replace('\xa0', '').strip()
                 horse_name = clean(cells[2])
 
                 # Parse finish position (handle "1", "2", "DH", "DNF", "WV" etc.)
