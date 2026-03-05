@@ -579,7 +579,10 @@ def _optimiser_select(
                         sel.append(r)
                         existing_sc.add(sc)
 
-            # Fill with picks that have overlay first
+            # Always include rank 1 pick first — our top pick must anchor every leg
+            rank1 = [r for r in runners if r.get("_is_pick") and r.get("_pick_rank") == 1]
+            _add(rank1, target)
+            # Fill with picks that have overlay
             _add(picks_overlay, target)
             # Then remaining picks (our tips even without overlay)
             _add(picks_rest, target)
