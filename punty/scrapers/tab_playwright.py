@@ -961,16 +961,16 @@ class HKJCResultsScraper:
         def clean(s):
             return re.sub(r'<[^>]+>', '', s).strip()
 
-        # Extract runner rows — try new format first, then legacy
+        # Extract runner rows — f_fs12 tbody exists in both old and new HKJC pages
         tbody_match = re.search(
-            r'<table\s+class="performance"[^>]*>(.*?)</table>',
+            r'<tbody\s+class="f_fs12">(.*?)</tbody>',
             html,
             re.DOTALL,
         )
         if not tbody_match:
-            # Legacy format fallback
+            # Try performance wrapper (new format) as fallback
             tbody_match = re.search(
-                r'<tbody\s+class="f_fs12">(.*?)</tbody>',
+                r'<table\s+class="performance"[^>]*>(.*?)</table>',
                 html,
                 re.DOTALL,
             )
@@ -984,8 +984,8 @@ class HKJCResultsScraper:
                 if len(cells) < 5:
                     continue
 
-                place_str = clean(cells[0])
-                saddlecloth_str = clean(cells[1])
+                place_str = clean(cells[0]).replace('&nbsp;', '').replace('\xa0', '').strip()
+                saddlecloth_str = clean(cells[1]).replace('&nbsp;', '').replace('\xa0', '').strip()
                 horse_name = clean(cells[2])
 
                 # Parse finish position (handle "1", "2", "DH", "DNF", "WV" etc.)

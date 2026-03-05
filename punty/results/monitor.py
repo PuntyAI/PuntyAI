@@ -690,9 +690,15 @@ class ResultsMonitor:
             latest_start = max(
                 (r.start_time for r in races if r.start_time), default=None
             )
-            all_empty_or_open = all(
+            # Check BOTH the DB statuses AND the freshly scraped statuses.
+            # The scraper may have returned "Paying" but the DB hasn't been updated yet.
+            db_all_empty = all(
                 (not r.results_status or r.results_status == "Open") for r in races
             )
+            scraped_all_empty = not statuses or all(
+                s in (None, "", "Open") for s in statuses.values()
+            )
+            all_empty_or_open = db_all_empty and scraped_all_empty
             if (
                 latest_start
                 and all_empty_or_open
