@@ -387,6 +387,48 @@ def calculate_pre_selections(
     # Allocate stakes with edge gating
     _allocate_stakes(picks, race_pool, field_size=field_size)
 
+    # Recalculate exotic combos from our actual picks (not prob engine's top4).
+    # The builder's exotic_combos use the probability engine's top 4 by win_prob,
+    # which can differ from our 4 picks. This ensures exotics only use our picks.
+    if picks and len(picks) >= 2:
+        from punty.probability import calculate_exotic_combinations
+        pick_runners_data = []
+        for p in picks:
+            # Find market_implied from the runner context
+            market_implied = 0.0
+            for r in runners:
+                if r.get("saddlecloth") == p.saddlecloth:
+                    odds = r.get("current_odds") or p.odds
+                    if odds and odds > 0:
+                        market_implied = 1.0 / odds
+                    break
+            pick_runners_data.append({
+                "saddlecloth": p.saddlecloth,
+                "horse_name": p.horse_name,
+                "win_prob": p.win_prob,
+                "market_implied": market_implied or (1.0 / p.odds if p.odds > 0 else 0),
+                "value_rating": p.value_rating,
+            })
+        try:
+            pick_combos = calculate_exotic_combinations(pick_runners_data)
+            if pick_combos:
+                exotic_combos = [
+                    {
+                        "type": c.exotic_type,
+                        "runners": c.runners,
+                        "runner_names": c.runner_names,
+                        "probability": f"{c.estimated_probability * 100:.1f}%"
+                            if isinstance(c.estimated_probability, float) else str(c.estimated_probability),
+                        "value": c.value_ratio,
+                        "combos": c.num_combos,
+                        "format": c.format,
+                    }
+                    for c in pick_combos
+                ]
+            # else: keep builder's original combos (may still pass overlap check)
+        except Exception:
+            pass  # Fall back to builder's combos
+
     # Select recommended exotic
     anchor_odds = picks[0].odds if picks else 0.0
     active_odds = [r.get("current_odds", 0) for r in runners
