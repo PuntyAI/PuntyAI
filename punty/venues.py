@@ -125,6 +125,14 @@ _STATE_TRACKS = {
     "ACT": ["canberra", "canberra acton"],
     "HK": ["sha tin", "happy valley"],
     "SGP": ["kranji"],
+    "NZ": [
+        "addington", "arawa park", "ascot park", "avondale", "awapuni",
+        "cromwell", "ellerslie", "gore", "hastings", "kurow", "matamata",
+        "new plymouth", "oamaru", "otaki", "pukekohe", "riccarton",
+        "riverton", "rotorua", "ruakaka", "tauranga", "te aroha", "te rapa",
+        "timaru", "trentham", "waimate", "waikouaiti", "wanganui", "wingatui",
+        "woodville",
+    ],
 }
 
 # Build reverse lookup: venue -> state
