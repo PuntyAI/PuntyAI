@@ -923,6 +923,19 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                                 scratch_count += 1
                                 logger.info(f"Pre-race scratching: {runner.horse_name} (R{race_num} No.{tab_no})")
                     if scratch_count:
+                        # Update field_size for affected races
+                        from sqlalchemy import func as sa_func
+                        race_rows = await db.execute(select(Race).where(Race.meeting_id == meeting_id))
+                        for race in race_rows.scalars().all():
+                            active_count_result = await db.execute(
+                                select(sa_func.count(Runner.id)).where(
+                                    Runner.race_id == race.id, Runner.scratched == False
+                                )
+                            )
+                            active_count = active_count_result.scalar() or 0
+                            if race.field_size and race.field_size != active_count:
+                                logger.info(f"Pre-race field size: {race.id} {race.field_size} → {active_count}")
+                                race.field_size = active_count
                         await db.commit()
                         logger.info(f"Applied {scratch_count} scratchings for {venue}")
             finally:
