@@ -8,8 +8,15 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.config import settings
+from punty.venues import guess_state
 
 logger = logging.getLogger(__name__)
+
+
+def _betfair_country(venue: str) -> str:
+    """Return Betfair country code for a venue."""
+    state = guess_state(venue)
+    return "NZ" if state == "NZ" else "AU"
 
 
 async def _get_scraper(db: AsyncSession):
@@ -53,7 +60,7 @@ async def resolve_place_market(
         catalogue = await scraper._api_call("listMarketCatalogue", {
             "filter": {
                 "eventTypeIds": ["7"],
-                "marketCountries": ["AU"],
+                "marketCountries": [_betfair_country(venue)],
                 "marketTypeCodes": ["PLACE"],
                 "venues": [search_venue],
                 "marketStartTime": {"from": date_from, "to": date_to},
@@ -171,7 +178,7 @@ async def resolve_win_market(
         catalogue = await scraper._api_call("listMarketCatalogue", {
             "filter": {
                 "eventTypeIds": ["7"],
-                "marketCountries": ["AU"],
+                "marketCountries": [_betfair_country(venue)],
                 "marketTypeCodes": ["WIN"],
                 "venues": [search_venue],
                 "marketStartTime": {"from": date_from, "to": date_to},
