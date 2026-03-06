@@ -1318,7 +1318,7 @@ class ContentGenerator:
                         filtered_combos.append(ec)
                     else:
                         # Trifecta/First4: at least 2 runners from picks
-                        overlap = len(runners & pick_saddlecloths)
+                        overlap = len(runners_set & pick_saddlecloths)
                         if overlap >= min(2, len(runners)):
                             filtered_combos.append(ec)
 
