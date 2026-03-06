@@ -235,9 +235,17 @@ class ContentGenerator:
                 learning_context = await asyncio.wait_for(
                     self._build_learning_context(context), timeout=30
                 )
-            except asyncio.TimeoutError:
-                logger.warning("Learning context build timed out after 30s, skipping")
+            except (asyncio.TimeoutError, Exception) as e:
+                if isinstance(e, asyncio.TimeoutError):
+                    logger.warning("Learning context build timed out after 30s, skipping")
+                else:
+                    logger.warning(f"Learning context build failed: {e}")
                 learning_context = ""
+                # Timeout may cancel mid-query, leaving session dirty — rollback to recover
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
             if learning_context:
                 context_str += "\n" + learning_context
 
