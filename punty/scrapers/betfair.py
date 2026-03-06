@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from punty.models.settings import AppSettings
+from punty.venues import guess_state
 
 logger = logging.getLogger(__name__)
 
@@ -184,10 +185,11 @@ class BetfairScraper:
                            23, 59, 59, tzinfo=timezone.utc).isoformat()
 
         # 1. List WIN markets for this venue/date
+        country = "NZ" if guess_state(venue) == "NZ" else "AU"
         catalogue = await self._api_call("listMarketCatalogue", {
             "filter": {
                 "eventTypeIds": ["7"],
-                "marketCountries": ["AU"],
+                "marketCountries": [country],
                 "marketTypeCodes": ["WIN"],
                 "venues": [search_venue],
                 "marketStartTime": {"from": date_from, "to": date_to},
@@ -319,10 +321,11 @@ class BetfairScraper:
         date_to = datetime(race_date.year, race_date.month, race_date.day,
                            23, 59, 59, tzinfo=timezone.utc).isoformat()
 
+        country = "NZ" if guess_state(venue) == "NZ" else "AU"
         catalogue = await self._api_call("listMarketCatalogue", {
             "filter": {
                 "eventTypeIds": ["7"],
-                "marketCountries": ["AU"],
+                "marketCountries": [country],
                 "marketTypeCodes": ["PLACE"],
                 "venues": [search_venue],
                 "marketStartTime": {"from": date_from, "to": date_to},

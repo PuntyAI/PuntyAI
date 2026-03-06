@@ -645,16 +645,28 @@ async def execute_due_bets(db: AsyncSession) -> int:
         bet.status = "placing"
         await db.commit()
 
-        # Always place market — no win bets
+        # Prefer place market; fall back to win if unavailable
         bet.bet_type = "place"
         market = await resolve_place_market(
             db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
         )
         if not market:
-            bet.status = "failed"
-            bet.error_message = "Could not resolve Betfair place market"
-            await db.commit()
-            continue
+            # Betfair often lacks Place markets for smaller venues — try Win
+            from punty.betting.betfair_client import resolve_win_market
+            market = await resolve_win_market(
+                db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
+            )
+            if market:
+                bet.bet_type = "win"
+                logger.info(
+                    "No Place market for %s R%s — falling back to Win",
+                    meeting.venue, bet.race_number,
+                )
+            else:
+                bet.status = "failed"
+                bet.error_message = "No Betfair Place or Win market available"
+                await db.commit()
+                continue
 
         bet.market_id = market["market_id"]
 
