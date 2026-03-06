@@ -175,13 +175,13 @@ class TestValidateSelections:
         assert errors[0].category == "consistency"
 
     def test_low_probability_win_bet(self):
-        """Win bet on low-probability runner produces warning."""
+        """Win bet on low-probability runner produces error (blocks approval)."""
         runner_map = {1: _runner(1, win_prob=0.05)}
         picks = [_selection(1, 1, bet_type="Win", stake=10.0)]
         result = ValidationResult()
         _validate_selections(picks, runner_map, 1, result)
-        warnings = [i for i in result.issues if i.level == "warning"]
-        assert any("probability" in w.category for w in warnings)
+        errors = [i for i in result.issues if i.level == "error"]
+        assert any("probability" in e.category for e in errors)
 
     def test_saver_win_also_counts_as_win(self):
         """Saver Win counts as a win bet for mandatory check."""
@@ -413,15 +413,15 @@ class TestValidatePuntysPicks:
         _validate_puntys_picks(picks, race_data, result)
         assert len(result.issues) == 0
 
-    def test_low_probability_warning(self):
-        """Punty's Pick below 15% → warning."""
+    def test_low_probability_blocks(self):
+        """Punty's Pick below 15% → error (blocks approval)."""
         picks = [_selection(1, 1, bet_type="Win", stake=10.0, rank=0)]
         race_data = {1: {"runners": [_runner(1, win_prob=0.08)], "field_size": 8}}
         result = ValidationResult()
         _validate_puntys_picks(picks, race_data, result)
-        warnings = [i for i in result.issues if i.level == "warning"]
-        assert len(warnings) == 1
-        assert "probability" in warnings[0].category
+        errors = [i for i in result.issues if i.level == "error"]
+        assert len(errors) == 1
+        assert "probability" in errors[0].category
 
     def test_non_puntys_pick_ignored(self):
         """Regular selections (rank != 0) not checked as Punty's Pick."""
@@ -451,8 +451,8 @@ class TestValidatePuntysPicks:
         }
         result = ValidationResult()
         _validate_puntys_picks(picks, race_data, result)
-        warnings = [i for i in result.issues if i.level == "warning"]
-        assert len(warnings) == 2
+        errors = [i for i in result.issues if i.level == "error"]
+        assert len(errors) == 2
 
 
 # ──────────────────────────────────────────────

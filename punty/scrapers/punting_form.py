@@ -38,8 +38,9 @@ _CONDITION_LABELS = {
 }
 
 # Module-level cache: meetings list keyed by date string.
-# Survives across scraper instances within the same process.
-_meetings_cache: dict[str, list[dict]] = {}
+# TTL prevents stale data when meetings are added/changed during the day.
+_meetings_cache: dict[str, tuple[float, list[dict]]] = {}  # date_str → (timestamp, data)
+_MEETINGS_CACHE_TTL = 7200  # 2 hours
 
 # Module-level cache: strike rates keyed by entity type (1=jockey, 2=trainer).
 # Name → stats dict.  Populated once per day (data is the same for all meetings).
@@ -361,12 +362,15 @@ class PuntingFormScraper(BaseScraper):
     # ---- Meeting resolution ----
 
     async def get_meetings(self, race_date: date) -> list[dict]:
-        """Get list of meetings for a date. Uses module-level cache."""
+        """Get list of meetings for a date. Uses module-level cache with 2hr TTL."""
+        import time
         date_str = race_date.strftime("%Y-%m-%d")
         if date_str in _meetings_cache:
-            return _meetings_cache[date_str]
+            cached_at, cached_data = _meetings_cache[date_str]
+            if time.time() - cached_at < _MEETINGS_CACHE_TTL:
+                return cached_data
         result = await self._api_get("/form/meetingslist", {"meetingDate": date_str})
-        _meetings_cache[date_str] = result
+        _meetings_cache[date_str] = (time.time(), result)
         return result
 
     async def resolve_meeting_id(self, venue: str, race_date: date) -> Optional[int]:
