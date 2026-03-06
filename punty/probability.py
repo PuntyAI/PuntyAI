@@ -1705,6 +1705,79 @@ def _market_movement_factor(runner: Any) -> float:
 
 
 # ──────────────────────────────────────────────
+# Class level parser (for class movement detection)
+# ──────────────────────────────────────────────
+
+# Regex patterns for extracting class levels from messy race class strings
+_BM_RE = re.compile(r"(?:BM|Benchmark|BENCHMARK)\s*(\d+)", re.IGNORECASE)
+_RTG_RE = re.compile(r"(?:RTG|Rating|RATING|Restricted)\s*(\d+)", re.IGNORECASE)
+_CL_RE = re.compile(r"(?:CL|Class)\s*(\d+)", re.IGNORECASE)
+_RANGE_RE = re.compile(r"0\s*-\s*(\d+)")
+
+
+def _class_to_level(class_str: str) -> float | None:
+    """Convert a race class string to a numeric level for comparison.
+
+    Returns a float where higher = higher class. Returns None if unparseable.
+    Scale: Maiden ~20, CL1 ~30, BM58 ~58, Listed ~90, Group 1 ~100.
+    """
+    if not class_str:
+        return None
+    s = class_str.strip()
+    sl = s.lower()
+
+    # Skip trials and jump-outs
+    if "trl" in sl or "trial" in sl or "jump out" in sl or "jumpout" in sl:
+        return None
+
+    # Group races (highest)
+    if "group 1" in sl or "group1" in sl:
+        return 100.0
+    if "group 2" in sl or "group2" in sl:
+        return 96.0
+    if "group 3" in sl or "group3" in sl:
+        return 93.0
+    if "listed" in sl:
+        return 90.0
+
+    # Benchmark / BM (most common)
+    m = _BM_RE.search(s)
+    if m:
+        return float(m.group(1))
+
+    # Rating-based (RTG 58+, Restricted 70, etc.)
+    m = _RTG_RE.search(s)
+    if m:
+        return float(m.group(1))
+
+    # Range format (0-58, 0-64, etc.)
+    m = _RANGE_RE.search(s)
+    if m:
+        return float(m.group(1))
+
+    # Class levels (CL1-CL6)
+    m = _CL_RE.search(s)
+    if m:
+        cl = int(m.group(1))
+        # CL1 ≈ BM54, CL2 ≈ BM58, CL3 ≈ BM64, CL4 ≈ BM68, CL5 ≈ BM72, CL6 ≈ BM76
+        return 50.0 + cl * 4.5
+
+    # Maiden
+    if "mdn" in sl or "maiden" in sl:
+        return 20.0
+
+    # Open (no rating = high class)
+    if sl.startswith("open") or sl == "opn spr":
+        return 82.0
+
+    # Named cups/handicaps — default to mid-range
+    if "cup" in sl or "hcp" in sl or "handicap" in sl:
+        return 70.0
+
+    return None
+
+
+# ──────────────────────────────────────────────
 # Factor: Class/Fitness
 # ──────────────────────────────────────────────
 
@@ -1784,6 +1857,43 @@ def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
                     else:
                         score -= 0.06
                     has_signal = True
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+
+    # Class movement from form_history — detect stepping up/down in class
+    if form_hist:
+        try:
+            if not isinstance(form_hist, list):
+                form_hist_parsed = json.loads(form_hist) if isinstance(form_hist, str) else []
+            else:
+                form_hist_parsed = form_hist
+            if isinstance(form_hist_parsed, list) and form_hist_parsed:
+                race_class = (_get(race, "class_") or "") if race else ""
+                today_level = _class_to_level(race_class)
+                if today_level is not None:
+                    # Average class level from last 1-3 starts
+                    recent_levels = []
+                    for start in form_hist_parsed[:3]:
+                        lvl = _class_to_level(start.get("class", ""))
+                        if lvl is not None:
+                            recent_levels.append(lvl)
+                    if recent_levels:
+                        avg_recent = sum(recent_levels) / len(recent_levels)
+                        class_diff = today_level - avg_recent
+                        # Negative diff = dropping in class (good), positive = stepping up (risky)
+                        if class_diff <= -15:
+                            score += 0.08  # big class drop (e.g. Open → BM64)
+                        elif class_diff <= -8:
+                            score += 0.05  # moderate drop
+                        elif class_diff <= -3:
+                            score += 0.02  # slight drop
+                        elif class_diff >= 15:
+                            score -= 0.06  # big step up
+                        elif class_diff >= 8:
+                            score -= 0.04  # moderate step up
+                        elif class_diff >= 3:
+                            score -= 0.02  # slight step up
+                        has_signal = True
         except (json.JSONDecodeError, TypeError, AttributeError):
             pass
 
@@ -2157,6 +2267,21 @@ def _horse_profile_factor(runner: Any, race: Any = None) -> float:
         # Geldings are slightly more consistent runners
         if sex_lower in ("gelding", "g"):
             score += 0.01
+            # Recent gelding boost — if a young horse has few career starts as
+            # a gelding, it likely was recently gelded (the "ultimate gear change").
+            # First 1-5 runs post-gelding often show dramatic improvement.
+            career = parse_stats_string(_get(runner, "career_record"))
+            horse_age = _get(runner, "horse_age")
+            if career and horse_age:
+                try:
+                    age_val = int(horse_age)
+                except (ValueError, TypeError):
+                    age_val = 0
+                # Young gelding (2-4yo) with few starts = likely recently gelded
+                if age_val <= 4 and career.starts <= 10:
+                    score += 0.06  # strong recent gelding boost
+                elif age_val <= 4 and career.starts <= 15:
+                    score += 0.03  # moderate — may have been gelded mid-career
         # Mares can be inconsistent in certain conditions
         elif sex_lower in ("mare", "m", "filly", "f"):
             score -= 0.01

@@ -43,6 +43,7 @@ from punty.probability import (
     _parse_margin_value,
     _get_weight_change_class,
     _get_context_multipliers,
+    _class_to_level,
     _context_venue_type,
     _context_class_bucket,
     set_dl_pattern_cache,
@@ -2593,3 +2594,202 @@ class TestPlaceValueRating:
         results = calculate_race_probabilities(runners, race, meeting)
         # Fav with strongest career should have highest PVR
         assert results["fav"].place_value_rating >= results["mid"].place_value_rating
+
+
+# ──────────────────────────────────────────────
+# Class Level Parser Tests
+# ──────────────────────────────────────────────
+
+class TestClassToLevel:
+    """Tests for _class_to_level numeric class parsing."""
+
+    def test_maiden(self):
+        assert _class_to_level("Maiden") == 20.0
+        assert _class_to_level("MDN") == 20.0
+        assert _class_to_level("3YO MDN") == 20.0
+
+    def test_benchmark(self):
+        assert _class_to_level("BM64") == 64.0
+        assert _class_to_level("Benchmark 58") == 58.0
+        assert _class_to_level("BENCHMARK 72") == 72.0
+        assert _class_to_level("BM100") == 100.0
+
+    def test_rating(self):
+        assert _class_to_level("RTG 58+") == 58.0
+        assert _class_to_level("Restricted 70") == 70.0
+
+    def test_class_levels(self):
+        cl1 = _class_to_level("CL1")
+        cl3 = _class_to_level("CL3")
+        cl6 = _class_to_level("Class 6")
+        assert cl1 < cl3 < cl6
+
+    def test_group_races(self):
+        g3 = _class_to_level("Group 3")
+        g2 = _class_to_level("Group 2")
+        g1 = _class_to_level("Group 1")
+        listed = _class_to_level("Listed")
+        assert listed < g3 < g2 < g1
+
+    def test_ordering(self):
+        maiden = _class_to_level("Maiden")
+        bm58 = _class_to_level("BM58")
+        bm72 = _class_to_level("BM72")
+        listed = _class_to_level("Listed")
+        g1 = _class_to_level("Group 1")
+        assert maiden < bm58 < bm72 < listed < g1
+
+    def test_range_format(self):
+        assert _class_to_level("0-58") == 58.0
+        assert _class_to_level("0 - 64") == 64.0
+
+    def test_trials_return_none(self):
+        assert _class_to_level("3UP-TRL") is None
+        assert _class_to_level("Jump Out - G4") is None
+
+    def test_open(self):
+        level = _class_to_level("OPEN")
+        assert level > 75  # Open is high class
+
+    def test_empty_none(self):
+        assert _class_to_level("") is None
+        assert _class_to_level(None) is None
+
+
+# ──────────────────────────────────────────────
+# Class Movement Tests
+# ──────────────────────────────────────────────
+
+class TestClassMovement:
+    """Tests for class movement signal in _class_factor."""
+
+    def test_dropping_in_class_boosts(self):
+        """Horse dropping from Open/BM80 to BM64 should get a boost."""
+        runner = _make_runner(
+            form_history=json.dumps([
+                {"position": 5, "margin": 4.0, "class": "BM80"},
+                {"position": 3, "margin": 2.0, "class": "BM78"},
+            ])
+        )
+        race = _make_race(class_="BM64")
+        score = _class_factor(runner, baseline=0.10, race=race)
+        # Dropping ~15 points → significant boost
+        assert score > 0.55
+
+    def test_stepping_up_penalises(self):
+        """Horse stepping up from Maiden to BM64 should get a penalty."""
+        runner = _make_runner(
+            form_history=json.dumps([
+                {"position": 1, "margin": 0, "class": "Maiden"},
+                {"position": 1, "margin": 0, "class": "Maiden"},
+            ])
+        )
+        race = _make_race(class_="BM64")
+        score_up = _class_factor(runner, baseline=0.10, race=race)
+
+        # Same runner staying in class
+        runner_stay = _make_runner(
+            form_history=json.dumps([
+                {"position": 1, "margin": 0, "class": "BM64"},
+                {"position": 2, "margin": 1.0, "class": "BM64"},
+            ])
+        )
+        score_stay = _class_factor(runner_stay, baseline=0.10, race=race)
+        # Stepping up should score lower than staying
+        assert score_up < score_stay
+
+    def test_lateral_move_neutral(self):
+        """Horse staying at same class should have no class movement effect."""
+        runner = _make_runner(
+            form_history=json.dumps([
+                {"position": 2, "margin": 1.0, "class": "BM64"},
+                {"position": 3, "margin": 2.0, "class": "BM66"},
+            ])
+        )
+        race = _make_race(class_="BM64")
+        score = _class_factor(runner, baseline=0.10, race=race)
+        # Small diff (0-2 levels) should be near-neutral
+        assert 0.45 <= score <= 0.55
+
+    def test_trials_in_history_skipped(self):
+        """Trial starts in form_history should not affect class comparison."""
+        runner = _make_runner(
+            form_history=json.dumps([
+                {"position": 1, "class": "3UP-TRL"},  # Trial — should be skipped
+                {"position": 2, "margin": 1.0, "class": "BM64"},
+            ])
+        )
+        race = _make_race(class_="BM64")
+        score = _class_factor(runner, baseline=0.10, race=race)
+        # Should use BM64 only, lateral move → neutral
+        assert 0.45 <= score <= 0.55
+
+    def test_no_class_in_history_safe(self):
+        """Missing class field in form_history should not crash."""
+        runner = _make_runner(
+            form_history=json.dumps([
+                {"position": 2, "margin": 1.0},
+                {"position": 3, "margin": 2.0},
+            ])
+        )
+        race = _make_race(class_="BM64")
+        score = _class_factor(runner, baseline=0.10, race=race)
+        assert 0.40 <= score <= 0.60
+
+
+# ──────────────────────────────────────────────
+# Recent Gelding Tests
+# ──────────────────────────────────────────────
+
+class TestRecentGelding:
+    """Tests for recent gelding boost in _horse_profile_factor."""
+
+    def test_young_gelding_few_starts_boosted(self):
+        """3yo gelding with 8 starts should get recent gelding boost."""
+        runner = _make_runner(
+            horse_sex="Gelding", horse_age=3, career_record="8: 2-1-1"
+        )
+        score = _horse_profile_factor(runner)
+        # age 3 (+0.02) + gelding (+0.01) + recent gelding (+0.06) = 0.59
+        assert score >= 0.58
+
+    def test_old_gelding_no_boost(self):
+        """6yo gelding with 40 starts should NOT get recent gelding boost."""
+        runner = _make_runner(
+            horse_sex="Gelding", horse_age=6, career_record="40: 5-8-6"
+        )
+        score = _horse_profile_factor(runner)
+        # age 6 near-peak (+0.02) + gelding (+0.01) = 0.53
+        assert score < 0.55
+
+    def test_young_gelding_moderate_starts(self):
+        """4yo gelding with 12 starts gets moderate boost."""
+        runner = _make_runner(
+            horse_sex="Gelding", horse_age=4, career_record="12: 2-2-1"
+        )
+        score = _horse_profile_factor(runner)
+        # age 4 peak (+0.05) + gelding (+0.01) + moderate gelding (+0.03) = 0.59
+        assert score >= 0.58
+
+    def test_colt_no_gelding_boost(self):
+        """Colt should not get any gelding boost."""
+        runner_colt = _make_runner(
+            horse_sex="Colt", horse_age=3, career_record="8: 2-1-1"
+        )
+        runner_gelding = _make_runner(
+            horse_sex="Gelding", horse_age=3, career_record="8: 2-1-1"
+        )
+        race = _make_race(class_="BM64")  # non-maiden so colt gets penalty
+        score_colt = _horse_profile_factor(runner_colt, race)
+        score_gelding = _horse_profile_factor(runner_gelding, race)
+        # Gelding should score higher due to recent gelding boost
+        assert score_gelding > score_colt
+
+    def test_blethyn_scenario(self):
+        """Blethyn: 3yo gelding, 8 starts, BM66 (dropping from BM80 area)."""
+        runner = _make_runner(
+            horse_sex="Gelding", horse_age=3, career_record="8: 2-1-1"
+        )
+        score = _horse_profile_factor(runner)
+        # Should get: age 3 (+0.02) + gelding (+0.01) + recent gelding (+0.06) = 0.59
+        assert score >= 0.58
