@@ -1031,9 +1031,9 @@ def _select_exotic(
     if not exotic_combos:
         return None
 
-    # Fav < $2 guard — Data: Exacta -$239, Quinella -$29 when fav < $2
-    if fav_price and fav_price < 2.0:
-        return None
+    # Fav < $2: no blanket exotic kill. RULE 1 (below) enforces that the fav
+    # must be included — a Quinella 1,5 with a $1.98 fav is a valid play.
+    # The old guard killed ALL exotics at fav < $2, which is too aggressive.
 
     # Data-driven filters (Feb 24 audit)
     tc = (track_condition or "").lower()
@@ -1535,6 +1535,8 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
             f"— $20 | Prob: {ex.probability * 100:.1f}% "
             f"| Value: {ex.value_ratio:.2f}x | {ex.num_combos} combos"
         )
+    else:
+        lines.append("  Exotic: SKIP — no exotic recommended for this race")
 
     if pre_sel.notes:
         for note in pre_sel.notes:

@@ -16,7 +16,7 @@ async def validate_unknown_venue(venue: str) -> dict:
     """Validate an unknown venue name using Claude Haiku.
 
     Returns dict with:
-        valid: bool — is this a real Australian racecourse?
+        valid: bool — is this a real Australian or NZ racecourse?
         canonical_name: str — the correct/canonical name
         state: str — state code (NSW, VIC, QLD, SA, WA, TAS, NT, ACT)
         notes: str — any disambiguation info
@@ -46,11 +46,11 @@ async def validate_unknown_venue(venue: str) -> dict:
             messages=[{
                 "role": "user",
                 "content": (
-                    f"Is '{venue}' a real Australian horse racing venue (thoroughbred racecourse)? "
+                    f"Is '{venue}' a real horse racing venue (thoroughbred racecourse) in Australia or New Zealand? "
                     f"Reply in exactly this format:\n"
                     f"VALID: yes or no\n"
                     f"NAME: canonical venue name\n"
-                    f"STATE: state code (NSW/VIC/QLD/SA/WA/TAS/NT/ACT)\n"
+                    f"STATE: state code (NSW/VIC/QLD/SA/WA/TAS/NT/ACT for AU, or NZ for New Zealand)\n"
                     f"NOTES: any disambiguation (e.g. if name is commonly confused with another venue)\n"
                     f"Be concise. If unsure, say no."
                 ),
