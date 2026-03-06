@@ -22,7 +22,7 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.10
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
-DEFAULT_MIN_PLACE_PROB = 0.65  # 65% minimum place probability (90% strike at this threshold)
+DEFAULT_MIN_PLACE_PROB = 0.45  # 45% minimum place probability (tissue engine calibration)
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
 DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
@@ -227,15 +227,6 @@ async def populate_bet_queue(
                 f"NTD override for {pick.horse_name} R{pick.race_number}: "
                 f"{runner_count} runners but PP {pp:.0%} >= {DEFAULT_NTD_HIGH_PP:.0%}"
             )
-
-        # VR ceiling — Data: VR 1.5+ unprofitable across all bet types
-        vr = getattr(pick, "value_rating", None)
-        if isinstance(vr, (int, float)) and vr >= 1.5:
-            logger.info(
-                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"VR {vr:.2f} >= 1.5 ceiling"
-            )
-            continue
 
         # Filter by place probability — only bet on high-confidence selections
         if pick.place_probability is not None and pick.place_probability < min_place_prob:
