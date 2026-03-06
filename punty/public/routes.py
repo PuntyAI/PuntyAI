@@ -2586,6 +2586,36 @@ async def get_daily_dashboard() -> dict:
             data["pnl"] = round(data["pnl"], 2)
             bet_types.append(data)
 
+        # ── Rank Strike Rates ──
+        # Rank 1: win strike (1st place), Rank 2-4: place strike (top 3)
+        rank_stats = {}
+        for pick, runner, race, meeting in settled_rows:
+            if pick.pick_type != "selection" or not pick.tip_rank:
+                continue
+            if (pick.bet_type or "").lower() == "no_bet":
+                continue
+            rank = pick.tip_rank
+            if rank not in rank_stats:
+                rank_stats[rank] = {"bets": 0, "hits": 0}
+            rank_stats[rank]["bets"] += 1
+            fp = runner.finish_position if runner else None
+            if fp:
+                if rank == 1 and fp == 1:
+                    rank_stats[rank]["hits"] += 1
+                elif rank >= 2 and fp <= 3:
+                    rank_stats[rank]["hits"] += 1
+        rank_strike = []
+        for rank in sorted(rank_stats.keys()):
+            rs = rank_stats[rank]
+            strike = round(rs["hits"] / rs["bets"] * 100, 1) if rs["bets"] else 0
+            rank_strike.append({
+                "rank": rank,
+                "bets": rs["bets"],
+                "hits": rs["hits"],
+                "strike": strike,
+                "label": "Win" if rank == 1 else "Place",
+            })
+
         # ── Insights ──
         insights = []
         winning_selections = [
@@ -2799,6 +2829,7 @@ async def get_daily_dashboard() -> dict:
             "upcoming": upcoming[:30],  # Cap at 30 for page size
             "edge_picks": edge_picks[:8],
             "bet_types": bet_types,
+            "rank_strike": rank_strike,
             "insights": insights,
             "venues": venues,
             "total_picks": total_picks,
