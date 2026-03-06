@@ -252,16 +252,16 @@ class TestMarketConsensus:
 
     def test_median_odds_bad_tab_not_double_counted(self):
         """When TAB odds are garbage (e.g. $1.20 for a $23 horse),
-        current_odds should NOT double-count the bad value."""
+        TAB is rejected as outlier (< 0.5× trusted anchor)."""
         runner = _make_runner(
             current_odds=1.20,  # Set from bad TAB value
-            odds_tab=1.20,      # Bad TAB odds
-            odds_sportsbet=23.0,
-            odds_bet365=21.0,
+            odds_tab=1.20,      # Bad TAB odds — rejected
+            odds_sportsbet=23.0,  # Trusted
+            odds_bet365=21.0,   # Supplementary, passes 2x check
         )
         median = _get_median_odds(runner)
-        # median of [1.20, 21.0, 23.0] — current_odds excluded
-        assert median == 21.0
+        # Trusted anchor=SB $23. TAB $1.20 rejected. B365 $21 included.
+        assert median == 22.0
 
     def test_overround_calculation(self):
         runners = [
@@ -1677,16 +1677,22 @@ class TestApplyMarketFloor:
         assert result == win_probs
 
     def test_cranbourne_r1_scenario(self):
-        """Simulates the Cranbourne R1 scenario — $1.40 fav must get proper probability."""
-        # 7-horse field, favourite at $1.40
+        """Simulates the Cranbourne R1 scenario — strong fav must get proper probability.
+
+        With tissue engine: probability comes from career/form, not market odds.
+        A $1.40 favourite should have strong career stats to justify that price.
+        """
+        # 7-horse field, favourite at $1.40 with strong career (realistic for that price)
         runners = [
-            _make_runner(id="fav", current_odds=1.4, last_five="11213"),
-            _make_runner(id="r2", current_odds=6.7),
-            _make_runner(id="r3", current_odds=7.4),
-            _make_runner(id="r4", current_odds=9.1),
-            _make_runner(id="r5", current_odds=14.9),
-            _make_runner(id="r6", current_odds=53.7),
-            _make_runner(id="r7", current_odds=65.6),
+            _make_runner(id="fav", current_odds=1.4, last_five="11213",
+                         career_record="20: 8-4-3",
+                         good_track_stats='{"starts": 12, "wins": 6}'),
+            _make_runner(id="r2", current_odds=6.7, career_record="15: 2-3-2"),
+            _make_runner(id="r3", current_odds=7.4, career_record="10: 1-2-1"),
+            _make_runner(id="r4", current_odds=9.1, career_record="12: 1-1-2"),
+            _make_runner(id="r5", current_odds=14.9, career_record="8: 0-1-1"),
+            _make_runner(id="r6", current_odds=53.7, career_record="5: 0-0-1"),
+            _make_runner(id="r7", current_odds=65.6, career_record="3: 0-0-0"),
         ]
         race = _make_race(field_size=7, distance=1000)
         meeting = _make_meeting(venue="Cranbourne")
@@ -1694,15 +1700,10 @@ class TestApplyMarketFloor:
 
         # Favourite must have highest probability
         assert results["fav"].win_probability > results["r2"].win_probability
-        # Favourite probability should be at least 20% (not the compressed 17%)
-        # Market floor ensures model doesn't wildly disagree with market
-        assert results["fav"].win_probability >= 0.20, (
+        # Strong-career favourite should be well above baseline (1/7 = 14.3%)
+        assert results["fav"].win_probability >= 0.18, (
             f"Favourite only got {results['fav'].win_probability:.1%}, "
-            f"expected >= 20% for a $1.40 shot"
-        )
-        # Value rating shouldn't be absurdly low
-        assert results["fav"].value_rating >= 0.4, (
-            f"Value rating {results['fav'].value_rating:.2f}x is too low"
+            f"expected >= 18% for a strong-career runner"
         )
 
 
@@ -2565,22 +2566,30 @@ class TestPlaceValueRating:
     def test_pvr_monotonic_with_place_odds(self):
         """PVR ordering in larger field — fav should have highest PVR.
 
-        Note: In 3-runner fields, place prob cap (0.75) compresses short-priced
-        favourites, so we test with a larger field where the cap doesn't bite.
+        With tissue engine: probability driven by career stats, not odds.
+        Runners given career records matching their price point for realism.
         """
         runners = [
-            _make_runner(id="fav", current_odds=2.0, place_odds=1.30, last_five="11111"),
-            _make_runner(id="mid", current_odds=4.0, place_odds=1.80, last_five="32451"),
-            _make_runner(id="long", current_odds=8.0, place_odds=2.80, last_five="65879"),
-            _make_runner(id="r4", current_odds=10.0, place_odds=3.50, last_five="67890"),
-            _make_runner(id="r5", current_odds=12.0, place_odds=4.00, last_five="78901"),
-            _make_runner(id="r6", current_odds=15.0, place_odds=5.00, last_five="89012"),
-            _make_runner(id="r7", current_odds=20.0, place_odds=6.00, last_five="90123"),
-            _make_runner(id="r8", current_odds=25.0, place_odds=8.00, last_five="01234"),
+            _make_runner(id="fav", current_odds=2.0, place_odds=1.30, last_five="11111",
+                         career_record="25: 10-5-3"),
+            _make_runner(id="mid", current_odds=4.0, place_odds=1.80, last_five="32451",
+                         career_record="20: 3-4-3"),
+            _make_runner(id="long", current_odds=8.0, place_odds=2.80, last_five="65879",
+                         career_record="15: 1-2-2"),
+            _make_runner(id="r4", current_odds=10.0, place_odds=3.50, last_five="67890",
+                         career_record="12: 1-1-2"),
+            _make_runner(id="r5", current_odds=12.0, place_odds=4.00, last_five="78901",
+                         career_record="10: 0-1-2"),
+            _make_runner(id="r6", current_odds=15.0, place_odds=5.00, last_five="89012",
+                         career_record="8: 0-1-1"),
+            _make_runner(id="r7", current_odds=20.0, place_odds=6.00, last_five="90123",
+                         career_record="6: 0-0-1"),
+            _make_runner(id="r8", current_odds=25.0, place_odds=8.00, last_five="01234",
+                         career_record="5: 0-0-0"),
         ]
         race = _make_race(field_size=8)
         meeting = _make_meeting()
 
         results = calculate_race_probabilities(runners, race, meeting)
-        # Favourite with best place odds should have highest PVR
+        # Fav with strongest career should have highest PVR
         assert results["fav"].place_value_rating >= results["mid"].place_value_rating

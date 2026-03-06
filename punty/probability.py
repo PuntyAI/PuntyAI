@@ -671,12 +671,21 @@ def _calculate_lgbm_probabilities(
         odds = _get_median_odds(runner)
         runner_odds_map[rid] = odds or 0.0
 
-    # Build place market consensus
+    # Build place market consensus — validate TAB place_odds against win odds
     place_market_implied = {}
     place_raw_probs = {}
     for runner in active:
         rid = _get(runner, "id", "")
         po = _get(runner, "place_odds", None)
+        win_odds = runner_odds_map.get(rid, 0.0)
+        # Validate: place_odds must be less than win_odds and within reasonable ratio
+        # Expected: place_odds ≈ (win_odds - 1) / 3 + 1 for 3-place fields
+        if po and po > 1.0 and win_odds > 1.0:
+            expected_place = (win_odds - 1) / 3 + 1
+            # Reject if place_odds > win_odds (impossible) or > 2.5× expected (stale TAB)
+            if po >= win_odds or po > expected_place * 2.5:
+                # Use Betfair-derived estimate instead
+                po = round(expected_place, 2)
         if po and po > 1.0:
             place_raw_probs[rid] = 1.0 / po
     if place_raw_probs:
@@ -802,6 +811,84 @@ def _false_favourite_score(runner: Any, race: Any) -> int:
 # Main entry point
 # ──────────────────────────────────────────────
 
+def _use_tissue() -> bool:
+    """Check if tissue-based probability engine is enabled."""
+    try:
+        from punty.config import get_settings
+        return get_settings().use_tissue
+    except Exception:
+        return True  # default ON
+
+
+def _calculate_tissue_probabilities(
+    active: list, race: Any, meeting: Any, pool: float = DEFAULT_POOL,
+) -> dict[str, "RunnerProbability"]:
+    """Calculate probabilities using tissue engine + market comparison layer.
+
+    Tissue builds independent probabilities without market odds.
+    Market comparison is applied post-ranking for value detection only.
+    """
+    try:
+        from punty.tissue import build_tissue
+        from punty.market_layer import compare_to_market
+    except ImportError:
+        logger.warning("Tissue/market_layer imports failed")
+        return {}
+
+    tissue = build_tissue(active, race, meeting)
+    if not tissue:
+        return {}
+
+    # Market comparison (post-ranking, for value detection and confidence)
+    market_comp = compare_to_market(tissue, active)
+
+    field_size = len(active)
+    baseline = 1.0 / field_size if field_size > 0 else DEFAULT_BASELINE
+
+    results: dict[str, RunnerProbability] = {}
+    for runner in active:
+        rid = _get(runner, "id", "")
+        t = tissue.get(rid)
+        m = market_comp.get(rid)
+        if not t:
+            continue
+
+        win_prob = t.win_probability
+        place_prob = t.place_probability
+
+        # Value and edge from market layer
+        mkt_prob = m.market_implied if m else baseline
+        value = m.value_rating if m else 1.0
+        place_value = m.place_value_rating if m else 1.0
+        edge = m.edge if m else 0.0
+
+        # Recommended stake (quarter-Kelly)
+        odds = _get_median_odds(runner) or 0.0
+        stake = _recommended_stake(win_prob, odds, pool)
+
+        # Build factor details from tissue breakdown + market layer
+        factors = dict(t.factors)
+        if m:
+            factors["_market_agreement"] = m.agreement
+            factors["_movement_signal"] = m.movement_signal
+            factors["_confidence_boost"] = m.confidence_boost
+            factors["_tissue_price"] = t.tissue_price
+
+        results[rid] = RunnerProbability(
+            win_probability=round(win_prob, 4),
+            place_probability=round(place_prob, 4),
+            market_implied=round(mkt_prob, 4),
+            value_rating=round(value, 3),
+            place_value_rating=round(place_value, 3),
+            edge=round(edge, 4),
+            recommended_stake=round(stake, 2),
+            factors=factors,
+            matched_patterns=[],
+        )
+
+    return results
+
+
 def calculate_race_probabilities(
     runners: list,
     race: Any,
@@ -813,6 +900,11 @@ def calculate_race_probabilities(
     _skip_lgbm: bool = False,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
+
+    Pipeline priority:
+    1. Tissue engine (condition-lookup, no market input) — if enabled
+    2. LightGBM blend — if enabled and tissue not used
+    3. Weighted factor engine — fallback
 
     Args:
         runners: List of Runner ORM objects (or dicts with runner fields)
@@ -830,6 +922,13 @@ def calculate_race_probabilities(
     active = [r for r in runners if not _get(r, "scratched", False)]
     if not active:
         return {}
+
+    # Tissue engine — condition-lookup model (highest priority when enabled)
+    if not _skip_lgbm and _use_tissue():
+        result = _calculate_tissue_probabilities(active, race, meeting, pool)
+        if result:
+            return result
+        logger.warning("Tissue engine failed, falling back to weighted engine")
 
     # LightGBM branch — odds-conditional blend toggled by config
     if not _skip_lgbm and _use_lightgbm():
@@ -1193,26 +1292,47 @@ def _market_consensus(runner: Any, overround: float) -> float:
 
 
 def _get_median_odds(runner: Any) -> Optional[float]:
-    """Get median odds across all available bookmakers.
+    """Get median odds across available bookmakers with outlier rejection.
 
-    Uses deduplicated provider odds only (not current_odds, which is derived
-    from one of these providers and would double-count).
+    Priority: Betfair/Sportsbet/PointsBet are trusted. TAB/Bet365/Ladbrokes
+    are supplementary — included only if they agree with trusted sources.
+    Any single source >2× the median of the others is excluded as stale/wrong.
     """
-    sources = [
-        _get(runner, "odds_tab"),
+    # Trusted sources first (exchange + major corporate)
+    trusted = [
+        _get(runner, "odds_betfair"),
         _get(runner, "odds_sportsbet"),
+    ]
+    # Supplementary sources
+    supplementary = [
+        _get(runner, "odds_tab"),
         _get(runner, "odds_bet365"),
         _get(runner, "odds_ladbrokes"),
-        _get(runner, "odds_betfair"),
     ]
-    valid = [o for o in sources if o and isinstance(o, (int, float)) and o > 1.0]
-    if not valid:
-        # Fall back to current_odds if no individual providers available
+    trusted_valid = [o for o in trusted if o and isinstance(o, (int, float)) and o > 1.0]
+    supp_valid = [o for o in supplementary if o and isinstance(o, (int, float)) and o > 1.0]
+
+    if trusted_valid:
+        # Use trusted median as anchor, only include supplementary that agree
+        anchor = statistics.median(trusted_valid)
+        all_valid = list(trusted_valid)
+        for o in supp_valid:
+            # Include if within 2× of trusted anchor (reject outliers like TAB $6.80 vs $2.30)
+            if 0.5 * anchor <= o <= 2.0 * anchor:
+                all_valid.append(o)
+        return statistics.median(all_valid)
+    elif supp_valid:
+        # No trusted sources — use supplementary with outlier rejection
+        if len(supp_valid) >= 3:
+            med = statistics.median(supp_valid)
+            filtered = [o for o in supp_valid if 0.5 * med <= o <= 2.0 * med]
+            return statistics.median(filtered) if filtered else med
+        return statistics.median(supp_valid)
+    else:
         co = _get(runner, "current_odds")
         if co and isinstance(co, (int, float)) and co > 1.0:
             return co
         return None
-    return statistics.median(valid)
 
 
 # ──────────────────────────────────────────────
@@ -2993,8 +3113,8 @@ def calculate_exotic_combinations(
     # Data: Trifecta -$2,259 (30-day audit), First4 losing across all bands.
     # Only Exacta + Quinella retained as profitable exotic types.
 
-    # Sort by value ratio descending, then probability
-    results.sort(key=lambda x: (-x.value_ratio, -x.estimated_probability))
+    # Sort by probability descending (strike rate first), then value as tiebreaker
+    results.sort(key=lambda x: (-x.estimated_probability, -x.value_ratio))
 
     return results[:12]
 
