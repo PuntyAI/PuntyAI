@@ -124,16 +124,43 @@
             <div x-show="chartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466;">
                 <span x-text="chartError"></span>
             </div>
-            <!-- Fallback HTML chart when Chart.js fails silently -->
-            <div x-show="chartFallback && !chartError" class="absolute inset-0 flex items-end gap-1 px-4 pb-8 pt-4">
-                <template x-for="(bar, i) in chartFallbackBars" :key="i">
-                    <div class="flex-1 flex flex-col items-center gap-1">
-                        <span class="text-[10px]" :style="'color:' + (bar.pnl >= 0 ? '#00ff88' : '#ff4466')"
-                              x-text="(bar.pnl >= 0 ? '+$' : '-$') + Math.abs(bar.pnl).toFixed(0)"></span>
-                        <div :style="'height:' + bar.height + '%;background:' + (bar.pnl >= 0 ? 'rgba(0,255,136,0.5)' : 'rgba(255,68,102,0.5)') + ';border:1px solid ' + (bar.pnl >= 0 ? 'rgba(0,255,136,0.8)' : 'rgba(255,68,102,0.8)') + ';border-radius:4px;width:100%;min-height:4px;'"></div>
-                        <span class="text-[9px]" style="color: var(--text-muted);" x-text="bar.label"></span>
-                    </div>
-                </template>
+            <!-- Fallback SVG cumulative P&L chart -->
+            <div x-show="chartFallback && !chartError" class="absolute inset-0" style="padding: 8px 0 0 0;">
+                <svg :viewBox="'0 0 ' + fallbackSvg.w + ' ' + fallbackSvg.h" preserveAspectRatio="none"
+                     style="width:100%;height:calc(100% - 28px);display:block;">
+                    <!-- Zero line -->
+                    <line :x1="0" :y1="fallbackSvg.zeroY" :x2="fallbackSvg.w" :y2="fallbackSvg.zeroY"
+                          stroke="rgba(128,128,160,0.25)" stroke-width="0.5" stroke-dasharray="4,3"/>
+                    <!-- Gradient fill -->
+                    <defs>
+                        <linearGradient id="fbGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" :stop-color="fallbackSvg.lastVal >= 0 ? 'rgba(0,212,255,0.25)' : 'rgba(255,68,102,0.25)'"/>
+                            <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+                        </linearGradient>
+                    </defs>
+                    <polygon :points="fallbackSvg.fillPts" fill="url(#fbGrad)"/>
+                    <!-- Line -->
+                    <polyline :points="fallbackSvg.linePts" fill="none"
+                              :stroke="fallbackSvg.lastVal >= 0 ? '#00d4ff' : '#ff4466'" stroke-width="2"
+                              stroke-linejoin="round" stroke-linecap="round"/>
+                    <!-- Points -->
+                    <template x-for="(pt, i) in fallbackSvg.points" :key="i">
+                        <circle :cx="pt.x" :cy="pt.y" r="3.5"
+                                :fill="pt.hit ? '#00ff88' : '#ff4466'" :stroke="pt.hit ? '#00ff88' : '#ff4466'" stroke-width="1"/>
+                    </template>
+                </svg>
+                <!-- X-axis labels + cumulative values -->
+                <div style="display:flex;justify-content:space-between;padding:0 4px;height:28px;align-items:center;overflow:hidden;">
+                    <template x-for="(pt, i) in fallbackSvg.points" :key="i">
+                        <div style="flex:1;text-align:center;min-width:0;">
+                            <div style="font-size:0.6rem;font-weight:700;font-family:'Orbitron',sans-serif;"
+                                 :style="'color:' + (pt.cum >= 0 ? '#00ff88' : '#ff4466')"
+                                 x-text="(pt.cum >= 0 ? '+$' : '-$') + Math.abs(pt.cum).toFixed(0)"></div>
+                            <div style="font-size:0.5rem;color:rgba(128,128,160,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                                 x-text="pt.label"></div>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
     </div>
@@ -652,7 +679,7 @@ function betfairApp() {
         chartRange: 30,
         chartError: '',
         chartFallback: false,
-        chartFallbackBars: [],
+        fallbackSvg: { w: 600, h: 240, zeroY: 120, linePts: '', fillPts: '', points: [], lastVal: 0 },
         _chart: null,
 
         get activeBets() {
@@ -1110,33 +1137,62 @@ function betfairApp() {
             });
         },
 
-        buildFallback(data) {
-            const series = data.series || [];
-            if (series.length === 0) { this.chartError = 'No Betfair data yet'; return; }
-            const maxPnl = Math.max(...series.map(s => Math.abs(s.pnl)), 1);
-            this.chartFallbackBars = series.map(s => ({
-                label: s.date.slice(5),
-                pnl: s.pnl,
-                height: Math.max(8, Math.abs(s.pnl) / maxPnl * 80),
+        _buildSvgLine(points, labels, hits) {
+            // Build SVG cumulative line chart data
+            const W = 600, H = 240, PAD = 20;
+            const n = points.length;
+            if (n === 0) return;
+            const minV = Math.min(0, ...points);
+            const maxV = Math.max(0, ...points);
+            const range = Math.max(maxV - minV, 1);
+            const scaleY = v => PAD + (H - 2 * PAD) * (1 - (v - minV) / range);
+            const zeroY = scaleY(0);
+            const pts = points.map((v, i) => ({
+                x: n === 1 ? W / 2 : PAD + i * ((W - 2 * PAD) / (n - 1)),
+                y: scaleY(v),
+                cum: v,
+                hit: hits[i],
+                label: labels[i],
             }));
+            const linePts = pts.map(p => p.x + ',' + p.y).join(' ');
+            const fillPts = pts.map(p => p.x + ',' + p.y).join(' ')
+                + ' ' + pts[pts.length - 1].x + ',' + zeroY
+                + ' ' + pts[0].x + ',' + zeroY;
+            this.fallbackSvg = { w: W, h: H, zeroY, linePts, fillPts, points: pts, lastVal: points[points.length - 1] };
             this.chartFallback = true;
-            // Hide the canvas so it doesn't overlap
             const canvas = document.getElementById('pnlChart');
             if (canvas) canvas.style.display = 'none';
+        },
+
+        buildFallback(data) {
+            let series = data.series || [];
+            if (series.length === 0) { this.chartError = 'No Betfair data yet'; return; }
+            if (this.chartRange > 0 && series.length > this.chartRange) {
+                series = series.slice(-this.chartRange);
+                const offset = series[0].cumulative_pnl - series[0].pnl;
+                series = series.map(s => ({...s, cumulative_pnl: s.cumulative_pnl - offset}));
+            }
+            this._buildSvgLine(
+                series.map(s => s.cumulative_pnl),
+                series.map(s => s.date.slice(5)),
+                series.map(s => s.pnl >= 0),
+            );
         },
 
         buildTodayFallback(data) {
             const settled = data.settled || [];
             if (settled.length === 0) { this.chartError = 'No bets settled yet today'; return; }
-            const maxPnl = Math.max(...settled.map(s => Math.abs(s.pnl)), 1);
-            this.chartFallbackBars = settled.map(s => ({
-                label: s.time + ' ' + (s.horse || '').split(' ')[0],
-                pnl: s.pnl,
-                height: Math.max(8, Math.abs(s.pnl) / maxPnl * 80),
-            }));
-            this.chartFallback = true;
-            const canvas = document.getElementById('pnlChart');
-            if (canvas) canvas.style.display = 'none';
+            let cum = 0;
+            const cumPoints = [0]; // Start at 0
+            const labels = ['Start'];
+            const hits = [true];
+            settled.forEach(s => {
+                cum += s.pnl;
+                cumPoints.push(cum);
+                labels.push(s.time + ' ' + (s.horse || '').split(' ')[0]);
+                hits.push(s.hit);
+            });
+            this._buildSvgLine(cumPoints, labels, hits);
         },
 
         showToast(bet) {
