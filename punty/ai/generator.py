@@ -1033,7 +1033,7 @@ class ContentGenerator:
             for runner in race.get("runners", []):
                 if runner.get("scratched"):
                     continue
-                comment = runner.get("comment_long") or runner.get("comment_short") or runner.get("comments")
+                comment = runner.get("comment") or runner.get("comment_long") or runner.get("comments")
                 if comment and len(comment) > 10:
                     race_comments.append({
                         "horse": runner.get("horse_name"),
