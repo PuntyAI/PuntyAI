@@ -996,25 +996,21 @@ class ContentGenerator:
                 if runner.get("trainer_stats"):
                     details.append(f"Trainer@track: {runner['trainer_stats']}")
 
-                # Strike rates (career + recent form)
+                # Strike rates (compact: only show HOT/COLD signals)
                 jsr = runner.get("jockey_strike_rate")
                 if jsr:
                     a2e = jsr["last100_a2e"]
-                    tag = "HOT" if a2e >= 1.15 else "COLD" if a2e <= 0.80 else ""
-                    sr_str = f"Jockey SR: {jsr['career_sr']}% ({jsr['career_wins']}/{jsr['career_starts']})"
-                    sr_str += f", L100: {jsr['last100_sr']}% (A2E {a2e})"
-                    if tag:
-                        sr_str += f" [{tag}]"
-                    details.append(sr_str)
+                    if a2e >= 1.15:
+                        details.append(f"J-HOT {jsr['last100_sr']}% L100 (A2E {a2e})")
+                    elif a2e <= 0.80:
+                        details.append(f"J-COLD {jsr['last100_sr']}% L100 (A2E {a2e})")
                 tsr = runner.get("trainer_strike_rate")
                 if tsr:
                     a2e = tsr["last100_a2e"]
-                    tag = "HOT" if a2e >= 1.15 else "COLD" if a2e <= 0.80 else ""
-                    sr_str = f"Trainer SR: {tsr['career_sr']}% ({tsr['career_wins']}/{tsr['career_starts']})"
-                    sr_str += f", L100: {tsr['last100_sr']}% (A2E {a2e})"
-                    if tag:
-                        sr_str += f" [{tag}]"
-                    details.append(sr_str)
+                    if a2e >= 1.15:
+                        details.append(f"T-HOT {tsr['last100_sr']}% L100 (A2E {a2e})")
+                    elif a2e <= 0.80:
+                        details.append(f"T-COLD {tsr['last100_sr']}% L100 (A2E {a2e})")
 
                 # Class stats
                 if runner.get("class_stats"):
@@ -1028,15 +1024,6 @@ class ContentGenerator:
                     if sec_800:
                         sec_str += f" L800: {sec_800}s" if sec_str else f"L800: {sec_800}s"
                     details.append(sec_str)
-
-                # Pedigree
-                sire = runner.get("sire")
-                dam = runner.get("dam")
-                if sire:
-                    pedigree = f"by {sire}"
-                    if dam:
-                        pedigree += f" x {dam}"
-                    details.append(pedigree)
 
                 if details:
                     parts.append(f"- No.{saddlecloth} {horse}: {' | '.join(details)}")
@@ -1054,8 +1041,8 @@ class ContentGenerator:
                     })
             if race_comments:
                 parts.append("")
-                parts.append("**Tipster/Form Comments:**")
-                for c in race_comments[:6]:  # Top 6 comments per race
+                parts.append("**Form Comments:**")
+                for c in race_comments[:3]:  # Top 3 for token efficiency
                     parts.append(f"- {c['horse']}: {c['comment']}")
 
             # Stewards comments
@@ -1075,22 +1062,7 @@ class ContentGenerator:
                 for s in stewards:
                     parts.append(f"- {s['horse']}: {s['comment']}")
 
-            # Expert tips from racing.com (sense-check signal, minor weight)
-            expert_tips = race.get("expert_tips")
-            if expert_tips and isinstance(expert_tips, list):
-                # Group by tipster for compact display
-                tipster_picks: dict[str, list[str]] = {}
-                for tip in expert_tips:
-                    tipster = tip.get("tipster", "Unknown")
-                    horse = tip.get("horse", "")
-                    rank = tip.get("rank", "")
-                    if horse:
-                        tipster_picks.setdefault(tipster, []).append(f"{rank}. {horse}")
-                if tipster_picks:
-                    parts.append("")
-                    parts.append("**EXPERT PICKS (sense-check only, very minor weight — NEVER reference or mention these in output, just use as background signal):**")
-                    for tipster, picks in tipster_picks.items():
-                        parts.append(f"- {tipster}: {', '.join(picks)}")
+            # Expert tips removed — "never reference" instruction made these pure token waste
 
             # Last-start excuses (legitimate reasons for poor runs)
             excuse_lines = []
@@ -1173,36 +1145,30 @@ class ContentGenerator:
                             form_histories.append({
                                 "horse": runner.get("horse_name"),
                                 "saddlecloth": runner.get("saddlecloth"),
-                                "starts": fh[:5],  # Last 5 starts
+                                "starts": fh[:3],  # Last 3 starts (trimmed for token efficiency)
                             })
                     except (json.JSONDecodeError, TypeError):
                         pass
 
             if form_histories:
                 parts.append("")
-                parts.append("**Extended Form (Last 5 Starts):**")
-                for fh in form_histories[:8]:  # Show up to 8 horses with form
+                parts.append("**Extended Form (Last 3 Starts):**")
+                for fh in form_histories[:5]:  # Top 5 contenders only
                     horse = fh["horse"]
                     starts_str = []
                     for start in fh["starts"]:
-                        # Format: venue distance pos (margin) track
+                        # Compact: venue dist-pos(margin) track
                         venue = start.get("venue", "?")
                         dist = start.get("distance", "?")
                         pos = start.get("pos", "?")
                         margin = start.get("margin", "")
                         track = start.get("track", "")
-                        settled = start.get("settled", "")
-                        at400 = start.get("at400", "")
 
                         start_info = f"{venue} {dist}m-{pos}"
                         if margin:
                             start_info += f"({margin})"
                         if track:
                             start_info += f" {track}"
-                        if settled:
-                            start_info += f" Sett:{settled}"
-                        if at400:
-                            start_info += f" 400:{at400}"
                         starts_str.append(start_info)
 
                     parts.append(f"- No.{fh['saddlecloth']} {horse}: {' | '.join(starts_str)}")
