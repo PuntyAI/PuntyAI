@@ -230,8 +230,14 @@ class ContentGenerator:
             yield evt("Generating Early Mail with AI (this may take a moment)...")
             context_str = self._format_context_for_prompt(context)
 
-            # Add learning from past predictions if available
-            learning_context = await self._build_learning_context(context)
+            # Add learning from past predictions if available (timeout after 30s)
+            try:
+                learning_context = await asyncio.wait_for(
+                    self._build_learning_context(context), timeout=30
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Learning context build timed out after 30s, skipping")
+                learning_context = ""
             if learning_context:
                 context_str += "\n" + learning_context
 
@@ -1304,16 +1310,28 @@ class ContentGenerator:
                 # Trifecta/First4: top positions from picks, allow ranking runners
                 # in trailing spots (3rd for tri, 4th+ for First4).
                 pick_saddlecloths = set()
+                # Map saddlecloth → tip_rank for anchor enforcement
+                pick_rank_map: dict[int, int] = {}
                 if pre_sel_obj := race.get("pre_selections"):
-                    pick_saddlecloths = {p.saddlecloth for p in getattr(pre_sel_obj, "picks", [])}
+                    for p in getattr(pre_sel_obj, "picks", []):
+                        pick_saddlecloths.add(p.saddlecloth)
+                        pick_rank_map[p.saddlecloth] = getattr(p, "tip_rank", 99)
                 filtered_combos = []
                 for ec in exotic_combos:
-                    runners = set(ec.get("runners", []))
+                    runners = ec.get("runners", [])
+                    runners_set = set(runners)
                     etype = ec.get("type", "")
                     if etype in ("Quinella", "Exacta", "Exacta Standout"):
                         # Strict: all runners must be from our picks
-                        if runners <= pick_saddlecloths:
-                            filtered_combos.append(ec)
+                        if not (runners_set <= pick_saddlecloths):
+                            continue
+                        # Exacta anchor rule: position 1 (winner) must be rank 1 or 2
+                        # Never let the roughie (rank 4) anchor the winning spot
+                        if etype in ("Exacta", "Exacta Standout") and runners:
+                            lead_rank = pick_rank_map.get(runners[0], 99)
+                            if lead_rank > 2:
+                                continue
+                        filtered_combos.append(ec)
                     else:
                         # Trifecta/First4: at least 2 runners from picks
                         overlap = len(runners & pick_saddlecloths)

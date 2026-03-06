@@ -171,7 +171,7 @@ class MemoryStore:
         conditions = []
 
         # Match on track condition
-        track = race_context.get("track_condition", "").lower()
+        track = (race_context.get("track_condition") or "").lower()
         if "heavy" in track:
             conditions.append("heavy")
         elif "soft" in track:
@@ -210,7 +210,7 @@ class MemoryStore:
             score = 0
 
             # Track condition match
-            m_track = ctx.get("track_condition", "").lower()
+            m_track = (ctx.get("track_condition") or "").lower()
             if ("heavy" in m_track and "heavy" in track) or \
                ("soft" in m_track and "soft" in track) or \
                ("good" in m_track and "good" in track):
@@ -253,7 +253,7 @@ class MemoryStore:
         insights = []
 
         # Track condition pattern
-        track = race_context.get("track_condition", "").lower()
+        track = (race_context.get("track_condition") or "").lower()
         if "heavy" in track:
             pattern_key = f"heavy_{race_context.get('distance', 1200)}"
         elif "soft" in track:
