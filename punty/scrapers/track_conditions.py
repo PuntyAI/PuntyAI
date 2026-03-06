@@ -1,8 +1,8 @@
-"""Racing Australia track conditions scraper.
+"""Track conditions scraper (AU + NZ).
 
-Scrapes official track conditions from racingaustralia.horse.
-This is the authoritative source for Australian track conditions.
-Uses httpx (static HTML page, no JS rendering needed).
+AU: Scrapes official track conditions from racingaustralia.horse.
+NZ: Scrapes track conditions from loveracing.nz.
+Uses httpx (static HTML pages, no JS rendering needed).
 """
 
 import asyncio
@@ -188,15 +188,20 @@ async def scrape_all_track_conditions() -> list[dict[str, Any]]:
 
 
 async def get_conditions_for_meeting(venue: str) -> Optional[dict[str, Any]]:
-    """Get RA track condition for a specific meeting venue.
+    """Get track condition for a specific meeting venue.
 
-    Resolves venue → state, scrapes that state, and fuzzy-matches the venue.
+    AU venues: resolves venue → state, scrapes racingaustralia.horse.
+    NZ venues: scrapes loveracing.nz meeting overview pages.
     Returns dict with condition info or None if not found.
     """
     state = _resolve_state(venue)
     if not state:
         logger.warning(f"Cannot resolve state for venue: {venue}")
         return None
+
+    # NZ venues — use loveracing.nz
+    if state == "NZ":
+        return await _get_nz_conditions(venue)
 
     conditions = await scrape_track_conditions(state)
     for cond in conditions:
@@ -206,4 +211,171 @@ async def get_conditions_for_meeting(venue: str) -> Optional[dict[str, Any]]:
             return cond
 
     logger.info(f"No RA track condition match for '{venue}' in {state}")
+    return None
+
+
+# ---------------------------------------------------------------------------
+# New Zealand track conditions (loveracing.nz)
+# ---------------------------------------------------------------------------
+
+_NZ_RACEINFO_URL = "https://loveracing.nz/RaceInfo.aspx"
+_NZ_MEETING_URL = "https://loveracing.nz/RaceInfo/{meeting_id}/Meeting-Overview.aspx"
+
+
+async def _get_nz_meeting_ids() -> list[dict[str, Any]]:
+    """Scrape loveracing.nz/RaceInfo.aspx to find meeting IDs and venue names.
+
+    Returns list of dicts: {"meeting_id": str, "venue": str, "club": str}
+    """
+    meetings: list[dict[str, Any]] = []
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(_NZ_RACEINFO_URL, follow_redirects=True)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        logger.error(f"Failed to fetch loveracing.nz RaceInfo: {e}")
+        return meetings
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Find all meeting links: /RaceInfo/{id}/Meeting-Overview.aspx
+    for link in soup.find_all("a", href=re.compile(r"/RaceInfo/\d+/Meeting-Overview")):
+        href = link.get("href", "")
+        m = re.search(r"/RaceInfo/(\d+)/Meeting-Overview", href)
+        if not m:
+            continue
+        meeting_id = m.group(1)
+        club = link.get_text(strip=True)
+
+        # Venue name is often in a sibling or parent cell — look for it
+        # in the surrounding text (table row or list item)
+        parent = link.find_parent(["tr", "li", "div"])
+        venue = ""
+        if parent:
+            text = parent.get_text(" ", strip=True)
+            # Common patterns: "Sat 7 March | Venue Name" or "Venue: Name"
+            # The venue is usually the last meaningful text after the date
+            for part in text.split("|"):
+                part = part.strip()
+                # Skip parts that are dates or the club name
+                if re.match(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s", part):
+                    continue
+                if part == club:
+                    continue
+                if part:
+                    venue = part
+
+        meetings.append({
+            "meeting_id": meeting_id,
+            "club": club,
+            "venue": venue or club,
+        })
+
+    logger.info(f"loveracing.nz: found {len(meetings)} NZ meetings")
+    return meetings
+
+
+def _parse_nz_going(text: str) -> Optional[str]:
+    """Parse NZ going string like 'Soft5 6.30 am 07/03/26' → 'Soft 5'."""
+    if not text:
+        return None
+    # Match patterns: "Soft5", "Good3", "Heavy10", "Dead4"
+    m = re.match(r"(Good|Soft|Heavy|Dead|Slow|Synthetic|Firm|Wet Fast)\s*(\d+)?", text, re.IGNORECASE)
+    if m:
+        condition = m.group(1).capitalize()
+        rating = m.group(2) or ""
+        return f"{condition} {rating}".strip()
+    return text.split()[0] if text.strip() else None
+
+
+async def _scrape_nz_meeting_conditions(meeting_id: str) -> Optional[dict[str, Any]]:
+    """Scrape track conditions from a single loveracing.nz meeting page."""
+    url = _NZ_MEETING_URL.format(meeting_id=meeting_id)
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(url, follow_redirects=True)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        logger.error(f"Failed to fetch NZ meeting {meeting_id}: {e}")
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+    data: dict[str, Any] = {
+        "venue": None,
+        "condition": None,
+        "rail": None,
+        "weather": None,
+        "penetrometer": None,
+        "rainfall": None,
+        "irrigation": None,
+    }
+
+    # Extract venue name from page title/heading
+    title = soup.find("h1") or soup.find("h2")
+    if title:
+        data["venue"] = title.get_text(strip=True)
+
+    # Parse condition sections: <h4>Going</h4>, <h4>Weather</h4>, <h4>Rail</h4>
+    for h4 in soup.find_all(["h4", "h3"]):
+        label = h4.get_text(strip=True).lower()
+        # Get the next <em> or <i> sibling for the value
+        em = h4.find_next(["em", "i", "span"])
+        if not em:
+            continue
+        val = em.get_text(strip=True)
+
+        if "going" in label:
+            data["condition"] = _parse_nz_going(val)
+        elif "weather" in label:
+            data["weather"] = val
+        elif "rail" in label:
+            # "Out 3m | No Rain Last 24 Hours | 2mm Rain Last 7 Days | 3mm Irrigation"
+            parts = [p.strip() for p in val.split("|")]
+            if parts:
+                data["rail"] = parts[0]
+            for part in parts[1:]:
+                pl = part.lower()
+                if "rain" in pl and "24" in pl:
+                    data["rainfall"] = part
+                elif "rain" in pl and "7" in pl:
+                    data["rainfall"] = (data["rainfall"] + "; " + part) if data["rainfall"] else part
+                elif "irrigation" in pl:
+                    data["irrigation"] = part
+
+    # Also try img alt text for going if <em> parsing missed it
+    if not data["condition"]:
+        for img in soup.find_all("img", src=re.compile(r"icon-going")):
+            alt = img.get("alt", "") or img.get("title", "")
+            if alt:
+                data["condition"] = _parse_nz_going(alt)
+                break
+
+    return data if data["condition"] else None
+
+
+async def _get_nz_conditions(venue: str) -> Optional[dict[str, Any]]:
+    """Get track conditions for an NZ venue from loveracing.nz."""
+    meetings = await _get_nz_meeting_ids()
+    if not meetings:
+        logger.warning("No NZ meetings found on loveracing.nz")
+        return None
+
+    # Try to match venue to a meeting
+    venue_lower = venue.lower().strip()
+    for meet in meetings:
+        meet_venue = meet["venue"].lower().strip()
+        meet_club = meet["club"].lower().strip()
+        if (venue_lower in meet_venue or meet_venue in venue_lower
+                or venue_lower in meet_club or meet_club in venue_lower
+                or _match_venue(meet_venue, venue)):
+            logger.info(f"NZ venue match: '{venue}' → meeting {meet['meeting_id']} ({meet['venue']})")
+            cond = await _scrape_nz_meeting_conditions(meet["meeting_id"])
+            if cond:
+                cond["venue"] = venue
+                logger.info(f"NZ conditions for '{venue}': {cond}")
+                return cond
+
+    logger.info(f"No NZ meeting match for '{venue}' on loveracing.nz")
     return None
