@@ -276,8 +276,9 @@ class ContentGenerator:
 
             await self._log_token_usage("early_mail", meeting_id)
 
-            yield evt("AI content generated", "done")
-
+            # Save content BEFORE yielding to SSE — if the client disconnected
+            # during the AI call, the generator gets cancelled on yield, so we
+            # must persist first to avoid losing generated content.
             result = {
                 "raw_content": raw_content,
                 "meeting_id": meeting_id,
@@ -286,12 +287,13 @@ class ContentGenerator:
             }
 
             if save:
-                yield evt("Saving & formatting content...")
                 content = await self._save_content(result, requires_review=True)
                 result["content_id"] = content.id
                 result["status"] = content.status
-                yield evt("Content saved", "done")
-            else:
+
+            yield evt("AI content generated & saved", "done")
+
+            if not save:
                 step += 1
                 yield evt("Save skipped", "done")
 

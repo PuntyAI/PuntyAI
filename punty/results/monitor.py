@@ -1223,7 +1223,7 @@ class ResultsMonitor:
                     self.wrapups_generated.add(meeting_id)
                     logger.info(f"Wrap-up generated for {meeting.venue}")
 
-                    # Auto-approve and post to Twitter + Facebook
+                    # Auto-approve and post to Twitter + Facebook (only if positive P&L)
                     if content:
                         from punty.scheduler.automation import auto_approve_content, auto_post_to_twitter, auto_post_to_facebook
                         content_id = content.get('content_id') if isinstance(content, dict) else None
@@ -1231,17 +1231,33 @@ class ResultsMonitor:
                             approval = await auto_approve_content(content_id, db)
                             if approval.get("status") == "approved":
                                 logger.info(f"Wrap-up auto-approved for {meeting.venue}")
-                                twitter_result = await auto_post_to_twitter(content_id, db)
-                                facebook_result = await auto_post_to_facebook(content_id, db)
-                                # Alert on delivery failures
-                                failures = []
-                                if twitter_result.get("status") == "error":
-                                    failures.append(f"Twitter: {twitter_result.get('message', 'unknown')}")
-                                if facebook_result.get("status") == "error":
-                                    failures.append(f"Facebook: {facebook_result.get('message', 'unknown')}")
-                                if failures:
-                                    from punty.scheduler.automation import _send_delivery_failure_alert
-                                    await _send_delivery_failure_alert(db, content_id, failures)
+
+                                # Only post wrap-ups for meetings with positive P&L
+                                from punty.models.pick import Pick
+                                from punty.models.content import Content as ContentModel
+                                pnl_result = await db.execute(
+                                    select(func.sum(Pick.pnl)).where(
+                                        Pick.meeting_id == meeting_id,
+                                        Pick.settled == True,
+                                    )
+                                )
+                                meeting_pnl = pnl_result.scalar() or 0.0
+
+                                if meeting_pnl > 0:
+                                    logger.info(f"Wrap-up posting for {meeting.venue}: P&L ${meeting_pnl:+.2f} (positive)")
+                                    twitter_result = await auto_post_to_twitter(content_id, db)
+                                    facebook_result = await auto_post_to_facebook(content_id, db)
+                                    # Alert on delivery failures
+                                    failures = []
+                                    if twitter_result.get("status") == "error":
+                                        failures.append(f"Twitter: {twitter_result.get('message', 'unknown')}")
+                                    if facebook_result.get("status") == "error":
+                                        failures.append(f"Facebook: {facebook_result.get('message', 'unknown')}")
+                                    if failures:
+                                        from punty.scheduler.automation import _send_delivery_failure_alert
+                                        await _send_delivery_failure_alert(db, content_id, failures)
+                                else:
+                                    logger.info(f"Wrap-up NOT posted for {meeting.venue}: P&L ${meeting_pnl:+.2f} (negative/zero)")
                             else:
                                 logger.warning(f"Wrap-up auto-approval failed for {meeting.venue}: {approval.get('issues')}")
                 except Exception as e:
