@@ -3163,7 +3163,9 @@ def calculate_exotic_combinations(
 
     # Minimum win probability for lead runner — prevents degenerate exotics
     # where value is high but absolute probability is negligible.
-    MIN_LEAD_PROB = 0.20
+    # Lowered from 0.20 to 0.12: tissue+market blend spreads probability wider
+    # in open races (e.g. All-Star Mile top pick at 15.7% was blocked at 0.20).
+    MIN_LEAD_PROB = 0.12
 
     results: list[ExoticCombination] = []
 
