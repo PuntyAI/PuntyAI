@@ -1237,6 +1237,24 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                 )
                 odds_updated = pf_fallback
 
+        # Recalculate field_size for each race after scratches applied
+        # (PF + Betfair scratches may have reduced the active field)
+        from sqlalchemy import func as sa_func
+        race_rows = await db.execute(select(Race).where(Race.meeting_id == meeting_id))
+        for race in race_rows.scalars().all():
+            active_count_result = await db.execute(
+                select(sa_func.count(Runner.id)).where(
+                    Runner.race_id == race.id, Runner.scratched == False
+                )
+            )
+            active_count = active_count_result.scalar() or 0
+            if race.field_size and race.field_size != active_count:
+                logger.info(
+                    f"Field size updated: {race.id} {race.field_size} → {active_count} "
+                    f"({race.field_size - active_count} scratched)"
+                )
+                race.field_size = active_count
+
         await db.commit()
         return {"meeting_id": meeting_id, "status": "ok", "odds_updated": odds_updated}
     except Exception as e:

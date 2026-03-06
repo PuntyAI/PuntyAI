@@ -719,7 +719,7 @@ def _estimate_place_prob(win_prob: float, field_size: int, place_count: int = 3)
       - Mid-priced: place_prob ≈ wp × 3.0
       - Long-priced: place_prob ≈ wp × 3.5 (place more likely relative to win)
 
-    Capped at 0.80 to prevent unrealistic certainty.
+    Capped at 0.75 to match weighted engine ceiling.
     """
     if win_prob <= 0:
         return 0.01
@@ -740,4 +740,4 @@ def _estimate_place_prob(win_prob: float, field_size: int, place_count: int = 3)
         scale *= 0.67
 
     place_prob = win_prob * scale
-    return min(0.80, max(0.01, place_prob))
+    return min(0.75, max(0.01, place_prob))
