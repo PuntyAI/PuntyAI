@@ -28,8 +28,6 @@ class ContextBuilder:
         self._standard_times: dict = {}
         self._jockey_strike_rates: dict = {}
         self._trainer_strike_rates: dict = {}
-        self._hkjc_jockeys: dict = {}
-        self._hkjc_trainers: dict = {}
 
     async def build_meeting_context(
         self,
@@ -116,25 +114,6 @@ class ContextBuilder:
         except Exception as e:
             logger.debug(f"Strike rate fetch failed: {e}")
 
-        # Fetch HKJC jockey/trainer rankings for HK venues (track-specific stats)
-        self._hkjc_jockeys: dict[str, dict] = {}
-        self._hkjc_trainers: dict[str, dict] = {}
-        try:
-            from punty.venues import is_international_venue, guess_state
-            if is_international_venue(meeting.venue) and guess_state(meeting.venue) == "HK":
-                from punty.scrapers.tab_playwright import fetch_hkjc_rankings
-                hkjc = await fetch_hkjc_rankings(meeting.venue)
-                # Index by lowercase name for matching
-                for j in hkjc.get("jockeys", []):
-                    self._hkjc_jockeys[j["name"].lower()] = j
-                for t in hkjc.get("trainers", []):
-                    self._hkjc_trainers[t["name"].lower()] = t
-                logger.info(
-                    f"HKJC rankings loaded: {len(self._hkjc_jockeys)} jockeys, "
-                    f"{len(self._hkjc_trainers)} trainers for {meeting.venue}"
-                )
-        except Exception as e:
-            logger.debug(f"HKJC ranking fetch failed: {e}")
 
         context = {
             "meeting": {
@@ -203,27 +182,6 @@ class ContextBuilder:
                                 "form": runner.form,
                             })
                             break
-
-        # Add HKJC top jockey/trainer summary at meeting level
-        if self._hkjc_jockeys:
-            # Top 5 jockeys by season wins
-            top_jockeys = sorted(
-                self._hkjc_jockeys.values(),
-                key=lambda j: j.get("overall", {}).get("win", 0),
-                reverse=True,
-            )[:5]
-            context["meeting"]["hkjc_top_jockeys"] = [
-                {"name": j["name"], **j.get("overall", {})} for j in top_jockeys
-            ]
-        if self._hkjc_trainers:
-            top_trainers = sorted(
-                self._hkjc_trainers.values(),
-                key=lambda t: t.get("overall", {}).get("win", 0),
-                reverse=True,
-            )[:5]
-            context["meeting"]["hkjc_top_trainers"] = [
-                {"name": t["name"], **t.get("overall", {})} for t in top_trainers
-            ]
 
         # Build sequence data (AU venues + HK)
         from punty.venues import is_international_venue, guess_state
@@ -422,24 +380,8 @@ class ContextBuilder:
             }
 
             if not runner.scratched:
-                # Pedigree
-                if runner.sire or runner.dam:
-                    runner_data["pedigree"] = {
-                        "sire": runner.sire,
-                        "dam": runner.dam,
-                        "dam_sire": runner.dam_sire,
-                    }
-
-                # Horse details
-                if runner.horse_age or runner.horse_sex:
-                    runner_data["horse_age"] = runner.horse_age
-                    runner_data["horse_sex"] = runner.horse_sex
-                    runner_data["horse_colour"] = runner.horse_colour
-
                 # Performance
-                runner_data["handicap_rating"] = runner.handicap_rating
                 runner_data["days_since_last_run"] = runner.days_since_last_run
-                runner_data["career_prize_money"] = runner.career_prize_money
 
                 if include_odds:
                     runner_data["current_odds"] = runner.current_odds
@@ -464,21 +406,13 @@ class ContextBuilder:
                                 runner.opening_odds, runner.current_odds
                             )
 
-                    # Multi-provider odds (keep for reference)
-                    runner_data["odds_tab"] = runner.odds_tab
-                    runner_data["odds_sportsbet"] = runner.odds_sportsbet
-                    runner_data["odds_bet365"] = runner.odds_bet365
-                    runner_data["odds_ladbrokes"] = runner.odds_ladbrokes
-                    runner_data["odds_betfair"] = runner.odds_betfair
 
                 if include_form:
                     runner_data["form"] = runner.form
-                    runner_data["last_five"] = runner.last_five
                     runner_data["career_record"] = runner.career_record
                     runner_data["form_history"] = runner.form_history
-                    runner_data["comments"] = runner.comments
-                    runner_data["comment_long"] = runner.comment_long
-                    runner_data["comment_short"] = runner.comment_short
+                    # Single best comment (prefer long > short > generic)
+                    runner_data["comment"] = runner.comment_long or runner.comment_short or runner.comments
                     runner_data["stewards_comment"] = runner.stewards_comment
 
                     # Parse form history for enriched analysis
@@ -541,19 +475,6 @@ class ContextBuilder:
                         runner_data["jockey_strike_rate"] = self._jockey_strike_rates[jockey_name]
                     if trainer_name and trainer_name in self._trainer_strike_rates:
                         runner_data["trainer_strike_rate"] = self._trainer_strike_rates[trainer_name]
-
-                    # HKJC track-specific jockey/trainer rankings (HK venues only)
-                    if self._hkjc_jockeys or self._hkjc_trainers:
-                        from punty.scrapers.tab_playwright import format_hkjc_ranking
-                        venue_name = self._venue_name
-                        if jockey_name and jockey_name in self._hkjc_jockeys:
-                            runner_data["hkjc_jockey_ranking"] = format_hkjc_ranking(
-                                self._hkjc_jockeys[jockey_name], "jockey", venue_name,
-                            )
-                        if trainer_name and trainer_name in self._hkjc_trainers:
-                            runner_data["hkjc_trainer_ranking"] = format_hkjc_ranking(
-                                self._hkjc_trainers[trainer_name], "trainer", venue_name,
-                            )
 
                     # Gear
                     runner_data["gear"] = runner.gear
