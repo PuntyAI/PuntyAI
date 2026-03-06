@@ -387,14 +387,19 @@ def calculate_pre_selections(
     # Allocate stakes with edge gating
     _allocate_stakes(picks, race_pool, field_size=field_size)
 
-    # Recalculate exotic combos from our actual picks (not prob engine's top4).
-    # The builder's exotic_combos use the probability engine's top 4 by win_prob,
-    # which can differ from our 4 picks. This ensures exotics only use our picks.
+    # Recalculate exotic combos using our picks + top 6 by probability.
+    # Our 4 picks anchor positions 1-2 (Exacta/First4). Positions 2 (Exacta)
+    # and 3-4 (First4) draw from the wider top-6 pool for better coverage.
+    # Diagnosis showed 57% of exotic misses were "winner not in picks" —
+    # the wider pool for trailing positions addresses this.
     if picks and len(picks) >= 2:
         from punty.probability import calculate_exotic_combinations
+        pick_scs = {p.saddlecloth for p in picks}
+
+        # Build runner data: our 4 picks + next 2 highest-probability runners
+        # that aren't already in our picks (top 6 total)
         pick_runners_data = []
         for p in picks:
-            # Find market_implied from the runner context
             market_implied = 0.0
             for r in runners:
                 if r.get("saddlecloth") == p.saddlecloth:
@@ -409,6 +414,26 @@ def calculate_pre_selections(
                 "market_implied": market_implied or (1.0 / p.odds if p.odds > 0 else 0),
                 "value_rating": p.value_rating,
             })
+
+        # Add next-best runners outside our picks for wider exotic coverage
+        non_pick_runners = sorted(
+            [r for r in runners
+             if not r.get("scratched") and r.get("saddlecloth") not in pick_scs
+             and r.get("_win_prob_raw", 0) > 0],
+            key=lambda r: r.get("_win_prob_raw", 0),
+            reverse=True,
+        )[:2]  # Next 2 best runners by probability
+        for r in non_pick_runners:
+            odds = r.get("current_odds", 0)
+            market_implied = 1.0 / odds if odds and odds > 0 else 0
+            pick_runners_data.append({
+                "saddlecloth": r.get("saddlecloth"),
+                "horse_name": r.get("horse_name", ""),
+                "win_prob": r.get("_win_prob_raw", 0),
+                "market_implied": market_implied,
+                "value_rating": r.get("punty_value_rating", 1.0),
+            })
+
         try:
             pick_combos = calculate_exotic_combinations(pick_runners_data)
             if pick_combos:
@@ -425,7 +450,6 @@ def calculate_pre_selections(
                     }
                     for c in pick_combos
                 ]
-            # else: keep builder's original combos (may still pass overlap check)
         except Exception:
             pass  # Fall back to builder's combos
 
@@ -1069,10 +1093,11 @@ def _select_exotic(
     if not exotic_combos:
         return None
 
-    # Kill Trifecta and First4 types — Data: Trifecta -$2,259, First4 losing
+    # Kill Trifecta types — Data: Trifecta -$2,259.
+    # First4 re-enabled with wider lower legs (positions 3-4 from top 6).
     exotic_combos = [
         ec for ec in exotic_combos
-        if not (ec.get("type", "").startswith("Trifecta") or ec.get("type", "").startswith("First4"))
+        if not ec.get("type", "").startswith("Trifecta")
     ]
     if not exotic_combos:
         return None
@@ -1155,17 +1180,33 @@ def _select_exotic(
             continue
 
         # --- Overlap rules ---
-        # Quinella/Exacta: ALL runners must be from our picks
-        # Trifecta/First4: at least 2 runners from picks
-        if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
+        # Quinella: ALL runners must be from our picks (2-runner, order-free)
+        # Exacta: position 1 (winner anchor) must be from picks rank 1-2;
+        #   position 2 can be from wider probability pool (top 6)
+        # Exacta Standout: anchor from picks, trailing from picks
+        # First4: positions 1-2 from picks, positions 3-4 can be wider
+        runner_list = ec.get("runners", [])
+        if ec_type == "Quinella":
             if overlap_ratio < 1.0:
                 continue
-            # Exacta anchor rule: position 1 (winner) must be rank 1 or 2.
-            # Never let the roughie (rank 4) or rank 3 anchor the winning spot.
-            runner_list = ec.get("runners", [])
-            if ec_type in ("Exacta", "Exacta Standout") and runner_list and rank_map:
+        elif ec_type in ("Exacta", "Exacta Standout"):
+            # Position 1 must be from our picks at rank 1 or 2
+            if runner_list and rank_map:
                 lead_rank = rank_map.get(runner_list[0], 99)
                 if lead_rank > 2:
+                    continue
+            elif runner_list:
+                # No rank map — at least position 1 must be in picks
+                if runner_list[0] not in selection_saddlecloths:
+                    continue
+        elif ec_type in ("First4", "First4 Box"):
+            # Positions 1-2 must be from our picks
+            if len(runner_list) >= 2:
+                top2_in_picks = sum(1 for r in runner_list[:2] if r in selection_saddlecloths)
+                if top2_in_picks < 2:
+                    continue
+            else:
+                if overlap < min(2, n_runners):
                     continue
         else:
             if overlap < min(2, n_runners):
@@ -1201,20 +1242,15 @@ def _select_exotic(
                 continue
 
         if ec_type in ("First4", "First4 Box"):
-            # First4 only viable in 12+ fields (big dividends) or ≤8 (predictable)
-            if field_size and 9 <= field_size <= 11:
-                continue  # Dead zone for First4
-            if field_size and field_size <= 8:
-                # Small field: skip First4 (small pool dividends)
+            # First4 re-enabled: viable in 10+ fields (wider lower legs give coverage).
+            # Skip small fields (<8) where pool dividends are too low.
+            if field_size and field_size < 8:
                 continue
 
-        # Quinella in 15+ fields: too random (skip)
-        if ec_type == "Quinella" and field_size and field_size >= 15:
-            continue
-
-        # Quinella 2-runner in small fields: -73% ROI, skip
-        if ec_type == "Quinella" and n_runners == 2 and field_size and field_size <= 10:
-            continue
+        # Quinella field-size routing — relaxed from 15 ceiling.
+        # Quinella is order-free so handles bigger fields better than Exacta.
+        # Keep minimum: ≤6 already filtered above.
+        # No upper field-size cap — Quinella can work in any field.
 
         # --- Parse probability and value ---
         raw_prob = ec.get("probability", 0)
@@ -1251,49 +1287,41 @@ def _select_exotic(
         # --- RULE 4: Odds-on favourite → anchor exotics ---
         # Fav <$2: route to standout formats (42.2% anchor hit rate in 12+ fields)
         if is_odds_on_fav:
-            if ec_type in ("Exacta Standout", "Trifecta Standout"):
+            if ec_type == "Exacta Standout":
                 score *= 1.30
 
         # Dominant favourite: directional exotics get boost
         if dominant_fav:
-            if ec_type in ("Exacta", "Exacta Standout", "Quinella", "Trifecta Standout"):
+            if ec_type in ("Exacta", "Exacta Standout", "Quinella"):
                 score *= 1.25
 
         # --- RULE 5: Race tightness routing ---
         if is_tight_race:
-            # Tight race: prefer order-independent (Quinella, Trifecta Box)
-            if ec_type in ("Quinella", "Trifecta Box"):
+            # Tight race: prefer order-independent (Quinella)
+            if ec_type == "Quinella":
                 score *= 1.15
-            elif ec_type in ("Exacta", "Exacta Standout") and ec_type != "Quinella":
+            elif ec_type in ("Exacta", "Exacta Standout"):
                 score *= 0.90  # Penalise directional in tight fields
         if is_wide_race:
             # Wide race: prefer directional (Exacta, standout formats)
             # Production: +92.4% ROI on Exacta in wide races
             if ec_type in ("Exacta", "Exacta Standout"):
                 score *= 1.20
-            if ec_type in ("Trifecta Standout",):
-                score *= 1.15
 
         # --- RULE 3 continued: Field-size scoring ---
         if field_size and field_size <= 10:
             # Small/mid field: Data: Quinella 8-10 = +68% ROI, 21.6% strike
             if ec_type in ("Quinella", "Exacta Standout"):
                 score *= 1.25
-            # Trifecta Box has 44.8% base rate in ≤10 fields!
-            if ec_type == "Trifecta Box":
-                score *= 1.10
         elif field_size and 11 <= field_size <= 11:
             # Mid field: Exacta sweet spot (12.4% strike, +30% ROI)
             if ec_type == "Exacta":
                 score *= 1.10
         elif field_size and field_size >= 12:
-            # Big field: promote Trifecta Box + First4 (enormous dividends)
-            # Trifecta avg div $1,538 in 12-14 fields, $3,090 in 15+
+            # Big field: First4 shines (enormous dividends with wider lower legs)
             # First4 avg div $732 in 12-14 fields
-            if ec_type == "Trifecta Box":
-                score *= 1.20
             if ec_type in ("First4", "First4 Box"):
-                score *= 1.15
+                score *= 1.20
             # Exacta still strong in big fields (+$1,519 P&L, avg div $741)
             if ec_type == "Exacta":
                 score *= 1.10
@@ -1303,9 +1331,9 @@ def _select_exotic(
             if ec_type in ("Exacta", "Quinella"):
                 score *= 0.85  # Reduce but don't block
 
-        # Open race: wider coverage exotics
+        # Open race: wider coverage exotics (First4 benefits from wider legs)
         if picks and all(p.win_prob < 0.25 for p in picks):
-            if ec_type in ("Trifecta Box", "First4", "First4 Box"):
+            if ec_type in ("First4", "First4 Box"):
                 score *= 1.20
 
         # --- RULE 6: Big race boost ($75K+ prize) ---

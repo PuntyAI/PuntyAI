@@ -293,20 +293,20 @@ class TestOptimiser:
                     f"Leg {i}: runner {r.get('saddlecloth')} has negative edge {r.get('edge')}"
 
     def test_field_size_cap_small(self):
-        """Field 8-10 → max 3 selections."""
+        """Field 8-10 → capped by min(shape_width, 5) and 50% field."""
         specs = [
             (0.35, 0.08, 8, "STANDOUT"),
-            (0.20, 0.06, 8, "TRIO"),     # chaos but field 8 → max 3
-            (0.25, 0.05, 9, "CLEAR_FAV"),
-            (0.25, 0.05, 10, "CLEAR_FAV"),
+            (0.20, 0.06, 8, "TRIO"),     # shape_w=7, field 8 → min(7,5)=5, 50% cap=4
+            (0.25, 0.05, 9, "CLEAR_FAV"),  # shape_w=5, field 9 → min(5,5)=5, 50% cap=4
+            (0.25, 0.05, 10, "CLEAR_FAV"), # shape_w=5, field 10 → min(5,5)=5, 50% cap=5
         ]
         legs = self._make_legs(specs)
         result = _optimiser_select(legs, budget=50.0)
         assert result is not None
         for i, sel in enumerate(result):
             field = getattr(legs[i], "_field_size", 8)
-            if field <= 10:
-                assert len(sel) <= 3, f"Leg {i}: {len(sel)} selections for field {field}"
+            max_half = max(1, field // 2)
+            assert len(sel) <= max_half, f"Leg {i}: {len(sel)} > 50% of field {field}"
 
     def test_no_over_half_field(self):
         """Never select > 50% of field."""

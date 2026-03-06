@@ -447,9 +447,9 @@ class TestSelectExotic:
             assert result is not None, f"{etype} should be selectable"
             assert result.exotic_type == etype
 
-    def test_trifecta_first4_filtered_out(self):
-        """Trifecta and First4 types are filtered out (data: -$2,259 P&L)."""
-        for etype in ["Trifecta", "Trifecta Box", "Trifecta Standout", "First4", "First4 Box"]:
+    def test_trifecta_filtered_out(self):
+        """Trifecta types are filtered out (data: -$2,259 P&L). First4 re-enabled."""
+        for etype in ["Trifecta", "Trifecta Box", "Trifecta Standout"]:
             combos = [
                 {"type": etype, "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
                  "probability": 0.15, "value": 2.0, "combos": 3, "format": "flat"},

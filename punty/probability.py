@@ -3143,20 +3143,17 @@ def calculate_exotic_combinations(
         reverse=True,
     )
 
-    # Restrict to top 4 to align with selections (top 3 + roughie).
-    # Only First4 4th position extends to top 5.
+    # Top 4 = our picks (top 3 + roughie). Top 6 used for Exacta position 2
+    # and First4 lower legs — widens coverage without abandoning pick anchoring.
     top4 = sorted_runners[:min(4, len(sorted_runners))]
-    top5 = sorted_runners[:min(5, len(sorted_runners))]
+    top6 = sorted_runners[:min(6, len(sorted_runners))]
 
     # Per-type value thresholds based on actual P&L data
     VALUE_THRESHOLDS = {
         "Quinella": 1.2,           # High-probability play, both runners in selections
-        "Exacta": 1.2,
-        "Trifecta Box": 1.2,      # Lowered — always 4-horse box now (better hit rate, 24 combos)
-        "Trifecta Standout": 1.2,
-        "Trifecta Contrarian": 1.3,  # Higher threshold — contrarian approach needs stronger edge
-        "First4": 1.2,            # Positional legs format — targeted, fewer combos
-        "First4 Box": 1.5,        # Rare, extreme value only (0/50 all-time)
+        "Exacta": 1.1,             # Lowered — wider position 2 pool needs lower bar
+        "First4": 1.2,             # Re-enabled with wider lower legs
+        "First4 Box": 1.5,         # Rare, extreme value only
     }
 
     # Odds-on favourite detection
@@ -3166,13 +3163,13 @@ def calculate_exotic_combinations(
 
     # Minimum win probability for lead runner — prevents degenerate exotics
     # where value is high but absolute probability is negligible.
-    # Exacta: first runner must realistically win (≥20%)
-    # Quinella: at least one runner must be a genuine contender (≥20%)
     MIN_LEAD_PROB = 0.20
 
     results: list[ExoticCombination] = []
 
     # --- Quinella: pairs from top 4 ---
+    # Quinella is unordered (no wrong-order penalty) — historically +68% ROI
+    # in 8-10 fields. Generate all pairs from our 4 picks.
     for combo in combinations(top4, 2):
         # At least one runner must be a genuine contender
         if max(combo[0]["win_prob"], combo[1]["win_prob"]) < MIN_LEAD_PROB:
@@ -3199,28 +3196,38 @@ def calculate_exotic_combinations(
                 format="flat",
             ))
 
-    # --- Exacta: ordered pairs from top 4 ---
-    for combo in permutations(top4, 2):
-        # First runner must realistically win — no degenerate roughie exactas
-        if combo[0]["win_prob"] < MIN_LEAD_PROB:
+    # --- Exacta: position 1 from top 4, position 2 from top 6 ---
+    # Diagnosis: 79% of 2nd placers were in our picks but only 50% of winners.
+    # Widening position 2 to top 6 by probability captures more 2nd placers
+    # while keeping the winner anchor on our strongest picks.
+    seen_exacta = set()
+    for first in top4:
+        if first["win_prob"] < MIN_LEAD_PROB:
             continue
+        for second in top6:
+            if second["saddlecloth"] == first["saddlecloth"]:
+                continue
+            key = (first["saddlecloth"], second["saddlecloth"])
+            if key in seen_exacta:
+                continue
+            seen_exacta.add(key)
 
-        our_prob = _harville_probability([r["win_prob"] for r in combo])
-        mkt_prob = _harville_probability([r["market_implied"] for r in combo])
-        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+            our_prob = _harville_probability([first["win_prob"], second["win_prob"]])
+            mkt_prob = _harville_probability([first["market_implied"], second["market_implied"]])
+            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
 
-        if value >= VALUE_THRESHOLDS["Exacta"]:
-            results.append(ExoticCombination(
-                exotic_type="Exacta",
-                runners=[r["saddlecloth"] for r in combo],
-                runner_names=[r.get("horse_name", "") for r in combo],
-                estimated_probability=round(our_prob, 6),
-                market_probability=round(mkt_prob, 6),
-                value_ratio=round(value, 3),
-                cost=stake,
-                num_combos=1,
-                format="flat",
-            ))
+            if value >= VALUE_THRESHOLDS["Exacta"]:
+                results.append(ExoticCombination(
+                    exotic_type="Exacta",
+                    runners=[first["saddlecloth"], second["saddlecloth"]],
+                    runner_names=[first.get("horse_name", ""), second.get("horse_name", "")],
+                    estimated_probability=round(our_prob, 6),
+                    market_probability=round(mkt_prob, 6),
+                    value_ratio=round(value, 3),
+                    cost=stake,
+                    num_combos=1,
+                    format="flat",
+                ))
 
     # --- Exacta Standout: #1 pick anchored 1st, others for 2nd ---
     # Validated: 22.2% hit rate, all exotic wins when #1 won were exactas.
@@ -3255,9 +3262,46 @@ def calculate_exotic_combinations(
                     format="standout",
                 ))
 
-    # --- Trifecta Box/Standout/Contrarian + First4/First4 Box: REMOVED ---
-    # Data: Trifecta -$2,259 (30-day audit), First4 losing across all bands.
-    # Only Exacta + Quinella retained as profitable exotic types.
+    # --- First4: positions 1-2 from top 4 picks, positions 3-4 from top 6 ---
+    # Re-enabled with wider lower legs. Our 4 picks anchor the top positions;
+    # top 6 by probability fill trailing spots for better coverage.
+    # Minimum 2% combined probability — prevents degenerate tiny-prob First4s.
+    MIN_FIRST4_PROB = 0.02
+    if len(top6) >= 4:
+        top4_scs = {r["saddlecloth"] for r in top4}
+        for first in top4[:2]:  # Only rank 1-2 can anchor position 1
+            if first["win_prob"] < MIN_LEAD_PROB:
+                continue
+            for second in top4:
+                if second["saddlecloth"] == first["saddlecloth"]:
+                    continue
+                for third in top6:
+                    if third["saddlecloth"] in (first["saddlecloth"], second["saddlecloth"]):
+                        continue
+                    for fourth in top6:
+                        if fourth["saddlecloth"] in (
+                            first["saddlecloth"], second["saddlecloth"], third["saddlecloth"]
+                        ):
+                            continue
+                        runner_list = [first, second, third, fourth]
+                        our_prob = _harville_probability([r["win_prob"] for r in runner_list])
+                        if our_prob < MIN_FIRST4_PROB:
+                            continue  # Skip degenerate low-prob First4s
+                        mkt_prob = _harville_probability([r["market_implied"] for r in runner_list])
+                        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+
+                        if value >= VALUE_THRESHOLDS["First4"]:
+                            results.append(ExoticCombination(
+                                exotic_type="First4",
+                                runners=[r["saddlecloth"] for r in runner_list],
+                                runner_names=[r.get("horse_name", "") for r in runner_list],
+                                estimated_probability=round(our_prob, 6),
+                                market_probability=round(mkt_prob, 6),
+                                value_ratio=round(value, 3),
+                                cost=stake,
+                                num_combos=1,
+                                format="flat",
+                            ))
 
     # Sort by probability descending (strike rate first), then value as tiebreaker
     results.sort(key=lambda x: (-x.estimated_probability, -x.value_ratio))
