@@ -257,12 +257,12 @@ class BetfairScraper:
                     })
                     continue
 
-                # Get best back price from book
+                # Get best back price from book (live liquidity only)
                 price = self._get_best_back(book_runner)
-                if not price:
-                    # Fallback to lastPriceTraded
-                    price = book_runner.get("lastPriceTraded")
                 if not price or price <= 1.0:
+                    # Do NOT fall back to lastPriceTraded — on illiquid markets
+                    # (country/midweek) it often returns the favourite's price
+                    # for all runners, corrupting the entire field's odds.
                     continue
 
                 results.append({

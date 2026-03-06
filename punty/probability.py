@@ -1298,13 +1298,14 @@ def _get_median_odds(runner: Any) -> Optional[float]:
     are supplementary — included only if they agree with trusted sources.
     Any single source >2× the median of the others is excluded as stale/wrong.
     """
-    # Trusted sources first (exchange + major corporate)
+    # Trusted sources first (primary corporate + exchange when liquid)
     trusted = [
+        _get(runner, "odds_pointsbet"),
         _get(runner, "odds_betfair"),
-        _get(runner, "odds_sportsbet"),
     ]
     # Supplementary sources
     supplementary = [
+        _get(runner, "odds_sportsbet"),
         _get(runner, "odds_tab"),
         _get(runner, "odds_bet365"),
         _get(runner, "odds_ladbrokes"),
@@ -1313,6 +1314,19 @@ def _get_median_odds(runner: Any) -> Optional[float]:
     supp_valid = [o for o in supplementary if o and isinstance(o, (int, float)) and o > 1.0]
 
     if trusted_valid:
+        # If two trusted sources disagree wildly (>5×), one is corrupted —
+        # discard the outlier by keeping only the one closest to supplementary consensus
+        if len(trusted_valid) >= 2:
+            ratio = max(trusted_valid) / min(trusted_valid)
+            if ratio > 5.0 and supp_valid:
+                supp_med = statistics.median(supp_valid)
+                # Keep the trusted source closer to supplementary consensus
+                trusted_valid = [min(trusted_valid,
+                                     key=lambda o: abs(o - supp_med))]
+            elif ratio > 5.0:
+                # No supplementary to arbitrate — keep the higher (more conservative)
+                trusted_valid = [max(trusted_valid)]
+
         # Use trusted median as anchor, only include supplementary that agree
         anchor = statistics.median(trusted_valid)
         all_valid = list(trusted_valid)

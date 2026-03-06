@@ -71,7 +71,7 @@ RUNNER_FIELDS = [
     "soft_track_stats", "heavy_track_stats", "jockey_stats", "trainer_stats", "class_stats",
     "gear", "gear_changes", "stewards_comment", "comment_long", "comment_short",
     "odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes",
-    "odds_betfair", "odds_flucs", "trainer_location", "form_history",
+    "odds_betfair", "odds_pointsbet", "odds_flucs", "trainer_location", "form_history",
     # Pace analysis insights
     "pf_speed_rank", "pf_settle", "pf_map_factor", "pf_jockey_factor",
 ]
@@ -383,6 +383,24 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             logger.warning(f"Betfair odds failed for {venue}: {e}")
             errors.append(f"betfair: {e}")
 
+        # Step 4b: PointsBet odds (primary corporate, fast HTTP, all AU+NZ)
+        try:
+            from punty.scrapers.pointsbet import PointsBetScraper
+            pb = PointsBetScraper()
+            race_result_pb = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id)
+            )
+            pb_race_count = len(race_result_pb.scalars().all())
+            pb_odds = await pb.scrape_odds_for_meeting(
+                venue, race_date, meeting_id, pb_race_count
+            )
+            if pb_odds:
+                await _merge_pointsbet_odds(db, meeting_id, pb_odds)
+                logger.info(f"PointsBet odds merged: {len(pb_odds)} runners for {venue}")
+        except Exception as e:
+            logger.warning(f"PointsBet odds failed for {venue}: {e}")
+            errors.append(f"pointsbet: {e}")
+
         # Step 5: International venue odds (TAB Playwright → HKJC fallback)
         from punty.venues import get_tab_mnemonic
         if get_tab_mnemonic(venue):
@@ -660,6 +678,30 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
             errors.append(f"betfair: {e}")
             yield {"step": 5, "total": total_steps,
                    "label": f"Betfair failed: {e}", "status": "error"}
+
+        # Step 5b: PointsBet odds (primary corporate, fast HTTP, all AU+NZ)
+        yield {"step": 5, "total": total_steps, "label": "Fetching PointsBet odds...", "status": "running"}
+        try:
+            from punty.scrapers.pointsbet import PointsBetScraper
+            pb = PointsBetScraper()
+            race_result_pb = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id)
+            )
+            pb_race_count = len(race_result_pb.scalars().all())
+            pb_odds = await pb.scrape_odds_for_meeting(
+                venue, race_date, meeting_id, pb_race_count
+            )
+            if pb_odds:
+                await _merge_pointsbet_odds(db, meeting_id, pb_odds)
+                yield {"step": 5, "total": total_steps,
+                       "label": f"PointsBet odds: {len(pb_odds)} runners", "status": "done"}
+            else:
+                yield {"step": 5, "total": total_steps,
+                       "label": "PointsBet: no odds found", "status": "done"}
+        except Exception as e:
+            logger.warning(f"PointsBet odds failed for {venue}: {e}")
+            yield {"step": 5, "total": total_steps,
+                   "label": f"PointsBet failed: {e}", "status": "error"}
 
         # Step 6: International venue odds (TAB Playwright → HKJC fallback)
         if is_international:
@@ -1075,6 +1117,23 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                 logger.info(f"Betfair not configured — skipping odds refresh for {meeting_id}")
         except Exception as e:
             logger.warning(f"Betfair odds refresh failed for {meeting_id}: {e}")
+
+        # PointsBet refresh (all AU+NZ venues — primary corporate)
+        try:
+            from punty.scrapers.pointsbet import PointsBetScraper
+            pb = PointsBetScraper()
+            race_result_pb = await db.execute(
+                select(Race).where(Race.meeting_id == meeting_id)
+            )
+            pb_race_count = len(race_result_pb.scalars().all())
+            pb_odds = await pb.scrape_odds_for_meeting(
+                meeting.venue, meeting.date, meeting_id, pb_race_count
+            )
+            if pb_odds:
+                await _merge_pointsbet_odds(db, meeting_id, pb_odds)
+                logger.info(f"PointsBet odds refresh: {len(pb_odds)} runners for {meeting_id}")
+        except Exception as e:
+            logger.warning(f"PointsBet odds refresh failed for {meeting_id}: {e}")
 
         # International venues (HK etc): PointsBet → TAB Playwright → HKJC fallback
         # Betfair is AU-only so never returns odds for these venues.
@@ -1642,6 +1701,24 @@ async def _merge_betfair_odds(db: AsyncSession, meeting_id: str, odds_data: list
                 f"at ${price:.2f} — below $1.10 floor"
             )
             continue
+
+        # Cross-validate: if runner already has other odds sources, reject
+        # Betfair prices that disagree by >5× (corrupted/stale exchange data)
+        existing_odds = [
+            o for o in [runner.odds_pointsbet, runner.odds_sportsbet,
+                        runner.odds_tab, runner.odds_bet365, runner.odds_ladbrokes]
+            if o and isinstance(o, (int, float)) and o > 1.0
+        ]
+        if existing_odds:
+            ref = min(existing_odds)  # most conservative comparison
+            ratio = max(price / ref, ref / price)
+            if ratio > 5.0:
+                logger.warning(
+                    f"Betfair merge rejected: {horse_name} ({race_id}) "
+                    f"BF=${price:.2f} vs ref=${ref:.2f} — {ratio:.1f}× divergence"
+                )
+                continue
+
         runner.odds_betfair = price
         matched += 1
 
@@ -1654,6 +1731,86 @@ async def _merge_betfair_odds(db: AsyncSession, meeting_id: str, odds_data: list
     logger.info(
         f"Betfair merge: {matched}/{len(odds_data)} matched, "
         f"{filled_current} filled current_odds"
+    )
+
+
+async def _merge_pointsbet_odds(db: AsyncSession, meeting_id: str, odds_data: list[dict]) -> None:
+    """Merge PointsBet fixed odds into runner records.
+
+    PointsBet is the primary corporate odds source — fast, reliable, covers all AU+NZ.
+    Also fills current_odds and place_odds when other sources are missing.
+    """
+    import re
+
+    def _normalize(name: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", name.strip().lower())
+
+    if not odds_data:
+        return
+
+    matched = 0
+    filled_current = 0
+    filled_place = 0
+
+    for item in odds_data:
+        race_num = item.get("race_number")
+        horse_name = item.get("horse_name", "")
+        saddlecloth = item.get("saddlecloth")
+        win_odds = item.get("current_odds")
+        place_odds = item.get("place_odds")
+
+        if not (race_num and horse_name and win_odds):
+            continue
+
+        race_id = f"{meeting_id}-r{race_num}"
+
+        # Match by saddlecloth first (most reliable)
+        runner = None
+        if saddlecloth:
+            result = await db.execute(
+                select(Runner).where(
+                    Runner.race_id == race_id,
+                    Runner.saddlecloth == int(saddlecloth),
+                ).limit(1)
+            )
+            runner = result.scalar_one_or_none()
+
+        # Fallback: name match
+        if not runner:
+            norm_pb = _normalize(horse_name)
+            result = await db.execute(
+                select(Runner).where(Runner.race_id == race_id)
+            )
+            for c in result.scalars().all():
+                if _normalize(c.horse_name) == norm_pb:
+                    runner = c
+                    break
+
+        if not runner:
+            continue
+
+        # Reject suspiciously low odds
+        if win_odds < 1.10:
+            continue
+
+        runner.odds_pointsbet = win_odds
+        matched += 1
+
+        # Fill current_odds if no other provider has odds
+        if not runner.current_odds or runner.current_odds <= 1.0:
+            runner.current_odds = win_odds
+            filled_current += 1
+
+        # Fill place_odds if missing or stale
+        if place_odds and place_odds > 1.0:
+            if not runner.place_odds or runner.place_odds <= 1.0:
+                runner.place_odds = place_odds
+                filled_place += 1
+
+    await db.flush()
+    logger.info(
+        f"PointsBet merge: {matched}/{len(odds_data)} matched, "
+        f"{filled_current} filled current_odds, {filled_place} filled place_odds"
     )
 
 
