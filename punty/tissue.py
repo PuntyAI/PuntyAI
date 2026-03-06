@@ -1177,29 +1177,26 @@ def build_tissue(
     results: dict[str, TissueResult] = {}
     place_count = 2 if field_size <= 7 else 3
 
-    # Maiden market blend: in maiden races, tissue alone is weak because
-    # all horses have 0 wins. Blend with market-implied probability to
-    # incorporate trial form, trainer confidence, breeding signals.
-    # α = 0.50 means equal weight tissue + market (geometric mean).
+    # Build market-implied probabilities for all runners (used by both
+    # maiden geometric blend and universal 20% linear blend).
     MAIDEN_MARKET_ALPHA = 0.50
+    MARKET_BLEND = 0.20  # 20% market, 80% tissue for all races
     market_probs: dict[str, float] = {}
-    if is_maiden:
-        odds_total = 0.0
-        for runner in runners:
-            rid = _get(runner, "id", "")
-            odds = _get(runner, "current_odds") or _get(runner, "opening_odds") or 0
-            if isinstance(odds, (int, float)) and odds > 1.0:
-                market_probs[rid] = 1.0 / odds
-                odds_total += 1.0 / odds
-            else:
-                market_probs[rid] = 0.0
-        # Normalize market probs to sum to 1.0 (remove overround)
-        if odds_total > 0:
-            for rid in market_probs:
-                market_probs[rid] /= odds_total
+    odds_total = 0.0
+    for runner in runners:
+        rid = _get(runner, "id", "")
+        odds = _get(runner, "current_odds") or _get(runner, "opening_odds") or 0
+        if isinstance(odds, (int, float)) and odds > 1.0:
+            market_probs[rid] = 1.0 / odds
+            odds_total += 1.0 / odds
         else:
-            # No odds available — disable blend
-            market_probs = {}
+            market_probs[rid] = 0.0
+    # Normalize market probs to sum to 1.0 (remove overround)
+    if odds_total > 0:
+        for rid in market_probs:
+            market_probs[rid] /= odds_total
+    else:
+        market_probs = {}
 
     blended_probs: dict[str, float] = {}
     for runner in runners:
@@ -1207,21 +1204,35 @@ def build_tissue(
         tissue_score = raw_scores.get(rid, 0.001)
         win_prob = tissue_score / total
 
-        # Apply maiden market blend if available
+        # Maiden geometric blend (50/50): tissue alone is weak for maidens
         if is_maiden and rid in market_probs and market_probs[rid] > 0:
             mkt = market_probs[rid]
-            # Geometric mean blend: tissue^(1-α) × market^α
             win_prob = (win_prob ** (1 - MAIDEN_MARKET_ALPHA)) * (mkt ** MAIDEN_MARKET_ALPHA)
             factor_details.get(rid, {})["_maiden_blend"] = round(MAIDEN_MARKET_ALPHA, 2)
-            factor_details.get(rid, {})["_market_implied"] = round(mkt, 4)
 
         blended_probs[rid] = win_prob
 
-    # Re-normalize blended probabilities to sum to 1.0
+    # Re-normalize after maiden blend
     blend_total = sum(blended_probs.values())
     if blend_total > 0:
         for rid in blended_probs:
             blended_probs[rid] /= blend_total
+
+    # Universal 20% market blend: 80% tissue + 20% market-implied
+    if market_probs:
+        for rid in blended_probs:
+            tissue_p = blended_probs[rid]
+            mkt_p = market_probs.get(rid, 0.0)
+            blended_probs[rid] = (1.0 - MARKET_BLEND) * tissue_p + MARKET_BLEND * mkt_p
+            if rid in factor_details:
+                factor_details[rid]["_market_implied"] = round(mkt_p, 4)
+                factor_details[rid]["_market_blend"] = MARKET_BLEND
+
+        # Re-normalize after market blend
+        blend_total = sum(blended_probs.values())
+        if blend_total > 0:
+            for rid in blended_probs:
+                blended_probs[rid] /= blend_total
 
     for runner in runners:
         rid = _get(runner, "id", "")
