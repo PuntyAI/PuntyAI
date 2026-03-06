@@ -231,9 +231,10 @@ class ContentGenerator:
             context_str = self._format_context_for_prompt(context)
 
             # Add learning from past predictions if available (timeout after 30s)
+            # Uses a separate DB session to avoid poisoning the main generator session
             try:
                 learning_context = await asyncio.wait_for(
-                    self._build_learning_context(context), timeout=30
+                    self._build_learning_context_safe(context), timeout=30
                 )
             except (asyncio.TimeoutError, Exception) as e:
                 if isinstance(e, asyncio.TimeoutError):
@@ -241,11 +242,6 @@ class ContentGenerator:
                 else:
                     logger.warning(f"Learning context build failed: {e}")
                 learning_context = ""
-                # Timeout may cancel mid-query, leaving session dirty — rollback to recover
-                try:
-                    await self.db.rollback()
-                except Exception:
-                    pass
             if learning_context:
                 context_str += "\n" + learning_context
 
@@ -308,7 +304,16 @@ class ContentGenerator:
             log_generate_error(venue_name, str(e))
             yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
-    async def _build_learning_context(self, context: dict) -> str:
+    async def _build_learning_context_safe(self, context: dict) -> str:
+        """Wrapper that runs learning context build in its own DB session.
+
+        This prevents learning context failures from corrupting the main generator session.
+        """
+        from punty.models.database import async_session
+        async with async_session() as learning_db:
+            return await self._build_learning_context(learning_db, context)
+
+    async def _build_learning_context(self, db: "AsyncSession", context: dict) -> str:
         """Build learning context from past predictions for inclusion in prompt.
 
         Finds similar past situations and includes insights about what worked/didn't.
@@ -326,7 +331,7 @@ class ContentGenerator:
             from punty.models.settings import get_api_key
 
             embedding_service = EmbeddingService()
-            memory_store = MemoryStore(self.db, embedding_service)
+            memory_store = MemoryStore(db, embedding_service)
             stats = await memory_store.get_stats()
 
             learning_parts = []
@@ -337,7 +342,7 @@ class ContentGenerator:
             # Strategy track record (actual $ performance per bet type)
             try:
                 from punty.memory.strategy import build_strategy_context
-                strategy_ctx = await build_strategy_context(self.db, track=track, going=going)
+                strategy_ctx = await build_strategy_context(db, track=track, going=going)
                 if strategy_ctx:
                     learning_parts.append(strategy_ctx)
                     learning_parts.append("")
@@ -345,7 +350,7 @@ class ContentGenerator:
                 logger.warning(f"Failed to build strategy context: {e}")
 
             # Get API key for embedding-based retrieval
-            api_key = await get_api_key(self.db, "openai_api_key")
+            api_key = await get_api_key(db, "openai_api_key")
 
             races = context.get("races", [])
             weather = meeting.get("weather_condition") or meeting.get("weather")
@@ -391,7 +396,7 @@ class ContentGenerator:
             for i, race in enumerate(races):
                 distance, race_class, age_restriction, sex_restriction, weight_type, field_size = race_meta[i]
                 assessments = await retrieve_assessment_context(
-                    self.db, track, distance, going, race_class,
+                    db, track, distance, going, race_class,
                     api_key=api_key, max_results=2,
                     age_restriction=age_restriction,
                     sex_restriction=sex_restriction,
