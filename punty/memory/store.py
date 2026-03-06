@@ -25,6 +25,7 @@ class MemoryStore:
     def __init__(self, db: AsyncSession, embedding_service: Optional[EmbeddingService] = None):
         self.db = db
         self.embedding_service = embedding_service or EmbeddingService()
+        self._cached_memories: list | None = None  # Cache for find_similar_situations
 
     async def store_prediction(
         self,
@@ -133,13 +134,18 @@ class MemoryStore:
             # Fall back to rule-based matching
             return await self._find_similar_by_rules(race_context, runner, top_k)
 
-        # Get all memories with embeddings
-        query = select(RaceMemory).where(RaceMemory.embedding_json.isnot(None))
-        if only_settled:
-            query = query.where(RaceMemory.settled_at.isnot(None))
-
-        result = await self.db.execute(query)
-        memories = result.scalars().all()
+        # Get all memories with embeddings (cached for repeated calls)
+        if self._cached_memories is None:
+            query = (
+                select(RaceMemory)
+                .where(RaceMemory.embedding_json.isnot(None))
+                .where(RaceMemory.settled_at.isnot(None))
+                .order_by(desc(RaceMemory.created_at))
+                .limit(500)  # Cap to avoid loading 10K+ rows
+            )
+            result = await self.db.execute(query)
+            self._cached_memories = result.scalars().all()
+        memories = self._cached_memories
 
         # Calculate similarities
         memory_embeddings = [
@@ -349,39 +355,25 @@ class MemoryStore:
         return "\n".join(parts) if parts else ""
 
     async def get_stats(self) -> dict[str, Any]:
-        """Get overall memory statistics."""
-        # Total memories
-        total_result = await self.db.execute(select(func.count(RaceMemory.id)))
-        total = total_result.scalar_one()
-
-        # Settled memories
-        settled_result = await self.db.execute(
-            select(func.count(RaceMemory.id)).where(RaceMemory.settled_at.isnot(None))
-        )
-        settled = settled_result.scalar_one()
-
-        # Hit rate
-        if settled > 0:
-            hits_result = await self.db.execute(
-                select(func.count(RaceMemory.id)).where(
-                    RaceMemory.settled_at.isnot(None),
-                    RaceMemory.hit == True,
-                )
+        """Get overall memory statistics in a single query."""
+        from sqlalchemy import case
+        result = await self.db.execute(
+            select(
+                func.count(RaceMemory.id).label("total"),
+                func.count(RaceMemory.settled_at).label("settled"),
+                func.sum(case((and_(RaceMemory.settled_at.isnot(None), RaceMemory.hit == True), 1), else_=0)).label("hits"),
+                func.avg(case((RaceMemory.settled_at.isnot(None), RaceMemory.pnl), else_=None)).label("avg_pnl"),
             )
-            hits = hits_result.scalar_one()
-            hit_rate = hits / settled * 100
-        else:
-            hit_rate = 0.0
-
-        # Average PNL
-        pnl_result = await self.db.execute(
-            select(func.avg(RaceMemory.pnl)).where(RaceMemory.settled_at.isnot(None))
         )
-        avg_pnl = pnl_result.scalar_one() or 0.0
+        row = result.one()
+        total = row.total or 0
+        settled = row.settled or 0
+        hits = row.hits or 0
+        hit_rate = (hits / settled * 100) if settled > 0 else 0.0
 
         return {
             "total_memories": total,
             "settled_memories": settled,
             "hit_rate": hit_rate,
-            "avg_pnl": avg_pnl,
+            "avg_pnl": row.avg_pnl or 0.0,
         }
