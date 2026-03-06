@@ -875,8 +875,11 @@ class ContentGenerator:
                 times = [e.get("time", "")[-8:-3] for e in high_prob]  # HH:MM
                 rain_prob_line = f"\nRain risk: {high_prob[0]['probability']}%+ chance at {', '.join(times)}"
 
+        meeting_id = meeting.get("id", "")
         parts = [
             f"## {meeting.get('venue', 'Unknown')} - {meeting.get('date', 'Unknown')}",
+            f"Meeting ID: {meeting_id}",
+            f"Tips link: https://punty.ai/tips/{meeting_id}",
             f"Track: {meeting.get('track_condition', 'TBC')}",
             f"Rail: {meeting.get('rail_position', 'TBC')}",
             f"Weather: {weather_line}{rainfall_line}{wind_impact_line}{obs_line}{rain_prob_line}",
