@@ -547,20 +547,16 @@ def _optimiser_select(
             )
             sel = by_prob[:target]
         else:
-            # Normal/chaos: tip-first selection
-            # 1) Picks with positive edge, sorted by win_prob (best picks first)
-            picks_overlay = sorted(
-                [r for r in runners if r.get("_is_pick") and float(r.get("edge", 0)) > 0],
+            # Normal/chaos: picks-first selection
+            # Quaddies need WINNERS — our picks sorted by win_prob always come
+            # first, regardless of edge. Edge only matters for non-pick width.
+            # 1) All our picks, sorted by win_prob descending (best picks first)
+            all_picks = sorted(
+                [r for r in runners if r.get("_is_pick")],
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
-            # 2) Picks with neutral/negative edge (still our tips, just no overlay)
-            picks_rest = sorted(
-                [r for r in runners if r.get("_is_pick") and float(r.get("edge", 0)) <= 0],
-                key=lambda r: float(r.get("win_prob", 0)),
-                reverse=True,
-            )
-            # 3) Extended pool runners with positive edge (non-tips, for width only)
+            # 2) Extended pool runners with positive edge (non-tips, for width only)
             extended_overlay = sorted(
                 [r for r in runners if not r.get("_is_pick") and float(r.get("edge", 0)) > 0],
                 key=lambda r: (float(r.get("edge", 0)), float(r.get("win_prob", 0))),
@@ -579,13 +575,8 @@ def _optimiser_select(
                         sel.append(r)
                         existing_sc.add(sc)
 
-            # Always include rank 1 pick first — our top pick must anchor every leg
-            rank1 = [r for r in runners if r.get("_is_pick") and r.get("_pick_rank") == 1]
-            _add(rank1, target)
-            # Fill with picks that have overlay
-            _add(picks_overlay, target)
-            # Then remaining picks (our tips even without overlay)
-            _add(picks_rest, target)
+            # Fill with our picks first (sorted by win_prob — strongest picks anchor)
+            _add(all_picks, target)
             # Only then extend with non-tip overlay runners for width
             _add(extended_overlay, target)
 
@@ -630,22 +621,37 @@ def _optimiser_select(
                 if short_fav is None or float(odds) < float(short_fav.get("current_odds", 999)):
                     short_fav = r
         if short_fav:
-            # Force-add: replace weakest non-pick runner if at capacity
+            # Force-add: replace weakest runner if at capacity
             if len(selected[i]) >= targets[i]:
+                # Prefer replacing non-pick runners first
                 worst_idx = None
-                worst_edge = 999
+                worst_score = 999
                 for j, r in enumerate(selected[i]):
                     if not r.get("_is_pick"):
-                        edge = float(r.get("edge", 0))
-                        if edge < worst_edge:
-                            worst_edge = edge
+                        score = float(r.get("edge", 0))
+                        if score < worst_score:
+                            worst_score = score
                             worst_idx = j
+                # If all runners are picks, replace the weakest pick by win_prob
+                # (short-priced fav at ≤$2.50 is almost certainly stronger)
+                if worst_idx is None:
+                    worst_wp = 999
+                    for j, r in enumerate(selected[i]):
+                        wp = float(r.get("win_prob", 0))
+                        if wp < worst_wp:
+                            worst_wp = wp
+                            worst_idx = j
+                    # Only replace if fav has higher win_prob than weakest pick
+                    fav_wp = float(short_fav.get("win_prob", 0))
+                    if worst_idx is not None and fav_wp <= worst_wp:
+                        worst_idx = None  # Don't replace a stronger pick
                 if worst_idx is not None:
+                    replaced = selected[i][worst_idx]
                     selected[i][worst_idx] = short_fav
                     logger.info(
                         f"Leg {i+1} R{legs_data[i].race_number}: forced fav "
                         f"{short_fav.get('horse_name')} (${short_fav.get('current_odds')}) "
-                        f"replacing weakest non-pick"
+                        f"replacing {replaced.get('horse_name')}"
                     )
             else:
                 selected[i].append(short_fav)
