@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 BASE_OUTLAY = 30.0
 MIN_OUTLAY = 20.0
-MAX_OUTLAY = 40.0
+MAX_OUTLAY = 80.0  # Shape-driven legs need wider budget (was $60, $40 before that)
 BIG6_MIN_OUTLAY = 20.0
 BIG6_MAX_OUTLAY = 30.0
-MIN_FLEXI_PCT = 30.0
+MIN_FLEXI_PCT = 20.0  # Lowered from 30% — allows 400 combos at $80 budget (5×4×5×4)
 
 # Main quaddie re-enabled with wider legs and edge-based construction.
 ENABLE_MAIN_QUADDIE = True
@@ -484,38 +484,41 @@ def _optimiser_select(
     for i, lt in enumerate(leg_types):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
         pool_depth = len(overlay_pools[i]["overlays"]) + len(overlay_pools[i]["neutrals"])
+        # Use odds-shape-driven width as the target — diagnosis showed 45% of
+        # missed legs had winners within shape_width but outside our leg width.
+        # Shape width comes from 14,246-leg backtest marginal capture >=7%.
+        shape_w = legs_data[i].shape_width if hasattr(legs_data[i], "shape_width") else 3
         if lt == "anchor":
-            # Allow 2-wide only if we have a short-priced fav selected to win
+            # Anchor: trust the favourite, allow 2-wide with short fav
             if has_short_fav_pick[i]:
                 targets.append(2)
             else:
-                targets.append(3)
+                targets.append(min(3, shape_w))
         elif lt == "chaos":
-            targets.append(min(5, pool_depth))
+            targets.append(min(shape_w, pool_depth))
         else:
-            # Normal: 3-4 based on field size and overlay depth
-            if field_size >= 12:
-                targets.append(min(4, pool_depth))
-            else:
-                targets.append(min(3, pool_depth))
+            # Normal: use shape width, capped by pool depth
+            targets.append(min(shape_w, pool_depth))
 
     # Step 4: Apply field-size caps and minimums
     for i in range(num_legs):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
-        if field_size <= 7:
+        shape_w = legs_data[i].shape_width if hasattr(legs_data[i], "shape_width") else 3
+        # Cap at shape width or field-size-based maximum, whichever is lower
+        if field_size <= 5:
             targets[i] = min(targets[i], 3)
-        elif field_size <= 10:
-            targets[i] = min(targets[i], 3)
-        elif field_size <= 13:
+        elif field_size <= 7:
             targets[i] = min(targets[i], 4)
+        elif field_size <= 10:
+            targets[i] = min(targets[i], min(shape_w, 5))
+        elif field_size <= 13:
+            targets[i] = min(targets[i], min(shape_w, 6))
         else:
-            targets[i] = min(targets[i], 5)
-        # Never > 50% of field (allow exactly half for small fields)
+            targets[i] = min(targets[i], min(shape_w, 7))
+        # Never > 50% of field
         max_half = max(1, field_size // 2) if field_size > 2 else 1
         targets[i] = min(targets[i], max_half)
         # Field-size-driven minimums
-        # ALL quaddie legs minimum 3-wide (37% → 62% hit rate)
-        # Big6 can be 2-wide (budget constraint: 3^6=729 combos doesn't fit)
         if field_size >= 14:
             min_width = 4
         elif is_big6:
@@ -556,10 +559,10 @@ def _optimiser_select(
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
-            # 2) Extended pool runners with positive edge (non-tips, for width only)
-            extended_overlay = sorted(
-                [r for r in runners if not r.get("_is_pick") and float(r.get("edge", 0)) > 0],
-                key=lambda r: (float(r.get("edge", 0)), float(r.get("win_prob", 0))),
+            # 2) Extended pool: top win_prob non-picks (need coverage, not just edge)
+            extended_pool = sorted(
+                [r for r in runners if not r.get("_is_pick")],
+                key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
 
@@ -577,8 +580,8 @@ def _optimiser_select(
 
             # Fill with our picks first (sorted by win_prob — strongest picks anchor)
             _add(all_picks, target)
-            # Only then extend with non-tip overlay runners for width
-            _add(extended_overlay, target)
+            # Then extend with highest win_prob non-picks for width coverage
+            _add(extended_pool, target)
 
         # If still under min 2, pad with best win_prob pick (last resort)
         if len(sel) < 2:
@@ -632,8 +635,9 @@ def _optimiser_select(
                         if score < worst_score:
                             worst_score = score
                             worst_idx = j
-                # If all runners are picks, replace the weakest pick by win_prob
-                # (short-priced fav at ≤$2.50 is almost certainly stronger)
+                # If all runners are picks, replace the weakest pick by win_prob.
+                # Short-priced favs (≤$2.50) should ALWAYS be in our legs —
+                # the market is pricing them at 40-75% chance. Trust market here.
                 if worst_idx is None:
                     worst_wp = 999
                     for j, r in enumerate(selected[i]):
@@ -641,10 +645,6 @@ def _optimiser_select(
                         if wp < worst_wp:
                             worst_wp = wp
                             worst_idx = j
-                    # Only replace if fav has higher win_prob than weakest pick
-                    fav_wp = float(short_fav.get("win_prob", 0))
-                    if worst_idx is not None and fav_wp <= worst_wp:
-                        worst_idx = None  # Don't replace a stronger pick
                 if worst_idx is not None:
                     replaced = selected[i][worst_idx]
                     selected[i][worst_idx] = short_fav
@@ -728,16 +728,19 @@ def _optimiser_select(
         current_ev = _calc_ev_proxy(selected, legs_data)
         for i in range(num_legs):
             field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
-            # Respect field-size caps (must match Step 4 grading)
-            if field_size <= 7:
+            shape_w = legs_data[i].shape_width if hasattr(legs_data[i], "shape_width") else 3
+            # Match Step 4 field-size caps — but respect shape_width
+            if field_size <= 5:
                 max_sel = 3
+            elif field_size <= 7:
+                max_sel = min(shape_w, 4)
             elif field_size <= 10:
-                max_sel = 3
+                max_sel = min(shape_w, 5)
             elif field_size <= 13:
-                max_sel = 4
+                max_sel = min(shape_w, 6)
             else:
-                max_sel = 5
-            max_half = max(1, field_size // 2 - 1) if field_size > 2 else 1
+                max_sel = min(shape_w, 7)
+            max_half = max(1, field_size // 2) if field_size > 2 else 1
             max_sel = min(max_sel, max_half)
             if is_big6:
                 max_sel = min(max_sel, 2)
