@@ -95,7 +95,7 @@ After the exotic line, add a line showing combos and flexi %. Calculate: flexi %
 - Trifecta Standout 1/3 = 6 combos → $15/6 = 250% flexi
 
 **EXOTIC SELECTION — USE THE PRE-CALCULATED RECOMMENDATION:**
-Each race includes a recommended exotic already computed using the Harville probability model. The system picks the type with the best expected value (probability × value ratio) from ALL available types. Use the recommended exotic directly — do NOT override the type or runners.
+Each race includes a recommended exotic already computed using the Harville probability model. The system picks the type with the best expected value (probability × value ratio) from ALL available types. Use the recommended exotic directly — do NOT override the type or runners. If the pre-selections say "Exotic: SKIP", do NOT invent an exotic — write "No exotic recommended for this race" instead.
 
 **CONSISTENCY RULE — ALL exotic runners MUST come from your Top 3 + Roughie picks.**
 The pre-calculated exotic combinations already enforce this constraint. Do NOT include runners that aren't in your selections.
