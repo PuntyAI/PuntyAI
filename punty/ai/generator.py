@@ -230,8 +230,18 @@ class ContentGenerator:
             yield evt("Generating Early Mail with AI (this may take a moment)...")
             context_str = self._format_context_for_prompt(context)
 
-            # Add learning from past predictions if available
-            learning_context = await self._build_learning_context(context)
+            # Add learning from past predictions if available (timeout after 30s)
+            # Uses a separate DB session to avoid poisoning the main generator session
+            try:
+                learning_context = await asyncio.wait_for(
+                    self._build_learning_context_safe(context), timeout=30
+                )
+            except (asyncio.TimeoutError, Exception) as e:
+                if isinstance(e, asyncio.TimeoutError):
+                    logger.warning("Learning context build timed out after 30s, skipping")
+                else:
+                    logger.warning(f"Learning context build failed: {e}")
+                learning_context = ""
             if learning_context:
                 context_str += "\n" + learning_context
 
@@ -266,8 +276,9 @@ class ContentGenerator:
 
             await self._log_token_usage("early_mail", meeting_id)
 
-            yield evt("AI content generated", "done")
-
+            # Save content BEFORE yielding to SSE — if the client disconnected
+            # during the AI call, the generator gets cancelled on yield, so we
+            # must persist first to avoid losing generated content.
             result = {
                 "raw_content": raw_content,
                 "meeting_id": meeting_id,
@@ -276,12 +287,13 @@ class ContentGenerator:
             }
 
             if save:
-                yield evt("Saving & formatting content...")
                 content = await self._save_content(result, requires_review=True)
                 result["content_id"] = content.id
                 result["status"] = content.status
-                yield evt("Content saved", "done")
-            else:
+
+            yield evt("AI content generated & saved", "done")
+
+            if not save:
                 step += 1
                 yield evt("Save skipped", "done")
 
@@ -294,7 +306,16 @@ class ContentGenerator:
             log_generate_error(venue_name, str(e))
             yield {"step": step, "total": total_steps, "label": f"Error: {e}", "status": "error"}
 
-    async def _build_learning_context(self, context: dict) -> str:
+    async def _build_learning_context_safe(self, context: dict) -> str:
+        """Wrapper that runs learning context build in its own DB session.
+
+        This prevents learning context failures from corrupting the main generator session.
+        """
+        from punty.models.database import async_session
+        async with async_session() as learning_db:
+            return await self._build_learning_context(learning_db, context)
+
+    async def _build_learning_context(self, db: "AsyncSession", context: dict) -> str:
         """Build learning context from past predictions for inclusion in prompt.
 
         Finds similar past situations and includes insights about what worked/didn't.
@@ -312,7 +333,7 @@ class ContentGenerator:
             from punty.models.settings import get_api_key
 
             embedding_service = EmbeddingService()
-            memory_store = MemoryStore(self.db, embedding_service)
+            memory_store = MemoryStore(db, embedding_service)
             stats = await memory_store.get_stats()
 
             learning_parts = []
@@ -323,7 +344,7 @@ class ContentGenerator:
             # Strategy track record (actual $ performance per bet type)
             try:
                 from punty.memory.strategy import build_strategy_context
-                strategy_ctx = await build_strategy_context(self.db, track=track, going=going)
+                strategy_ctx = await build_strategy_context(db, track=track, going=going)
                 if strategy_ctx:
                     learning_parts.append(strategy_ctx)
                     learning_parts.append("")
@@ -331,7 +352,7 @@ class ContentGenerator:
                 logger.warning(f"Failed to build strategy context: {e}")
 
             # Get API key for embedding-based retrieval
-            api_key = await get_api_key(self.db, "openai_api_key")
+            api_key = await get_api_key(db, "openai_api_key")
 
             races = context.get("races", [])
             weather = meeting.get("weather_condition") or meeting.get("weather")
@@ -377,7 +398,7 @@ class ContentGenerator:
             for i, race in enumerate(races):
                 distance, race_class, age_restriction, sex_restriction, weight_type, field_size = race_meta[i]
                 assessments = await retrieve_assessment_context(
-                    self.db, track, distance, going, race_class,
+                    db, track, distance, going, race_class,
                     api_key=api_key, max_results=2,
                     age_restriction=age_restriction,
                     sex_restriction=sex_restriction,
@@ -854,8 +875,11 @@ class ContentGenerator:
                 times = [e.get("time", "")[-8:-3] for e in high_prob]  # HH:MM
                 rain_prob_line = f"\nRain risk: {high_prob[0]['probability']}%+ chance at {', '.join(times)}"
 
+        meeting_id = meeting.get("id", "")
         parts = [
             f"## {meeting.get('venue', 'Unknown')} - {meeting.get('date', 'Unknown')}",
+            f"Meeting ID: {meeting_id}",
+            f"Tips link: https://punty.ai/tips/{meeting_id}",
             f"Track: {meeting.get('track_condition', 'TBC')}",
             f"Rail: {meeting.get('rail_position', 'TBC')}",
             f"Weather: {weather_line}{rainfall_line}{wind_impact_line}{obs_line}{rain_prob_line}",
@@ -1304,16 +1328,28 @@ class ContentGenerator:
                 # Trifecta/First4: top positions from picks, allow ranking runners
                 # in trailing spots (3rd for tri, 4th+ for First4).
                 pick_saddlecloths = set()
+                # Map saddlecloth → tip_rank for anchor enforcement
+                pick_rank_map: dict[int, int] = {}
                 if pre_sel_obj := race.get("pre_selections"):
-                    pick_saddlecloths = {p.saddlecloth for p in getattr(pre_sel_obj, "picks", [])}
+                    for p in getattr(pre_sel_obj, "picks", []):
+                        pick_saddlecloths.add(p.saddlecloth)
+                        pick_rank_map[p.saddlecloth] = getattr(p, "tip_rank", 99)
                 filtered_combos = []
                 for ec in exotic_combos:
-                    runners = set(ec.get("runners", []))
+                    runners = ec.get("runners", [])
+                    runners_set = set(runners)
                     etype = ec.get("type", "")
                     if etype in ("Quinella", "Exacta", "Exacta Standout"):
                         # Strict: all runners must be from our picks
-                        if runners <= pick_saddlecloths:
-                            filtered_combos.append(ec)
+                        if not (runners_set <= pick_saddlecloths):
+                            continue
+                        # Exacta anchor rule: position 1 (winner) must be rank 1 or 2
+                        # Never let the roughie (rank 4) anchor the winning spot
+                        if etype in ("Exacta", "Exacta Standout") and runners:
+                            lead_rank = pick_rank_map.get(runners[0], 99)
+                            if lead_rank > 2:
+                                continue
+                        filtered_combos.append(ec)
                     else:
                         # Trifecta/First4: at least 2 runners from picks
                         overlap = len(runners & pick_saddlecloths)

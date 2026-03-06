@@ -139,7 +139,7 @@ class TestBuildLearningContext:
         """Test learning context when no assessments exist."""
         generator = ContentGenerator(db_session)
 
-        result = await generator._build_learning_context(sample_meeting_data)
+        result = await generator._build_learning_context(db_session, sample_meeting_data)
 
         # Should return empty string when no assessments
         assert result == "" or "Past Learnings" not in result
@@ -156,7 +156,7 @@ class TestBuildLearningContext:
         }
 
         # Should not raise
-        result = await generator._build_learning_context(context)
+        result = await generator._build_learning_context(db_session, context)
         assert isinstance(result, str)
 
 

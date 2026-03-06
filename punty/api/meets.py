@@ -333,17 +333,18 @@ async def bulk_generate_early_mail_stream():
                 meeting_num = idx + 1
                 yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'Generating {meeting.venue} ({meeting_num}/{total_meetings})...', 'status': 'running'})}\n\n"
 
+                venue_name = meeting.venue  # Cache before async work (avoids lazy-load on broken session)
                 try:
                     async for event in generator.generate_early_mail_stream(meeting.id):
-                        event['meeting'] = meeting.venue
+                        event['meeting'] = venue_name
                         event['meeting_num'] = meeting_num
                         event['total_meetings'] = total_meetings
                         yield f"data: {json.dumps(event)}\n\n"
 
-                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: complete', 'status': 'done'})}\n\n"
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue_name, 'label': f'{venue_name}: complete', 'status': 'done'})}\n\n"
 
                 except Exception as e:
-                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: error - {str(e)}', 'status': 'error'})}\n\n"
+                    yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue_name, 'label': f'{venue_name}: error - {str(e)}', 'status': 'error'})}\n\n"
 
                 import asyncio
                 await asyncio.sleep(1)

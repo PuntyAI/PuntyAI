@@ -705,8 +705,7 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         # Fixed stake from settings (Kelly removed — at short place odds
         # the edge is always within PP estimation error, causing false cancels)
-        stake_mode = await _get_setting(db, "betfair_stake_mode", "10")
-        stake = float(stake_mode)
+        stake = await get_current_stake(db)
         bet.stake = round(stake, 2)
         bet.requested_odds = current_odds
 
