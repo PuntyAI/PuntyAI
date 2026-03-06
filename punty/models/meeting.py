@@ -241,6 +241,7 @@ class Runner(Base):
     odds_bet365: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odds_ladbrokes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odds_betfair: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    odds_pointsbet: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odds_flucs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Result fields
@@ -322,6 +323,7 @@ class Runner(Base):
             "odds_bet365": self.odds_bet365,
             "odds_ladbrokes": self.odds_ladbrokes,
             "odds_betfair": self.odds_betfair,
+            "odds_pointsbet": self.odds_pointsbet,
             "odds_flucs": self.odds_flucs,
             "trainer_location": self.trainer_location,
             "finish_position": self.finish_position,

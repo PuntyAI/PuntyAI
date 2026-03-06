@@ -152,7 +152,7 @@ def _validate_selections(
             has_win_bet = True
             if win_prob and win_prob < WIN_BET_MIN_PROB:
                 result.issues.append(ValidationIssue(
-                    level="warning",
+                    level="error",
                     race_number=race_num,
                     message=(
                         f"Win bet on {pick.get('horse_name', '?')} (No.{sc}) "
@@ -348,7 +348,7 @@ def _validate_puntys_picks(
 
         if win_prob and win_prob < PUNTYS_PICK_MIN_PROB:
             result.issues.append(ValidationIssue(
-                level="warning",
+                level="error",
                 race_number=rn,
                 message=(
                     f"Punty's Pick {pick.get('horse_name', '?')} (No.{sc}) "
@@ -397,7 +397,6 @@ async def validate_early_mail_probability(
     """
     from punty.results.parser import extract_all_picks
     from punty.models.meeting import Meeting, Race, Runner
-    from punty.context.builder import ContextBuilder
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
@@ -420,17 +419,34 @@ async def validate_early_mail_probability(
         ))
         return vr
 
-    # Build race data dict from runner DB data
+    # Build race data dict with live probabilities from probability engine
+    from punty.probability import calculate_race_probabilities
     race_data: dict[int, dict] = {}
     for race in meeting.races:
+        active_runners = [r for r in race.runners if not r.scratched]
+        if not active_runners:
+            continue
+
+        # Calculate live probabilities for validation
+        try:
+            runner_dicts = [r.to_dict() for r in active_runners]
+            race_dict = race.to_dict() if hasattr(race, "to_dict") else {"race_number": race.race_number}
+            meeting_dict = meeting.to_dict() if hasattr(meeting, "to_dict") else {}
+            prob_results = calculate_race_probabilities(
+                runners=runner_dicts, race=race_dict, meeting=meeting_dict,
+            )
+        except Exception as e:
+            logger.debug("Probability calc failed for R%s: %s", race.race_number, e)
+            prob_results = {}
+
         runners_list = []
-        for runner in race.runners:
-            if runner.scratched:
-                continue
+        for runner in active_runners:
+            prob = prob_results.get(runner.id)
+            win_prob = prob.win_probability if prob else 0
             runners_list.append({
                 "saddlecloth": runner.saddlecloth,
                 "horse_name": runner.horse_name,
-                "_win_prob_raw": 0,  # probabilities not stored on DB runner
+                "_win_prob_raw": win_prob,
                 "current_odds": runner.current_odds,
             })
         race_data[race.race_number] = {

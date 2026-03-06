@@ -361,9 +361,10 @@ async def _settle_picks_for_race_impl(
 
             # Sanity: place odds should NEVER exceed win odds (impossible in real markets).
             # If they do, the place odds are likely garbage (e.g. win $2.70 / place $6.00).
-            # Fall back to estimated place from win: (win - 1) / 3 + 1
+            # Fall back to estimated place from win odds (NTD-aware)
             if win_odds and place_odds and place_odds > win_odds:
-                estimated_place = round((win_odds - 1) / 3 + 1, 2)
+                divisor = 2 if num_places == 2 else 3
+                estimated_place = round((win_odds - 1) / divisor + 1, 2)
                 logger.warning(
                     f"Place odds > win odds for {pick.horse_name} R{pick.race_number}: "
                     f"win=${win_odds:.2f} place=${place_odds:.2f}. "

@@ -269,6 +269,8 @@ async def init_db() -> None:
             "ALTER TABLE picks ADD COLUMN no_bet_reason VARCHAR(200)",
             # Betfair bet type: place (default) or win (for odds-on horses)
             "ALTER TABLE betfair_bets ADD COLUMN bet_type VARCHAR(10) DEFAULT 'place'",
+            # PointsBet as primary corporate odds source
+            "ALTER TABLE runners ADD COLUMN odds_pointsbet FLOAT",
         ]:
             try:
                 await conn.execute(_text(col))

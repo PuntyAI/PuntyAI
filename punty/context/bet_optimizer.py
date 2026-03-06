@@ -231,11 +231,15 @@ def _build_optimizer_candidates(runners: list[dict]) -> list[dict]:
     return candidates
 
 
-def _estimate_place_odds(win_odds: float) -> float:
-    """Estimate place odds when not provided (approx 1/3 of win profit + 1)."""
+def _estimate_place_odds(win_odds: float, field_size: int = 12) -> float:
+    """Estimate place odds when not provided.
+
+    Uses /3 divisor for 3-place fields (8+ runners) and /2 for NTD fields (5-7).
+    """
     if win_odds <= 1.0:
         return 1.0
-    return round((win_odds - 1) / 3 + 1, 2)
+    divisor = 2 if 5 <= field_size <= 7 else 3
+    return round((win_odds - 1) / divisor + 1, 2)
 
 
 # ──────────────────────────────────────────────
