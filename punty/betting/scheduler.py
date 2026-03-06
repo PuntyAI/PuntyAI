@@ -24,6 +24,8 @@ class BetfairBetScheduler:
             return
         self.running = True
         self._task = asyncio.create_task(self._poll_loop())
+        # Recover zombie bets left in "placing" from a previous crash/restart
+        asyncio.create_task(self._recover_zombie_bets())
         logger.info("BetfairBetScheduler started")
 
     def stop(self):
@@ -61,6 +63,49 @@ class BetfairBetScheduler:
             if placed:
                 self.bets_placed_today += placed
                 logger.info(f"BetfairBetScheduler: placed {placed} bets this tick")
+
+
+    async def _recover_zombie_bets(self):
+        """Reset bets stuck in 'placing' from a crash/restart.
+
+        If a bet was mid-placement when the server died, it will be stuck
+        in 'placing' forever. Reset to 'queued' if the race hasn't started,
+        or 'cancelled' if the window has passed.
+        """
+        try:
+            from punty.betting.models import BetfairBet
+            from sqlalchemy import update
+
+            async with async_session() as db:
+                from sqlalchemy import select, func
+                result = await db.execute(
+                    select(BetfairBet).where(BetfairBet.status == "placing")
+                )
+                zombies = result.scalars().all()
+                if not zombies:
+                    return
+
+                now = melb_now_naive()
+                recovered = 0
+                cancelled = 0
+                for bet in zombies:
+                    if bet.scheduled_at and bet.scheduled_at > now:
+                        # Race hasn't started — re-queue
+                        bet.status = "queued"
+                        bet.error_message = None
+                        recovered += 1
+                    else:
+                        # Race already started — cancel
+                        bet.status = "cancelled"
+                        bet.error_message = "Recovered from crash — missed window"
+                        cancelled += 1
+                await db.commit()
+                logger.info(
+                    f"Recovered {recovered} zombie bets (re-queued), "
+                    f"cancelled {cancelled} (missed window)"
+                )
+        except Exception as e:
+            logger.error(f"Zombie bet recovery failed: {e}")
 
 
 # Module-level singleton
