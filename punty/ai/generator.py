@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,108 @@ PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 
 REQUIRED_PROMPTS = {"early_mail", "personality", "wrap_up", "weekly_blog", "results"}
+
+# Regex to match Smart: lines in AI output
+# e.g. "Smart: 5,2,7 / 9,12,6,2 / ... (144 combos × $0.31 = $45.00) — 31% flexi"
+_SMART_LINE_RE = re.compile(
+    r"(Smart\s*(?:\([^)]*\))?\s*:\s*)(.+)",
+    re.IGNORECASE,
+)
+# Sequence header to identify which type a Smart line belongs to
+_SEQ_HEADER_RE = re.compile(
+    r"(EARLY\s+QUADDIE|QUADDIE|BIG\s*6)\s*\(Races?\s*(\d+)\s*[-\u2013]\s*(\d+)\)",
+    re.IGNORECASE,
+)
+
+
+def _correct_sequence_legs(raw_content: str, pre_built_sequences: list) -> str:
+    """Replace AI-generated sequence legs with pre-built data.
+
+    The AI is instructed to copy sequences exactly but sometimes drops runners.
+    This post-processor finds Smart: lines and replaces them with the correct
+    pre-built legs, preserving the AI's surrounding commentary.
+    """
+    if not pre_built_sequences:
+        return raw_content
+
+    # Build lookup: sequence_type_lower → SmartSequence
+    seq_lookup = {}
+    for block in pre_built_sequences:
+        smart = getattr(block, "smart", None) or (block.smart if hasattr(block, "smart") else None)
+        if not smart:
+            continue
+        key = smart.sequence_type.lower().replace(" ", "_")
+        seq_lookup[key] = smart
+
+    if not seq_lookup:
+        return raw_content
+
+    lines = raw_content.split("\n")
+    current_seq_type = None
+    corrections = 0
+
+    for i, line in enumerate(lines):
+        # Track which sequence type we're in
+        hdr = _SEQ_HEADER_RE.search(line)
+        if hdr:
+            name = hdr.group(1).upper().strip()
+            if "EARLY" in name:
+                current_seq_type = "early_quaddie"
+            elif "BIG" in name:
+                current_seq_type = "big_6"
+            else:
+                current_seq_type = "quaddie"
+            continue
+
+        # Check for Smart: line
+        sm = _SMART_LINE_RE.match(line.strip())
+        if not sm or not current_seq_type:
+            continue
+
+        smart = seq_lookup.get(current_seq_type)
+        if not smart:
+            continue
+
+        # Build the correct Smart: line
+        legs_str = " / ".join(
+            ",".join(str(r) for r in leg.runners)
+            for leg in smart.legs
+        )
+        unit_price = smart.total_outlay / smart.total_combos if smart.total_combos > 0 else 0
+        correct_line = (
+            f"Smart: {legs_str} "
+            f"({smart.total_combos} combos x "
+            f"${unit_price:.2f} "
+            f"= ${smart.total_outlay:.2f}) "
+            f"--- {smart.flexi_pct:.0f}% flexi"
+        )
+
+        # Check if AI output matches
+        ai_legs = sm.group(2).strip()
+        # Extract just the leg numbers from AI output for comparison
+        ai_leg_parts = re.split(r"\s*/\s*", ai_legs.split("(")[0].strip())
+        ai_saddlecloths = []
+        for part in ai_leg_parts:
+            nums = [int(x) for x in re.findall(r"\d+", part)]
+            ai_saddlecloths.append(sorted(nums))
+
+        correct_saddlecloths = [sorted(leg.runners) for leg in smart.legs]
+
+        if ai_saddlecloths != correct_saddlecloths:
+            # Preserve leading whitespace
+            leading = len(line) - len(line.lstrip())
+            lines[i] = " " * leading + correct_line
+            corrections += 1
+            logger.warning(
+                f"Sequence correction ({current_seq_type}): "
+                f"AI had {ai_leg_parts} → corrected to "
+                f"{[leg.runners for leg in smart.legs]}"
+            )
+
+    if corrections > 0:
+        logger.info(f"Corrected {corrections} sequence leg(s) in AI output")
+
+    return "\n".join(lines)
 
 
 def load_prompt(name: str) -> str:
@@ -275,6 +378,11 @@ class ContentGenerator:
                 raise Exception("AI generation failed - no content returned")
 
             await self._log_token_usage("early_mail", meeting_id)
+
+            # Post-process: correct any AI-mangled sequence legs
+            pre_built = context.get("pre_built_sequences", [])
+            if pre_built:
+                raw_content = _correct_sequence_legs(raw_content, pre_built)
 
             # Save content BEFORE yielding to SSE — if the client disconnected
             # during the AI call, the generator gets cancelled on yield, so we
