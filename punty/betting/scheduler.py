@@ -73,11 +73,10 @@ class BetfairBetScheduler:
         or 'cancelled' if the window has passed.
         """
         try:
-            from punty.betting.models import BetfairBet
-            from sqlalchemy import update
+            from punty.models.betfair_bet import BetfairBet
+            from sqlalchemy import select
 
             async with async_session() as db:
-                from sqlalchemy import select, func
                 result = await db.execute(
                     select(BetfairBet).where(BetfairBet.status == "placing")
                 )
