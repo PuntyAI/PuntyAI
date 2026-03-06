@@ -656,6 +656,11 @@ class ContextBuilder:
                     runner_data["_win_prob_raw"] = rp.win_probability
                     runner_data["_place_prob_raw"] = rp.place_probability
                     runner_data["_edge_raw"] = rp.edge
+                    # Tissue engine confidence boost (market agreement signal)
+                    runner_data["_confidence_boost"] = rp.factors.get("_confidence_boost", 0.0)
+                    tissue_price = rp.factors.get("_tissue_price")
+                    if tissue_price:
+                        runner_data["_tissue_price"] = tissue_price
                     if rp.matched_patterns:
                         runner_data["_matched_patterns"] = rp.matched_patterns
 

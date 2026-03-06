@@ -229,11 +229,11 @@ def calculate_pre_selections(
     # Remaining picks still tracked (displayed, not staked) for accuracy tracking.
     is_ntd = 5 <= field_size <= 7
 
-    # Sort by probability with value tiebreaker: when two candidates have
-    # win_prob within 2% of each other, prefer higher value_rating.
-    # Bucket win_prob to 0.02 granularity so close probabilities are treated equal.
+    # Sort by tissue probability + market agreement confidence boost.
+    # VR tiebreaker removed — it promoted losers (VR 1.20+ wins 14.5% vs VR<0.90 at 29.7%).
+    # Confidence boost from market_layer: tissue R1 = market fav → +0.15 boost.
     candidates.sort(
-        key=lambda c: (round(c["win_prob"] / 0.02) * 0.02, c["value_rating"]),
+        key=lambda c: c["win_prob"] + c.get("confidence_boost", 0.0),
         reverse=True,
     )
 
@@ -474,6 +474,7 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
             "place_value_rating": place_value,
             "rec_stake": rec_stake,
             "ev": ev,
+            "confidence_boost": r.get("_confidence_boost", 0.0),
         })
 
     return candidates
@@ -1113,6 +1114,13 @@ def _select_exotic(
         if ec_type in ("Quinella", "Exacta", "Exacta Standout"):
             if overlap_ratio < 1.0:
                 continue
+            # Exacta anchor rule: position 1 (winner) must be rank 1 or 2.
+            # Never let the roughie (rank 4) or rank 3 anchor the winning spot.
+            runner_list = ec.get("runners", [])
+            if ec_type in ("Exacta", "Exacta Standout") and runner_list and rank_map:
+                lead_rank = rank_map.get(runner_list[0], 99)
+                if lead_rank > 2:
+                    continue
         else:
             if overlap < min(2, n_runners):
                 continue
@@ -1168,13 +1176,14 @@ def _select_exotic(
             raw_prob = float(raw_prob.rstrip("%")) / 100
         value = ec.get("value", 1.0)
 
-        # Base EV score
-        ev_score = raw_prob * value
+        # Score by PROBABILITY first — strike rate matters most.
+        # Value is a minor tiebreaker (10% weight), not the driver.
+        score = raw_prob + raw_prob * max(0, value - 1.0) * 0.10
 
         # Efficiency bonus for fewer combos
         combos = max(1, ec.get("combos", 1))
-        efficiency_bonus = max(0, (1 - combos / 24)) * 0.1 * ev_score
-        score = ev_score + efficiency_bonus
+        efficiency_bonus = max(0, (1 - combos / 24)) * 0.1 * score
+        score += efficiency_bonus
 
         # --- Top-pick bonus ---
         if rank_map:
