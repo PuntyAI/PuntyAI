@@ -605,16 +605,57 @@ class ResultsMonitor:
                     logger.error(f"Failed to check HKJC statuses for {meeting.venue}: {e}")
                     return
             else:
-                # Non-HK international venues — fallback to TAB Playwright
-                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                # Non-HK international venues (NZ etc) — try PointsBet first (fast HTTP),
+                # then PuntingForm, then TAB Playwright as last resort
+                statuses = {}
+                scraped_tc = None
+
+                # Try PointsBet (fast HTTP API, covers NZ racing)
                 try:
-                    tab_pw = TabPlaywrightScraper()
-                    status_data = await tab_pw.scrape_race_statuses(meeting.venue, meeting.date)
-                    statuses = status_data["statuses"]
-                    scraped_tc = status_data.get("track_condition")
+                    from punty.scrapers.pointsbet import PointsBetScraper
+                    pb = PointsBetScraper()
+                    pb_status_data = await pb.scrape_race_statuses(meeting.venue, meeting.date)
+                    pb_statuses = pb_status_data.get("statuses", {})
+                    if pb_statuses:
+                        statuses = pb_statuses
+                        logger.info(f"PointsBet statuses for {meeting.venue}: {statuses}")
                 except Exception as e:
-                    logger.error(f"Failed to check TAB statuses for {meeting.venue}: {e}")
-                    return
+                    logger.debug(f"PointsBet status check failed for {meeting.venue}: {e}")
+
+                # Fallback: PuntingForm
+                if not statuses:
+                    try:
+                        from punty.scrapers.punting_form import PuntingFormScraper
+                        from punty.models.settings import AppSettings
+                        pf_key_result = await db.execute(
+                            select(AppSettings).where(AppSettings.key == "punting_form_api_key")
+                        )
+                        pf_key_setting = pf_key_result.scalar_one_or_none()
+                        pf_key = pf_key_setting.value if pf_key_setting else ""
+                        pf = PuntingFormScraper(api_key=pf_key)
+                        try:
+                            pf_status_data = await pf.scrape_race_statuses(meeting.venue, meeting.date)
+                            pf_statuses = pf_status_data["statuses"]
+                            if pf_statuses:
+                                statuses = pf_statuses
+                                scraped_tc = pf_status_data.get("track_condition")
+                                logger.info(f"PuntingForm statuses for {meeting.venue}: {statuses}")
+                        finally:
+                            await pf.close()
+                    except Exception as e:
+                        logger.debug(f"PuntingForm status check failed for {meeting.venue}: {e}")
+
+                # Last resort: TAB Playwright (slow, browser-based)
+                if not statuses:
+                    from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                    try:
+                        tab_pw = TabPlaywrightScraper()
+                        status_data = await tab_pw.scrape_race_statuses(meeting.venue, meeting.date)
+                        statuses = status_data["statuses"]
+                        scraped_tc = status_data.get("track_condition")
+                    except Exception as e:
+                        logger.error(f"Failed to check TAB statuses for {meeting.venue}: {e}")
+                        return
         else:
             scraper = RacingComScraper()
             try:
@@ -961,11 +1002,79 @@ class ResultsMonitor:
                                         f"{meeting.venue} R{race_num}: {e}"
                                     )
                         else:
-                            from punty.scrapers.tab_playwright import TabPlaywrightScraper
-                            tab_pw = TabPlaywrightScraper()
-                            results_data = await tab_pw.scrape_race_result(
-                                meeting.venue, meeting.date, race_num
+                            # Non-HK international (NZ etc) — try PointsBet first (fast HTTP)
+                            results_data = {"results": [], "exotics": {}}
+                            try:
+                                from punty.scrapers.pointsbet import PointsBetScraper
+                                pb = PointsBetScraper()
+                                pb_results = await pb.scrape_results_for_race(
+                                    meeting.venue, meeting.date, race_num
+                                )
+                                pb_has_pos = any(
+                                    r.get("position") is not None
+                                    for r in pb_results.get("results", [])
+                                )
+                                if pb_has_pos:
+                                    results_data = pb_results
+                                    logger.info(
+                                        f"PointsBet results for {meeting.venue} R{race_num}: "
+                                        f"{len(pb_results.get('results', []))} runners"
+                                    )
+                            except Exception as e:
+                                logger.debug(
+                                    f"PointsBet result fetch failed for "
+                                    f"{meeting.venue} R{race_num}: {e}"
+                                )
+
+                            # Fallback: PuntingForm
+                            has_positions = any(
+                                r.get("position") is not None
+                                for r in results_data.get("results", [])
                             )
+                            if not has_positions:
+                                try:
+                                    from punty.scrapers.punting_form import PuntingFormScraper
+                                    from punty.models.settings import AppSettings
+                                    pf_key_result = await db.execute(
+                                        select(AppSettings).where(
+                                            AppSettings.key == "punting_form_api_key"
+                                        )
+                                    )
+                                    pf_key_setting = pf_key_result.scalar_one_or_none()
+                                    pf_key = pf_key_setting.value if pf_key_setting else ""
+                                    pf = PuntingFormScraper(api_key=pf_key)
+                                    try:
+                                        pf_results = await pf.scrape_race_result(
+                                            meeting.venue, meeting.date, race_num
+                                        )
+                                        pf_has_pos = any(
+                                            r.get("position") is not None
+                                            for r in pf_results.get("results", [])
+                                        )
+                                        if pf_has_pos:
+                                            results_data = pf_results
+                                            logger.info(
+                                                f"PuntingForm results for {meeting.venue} R{race_num}"
+                                            )
+                                    finally:
+                                        await pf.close()
+                                except Exception as e:
+                                    logger.debug(
+                                        f"PuntingForm result fallback failed for "
+                                        f"{meeting.venue} R{race_num}: {e}"
+                                    )
+
+                            # Last resort: TAB Playwright (slow, browser-based)
+                            has_positions = any(
+                                r.get("position") is not None
+                                for r in results_data.get("results", [])
+                            )
+                            if not has_positions:
+                                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                                tab_pw = TabPlaywrightScraper()
+                                results_data = await tab_pw.scrape_race_result(
+                                    meeting.venue, meeting.date, race_num
+                                )
                     else:
                         scraper2 = RacingComScraper()
                         try:
@@ -1879,21 +1988,30 @@ class ResultsMonitor:
         try:
             from punty.venues import is_international_venue
             from punty.scrapers.racing_com import RacingComScraper
-            use_tab = is_international_venue(meeting.venue)
+            is_intl = is_international_venue(meeting.venue)
 
-            if use_tab:
-                from punty.scrapers.tab_playwright import TabPlaywrightScraper
-                tab_pw = TabPlaywrightScraper()
-
-            scraper = None if use_tab else RacingComScraper()
+            scraper = None if is_intl else RacingComScraper()
             try:
                 updated = 0
                 for rn in missing_races:
                     try:
-                        if use_tab:
-                            results_data = await tab_pw.scrape_race_result(
-                                meeting.venue, meeting.date, rn
-                            )
+                        if is_intl:
+                            # International venues: PointsBet first (fast HTTP), TAB Playwright fallback
+                            results_data = {"results": []}
+                            try:
+                                from punty.scrapers.pointsbet import PointsBetScraper
+                                pb = PointsBetScraper()
+                                results_data = await pb.scrape_results_for_race(
+                                    meeting.venue, meeting.date, rn
+                                )
+                            except Exception:
+                                pass
+                            if not any(r.get("place_dividend") for r in results_data.get("results", [])):
+                                from punty.scrapers.tab_playwright import TabPlaywrightScraper
+                                tab_pw = TabPlaywrightScraper()
+                                results_data = await tab_pw.scrape_race_result(
+                                    meeting.venue, meeting.date, rn
+                                )
                         else:
                             results_data = await scraper.scrape_race_result(
                                 meeting.venue, meeting.date, rn
