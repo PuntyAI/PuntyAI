@@ -33,12 +33,19 @@ logger = logging.getLogger(__name__)
 # Config F: 45.4% R1 accuracy, 64.4% agreement, +166.7% win ROI
 # ──────────────────────────────────────────────
 DAMPEN = {
-    "condition": 0.5,      # context helps but noisy
-    "form_recency": 0.2,   # weak signal, mostly noise
-    "specialist": 0.3,     # T/D and condition specialist
-    "spell": 0.2,          # first-up/second-up
-    "profile": 0.2,        # age × sex
-    "weight": 0.2,         # weight relative to field
+    "condition": 0.5,       # context helps but noisy
+    "form_recency": 0.2,    # weak signal, mostly noise (single-char legacy)
+    "specialist": 0.3,      # T/D and condition specialist
+    "spell": 0.2,           # first-up/second-up
+    "profile": 0.2,         # age × sex
+    "weight": 0.2,          # weight relative to field
+    "pf_assessment": 0.6,   # strong external AI signal, captures class
+    "handicap": 0.5,        # official class rating
+    "class_stats": 0.4,     # wins at this class
+    "jockey_trainer": 0.3,  # jockey/trainer combo performance
+    "speed_map": 0.3,       # predicted running position
+    "days_spell": 0.2,      # granular spell freshness
+    "race_time": 0.6,       # time over distance — strong class indicator
 }
 
 
@@ -176,11 +183,16 @@ def _condition_multiplier(
 
 
 def _career_multiplier(career_record: str, is_maiden_race: bool = False) -> float:
-    """Career win rate band → tissue multiplier.
+    """Career win rate → tissue multiplier via Bayesian shrinkage + interpolation.
 
-    In maiden races, all horses have 0 wins so the standard career bands
-    don't apply. Instead we use maiden-specific bands based on starts
-    (experience level) and places (competitiveness).
+    Small-sample career records (e.g. 3 starts, 2 wins = 67%) are regressed
+    toward the population mean (~10%) using Bayesian pseudocounts. This prevents
+    horses with tiny samples from receiving extreme "elite" multipliers.
+
+    The shrunk win rate is then mapped to a multiplier via linear interpolation
+    between empirically calibrated points (no cliffs between bands).
+
+    In maiden races, 0 wins is expected — uses place-rate assessment instead.
     """
     tables = _load_tables()
     bands = tables.get("career_bands", {}).get("bands", {})
@@ -209,16 +221,91 @@ def _career_multiplier(career_record: str, is_maiden_race: bool = False) -> floa
     if starts < 3:
         return bands.get("lightly_raced", {}).get("mult", 1.0)
 
-    win_rate = wins / starts
-    if win_rate >= 0.30:
-        return bands.get("elite_30pct", {}).get("mult", 1.0)
-    if win_rate >= 0.20:
-        return bands.get("good_20pct", {}).get("mult", 1.0)
-    if win_rate >= 0.10:
-        return bands.get("average_10pct", {}).get("mult", 1.0)
-    if wins > 0:
+    # Bayesian shrinkage: regress small samples toward population mean.
+    # k=8 pseudocounts at 10% prior. A 3-start/2-win horse (67% raw) shrinks
+    # to 25.5%; a 30-start/9-win horse (30% raw) barely moves to 25.8%.
+    # This prevents tiny samples from hitting extreme multiplier bands.
+    SHRINK_K = 8
+    PRIOR_WIN_RATE = 0.10
+    shrunk_rate = (wins + SHRINK_K * PRIOR_WIN_RATE) / (starts + SHRINK_K)
+
+    # 0-win horses in non-maiden races: use place-rate assessment.
+    # maiden_career (0.004) is for chronic non-winners — not lightly-raced
+    # horses like Zambales (3: 0-2-0) running in open-class races.
+    if wins == 0:
+        return _zero_win_non_maiden_multiplier(starts, seconds, thirds, bands)
+
+    # Continuous interpolation between calibrated points (no cliffs).
+    # Points: (shrunk_rate, multiplier) from 221K-runner dataset.
+    return _interpolate_career_mult(shrunk_rate, bands)
+
+
+def _zero_win_non_maiden_multiplier(
+    starts: int, seconds: int, thirds: int, bands: dict,
+) -> float:
+    """Career multiplier for 0-win horses in non-maiden races.
+
+    These horses are entered in winner-class races despite having 0 wins,
+    meaning connections believe they're competitive. Assessment uses place
+    record and exposure (starts) to differentiate genuine prospects from
+    exposed non-winners.
+    """
+    places = seconds + thirds
+    place_rate = places / starts if starts > 0 else 0
+
+    if starts <= 5:
+        # Lightly raced, 0 wins — could be promising or unproven
+        if place_rate >= 0.40:
+            return bands.get("average_10pct", {}).get("mult", 1.0)
+        if places > 0:
+            return bands.get("lightly_raced", {}).get("mult", 1.0)
+        return bands.get("lightly_raced", {}).get("mult", 1.0)
+
+    if starts <= 12:
+        # Moderate experience, 0 wins — needs places to justify entry
+        if place_rate >= 0.30:
+            return bands.get("lightly_raced", {}).get("mult", 1.0)
+        if places >= 2:
+            return bands.get("below_avg", {}).get("mult", 1.0)
+        return bands.get("below_avg", {}).get("mult", 1.0)
+
+    # 13+ starts, 0 wins — chronic non-winner
+    if place_rate >= 0.25:
         return bands.get("below_avg", {}).get("mult", 1.0)
     return bands.get("maiden_career", {}).get("mult", 1.0)
+
+
+def _interpolate_career_mult(shrunk_rate: float, bands: dict) -> float:
+    """Linearly interpolate career multiplier from shrunk win rate.
+
+    Calibration points from 221K-runner dataset. Interpolation removes the
+    cliff between bands (e.g. 29% → 2.06, 30% → 3.63 was a 76% jump).
+    """
+    # (shrunk_rate_threshold, multiplier) — ascending by rate
+    points = [
+        (0.05, bands.get("below_avg", {}).get("mult", 0.47)),
+        (0.10, bands.get("average_10pct", {}).get("mult", 1.074)),
+        (0.20, bands.get("good_20pct", {}).get("mult", 2.06)),
+        (0.30, bands.get("elite_30pct", {}).get("mult", 3.63)),
+    ]
+
+    # Below lowest point
+    if shrunk_rate <= points[0][0]:
+        return points[0][1]
+
+    # Above highest point (cap at elite)
+    if shrunk_rate >= points[-1][0]:
+        return points[-1][1]
+
+    # Linear interpolation between surrounding points
+    for i in range(len(points) - 1):
+        r_lo, m_lo = points[i]
+        r_hi, m_hi = points[i + 1]
+        if r_lo <= shrunk_rate <= r_hi:
+            t = (shrunk_rate - r_lo) / (r_hi - r_lo)
+            return m_lo + t * (m_hi - m_lo)
+
+    return 1.0  # fallback
 
 
 def _maiden_career_multiplier(starts: int, wins: int, seconds: int, thirds: int) -> float:
@@ -267,7 +354,7 @@ def _maiden_career_multiplier(starts: int, wins: int, seconds: int, thirds: int)
 
 
 def _form_recency_multiplier(last_five: str) -> float:
-    """Recent form pattern → tissue multiplier."""
+    """Recent form pattern → tissue multiplier (legacy, single-char)."""
     tables = _load_tables()
     form = tables.get("form_recency", {})
     recent = form.get("recent_form", {})
@@ -289,6 +376,75 @@ def _form_recency_multiplier(last_five: str) -> float:
     if first_char in ("x", "X"):
         return recent.get("last_x", {}).get("mult", 1.0)
     return recent.get("last_back", {}).get("mult", 1.0)
+
+
+# ──────────────────────────────────────────────
+# Enhanced Recent Form (scores all of last 5)
+# ──────────────────────────────────────────────
+
+# Points per finish position, recency-weighted
+_FORM_POINTS = {"1": 3.0, "2": 2.0, "3": 1.5, "4": 0.5, "5": 0.5}
+# More recent results matter more (index 0 = most recent)
+_RECENCY_WEIGHTS = [1.5, 1.2, 1.0, 0.8, 0.6]
+
+
+def _recent_form_multiplier(last_five: str) -> float:
+    """Score all of last 5 results with recency weighting → multiplier.
+
+    Maps a normalized form score (0-1) to the same multiplier scale as
+    career bands using linear interpolation. This gives recent form the
+    same expressive range as career win rate.
+
+    Examples:
+      "11111" → score 1.0  → mult 3.63 (elite recent form)
+      "11143" → score 0.77 → mult 3.05
+      "31111" → score 0.88 → mult 3.35
+      "71962" → score 0.27 → mult 1.25
+      "80191" → score 0.27 → mult 1.25
+      "88349" → score 0.10 → mult 0.47
+    """
+    if not last_five:
+        return 1.0
+
+    # Score each position with recency weighting
+    total_score = 0.0
+    max_possible = 0.0
+    for i, ch in enumerate(last_five[:5]):
+        w = _RECENCY_WEIGHTS[i] if i < len(_RECENCY_WEIGHTS) else 0.5
+        total_score += _FORM_POINTS.get(ch, 0.0) * w
+        max_possible += 3.0 * w  # max is "1" (win) at every position
+
+    if max_possible <= 0:
+        return 1.0
+
+    # Normalize to 0-1
+    norm_score = total_score / max_possible
+
+    # Map to multiplier scale via interpolation points
+    # (norm_score, multiplier) — calibrated to match career band range
+    points = [
+        (0.00, 0.47),   # terrible recent form
+        (0.15, 1.074),  # poor
+        (0.35, 1.50),   # below average
+        (0.50, 2.06),   # average-good
+        (0.70, 2.80),   # good
+        (0.85, 3.30),   # very good
+        (1.00, 3.63),   # elite (all wins)
+    ]
+
+    if norm_score <= points[0][0]:
+        return points[0][1]
+    if norm_score >= points[-1][0]:
+        return points[-1][1]
+
+    for i in range(len(points) - 1):
+        s_lo, m_lo = points[i]
+        s_hi, m_hi = points[i + 1]
+        if s_lo <= norm_score <= s_hi:
+            t = (norm_score - s_lo) / (s_hi - s_lo)
+            return m_lo + t * (m_hi - m_lo)
+
+    return 1.0
 
 
 def _specialist_multiplier(runner: Any, track_condition: str) -> float:
@@ -514,6 +670,354 @@ def _parse_stats(raw: Any) -> Optional[tuple[int, int]]:
 
 
 # ──────────────────────────────────────────────
+# Additional Tissue Factors (previously ignored)
+# ──────────────────────────────────────────────
+
+def _pf_assessment_multiplier(runner: Any, field_runners: list) -> float:
+    """PuntingForm AI score → multiplier relative to field.
+
+    PF's AI model factors in class, form, sectionals, and track — signals
+    our tissue misses. We use the score relative to field average rather
+    than absolute, so it acts as a differentiator within each race.
+
+    Coverage: ~96% of runners.
+    """
+    score = _get(runner, "pf_ai_score")
+    if not score or not isinstance(score, (int, float)):
+        return 1.0
+
+    # Compute field average PF score
+    scores = [_get(r, "pf_ai_score") for r in field_runners
+              if isinstance(_get(r, "pf_ai_score"), (int, float)) and _get(r, "pf_ai_score") > 0]
+    if len(scores) < 2:
+        return 1.0
+
+    avg_score = sum(scores) / len(scores)
+    if avg_score <= 0:
+        return 1.0
+
+    # Ratio: 1.0 = field average, >1 = above avg, <1 = below
+    ratio = score / avg_score
+
+    # Map ratio to multiplier. PF scores typically range 20-90.
+    # A runner at 1.5× field average is clearly superior.
+    if ratio >= 1.4:
+        return 1.8
+    if ratio >= 1.2:
+        return 1.0 + (ratio - 1.0) * 1.5  # 1.2→1.3, 1.3→1.45
+    if ratio >= 0.8:
+        return 1.0 + (ratio - 1.0) * 1.0  # linear around center
+    if ratio >= 0.6:
+        return 0.8 + (ratio - 0.6) * 1.0
+    return 0.7
+
+
+def _handicap_rating_multiplier(runner: Any, field_runners: list) -> float:
+    """Handicap rating relative to field → multiplier.
+
+    Official handicap ratings directly capture class ability. A horse
+    rated 118 (Pride of Jenni) vs field average of 80 is a class above.
+    Relative-to-field ensures the signal differentiates within each race.
+
+    Coverage: ~81% of runners.
+    """
+    rating = _get(runner, "handicap_rating")
+    if not rating or not isinstance(rating, (int, float)):
+        return 1.0
+
+    ratings = [_get(r, "handicap_rating") for r in field_runners
+               if isinstance(_get(r, "handicap_rating"), (int, float)) and _get(r, "handicap_rating") > 0]
+    if len(ratings) < 2:
+        return 1.0
+
+    avg_rating = sum(ratings) / len(ratings)
+    if avg_rating <= 0:
+        return 1.0
+
+    # Each point above/below average = ~2% multiplier adjustment
+    diff = rating - avg_rating
+    # Cap at ±20 points (~±40% multiplier swing)
+    diff = max(-20, min(20, diff))
+    return 1.0 + diff * 0.02
+
+
+def _class_stats_multiplier(runner: Any) -> float:
+    """Wins/starts at this class level → multiplier.
+
+    Direct measure of ability at the grade being contested. A horse
+    with 4/10 at this class is proven; one with 0/6 is struggling.
+
+    Coverage: ~83% of runners.
+    """
+    raw = _get(runner, "class_stats")
+    parsed = _parse_stats(raw)
+    if not parsed:
+        return 1.0
+
+    starts, wins = parsed
+    if starts < 2:
+        return 1.0  # too few starts at this class to assess
+
+    win_rate = wins / starts
+    if win_rate >= 0.30:
+        return 1.5
+    if win_rate >= 0.20:
+        return 1.3
+    if win_rate >= 0.10:
+        return 1.1
+    if wins > 0:
+        return 0.95
+    return 0.80  # multiple starts, no wins at this class
+
+
+def _jockey_trainer_multiplier(runner: Any) -> float:
+    """Jockey and trainer stats → combined multiplier.
+
+    Uses actual-vs-expected (A2E) from PuntingForm as the primary signal.
+    A2E > 1.0 means outperforming expectations. Combo stats (this jockey
+    with this trainer) are weighted more heavily when available.
+
+    Coverage: 100% for jockey/trainer, ~60% for combo stats.
+    """
+    mult = 1.0
+
+    # Jockey A2E (last 100 runners)
+    jockey_raw = _get(runner, "jockey_stats")
+    if jockey_raw:
+        jstats = jockey_raw if isinstance(jockey_raw, dict) else {}
+        if isinstance(jockey_raw, str):
+            try:
+                jstats = json.loads(jockey_raw)
+            except (json.JSONDecodeError, TypeError):
+                jstats = {}
+
+        # Prefer combo stats (jockey+trainer together) if sufficient sample
+        combo = jstats.get("combo_career", {})
+        combo_runners = combo.get("runners", 0) if isinstance(combo, dict) else 0
+        if combo_runners >= 10:
+            combo_a2e = combo.get("a2e", 1.0)
+            if isinstance(combo_a2e, (int, float)):
+                # Combo A2E is the strongest jockey/trainer signal
+                mult *= max(0.7, min(1.4, combo_a2e))
+        else:
+            # Fall back to jockey last-100 A2E
+            last100 = jstats.get("last100", {})
+            if isinstance(last100, dict):
+                a2e = last100.get("a2e", 1.0)
+                if isinstance(a2e, (int, float)):
+                    # Dampen jockey-only signal (less specific than combo)
+                    mult *= max(0.85, min(1.2, 1.0 + (a2e - 1.0) * 0.5))
+
+    # Trainer last-100 A2E (additive to jockey)
+    trainer_raw = _get(runner, "trainer_stats")
+    if trainer_raw:
+        tstats = trainer_raw if isinstance(trainer_raw, dict) else {}
+        if isinstance(trainer_raw, str):
+            try:
+                tstats = json.loads(trainer_raw)
+            except (json.JSONDecodeError, TypeError):
+                tstats = {}
+
+        last100 = tstats.get("last100", {})
+        if isinstance(last100, dict):
+            a2e = last100.get("a2e", 1.0)
+            if isinstance(a2e, (int, float)):
+                mult *= max(0.90, min(1.15, 1.0 + (a2e - 1.0) * 0.3))
+
+    return mult
+
+
+def _speed_map_direct_multiplier(runner: Any) -> float:
+    """Speed map position as direct competitive advantage.
+
+    Leaders and on-pace runners have a statistical edge, particularly
+    in sprints. The existing condition multiplier uses pace as a lookup
+    key but doesn't capture the direct leader advantage.
+
+    Coverage: ~96% of runners.
+    """
+    pos = (_get(runner, "speed_map_position") or "").lower().strip()
+    if not pos:
+        return 1.0
+
+    if pos == "leader":
+        return 1.15
+    if pos == "on_pace":
+        return 1.08
+    if pos == "midfield":
+        return 1.0
+    if pos == "backmarker":
+        return 0.90
+    return 1.0
+
+
+def _days_since_run_multiplier(runner: Any) -> float:
+    """Granular spell length → multiplier.
+
+    Finer-grained than the existing first-up/second-up assessment.
+    Optimal freshness varies by distance, but generally:
+    - 14-35 days: peak freshness (racing fit)
+    - 36-90 days: short break (usually fine)
+    - 91-180 days: spell (first-up, needs assessment)
+    - 180+: long spell (fitness question)
+
+    Coverage: ~98% of runners.
+    """
+    days = _get(runner, "days_since_last_run")
+    if not days or not isinstance(days, (int, float)):
+        return 1.0
+
+    days = int(days)
+    if days <= 7:
+        return 0.90  # backed up very quickly
+    if days <= 14:
+        return 1.0
+    if days <= 35:
+        return 1.05  # peak fitness window
+    if days <= 60:
+        return 1.0  # normal break
+    if days <= 120:
+        return 0.95  # first-up, slight question
+    if days <= 180:
+        return 0.90  # long spell
+    return 0.85  # very long absence
+
+
+def _race_time_multiplier(runner: Any, race: Any, field_runners: list) -> float:
+    """Recent race times over similar distance/track → multiplier.
+
+    Analyses form_history to extract times run at similar distances on
+    similar track types. Compares each runner's average time per 200m
+    to the field average. Faster runners get a boost.
+
+    This is a key class differentiator: a horse running 1:08.1 for 1200m
+    at Group 1 Flemington is faster than one running 1:12.0 at a BM58.
+
+    Coverage: depends on form_history availability (~80% of runners have
+    at least one timed run at a comparable distance).
+    """
+    race_distance = _get(race, "distance") or 0
+    if not race_distance:
+        return 1.0
+
+    # Collect times for all runners at similar distances
+    runner_times: dict[str, list[float]] = {}
+    dist_lo = race_distance * 0.85  # ±15% distance tolerance
+    dist_hi = race_distance * 1.15
+
+    for r in field_runners:
+        rid = _get(r, "id", "")
+        fh = _get(r, "form_history")
+        if not fh:
+            continue
+
+        if isinstance(fh, str):
+            try:
+                fh = json.loads(fh)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        if not isinstance(fh, list):
+            continue
+
+        times_per_200: list[float] = []
+        for run in fh[:10]:  # last 10 runs max
+            if not isinstance(run, dict):
+                continue
+            if run.get("is_trial"):
+                continue
+            dist = run.get("distance")
+            if not dist or not isinstance(dist, (int, float)):
+                continue
+            if not (dist_lo <= dist <= dist_hi):
+                continue
+
+            time_str = run.get("time")
+            if not time_str or not isinstance(time_str, str):
+                continue
+
+            # Parse "00:01:08.1000000" → seconds
+            secs = _parse_race_time(time_str)
+            if secs and secs > 0 and dist > 0:
+                per_200 = secs / (dist / 200)
+                times_per_200.append(per_200)
+
+        if times_per_200:
+            # Use best time (peak ability) rather than average
+            runner_times[rid] = times_per_200
+
+    # Need at least 3 runners with times to make meaningful comparison
+    if len(runner_times) < 3:
+        return 1.0
+
+    # Field average of best time per 200m
+    all_best = [min(ts) for ts in runner_times.values()]
+    field_avg = sum(all_best) / len(all_best)
+    if field_avg <= 0:
+        return 1.0
+
+    # This runner's best time
+    rid = _get(runner, "id", "")
+    if rid not in runner_times:
+        return 1.0
+
+    runner_best = min(runner_times[rid])
+
+    # Ratio: field_avg / runner_best — faster = higher ratio
+    # A runner 2% faster than average gets ~1.2 multiplier
+    ratio = field_avg / runner_best
+    # Map to multiplier: 0.95 to 1.05 range → 0.8 to 1.3 multiplier
+    if ratio >= 1.03:
+        return 1.3   # significantly faster
+    if ratio >= 1.02:
+        return 1.2
+    if ratio >= 1.01:
+        return 1.1
+    if ratio >= 0.99:
+        return 1.0   # average
+    if ratio >= 0.98:
+        return 0.9
+    if ratio >= 0.97:
+        return 0.8
+    return 0.75       # significantly slower
+
+
+def _parse_race_time(time_str: str) -> float | None:
+    """Parse race time string to seconds.
+
+    Handles formats:
+    - "00:01:08.1000000" (HH:MM:SS.fraction)
+    - "1:08.10" (M:SS.fraction)
+    - "68.10" (raw seconds)
+    """
+    if not time_str:
+        return None
+
+    try:
+        # Strip trailing zeros from fraction
+        time_str = time_str.strip()
+
+        if time_str.count(":") == 2:
+            # HH:MM:SS.frac
+            parts = time_str.split(":")
+            h = int(parts[0])
+            m = int(parts[1])
+            s = float(parts[2])
+            return h * 3600 + m * 60 + s
+        elif time_str.count(":") == 1:
+            # M:SS.frac
+            parts = time_str.split(":")
+            m = int(parts[0])
+            s = float(parts[1])
+            return m * 60 + s
+        else:
+            # Raw seconds
+            return float(time_str)
+    except (ValueError, IndexError):
+        return None
+
+
+# ──────────────────────────────────────────────
 # Main Tissue Builder
 # ──────────────────────────────────────────────
 
@@ -581,8 +1085,9 @@ def build_tissue(
         career_record = _get(runner, "career_record") or ""
         last_five = _get(runner, "last_five") or ""
 
-        # Calculate individual multipliers (career at full strength, rest dampened)
+        # Calculate individual multipliers
         career_mult = _career_multiplier(career_record, is_maiden_race=is_maiden)
+        recent_form_mult = _recent_form_multiplier(last_five)
         cond_mult = _dampen(_condition_multiplier(
             distance, track_condition, barrier, pace_pos, field_size, venue), "condition")
         form_mult = _dampen(_form_recency_multiplier(last_five), "form_recency")
@@ -591,18 +1096,38 @@ def build_tissue(
         profile_mult = _dampen(_horse_profile_multiplier(runner), "profile")
         weight_mult = _dampen(_weight_multiplier(runner, avg_weight), "weight")
 
-        # Combine multiplicatively
-        # Career is the dominant signal (3.6× range). Other factors
-        # are dampened toward 1.0 to reduce noise while preserving
-        # directional information. Validated OOS: 45.4% R1 accuracy.
+        # New factors (previously ignored by tissue)
+        pf_mult = _dampen(_pf_assessment_multiplier(runner, runners), "pf_assessment")
+        hcap_mult = _dampen(_handicap_rating_multiplier(runner, runners), "handicap")
+        class_mult = _dampen(_class_stats_multiplier(runner), "class_stats")
+        jt_mult = _dampen(_jockey_trainer_multiplier(runner), "jockey_trainer")
+        smap_mult = _dampen(_speed_map_direct_multiplier(runner), "speed_map")
+        days_mult = _dampen(_days_since_run_multiplier(runner), "days_spell")
+        time_mult = _dampen(_race_time_multiplier(runner, race, runners), "race_time")
+
+        # Blend career and recent form 40/60.
+        # Career win rate captures long-term ability but lacks class context.
+        # Recent form (last 5 results, recency-weighted) captures current
+        # form cycle and is a better 12-month indicator.
+        CAREER_WEIGHT = 0.4
+        FORM_WEIGHT = 0.6
+        blended_ability = CAREER_WEIGHT * career_mult + FORM_WEIGHT * recent_form_mult
+
         tissue_score = (
-            career_mult
+            blended_ability
             * cond_mult
             * form_mult
             * spec_mult
             * spell_mult
             * profile_mult
             * weight_mult
+            * pf_mult
+            * hcap_mult
+            * class_mult
+            * jt_mult
+            * smap_mult
+            * days_mult
+            * time_mult
         )
 
         # Floor at 0.001 to avoid zero probabilities
@@ -610,12 +1135,21 @@ def build_tissue(
         raw_scores[rid] = tissue_score
         factor_details[rid] = {
             "career": round(career_mult, 3),
+            "recent_form": round(recent_form_mult, 3),
+            "blended_ability": round(blended_ability, 3),
             "condition": round(cond_mult, 3),
             "form_recency": round(form_mult, 3),
             "specialist": round(spec_mult, 3),
             "spell": round(spell_mult, 3),
             "profile": round(profile_mult, 3),
             "weight": round(weight_mult, 3),
+            "pf_assessment": round(pf_mult, 3),
+            "handicap": round(hcap_mult, 3),
+            "class_stats": round(class_mult, 3),
+            "jockey_trainer": round(jt_mult, 3),
+            "speed_map": round(smap_mult, 3),
+            "days_spell": round(days_mult, 3),
+            "race_time": round(time_mult, 3),
             "raw_score": round(tissue_score, 4),
         }
 

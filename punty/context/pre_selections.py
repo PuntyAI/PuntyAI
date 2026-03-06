@@ -454,10 +454,15 @@ def calculate_pre_selections(
             pass  # Fall back to builder's combos
 
     # Select recommended exotic
-    anchor_odds = picks[0].odds if picks else 0.0
+    # Anchor odds = best price among our rank 1 pick OR market favourite.
+    # When tissue diverges heavily from market (e.g. tissue rank 1 is $12
+    # but market fav is $1.65), using only tissue rank 1's odds would
+    # incorrectly kill exotics via the anchor > $5 gate.
     active_odds = [r.get("current_odds", 0) for r in runners
                    if not r.get("scratched") and r.get("current_odds", 0) > 0]
     fav_price = min(active_odds) if active_odds else 0.0
+    rank1_odds = picks[0].odds if picks else 0.0
+    anchor_odds = min(rank1_odds, fav_price) if fav_price > 0 else rank1_odds
     exotic = _select_exotic(
         exotic_combos, used_saddlecloths,
         field_size=field_size, anchor_odds=anchor_odds,
