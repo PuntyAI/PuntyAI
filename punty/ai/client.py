@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Retry settings for rate limits
 MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
-API_TIMEOUT = 480  # 8 minutes — GPT-5.2 with reasoning can be slow on large meets
+API_TIMEOUT = 600  # 10 minutes — GPT-5.4 with reasoning needs more time on large meets
 
 # Reasoning effort levels for GPT-5.x Responses API
 ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
