@@ -1,6 +1,6 @@
 """Feature extraction for LightGBM probability models.
 
-Two extraction paths producing an identical 58-feature vector:
+Three extraction paths producing an identical 61-feature vector:
   - extract_features_from_db_row(): training from backtest.db rows
   - extract_features_from_runner(): live inference from Runner ORM objects
   - extract_features_batch(): batch inference for a full race
@@ -37,10 +37,13 @@ FEATURE_NAMES = [
     # Freshness (4)
     "first_up_sr", "first_up_starts",
     "second_up_sr", "second_up_starts",
-    # Recent form (3)
+    # Recent form (5)
     "last5_score", "last5_wins", "last5_places",
-    # Class & fitness (3)
+    "form_trend",           # slope of L5 positions (negative = improving)
+    "place_vs_market",      # career_place_pct minus market implied place rate
+    # Class & fitness (4)
     "prize_per_start", "handicap_rating", "avg_margin",
+    "class_differential",   # race prize money / career prize per start
     # Pace (2)
     "days_since_last", "settle_pos",
     # Barrier (2)
@@ -60,11 +63,14 @@ FEATURE_NAMES = [
     "price_move_pct",
     # Group (2)
     "group_starts", "group_sr",
+    # Place specialist (2)
+    "distance_place_rate",  # place rate at this distance
+    "track_place_rate",     # place rate at this track
     # Race context (2)
     "field_size", "distance",
 ]
 
-NUM_FEATURES = len(FEATURE_NAMES)  # 56
+NUM_FEATURES = len(FEATURE_NAMES)  # 61
 
 
 # ──────────────────────────────────────────────
@@ -112,7 +118,19 @@ def _sr_from_stats(s: Any) -> tuple[Optional[float], int]:
 
 
 def _place_rate_from_stats(s: Any) -> Optional[float]:
-    """Return place rate from a stats string."""
+    """Return place rate from a stats string or JSON dict."""
+    if isinstance(s, str) and s.strip().startswith("{"):
+        try:
+            import json
+            d = json.loads(s)
+            if isinstance(d, dict):
+                starts = d.get("starts", 0) or 0
+                wins = d.get("wins", 0) or 0
+                seconds = d.get("seconds", 0) or 0
+                thirds = d.get("thirds", 0) or 0
+                return (wins + seconds + thirds) / starts if starts > 0 else None
+        except (json.JSONDecodeError, ValueError):
+            pass
     parsed = _parse_stats(s)
     if not parsed:
         return None
@@ -149,6 +167,34 @@ def _score_last_five(last_five: Any) -> Optional[float]:
     # Weight recent starts higher
     weights = [1.0, 0.9, 0.8, 0.7, 0.6][:len(scores)]
     return sum(s * w for s, w in zip(scores, weights)) / sum(weights)
+
+
+def _form_trend(last_five: Any) -> Optional[float]:
+    """Compute form trend from L5 string. Negative = improving (positions decreasing).
+
+    Uses finish positions as raw numbers. Returns slope of linear regression.
+    E.g. "56321" → positions [5,6,3,2,1] → negative slope (improving).
+    """
+    if not last_five:
+        return None
+    s = str(last_five).strip()
+    positions = []
+    for ch in s[:5]:
+        if ch.isdigit() and ch != '0':
+            positions.append(int(ch))
+        elif ch in ('x', 'f', '0'):
+            positions.append(10)
+    if len(positions) < 3:
+        return None
+    n = len(positions)
+    xs = list(range(n))
+    x_mean = sum(xs) / n
+    y_mean = sum(positions) / n
+    num = sum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(xs, positions))
+    den = sum((xi - x_mean) ** 2 for xi in xs)
+    if den == 0:
+        return 0.0
+    return num / den
 
 
 def _count_last5(last_five: Any, positions: set) -> Optional[int]:
@@ -222,10 +268,6 @@ def capped_sr(val: Optional[float]) -> Optional[float]:
     Returns as decimal fraction matching Proform training format."""
     if val is None:
         return None
-    # Proform StrikeRate is already a percentage (e.g. 14.15 = 14.15%)
-    # Live DB strike_rate is also a percentage (e.g. 14.15 = 14.15%)
-    # Training extract_features_proform passes raw StrikeRate through _a2e_field
-    # which returns the raw value — so keep consistent: return the raw percentage value
     return val
 
 
@@ -240,6 +282,17 @@ def _safe_float(val: Any) -> Optional[float]:
         return None
 
 
+def _f(val: Any) -> float:
+    """Convert to float, NaN if None."""
+    if val is None:
+        return float("nan")
+    try:
+        v = float(val)
+        return v if math.isfinite(v) else float("nan")
+    except (ValueError, TypeError):
+        return float("nan")
+
+
 # ──────────────────────────────────────────────
 # Extraction from backtest.db rows (training)
 # ──────────────────────────────────────────────
@@ -247,18 +300,7 @@ def _safe_float(val: Any) -> Optional[float]:
 def extract_features_from_db_row(
     runner: dict, race: dict, meeting: dict, field_size: int, avg_weight: float,
 ) -> list:
-    """Extract 58-feature vector from backtest.db row dicts.
-
-    Args:
-        runner: Dict from runners table
-        race: Dict from races table
-        meeting: Dict from meetings table
-        field_size: Number of non-scratched runners in the race
-        avg_weight: Average weight carried in the race
-
-    Returns:
-        List of 58 float/NaN values in FEATURE_NAMES order
-    """
+    """Extract feature vector from backtest.db row dicts."""
     nan = float("nan")
 
     # Market
@@ -284,7 +326,6 @@ def extract_features_from_db_row(
     good_sr, good_starts = _sr_from_stats(runner.get("good_track_stats"))
     soft_sr, soft_starts = _sr_from_stats(runner.get("soft_track_stats"))
     heavy_sr, heavy_starts = _sr_from_stats(runner.get("heavy_track_stats"))
-    # firm/synthetic not in backtest.db — NaN
     firm_sr, firm_starts = nan, 0
     synth_sr, synth_starts = nan, 0
 
@@ -296,14 +337,24 @@ def extract_features_from_db_row(
     l5_score = _score_last_five(last_five)
     l5_wins = _count_last5(last_five, {1})
     l5_places = _count_last5(last_five, {1, 2, 3})
+    form_trend_val = _form_trend(last_five)
+
+    # Place vs market residual
+    place_count = 2 if field_size <= 7 else 3
+    market_implied_place = (place_count / field_size) if field_size > 0 else nan
+    place_vs_market = (career_place_pct - market_implied_place
+                       if not math.isnan(career_place_pct) and not math.isnan(market_implied_place)
+                       else nan)
 
     # Class & fitness
     prize = runner.get("career_prize_money")
     c_starts = career[0] if career else None
     prize_per_start = prize / c_starts if prize and c_starts and c_starts > 0 else nan
+    race_prize = race.get("prize_money") or 0
+    class_diff = race_prize / prize_per_start if race_prize and not math.isnan(prize_per_start) and prize_per_start > 0 else nan
 
     handicap = _safe_float(runner.get("handicap_rating"))
-    avg_margin = nan  # Not directly available in backtest.db
+    avg_margin = nan
 
     # Pace
     days_since = _safe_float(runner.get("days_since_last_run"))
@@ -313,10 +364,9 @@ def extract_features_from_db_row(
     barrier = runner.get("barrier") or 0
     barrier_relative = (barrier - 1) / (field_size - 1) if barrier and field_size > 1 else nan
 
-    # Jockey/trainer stats — backtest.db has aggregated stats strings
+    # Jockey/trainer stats
     j_sr, j_starts = _sr_from_stats(runner.get("jockey_stats"))
     t_sr, t_starts = _sr_from_stats(runner.get("trainer_stats"))
-    # A2E/PoT/L100/combo not in backtest.db
     jockey_career_sr = j_sr if j_sr is not None else nan
     jockey_career_a2e = nan
     jockey_career_pot = nan
@@ -352,6 +402,10 @@ def extract_features_from_db_row(
     group_starts = nan
     group_sr = nan
 
+    # Place specialist rates
+    dist_place = _place_rate_from_stats(runner.get("distance_stats"))
+    trk_place = _place_rate_from_stats(runner.get("track_stats"))
+
     # Race context
     distance = race.get("distance") or 1400
 
@@ -369,7 +423,9 @@ def extract_features_from_db_row(
         _f(fu_sr), float(fu_starts),
         _f(su_sr), float(su_starts),
         _f(l5_score), _f(l5_wins), _f(l5_places),
+        _f(form_trend_val), _f(place_vs_market),
         _f(prize_per_start), _f(handicap), _f(avg_margin),
+        _f(class_diff),
         _f(days_since), _f(settle),
         _f(barrier_relative), float(barrier) if barrier else nan,
         _f(jockey_career_sr), _f(jockey_career_a2e), _f(jockey_career_pot),
@@ -381,19 +437,9 @@ def extract_features_from_db_row(
         is_gelding, is_mare,
         _f(price_move_pct),
         _f(group_starts), _f(group_sr),
+        _f(dist_place), _f(trk_place),
         float(field_size), float(distance),
     ]
-
-
-def _f(val: Any) -> float:
-    """Convert to float, NaN if None."""
-    if val is None:
-        return float("nan")
-    try:
-        v = float(val)
-        return v if math.isfinite(v) else float("nan")
-    except (ValueError, TypeError):
-        return float("nan")
 
 
 # ──────────────────────────────────────────────
@@ -404,11 +450,7 @@ def extract_features_from_runner(
     runner: Any, race: Any, meeting: Any,
     field_size: int, avg_weight: float, overround: float = 1.0,
 ) -> list:
-    """Extract 58-feature vector from live Runner ORM object.
-
-    Mirrors extract_features_from_db_row() but reads ORM attributes.
-    Missing data (e.g. Proform-specific stats) passed as NaN.
-    """
+    """Extract feature vector from live Runner ORM object."""
     nan = float("nan")
 
     # Market — median odds across bookmakers
@@ -460,11 +502,21 @@ def extract_features_from_runner(
     l5_score = _score_last_five(last_five)
     l5_wins = _count_last5(last_five, {1})
     l5_places = _count_last5(last_five, {1, 2, 3})
+    form_trend_val = _form_trend(last_five)
+
+    # Place vs market residual
+    place_count = 2 if field_size <= 7 else 3
+    market_implied_place = (place_count / field_size) if field_size > 0 else nan
+    place_vs_market = (career_place_pct - market_implied_place
+                       if not math.isnan(career_place_pct) and not math.isnan(market_implied_place)
+                       else nan)
 
     # Class & fitness
     prize = _safe_float(_get(runner, "career_prize_money"))
     c_starts = career[0] if career else None
     prize_per_start = prize / c_starts if prize and c_starts and c_starts > 0 else nan
+    race_prize = _safe_float(_get(race, "prize_money")) or 0
+    class_diff = race_prize / prize_per_start if race_prize and not math.isnan(prize_per_start) and prize_per_start > 0 else nan
 
     handicap = _safe_float(_get(runner, "handicap_rating"))
     avg_margin = _extract_avg_margin(_get(runner, "form_history"))
@@ -540,6 +592,10 @@ def extract_features_from_runner(
     group_starts = nan
     group_sr = nan
 
+    # Place specialist rates
+    dist_place = _place_rate_from_stats(_get(runner, "distance_stats"))
+    trk_place = _place_rate_from_stats(_get(runner, "track_stats"))
+
     # Race context
     distance = _get(race, "distance") or 1400
 
@@ -557,7 +613,9 @@ def extract_features_from_runner(
         _f(fu_sr), float(fu_starts),
         _f(su_sr), float(su_starts),
         _f(l5_score), _f(l5_wins), _f(l5_places),
+        _f(form_trend_val), _f(place_vs_market),
         _f(prize_per_start), _f(handicap), _f(avg_margin),
+        _f(class_diff),
         _f(days_since), _f(settle),
         _f(barrier_relative), float(barrier) if barrier else nan,
         _f(jockey_career_sr), _f(jockey_career_a2e), _f(jockey_career_pot),
@@ -569,6 +627,7 @@ def extract_features_from_runner(
         is_gelding, is_mare,
         _f(price_move_pct),
         _f(group_starts), _f(group_sr),
+        _f(dist_place), _f(trk_place),
         float(field_size), float(distance),
     ]
 
@@ -579,7 +638,7 @@ def extract_features_batch(
     """Extract features for all active runners in a race.
 
     Returns:
-        np.ndarray of shape (n_runners, 58) with NaN for missing values.
+        np.ndarray of shape (n_runners, NUM_FEATURES) with NaN for missing values.
     """
     active = [r for r in runners if not _get(r, "scratched", False)]
     if not active:

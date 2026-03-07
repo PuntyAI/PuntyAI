@@ -159,8 +159,8 @@ class TestFeatureExtraction:
     """Tests for feature extraction from various data sources."""
 
     def test_feature_count(self):
-        """Feature list has exactly 58 features."""
-        assert NUM_FEATURES == 56
+        """Feature list has exactly 61 features."""
+        assert NUM_FEATURES == 61
 
     def test_db_row_extraction_length(self, sample_db_runner, sample_race, sample_meeting):
         """Extraction from DB row produces correct-length vector."""
