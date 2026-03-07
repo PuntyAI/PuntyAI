@@ -131,6 +131,109 @@ def _correct_sequence_legs(raw_content: str, pre_built_sequences: list) -> str:
     return "\n".join(lines)
 
 
+# Regex to match exotic lines in AI output
+# e.g. "Exacta: 3, 4 — $15" or "Trifecta Box: 3, 9, 6 — $20"
+_EXOTIC_LINE_RE = re.compile(
+    r"(Exacta|Quinella|Trifecta\s*Box|Trifecta|First\s*4)\s*:\s*([\d,\s]+)\s*[—\-–]\s*\$(\d+)",
+    re.IGNORECASE,
+)
+# Regex to match race headers: "Race 2 – Herald Sun Plate" or "## Race 2"
+_RACE_HEADER_RE = re.compile(
+    r"(?:^|\n)\s*(?:\*\*|#{1,3}\s*)?Race\s+(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _correct_exotic_runners(raw_content: str, races: list) -> str:
+    """Replace AI-invented exotic runners with the pre-selected exotic.
+
+    GPT-5.4 sometimes ignores the recommended exotic and substitutes
+    runners that aren't in our picks. This post-processor finds the
+    exotic line for each race and replaces it with the correct one.
+    """
+    # Build lookup: race_number → RecommendedExotic
+    exotic_lookup: dict[int, object] = {}
+    pick_lookup: dict[int, set[int]] = {}
+    for race in races:
+        rnum = race.get("race_number")
+        pre_sel = race.get("pre_selections")
+        if not pre_sel or not rnum:
+            continue
+        if pre_sel.exotic:
+            exotic_lookup[rnum] = pre_sel.exotic
+        pick_scs = set()
+        for p in getattr(pre_sel, "picks", []):
+            pick_scs.add(p.saddlecloth)
+        pick_lookup[rnum] = pick_scs
+
+    if not exotic_lookup:
+        return raw_content
+
+    lines = raw_content.split("\n")
+    current_race = None
+    corrections = 0
+
+    for i, line in enumerate(lines):
+        # Track current race number
+        hdr = _RACE_HEADER_RE.search(line)
+        if hdr:
+            current_race = int(hdr.group(1))
+            continue
+
+        if current_race is None:
+            continue
+
+        # Check for exotic line
+        em = _EXOTIC_LINE_RE.search(line)
+        if not em:
+            continue
+
+        # Parse AI's runners
+        ai_runners_str = em.group(2).strip()
+        ai_runners = [int(x.strip()) for x in ai_runners_str.split(",") if x.strip().isdigit()]
+        ai_runners_set = set(ai_runners)
+        stake = int(em.group(3))
+
+        # Check if all runners are from our picks
+        picks_for_race = pick_lookup.get(current_race, set())
+        if picks_for_race and ai_runners_set <= picks_for_race:
+            continue  # All runners from picks — OK
+
+        # Runners are wrong — replace with recommended exotic
+        rec = exotic_lookup.get(current_race)
+        if not rec:
+            continue
+
+        runners_str = ", ".join(str(r) for r in rec.runners)
+        names_str = ", ".join(rec.runner_names)
+        new_exotic_line = f"{rec.exotic_type}: {runners_str} — ${stake}"
+
+        # Calculate flexi
+        flexi_pct = (stake / rec.num_combos) * 100 if rec.num_combos > 0 else 100
+        new_flexi_line = f"{rec.num_combos} combos — {flexi_pct:.0f}% flexi"
+
+        # Replace the exotic line
+        leading = len(line) - len(line.lstrip())
+        lines[i] = " " * leading + new_exotic_line
+
+        # Try to fix the combos/flexi line (usually the next line)
+        if i + 1 < len(lines) and re.search(r"combo", lines[i + 1], re.IGNORECASE):
+            leading2 = len(lines[i + 1]) - len(lines[i + 1].lstrip())
+            lines[i + 1] = " " * leading2 + new_flexi_line
+
+        corrections += 1
+        logger.warning(
+            f"Exotic correction (Race {current_race}): "
+            f"AI had [{', '.join(str(r) for r in ai_runners)}] → "
+            f"corrected to {rec.exotic_type} {rec.runners} ({names_str})"
+        )
+
+    if corrections > 0:
+        logger.info(f"Corrected {corrections} exotic(s) in AI output")
+
+    return "\n".join(lines)
+
+
 def load_prompt(name: str) -> str:
     """Load prompt template from file (or DB cache for personality)."""
     if name == "personality":
@@ -383,6 +486,11 @@ class ContentGenerator:
             pre_built = context.get("pre_built_sequences", [])
             if pre_built:
                 raw_content = _correct_sequence_legs(raw_content, pre_built)
+
+            # Post-process: correct any AI-invented exotic runners
+            races = context.get("races", [])
+            if races:
+                raw_content = _correct_exotic_runners(raw_content, races)
 
             # Save content BEFORE yielding to SSE — if the client disconnected
             # during the AI call, the generator gets cancelled on yield, so we
