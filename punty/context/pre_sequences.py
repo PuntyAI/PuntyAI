@@ -27,9 +27,8 @@ ENABLE_MAIN_QUADDIE = True
 
 # Minimum estimated return % thresholds — skip sequences below these
 MIN_RETURN_PCT = {
-    "early_quaddie": 60.0,  # Data: Early Quad -52% ROI — require high return to proceed
-    "quaddie": 20.0,
-    "big6": 5.0,
+    "early_quaddie": 80.0,  # Data: Early Quad -52% ROI (8/57) — raised from 60%
+    "quaddie": 30.0,         # Data: Quaddie -43.9% ROI (16/178) — raised from 20%
 }
 
 # Odds shapes classified as chaos / dividend-decider legs
@@ -536,15 +535,25 @@ def _optimiser_select(
     # Anchor legs: top win_prob runners (favorites = short-priced, predictable)
     # Normal/chaos legs: tip-first selection — picks form the backbone,
     #   extended pool runners only supplement for width when picks can't fill.
+    # LGBM-driven floor: exclude runners with win_prob < 5% from legs.
+    # Production data: 2-wide legs hit 45.3% but 3-wide hit 54.5% — wider is
+    # better, but only if the extra runners have genuine win chances.
+    MIN_LEG_RUNNER_WP = 0.05  # 5% win probability floor for leg inclusion
     selected = []
     for i in range(num_legs):
         runners = legs_data[i].top_runners
         target = targets[i]
 
+        # Filter to runners above LGBM probability floor
+        viable = [r for r in runners if float(r.get("win_prob", 0)) >= MIN_LEG_RUNNER_WP]
+        # Ensure we always have at least min runners from the full pool
+        if len(viable) < 2:
+            viable = runners
+
         if leg_types[i] == "anchor":
             # Anchor = most probable runners, sorted by win_prob descending
             by_prob = sorted(
-                runners,
+                viable,
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
@@ -555,13 +564,13 @@ def _optimiser_select(
             # first, regardless of edge. Edge only matters for non-pick width.
             # 1) All our picks, sorted by win_prob descending (best picks first)
             all_picks = sorted(
-                [r for r in runners if r.get("_is_pick")],
+                [r for r in viable if r.get("_is_pick")],
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
             # 2) Extended pool: top win_prob non-picks (need coverage, not just edge)
             extended_pool = sorted(
-                [r for r in runners if not r.get("_is_pick")],
+                [r for r in viable if not r.get("_is_pick")],
                 key=lambda r: float(r.get("win_prob", 0)),
                 reverse=True,
             )
@@ -823,6 +832,12 @@ def build_smart_sequence(
     Legs classified as anchor (single) / chaos (wide) / normal.
     Outlay $40-$60, budget-optimised by trimming/adding runners by edge.
     """
+    # Kill Big6: 1/59 hits = -95.7% ROI, -$1,627. Not recoverable.
+    is_big6 = "big" in sequence_type.lower() or "6" in sequence_type
+    if is_big6:
+        logger.info(f"Skipping {sequence_type}: Big6 killed (1/59 hits, -95.7% ROI)")
+        return None
+
     # Data-driven track condition filters (Feb 24 audit)
     tc = (track_condition or "").lower()
     if "heavy" in tc:
@@ -844,7 +859,9 @@ def build_smart_sequence(
                 top_prob = max((float(r.get("win_prob", 0)) for r in top_runners), default=0)
                 leg_confidences.append(top_prob)
         avg_confidence = sum(leg_confidences) / len(leg_confidences) if leg_confidences else 0
-        if avg_confidence < 0.22:
+        # Raised from 0.22 to 0.26: early quaddies at -52.3% ROI (8/57 hits).
+        # Higher confidence bar ensures we only play when model is confident.
+        if avg_confidence < 0.26:
             logger.info(
                 f"Skipping {sequence_type}: avg top-pick probability {avg_confidence:.2f} "
                 f"< 0.22 threshold (chaos territory)"

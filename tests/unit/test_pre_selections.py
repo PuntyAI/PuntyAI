@@ -171,10 +171,16 @@ class TestDetermineBetType:
         result = _determine_bet_type(c, rank=1, is_roughie=False)
         assert result == "Win"
 
-    def test_second_pick_place_in_sweet_spot(self):
-        """Rank 2 in $4-$6 sweet spot gets Place (E/W killed — -16.16% ROI)."""
+    def test_second_pick_win_in_sweet_spot(self):
+        """Rank 2 in $4-$8 with wp>=0.20 and value>=1.0 gets Win."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Win"
+
+    def test_second_pick_place_low_value(self):
+        """Rank 2 in $4-$8 with value < 1.0 stays Place."""
+        c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
+             "value_rating": 0.90, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
 
     def test_second_pick_place_dead_zone(self):
