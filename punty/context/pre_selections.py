@@ -1281,6 +1281,10 @@ def _select_exotic(
                 score *= 1.30
             elif best_rank == 2:
                 score *= 1.15
+            # All runners from our picks → strong preference.
+            # Non-pick runners in exotics hit at lower strike rate.
+            if all(r in selection_saddlecloths for r in runners):
+                score *= 1.20
 
         # --- Tight cluster boost ---
         if cluster_boost > 1.0:

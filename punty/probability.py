@@ -3171,6 +3171,8 @@ def calculate_exotic_combinations(
     # --- Quinella: pairs from top 4 ---
     # Quinella is unordered (no wrong-order penalty) — historically +68% ROI
     # in 8-10 fields. Generate all pairs from our 4 picks.
+    top2_scs = {r["saddlecloth"] for r in sorted_runners[:min(2, len(sorted_runners))]}
+
     for combo in combinations(top4, 2):
         # At least one runner must be a genuine contender
         if max(combo[0]["win_prob"], combo[1]["win_prob"]) < MIN_LEAD_PROB:
@@ -3184,7 +3186,13 @@ def calculate_exotic_combinations(
         )
         value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
 
-        if value >= VALUE_THRESHOLDS["Quinella"]:
+        # Top-2 picks Quinella: lower value bar. These are our highest-
+        # conviction runners — probability > value. Market-agreeing combos
+        # (value ~1.0) still collect at high strike rate.
+        combo_scs = {combo[0]["saddlecloth"], combo[1]["saddlecloth"]}
+        threshold = 0.85 if combo_scs <= top2_scs else VALUE_THRESHOLDS["Quinella"]
+
+        if value >= threshold:
             results.append(ExoticCombination(
                 exotic_type="Quinella",
                 runners=[r["saddlecloth"] for r in combo],
