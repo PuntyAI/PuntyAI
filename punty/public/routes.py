@@ -2815,6 +2815,28 @@ async def get_daily_dashboard() -> dict:
             reverse=True,
         )[:3]
 
+        # ── Meeting P&L timeline (per-meeting cumulative P&L over time) ──
+        meeting_timelines: dict[str, list] = defaultdict(list)
+        for pick, runner, race, meeting in settled_chrono:
+            pnl = pick.pnl or 0
+            venue = meeting.venue
+            rn = pick.race_number or pick.sequence_start_race or 0
+            ts = (race.start_time if race else None) or pick.settled_at or pick.created_at
+            entries = meeting_timelines[venue]
+            prev_cum = entries[-1]["cumulative"] if entries else 0.0
+            entries.append({
+                "time": ts.strftime("%H:%M") if ts else "?",
+                "race": rn,
+                "pnl": round(pnl, 2),
+                "cumulative": round(prev_cum + pnl, 2),
+            })
+        # Convert to list of {venue, data} sorted by venue name
+        meeting_pnl = [
+            {"venue": v, "data": d}
+            for v, d in sorted(meeting_timelines.items())
+            if len(d) > 0
+        ]
+
         # ── Summary counts for has_data logic ──
         total_picks = len(all_rows)
         total_settled = len(settled_rows)
@@ -2826,6 +2848,7 @@ async def get_daily_dashboard() -> dict:
             "performance": performance,
             "big_wins": big_wins,
             "timeline": timeline,
+            "meeting_pnl": meeting_pnl,
             "upcoming": upcoming[:30],  # Cap at 30 for page size
             "edge_picks": edge_picks[:8],
             "bet_types": bet_types,
