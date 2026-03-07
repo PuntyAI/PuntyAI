@@ -796,7 +796,6 @@ setTimeout(function() { location.reload(); }, 300000);
         if (!canvas) return;
         var ctx = canvas.getContext('2d');
 
-        // Sizing — re-measure each draw so expand/collapse works
         var rect = canvas.parentElement.getBoundingClientRect();
         var dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
@@ -804,10 +803,10 @@ setTimeout(function() { location.reload(); }, 300000);
         ctx.scale(dpr, dpr);
         var W = rect.width, H = rect.height;
         var expanded = H > 200;
-        var fontSize = expanded ? 12 : 10;
-        var dotR = expanded ? 3.5 : 2.5;
-        var lineW = expanded ? 2.5 : 2;
-        var padL = 46, padR = expanded ? 100 : 12, padT = expanded ? 16 : 10, padB = expanded ? 28 : 22;
+        var fontSize = expanded ? 12 : 9;
+        var dotR = expanded ? 3.5 : 2;
+        var lineW = expanded ? 2.5 : 1.5;
+        var padL = 40, padR = expanded ? 110 : 80, padT = expanded ? 16 : 8, padB = expanded ? 28 : 20;
         var chartW = W - padL - padR, chartH = H - padT - padB;
 
         // Find global min/max
@@ -818,24 +817,17 @@ setTimeout(function() { location.reload(); }, 300000);
         var minV = Math.min.apply(null, allVals);
         var maxV = Math.max.apply(null, allVals);
         var range = maxV - minV || 1;
-        minV -= range * 0.15; maxV += range * 0.15;
+        minV -= range * 0.12; maxV += range * 0.12;
         range = maxV - minV;
 
-        // Build sorted unique race numbers across all meetings for x-axis
-        var raceSet = {};
-        meetings.forEach(function(m) {
-            m.data.forEach(function(d) { raceSet[d.race] = true; });
-        });
-        var raceNums = Object.keys(raceSet).map(Number).sort(function(a, b) { return a - b; });
-        var maxPts = raceNums.length;
-        // Map race number to x-index (0-based)
-        var raceIndex = {};
-        raceNums.forEach(function(r, i) { raceIndex[r] = i; });
+        // Each meeting uses sequential x (race 1, 2, 3...) — not shared axis
+        var maxRaces = 0;
+        meetings.forEach(function(m) { if (m.data.length > maxRaces) maxRaces = m.data.length; });
+        if (maxRaces < 1) maxRaces = 1;
 
         function y(v) { return padT + (1 - (v - minV) / range) * chartH; }
-        function xForRace(r) { return padL + ((raceIndex[r] + 0.5) / maxPts) * chartW; }
+        function xAt(idx) { return padL + ((idx + 0.5) / maxRaces) * chartW; }
 
-        // Clear
         ctx.clearRect(0, 0, W, H);
 
         // Zero line
@@ -845,7 +837,7 @@ setTimeout(function() { location.reload(); }, 300000);
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
         ctx.moveTo(padL, zeroY);
-        ctx.lineTo(W - padR, zeroY);
+        ctx.lineTo(padL + chartW, zeroY);
         ctx.stroke();
         ctx.setLineDash([]);
 
@@ -853,26 +845,21 @@ setTimeout(function() { location.reload(); }, 300000);
         if (expanded) {
             ctx.strokeStyle = 'rgba(255,255,255,0.04)';
             ctx.lineWidth = 1;
-            var gridSteps = 4;
-            for (var g = 1; g < gridSteps; g++) {
-                var gv = minV + (range * g / gridSteps);
-                var gy = y(gv);
-                ctx.beginPath();
-                ctx.moveTo(padL, gy);
-                ctx.lineTo(W - padR, gy);
-                ctx.stroke();
+            for (var g = 1; g < 4; g++) {
+                var gy = y(minV + (range * g / 4));
+                ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(padL + chartW, gy); ctx.stroke();
             }
         }
 
-        // Sort meetings by final P&L so labels stack nicely
+        // Sort meetings by final P&L (best first)
         var sorted = meetings.map(function(m, i) { return { m: m, i: i }; });
         sorted.sort(function(a, b) {
-            var aLast = a.m.data.length ? a.m.data[a.m.data.length - 1].cumulative : 0;
-            var bLast = b.m.data.length ? b.m.data[b.m.data.length - 1].cumulative : 0;
-            return bLast - aLast;
+            var aL = a.m.data.length ? a.m.data[a.m.data.length - 1].cumulative : 0;
+            var bL = b.m.data.length ? b.m.data[b.m.data.length - 1].cumulative : 0;
+            return bL - aL;
         });
 
-        // Draw lines
+        // Draw lines — sequential x per meeting
         var labelPositions = [];
         sorted.forEach(function(item) {
             var m = item.m, mi = item.i;
@@ -881,63 +868,53 @@ setTimeout(function() { location.reload(); }, 300000);
             if (pts.length === 0) return;
 
             ctx.beginPath();
-            var firstX = xForRace(pts[0].race);
-            ctx.moveTo(firstX, zeroY);
+            ctx.moveTo(xAt(0), zeroY);
             for (var i = 0; i < pts.length; i++) {
-                ctx.lineTo(xForRace(pts[i].race), y(pts[i].cumulative));
+                ctx.lineTo(xAt(i), y(pts[i].cumulative));
             }
             ctx.strokeStyle = color;
             ctx.lineWidth = lineW;
             ctx.stroke();
 
-            // Dots
             for (var i = 0; i < pts.length; i++) {
                 ctx.beginPath();
-                ctx.arc(xForRace(pts[i].race), y(pts[i].cumulative), dotR, 0, Math.PI * 2);
+                ctx.arc(xAt(i), y(pts[i].cumulative), dotR, 0, Math.PI * 2);
                 ctx.fillStyle = color;
                 ctx.fill();
             }
 
-            // Collect label info
             var last = pts[pts.length - 1];
-            var xEnd = xForRace(last.race);
-            var yEnd = y(last.cumulative);
-            labelPositions.push({ venue: m.venue, cum: last.cumulative, x: xEnd, y: yEnd, color: color });
+            labelPositions.push({
+                venue: m.venue, cum: last.cumulative,
+                x: xAt(pts.length - 1), y: y(last.cumulative), color: color
+            });
         });
 
-        // De-overlap labels vertically (push apart if too close)
+        // De-overlap labels
         labelPositions.sort(function(a, b) { return a.y - b.y; });
-        var minGap = fontSize + 2;
+        var minGap = fontSize + 3;
         for (var i = 1; i < labelPositions.length; i++) {
-            var diff = labelPositions[i].y - labelPositions[i - 1].y;
-            if (diff < minGap) {
+            if (labelPositions[i].y - labelPositions[i - 1].y < minGap) {
                 labelPositions[i].y = labelPositions[i - 1].y + minGap;
             }
         }
 
-        // Draw labels
+        // Labels in right margin (both modes)
+        var labelStartX = padL + chartW + 8;
         labelPositions.forEach(function(lbl) {
+            var text = lbl.venue + ' ' + (lbl.cum >= 0 ? '+' : '') + Math.round(lbl.cum);
             ctx.font = 'bold ' + fontSize + 'px Rajdhani, sans-serif';
             ctx.fillStyle = lbl.color;
             ctx.textAlign = 'left';
-            var labelX = lbl.x + 6;
-            var text = lbl.venue + ' ' + (lbl.cum >= 0 ? '+' : '') + lbl.cum.toFixed(0);
-            if (expanded) {
-                // Labels in right margin
-                labelX = W - padR + 8;
-                // Connector line from end point to label
-                ctx.strokeStyle = lbl.color;
-                ctx.lineWidth = 0.5;
-                ctx.globalAlpha = 0.4;
-                ctx.beginPath();
-                ctx.moveTo(lbl.x + dotR + 1, lbl.y);
-                ctx.lineTo(labelX - 2, lbl.y);
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
-            } else {
-                labelX = Math.min(lbl.x + 4, W - padR - 50);
-            }
-            ctx.fillText(text, labelX, lbl.y + (fontSize / 3));
+            ctx.strokeStyle = lbl.color;
+            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = 0.3;
+            ctx.beginPath();
+            ctx.moveTo(lbl.x + dotR + 1, lbl.y);
+            ctx.lineTo(labelStartX - 2, lbl.y);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+            ctx.fillText(text, labelStartX, lbl.y + (fontSize / 3));
         });
 
         // Y-axis labels
@@ -945,16 +922,15 @@ setTimeout(function() { location.reload(); }, 300000);
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
         ctx.textAlign = 'right';
         ctx.fillText('0', padL - 4, zeroY + 3);
-        if (maxV > 0) ctx.fillText('+' + Math.round(maxV - range * 0.15), padL - 4, padT + fontSize);
-        if (minV < 0) ctx.fillText(Math.round(minV + range * 0.15), padL - 4, H - padB);
+        if (maxV > 0) ctx.fillText('+' + Math.round(maxV - range * 0.12), padL - 4, padT + fontSize);
+        if (minV < 0) ctx.fillText(Math.round(minV + range * 0.12), padL - 4, H - padB);
 
-        // X-axis race labels (actual race numbers)
+        // X-axis: R1, R2, R3...
         ctx.fillStyle = 'rgba(255,255,255,0.25)';
         ctx.textAlign = 'center';
-        for (var i = 0; i < raceNums.length; i++) {
-            var xp = xForRace(raceNums[i]);
-            if (raceNums.length <= 12 || i % 2 === 0) {
-                ctx.fillText('R' + raceNums[i], xp, H - 4);
+        for (var i = 0; i < maxRaces; i++) {
+            if (maxRaces <= 12 || i % 2 === 0) {
+                ctx.fillText('R' + (i + 1), xAt(i), H - (expanded ? 4 : 2));
             }
         }
     }

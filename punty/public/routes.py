@@ -2815,27 +2815,31 @@ async def get_daily_dashboard() -> dict:
             reverse=True,
         )[:3]
 
-        # ── Meeting P&L timeline (per-meeting cumulative P&L over time) ──
-        meeting_timelines: dict[str, list] = defaultdict(list)
+        # ── Meeting P&L timeline (per-meeting cumulative P&L by race) ──
+        # Aggregate all picks per (venue, race_number) into one net P&L
+        meeting_race_pnl: dict[str, dict[int, float]] = defaultdict(lambda: defaultdict(float))
         for pick, runner, race, meeting in settled_chrono:
             pnl = pick.pnl or 0
             venue = meeting.venue
             rn = pick.race_number or pick.sequence_start_race or 0
-            ts = (race.start_time if race else None) or pick.settled_at or pick.created_at
-            entries = meeting_timelines[venue]
-            prev_cum = entries[-1]["cumulative"] if entries else 0.0
-            entries.append({
-                "time": ts.strftime("%H:%M") if ts else "?",
-                "race": rn,
-                "pnl": round(pnl, 2),
-                "cumulative": round(prev_cum + pnl, 2),
-            })
-        # Convert to list of {venue, data} sorted by venue name
-        meeting_pnl = [
-            {"venue": v, "data": d}
-            for v, d in sorted(meeting_timelines.items())
-            if len(d) > 0
-        ]
+            if rn:
+                meeting_race_pnl[venue][rn] += pnl
+
+        # Build cumulative timeline with one point per race
+        meeting_pnl = []
+        for venue in sorted(meeting_race_pnl.keys()):
+            races = meeting_race_pnl[venue]
+            entries = []
+            cum = 0.0
+            for rn in sorted(races.keys()):
+                cum += races[rn]
+                entries.append({
+                    "race": rn,
+                    "pnl": round(races[rn], 2),
+                    "cumulative": round(cum, 2),
+                })
+            if entries:
+                meeting_pnl.append({"venue": venue, "data": entries})
 
         # ── Summary counts for has_data logic ──
         total_picks = len(all_rows)
