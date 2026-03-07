@@ -323,13 +323,22 @@ async def place_bet(
     selection_id: int,
     stake: float,
     price: float,
+    use_bsp: bool = True,
 ) -> dict[str, Any]:
     """Place a BACK bet on Betfair Exchange.
+
+    When use_bsp=True (default), places a BSP (Betfair Starting Price) order
+    via LIMIT_ON_CLOSE. This guarantees a fill at the market-clearing price,
+    eliminating the 53% non-fill rate from LIMIT orders.
+
+    The price parameter sets a minimum acceptable BSP — if BSP is below this,
+    the bet is cancelled by the exchange. Set to DEFAULT_MIN_ODDS ($1.30) as
+    our floor.
 
     Returns: {bet_id, status, size_matched, average_price_matched} or {status: 'failed', error: ...}
     """
     if settings.mock_external:
-        logger.info(f"[MOCK] place_bet: market={market_id} sel={selection_id} ${stake} @ {price}")
+        logger.info(f"[MOCK] place_bet: market={market_id} sel={selection_id} ${stake} @ {price} bsp={use_bsp}")
         return {
             "bet_id": f"mock-{market_id}-{selection_id}",
             "status": "SUCCESS",
@@ -341,19 +350,32 @@ async def place_bet(
     if not scraper:
         return {"status": "failed", "error": "Betfair not configured"}
 
+    if use_bsp:
+        instruction = {
+            "selectionId": selection_id,
+            "side": "BACK",
+            "orderType": "LIMIT_ON_CLOSE",
+            "limitOnCloseOrder": {
+                "liability": round(stake, 2),
+                "price": round(price, 2),  # minimum acceptable BSP
+            },
+        }
+    else:
+        instruction = {
+            "selectionId": selection_id,
+            "side": "BACK",
+            "orderType": "LIMIT",
+            "limitOrder": {
+                "size": round(stake, 2),
+                "price": round(price, 2),
+                "persistenceType": "LAPSE",
+            },
+        }
+
     try:
         result = await scraper._api_call("placeOrders", {
             "marketId": market_id,
-            "instructions": [{
-                "selectionId": selection_id,
-                "side": "BACK",
-                "orderType": "LIMIT",
-                "limitOrder": {
-                    "size": round(stake, 2),
-                    "price": round(price, 2),
-                    "persistenceType": "LAPSE",
-                },
-            }],
+            "instructions": [instruction],
         })
     except Exception as e:
         logger.error(f"Betfair placeOrders failed: {e}")
@@ -372,6 +394,7 @@ async def place_bet(
             "status": report.get("status", "SUCCESS"),
             "size_matched": report.get("sizeMatched", 0),
             "average_price_matched": report.get("averagePriceMatched", 0),
+            "order_type": "BSP" if use_bsp else "LIMIT",
         }
 
     error = result.get("errorCode", "UNKNOWN")
