@@ -373,13 +373,13 @@ class TestBuildSmartSequence:
         assert len(result.legs) == 4
         assert MIN_OUTLAY <= result.total_outlay <= MAX_OUTLAY
 
-    def test_big6_has_6_legs(self):
+    def test_big6_killed(self):
+        """Big6 killed: 1/59 hits, -95.7% ROI. Should always return None."""
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
         race_contexts = [_race_ctx(r) for r in range(3, 9)]
 
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
-        assert result is not None
-        assert len(result.legs) == 6
+        assert result is None
 
     def test_missing_leg_returns_none(self):
         """Missing leg analysis for a race should return None."""
@@ -702,26 +702,13 @@ class TestBuildReason:
 # ──────────────────────────────────────────────
 
 class TestStrategyImprovements:
-    def test_big6_reduced_outlay(self):
-        """Big6 outlay should be $20-$30 (not $40-$60)."""
+    def test_big6_killed_in_strategy(self):
+        """Big6 killed: always returns None regardless of input."""
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
         race_contexts = [_race_ctx(r) for r in range(3, 9)]
 
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
-        assert result is not None
-        assert BIG6_MIN_OUTLAY <= result.total_outlay <= BIG6_MAX_OUTLAY, \
-            f"Big6 outlay ${result.total_outlay} outside ${BIG6_MIN_OUTLAY}-${BIG6_MAX_OUTLAY}"
-
-    def test_big6_max_2_wide_per_leg(self):
-        """Big6 legs should be capped at 2-wide to fit budget."""
-        leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
-        race_contexts = [_race_ctx(r) for r in range(3, 9)]
-
-        result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
-        assert result is not None
-        for i, leg in enumerate(result.legs):
-            assert len(leg.runners) <= 2, \
-                f"Big6 leg {i+1} has {len(leg.runners)} runners, max should be 2"
+        assert result is None
 
     def test_mandatory_fav_inclusion(self):
         """Runner ≤$2.50 must be included in leg even without edge."""

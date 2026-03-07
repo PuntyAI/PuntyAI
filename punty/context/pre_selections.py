@@ -622,11 +622,19 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if rank == 1 and not is_roughie:
         return "Win"
 
-    # Roughie Win: 0/43 = -98.7% ROI. All roughies → Place.
+    # Roughie Win: 0/43 = -98.7% ROI. All roughies -> Place.
     if is_roughie:
         return "Place"
 
-    # Rank 2+ → Place (rank 2 Win: -78.4% ROI)
+    # Rank 2 Win consideration: allow Win at $4-$8 with strong probability.
+    # Production data: 3 winners today were our rank 2 on Place only
+    # (Seastraand missed $58.80 win profit, Blue Suede Hooves missed $31.80).
+    # Higher odds ($4-$8) win bets pay significantly more than place.
+    if rank == 2 and not is_roughie:
+        if 4.0 <= odds <= 8.0 and win_prob >= 0.20 and value >= 1.0:
+            return "Win"
+
+    # Rank 2+ -> Place
     return "Place"
 
 
@@ -903,6 +911,11 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     if bt == "Place":
         # High collection confidence auto-pass (pp >= 0.70)
         if place_prob >= 0.70:
+            return (True, None)
+        # Strong win probability override: if wp >= 0.30, the runner is a genuine
+        # contender — place prob may be underestimated by model. Production data
+        # showed runners with wp=0.34 at $3.50 getting no_bet despite winning.
+        if win_prob >= 0.30 and 2.0 <= odds <= 8.0:
             return (True, None)
         # Short odds ($1.50-$3): needs high collection prob
         if odds < 3.0 and place_prob >= 0.55:
