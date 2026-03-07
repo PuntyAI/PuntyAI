@@ -366,3 +366,24 @@ async def update_balance(body: BalanceUpdate, db: AsyncSession = Depends(get_db)
     from punty.betting.queue import set_balance
     await set_balance(db, body.balance)
     return {"balance": body.balance}
+
+
+@router.get("/calibration")
+async def get_calibration(db: AsyncSession = Depends(get_db)):
+    """Get current probability calibration map — shows how predictions are corrected."""
+    from punty.betting.calibration import build_calibration_map, calibrate_probability, BIN_WIDTH
+    cal_map = await build_calibration_map(db)
+
+    bins = []
+    for i in range(10):
+        predicted = (i + 0.5) * BIN_WIDTH
+        actual = cal_map.get(i)
+        calibrated = calibrate_probability(predicted, cal_map) if actual is not None else None
+        bins.append({
+            "bin": i,
+            "predicted": round(predicted, 2),
+            "actual": round(actual, 3) if actual is not None else None,
+            "correction": round(actual - predicted, 3) if actual is not None else None,
+            "has_data": actual is not None,
+        })
+    return {"bins": bins, "calibrated_bins": len(cal_map)}

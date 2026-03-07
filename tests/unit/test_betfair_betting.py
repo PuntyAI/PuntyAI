@@ -586,3 +586,72 @@ class TestCycleBetSelection:
         result = await cycle_bet_selection(mock_db, "bf-sale-2026-03-02-r1")
         assert result["swapped"] is True
         assert bet.bet_type == "place"
+
+
+class TestCalibration:
+    """Test the probability calibration system."""
+
+    def test_calibrate_no_data_returns_raw(self):
+        """With empty calibration map, returns raw prediction."""
+        from punty.betting.calibration import calibrate_probability
+        assert calibrate_probability(0.75, {}) == 0.75
+
+    def test_calibrate_corrects_overconfident(self):
+        """Overconfident bin gets corrected down."""
+        from punty.betting.calibration import calibrate_probability
+        # Bin 7 (0.70-0.80, center 0.75) actual = 0.53
+        cal_map = {7: 0.53}
+        result = calibrate_probability(0.75, cal_map)
+        assert result == 0.53
+
+    def test_calibrate_corrects_underconfident(self):
+        """Underconfident bin gets corrected up."""
+        from punty.betting.calibration import calibrate_probability
+        # Bin 4 (0.40-0.50, center 0.45) actual = 0.48
+        cal_map = {4: 0.48}
+        result = calibrate_probability(0.45, cal_map)
+        assert result == 0.48
+
+    def test_calibrate_interpolates_between_bins(self):
+        """Probabilities between bin centers interpolate smoothly."""
+        from punty.betting.calibration import calibrate_probability
+        cal_map = {5: 0.52, 6: 0.67}  # bins 5 and 6
+        # 0.60 is at center of bin 6
+        result = calibrate_probability(0.60, cal_map)
+        # Interpolation: pp=0.60 is slightly below bin 6 center (0.65),
+        # so it interpolates toward bin 5
+        assert 0.52 < result < 0.67
+
+    def test_calibrate_zero_returns_zero(self):
+        from punty.betting.calibration import calibrate_probability
+        assert calibrate_probability(0.0, {5: 0.60}) == 0.0
+
+    def test_calibrate_missing_bin_falls_through(self):
+        """Missing bin returns raw prediction."""
+        from punty.betting.calibration import calibrate_probability
+        cal_map = {3: 0.35}  # Only bin 3 has data
+        assert calibrate_probability(0.75, cal_map) == 0.75  # Bin 7 has no data
+
+    def test_kelly_with_calibration_reduces_overconfident_stake(self):
+        """Calibrated Kelly stakes less on overconfident predictions."""
+        from punty.betting.calibration import calibrate_probability
+        cal_map = {7: 0.53}  # Predicted 75% → actual 53%
+
+        raw_pp = 0.75
+        calibrated_pp = calibrate_probability(raw_pp, cal_map)
+
+        # At $2.00 odds (implied 50%), $1000 balance to avoid min floor:
+        # Raw: edge = 0.75 - 0.50 = 0.25, kelly = 0.25, capped 0.08 → $80
+        # Calibrated: edge = 0.53 - 0.50 = 0.03, kelly = 0.03 → $30
+        raw_stake = calculate_kelly_stake(1000, raw_pp, 2.00)
+        cal_stake = calculate_kelly_stake(1000, calibrated_pp, 2.00)
+        assert cal_stake < raw_stake
+        assert cal_stake < raw_stake * 0.5  # At least halved
+
+    def test_invalidate_cache(self):
+        """Cache invalidation resets the cached map."""
+        from punty.betting.calibration import invalidate_cache, _calibration_cache
+        invalidate_cache()
+        from punty.betting import calibration
+        assert calibration._calibration_cache is None
+        assert calibration._cache_expires is None

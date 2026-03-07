@@ -126,8 +126,9 @@ async def get_current_stake(db: AsyncSession, place_probability: float = 0,
         if place_probability > 0 and odds > 1:
             max_frac = float(await _get_setting(db, "betfair_max_kelly_fraction",
                                                  str(DEFAULT_MAX_KELLY_FRACTION)))
-            return calculate_kelly_stake(balance, place_probability, odds,
-                                         max_fraction=max_frac)
+            from punty.betting.calibration import calibrated_kelly_stake
+            return await calibrated_kelly_stake(
+                db, balance, place_probability, odds, max_fraction=max_frac)
         # Fall through to auto if PP/odds not available
         mode = "auto"
 
@@ -901,6 +902,11 @@ async def settle_betfair_bets(
     await set_balance(db, balance)
 
     await db.commit()
+
+    # Invalidate calibration cache so next bet uses updated data
+    from punty.betting.calibration import invalidate_cache
+    invalidate_cache()
+
     logger.info(
         f"Betfair settled: {bet.id} — {'HIT' if bet.hit else 'MISS'} "
         f"pnl=${bet.pnl:+.2f} (balance: ${balance:.2f})"
