@@ -567,26 +567,25 @@ def _use_lightgbm() -> bool:
 def _lgbm_blend_weight(runner_odds: float) -> float:
     """Per-runner LGBM blend weight based on market odds.
 
-    LGBM's 68% accuracy is strongest at short prices where training data is
-    dense and patterns are clearest. At longer odds, the weighted engine's
-    form/market analysis is more discriminating — LGBM sees sparse data and
-    tends to over-predict longshots.
+    LGBM has career_place_pct and prize_per_start features that the tissue
+    engine lacks — giving it better class context and place-rate awareness.
+    68% accuracy vs tissue's 36% warrants majority weighting across all bands.
 
-    Live data confirmed: $4-6 win edge comes from AI selection layer, not ML.
-    So weighted engine (which feeds AI context) should dominate mid-range.
+    Conservative bump (2026-03-07): +10-15pp across all bands to let LGBM's
+    place-rate and class signals influence ranking and edge gate decisions.
 
     Returns LGBM weight (0.0-1.0). Weighted weight = 1.0 - lgbm_weight.
     """
     if runner_odds < 3.0:
-        return 0.60          # LGBM dominates short prices (dense training data)
+        return 0.70          # LGBM dominates short prices (was 0.60)
     elif runner_odds < 5.0:
-        # Linear ramp down: 60% → 40% LGBM
-        return 0.60 - (runner_odds - 3.0) / 2.0 * 0.20
+        # Linear ramp down: 70% → 55% LGBM (was 60% → 40%)
+        return 0.70 - (runner_odds - 3.0) / 2.0 * 0.15
     elif runner_odds < 8.0:
-        # Linear ramp down: 40% → 25% LGBM
-        return 0.40 - (runner_odds - 5.0) / 3.0 * 0.15
+        # Linear ramp down: 55% → 40% LGBM (was 40% → 25%)
+        return 0.55 - (runner_odds - 5.0) / 3.0 * 0.15
     else:
-        return 0.25          # Weighted engine dominates longshots (better form signal)
+        return 0.40          # LGBM gets meaningful say on longshots (was 0.25)
 
 
 def _calculate_lgbm_probabilities(
