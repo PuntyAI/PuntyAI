@@ -2,6 +2,8 @@
 
 import pytest
 
+from unittest import mock
+
 from punty.context.pre_selections import (
     EACH_WAY_MAX_ODDS,
     EACH_WAY_MIN_ODDS,
@@ -776,7 +778,8 @@ class TestCalculatePreSelections:
         assert result.total_stake == 0.0
         assert any("only 2 runner" in n for n in result.notes)
 
-    def test_exotic_recommendation(self):
+    @mock.patch("punty.probability.calculate_exotic_combinations", return_value=[])
+    def test_exotic_recommendation(self, _mock_calc):
         runners = [
             _runner(1, "A", 3.0, win_prob=0.30, value=1.10),
             _runner(2, "B", 4.0, win_prob=0.22, value=1.08),
@@ -796,7 +799,8 @@ class TestCalculatePreSelections:
         assert result.exotic is not None
         assert result.exotic.exotic_type == "Exacta Standout"
 
-    def test_puntys_pick_exotic_when_high_value(self):
+    @mock.patch("punty.probability.calculate_exotic_combinations", return_value=[])
+    def test_puntys_pick_exotic_when_high_value(self, _mock_calc):
         """Exotic should become Punty's Pick when value >= 1.5x and EV > selection."""
         # Anchor odds must be <= $3.50 for exotic filter to pass
         runners = [
@@ -842,7 +846,8 @@ class TestFormatPreSelections:
         assert "Total stake" in formatted
         assert "$" in formatted
 
-    def test_exotic_in_output(self):
+    @mock.patch("punty.probability.calculate_exotic_combinations", return_value=[])
+    def test_exotic_in_output(self, _mock_calc):
         runners = [
             _runner(1, "A", 3.0, win_prob=0.30),
             _runner(2, "B", 4.0, win_prob=0.25),

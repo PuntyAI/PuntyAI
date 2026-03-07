@@ -3308,6 +3308,37 @@ def calculate_exotic_combinations(
     # Sort by probability descending (strike rate first), then value as tiebreaker
     results.sort(key=lambda x: (-x.estimated_probability, -x.value_ratio))
 
+    # Fallback: if no combos met value thresholds, generate the best Quinella
+    # from top 2 runners anyway. User directive: every race needs an exotic.
+    # Only fires when there are truly zero results — won't override combos
+    # that passed the normal thresholds.
+    if not results and len(top4) >= 2:
+        # Try all top-4 pairs, pick the one with best value
+        best_fallback = None
+        for pair in combinations(top4[:4], 2):
+            r1, r2 = pair
+            if max(r1["win_prob"], r2["win_prob"]) < MIN_LEAD_PROB:
+                continue
+            our_prob = _quinella_probability(r1["win_prob"], r2["win_prob"])
+            mkt_prob = _quinella_probability(r1["market_implied"], r2["market_implied"])
+            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+            if best_fallback is None or value > best_fallback[2]:
+                best_fallback = (r1, r2, value, our_prob, mkt_prob)
+
+        if best_fallback:
+            r1, r2, value, our_prob, mkt_prob = best_fallback
+            results.append(ExoticCombination(
+                exotic_type="Quinella",
+                runners=[r1["saddlecloth"], r2["saddlecloth"]],
+                runner_names=[r1.get("horse_name", ""), r2.get("horse_name", "")],
+                estimated_probability=round(our_prob, 6),
+                market_probability=round(mkt_prob, 6),
+                value_ratio=round(value, 3),
+                cost=stake,
+                num_combos=1,
+                format="flat",
+            ))
+
     return results[:12]
 
 
