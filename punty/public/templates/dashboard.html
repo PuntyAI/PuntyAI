@@ -488,12 +488,22 @@
                     {# Meeting P&L Chart #}
                     {% set mp = dashboard.meeting_pnl|default([]) %}
                     {% if mp|length > 0 %}
-                    <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);">
-                        <div class="px-3 pt-3 pb-1 flex items-center gap-2">
-                            <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-                            <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>
+                    <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
+                         x-data="{ expanded: false }">
+                        <div class="px-3 pt-3 pb-1 flex items-center justify-between cursor-pointer"
+                             @click="expanded = !expanded; $nextTick(() => window.drawMeetingPnl && window.drawMeetingPnl())">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[10px] font-heading uppercase tracking-wider" style="color: var(--text-muted);"
+                                      x-text="expanded ? 'Collapse' : 'Expand'"></span>
+                                <svg class="w-4 h-4 transition-transform" :class="expanded && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </div>
                         </div>
-                        <div style="position: relative; height: 160px; padding: 0.5rem 0.75rem 0.75rem;">
+                        <div style="position: relative; padding: 0.5rem 0.75rem 0.75rem; transition: height 0.3s ease;"
+                             :style="{ height: expanded ? '380px' : '160px' }">
                             <canvas id="meetingPnlChart" style="width: 100%; height: 100%;"></canvas>
                         </div>
                     </div>
@@ -776,109 +786,181 @@ setTimeout(function() { location.reload(); }, 300000);
 {% set mp = dashboard.meeting_pnl|default([]) %}
 {% if mp|length > 0 %}
 (function() {
-    var canvas = document.getElementById('meetingPnlChart');
-    if (!canvas) return;
-    var ctx = canvas.getContext('2d');
-
     var meetings = {{ mp | tojson }};
     if (!meetings.length) return;
 
-    // Sizing
-    var rect = canvas.parentElement.getBoundingClientRect();
-    var dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    var W = rect.width, H = rect.height;
-    var padL = 42, padR = 12, padT = 10, padB = 22;
-    var chartW = W - padL - padR, chartH = H - padT - padB;
-
-    // Find global min/max across all meetings
-    var allVals = [];
-    meetings.forEach(function(m) {
-        allVals.push(0);  // start at zero
-        m.data.forEach(function(d) { allVals.push(d.cumulative); });
-    });
-    var minV = Math.min.apply(null, allVals);
-    var maxV = Math.max.apply(null, allVals);
-    var range = maxV - minV || 1;
-    minV -= range * 0.15; maxV += range * 0.15;
-    range = maxV - minV;
-
-    // Max data points across any meeting (for x-axis scaling)
-    var maxPts = Math.max.apply(null, meetings.map(function(m) { return m.data.length; }));
-
-    function y(v) { return padT + (1 - (v - minV) / range) * chartH; }
-
-    // Zero line
-    var zeroY = y(0);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(padL, zeroY);
-    ctx.lineTo(W - padR, zeroY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Color palette for meetings
     var colors = ['#e91e8c', '#00d4ff', '#ff6b35', '#facc15', '#a855f7', '#4ade80', '#f472b6', '#38bdf8', '#fb923c', '#c084fc'];
 
-    // Draw each meeting as a line
-    meetings.forEach(function(m, mi) {
-        var color = colors[mi % colors.length];
-        var pts = m.data;
-        if (pts.length === 0) return;
+    function draw() {
+        var canvas = document.getElementById('meetingPnlChart');
+        if (!canvas) return;
+        var ctx = canvas.getContext('2d');
 
+        // Sizing — re-measure each draw so expand/collapse works
+        var rect = canvas.parentElement.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        var W = rect.width, H = rect.height;
+        var expanded = H > 200;
+        var fontSize = expanded ? 12 : 10;
+        var dotR = expanded ? 3.5 : 2.5;
+        var lineW = expanded ? 2.5 : 2;
+        var padL = 46, padR = expanded ? 100 : 12, padT = expanded ? 16 : 10, padB = expanded ? 28 : 22;
+        var chartW = W - padL - padR, chartH = H - padT - padB;
+
+        // Find global min/max
+        var allVals = [0];
+        meetings.forEach(function(m) {
+            m.data.forEach(function(d) { allVals.push(d.cumulative); });
+        });
+        var minV = Math.min.apply(null, allVals);
+        var maxV = Math.max.apply(null, allVals);
+        var range = maxV - minV || 1;
+        minV -= range * 0.15; maxV += range * 0.15;
+        range = maxV - minV;
+
+        // Build sorted unique race numbers across all meetings for x-axis
+        var raceSet = {};
+        meetings.forEach(function(m) {
+            m.data.forEach(function(d) { raceSet[d.race] = true; });
+        });
+        var raceNums = Object.keys(raceSet).map(Number).sort(function(a, b) { return a - b; });
+        var maxPts = raceNums.length;
+        // Map race number to x-index (0-based)
+        var raceIndex = {};
+        raceNums.forEach(function(r, i) { raceIndex[r] = i; });
+
+        function y(v) { return padT + (1 - (v - minV) / range) * chartH; }
+        function xForRace(r) { return padL + ((raceIndex[r] + 0.5) / maxPts) * chartW; }
+
+        // Clear
+        ctx.clearRect(0, 0, W, H);
+
+        // Zero line
+        var zeroY = y(0);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        // Start from zero at x=0
-        var x0 = padL;
-        ctx.moveTo(x0, zeroY);
-        for (var i = 0; i < pts.length; i++) {
-            var xp = padL + ((i + 1) / maxPts) * chartW;
-            ctx.lineTo(xp, y(pts[i].cumulative));
-        }
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.moveTo(padL, zeroY);
+        ctx.lineTo(W - padR, zeroY);
         ctx.stroke();
+        ctx.setLineDash([]);
 
-        // End label
-        var last = pts[pts.length - 1];
-        var xEnd = padL + (pts.length / maxPts) * chartW;
-        var yEnd = y(last.cumulative);
-        ctx.font = 'bold 10px Rajdhani, sans-serif';
-        ctx.fillStyle = color;
-        ctx.textAlign = 'left';
-        var labelX = Math.min(xEnd + 4, W - padR - 50);
-        ctx.fillText(m.venue + ' ' + (last.cumulative >= 0 ? '+' : '') + last.cumulative.toFixed(0), labelX, yEnd + 3);
-
-        // Dots at each point
-        for (var i = 0; i < pts.length; i++) {
-            var xp = padL + ((i + 1) / maxPts) * chartW;
-            ctx.beginPath();
-            ctx.arc(xp, y(pts[i].cumulative), 2.5, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
+        // Grid lines in expanded mode
+        if (expanded) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+            ctx.lineWidth = 1;
+            var gridSteps = 4;
+            for (var g = 1; g < gridSteps; g++) {
+                var gv = minV + (range * g / gridSteps);
+                var gy = y(gv);
+                ctx.beginPath();
+                ctx.moveTo(padL, gy);
+                ctx.lineTo(W - padR, gy);
+                ctx.stroke();
+            }
         }
-    });
 
-    // Y-axis labels
-    ctx.font = '10px Rajdhani, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.textAlign = 'right';
-    ctx.fillText('0', padL - 4, zeroY + 3);
-    if (maxV > 0) ctx.fillText('+' + Math.round(maxV - range * 0.15), padL - 4, padT + 10);
-    if (minV < 0) ctx.fillText(Math.round(minV + range * 0.15), padL - 4, H - padB);
+        // Sort meetings by final P&L so labels stack nicely
+        var sorted = meetings.map(function(m, i) { return { m: m, i: i }; });
+        sorted.sort(function(a, b) {
+            var aLast = a.m.data.length ? a.m.data[a.m.data.length - 1].cumulative : 0;
+            var bLast = b.m.data.length ? b.m.data[b.m.data.length - 1].cumulative : 0;
+            return bLast - aLast;
+        });
 
-    // X-axis race labels
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.textAlign = 'center';
-    for (var i = 1; i <= maxPts; i++) {
-        var xp = padL + (i / maxPts) * chartW;
-        if (maxPts <= 12 || i % 2 === 0) {
-            ctx.fillText('R' + i, xp, H - 4);
+        // Draw lines
+        var labelPositions = [];
+        sorted.forEach(function(item) {
+            var m = item.m, mi = item.i;
+            var color = colors[mi % colors.length];
+            var pts = m.data;
+            if (pts.length === 0) return;
+
+            ctx.beginPath();
+            var firstX = xForRace(pts[0].race);
+            ctx.moveTo(firstX, zeroY);
+            for (var i = 0; i < pts.length; i++) {
+                ctx.lineTo(xForRace(pts[i].race), y(pts[i].cumulative));
+            }
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineW;
+            ctx.stroke();
+
+            // Dots
+            for (var i = 0; i < pts.length; i++) {
+                ctx.beginPath();
+                ctx.arc(xForRace(pts[i].race), y(pts[i].cumulative), dotR, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+
+            // Collect label info
+            var last = pts[pts.length - 1];
+            var xEnd = xForRace(last.race);
+            var yEnd = y(last.cumulative);
+            labelPositions.push({ venue: m.venue, cum: last.cumulative, x: xEnd, y: yEnd, color: color });
+        });
+
+        // De-overlap labels vertically (push apart if too close)
+        labelPositions.sort(function(a, b) { return a.y - b.y; });
+        var minGap = fontSize + 2;
+        for (var i = 1; i < labelPositions.length; i++) {
+            var diff = labelPositions[i].y - labelPositions[i - 1].y;
+            if (diff < minGap) {
+                labelPositions[i].y = labelPositions[i - 1].y + minGap;
+            }
+        }
+
+        // Draw labels
+        labelPositions.forEach(function(lbl) {
+            ctx.font = 'bold ' + fontSize + 'px Rajdhani, sans-serif';
+            ctx.fillStyle = lbl.color;
+            ctx.textAlign = 'left';
+            var labelX = lbl.x + 6;
+            var text = lbl.venue + ' ' + (lbl.cum >= 0 ? '+' : '') + lbl.cum.toFixed(0);
+            if (expanded) {
+                // Labels in right margin
+                labelX = W - padR + 8;
+                // Connector line from end point to label
+                ctx.strokeStyle = lbl.color;
+                ctx.lineWidth = 0.5;
+                ctx.globalAlpha = 0.4;
+                ctx.beginPath();
+                ctx.moveTo(lbl.x + dotR + 1, lbl.y);
+                ctx.lineTo(labelX - 2, lbl.y);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            } else {
+                labelX = Math.min(lbl.x + 4, W - padR - 50);
+            }
+            ctx.fillText(text, labelX, lbl.y + (fontSize / 3));
+        });
+
+        // Y-axis labels
+        ctx.font = fontSize + 'px Rajdhani, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.textAlign = 'right';
+        ctx.fillText('0', padL - 4, zeroY + 3);
+        if (maxV > 0) ctx.fillText('+' + Math.round(maxV - range * 0.15), padL - 4, padT + fontSize);
+        if (minV < 0) ctx.fillText(Math.round(minV + range * 0.15), padL - 4, H - padB);
+
+        // X-axis race labels (actual race numbers)
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.textAlign = 'center';
+        for (var i = 0; i < raceNums.length; i++) {
+            var xp = xForRace(raceNums[i]);
+            if (raceNums.length <= 12 || i % 2 === 0) {
+                ctx.fillText('R' + raceNums[i], xp, H - 4);
+            }
         }
     }
+
+    window.drawMeetingPnl = draw;
+    draw();
 })();
 {% endif %}
 </script>
