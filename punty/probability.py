@@ -3308,35 +3308,33 @@ def calculate_exotic_combinations(
     # Sort by probability descending (strike rate first), then value as tiebreaker
     results.sort(key=lambda x: (-x.estimated_probability, -x.value_ratio))
 
-    # Ensure at least one combo includes the top pick (rank 1).
-    # User directive: every race needs an exotic, and the top pick should anchor it.
-    # Production data: exotics WITH market fav +78.6% ROI, WITHOUT -59.1%.
+    # Ensure at least one combo includes the top pick (rank 1 by tissue).
+    # _select_exotic requires rank 1 in every exotic. If no existing combo
+    # includes rank 1, generate a Quinella anchored on rank 1 paired with
+    # the best partner by probability.
     r1 = top4[0]  # Rank 1 = highest tissue probability
     has_r1 = any(r1["saddlecloth"] in ec.runners for ec in results)
 
     if not has_r1 and len(top4) >= 2:
-        # Generate Quinella anchored on rank 1, paired with best partner
-        best_fallback = None
-        for r2 in top4[1:]:
-            our_prob = _quinella_probability(r1["win_prob"], r2["win_prob"])
-            mkt_prob = _quinella_probability(r1["market_implied"], r2["market_implied"])
-            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
-            if best_fallback is None or our_prob > best_fallback[2]:
-                best_fallback = (r2, value, our_prob, mkt_prob)
-
-        if best_fallback:
-            r2, value, our_prob, mkt_prob = best_fallback
-            results.append(ExoticCombination(
-                exotic_type="Quinella",
-                runners=[r1["saddlecloth"], r2["saddlecloth"]],
-                runner_names=[r1.get("horse_name", ""), r2.get("horse_name", "")],
-                estimated_probability=round(our_prob, 6),
-                market_probability=round(mkt_prob, 6),
-                value_ratio=round(value, 3),
-                cost=stake,
-                num_combos=1,
-                format="flat",
-            ))
+        # Pair rank 1 with best partner from top 4 by hit probability
+        best_partner = max(
+            top4[1:],
+            key=lambda r: _quinella_probability(r1["win_prob"], r["win_prob"]),
+        )
+        our_prob = _quinella_probability(r1["win_prob"], best_partner["win_prob"])
+        mkt_prob = _quinella_probability(r1["market_implied"], best_partner["market_implied"])
+        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+        results.append(ExoticCombination(
+            exotic_type="Quinella",
+            runners=[r1["saddlecloth"], best_partner["saddlecloth"]],
+            runner_names=[r1.get("horse_name", ""), best_partner.get("horse_name", "")],
+            estimated_probability=round(our_prob, 6),
+            market_probability=round(mkt_prob, 6),
+            value_ratio=round(value, 3),
+            cost=stake,
+            num_combos=1,
+            format="flat",
+        ))
 
     return results[:12]
 

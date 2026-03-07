@@ -1128,14 +1128,15 @@ def _select_exotic(
     if anchor_odds and anchor_odds > 5.0:
         return None
 
-    # --- RULE 1: Identify market favourite saddlecloth ---
-    # ALL exotics must include the market fav. Production: +78.6% ROI with fav,
-    # -59.1% without. Quinella with fav +89.7%, without -72.3%.
+    # --- RULE 1: Identify anchor saddlecloth (our top pick) ---
+    # ALL exotics must include our rank 1 pick (highest tissue probability).
+    # This is our most confident runner — the exotic anchor.
+    # Production data: exotics WITH top pick +78.6% ROI, WITHOUT -59.1%.
     fav_saddlecloth = None
     if picks:
-        # Fav = runner with lowest odds among ALL our picks (including tracked_only/no_bet,
-        # since a short-priced favourite is still the market fav for exotic anchoring)
-        fav_saddlecloth = min(picks, key=lambda p: p.odds).saddlecloth
+        # Anchor = rank 1 pick (our top pick by probability, not market fav)
+        rank1 = min(picks, key=lambda p: p.rank)
+        fav_saddlecloth = rank1.saddlecloth
 
     # --- Cluster / tightness detection ---
     # Tight race: spread between rank 1-4 tips <$3. Wide race: spread $6+.
