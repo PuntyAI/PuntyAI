@@ -214,6 +214,47 @@
         </div>
         {% endif %}
 
+        <!-- ═══ P&L by Type + Pick Strike Rate ═══ -->
+        {% set bt = bet_types|default([]) %}
+        {% set rs = rank_strike|default([]) %}
+        {% if bt|length > 0 or rs|length > 0 %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {% if bt|length > 0 %}
+            <div class="rounded-xl p-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">P&amp;L by Type</div>
+                {% for b in bt %}
+                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: rgba(255,255,255,0.04);">
+                    <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ b.name }}</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs" style="color: var(--text-muted);">{{ b.bets }} bet{{ 's' if b.bets != 1 }}</span>
+                        <span class="font-display font-bold text-sm" style="color: {{ '#4ade80' if b.pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(b.pnl) | replace('+', '+$') | replace('-', '-$') }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if rs|length > 0 %}
+            <div class="rounded-xl p-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
+                <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">Pick Strike Rate</div>
+                {% set rank_colors = ['var(--magenta)', 'var(--cyan)', 'var(--yellow)', '#a855f7'] %}
+                {% for r in rs %}
+                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: rgba(255,255,255,0.04);">
+                    <div class="flex items-center gap-2">
+                        <span class="font-display text-xs font-bold" style="color: {{ rank_colors[loop.index0] }};">#{{ r.rank }}</span>
+                        <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ r.label }}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.bets }}</span>
+                        <span class="font-display font-bold text-sm" style="color: {{ '#4ade80' if r.strike >= 40 else '#facc15' if r.strike >= 25 else '#ef4444' }};">{{ r.strike }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <!-- ═══ Section Nav Tabs ═══ -->
         <div class="dash-tabs mb-6">
             <button class="dash-tab" :class="{ active: tab === 'results' }" @click="tab = 'results'">Results</button>
