@@ -567,26 +567,25 @@ def _use_lightgbm() -> bool:
 def _lgbm_blend_weight(runner_odds: float) -> float:
     """Per-runner LGBM blend weight based on market odds.
 
-    LGBM's 68% accuracy is strongest at short prices where training data is
-    dense and patterns are clearest. At longer odds, the weighted engine's
-    form/market analysis is more discriminating — LGBM sees sparse data and
-    tends to over-predict longshots.
+    LGBM has career_place_pct and prize_per_start features that the tissue
+    engine lacks — giving it better class context and place-rate awareness.
+    68% accuracy vs tissue's 36% warrants majority weighting across all bands.
 
-    Live data confirmed: $4-6 win edge comes from AI selection layer, not ML.
-    So weighted engine (which feeds AI context) should dominate mid-range.
+    Conservative bump (2026-03-07): +10-15pp across all bands to let LGBM's
+    place-rate and class signals influence ranking and edge gate decisions.
 
     Returns LGBM weight (0.0-1.0). Weighted weight = 1.0 - lgbm_weight.
     """
     if runner_odds < 3.0:
-        return 0.60          # LGBM dominates short prices (dense training data)
+        return 0.70          # LGBM dominates short prices (was 0.60)
     elif runner_odds < 5.0:
-        # Linear ramp down: 60% → 40% LGBM
-        return 0.60 - (runner_odds - 3.0) / 2.0 * 0.20
+        # Linear ramp down: 70% → 55% LGBM (was 60% → 40%)
+        return 0.70 - (runner_odds - 3.0) / 2.0 * 0.15
     elif runner_odds < 8.0:
-        # Linear ramp down: 40% → 25% LGBM
-        return 0.40 - (runner_odds - 5.0) / 3.0 * 0.15
+        # Linear ramp down: 55% → 40% LGBM (was 40% → 25%)
+        return 0.55 - (runner_odds - 5.0) / 3.0 * 0.15
     else:
-        return 0.25          # Weighted engine dominates longshots (better form signal)
+        return 0.40          # LGBM gets meaningful say on longshots (was 0.25)
 
 
 def _calculate_lgbm_probabilities(
@@ -3172,6 +3171,8 @@ def calculate_exotic_combinations(
     # --- Quinella: pairs from top 4 ---
     # Quinella is unordered (no wrong-order penalty) — historically +68% ROI
     # in 8-10 fields. Generate all pairs from our 4 picks.
+    top2_scs = {r["saddlecloth"] for r in sorted_runners[:min(2, len(sorted_runners))]}
+
     for combo in combinations(top4, 2):
         # At least one runner must be a genuine contender
         if max(combo[0]["win_prob"], combo[1]["win_prob"]) < MIN_LEAD_PROB:
@@ -3185,7 +3186,13 @@ def calculate_exotic_combinations(
         )
         value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
 
-        if value >= VALUE_THRESHOLDS["Quinella"]:
+        # Top-2 picks Quinella: lower value bar. These are our highest-
+        # conviction runners — probability > value. Market-agreeing combos
+        # (value ~1.0) still collect at high strike rate.
+        combo_scs = {combo[0]["saddlecloth"], combo[1]["saddlecloth"]}
+        threshold = 0.85 if combo_scs <= top2_scs else VALUE_THRESHOLDS["Quinella"]
+
+        if value >= threshold:
             results.append(ExoticCombination(
                 exotic_type="Quinella",
                 runners=[r["saddlecloth"] for r in combo],
