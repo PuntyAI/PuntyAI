@@ -239,7 +239,7 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
         p["odds_at_tip"] = b.get("odds")
         picks.append(p)
 
-    # --- Big 3 Multi — tracked_only (Data: -$400 P&L) ---
+    # --- Big 3 Multi ---
     b3m = data.get("big3_multi")
     if b3m and b3m.get("stake"):
         p = _pick_base()
@@ -247,8 +247,7 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
         p["pick_type"] = "big3_multi"
         p["exotic_stake"] = b3m.get("stake")
         p["multi_odds"] = b3m.get("multi_odds")
-        p["tracked_only"] = True
-        p["no_bet_reason"] = "Big3 Multi tracked only (-$400 P&L)"
+        p["tracked_only"] = False
         picks.append(p)
 
     # --- Race selections + exotics ---
@@ -532,8 +531,7 @@ def _parse_big3(raw_content: str, content_id: str, meeting_id: str, next_id) -> 
             "sequence_start_race": None,
             "multi_odds": float(multi_m.group(2)),
             "estimated_return_pct": None,
-            "tracked_only": True,
-            "no_bet_reason": "Big3 Multi tracked only (-$400 P&L)",
+            "tracked_only": False,
         })
 
     return picks
