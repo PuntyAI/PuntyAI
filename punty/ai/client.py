@@ -18,12 +18,13 @@ MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 45  # seconds if we can't parse the wait time
 API_TIMEOUT = 480  # 8 minutes — GPT-5.2 with reasoning can be slow on large meets
 
-# Reasoning effort levels for GPT-5.2 Responses API
+# Reasoning effort levels for GPT-5.x Responses API
 ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
 
-# Cost per million tokens (GPT-5.2 estimates — update as pricing changes)
+# Cost per million tokens
 TOKEN_COSTS = {
-    "gpt-5.2": {"input": 2.50, "output": 10.00},
+    "gpt-5.4": {"input": 2.50, "output": 15.00},
+    "gpt-5.2": {"input": 1.75, "output": 10.00},
     "gpt-4o": {"input": 2.50, "output": 10.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
 }
@@ -44,11 +45,11 @@ class TokenUsage:
 
 
 class AIClient:
-    """Wrapper for OpenAI API client using Responses API for GPT-5.2."""
+    """Wrapper for OpenAI API client using Responses API for GPT-5.x."""
 
     def __init__(
         self,
-        model: str = "gpt-5.2",
+        model: str = "gpt-5.4",
         api_key: Optional[str] = None,
         reasoning_effort: ReasoningEffort = "medium",
     ):
