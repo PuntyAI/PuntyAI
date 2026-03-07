@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from punty.betting.queue import (
     calculate_stake, calculate_kelly_stake, populate_bet_queue,
     settle_betfair_bets, execute_due_bets, refresh_bet_selections,
-    cycle_bet_selection, SWAP_THRESHOLD,
+    cycle_bet_selection, SWAP_THRESHOLD, DEFAULT_MIN_ODDS,
 )
 
 
@@ -94,6 +94,23 @@ class TestCalculateKellyStake:
     def test_invalid_odds(self):
         assert calculate_kelly_stake(50.0, 0.70, 1.00) == 0
         assert calculate_kelly_stake(50.0, 0.70, 0.50) == 0
+
+
+class TestMinOddsFloor:
+    """Test the minimum odds floor ($1.30)."""
+
+    def test_min_odds_default(self):
+        assert DEFAULT_MIN_ODDS == 1.30
+
+    def test_kelly_zero_at_short_odds(self):
+        """At $1.20 odds, implied = 83%. PP=80% has negative edge → $0."""
+        stake = calculate_kelly_stake(balance=100.0, place_probability=0.80, odds=1.20)
+        assert stake == 0  # 80% < 83.3% implied
+
+    def test_kelly_positive_above_floor(self):
+        """At $1.50 odds, implied = 66.7%. PP=80% has +13% edge → real stake."""
+        stake = calculate_kelly_stake(balance=100.0, place_probability=0.80, odds=1.50)
+        assert stake > 0
 
 
 class TestPopulateBetQueue:
@@ -380,6 +397,33 @@ class TestRefreshBetSelections:
         count = await refresh_bet_selections(mock_db)
         assert count == 0  # No changes — stays place
         assert bet.bet_type == "place"
+
+
+class TestBSPOrders:
+    """Test BSP (Betfair Starting Price) order placement."""
+
+    @pytest.mark.asyncio
+    async def test_bsp_mock_returns_success(self):
+        """BSP mock mode returns success with correct fields."""
+        from punty.betting.betfair_client import place_bet
+        with patch("punty.betting.betfair_client.settings") as mock_settings:
+            mock_settings.mock_external = True
+            result = await place_bet(
+                AsyncMock(), "market-1", 12345, 10.0, 1.30, use_bsp=True
+            )
+            assert result["status"] == "SUCCESS"
+            assert result["size_matched"] == 10.0
+
+    @pytest.mark.asyncio
+    async def test_limit_fallback(self):
+        """use_bsp=False still uses LIMIT orders."""
+        from punty.betting.betfair_client import place_bet
+        with patch("punty.betting.betfair_client.settings") as mock_settings:
+            mock_settings.mock_external = True
+            result = await place_bet(
+                AsyncMock(), "market-1", 12345, 10.0, 3.50, use_bsp=False
+            )
+            assert result["status"] == "SUCCESS"
 
 
 class TestSettlementBetType:

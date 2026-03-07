@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Default settings
 DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
-DEFAULT_MIN_ODDS = 1.10
+DEFAULT_MIN_ODDS = 1.30  # Minimum place odds floor — below this, one miss wipes too many wins
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
 DEFAULT_MIN_PLACE_PROB = 0.45  # 45% minimum place probability (tissue engine calibration)
@@ -110,14 +110,28 @@ def calculate_kelly_stake(
     return stake
 
 
-async def get_current_stake(db: AsyncSession) -> float:
+async def get_current_stake(db: AsyncSession, place_probability: float = 0,
+                           odds: float = 0) -> float:
     """Get current stake based on mode setting.
 
-    If mode is 'auto', uses doubling formula. Otherwise treats mode value as fixed stake.
+    Modes:
+    - 'kelly': Kelly-proportional staking based on PP and odds (preferred)
+    - 'auto': Legacy doubling formula (fallback)
+    - numeric: Fixed stake amount
     """
-    mode = await _get_setting(db, "betfair_stake_mode", "auto")
+    mode = await _get_setting(db, "betfair_stake_mode", "kelly")
+    balance = await get_balance(db)
+
+    if mode.lower() == "kelly":
+        if place_probability > 0 and odds > 1:
+            max_frac = float(await _get_setting(db, "betfair_max_kelly_fraction",
+                                                 str(DEFAULT_MAX_KELLY_FRACTION)))
+            return calculate_kelly_stake(balance, place_probability, odds,
+                                         max_fraction=max_frac)
+        # Fall through to auto if PP/odds not available
+        mode = "auto"
+
     if mode.lower() == "auto":
-        balance = await get_balance(db)
         initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
         base_stake = float(await _get_setting(db, "betfair_stake", str(DEFAULT_BASE_STAKE)))
         return calculate_stake(balance, initial_balance, base_stake)
@@ -172,16 +186,23 @@ async def populate_bet_queue(
     )
     races_by_num = {r.race_number: r for r in race_result.scalars().all()}
 
-    # Get current stake (auto-doubling or manual fixed)
-    stake = await get_current_stake(db)
     min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
     max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
+    min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
 
     queued = 0
     for pick in rank1_picks:
         race = races_by_num.get(pick.race_number)
         if not race or not race.start_time:
             logger.debug(f"Skipping bet for {meeting_id} R{pick.race_number}: no start time")
+            continue
+
+        # Filter by odds floor — ultra-short odds bleed value
+        if pick.place_odds_at_tip and pick.place_odds_at_tip < min_odds:
+            logger.info(
+                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                f"place_odds ${pick.place_odds_at_tip:.2f} < ${min_odds:.2f} floor"
+            )
             continue
 
         # Filter by odds ceiling — reject longshots
@@ -256,6 +277,17 @@ async def populate_bet_queue(
         runner = runner_result.scalar_one_or_none()
         if runner and runner.scratched:
             logger.info(f"Skipping bet for {pick.horse_name} R{pick.race_number}: scratched")
+            continue
+
+        # Kelly stake per-bet based on this pick's PP and odds
+        pp = pick.place_probability or 0
+        odds = pick.place_odds_at_tip or 0
+        stake = await get_current_stake(db, place_probability=pp, odds=odds)
+        if stake <= 0:
+            logger.info(
+                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
+                f"Kelly says no edge (PP={pp:.0%}, odds=${odds:.2f})"
+            )
             continue
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
@@ -687,27 +719,22 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         bet.selection_id = selection_id
 
-        # Get live Betfair place odds
+        # Get live Betfair place odds (for Kelly sizing and edge check)
         current_odds = await get_place_odds(db, market["market_id"], selection_id)
-        if not current_odds or current_odds < min_odds:
+        if not current_odds:
+            # BSP doesn't need live odds, but we need them for Kelly sizing
+            # Use requested_odds as fallback for stake calculation
+            current_odds = bet.requested_odds or 0
+
+        # Min odds floor — ultra-short odds bleed value
+        if current_odds and current_odds < min_odds:
             bet.status = "cancelled"
-            bet.error_message = f"Odds too low: ${current_odds}" if current_odds else "No odds available"
+            bet.error_message = f"Odds ${current_odds:.2f} below ${min_odds:.2f} floor"
+            logger.info(f"Betfair: {bet.id} cancelled — odds ${current_odds:.2f} < ${min_odds:.2f} floor")
             await db.commit()
             continue
 
-        # Dead zone filter: skip $1.60-$2.00 for low-confidence bets only
-        # High-PP picks (>= 60%) are confident enough to bet through the dead zone
-        if dead_zone_low <= current_odds < dead_zone_high and place_prob < 0.60:
-            bet.status = "cancelled"
-            bet.error_message = f"Dead zone odds: ${current_odds:.2f} (${dead_zone_low}-${dead_zone_high}), PP {place_prob:.0%} < 60%"
-            logger.info(f"Betfair: {bet.id} cancelled — dead zone ${current_odds:.2f}, PP {place_prob:.0%}")
-            await db.commit()
-            continue
-
-        # Edge gate simplified: PP floor is the only gate needed.
-        # The min_place_prob threshold (65%) guarantees high strike rate by design.
-        # Previous edge multiplier logic killed winners like Just Maz (PP=83% but
-        # needed 96.5% at $1.14 implied × 1.1).
+        # Edge gate: PP floor guarantees high strike rate
         if place_prob > 0 and place_prob < min_place_prob:
             bet.status = "cancelled"
             bet.error_message = f"PP {place_prob:.1%} below {min_place_prob:.0%} floor"
@@ -715,11 +742,19 @@ async def execute_due_bets(db: AsyncSession) -> int:
             await db.commit()
             continue
 
-        # Fixed stake from settings (Kelly removed — at short place odds
-        # the edge is always within PP estimation error, causing false cancels)
-        stake = await get_current_stake(db)
+        # Kelly stake based on live odds and PP
+        stake = await get_current_stake(db, place_probability=place_prob,
+                                         odds=current_odds if current_odds > 1 else 0)
+        if stake <= 0:
+            bet.status = "cancelled"
+            bet.error_message = f"Kelly: no edge (PP={place_prob:.0%}, odds=${current_odds:.2f})"
+            logger.info(f"Betfair: {bet.id} cancelled — Kelly says no edge")
+            await db.commit()
+            continue
+
         bet.stake = round(stake, 2)
-        bet.requested_odds = current_odds
+        # BSP: use min_odds as the floor price (minimum acceptable BSP)
+        bet.requested_odds = min_odds
 
         if balance < bet.stake:
             bet.status = "cancelled"
@@ -728,26 +763,25 @@ async def execute_due_bets(db: AsyncSession) -> int:
             await db.commit()
             continue
 
-        # Place the bet
-        result = await place_bet(db, market["market_id"], selection_id, bet.stake, current_odds)
+        # Place BSP bet — guaranteed fill at market-clearing price
+        result = await place_bet(db, market["market_id"], selection_id,
+                                  bet.stake, min_odds, use_bsp=True)
 
         if result.get("status") == "SUCCESS" or result.get("bet_id"):
             bet.status = "placed"
             bet.bet_id = result.get("bet_id")
             bet.size_matched = result.get("size_matched", 0)
             bet.average_price_matched = result.get("average_price_matched", 0)
-            bet.matched_odds = result.get("average_price_matched", current_odds)
+            bet.matched_odds = result.get("average_price_matched") or current_odds
             bet.placed_at = melb_now_naive()
             placed += 1
-            # Use actual matched amount for balance tracking (partial matches possible)
-            actual_stake = bet.size_matched if bet.size_matched > 0 else bet.stake
-            bet.stake = round(actual_stake, 2)  # Update to actual matched amount
+            # BSP: stake is the liability (what we risk), deduct now
             balance -= bet.stake
             await set_balance(db, balance)
             edge_pct = (place_prob - 1.0 / current_odds) * 100 if current_odds > 1 else 0
             logger.info(
-                f"Betfair: placed {bet.id} — {bet.horse_name} ${bet.stake:.2f} "
-                f"(matched ${bet.size_matched:.2f}) @ {bet.matched_odds} "
+                f"Betfair BSP: placed {bet.id} — {bet.horse_name} ${bet.stake:.2f} "
+                f"@ BSP (live ${current_odds:.2f}) "
                 f"PP={place_prob:.0%} edge={edge_pct:+.1f}% (balance: ${balance:.2f})"
             )
         else:
@@ -915,8 +949,8 @@ async def get_queue_summary(db: AsyncSession) -> dict:
 
     balance = await get_balance(db)
     initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
-    stake = await get_current_stake(db)
-    stake_mode = await _get_setting(db, "betfair_stake_mode", "auto")
+    stake = await get_current_stake(db, place_probability=0.75, odds=1.50)  # Representative
+    stake_mode = await _get_setting(db, "betfair_stake_mode", "kelly")
 
     # Enrich bets with runner counts and place probability from linked pick
     enriched_bets = []
