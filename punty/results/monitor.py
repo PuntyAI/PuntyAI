@@ -587,6 +587,10 @@ class ResultsMonitor:
         if meeting_id not in self.processed_races:
             self.processed_races[meeting_id] = set()
 
+        # Poly track venues are listed separately on racing.com (e.g. "Sunshine Coast Poly Track")
+        is_poly = meeting.track_condition and meeting.track_condition.lower() == "synthetic"
+        scrape_venue = f"{meeting.venue} Poly Track" if is_poly else meeting.venue
+
         from punty.venues import is_international_venue
 
         if is_international_venue(meeting.venue):
@@ -659,11 +663,11 @@ class ResultsMonitor:
         else:
             scraper = RacingComScraper()
             try:
-                status_data = await scraper.check_race_statuses(meeting.venue, meeting.date)
+                status_data = await scraper.check_race_statuses(scrape_venue, meeting.date)
                 statuses = status_data["statuses"]
                 scraped_tc = status_data.get("track_condition")
             except Exception as e:
-                logger.error(f"Failed to check statuses for {meeting.venue}: {e}")
+                logger.error(f"Failed to check statuses for {scrape_venue}: {e}")
                 return
             finally:
                 await scraper.close()
@@ -1079,7 +1083,7 @@ class ResultsMonitor:
                         scraper2 = RacingComScraper()
                         try:
                             results_data = await scraper2.scrape_race_result(
-                                meeting.venue, meeting.date, race_num
+                                scrape_venue, meeting.date, race_num
                             )
                         finally:
                             await scraper2.close()
@@ -1938,6 +1942,10 @@ class ResultsMonitor:
         """
         from punty.models.meeting import Runner as RunnerModel, Race
 
+        # Poly track venues use a different name on racing.com
+        is_poly = meeting.track_condition and meeting.track_condition.lower() == "synthetic"
+        scrape_venue = f"{meeting.venue} Poly Track" if is_poly else meeting.venue
+
         # Only check paying/closed races
         paying_races = [rn for rn, s in statuses.items() if s in ("Paying", "Closed")]
         if not paying_races:
@@ -2014,10 +2022,10 @@ class ResultsMonitor:
                                 )
                         else:
                             results_data = await scraper.scrape_race_result(
-                                meeting.venue, meeting.date, rn
+                                scrape_venue, meeting.date, rn
                             )
                     except Exception as e:
-                        logger.debug(f"Place dividend backfill scrape failed for {meeting.venue} R{rn}: {e}")
+                        logger.debug(f"Place dividend backfill scrape failed for {scrape_venue} R{rn}: {e}")
                         continue
 
                     race_id = f"{meeting.id}-r{rn}"
