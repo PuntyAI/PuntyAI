@@ -365,7 +365,7 @@ class ContentGenerator:
         """Generate Early Mail with SSE progress events."""
         from punty.scheduler.activity_log import log_generate_start, log_generate_complete, log_generate_error
 
-        total_steps = 6
+        total_steps = 7
         step = 0
         venue_name = meeting_id  # Will be updated once we have context
 
@@ -377,6 +377,17 @@ class ContentGenerator:
 
         try:
             await self._ensure_openai_key()
+
+            # Pre-race refresh: odds, scratchings, track conditions
+            yield evt("Refreshing odds & conditions...")
+            try:
+                from punty.scrapers.orchestrator import refresh_odds
+                refresh_result = await refresh_odds(meeting_id, self.db)
+                logger.info(f"Pre-generate refresh for {meeting_id}: {refresh_result}")
+            except Exception as e:
+                logger.warning(f"Pre-generate refresh failed for {meeting_id}: {e}")
+            yield evt("Odds & conditions refreshed", "done")
+
             yield evt("Building meeting context...")
 
             context = await self.context_builder.build_meeting_context(meeting_id)

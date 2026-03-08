@@ -719,14 +719,17 @@ def _calculate_lgbm_probabilities(
     if bw_total > 0:
         blended_win = {rid: p / bw_total for rid, p in blended_win.items()}
 
-    # Place probabilities: same approach — market place probs + LGBM rank boost
+    # Place probabilities: real market place odds when available, Harville model otherwise.
+    # Harville uses the full field's win distribution — much more accurate than the crude
+    # (win-1)/3+1 estimate that was previously used.
     blended_place = {}
     for runner in active:
         rid = _get(runner, "id", "")
         mkt_place = place_market_implied.get(rid)
         if not mkt_place:
-            mkt_place = _place_probability(market_implied.get(rid, baseline), field_size)
-        lgbm_rank_place = _place_probability(rank_weights.get(rid, baseline), field_size)
+            # Harville model: compute place prob from field's market-implied win probs
+            mkt_place = _harville_place_probability(rid, market_implied, place_count)
+        lgbm_rank_place = _harville_place_probability(rid, rank_weights, place_count)
         blended_place[rid] = (1.0 - LGBM_RANK_INFLUENCE) * mkt_place + LGBM_RANK_INFLUENCE * lgbm_rank_place
 
     # Normalize place probs
@@ -740,7 +743,7 @@ def _calculate_lgbm_probabilities(
     for runner in active:
         rid = _get(runner, "id", "")
         win_prob = blended_win.get(rid, baseline)
-        place_prob = blended_place.get(rid, _place_probability(win_prob, field_size))
+        place_prob = blended_place.get(rid, _harville_place_probability(rid, blended_win, place_count))
 
         mkt_prob = market_implied.get(rid, baseline)
         value = win_prob / mkt_prob if mkt_prob > 0 else 1.0
@@ -750,7 +753,7 @@ def _calculate_lgbm_probabilities(
         if mkt_place_prob and mkt_place_prob > 0:
             place_value = place_prob / mkt_place_prob
         else:
-            mkt_place = _place_probability(mkt_prob, field_size)
+            mkt_place = _harville_place_probability(rid, market_implied, place_count)
             place_value = place_prob / mkt_place if mkt_place > 0 else 1.0
 
         odds = runner_odds_map.get(rid, 0.0)
@@ -1260,7 +1263,7 @@ def calculate_race_probabilities(
         for rid_h in list(win_probs.keys()):
             wp_h = win_probs.get(rid_h, baseline)
             harville_p = _harville_place_probability(rid_h, win_probs, place_count)
-            factor_p = place_probs.get(rid_h, _place_probability(wp_h, field_size))
+            factor_p = place_probs.get(rid_h, _harville_place_probability(rid_h, win_probs, place_count))
             blended = 0.70 * factor_p + 0.30 * harville_p
 
             # Anchor to market when real place_odds available
@@ -1274,8 +1277,8 @@ def calculate_race_probabilities(
         rid = _get(runner, "id", "")
         win_prob = win_probs.get(rid, baseline)
 
-        # Place probability — use Harville-blended if available, else field-factor formula
-        place_prob = place_probs.get(rid, _place_probability(win_prob, field_size))
+        # Place probability — use Harville-blended if available, else Harville from win probs
+        place_prob = place_probs.get(rid, _harville_place_probability(rid, win_probs, place_count))
 
         # Value detection (win)
         mkt_prob = market_implied.get(rid, baseline)
@@ -1287,8 +1290,8 @@ def calculate_race_probabilities(
         if mkt_place_prob and mkt_place_prob > 0:
             place_value = place_prob / mkt_place_prob
         else:
-            # Fallback: derive from win market probability
-            mkt_place = _place_probability(mkt_prob, field_size)
+            # Fallback: derive from Harville on market-implied win probs
+            mkt_place = _harville_place_probability(rid, market_implied, place_count)
             place_value = place_prob / mkt_place if mkt_place > 0 else 1.0
 
         # Recommended stake (quarter-Kelly)

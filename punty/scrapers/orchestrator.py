@@ -1126,13 +1126,12 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                             odds_updated += 1
                             if not runner.opening_odds:
                                 runner.opening_odds = bf_price
-                            # Use real Betfair PLACE odds if available, else estimate
+                            # Use real Betfair PLACE odds if available.
+                            # Do NOT estimate — let PointsBet fill or Harville calculate.
                             place_key = (od["race_id"], od["horse_name"])
                             real_place = bf_place_odds.get(place_key)
-                            if real_place and real_place > 1.0:
+                            if real_place and real_place > 1.0 and real_place < bf_price:
                                 runner.place_odds = real_place
-                            else:
-                                runner.place_odds = round((bf_price - 1) / 3 + 1, 2)
                     logger.info(
                         f"Odds refresh for {meeting_id}: updated {odds_updated} "
                         f"runners from Betfair ({len(bf_place_odds)} with real place odds)"
@@ -1252,7 +1251,7 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                     runner.current_odds = round(price, 2)
                     if not runner.opening_odds:
                         runner.opening_odds = round(price, 2)
-                    runner.place_odds = round((price - 1) / 3 + 1, 2)
+                    # Don't estimate place_odds — let Harville calculate from field
                     pf_fallback += 1
             if pf_fallback:
                 logger.info(
@@ -1884,7 +1883,8 @@ async def _merge_pointsbet_odds(db: AsyncSession, meeting_id: str, odds_data: li
                 filled_current += 1
 
         # Fill place_odds if missing or stale
-        if place_odds and place_odds > 1.0:
+        # Sanity: place_odds must be > 1.0 AND less than win_odds
+        if place_odds and place_odds > 1.0 and (not win_odds or place_odds < win_odds):
             if not runner.place_odds or runner.place_odds <= 1.0:
                 runner.place_odds = place_odds
                 filled_place += 1
