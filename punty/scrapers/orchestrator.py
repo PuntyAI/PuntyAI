@@ -1499,10 +1499,21 @@ def _apply_hkjc_conditions(meeting: Meeting, info: dict) -> None:
         meeting.weather_wind_speed = info["weather_wind_speed"]
     if info.get("weather_wind_dir"):
         meeting.weather_wind_dir = info["weather_wind_dir"]
-    if info.get("weather_condition"):
-        meeting.weather_condition = info["weather_condition"]
+    # HKJC wind tracker doesn't provide a weather description — derive from data
+    weather_desc = info.get("weather_condition")
+    if not weather_desc:
+        rain = info.get("rainfall")
+        humidity = info.get("weather_humidity")
+        if rain is not None and rain > 0:
+            weather_desc = "Rain"
+        elif humidity is not None and humidity >= 90:
+            weather_desc = "Overcast"
+        else:
+            weather_desc = "Fine"
+    if weather_desc:
+        meeting.weather_condition = weather_desc
         if not meeting.weather:
-            meeting.weather = info["weather_condition"]
+            meeting.weather = weather_desc
     if info.get("weather_temp") is not None:
         meeting.weather_temp = info["weather_temp"]
     if info.get("weather_humidity") is not None:
