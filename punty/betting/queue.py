@@ -26,8 +26,10 @@ DEFAULT_MIN_PLACE_PROB = 0.45  # 45% minimum place probability (tissue engine ca
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
 DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
-DEFAULT_MAX_KELLY_FRACTION = 0.08  # Cap Kelly fraction at 8%
+DEFAULT_MAX_KELLY_FRACTION = 0.06  # Cap Kelly fraction at 6% (half-Kelly conservative)
+DEFAULT_KELLY_HALF = True  # True half-Kelly: halve the fraction for 75% less variance
 DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
+DEFAULT_MIN_CALIBRATED_PP = 0.55  # Only bet when calibrated PP >= 55% (70% SR sweet spot)
 DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
 DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
 DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
@@ -90,10 +92,14 @@ def calculate_kelly_stake(
     odds: float,
     max_fraction: float = DEFAULT_MAX_KELLY_FRACTION,
     min_stake: float = DEFAULT_MIN_KELLY_STAKE,
+    half_kelly: bool = DEFAULT_KELLY_HALF,
 ) -> float:
     """Kelly-proportional staking: bet more when edge is larger.
 
-    Kelly fraction = edge / (odds - 1), capped at max_fraction.
+    Uses half-Kelly by default: 75% less variance, only 25% less expected growth.
+    Losing hurts more than winning — conservative sizing protects compound growth.
+
+    Kelly fraction = edge / (odds - 1), halved, capped at max_fraction.
     Stake = kelly_fraction * balance, floored at min_stake.
     """
     if odds <= 1 or balance <= 0 or place_probability <= 0:
@@ -103,6 +109,8 @@ def calculate_kelly_stake(
     if edge <= 0:
         return 0  # Negative edge — don't bet
     kelly = edge / (odds - 1)
+    if half_kelly:
+        kelly *= 0.5  # Half-Kelly: dramatically reduces drawdowns
     kelly = min(kelly, max_fraction)
     stake = kelly * balance
     if stake < min_stake:
@@ -126,9 +134,12 @@ async def get_current_stake(db: AsyncSession, place_probability: float = 0,
         if place_probability > 0 and odds > 1:
             max_frac = float(await _get_setting(db, "betfair_max_kelly_fraction",
                                                  str(DEFAULT_MAX_KELLY_FRACTION)))
+            min_pp = float(await _get_setting(db, "betfair_min_calibrated_pp",
+                                               str(DEFAULT_MIN_CALIBRATED_PP)))
             from punty.betting.calibration import calibrated_kelly_stake
             return await calibrated_kelly_stake(
-                db, balance, place_probability, odds, max_fraction=max_frac)
+                db, balance, place_probability, odds,
+                max_fraction=max_frac, min_calibrated_pp=min_pp)
         # Fall through to auto if PP/odds not available
         mode = "auto"
 

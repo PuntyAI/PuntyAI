@@ -151,11 +151,11 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_win_outside_sweet_spot(self):
-        """$8 odds rank 1 → Win (rank 1 always backs to win)."""
+    def test_top_pick_place_at_long_odds(self):
+        """$8 odds rank 1 → Place (rank 1 at $6+ routes to Place for safety)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_top_pick_win_at_2_50(self):
         """$2.50 rank 1 → Win (rank 1 always backs to win)."""
@@ -171,10 +171,16 @@ class TestDetermineBetType:
         result = _determine_bet_type(c, rank=1, is_roughie=False)
         assert result == "Win"
 
-    def test_second_pick_win_in_sweet_spot(self):
-        """Rank 2 in $4-$8 with wp>=0.20 and value>=1.0 gets Win."""
+    def test_second_pick_saver_win_in_sweet_spot(self):
+        """Rank 2 in $4-$8 with wp>=0.20 and value>=1.0 gets Saver Win."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Saver Win"
+
+    def test_second_pick_win_strong_conviction(self):
+        """Rank 2 in $4-$8 with wp>=0.25 and value>=1.10 gets full Win."""
+        c = {"win_prob": 0.26, "place_prob": 0.60, "odds": 5.0,
+             "value_rating": 1.15, "place_value_rating": 1.10}
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Win"
 
     def test_second_pick_place_low_value(self):
