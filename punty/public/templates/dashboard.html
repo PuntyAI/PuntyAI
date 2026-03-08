@@ -491,7 +491,7 @@
                     <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
                          x-data="{ expanded: false }">
                         <div class="px-3 pt-3 pb-1 flex items-center justify-between cursor-pointer"
-                             @click="expanded = !expanded; $nextTick(() => window.drawMeetingPnl && window.drawMeetingPnl())">
+                             @click="expanded = !expanded; setTimeout(() => window.drawMeetingPnl && window.drawMeetingPnl(), 350)">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
                                 <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>

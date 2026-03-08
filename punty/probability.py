@@ -411,8 +411,8 @@ FACTOR_REGISTRY = {
 #   hp=0.0256, cf=0.0256, pace=0.00, movement=0.00
 # Rounded to clean values that sum to 1.0
 DEFAULT_WEIGHTS = {
-    "form": 0.50,
-    "market": 0.31,
+    "form": 0.54,
+    "market": 0.27,
     "weight_carried": 0.05,
     "jockey_trainer": 0.04,
     "barrier": 0.03,
@@ -421,33 +421,33 @@ DEFAULT_WEIGHTS = {
     "movement": 0.00,
     "pace": 0.00,
     "deep_learning": 0.03,  # validated jockey_trainer patterns: +7% edge, p=0.000
-}  # sums to 1.0 — DL enabled (was 0.0), form/market/hp trimmed to compensate
+}  # sums to 1.0 — 2026-03-08: market 0.31→0.27, form 0.50→0.54 to reduce fav bias
 
 # Distance-specific weight overrides — tuned via batch 2 grid search (seed=123, 400 combos x 500 races per bucket)
 # Middle was biggest win: -0.39% → +9.75% ROI. horse_profile elevated for short/middle distances.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
     "sprint": {  # ≤1100m — DL enabled at 0.03 (from form/market)
-        "form": 0.50, "market": 0.31, "weight_carried": 0.05, "barrier": 0.03,
+        "form": 0.54, "market": 0.27, "weight_carried": 0.05, "barrier": 0.03,
         "horse_profile": 0.02, "class_fitness": 0.02, "jockey_trainer": 0.04,
         "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
     },
     "short": {  # 1101-1399m — horse_profile 4x boost, pace emerges (batch 2)
-        "form": 0.455, "market": 0.281, "horse_profile": 0.093, "jockey_trainer": 0.058,
+        "form": 0.495, "market": 0.241, "horse_profile": 0.093, "jockey_trainer": 0.058,
         "barrier": 0.023, "weight_carried": 0.023, "class_fitness": 0.023,
         "pace": 0.013, "movement": 0.00, "deep_learning": 0.03,
     },
     "middle": {  # 1400-1799m — biggest improvement: -0.39% → +9.75% win ROI (batch 2)
-        "form": 0.439, "market": 0.271, "horse_profile": 0.090, "weight_carried": 0.067,
+        "form": 0.479, "market": 0.231, "horse_profile": 0.090, "weight_carried": 0.067,
         "jockey_trainer": 0.056, "barrier": 0.034, "class_fitness": 0.013,
         "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
     },
     "classic": {  # 1800-2199m — jockey_trainer 2x boost (batch 2)
-        "form": 0.445, "market": 0.274, "jockey_trainer": 0.091, "weight_carried": 0.068,
+        "form": 0.485, "market": 0.234, "jockey_trainer": 0.091, "weight_carried": 0.068,
         "horse_profile": 0.036, "barrier": 0.034, "class_fitness": 0.023,
         "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
     },
     "staying": {  # 2200m+ — jockey_trainer & class_fitness elevated (batch 2)
-        "form": 0.445, "market": 0.274, "jockey_trainer": 0.091, "class_fitness": 0.068,
+        "form": 0.485, "market": 0.234, "jockey_trainer": 0.091, "class_fitness": 0.068,
         "weight_carried": 0.046, "horse_profile": 0.046, "barrier": 0.00,
         "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
     },
@@ -457,8 +457,8 @@ DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
 # Key insight: form is much more important for place than previously assumed (0.38 vs 0.25)
 # Market less dominant for place (0.27 vs 0.35) — market prices win probability, not place
 DEFAULT_PLACE_WEIGHTS = {
-    "form": 0.37,
-    "market": 0.26,
+    "form": 0.41,
+    "market": 0.22,
     "class_fitness": 0.09,
     "jockey_trainer": 0.09,
     "barrier": 0.05,
@@ -685,12 +685,12 @@ def _calculate_lgbm_probabilities(
     # bottom ranks get penalised. Total probability still sums to 1.0.
     #
     # LGBM_RANK_INFLUENCE controls how much LGBM can shift probabilities
-    # away from market. At 0.30, LGBM can redistribute up to 30% of
-    # the total probability mass. Higher = more trust in LGBM ranking.
+    # away from market. Higher = more trust in LGBM ranking, less market.
     # Dry-run over 669 races: 0.50 = +$1,294 P&L, 36.5% top-1, +10.3% win ROI.
     # Pure LGBM (1.0) gives +$7,838 but breaks calibration completely.
-    # 0.50 is the conservative starting point for production.
-    LGBM_RANK_INFLUENCE = 0.50
+    # 2026-03-08: Raised 0.50 → 0.55 to reduce market influence (was picking
+    # too many favourites). Market portion: 45% (was 50%).
+    LGBM_RANK_INFLUENCE = 0.55
 
     # Build rank-position weights: exponential decay from top to bottom.
     # Top runner gets highest weight, bottom gets lowest.

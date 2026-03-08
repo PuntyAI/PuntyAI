@@ -2579,6 +2579,8 @@ async def get_daily_dashboard() -> dict:
             bt_stats[bt]["staked"] += stake
         bet_types = []
         for bt, data in sorted(bt_stats.items()):
+            if bt in ("Skip", "None", "skip", "none", "", None):
+                continue
             data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0
             data["roi"] = round(data["pnl"] / data["staked"] * 100, 1) if data["staked"] else 0
             data["name"] = bt
