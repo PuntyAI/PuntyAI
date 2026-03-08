@@ -3209,34 +3209,29 @@ def calculate_exotic_combinations(
 
     results: list[ExoticCombination] = []
 
-    # --- Quinella: pairs from top 4 ---
-    # Quinella is unordered (no wrong-order penalty) — historically +68% ROI
-    # in 8-10 fields. Generate all pairs from our 4 picks.
-    top2_scs = {r["saddlecloth"] for r in sorted_runners[:min(2, len(sorted_runners))]}
+    # --- Quinella: default 3-runner box, 2-runner only for standout pairs ---
+    # Production data: 3-runner quinellas hit 26.1% vs 2-runner 9.8%.
+    # 3-runner box = 3 combos within same budget (unit cost = stake/3).
+    # Use 2-runner only when top-2 pair is a genuine standout (combined
+    # quinella prob >= 0.25 and clear gap to 3rd pick).
+    top3 = top4[:min(3, len(top4))]
 
-    for combo in combinations(top4, 2):
-        # At least one runner must be a genuine contender
-        if max(combo[0]["win_prob"], combo[1]["win_prob"]) < MIN_LEAD_PROB:
-            continue
+    # Check if top-2 pair is a standout — both strong and clear gap to 3rd
+    if len(top4) >= 2:
+        top2_qprob = _quinella_probability(top4[0]["win_prob"], top4[1]["win_prob"])
+        gap_to_3rd = (top4[1]["win_prob"] - top4[2]["win_prob"]) if len(top4) >= 3 else 0.10
+        standout_pair = top2_qprob >= 0.25 and gap_to_3rd >= 0.05
+    else:
+        standout_pair = True  # Too few runners, use whatever we have
 
-        our_prob = _quinella_probability(
-            combo[0]["win_prob"], combo[1]["win_prob"]
-        )
-        mkt_prob = _quinella_probability(
-            combo[0]["market_implied"], combo[1]["market_implied"]
-        )
+    if standout_pair and len(top4) >= 2:
+        # 2-runner quinella — standout pair, full stake on 1 combo
+        combo = (top4[0], top4[1])
+        our_prob = _quinella_probability(combo[0]["win_prob"], combo[1]["win_prob"])
+        mkt_prob = _quinella_probability(combo[0]["market_implied"], combo[1]["market_implied"])
         value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
 
-        # Top-2 picks Quinella: always include — these are our highest-
-        # conviction runners. Production data: both quinella horses were in
-        # our selections in missed races but the combo wasn't generated
-        # because value threshold filtered it out. Rank 1+2 pair MUST
-        # always be in the combo table for _select_exotic to consider.
-        combo_scs = {combo[0]["saddlecloth"], combo[1]["saddlecloth"]}
-        is_top2_pair = combo_scs <= top2_scs
-        threshold = 0.0 if is_top2_pair else VALUE_THRESHOLDS["Quinella"]
-
-        if value >= threshold:
+        if max(combo[0]["win_prob"], combo[1]["win_prob"]) >= MIN_LEAD_PROB:
             results.append(ExoticCombination(
                 exotic_type="Quinella",
                 runners=[r["saddlecloth"] for r in combo],
@@ -3247,6 +3242,30 @@ def calculate_exotic_combinations(
                 cost=stake,
                 num_combos=1,
                 format="flat",
+            ))
+    elif len(top3) >= 3:
+        # 3-runner quinella box — higher strike rate, same budget (3 combos)
+        box_our_prob = sum(
+            _quinella_probability(a["win_prob"], b["win_prob"])
+            for a, b in combinations(top3, 2)
+        )
+        box_mkt_prob = sum(
+            _quinella_probability(a["market_implied"], b["market_implied"])
+            for a, b in combinations(top3, 2)
+        )
+        value = box_our_prob / box_mkt_prob if box_mkt_prob > 0 else 1.0
+
+        if max(r["win_prob"] for r in top3) >= MIN_LEAD_PROB:
+            results.append(ExoticCombination(
+                exotic_type="Quinella",
+                runners=[r["saddlecloth"] for r in top3],
+                runner_names=[r.get("horse_name", "") for r in top3],
+                estimated_probability=round(box_our_prob, 6),
+                market_probability=round(box_mkt_prob, 6),
+                value_ratio=round(value, 3),
+                cost=stake,
+                num_combos=3,
+                format="box",
             ))
 
     # --- Exacta: position 1 from top 4, position 2 from top 6 ---

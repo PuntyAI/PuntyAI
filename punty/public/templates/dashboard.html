@@ -574,33 +574,7 @@
                     {% include "partials/recent_results.html" %}
                 </div>
 
-                {# ── Performance Snapshot (compact 2x2 grid) ── #}
-                {% set perf = dashboard.performance|default({}) %}
-                <div class="sidebar-panel dash-sidebar-performance">
-                    <div class="sidebar-panel-title">Performance</div>
-                    <div class="stat-grid">
-                        <div class="stat-cell">
-                            <div class="stat-cell-label">Bets</div>
-                            <div class="stat-cell-value">{{ perf.total_bets|default(0) }}</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-cell-label">Winners</div>
-                            <div class="stat-cell-value" style="color: var(--cyan);">{{ perf.total_winners|default(0) }}</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-cell-label">Strike</div>
-                            {% set sr2 = (perf.total_winners|default(0) / perf.total_bets * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
-                            <div class="stat-cell-value" style="color: var(--yellow);">{{ sr2 }}%</div>
-                        </div>
-                        <div class="stat-cell">
-                            <div class="stat-cell-label">P&L</div>
-                            {% set tp2 = perf.total_pnl|default(0) %}
-                            <div class="stat-cell-value" style="color: {{ '#4ade80' if tp2 >= 0 else '#ef4444' }};">
-                                {{ '%+.0f'|format(tp2) | replace('+', '+$') | replace('-', '-$') }}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {# Performance Snapshot removed — duplicates Today's Stats bar #}
 
                 {# ── By Bet Type (compact) ── #}
                 {% set bt = dashboard.bet_types|default([]) %}
