@@ -39,6 +39,9 @@ VENUE_ALIASES = {
     # Southside = synthetic track at same venue
     "southside pakenham": "pakenham",
     "southside cranbourne": "cranbourne",
+    # Poly = synthetic track at same venue
+    "sunshine coast poly": "sunshine coast",
+    "sunshine-coast-poly": "sunshine coast",
     # Yarra Glen = Yarra Valley Racing Club (same track, different names across sources)
     "yarra valley": "yarra glen",
     "yarra-valley": "yarra glen",

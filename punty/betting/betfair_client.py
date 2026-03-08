@@ -403,6 +403,45 @@ async def place_bet(
     return {"status": "failed", "error": error}
 
 
+async def get_bet_result(db: AsyncSession, bet_id: str) -> Optional[dict]:
+    """Query Betfair for the actual settled result of a bet (BSP price, profit/loss).
+
+    Uses listClearedOrders to get the real BSP matched price after a race.
+    Returns: {price_matched, profit, settled_date} or None if not found/settled.
+    """
+    if settings.mock_external:
+        return None
+
+    scraper = await _get_scraper(db)
+    if not scraper:
+        return None
+
+    try:
+        result = await scraper._api_call("listClearedOrders", {
+            "betStatus": "SETTLED",
+            "betIds": [bet_id],
+        })
+    except Exception as e:
+        logger.warning(f"Betfair listClearedOrders failed for {bet_id}: {e}")
+        return None
+
+    orders = result.get("clearedOrders", []) if isinstance(result, dict) else []
+    if not orders:
+        return None
+
+    order = orders[0]
+    price = order.get("priceMatched") or order.get("priceRequested")
+    profit = order.get("profit")
+    logger.info(
+        f"Betfair BSP result for {bet_id}: price={price}, profit={profit}"
+    )
+    return {
+        "price_matched": price,
+        "profit": profit,
+        "settled_date": order.get("settledDate"),
+    }
+
+
 async def get_account_balance(db: AsyncSession) -> Optional[float]:
     """Get available Betfair account balance."""
     if settings.mock_external:

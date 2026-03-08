@@ -100,8 +100,9 @@ class PointsBetScraper:
                     # Flat list of meetings (alternative format)
                     all_meetings.append(group)
 
-        # Find meeting matching our venue
-        race_ids: list[tuple[int, str]] = []
+        # Find all meetings matching our venue (there may be multiple, e.g.
+        # "Sunshine Coast" turf + "Sunshine Coast Poly Track" at same venue)
+        candidates: list[tuple[int, list[tuple[int, str]]]] = []  # (active_count, races)
         for meeting in all_meetings:
             if not isinstance(meeting, dict):
                 continue
@@ -112,7 +113,9 @@ class PointsBetScraper:
             if pb_venue != venue_norm and venue_norm not in pb_venue and pb_venue not in venue_norm:
                 continue
 
-            # Found our venue — extract race IDs
+            # Extract race IDs from this meeting
+            meeting_races: list[tuple[int, str]] = []
+            active_count = 0
             races = meeting.get("races", [])
             for race in races:
                 if not isinstance(race, dict):
@@ -121,15 +124,23 @@ class PointsBetScraper:
                 race_num = race.get("raceNumber") or race.get("number")
                 if not event_id or not race_num:
                     continue
-                # Skip suspended races
                 trading = race.get("tradingStatus")
+                # Skip suspended races
                 if trading in ("Suspended", 3):
                     continue
-                race_ids.append((int(race_num), event_id))
+                meeting_races.append((int(race_num), event_id))
+                # Count actively trading races (tradingStatus=1)
+                if trading == 1:
+                    active_count += 1
 
-            if race_ids:
-                break  # Found our venue
+            if meeting_races:
+                candidates.append((active_count, meeting_races))
 
+        if not candidates:
+            return []
+        # When multiple meetings match (e.g. turf abandoned + poly active),
+        # prefer the one with the most actively trading races
+        _, race_ids = max(candidates, key=lambda c: c[0])
         return sorted(race_ids, key=lambda x: x[0])
 
     async def scrape_race_statuses(

@@ -29,7 +29,7 @@ DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
 DEFAULT_MAX_KELLY_FRACTION = 0.06  # Cap Kelly fraction at 6% (half-Kelly conservative)
 DEFAULT_KELLY_HALF = True  # True half-Kelly: halve the fraction for 75% less variance
 DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
-DEFAULT_MIN_CALIBRATED_PP = 0.55  # Only bet when calibrated PP >= 55% (70% SR sweet spot)
+DEFAULT_MIN_CALIBRATED_PP = 0.50  # Only bet when calibrated PP >= 50% (volume for compound growth)
 DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
 DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
 DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
@@ -941,6 +941,18 @@ async def settle_betfair_bets(
                 return 0  # Paying but positions not filled yet — wait
         else:
             return 0  # Results not in yet
+
+    # Fetch actual BSP from Betfair before settling — BSP orders don't have
+    # matched odds at placement time, only after the race
+    if bet.bet_id and not bet.bet_id.startswith("mock-"):
+        from punty.betting.betfair_client import get_bet_result
+        bf_result = await get_bet_result(db, bet.bet_id)
+        if bf_result and bf_result.get("price_matched"):
+            bsp = bf_result["price_matched"]
+            logger.info(
+                f"BSP update for {bet.id}: {bet.matched_odds or bet.requested_odds:.2f} -> {bsp:.2f}"
+            )
+            bet.matched_odds = bsp
 
     commission_rate = float(await _get_setting(db, "betfair_commission_rate", str(DEFAULT_COMMISSION_RATE)))
     odds = bet.matched_odds or bet.requested_odds or 0
