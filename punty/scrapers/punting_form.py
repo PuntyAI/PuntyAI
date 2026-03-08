@@ -374,19 +374,41 @@ class PuntingFormScraper(BaseScraper):
         return result
 
     async def resolve_meeting_id(self, venue: str, race_date: date) -> Optional[int]:
-        """Resolve our venue name to an API integer meetingId."""
+        """Resolve our venue name to an API integer meetingId.
+
+        When multiple meetings match (e.g. turf abandoned + poly active at
+        same venue), prefer the one with the most races — the active meeting.
+        """
         from punty.venues import normalize_venue
         meetings = await self.get_meetings(race_date)
         venue_lower = venue.lower().strip()
         clean_venue = normalize_venue(venue)
 
+        candidates: list[tuple[str, int, int]] = []  # (track_name, race_count, meetingId)
         for m in meetings:
             track_name = m.get("track", {}).get("name", "").lower().strip()
             if track_name == clean_venue or track_name == venue_lower:
-                return int(m["meetingId"])
+                race_count = len(m.get("races", []))
+                candidates.append((track_name, race_count, int(m["meetingId"])))
             # Partial match: "Pakenham" matches "Sportsbet Pakenham"
-            if track_name in clean_venue or clean_venue in track_name:
-                return int(m["meetingId"])
+            elif track_name in clean_venue or clean_venue in track_name:
+                race_count = len(m.get("races", []))
+                candidates.append((track_name, race_count, int(m["meetingId"])))
+
+        if candidates:
+            if len(candidates) > 1:
+                logger.info(
+                    f"Multiple PF meetings match {venue!r}: "
+                    f"{[(tn, rc, mid) for tn, rc, mid in candidates]} — picking best"
+                )
+                # Prefer poly/synthetic tracks (turf is likely abandoned)
+                poly = [c for c in candidates if "poly" in c[0] or "synthetic" in c[0]]
+                if poly:
+                    _, _, best_id = max(poly, key=lambda c: c[1])
+                    return best_id
+            # Single match or no poly — pick meeting with most races
+            _, _, best_id = max(candidates, key=lambda c: c[1])
+            return best_id
 
         logger.warning(f"Could not resolve meetingId for venue={venue!r} on {race_date}")
         available = [m.get("track", {}).get("name", "?") for m in meetings]
