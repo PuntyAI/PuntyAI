@@ -249,6 +249,8 @@ class TestRefreshBetSelections:
         6. select(Pick) → candidate picks for the race
         7. select(Runner) → current horse runner (scratched check)
         8..N. select(Runner) → one per candidate pick
+        Then odds refresh per queued bet:
+        N+1. select(Runner) → live odds lookup (place_odds=None → no further calls)
         """
         # Build result mocks
         bets_result = MagicMock()
@@ -283,9 +285,17 @@ class TestRefreshBetSelections:
             rr.scalar_one_or_none.return_value = r
             runner_results.append(rr)
 
+        # Odds refresh: Runner lookup per still-queued bet (place_odds=None → skip)
+        odds_refresh_runners = []
+        for bet in queued_bets:
+            null_runner = MagicMock()
+            null_runner.scalar_one_or_none.return_value = None  # No live odds
+            odds_refresh_runners.append(null_runner)
+
         mock_db.execute = AsyncMock(
             side_effect=[bets_result, setting_prob, setting_odds,
-                         runner_count_result, race_result, picks_result] + runner_results
+                         runner_count_result, race_result, picks_result]
+                        + runner_results + odds_refresh_runners
         )
 
     @pytest.mark.asyncio
