@@ -3084,7 +3084,7 @@ class ExoticCombination:
     estimated_probability: float  # our Harville model probability
     market_probability: float     # market-implied Harville probability
     value_ratio: float      # our_prob / market_prob (>1.0 = value)
-    cost: float             # always $20
+    cost: float             # total budget ($15 default)
     num_combos: int         # 1 for flat, 6/24/etc for boxed
     format: str             # "flat" or "boxed"
 
@@ -3157,7 +3157,7 @@ def _box_probability(probs: list[float], positions: int) -> float:
 
 def calculate_exotic_combinations(
     runners_data: list[dict],
-    stake: float = 20.0,
+    stake: float = 15.0,
 ) -> list[ExoticCombination]:
     """Pre-calculate best exotic combinations for a race.
 
@@ -3167,7 +3167,7 @@ def calculate_exotic_combinations(
             - horse_name (str)
             - win_prob (float) — our model probability
             - market_implied (float) — market probability
-        stake: Total stake per exotic (default $20)
+        stake: Total budget per exotic (default $15)
 
     Returns:
         Top 12 value combinations sorted by value_ratio descending,
