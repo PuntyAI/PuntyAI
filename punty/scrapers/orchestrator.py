@@ -1089,15 +1089,35 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                                 )
                                 continue
                             # Reject extreme divergence from opening odds (>5x ratio)
+                            # But if PointsBet agrees with Betfair, trust it — opening was stale tote
                             if runner.opening_odds and runner.opening_odds > 1.5:
                                 ratio = runner.opening_odds / bf_price
                                 if ratio > 5.0:
-                                    logger.warning(
-                                        f"Betfair odds rejected: {runner.horse_name} "
-                                        f"({od['race_id']}) ${bf_price:.2f} vs opening "
-                                        f"${runner.opening_odds:.2f} — {ratio:.1f}x divergence"
-                                    )
-                                    continue
+                                    pb = runner.odds_pointsbet
+                                    if pb and pb > 1.0:
+                                        pb_bf_ratio = max(pb, bf_price) / min(pb, bf_price)
+                                        if pb_bf_ratio < 2.0:
+                                            # PointsBet and Betfair agree — opening was garbage
+                                            logger.info(
+                                                f"Betfair odds accepted: {runner.horse_name} "
+                                                f"({od['race_id']}) ${bf_price:.2f} — PointsBet "
+                                                f"${pb:.2f} agrees (opening ${runner.opening_odds:.2f} was stale)"
+                                            )
+                                            runner.opening_odds = bf_price  # Fix the stale opening
+                                        else:
+                                            logger.warning(
+                                                f"Betfair odds rejected: {runner.horse_name} "
+                                                f"({od['race_id']}) ${bf_price:.2f} vs opening "
+                                                f"${runner.opening_odds:.2f} — {ratio:.1f}x divergence"
+                                            )
+                                            continue
+                                    else:
+                                        logger.warning(
+                                            f"Betfair odds rejected: {runner.horse_name} "
+                                            f"({od['race_id']}) ${bf_price:.2f} vs opening "
+                                            f"${runner.opening_odds:.2f} — {ratio:.1f}x divergence"
+                                        )
+                                        continue
                             runner.current_odds = bf_price
                             odds_updated += 1
                             if not runner.opening_odds:
@@ -1814,16 +1834,31 @@ async def _merge_pointsbet_odds(db: AsyncSession, meeting_id: str, odds_data: li
         runner.odds_pointsbet = win_odds
         matched += 1
 
-        # Fill current_odds if no other provider has odds
+        # Update current_odds: fill if empty, or overwrite if wildly stale
+        # (e.g. early tote $23 vs PointsBet fixed $1.70)
         if not runner.current_odds or runner.current_odds <= 1.0:
             runner.current_odds = win_odds
             filled_current += 1
+        elif runner.current_odds > 1.0:
+            ratio = max(runner.current_odds, win_odds) / min(runner.current_odds, win_odds)
+            if ratio > 3.0:
+                logger.info(
+                    f"PointsBet override current_odds: {runner.horse_name} "
+                    f"${runner.current_odds:.2f} -> ${win_odds:.2f} ({ratio:.1f}x divergence)"
+                )
+                runner.current_odds = win_odds
+                filled_current += 1
 
         # Fill place_odds if missing or stale
         if place_odds and place_odds > 1.0:
             if not runner.place_odds or runner.place_odds <= 1.0:
                 runner.place_odds = place_odds
                 filled_place += 1
+            elif runner.place_odds > 1.0:
+                place_ratio = max(runner.place_odds, place_odds) / min(runner.place_odds, place_odds)
+                if place_ratio > 3.0:
+                    runner.place_odds = place_odds
+                    filled_place += 1
 
     await db.flush()
     logger.info(

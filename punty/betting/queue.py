@@ -589,6 +589,62 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                     f"{bet.horse_name} ({best_pp:.0%}pp)"
                 )
 
+    # --- Odds refresh: update requested_odds from live Runner place_odds ---
+    # Picks store odds at approval time which can be stale tote data.
+    # Live Runner.place_odds gets updated by Betfair/PointsBet scrapers.
+    for bet in queued_bets:
+        if bet.status != "queued":
+            continue  # skip any we just cancelled above
+        race_id = f"{bet.meeting_id}-r{bet.race_number}"
+        runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.saddlecloth == bet.saddlecloth,
+            )
+        )
+        runner = runner_result.scalar_one_or_none()
+        if not runner or not runner.place_odds or runner.place_odds <= 1.0:
+            continue
+        old_odds = bet.requested_odds or 0
+        if abs(runner.place_odds - old_odds) > 0.05:
+            bet.requested_odds = round(runner.place_odds, 2)
+            # Re-check odds floor/ceiling after update
+            min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
+            if bet.requested_odds < min_odds:
+                bet.status = "cancelled"
+                bet.error_message = f"Live odds ${bet.requested_odds:.2f} below ${min_odds:.2f} floor"
+                changes += 1
+                logger.info(f"Cancelled {bet.id}: odds dropped to ${bet.requested_odds:.2f}")
+                continue
+            if bet.requested_odds > max_place_odds:
+                bet.status = "cancelled"
+                bet.error_message = f"Live odds ${bet.requested_odds:.2f} above ${max_place_odds:.2f} ceiling"
+                changes += 1
+                logger.info(f"Cancelled {bet.id}: odds drifted to ${bet.requested_odds:.2f}")
+                continue
+            # Recalculate Kelly stake with updated odds
+            pp_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
+            pick = pp_result.scalar_one_or_none()
+            if pick and pick.place_probability:
+                new_stake = await get_current_stake(
+                    db, place_probability=pick.place_probability,
+                    odds=bet.requested_odds,
+                )
+                if new_stake <= 0:
+                    bet.status = "cancelled"
+                    bet.error_message = f"No Kelly edge at live odds ${bet.requested_odds:.2f}"
+                    changes += 1
+                    logger.info(f"Cancelled {bet.id}: no edge at ${bet.requested_odds:.2f}")
+                    continue
+                if abs(new_stake - bet.stake) > 0.50:
+                    bet.stake = round(new_stake, 2)
+            if old_odds > 0:
+                logger.info(
+                    f"Odds update {bet.id}: {bet.horse_name} "
+                    f"${old_odds:.2f} -> ${bet.requested_odds:.2f}"
+                )
+                changes += 1
+
     if changes:
         await db.commit()
     return changes
