@@ -17,6 +17,22 @@ logger = logging.getLogger(__name__)
 
 ALL_STATES = ["NSW", "VIC", "QLD", "SA", "WA", "TAS", "ACT", "NT"]
 
+# NZ racing club → venue/track aliases (loveracing.nz uses club names, not venue names)
+_NZ_CLUB_ALIASES: dict[str, list[str]] = {
+    "wyndham rc": ["riverton"],
+    "south waikato rc": ["matamata"],
+    "manawatu rc": ["awapuni", "trentham"],
+    "auckland thoroughbred racing": ["ellerslie"],
+    "canterbury jockey club": ["riccarton"],
+    "otago racing club": ["wingatui"],
+    "waikato racing club": ["te rapa"],
+    "hawke's bay racing": ["hastings"],
+    "taranaki thoroughbred racing": ["new plymouth"],
+    "racing tauranga": ["tauranga"],
+    "whanganui racing club": ["wanganui"],
+    "gore racing club": ["gore"],
+}
+
 _BASE_URL = (
     "https://www.racingaustralia.horse/InteractiveForm/"
     "TrackCondition.aspx?State={state}"
@@ -367,10 +383,18 @@ async def _get_nz_conditions(venue: str) -> Optional[dict[str, Any]]:
     for meet in meetings:
         meet_venue = meet["venue"].lower().strip()
         meet_club = meet["club"].lower().strip()
-        if (venue_lower in meet_venue or meet_venue in venue_lower
-                or venue_lower in meet_club or meet_club in venue_lower
-                or _match_venue(meet_venue, venue)):
-            logger.info(f"NZ venue match: '{venue}' → meeting {meet['meeting_id']} ({meet['venue']})")
+        # Direct match
+        matched = (venue_lower in meet_venue or meet_venue in venue_lower
+                   or venue_lower in meet_club or meet_club in venue_lower
+                   or _match_venue(meet_venue, venue))
+        # Club alias match (e.g. "wyndham rc" → ["riverton"])
+        if not matched:
+            for club_key, aliases in _NZ_CLUB_ALIASES.items():
+                if club_key in meet_club and venue_lower in aliases:
+                    matched = True
+                    break
+        if matched:
+            logger.info(f"NZ venue match: '{venue}' -> meeting {meet['meeting_id']} ({meet['venue']})")
             cond = await _scrape_nz_meeting_conditions(meet["meeting_id"])
             if cond:
                 cond["venue"] = venue

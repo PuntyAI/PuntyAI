@@ -1257,6 +1257,20 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                 )
                 odds_updated = pf_fallback
 
+        # HKJC wind tracker for HK venues — gets weather + track conditions
+        from punty.venues import is_international_venue, guess_state
+        if is_international_venue(meeting.venue) and guess_state(meeting.venue) == "HK":
+            if not meeting.weather_condition:
+                try:
+                    from punty.scrapers.tab_playwright import HKJCTrackInfoScraper
+                    hkjc_track = HKJCTrackInfoScraper()
+                    track_info = await hkjc_track.scrape_track_info(meeting.date)
+                    if track_info:
+                        _apply_hkjc_conditions(meeting, track_info)
+                        logger.info(f"HKJC wind tracker applied for {meeting.venue}: {track_info}")
+                except Exception as e:
+                    logger.warning(f"HKJC wind tracker failed for {meeting.venue}: {e}")
+
         # Recalculate field_size for each race after scratches applied
         # (PF + Betfair scratches may have reduced the active field)
         from sqlalchemy import func as sa_func
