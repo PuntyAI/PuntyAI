@@ -403,7 +403,9 @@ class PuntingFormScraper(BaseScraper):
                 # Prefer poly/synthetic tracks (turf is likely abandoned when poly exists)
                 poly = [c for c in candidates if "poly" in c[0] or "synthetic" in c[0]]
                 if poly:
+                    self.resolved_poly = True
                     return poly[0][1]
+            self.resolved_poly = False
             return candidates[0][1]
 
         logger.warning(f"Could not resolve meetingId for venue={venue!r} on {race_date}")

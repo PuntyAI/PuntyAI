@@ -208,7 +208,8 @@ async def scrape_meeting_fields_only(meeting_id: str, db: AsyncSession, pf_scrap
         errors.append(f"conditions: {e}")
         pf_cond = None
     try:
-        await refresh_track_conditions(meeting, pf_cond=pf_cond, source="fields_only")
+        await refresh_track_conditions(meeting, pf_cond=pf_cond, source="fields_only",
+                                      is_poly=getattr(pf_scraper, "resolved_poly", False))
     except Exception as e:
         logger.error(f"Conditions gatekeeper failed for {venue}: {e}")
 
@@ -331,7 +332,8 @@ async def scrape_meeting_full(meeting_id: str, db: AsyncSession, pf_scraper=None
             logger.error(f"PF conditions failed: {e}")
             errors.append(f"conditions: {e}")
         try:
-            await refresh_track_conditions(meeting, pf_cond=pf_cond, source="scrape_meeting")
+            await refresh_track_conditions(meeting, pf_cond=pf_cond, source="scrape_meeting",
+                                          is_poly=getattr(pf_scraper, "resolved_poly", False))
         except Exception as e:
             logger.error(f"Conditions gatekeeper failed for {venue}: {e}")
 
@@ -590,7 +592,8 @@ async def scrape_meeting_full_stream(meeting_id: str, db: AsyncSession) -> Async
                     from punty.scrapers.punting_form import PuntingFormScraper
                     pf_scraper = await PuntingFormScraper.from_settings(db)
                 pf_cond = await pf_scraper.get_conditions_for_venue(venue)
-            await refresh_track_conditions(meeting, pf_cond=pf_cond, source="full_scrape")
+            await refresh_track_conditions(meeting, pf_cond=pf_cond, source="full_scrape",
+                                          is_poly=getattr(pf_scraper, "resolved_poly", False))
             if meeting.track_condition:
                 yield {"step": 2, "total": total_steps,
                        "label": f"Conditions: {meeting.track_condition}" + (f" | Rain: {pf_cond.get('rainfall', 'N/A')}mm" if pf_cond else ""),
@@ -1007,12 +1010,13 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
         pf = await PuntingFormScraper.from_settings(db)
         if pf:
             try:
+                # Resolve PF meeting first (sets resolved_poly flag)
+                pf_meeting_id = await pf.resolve_meeting_id(meeting.venue, meeting.date)
+
                 # Refresh conditions — single gatekeeper (RA authoritative)
                 pf_cond = await pf.get_conditions_for_venue(meeting.venue)
-                await refresh_track_conditions(meeting, pf_cond=pf_cond, source="refresh_odds")
-
-                # Refresh scratchings
-                pf_meeting_id = await pf.resolve_meeting_id(meeting.venue, meeting.date)
+                await refresh_track_conditions(meeting, pf_cond=pf_cond, source="refresh_odds",
+                                              is_poly=getattr(pf, "resolved_poly", False))
                 if pf_meeting_id:
                     scratchings = await pf.get_scratchings_for_meeting(pf_meeting_id)
                     if scratchings:
@@ -1389,6 +1393,7 @@ async def refresh_track_conditions(
     meeting: Meeting,
     pf_cond: dict | None = None,
     source: str = "unknown",
+    is_poly: bool = False,
 ) -> str | None:
     """Single gatekeeper for all track condition updates.
 
@@ -1450,6 +1455,10 @@ async def refresh_track_conditions(
         if pf_cond.get("rainfall") is not None:
             meeting.rainfall = pf_cond["rainfall"]
         logger.info(f"[{source}] PF conditions for {meeting.venue} (RA unavailable): {old_tc!r} → {meeting.track_condition!r}")
+
+    # Poly/synthetic tracks: RA/PF report turf conditions, override to Synthetic
+    if is_poly:
+        meeting.track_condition = "Synthetic"
 
     return meeting.track_condition
 
