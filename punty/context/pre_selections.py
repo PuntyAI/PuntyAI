@@ -1112,8 +1112,8 @@ def _select_exotic(
 
     Three-tier routing based on win-probability spread:
       DOMINANT  (wp_spread > 0.12) → Standout structures (Exacta/Tri anchored)
-      STRUCTURED (0.05–0.12)       → Box structures (Quinella 3, Trifecta Box)
-      OPEN      (< 0.05)           → PASS (skip exotic)
+      STRUCTURED (0.05–0.12)       → Box structures (Quinella 3, First4)
+      OPEN      (< 0.05)           → Box with wider coverage (bigger dividends)
 
     Budget: $15 total, flexi % = budget / (combos × $1).
     """
@@ -1155,11 +1155,7 @@ def _select_exotic(
     elif wp_spread >= 0.05:
         race_shape = "structured"  # 3-4 realistic chances
     else:
-        race_shape = "open"        # Low predictive confidence → PASS
-
-    # OPEN races: skip exotics entirely (production: -34% ROI when top pick WP < 15%)
-    if race_shape == "open":
-        return None
+        race_shape = "open"        # Competitive — bigger dividends when we hit
 
     # ── Build rank map ──
     rank_map: dict[int, int] = {}
@@ -1176,6 +1172,10 @@ def _select_exotic(
     if race_shape == "dominant":
         # Standout structures: anchor our #1 pick, others fill trailing spots
         preferred_types = {"Exacta Standout", "Exacta", "Quinella"}
+    elif race_shape == "open":
+        # Open races: box for wider coverage — +200% ROI historically
+        # Bigger dividends compensate for lower strike rate
+        preferred_types = {"Quinella", "First4", "First4 Box"}
     else:  # structured
         # Box structures: wider coverage across competitive field
         preferred_types = {"Quinella", "First4", "First4 Box"}
