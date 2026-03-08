@@ -618,8 +618,10 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
             return "Win"
         return "Place"
 
-    # Rank 1 always gets Win — Punty's best probability pick backs to win
+    # Rank 1: Win at reasonable odds, Place at $6+ (7.5% win SR at $6+ = -42% ROI)
     if rank == 1 and not is_roughie:
+        if odds >= 6.0:
+            return "Place"
         return "Win"
 
     # Roughie Win: 0/43 = -98.7% ROI. All roughies -> Place.
@@ -631,8 +633,11 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     # (Seastraand missed $58.80 win profit, Blue Suede Hooves missed $31.80).
     # Higher odds ($4-$8) win bets pay significantly more than place.
     if rank == 2 and not is_roughie:
-        if 4.0 <= odds <= 8.0 and win_prob >= 0.20 and value >= 1.0:
-            return "Win"
+        if 4.0 <= odds <= 8.0:
+            if win_prob >= 0.25 and value >= 1.10:
+                return "Win"
+            if win_prob >= 0.20 and value >= 1.0:
+                return "Saver Win"
 
     # Rank 2+ -> Place
     return "Place"
@@ -986,11 +991,14 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
             pick.tracked_only = True
             pick.no_bet_reason = reason or "No proven edge in this odds band"
             pick.stake = 0.0
-        # Place odds $10 cap — Data: 18.7% strike, -9% ROI at $10+
-        elif pick.bet_type == "Place" and pick.odds and pick.odds > 10.0:
-            pick.tracked_only = True
-            pick.no_bet_reason = "Place odds > $10 (-9% ROI historically)"
-            pick.stake = 0.0
+        # Place odds cap — rank-dependent
+        # Rank 1: $10 cap (strong anchor). Rank 2+: $8 cap (yesterday data: +$33.50)
+        elif pick.bet_type == "Place" and pick.odds:
+            place_cap = 10.0 if pick.rank == 1 else 8.0
+            if pick.odds > place_cap:
+                pick.tracked_only = True
+                pick.no_bet_reason = f"Place odds > ${place_cap:.0f} (rank {pick.rank})"
+                pick.stake = 0.0
 
     # Count staked picks
     staked_picks = [p for p in picks if not p.tracked_only]
@@ -1022,6 +1030,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
         # Win bonus — rank 1 always gets Win, slight boost for conviction
         if pick.bet_type in ("Win", "Saver Win") and pick.win_prob and pick.win_prob >= 0.20:
             base *= 1.10  # 10% stake boost for high-conviction Win
+
+        # Saver Win: reduced stake — 60% of full Win allocation
+        if pick.bet_type == "Saver Win":
+            base *= 0.60
 
         # Roughie $10-$20 bonus (+53% ROI sweet spot)
         if pick.is_roughie and 10.0 <= pick.odds <= 20.0:

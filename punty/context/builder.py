@@ -552,6 +552,14 @@ class ContextBuilder:
                 dl_patterns=getattr(self, "_dl_patterns", None),
             )
 
+            # Build median odds lookup from ORM runners (PointsBet/Betfair priority)
+            from punty.probability import _get_median_odds
+            median_odds_lookup = {}
+            for r in active_runners:
+                med = _get_median_odds(r)
+                if med and med > 1.0:
+                    median_odds_lookup[r.horse_name] = med
+
             # Inject probability data into each runner's context dict
             prob_summary = {}
             exotic_runners_data = []  # For exotic combination calculations
@@ -559,6 +567,19 @@ class ContextBuilder:
             for runner_data in race_context["runners"]:
                 if runner_data.get("scratched"):
                     continue
+
+                # Override current_odds with median odds (PointsBet/Betfair priority)
+                horse = runner_data.get("horse_name", "")
+                if horse in median_odds_lookup:
+                    raw_co = runner_data.get("current_odds")
+                    med_odds = median_odds_lookup[horse]
+                    runner_data["current_odds"] = med_odds
+                    if raw_co and abs(raw_co - med_odds) > med_odds * 0.5:
+                        logger.warning(
+                            "Odds override %s: stale $%.2f -> median $%.2f",
+                            horse, raw_co, med_odds,
+                        )
+
                 # Match by runner id
                 rid = None
                 for r in active_runners:
