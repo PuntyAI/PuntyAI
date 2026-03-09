@@ -2031,8 +2031,16 @@ document.addEventListener('DOMContentLoaded', function() {
             var variantMatch = text.match(/^(Skinny|Balanced|Wide|Smart)\s*[\(:]/i);
             if (variantMatch) {
                 var variant = variantMatch[1].toLowerCase();
+                // Find parent accordion heading to determine sequence type
+                var parentAcc = el.closest('.race-accordion');
+                var headingText = parentAcc ? (parentAcc.querySelector('.race-accordion-header') || {}).textContent || '' : '';
+                var isEarly = /early/i.test(headingText);
                 for (var si = 0; si < winSequences.length; si++) {
-                    if (winSequences[si].variant === variant) { addBadge(el, 'HIT'); break; }
+                    var ws = winSequences[si];
+                    if (ws.variant !== variant) continue;
+                    // Match sequence type to the correct section
+                    var wsIsEarly = /early/i.test(ws.type);
+                    if (isEarly === wsIsEarly) { addBadge(el, 'HIT'); break; }
                 }
             }
             if (/^Multi\b/i.test(text)) {
