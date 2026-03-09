@@ -356,20 +356,6 @@ def calculate_pre_selections(
                     used_saddlecloths.add(c["saddlecloth"])
                     break
 
-    # No-bet cascade: if rank 1 is too short (no_bet), only bet rank 2 Place
-    # when rank 2's place odds offer better value than rank 1's win odds.
-    if len(picks) >= 2 and picks[0].tracked_only:
-        rank1_odds = picks[0].odds or 0
-        rank2_place_odds = picks[1].place_odds or 0
-        if rank2_place_odds <= rank1_odds:
-            # Rank 2 place pays less than rank 1 win would — skip it too
-            picks[1].tracked_only = True
-            picks[1].no_bet_reason = (
-                f"Rank 1 no-bet (${rank1_odds:.2f}) and Place ${rank2_place_odds:.2f} "
-                f"doesn't beat it"
-            )
-            picks[1].stake = 0.0
-
     # Ensure at least one Win/Saver Win bet (mandatory rule)
     # Skip for PLACE_LEVERAGE — this classification can go all-Place
     if classification.race_type != "PLACE_LEVERAGE":
@@ -566,98 +552,27 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
 
 
 def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None) -> str:
-    """Determine optimal bet type for a runner based on probability profile.
+    """Determine bet type: Rank 1 = Win, Rank 2+ = Place. Simple.
 
-    Edge-aware logic validated on historical performance data:
-    - Win sweet spot $4-$6: +60.8% ROI — strongly prefer Win
-    - Short-priced favs <$2 on Win: -38.9% ROI — prefer Place
-    - $2-$4 Win: moderate, use for top picks only
-    - Roughie $10-$20: +53% ROI sweet spot
-    - Roughie $50+: -100% ROI — avoid Win entirely
+    Only exception: ≤4 runner fields have no place market → Win for all.
     """
-    t = thresholds or _load_thresholds()
-    win_prob = c["win_prob"]
-    place_prob = c["place_prob"]
-    odds = c["odds"]
-    value = c["value_rating"]
-    place_value = c["place_value_rating"]
-
-    # Field size affects place payouts:
-    # ≤4 runners: no place betting, ≤7 runners: only 2 places paid
-    # Prefer Win over Place in small fields
-    num_places = 0 if field_size <= 4 else (2 if field_size <= 7 else 3)
-
-    if num_places == 0:
-        # No place betting available — everything must be Win/Saver Win
+    # ≤4 runners: no place betting available
+    if field_size <= 4:
         return "Win"
 
-    if num_places == 2:
-        # Only 2 places paid — Place is much harder to collect.
-        # Data: 1-6 runners = +11.5% ROI. For 5-7 field, rank ≤2 with
-        # pp >= 0.55 → Place instead of Win (better collection rate).
-        if rank <= 2:
-            if field_size >= 5 and place_prob >= 0.55:
-                return "Place"
-            return "Win"
-        # Lower ranks: only Place if very high place probability
-        if place_prob >= 0.55 and place_value >= 1.0:
-            return "Place"
-        return "Win"  # default to Win in small fields
-
-    # --- Rank 1 always gets Win (Punty's top tip backs the best horse to win) ---
-    # Rank 2+ and roughies → Place (rank 2 Win: -78.4% ROI, roughie Win: -98.7%)
-
-    # Very short-priced favourites (<$2.01): routing depends on price + field
-    if odds < 2.01 and not is_roughie:
-        # Ultra-short fav (<$1.50): always no_bet, even in small fields.
-        if odds < 1.50 and rank == 1:
-            return "no_bet"
-        # Small field exception (≤8): allow Place on $1.50-$2.00 fav
-        if field_size and field_size <= 8:
-            if rank == 1:
-                return "Win"
-            return "Place"
-        # Rank 1 at <$1.80: mark as no_bet. Stake redistributed.
-        if odds < 1.80 and rank == 1:
-            return "no_bet"
-        # High PP unlock: place_probability >= 0.60 always gets Place
-        if place_prob >= 0.60:
-            if rank == 1:
-                return "Win"
-            return "Place"
-        # Rank 1 $1.80-$2.00: Place only with very high place confidence
-        if rank == 1 and place_prob < 0.70:
-            return "no_bet"
-        if rank == 1:
-            return "Win"
-        return "Place"
-
-    # Rank 1: Win at reasonable odds, Place at $6+ (7.5% win SR at $6+ = -42% ROI)
+    # Rank 1: Win (back the horse we think will win)
     if rank == 1 and not is_roughie:
-        if odds >= 6.0:
-            return "Place"
         return "Win"
 
-    # Roughie Win: 0/43 = -98.7% ROI. All roughies -> Place.
-    if is_roughie:
-        return "Place"
-
-    # Rank 2+ → always Place. Win risk concentrated on rank 1 only.
+    # Everyone else: Place (saver)
     return "Place"
 
 
 def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None) -> RecommendedPick:
     """Create a RecommendedPick from candidate data (legacy path)."""
     bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
-
-    # Short-priced fav no_bet: mark tracked_only, display as Place for accuracy
     tracked_only = False
     no_bet_reason = None
-    if bet_type == "no_bet":
-        tracked_only = True
-        no_bet_reason = "Short-priced favourite — stake redistributed"
-        bet_type = "Place"  # display as Place for accuracy tracking
-
     expected_return = _expected_return(c, bet_type)
 
     return RecommendedPick(
@@ -693,20 +608,11 @@ def _make_pick_from_optimizer(
     Falls back to legacy _determine_bet_type if no optimizer recommendation
     exists for this saddlecloth (shouldn't happen in practice).
     """
-    rec = rec_lookup.get(c["saddlecloth"])
-    if rec:
-        bet_type = rec.bet_type
-    else:
-        # Fallback to legacy
-        bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
-
-    # Short-priced fav no_bet: mark tracked_only, display as Place for accuracy
+    # Simple rule: rank 1 = Win, rank 2+ = Place (optimizer recommendation ignored
+    # for bet type — kept for stake % and edge calculations only)
+    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
     tracked_only = False
     no_bet_reason = None
-    if bet_type == "no_bet":
-        tracked_only = True
-        no_bet_reason = "Short-priced favourite — stake redistributed"
-        bet_type = "Place"
 
     expected_return = _expected_return(c, bet_type)
 

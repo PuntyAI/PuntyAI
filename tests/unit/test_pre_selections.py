@@ -151,11 +151,11 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_place_at_long_odds(self):
-        """$8 odds rank 1 → Place (rank 1 at $6+ routes to Place for safety)."""
+    def test_top_pick_win_at_long_odds(self):
+        """$8 odds rank 1 → Win (rank 1 always backs to win)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
     def test_top_pick_win_at_2_50(self):
         """$2.50 rank 1 → Win (rank 1 always backs to win)."""
@@ -1155,30 +1155,27 @@ class TestEdgeGatedAllocation:
 # ──────────────────────────────────────────────
 
 class TestSubTwoDollarBetType:
-    def test_sub_180_rank1_gets_no_bet(self):
-        """Sub-$1.80 rank 1 should get no_bet (stake redistributed to rank 2-3)."""
+    def test_short_rank1_gets_win(self):
+        """Short-priced rank 1 gets Win — no caps on short prices."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "no_bet"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_sub_150_small_field_gets_no_bet(self):
-        """Sub-$1.50 rank 1 in small field (≤8) should get no_bet — tote place ≈$1.04."""
+    def test_ultra_short_rank1_gets_win(self):
+        """Ultra-short rank 1 gets Win — no caps."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.12,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        # Ultra-short fav: no_bet even in small fields (DuckDB: Place ROI -0.9%)
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "no_bet"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
 
-    def test_150_to_180_small_field_gets_win(self):
-        """$1.50-$1.80 rank 1 in small field → Win (rank 1 always backs to win)."""
+    def test_short_rank1_small_field_gets_win(self):
+        """Short rank 1 in any field size → Win."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.60,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        # field_size=8 → rank 1 gets Win
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
-        # field_size=7 → num_places=2, rank 1 with pp>=0.55 and field>=5 → Place
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=7) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=7) == "Win"
 
     def test_180_to_200_gets_win(self):
-        """$1.80-$2.00 rank 1 → Win (rank 1 always backs to win)."""
+        """$1.80-$2.00 rank 1 → Win."""
         c = {"win_prob": 0.40, "place_prob": 0.70, "odds": 1.90,
              "value_rating": 1.05, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
@@ -1202,41 +1199,42 @@ class TestSubTwoDollarBetType:
 
 
 # ──────────────────────────────────────────────
-# Tests: Ultra-short fav no_bet + dominant fav Saver→Place
+# Tests: Simple bet type rules (rank 1 Win, rank 2+ Place)
 # ──────────────────────────────────────────────
 
-class TestUltraShortFavNoBet:
-    """Fix 1: <$1.50 rank 1 → no_bet even in small fields."""
+class TestSimpleBetTypeRules:
+    """Simple rules: rank 1 = Win, rank 2+ = Place, no caps."""
 
-    def test_sub_150_rank1_small_field_no_bet(self):
-        """$1.12 fav in 8-runner field: no_bet (tote place ≈$1.04, dead money)."""
+    def test_ultra_short_rank1_gets_win(self):
+        """$1.12 rank 1 → Win (no short-price caps)."""
         c = {"win_prob": 0.55, "place_prob": 0.85, "odds": 1.12,
              "value_rating": 0.90, "place_value_rating": 0.95}
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "no_bet"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
 
-    def test_sub_150_rank1_large_field_no_bet(self):
-        """$1.30 fav in 12-runner field: no_bet."""
+    def test_short_rank1_large_field_gets_win(self):
+        """$1.30 rank 1 in 12-runner field → Win."""
         c = {"win_prob": 0.50, "place_prob": 0.80, "odds": 1.30,
              "value_rating": 0.92, "place_value_rating": 0.98}
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=12) == "no_bet"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=12) == "Win"
 
-    def test_160_rank1_small_field_gets_win(self):
-        """$1.60 fav rank 1 in 8-runner field: Win (rank 1 always backs to win)."""
+    def test_rank1_always_win(self):
+        """Rank 1 → Win regardless of price or field."""
         c = {"win_prob": 0.42, "place_prob": 0.72, "odds": 1.60,
              "value_rating": 0.95, "place_value_rating": 1.00}
         assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
 
-    def test_sub_150_rank2_small_field_gets_place(self):
-        """Rank 2 at $1.40 in small field: Place (ultra-short guard only affects rank 1)."""
+    def test_rank2_always_place(self):
+        """Rank 2 → Place regardless of price."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 1.40,
              "value_rating": 0.95, "place_value_rating": 1.00}
         assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=8) == "Place"
 
-    def test_exactly_150_is_not_ultra_short(self):
-        """$1.50 exactly: NOT ultra-short, rank 1 → Win."""
+    def test_very_small_field_all_win(self):
+        """≤4 runners: all ranks get Win (no place market)."""
         c = {"win_prob": 0.45, "place_prob": 0.75, "odds": 1.50,
              "value_rating": 0.95, "place_value_rating": 1.00}
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=8) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=4) == "Win"
+        assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=4) == "Win"
 
 
 class TestDominantFavSaverToPlace:
@@ -1299,11 +1297,11 @@ class TestEachWayKilled:
                     )
 
     def test_small_field_no_ew(self):
-        """≤7 field returns Win (not E/W) for rank ≤2."""
+        """≤7 field rank 2 returns Place (not E/W). Rank 1 → Win."""
         c = {"win_prob": 0.20, "place_prob": 0.40, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        result = _determine_bet_type(c, rank=2, is_roughie=False, field_size=6)
-        assert result == "Win"  # not Each Way
+        assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=6) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=6) == "Win"
 
 
 # ──────────────────────────────────────────────

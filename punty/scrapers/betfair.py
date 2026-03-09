@@ -39,7 +39,11 @@ def _normalize_name(name: str) -> str:
 
 
 def _strip_venue_prefix(venue: str) -> str:
-    """Strip sponsor prefixes like 'Beaumont' from 'Beaumont Newcastle'."""
+    """Strip sponsor prefixes and surface suffixes for Betfair matching.
+
+    Betfair lists venues without surface type (e.g. 'Devonport' not
+    'Devonport Synthetic') and without sponsor names.
+    """
     # Common sponsor prefixes on Australian venues
     prefixes = [
         "Beaumont", "Ladbrokes", "TAB", "Sportsbet", "Bet365",
@@ -47,7 +51,19 @@ def _strip_venue_prefix(venue: str) -> str:
     ]
     for prefix in prefixes:
         if venue.startswith(prefix + " "):
-            return venue[len(prefix) + 1:]
+            venue = venue[len(prefix) + 1:]
+            break
+
+    # Surface suffixes — Betfair drops these
+    suffixes = [
+        "Synthetic Poly Track", "Synthetic", "Poly Track",
+        "All Weather", "Tapeta", "Cushion Track",
+    ]
+    for suffix in suffixes:
+        if venue.endswith(" " + suffix):
+            venue = venue[: -(len(suffix) + 1)]
+            break
+
     return venue
 
 
