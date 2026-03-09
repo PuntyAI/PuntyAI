@@ -2793,3 +2793,90 @@ class TestRecentGelding:
         score = _horse_profile_factor(runner)
         # Should get: age 3 (+0.02) + gelding (+0.01) + recent gelding (+0.06) = 0.59
         assert score >= 0.58
+
+
+class TestRankPlaceProbabilityInvariant:
+    """CRITICAL INVARIANT: Higher win probability must always produce higher place probability.
+
+    This prevents the bug where market place odds could override LGBM ranking,
+    causing rank 2 to have higher PP than rank 1 (e.g. Cousins Day over Vellasglory).
+    If this test ever fails, the Betfair queue will bet on the wrong horse.
+    """
+
+    def test_harville_preserves_win_rank_ordering(self):
+        """Harville place prob must be monotonic with win probability."""
+        win_probs = {"r1": 0.30, "r2": 0.25, "r3": 0.20, "r4": 0.15, "r5": 0.10}
+        place_probs = {
+            rid: _harville_place_probability(rid, win_probs, place_count=3)
+            for rid in win_probs
+        }
+        # Rank ordering must be preserved: r1 > r2 > r3 > r4 > r5
+        assert place_probs["r1"] > place_probs["r2"]
+        assert place_probs["r2"] > place_probs["r3"]
+        assert place_probs["r3"] > place_probs["r4"]
+        assert place_probs["r4"] > place_probs["r5"]
+
+    def test_place_prob_consistent_with_odds_ranking(self):
+        """In full probability engine, shorter-odds runner must have higher PP.
+
+        Simulates the Cousins Day scenario: two runners with different market
+        odds but where the engine should still respect probability ordering.
+        """
+        # Runner A: favourite ($3.00), Runner B: next ($5.00)
+        # Both have place odds, but PP must follow win prob ordering
+        runners = [
+            _make_runner(id="fav", current_odds=3.0, place_odds=1.50, last_five="11211",
+                         career_record="20: 8-4-2"),
+            _make_runner(id="second", current_odds=5.0, place_odds=1.80, last_five="21312",
+                         career_record="18: 4-3-3"),
+            _make_runner(id="r3", current_odds=8.0, place_odds=2.50, last_five="33452"),
+            _make_runner(id="r4", current_odds=12.0, place_odds=3.50, last_five="55678"),
+            _make_runner(id="r5", current_odds=15.0, place_odds=4.50, last_five="67890"),
+            _make_runner(id="r6", current_odds=20.0, place_odds=6.00, last_five="89012"),
+            _make_runner(id="r7", current_odds=26.0, place_odds=8.00, last_five="90123"),
+            _make_runner(id="r8", current_odds=35.0, place_odds=10.0, last_five="01234"),
+        ]
+        race = _make_race(field_size=8)
+        meeting = _make_meeting()
+
+        results = calculate_race_probabilities(runners, race, meeting)
+        # The favourite MUST have higher place probability than second pick
+        assert results["fav"].place_probability >= results["second"].place_probability, (
+            f"INVARIANT VIOLATED: fav PP {results['fav'].place_probability} < "
+            f"second PP {results['second'].place_probability}. "
+            f"Market place odds are overriding engine ranking!"
+        )
+
+    def test_place_prob_not_dominated_by_market_place_odds(self):
+        """PP must not flip when market place odds disagree with win odds.
+
+        This is the exact Cousins Day bug: runner B has shorter place odds
+        than runner A, but runner A has higher win probability. PP must
+        still follow win probability, not raw market place odds.
+        """
+        runners = [
+            # Runner A: higher win prob ($4.00) but longer place odds ($2.50)
+            _make_runner(id="rank1", current_odds=4.0, place_odds=2.50, last_five="12131",
+                         career_record="15: 5-3-2"),
+            # Runner B: lower win prob ($5.50) but shorter place odds ($2.00)
+            _make_runner(id="rank2", current_odds=5.5, place_odds=2.00, last_five="22312",
+                         career_record="15: 3-4-3"),
+            _make_runner(id="r3", current_odds=7.0, place_odds=2.80, last_five="33452"),
+            _make_runner(id="r4", current_odds=10.0, place_odds=3.50, last_five="45567"),
+            _make_runner(id="r5", current_odds=14.0, place_odds=4.50, last_five="56789"),
+            _make_runner(id="r6", current_odds=18.0, place_odds=6.00, last_five="67890"),
+            _make_runner(id="r7", current_odds=25.0, place_odds=8.00, last_five="78901"),
+            _make_runner(id="r8", current_odds=40.0, place_odds=12.0, last_five="89012"),
+        ]
+        race = _make_race(field_size=8)
+        meeting = _make_meeting()
+
+        results = calculate_race_probabilities(runners, race, meeting)
+        # rank1 has higher win prob ($4 vs $5.50) so MUST have higher PP
+        # even though rank2 has shorter place odds ($2.00 vs $2.50)
+        assert results["rank1"].place_probability >= results["rank2"].place_probability, (
+            f"INVARIANT VIOLATED: rank1 PP {results['rank1'].place_probability} < "
+            f"rank2 PP {results['rank2'].place_probability}. "
+            f"Market place odds ($2.00 vs $2.50) flipped the PP ordering! "
+            f"This is the Cousins Day bug — rank 2 would be queued for Betfair."
+        )
