@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 # Bet-type thresholds for WP-rank assignment (mirrors pre_selections logic)
 _WP_RANK1_MAX_ODDS = 6.0      # Above $6, Rank 1 gets Place instead of Win
 _WP_RANK1_MIN_ODDS = 1.50     # Below $1.50, no_bet (too short)
-_WP_RANK2_WIN_MIN_ODDS = 4.0  # Rank 2 Win zone: $4-$8
-_WP_RANK2_WIN_MAX_ODDS = 8.0
-_WP_RANK2_WIN_MIN_WP = 0.25   # Rank 2 needs 25%+ WP for Win
+_WP_RANK2_SW_MIN_ODDS = 4.0   # Rank 2 Saver Win zone: $4-$8
+_WP_RANK2_SW_MAX_ODDS = 8.0
+_WP_RANK2_SW_MIN_WP = 0.25    # Rank 2 needs 25%+ WP for Saver Win
 
 
 def _reassign_bets_by_wp(pick_dicts: list[dict]) -> None:
@@ -78,10 +78,10 @@ def _reassign_bets_by_wp(pick_dicts: list[dict]) -> None:
                 else:
                     s["bet_type"] = "Win"
             elif wp_rank == 2:
-                # Second highest WP → Place (Win if strong at $4-$8)
-                if (_WP_RANK2_WIN_MIN_ODDS <= odds <= _WP_RANK2_WIN_MAX_ODDS
-                        and wp >= _WP_RANK2_WIN_MIN_WP):
-                    s["bet_type"] = "Win"
+                # Second highest WP → Place (Saver Win if strong at $4-$8)
+                if (_WP_RANK2_SW_MIN_ODDS <= odds <= _WP_RANK2_SW_MAX_ODDS
+                        and wp >= _WP_RANK2_SW_MIN_WP):
+                    s["bet_type"] = "Saver Win"
                 else:
                     s["bet_type"] = "Place"
             else:
