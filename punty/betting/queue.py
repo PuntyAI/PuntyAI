@@ -22,7 +22,7 @@ DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.30  # Minimum place odds floor — below this, one miss wipes too many wins
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
-DEFAULT_MIN_PLACE_PROB = 0.60  # 60% minimum place probability (Harville-calibrated)
+DEFAULT_MIN_PLACE_PROB = 0.40  # Absolute floor — field-size tiers set the real PP thresholds
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
 DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
@@ -31,19 +31,28 @@ DEFAULT_KELLY_HALF = True  # True half-Kelly: halve the fraction for 75% less va
 DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
 DEFAULT_MIN_CALIBRATED_PP = 0.50  # Only bet when calibrated PP >= 50% (volume for compound growth)
 DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
-DEFAULT_MIN_RUNNERS = 8  # Minimum runners for 3 place dividends (NTD below this)
-DEFAULT_NTD_HIGH_PP = 0.70  # Allow 5-7 runners if PP >= this threshold
 MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
 DEFAULT_MAIDEN_MAX_PLACE_ODDS = 1.75  # Tighter ceiling for maiden races (≈$3 win)
 # Data-driven: R1 76.2% place SR vs R2 73.4%. R1 PP≥65% = 81.1% SR.
 # Restrict to Rank 1 only for maximum strike rate.
 MAX_BETFAIR_RANK = 1
-# Data-driven: fields ≤10 → 75% place SR; 11-14 → 48%; 15+ → 42%
-# Rank 1 in ≤7 fields: 89.7% SR, 8-10: ~73%. Above 10 drops sharply.
-MAX_FIELD_SIZE = 10
-# R1 PP≥65% = 81.1% SR (122 bets / 3 weeks ≈ 6/day). Sweet spot.
-RANK1_MIN_PP = 0.65
-RANK2_MIN_PP = 0.65
+# Field-size-tiered PP floors — larger fields need higher confidence.
+# Data: ≤7 runners 89.7% SR, 8-10 ~73%, 11-14 ~48%, 15+ ~42%.
+# Instead of a hard field cap, scale PP requirement with field size.
+FIELD_PP_TIERS = [
+    (7,  0.45),   # Small fields — inherently easier to place
+    (10, 0.49),   # Standard competitive fields
+    (14, 0.55),   # Larger fields need more confidence
+    (99, 0.65),   # Very large fields — high conviction only
+]
+
+
+def _pp_floor_for_field(runner_count: int) -> float:
+    """Return the minimum place probability for a given field size."""
+    for max_runners, pp_floor in FIELD_PP_TIERS:
+        if runner_count <= max_runners:
+            return pp_floor
+    return FIELD_PP_TIERS[-1][1]
 
 
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
@@ -208,7 +217,6 @@ async def populate_bet_queue(
     )
     races_by_num = {r.race_number: r for r in race_result.scalars().all()}
 
-    min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
     max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
     min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
 
@@ -248,46 +256,23 @@ async def populate_bet_queue(
                     )
                     continue
 
-        # NTD filter — need 8+ runners for 3 place dividends
-        # Allow 5-7 runners if place_probability is very high (>= 70%)
+        # NTD hard kill — fewer than 5 runners often means only 1 paid place
         race_id = f"{meeting_id}-r{race.race_number}"
         runner_count = await _count_active_runners(db, race_id)
-        if runner_count < DEFAULT_MIN_RUNNERS:
-            pp = pick.place_probability or 0
-            if runner_count < 5:
-                logger.info(
-                    f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                    f"NTD — {runner_count} runners (too few for place betting)"
-                )
-                continue
-            if pp < DEFAULT_NTD_HIGH_PP:
-                logger.info(
-                    f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                    f"NTD — {runner_count} runners, PP {pp:.0%} < {DEFAULT_NTD_HIGH_PP:.0%} threshold"
-                )
-                continue
-            logger.info(
-                f"NTD override for {pick.horse_name} R{pick.race_number}: "
-                f"{runner_count} runners but PP {pp:.0%} >= {DEFAULT_NTD_HIGH_PP:.0%}"
-            )
-
-        # Field size filter — large fields reduce predictability
-        # Data: ≤10 runners → 65% place SR; 11-14 → 48%; 15+ → 42%
-        if runner_count > MAX_FIELD_SIZE:
+        if runner_count < 5:
             logger.info(
                 f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"field too large ({runner_count} > {MAX_FIELD_SIZE} runners)"
+                f"NTD — {runner_count} runners (too few for place betting)"
             )
             continue
 
-        # Filter by place probability — tiered by rank
-        # Data: Rank 1 has 59% base place SR so can accept lower PP; Rank 2 needs 60%+
-        rank_pp_floor = RANK1_MIN_PP if pick.tip_rank == 1 else RANK2_MIN_PP
-        effective_min_pp = max(min_place_prob, rank_pp_floor)
+        # Field-size-tiered PP floor — larger fields need higher confidence
+        effective_min_pp = _pp_floor_for_field(runner_count)
         if pick.place_probability is not None and pick.place_probability < effective_min_pp:
             logger.info(
                 f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"place_prob {pick.place_probability:.1%} < {effective_min_pp:.0%} threshold (rank {pick.tip_rank})"
+                f"PP {pick.place_probability:.1%} < {effective_min_pp:.0%} floor "
+                f"(field={runner_count})"
             )
             continue
 
@@ -475,36 +460,14 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
     for bet in queued_bets:
         race_id = f"{bet.meeting_id}-r{bet.race_number}"
 
-        # NTD check — cancel if scratchings dropped field below threshold
-        # Allow 5-7 runners if the pick's PP >= 70%
+        # NTD hard kill — fewer than 5 runners often means only 1 paid place
         runner_count = await _count_active_runners(db, race_id)
-        if runner_count < DEFAULT_MIN_RUNNERS:
-            # Look up PP from current active pick (handles superseded content)
-            pick_pp_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
-            current_pick = pick_pp_result.scalar_one_or_none()
-            pp = (current_pick.place_probability if current_pick else None) or 0
-            # If PP is 0, try finding by horse name in active content
-            if pp == 0:
-                active_pick_result = await db.execute(
-                    select(Pick).where(
-                        Pick.meeting_id == bet.meeting_id,
-                        Pick.race_number == bet.race_number,
-                        Pick.horse_name == bet.horse_name,
-                        Pick.pick_type == "selection",
-                        Pick.place_probability > 0,
-                    ).order_by(Pick.place_probability.desc()).limit(1)
-                )
-                active_pick = active_pick_result.scalar_one_or_none()
-                if active_pick:
-                    pp = active_pick.place_probability or 0
-                    bet.pick_id = active_pick.id  # Re-link to active pick
-            if runner_count < 5 or pp < DEFAULT_NTD_HIGH_PP:
-                bet.status = "cancelled"
-                reason = f"NTD — {runner_count} runners" + (f", PP {pp:.0%} < {DEFAULT_NTD_HIGH_PP:.0%}" if runner_count >= 5 else "")
-                bet.error_message = reason
-                changes += 1
-                logger.info(f"Cancelled {bet.id}: {reason}")
-                continue
+        if runner_count < 5:
+            bet.status = "cancelled"
+            bet.error_message = f"NTD — {runner_count} runners (too few for place betting)"
+            changes += 1
+            logger.info(f"Cancelled {bet.id}: NTD {runner_count} runners")
+            continue
 
         # Check maiden race — cancel if odds drifted above maiden ceiling
         race_result = await db.execute(
@@ -521,14 +484,6 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                 logger.info(f"Cancelled {bet.id}: maiden odds ${place_odds:.2f} above ceiling")
                 continue
 
-        # Field size filter — cancel if field grew too large
-        if runner_count > MAX_FIELD_SIZE:
-            bet.status = "cancelled"
-            bet.error_message = f"Field too large ({runner_count} > {MAX_FIELD_SIZE} runners)"
-            changes += 1
-            logger.info(f"Cancelled {bet.id}: field size {runner_count} exceeds {MAX_FIELD_SIZE}")
-            continue
-
         # Load all selection picks for this race — restrict to Rank 1-2
         # Data: Rank 3-4 place SR 35%/26% — not reliable enough for Betfair
         pick_result = await db.execute(
@@ -542,6 +497,17 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         )
         candidates = pick_result.scalars().all()
         if not candidates:
+            continue
+
+        # Field-size-tiered PP check — cancel if current pick's PP too low
+        pp_floor = _pp_floor_for_field(runner_count)
+        current_pick = next((c for c in candidates if c.id == bet.pick_id), None)
+        current_pp = float(current_pick.place_probability or 0) if current_pick else 0.0
+        if current_pp < pp_floor:
+            bet.status = "cancelled"
+            bet.error_message = f"PP {current_pp:.0%} < {pp_floor:.0%} floor (field={runner_count})"
+            changes += 1
+            logger.info(f"Cancelled {bet.id}: PP {current_pp:.0%} below {pp_floor:.0%} for {runner_count}-runner field")
             continue
 
         # Check if current horse is scratched
