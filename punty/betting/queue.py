@@ -355,7 +355,7 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
 
     max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
 
-    # Load Rank 1-2 selection picks for this race, sorted by tip_rank
+    # Load Rank 1 selection picks for this race only
     # Include tracked_only picks — manual cycle is an explicit override
     pick_result = await db.execute(
         select(Pick).where(
