@@ -719,18 +719,15 @@ def _calculate_lgbm_probabilities(
     if bw_total > 0:
         blended_win = {rid: p / bw_total for rid, p in blended_win.items()}
 
-    # Place probabilities: real market place odds when available, Harville model otherwise.
-    # Harville uses the full field's win distribution — much more accurate than the crude
-    # (win-1)/3+1 estimate that was previously used.
+    # Place probabilities: Harville model from the already-blended win probs.
+    # Previously used raw market place odds as the market component, but this
+    # caused rank 2 to have higher PP than rank 1 when market place odds
+    # disagreed with LGBM ranking — undermining our own pick ordering.
+    # Now: Harville from blended win probs ensures rank ordering is consistent.
     blended_place = {}
     for runner in active:
         rid = _get(runner, "id", "")
-        mkt_place = place_market_implied.get(rid)
-        if not mkt_place:
-            # Harville model: compute place prob from field's market-implied win probs
-            mkt_place = _harville_place_probability(rid, market_implied, place_count)
-        lgbm_rank_place = _harville_place_probability(rid, rank_weights, place_count)
-        blended_place[rid] = (1.0 - LGBM_RANK_INFLUENCE) * mkt_place + LGBM_RANK_INFLUENCE * lgbm_rank_place
+        blended_place[rid] = _harville_place_probability(rid, blended_win, place_count)
 
     # Normalize place probs
     bp_total = sum(blended_place.values())
@@ -1266,10 +1263,8 @@ def calculate_race_probabilities(
             factor_p = place_probs.get(rid_h, _harville_place_probability(rid_h, win_probs, place_count))
             blended = 0.70 * factor_p + 0.30 * harville_p
 
-            # Anchor to market when real place_odds available
-            mkt_p = place_market_implied.get(rid_h)
-            if mkt_p and mkt_p > 0:
-                blended = 0.50 * blended + 0.50 * mkt_p
+            # Market place odds used for value detection only, not for PP calc.
+            # Anchoring to market here caused rank 2 to outrank rank 1 on PP.
 
             place_probs[rid_h] = min(0.75, blended)
 
