@@ -348,7 +348,7 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
             p = _pick_base()
             p["id"] = _next_id()
             p["pick_type"] = "sequence"
-            p["sequence_type"] = "quaddie" if "quad" in seq_type else "big6"
+            p["sequence_type"] = seq_type if seq_type else ("quaddie" if "quad" in seq_type else "big6")
             p["sequence_variant"] = var.get("name", "").lower()
             legs_raw = var.get("legs", "")
             # Parse "3,4,9/3,2,1/10,4,12,8" into [[3,4,9],[3,2,1],[10,4,12,8]]
