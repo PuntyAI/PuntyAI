@@ -17,92 +17,6 @@ from punty.results.parser import parse_early_mail
 
 logger = logging.getLogger(__name__)
 
-# Bet-type thresholds for WP-rank assignment (mirrors pre_selections logic)
-_WP_RANK1_MAX_ODDS = 6.0      # Above $6, Rank 1 gets Place instead of Win
-_WP_RANK1_MIN_ODDS = 1.50     # Below $1.50, no_bet (too short)
-_WP_RANK2_SW_MIN_ODDS = 4.0   # Rank 2 Saver Win zone: $4-$8
-_WP_RANK2_SW_MAX_ODDS = 8.0
-_WP_RANK2_SW_MIN_WP = 0.25    # Rank 2 needs 25%+ WP for Saver Win
-
-
-def _reassign_bets_by_wp(pick_dicts: list[dict]) -> None:
-    """Reassign tip_rank and bet_type based on win_probability rank.
-
-    Groups selections by race, sorts by WP descending, then assigns:
-      - WP Rank 1: Win (at $1.50-$6.00) or Place (at $6+) or no_bet (< $1.50)
-      - WP Rank 2: Place (default), Win at $4-$8 if WP >= 25%
-      - WP Rank 3+: tracked_only (stake = 0)
-      - Roughie (rank 4 / odds >= $8 + lowest WP): always Place
-
-    Preserves the AI's horse selections — only changes bet assignment order.
-    """
-    from collections import defaultdict
-
-    # Group selections by race
-    by_race: dict[int, list[dict]] = defaultdict(list)
-    for pd in pick_dicts:
-        if pd.get("pick_type") == "selection" and pd.get("race_number"):
-            by_race[pd["race_number"]].append(pd)
-
-    for race_num, sels in by_race.items():
-        if len(sels) < 2:
-            continue
-
-        # Sort by win_probability descending (highest WP first)
-        sels.sort(key=lambda p: p.get("win_probability") or 0, reverse=True)
-
-        # Identify roughie: original rank 4 or highest odds in the group
-        roughie_sc = None
-        for s in sels:
-            if s.get("tip_rank") == 4:
-                roughie_sc = s.get("saddlecloth")
-                break
-
-        # Assign WP-based ranks: highest WP = 1, then 2, then 3, roughie = 4
-        wp_rank = 0
-        for s in sels:
-            if s.get("saddlecloth") == roughie_sc:
-                continue  # Handle roughie separately
-            wp_rank += 1
-            odds = s.get("odds_at_tip") or 0
-            wp = s.get("win_probability") or 0
-
-            s["tip_rank"] = wp_rank
-
-            if wp_rank == 1:
-                # Highest WP → Win bet (core change)
-                if odds < _WP_RANK1_MIN_ODDS:
-                    s["bet_type"] = "Place"  # Too short for Win
-                elif odds > _WP_RANK1_MAX_ODDS:
-                    s["bet_type"] = "Place"  # Too long for Win
-                else:
-                    s["bet_type"] = "Win"
-            elif wp_rank == 2:
-                # Second highest WP → Place (Saver Win if strong at $4-$8)
-                if (_WP_RANK2_SW_MIN_ODDS <= odds <= _WP_RANK2_SW_MAX_ODDS
-                        and wp >= _WP_RANK2_SW_MIN_WP):
-                    s["bet_type"] = "Saver Win"
-                else:
-                    s["bet_type"] = "Place"
-            else:
-                # Rank 3+: tracked only
-                s["bet_type"] = "Place"
-                s["bet_stake"] = 0.0
-
-        # Roughie always rank 4, always Place
-        if roughie_sc:
-            for s in sels:
-                if s.get("saddlecloth") == roughie_sc:
-                    s["tip_rank"] = 4
-                    s["bet_type"] = "Place"
-                    break
-
-        logger.debug(
-            "WP-rank reassign R%d: %s",
-            race_num,
-            [(s.get("horse_name", "?"), s.get("tip_rank"), s.get("bet_type"),
-              f"WP={s.get('win_probability', 0):.1%}") for s in sels],
-        )
 
 
 async def store_picks_from_content(
@@ -183,12 +97,9 @@ async def store_picks_from_content(
                 if rp.factors:
                     pd["factors_json"] = json.dumps(rp.factors)
 
-    # ── WP-rank bet reassignment ──
-    # The AI may reorder picks from the pre-selections recommendation.
-    # Enforce: highest win_probability gets Win bet, second gets Place.
-    # This avoids the LGBM-rank / WP-rank inversion problem where the
-    # LGBM top-ranked horse has lower calibrated WP than rank 2.
-    _reassign_bets_by_wp(pick_dicts)
+    # Trust the AI's ranking — no WP-rank reordering.
+    # Bet types are set by pre_selections._determine_bet_type() and
+    # preserved through the parser. Rank 1 = Win, Rank 2 = Place.
 
     for pd in pick_dicts:
         pick = Pick(**pd)

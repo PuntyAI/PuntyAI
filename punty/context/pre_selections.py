@@ -356,6 +356,20 @@ def calculate_pre_selections(
                     used_saddlecloths.add(c["saddlecloth"])
                     break
 
+    # No-bet cascade: if rank 1 is too short (no_bet), only bet rank 2 Place
+    # when rank 2's place odds offer better value than rank 1's win odds.
+    if len(picks) >= 2 and picks[0].tracked_only:
+        rank1_odds = picks[0].odds or 0
+        rank2_place_odds = picks[1].place_odds or 0
+        if rank2_place_odds <= rank1_odds:
+            # Rank 2 place pays less than rank 1 win would — skip it too
+            picks[1].tracked_only = True
+            picks[1].no_bet_reason = (
+                f"Rank 1 no-bet (${rank1_odds:.2f}) and Place ${rank2_place_odds:.2f} "
+                f"doesn't beat it"
+            )
+            picks[1].stake = 0.0
+
     # Ensure at least one Win/Saver Win bet (mandatory rule)
     # Skip for PLACE_LEVERAGE — this classification can go all-Place
     if classification.race_type != "PLACE_LEVERAGE":
@@ -628,18 +642,7 @@ def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict |
     if is_roughie:
         return "Place"
 
-    # Rank 2 Win consideration: allow Win at $4-$8 with strong probability.
-    # Production data: 3 winners today were our rank 2 on Place only
-    # (Seastraand missed $58.80 win profit, Blue Suede Hooves missed $31.80).
-    # Higher odds ($4-$8) win bets pay significantly more than place.
-    if rank == 2 and not is_roughie:
-        if 4.0 <= odds <= 8.0:
-            if win_prob >= 0.25 and value >= 1.10:
-                return "Win"
-            if win_prob >= 0.20 and value >= 1.0:
-                return "Saver Win"
-
-    # Rank 2+ -> Place
+    # Rank 2+ → always Place. Win risk concentrated on rank 1 only.
     return "Place"
 
 

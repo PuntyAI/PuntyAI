@@ -171,20 +171,20 @@ class TestDetermineBetType:
         result = _determine_bet_type(c, rank=1, is_roughie=False)
         assert result == "Win"
 
-    def test_second_pick_saver_win_in_sweet_spot(self):
-        """Rank 2 in $4-$8 with wp>=0.20 and value>=1.0 gets Saver Win."""
+    def test_second_pick_always_place(self):
+        """Rank 2 always gets Place — win risk concentrated on rank 1."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Saver Win"
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
 
-    def test_second_pick_win_strong_conviction(self):
-        """Rank 2 in $4-$8 with wp>=0.25 and value>=1.10 gets full Win."""
+    def test_second_pick_place_strong_conviction(self):
+        """Rank 2 stays Place even with strong win probability."""
         c = {"win_prob": 0.26, "place_prob": 0.60, "odds": 5.0,
              "value_rating": 1.15, "place_value_rating": 1.10}
-        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
 
     def test_second_pick_place_low_value(self):
-        """Rank 2 in $4-$8 with value < 1.0 stays Place."""
+        """Rank 2 stays Place regardless of value."""
         c = {"win_prob": 0.22, "place_prob": 0.55, "odds": 4.0,
              "value_rating": 0.90, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
