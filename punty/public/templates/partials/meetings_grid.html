@@ -92,15 +92,23 @@
             {% if meet.track_condition %}
             <div class="inline-block px-2 py-0.5 rounded text-xs font-heading font-semibold mb-2" style="background: rgba(0, 212, 255, 0.12); color: var(--cyan);">{{ meet.track_condition }}</div>
             {% endif %}
-            {# Next race jump time #}
+            {# Live P&L — shown for both in-progress and completed meetings #}
+            {% set venue_data = dashboard.venues|selectattr('name', 'equalto', meet.venue)|first if dashboard is defined and dashboard.venues is defined else none %}
             {% if meet.next_jump %}
-            <div class="flex items-center gap-1.5 text-xs">
-                <span style="color: var(--text-muted);">R{{ meet.next_race_num }}</span>
-                <span class="countdown-fixed font-heading font-semibold" style="color: var(--magenta);" data-start="{{ meet.next_jump }}">--:--</span>
+            {# In-progress: countdown + live P&L #}
+            <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-1.5">
+                    <span style="color: var(--text-muted);">R{{ meet.next_race_num }}</span>
+                    <span class="countdown-fixed font-heading font-semibold" style="color: var(--magenta);" data-start="{{ meet.next_jump }}">--:--</span>
+                </div>
+                {% if venue_data and venue_data.bets > 0 %}
+                <span class="font-heading font-bold {% if venue_data.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                    {{ '+' if venue_data.pnl >= 0 }}${{ '%.0f'|format(venue_data.pnl) }}
+                </span>
+                {% endif %}
             </div>
             {% else %}
-            {# All races done #}
-            {% set venue_data = dashboard.venues|selectattr('name', 'equalto', meet.venue)|first if dashboard is defined and dashboard.venues is defined else none %}
+            {# Completed: P&L summary #}
             {% if venue_data and venue_data.pnl is not none and venue_data.bets > 0 %}
             <div class="flex items-center justify-between text-xs">
                 <span style="color: var(--text-muted);">{{ venue_data.bets }} bets</span>
