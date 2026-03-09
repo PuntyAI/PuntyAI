@@ -1928,10 +1928,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     addBadgeAfterStrong(s, ordinal, 'position-badge');
                 }
             } else if (raceWinners && raceWinners.indexOf(sc) !== -1) {
-                // Staked pick that won — show position + WINNER
+                // Staked pick that hit — WINNER only for 1st, otherwise just position
                 var fp = fpMap[sc];
-                var posLabel = fp ? (fp === 1 ? '1ST' : fp === 2 ? '2ND' : fp === 3 ? '3RD' : fp + 'TH') + ' ' : '';
-                addBadgeAfterStrong(s, posLabel + 'WINNER');
+                if (fp === 1) {
+                    addBadgeAfterStrong(s, 'WINNER');
+                } else {
+                    var posLabel = fp === 2 ? '2ND' : fp === 3 ? '3RD' : fp + 'TH';
+                    addBadgeAfterStrong(s, posLabel, 'position-badge');
+                }
             } else {
                 // Staked pick that didn't win — show finish position if settled
                 var fp = fpMap[sc];
