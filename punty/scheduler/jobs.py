@@ -1162,39 +1162,13 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                 results["errors"].append(f"odds_update: {str(e)}")
                 odds_drift_picks = []
 
-            # Step 6: Create fresh snapshot and compare to morning baseline
-            needs_regen = False
-            try:
-                snapshot = await create_context_snapshot(db, meeting_id, force=True)
-                if snapshot and snapshot.get("significant_changes"):
-                    MATERIAL_TYPES = {
-                        "scratching", "track_condition", "speed_map_change",
-                        "jockey_change", "gear_change",
-                    }
-                    material = [
-                        c for c in snapshot["significant_changes"]
-                        if c["type"] in MATERIAL_TYPES
-                    ]
-                    if material:
-                        needs_regen = True
-                        descriptions = [c["description"] for c in material]
-                        logger.info(f"Material changes for {venue}: {descriptions}")
-                        results["steps"].append(f"snapshot_compare: material changes ({len(material)})")
-                    else:
-                        results["steps"].append("snapshot_compare: no material changes")
-                else:
-                    results["steps"].append("snapshot_compare: no changes")
-            except Exception as e:
-                logger.error(f"Snapshot comparison failed for {venue}: {e}")
-                results["errors"].append(f"snapshot_compare: {str(e)}")
-                # On snapshot failure, fall through to regen for safety
-                needs_regen = True
-
-            # Also trigger regen if extreme odds drift on picked horses
-            if odds_drift_picks and not needs_regen:
-                needs_regen = True
-                logger.info(f"Triggering regen for {venue} due to extreme odds drift on picks")
-                results["steps"].append("odds_drift_regen: triggered")
+            # Step 6: Always regenerate at T-90 minutes.
+            # Morning scrape data is often stale (odds, scratchings, speed maps,
+            # jockey changes). Rather than detecting material changes and risking
+            # stale content flowing through, always regenerate with fresh data.
+            needs_regen = True
+            logger.info(f"Forced regeneration for {venue} at T-90m (always-regen policy)")
+            results["steps"].append("pre_race_regen: forced (always-regen policy)")
 
             if needs_regen:
                 # Step 7a: Regenerate — material changes detected
@@ -1215,6 +1189,14 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                         results["steps"].append(f"regen_approve_post: {post_result.get('status')}")
                         results["post_result"] = post_result
                         results["content_id"] = content_id
+                        # Populate Betfair queue with fresh picks from regenerated content
+                        try:
+                            from punty.betting.queue import populate_bet_queue
+                            queued = await populate_bet_queue(db, meeting_id, content_id)
+                            if queued:
+                                results["steps"].append(f"betfair_queue: {queued} bets")
+                        except Exception as eq:
+                            logger.error(f"Betfair queue failed for {venue}: {eq}")
                     else:
                         results["errors"].append("regen: no content_id returned")
                 except Exception as e:

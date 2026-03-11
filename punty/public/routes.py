@@ -1238,7 +1238,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
         updates_result = await db.execute(
             select(LiveUpdate).where(
                 LiveUpdate.meeting_id == meeting_id,
-            ).order_by(LiveUpdate.created_at.asc())
+            ).order_by(LiveUpdate.created_at.desc())
         )
         live_updates = [
             {
