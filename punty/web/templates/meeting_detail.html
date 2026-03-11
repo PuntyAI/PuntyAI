@@ -457,31 +457,31 @@
                                                 {% if runner.track_dist_stats %}
                                                 <div>
                                                     <span class="text-gray-500">Trk/Dist:</span>
-                                                    <span class="font-medium">{{ runner.track_dist_stats }}</span>
+                                                    <span class="font-medium">{{ runner.track_dist_stats|stats }}</span>
                                                 </div>
                                                 {% endif %}
                                                 {% if runner.track_stats %}
                                                 <div>
                                                     <span class="text-gray-500">Track:</span>
-                                                    <span class="font-medium">{{ runner.track_stats }}</span>
+                                                    <span class="font-medium">{{ runner.track_stats|stats }}</span>
                                                 </div>
                                                 {% endif %}
                                                 {% if runner.distance_stats %}
                                                 <div>
                                                     <span class="text-gray-500">Distance:</span>
-                                                    <span class="font-medium">{{ runner.distance_stats }}</span>
+                                                    <span class="font-medium">{{ runner.distance_stats|stats }}</span>
                                                 </div>
                                                 {% endif %}
                                                 {% if runner.first_up_stats %}
                                                 <div>
                                                     <span class="text-gray-500">1st Up:</span>
-                                                    <span class="font-medium">{{ runner.first_up_stats }}</span>
+                                                    <span class="font-medium">{{ runner.first_up_stats|stats }}</span>
                                                 </div>
                                                 {% endif %}
                                                 {% if runner.second_up_stats %}
                                                 <div>
                                                     <span class="text-gray-500">2nd Up:</span>
-                                                    <span class="font-medium">{{ runner.second_up_stats }}</span>
+                                                    <span class="font-medium">{{ runner.second_up_stats|stats }}</span>
                                                 </div>
                                                 {% endif %}
                                                 <!-- Gear -->
