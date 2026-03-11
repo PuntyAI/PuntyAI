@@ -25,6 +25,27 @@ templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else {}
 
+
+def _format_stats(val):
+    """Format race stats: JSON dict → '3: 1-0-1', string passthrough."""
+    if not val:
+        return ""
+    if isinstance(val, str):
+        try:
+            val = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return val  # Already a plain string
+    if isinstance(val, dict):
+        s = val.get("starts", 0)
+        w = val.get("wins", 0)
+        p = val.get("seconds", 0)
+        t = val.get("thirds", 0)
+        return f"{s}: {w}-{p}-{t}"
+    return str(val)
+
+
+templates.env.filters["stats"] = _format_stats
+
 from punty.config import MELB_TZ
 from datetime import timezone
 

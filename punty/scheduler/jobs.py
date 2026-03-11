@@ -1189,6 +1189,14 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                         results["steps"].append(f"regen_approve_post: {post_result.get('status')}")
                         results["post_result"] = post_result
                         results["content_id"] = content_id
+                        # Populate Betfair queue with fresh picks from regenerated content
+                        try:
+                            from punty.betting.queue import populate_bet_queue
+                            queued = await populate_bet_queue(db, meeting_id, content_id)
+                            if queued:
+                                results["steps"].append(f"betfair_queue: {queued} bets")
+                        except Exception as eq:
+                            logger.error(f"Betfair queue failed for {venue}: {eq}")
                     else:
                         results["errors"].append("regen: no content_id returned")
                 except Exception as e:
