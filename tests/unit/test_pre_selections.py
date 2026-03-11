@@ -1040,12 +1040,10 @@ class TestEdgeGate:
         pick = self._pick(bet_type="Win", odds=3.50, win_prob=0.18)
         assert _passes_edge_gate(pick)[0] is True
 
-    def test_live_profile_override_rejects_losing_band(self):
-        """Live profile with strong negative ROI overrides even passing criteria."""
+    def test_win_passes_on_probability_alone(self):
+        """Win bet passes edge gate based on probability, no live ROI gate."""
         pick = self._pick(bet_type="Win", odds=5.0, win_prob=0.25)
-        # This would normally pass (sweet spot), but live data says it's losing
-        profile = {("win", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
-        assert _passes_edge_gate(pick, live_profile=profile)[0] is False
+        assert _passes_edge_gate(pick)[0] is True
 
 
 # ──────────────────────────────────────────────
@@ -1353,24 +1351,27 @@ class TestExoticFilters:
                "runner_names": ["A", "B"],
                "probability": "20.0%", "value": 1.50, "combos": 1, "format": "standout"}]
 
-    def test_heavy_track_blocks_exotic(self):
+    def test_heavy_track_allows_exotic(self):
+        """Heavy track no longer hard-kills exotics — probability handles it."""
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
                                 track_condition="Heavy 10")
-        assert result is None
+        assert result is not None
 
-    def test_soft_7_blocks_exotic(self):
+    def test_soft_7_allows_exotic(self):
+        """Soft 7+ no longer hard-kills exotics — soft penalty still applies."""
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
                                 track_condition="Soft 7")
-        assert result is None
+        assert result is not None
 
     def test_soft_5_allows_exotic(self):
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
                                 track_condition="Soft 5")
         assert result is not None
 
-    def test_hk_blocks_exotic(self):
+    def test_hk_allows_exotic(self):
+        """HK no longer hard-kills exotics — small sample (0/11) not significant."""
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=8, is_hk=True)
-        assert result is None
+        assert result is not None
 
     def test_small_field_blocks_exotic(self):
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=5)
@@ -1569,15 +1570,11 @@ class TestNoBetReasons:
         # Hits "Place prob too low" before negative EV
         assert reason is not None
 
-    def test_live_profile_reason(self):
-        """Live profile override returns reason with ROI."""
-        # Use Place bet to test profile gate (Win at $5 rejected by $3-$4 gate first)
+    def test_place_passes_on_probability(self):
+        """Place bet at $5 with 50% pp passes edge gate (probability-only)."""
         pick = self._pick(bet_type="Place", odds=5.0, win_prob=0.25, place_prob=0.50)
-        profile = {("place", "$4-$6"): {"roi": -20.0, "sr": 15.0, "bets": 60, "avg_pnl": -2.5}}
-        passed, reason = _passes_edge_gate(pick, live_profile=profile)
-        assert passed is False
-        assert "Losing odds band" in reason
-        assert "-20%" in reason
+        passed, reason = _passes_edge_gate(pick)
+        assert passed is True
 
     def test_allocate_stakes_sets_reason(self):
         """_allocate_stakes stores no_bet_reason when edge gate fails."""

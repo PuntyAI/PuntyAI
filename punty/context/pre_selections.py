@@ -774,12 +774,11 @@ def _determine_race_pool(
     return POOL_LOW
 
 
-def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -> tuple[bool, str | None]:
-    """Check if a pick passes the edge gate (proven-profitable criteria).
+def _passes_edge_gate(pick: RecommendedPick) -> tuple[bool, str | None]:
+    """Check if a pick passes the edge gate (probability-based criteria).
 
     Returns (True, None) if the pick should be staked,
     or (False, reason) with a human-readable explanation if tracked-only.
-    Uses live edge profile when available (sample >= 50), otherwise hardcoded.
     """
     odds = pick.odds
     bt = pick.bet_type
@@ -793,17 +792,10 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     ev_win = win_prob * odds - 1
     ev_place = place_prob * place_odds_est - 1
 
-    # Check live profile override: if live ROI for this bet_type+band is
-    # strongly negative (< -15%) with sufficient sample, reject
-    if live_profile:
-        bt_key = bt.lower().replace(" ", "_")
-        for label, lo, hi in _EDGE_ODDS_BANDS:
-            if lo <= odds < hi:
-                cell = live_profile.get((bt_key, label))
-                if cell and cell["bets"] >= 50:
-                    if cell["roi"] < -15.0:
-                        return (False, f"Losing odds band (live ROI {cell['roi']:.0f}%)")
-                break
+    # Live ROI gate REMOVED — probability engine already prices edge.
+    # Historical ROI by odds band is noisy and backwards-looking; it was
+    # blanket-killing all Rank 1 Win bets (e.g. entire Matamata card).
+    # Strike rate via calibrated probability is the right filter.
 
     # --- High-probability universal override ---
     # Any Place bet with place_prob >= 0.75 passes regardless of odds band.
@@ -857,17 +849,6 @@ def _passes_edge_gate(pick: RecommendedPick, live_profile: dict | None = None) -
     return (True, None)
 
 
-# Odds bands matching strategy.py's _ODDS_BANDS for live profile lookup
-_EDGE_ODDS_BANDS = [
-    ("$1-$2", 1.0, 2.0),
-    ("$2-$3", 2.0, 3.0),
-    ("$3-$4", 3.0, 4.0),
-    ("$4-$6", 4.0, 6.0),
-    ("$6-$10", 6.0, 10.0),
-    ("$10-$20", 10.0, 20.0),
-    ("$20+", 20.0, 999.0),
-]
-
 
 def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int = 0) -> None:
     """Allocate stakes from pool using edge-weighted sizing.
@@ -889,13 +870,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
     # wider Win range ($2-$10) and don't want double-filtering.
 
     # --- Pass 1: Edge gate ---
-    from punty.memory.strategy import get_cached_edge_profile
-    live_profile = get_cached_edge_profile()
-
     for pick in picks:
         if pick.tracked_only:
             continue  # already marked (e.g. NTD path) — preserve original reason
-        passed, reason = _passes_edge_gate(pick, live_profile)
+        passed, reason = _passes_edge_gate(pick)
         if not passed:
             pick.tracked_only = True
             pick.no_bet_reason = reason or "No proven edge in this odds band"
@@ -1029,19 +1007,10 @@ def _select_exotic(
     if not exotic_combos:
         return None
 
-    # ── Hard gates (data-driven, non-negotiable) ──
+    # ── Hard gates ──
     tc = (track_condition or "").lower()
-    if "heavy" in tc:
-        return None  # 0/21 exotic hits on Heavy tracks
-    soft_match = re.search(r'soft\s*(\d+)', tc)
-    if soft_match and int(soft_match.group(1)) >= 7:
-        return None  # 0% strike on Soft 7+
-    if is_hk:
-        return None  # 0/11 exotic hits on HK races
     if field_size and field_size <= 6:
-        return None  # All types losing in ≤6 fields
-    if anchor_odds and anchor_odds > 5.0:
-        return None  # $5+ anchor = -60% ROI
+        return None  # Thin quinella dividends in tiny fields
 
     # ── Anchor: our rank 1 pick must be in every exotic ──
     fav_saddlecloth = None
