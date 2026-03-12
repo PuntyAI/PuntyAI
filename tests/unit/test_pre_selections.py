@@ -461,15 +461,33 @@ class TestSelectExotic:
             assert result is not None, f"{etype} should be selectable"
             assert result.exotic_type == etype
 
-    def test_trifecta_filtered_out(self):
-        """Trifecta types are filtered out (data: -$2,259 P&L). First4 re-enabled."""
-        for etype in ["Trifecta", "Trifecta Box", "Trifecta Standout"]:
+    def test_trifecta_selectable(self):
+        """Trifecta types are selectable (re-enabled with meet-quality routing)."""
+        for etype in ["Trifecta Standout", "Trifecta Box"]:
             combos = [
                 {"type": etype, "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
                  "probability": 0.15, "value": 2.0, "combos": 3, "format": "flat"},
             ]
-            result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0)
-            assert result is None, f"{etype} should be filtered out"
+            result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=10)
+            assert result is not None, f"{etype} should be selectable"
+            assert result.exotic_type == etype
+
+    def test_trifecta_small_field_deprioritised(self):
+        """Trifecta in small fields gets lower score but isn't blocked."""
+        combos = [
+            {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
+             "probability": 0.10, "value": 1.5, "combos": 6, "format": "box"},
+            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
+             "probability": 0.10, "value": 1.5, "combos": 1, "format": "flat"},
+        ]
+        # Small field: Quinella should win via field-size scaling
+        result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=6)
+        assert result is not None
+        assert result.exotic_type == "Quinella"
+        # Large field: Trifecta should win via field-size scaling
+        result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=12)
+        assert result is not None
+        assert result.exotic_type == "Trifecta Box"
 
 
 # ──────────────────────────────────────────────
@@ -477,26 +495,26 @@ class TestSelectExotic:
 # ──────────────────────────────────────────────
 
 class TestTightClusterExoticBoost:
-    def test_tight_cluster_boosts_quinella_over_exacta(self):
-        """When top 3 picks are within 5%, unordered Quinella beats directional Exacta."""
-        # Picks at 28%, 25%, 23% — very tight cluster (5% spread)
+    def test_tight_cluster_value_drives_selection(self):
+        """When top 3 picks are within 5%, higher-value exotic wins via prob × value scoring."""
+        # Picks at 28%, 25%, 23% — very tight cluster (5% spread) → structured
         picks = [
             RecommendedPick(1, 1, "Alpha", "Place", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
             RecommendedPick(2, 2, "Beta", "Place", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
             RecommendedPick(3, 3, "Gamma", "Place", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
         ]
         combos = [
-            # Exacta: 12% prob × 1.3 value = 0.156 base EV (penalised in tight race)
+            # Exacta: 12% prob × 1.3 value — higher value wins in prob × value scoring
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.3, "combos": 1, "format": "flat"},
-            # Quinella: 11% prob × 1.35 value = 0.149 base EV
-            # With 1.15x cluster boost → 0.171 (beats Exacta's 0.156 × 0.90 = 0.140)
+            # Quinella: 11% prob × 1.05 value — lower value
             {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
-             "probability": 0.11, "value": 1.35, "combos": 1, "format": "flat"},
+             "probability": 0.11, "value": 1.05, "combos": 1, "format": "flat"},
         ]
         result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks, fav_price=3.0)
         assert result is not None
-        assert result.exotic_type == "Quinella"
+        # Exacta wins because prob × value scoring rewards higher value
+        assert result.exotic_type == "Exacta"
 
     def test_no_boost_when_spread_wide(self):
         """No cluster boost when picks are spread (>8%)."""
@@ -1373,39 +1391,30 @@ class TestExoticFilters:
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=8, is_hk=True)
         assert result is not None
 
-    def test_small_field_blocks_exotic(self):
+    def test_small_field_still_selectable(self):
+        """Small fields no longer hard-block — routing adapts instead."""
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=5)
-        assert result is None
+        assert result is not None
 
     def test_good_track_allows_exotic(self):
         result = _select_exotic(self.COMBOS, {1, 2}, field_size=8,
                                 track_condition="Good 4")
         assert result is not None
 
-    def test_trifecta_box_scenario_filter(self):
-        """Trifecta Box: field 7+, fav $1.50-$5.00 (15+ now allowed for huge dividends)."""
+    def test_trifecta_box_field_size_scaling(self):
+        """Trifecta Box: score scales with field size, never hard blocked."""
         tri_combos = [{"type": "Trifecta Box", "runners": [1, 2, 3],
                         "runner_names": ["A", "B", "C"],
                         "probability": "8.5%", "value": 1.40, "combos": 6, "format": "boxed"}]
-        # Blocked: field too small (< 8)
-        for fs in [5, 6, 7]:
-            result = _select_exotic(tri_combos, {1, 2, 3}, field_size=fs,
-                                    track_condition="Good 4", fav_price=2.80, distance=1600)
-            assert result is None, f"Trifecta Box should be blocked in {fs}-field"
-        # Blocked: field too large (> 10) — data: -50% to -86% outside 8-10
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=15,
+        # Small field: still selectable (only option)
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=6,
                                 track_condition="Good 4", fav_price=2.80, distance=1600)
-        assert result is None, "Trifecta Box should be blocked in 15+ field"
-        # Blocked: anchor > $3 — data: only $1-3 anchor profitable
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=10,
-                                track_condition="Good 4", fav_price=3.50, distance=1600,
-                                anchor_odds=3.50)
-        assert result is None, "Trifecta Box should be blocked when anchor > $3"
-        # Trifecta Box now filtered out entirely (data: -$2,259 P&L)
-        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=9,
-                                track_condition="Good 4", fav_price=2.80, distance=1600,
-                                anchor_odds=2.80)
-        assert result is None, "Trifecta Box should be filtered out (killed in strategy overhaul)"
+        assert result is not None, "Trifecta Box should not be hard-blocked"
+        # Large field: also selectable, with higher score
+        result = _select_exotic(tri_combos, {1, 2, 3}, field_size=12,
+                                track_condition="Good 4", fav_price=2.80, distance=1600)
+        assert result is not None
+        assert result.exotic_type == "Trifecta Box"
 
 
 # ──────────────────────────────────────────────

@@ -356,5 +356,7 @@ class TestTrifectaSpeedMapBonus:
             })
         results = calculate_exotic_combinations(runners)
         standouts = [r for r in results if r.exotic_type == "Trifecta Standout"]
-        # Trifecta Standout removed — should not be generated
-        assert len(standouts) == 0
+        # Trifecta Standout re-enabled — should be generated when value passes
+        # Without speed data, no speed bonus applied but combo still generated
+        for s in standouts:
+            assert s.runners[0] == 1  # Rank 1 anchors position 1

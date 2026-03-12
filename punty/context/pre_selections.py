@@ -995,12 +995,14 @@ def _select_exotic(
     distance: int = 0,
     prize_money: int | float = 0,
 ) -> RecommendedExotic | None:
-    """Select the best exotic bet using race-shape decision tree.
+    """Select the best exotic bet using race-shape + meet-quality routing.
 
-    Three-tier routing based on win-probability spread:
-      DOMINANT  (wp_spread > 0.12) → Standout structures (Exacta/Tri anchored)
-      STRUCTURED (0.05–0.12)       → Box structures (Quinella 3, First4)
-      OPEN      (< 0.05)           → Box with wider coverage (bigger dividends)
+    Two independent axes drive selection:
+      1. Race shape (dominant/structured/open) → structure (standout vs box)
+      2. Meet quality (metro/provincial/country + field size + prize) → ambition
+
+    High-quality meets with big fields → trifecta/first4 (bigger dividends)
+    Lower-quality meets with thin fields → quinella/exacta (higher strike rate)
 
     Budget: $15 total, flexi % = budget / (combos × $1).
     """
@@ -1009,8 +1011,6 @@ def _select_exotic(
 
     # ── Hard gates ──
     tc = (track_condition or "").lower()
-    if field_size and field_size <= 6:
-        return None  # Thin quinella dividends in tiny fields
 
     # ── Anchor: our rank 1 pick must be in every exotic ──
     fav_saddlecloth = None
@@ -1021,19 +1021,53 @@ def _select_exotic(
     # ── Classify race shape by win-probability spread ──
     top_wps = sorted([p.win_prob for p in picks if not p.is_roughie], reverse=True)[:3] if picks else []
     if len(top_wps) >= 3:
-        wp_spread = top_wps[0] - top_wps[2]  # Top 1 vs Top 3 gap
+        wp_spread = top_wps[0] - top_wps[2]
     elif len(top_wps) >= 2:
         wp_spread = top_wps[0] - top_wps[1]
     else:
-        wp_spread = 0.10  # No picks → assume structured (allow exotics)
+        wp_spread = 0.10
 
-    # Shape classification
     if wp_spread > 0.12:
-        race_shape = "dominant"   # 1-2 horses clearly stronger
+        race_shape = "dominant"
     elif wp_spread >= 0.05:
-        race_shape = "structured"  # 3-4 realistic chances
+        race_shape = "structured"
     else:
-        race_shape = "open"        # Competitive — bigger dividends when we hit
+        race_shape = "open"
+
+    # ── Meet quality score (0-3) ──
+    # Drives exotic ambition: higher quality = more ambitious bet types
+    meet_quality = 0
+    vt = (venue_type or "").lower()
+    if "metro" in vt:
+        meet_quality += 2
+    elif "provincial" in vt:
+        meet_quality += 1
+    # else country = 0
+
+    if field_size and field_size >= 12:
+        meet_quality += 1  # Big field → bigger dividends worth chasing
+
+    pm = float(prize_money or 0)
+    if pm >= 100_000:
+        meet_quality += 1  # High-stakes race
+    elif pm >= 50_000:
+        meet_quality += 0.5
+
+    # ── Minimum field sizes by type, relative to meet quality ──
+    # Higher quality meets tolerate smaller fields (better horses, deeper pools)
+    # Country needs bigger fields for meaningful dividends
+    if meet_quality >= 2:
+        min_field = {"Quinella": 4, "Exacta": 5, "Exacta Standout": 5,
+                     "Trifecta Standout": 7, "Trifecta Box": 7,
+                     "First4": 8, "First4 Box": 9}
+    elif meet_quality >= 1:
+        min_field = {"Quinella": 5, "Exacta": 6, "Exacta Standout": 6,
+                     "Trifecta Standout": 8, "Trifecta Box": 8,
+                     "First4": 9, "First4 Box": 10}
+    else:
+        min_field = {"Quinella": 6, "Exacta": 7, "Exacta Standout": 7,
+                     "Trifecta Standout": 9, "Trifecta Box": 9,
+                     "First4": 10, "First4 Box": 11}
 
     # ── Build rank map ──
     rank_map: dict[int, int] = {}
@@ -1041,23 +1075,38 @@ def _select_exotic(
         for p in picks:
             rank_map[p.saddlecloth] = p.rank
 
-    top_pick_wp = max((p.win_prob for p in picks if p.rank == 1), default=0) if picks else 0
-
     # Soft track penalty — Data: Good/Firm +21% ROI, any Soft -37% ROI
-    soft_penalty = 0.50 if "soft" in tc else 1.0
+    soft_penalty = 0.65 if "soft" in tc else 1.0
 
-    # ── Preferred types by race shape ──
+    # ── Preferred types by race shape × meet quality ──
+    # Shape drives structure, quality drives ambition
     if race_shape == "dominant":
-        # Standout structures: anchor our #1 pick, others fill trailing spots
-        # Quinella excluded — dominant races should play Exacta for higher payouts
-        preferred_types = {"Exacta Standout", "Exacta"}
+        if meet_quality >= 2:
+            # Metro/big-field standout → Trifecta Standout anchored on rank 1
+            preferred_types = {"Exacta Standout", "Trifecta Standout", "Exacta"}
+        else:
+            # Country standout → simpler Exacta structures
+            preferred_types = {"Exacta Standout", "Exacta"}
     elif race_shape == "open":
-        # Open races: box for wider coverage — +200% ROI historically
-        # Bigger dividends compensate for lower strike rate
-        preferred_types = {"Quinella", "First4", "First4 Box"}
+        if meet_quality >= 2:
+            # Metro open → wide boxes for big dividends
+            preferred_types = {"Trifecta Box", "First4 Box", "First4"}
+        elif meet_quality >= 1:
+            # Provincial open → Trifecta box or quinella
+            preferred_types = {"Trifecta Box", "Quinella"}
+        else:
+            # Country open → stick to quinella (thin dividends otherwise)
+            preferred_types = {"Quinella"}
     else:  # structured
-        # Box structures: wider coverage across competitive field
-        preferred_types = {"Quinella", "First4", "First4 Box"}
+        if meet_quality >= 2:
+            # Metro structured → Trifecta box or First4
+            preferred_types = {"Trifecta Box", "Trifecta Standout", "First4", "Quinella"}
+        elif meet_quality >= 1:
+            # Provincial structured → Trifecta box or quinella
+            preferred_types = {"Trifecta Box", "Quinella"}
+        else:
+            # Country structured → quinella or exacta
+            preferred_types = {"Quinella", "Exacta"}
 
     # ── Score and filter combos ──
     scored = []
@@ -1068,15 +1117,11 @@ def _select_exotic(
         overlap_ratio = overlap / n_runners if n_runners else 0
         ec_type = ec.get("type", "")
 
-        # Kill Trifecta types — Data: Trifecta -$2,259 lifetime
-        if ec_type.startswith("Trifecta"):
-            continue
-
         # Anchor enforcement
         if fav_saddlecloth and fav_saddlecloth not in runners:
             continue
 
-        # Overlap rules
+        # Overlap rules per type
         runner_list = ec.get("runners", [])
         if ec_type == "Quinella":
             if overlap_ratio < 1.0:
@@ -1087,16 +1132,21 @@ def _select_exotic(
                     continue
             elif runner_list and runner_list[0] not in selection_saddlecloths:
                 continue
+        elif ec_type in ("Trifecta Standout",):
+            # Rank 1 must anchor position 1 (already enforced by generation)
+            if runner_list and rank_map:
+                if rank_map.get(runner_list[0], 99) > 1:
+                    continue
+        elif ec_type in ("Trifecta Box",):
+            # At least 2 runners must be in our selections
+            if overlap < min(2, n_runners):
+                continue
         elif ec_type in ("First4", "First4 Box"):
             if len(runner_list) >= 2:
                 if sum(1 for r in runner_list[:2] if r in selection_saddlecloths) < 2:
                     continue
             elif overlap < min(2, n_runners):
                 continue
-
-        # Field-size gates
-        if ec_type in ("First4", "First4 Box") and field_size and field_size < 8:
-            continue
 
         # Parse probability and value
         raw_prob = ec.get("probability", 0)
@@ -1108,35 +1158,46 @@ def _select_exotic(
         # Budget feasibility: flexi must be >= 10% to be meaningful
         flexi_pct = EXOTIC_BUDGET / combos * 100 if combos > 0 else 0
         if flexi_pct < 10:
-            continue  # Too many combos for $15 budget
+            continue
 
-        # Score: probability weighted by value — lets high-value Exactas
-        # compete against high-probability Quinellas
-        score = raw_prob * (value ** 0.5)
+        # Score: probability × value — both matter equally
+        score = raw_prob * max(value, 0.1)
 
-        # Preferred type bonus — route to correct shape
+        # Preferred type bonus
         if ec_type in preferred_types:
-            score *= 1.40
+            score *= 1.30
         else:
-            score *= 0.70  # Penalise but don't block
+            score *= 0.80  # Mild penalty, don't crush non-preferred types
 
-        # Anchor rank bonus
+        # Anchor rank bonus (capped at 1.40x combined to prevent
+        # Quinella from stacking bonuses to beat everything)
+        anchor_bonus = 1.0
         if rank_map:
             best_rank = min(rank_map.get(r, 99) for r in runners)
             if best_rank == 1:
-                score *= 1.30
+                anchor_bonus *= 1.20
             elif best_rank == 2:
-                score *= 1.15
+                anchor_bonus *= 1.10
             if all(r in selection_saddlecloths for r in runners):
-                score *= 1.20
+                anchor_bonus *= 1.10
+        score *= min(anchor_bonus, 1.40)  # Cap combined bonus
 
-        # Field-size scoring
-        if field_size and field_size >= 12:
-            if ec_type in ("First4", "First4 Box"):
-                score *= 1.20
-        if field_size and field_size <= 10:
-            if ec_type in ("Quinella", "Exacta Standout"):
-                score *= 1.25
+        # Field-size context: continuous scaling, not gates
+        # Small fields → favour simple exotics (quinella, exacta)
+        # Large fields → favour ambitious exotics (trifecta, first4)
+        if field_size:
+            if ec_type in ("Quinella",):
+                # Quinella works everywhere but less edge in big fields
+                score *= max(0.85, min(1.15, 1.30 - field_size * 0.03))
+            elif ec_type in ("Exacta", "Exacta Standout"):
+                # Exacta scales mildly with field size
+                score *= max(0.90, min(1.15, 0.80 + field_size * 0.03))
+            elif ec_type in ("Trifecta Standout", "Trifecta Box"):
+                # Trifecta rewards bigger fields (better dividends)
+                score *= max(0.70, min(1.25, 0.40 + field_size * 0.07))
+            elif ec_type in ("First4", "First4 Box"):
+                # First4 needs depth — scales strongly with field size
+                score *= max(0.60, min(1.30, 0.20 + field_size * 0.08))
 
         # Soft track penalty
         score *= soft_penalty

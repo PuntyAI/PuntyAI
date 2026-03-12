@@ -3187,6 +3187,8 @@ def calculate_exotic_combinations(
     VALUE_THRESHOLDS = {
         "Quinella": 1.2,           # High-probability play, both runners in selections
         "Exacta": 1.1,             # Lowered — wider position 2 pool needs lower bar
+        "Trifecta Standout": 1.1,  # Anchored on rank 1 — lower bar like Exacta
+        "Trifecta Box": 1.2,       # Box = more combos, need stronger value signal
         "First4": 1.2,             # Re-enabled with wider lower legs
         "First4 Box": 1.5,         # Rare, extreme value only
     }
@@ -3329,6 +3331,70 @@ def calculate_exotic_combinations(
                     format="standout",
                 ))
 
+    # --- Trifecta Standout: rank 1 anchored 1st, ranks 2-4 fill 2nd/3rd ---
+    # Keyed trifecta: fewer combos than box, higher unit stake.
+    # Only generated when rank 1 is strong enough to anchor.
+    if len(top4) >= 3:
+        tri_anchor = top4[0]
+        if tri_anchor["win_prob"] >= MIN_LEAD_PROB:
+            tri_others = top4[1:4]  # Ranks 2-4
+            our_prob = 0.0
+            mkt_prob = 0.0
+            for perm in permutations(tri_others, 2):
+                our_prob += _harville_probability(
+                    [tri_anchor["win_prob"]] + [r["win_prob"] for r in perm]
+                )
+                mkt_prob += _harville_probability(
+                    [tri_anchor["market_implied"]] + [r["market_implied"] for r in perm]
+                )
+            value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+            # Combos = P(n-1, 2) where n = len(tri_others)
+            num_combos = len(tri_others) * (len(tri_others) - 1)
+
+            if value >= VALUE_THRESHOLDS.get("Trifecta Standout", 1.1):
+                results.append(ExoticCombination(
+                    exotic_type="Trifecta Standout",
+                    runners=[tri_anchor["saddlecloth"]] + [r["saddlecloth"] for r in tri_others],
+                    runner_names=[tri_anchor.get("horse_name", "")] + [r.get("horse_name", "") for r in tri_others],
+                    estimated_probability=round(our_prob, 6),
+                    market_probability=round(mkt_prob, 6),
+                    value_ratio=round(value, 3),
+                    cost=stake,
+                    num_combos=num_combos,
+                    format="standout",
+                ))
+
+    # --- Trifecta Box: top 3 or top 4 runners in any order ---
+    # 3-runner box = 6 perms, 4-runner box = 24 perms.
+    # Use 3-runner for structured races (fewer combos, higher unit stake).
+    # Use 4-runner when we have 4+ picks and field is large enough.
+    for box_size in (3, 4):
+        box_runners = top4[:box_size] if len(top4) >= box_size else None
+        if not box_runners:
+            continue
+        if max(r["win_prob"] for r in box_runners) < MIN_LEAD_PROB:
+            continue
+
+        our_prob = _box_probability([r["win_prob"] for r in box_runners], 3)
+        mkt_prob = _box_probability([r["market_implied"] for r in box_runners], 3)
+        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+
+        from math import comb, factorial
+        num_combos = comb(box_size, 3) * factorial(3)  # 6 or 24
+
+        if value >= VALUE_THRESHOLDS.get("Trifecta Box", 1.2):
+            results.append(ExoticCombination(
+                exotic_type="Trifecta Box",
+                runners=[r["saddlecloth"] for r in box_runners],
+                runner_names=[r.get("horse_name", "") for r in box_runners],
+                estimated_probability=round(our_prob, 6),
+                market_probability=round(mkt_prob, 6),
+                value_ratio=round(value, 3),
+                cost=stake,
+                num_combos=num_combos,
+                format="box",
+            ))
+
     # --- First4: positions 1-2 from top 4 picks, positions 3-4 from top 6 ---
     # Re-enabled with wider lower legs. Our 4 picks anchor the top positions;
     # top 6 by probability fill trailing spots for better coverage.
@@ -3369,6 +3435,36 @@ def calculate_exotic_combinations(
                                 num_combos=1,
                                 format="flat",
                             ))
+
+    # --- First4 Box: top 4 or 5 runners in any order for positions 1-4 ---
+    # High combo count (24 or 120) but big dividends in open/large fields.
+    # Only worth it when field is large enough for meaningful payouts.
+    for f4_box_size in (4, 5):
+        f4_box_runners = top6[:f4_box_size] if len(top6) >= f4_box_size else None
+        if not f4_box_runners:
+            continue
+        if max(r["win_prob"] for r in f4_box_runners) < MIN_LEAD_PROB:
+            continue
+
+        our_prob = _box_probability([r["win_prob"] for r in f4_box_runners], 4)
+        mkt_prob = _box_probability([r["market_implied"] for r in f4_box_runners], 4)
+        value = our_prob / mkt_prob if mkt_prob > 0 else 1.0
+
+        from math import comb, factorial
+        num_combos = comb(f4_box_size, 4) * factorial(4)  # 24 or 120
+
+        if value >= VALUE_THRESHOLDS.get("First4 Box", 1.5):
+            results.append(ExoticCombination(
+                exotic_type="First4 Box",
+                runners=[r["saddlecloth"] for r in f4_box_runners],
+                runner_names=[r.get("horse_name", "") for r in f4_box_runners],
+                estimated_probability=round(our_prob, 6),
+                market_probability=round(mkt_prob, 6),
+                value_ratio=round(value, 3),
+                cost=stake,
+                num_combos=num_combos,
+                format="box",
+            ))
 
     # Sort by probability descending (strike rate first), then value as tiebreaker
     results.sort(key=lambda x: (-x.estimated_probability, -x.value_ratio))
