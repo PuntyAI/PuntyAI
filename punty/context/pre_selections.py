@@ -1049,7 +1049,8 @@ def _select_exotic(
     # ── Preferred types by race shape ──
     if race_shape == "dominant":
         # Standout structures: anchor our #1 pick, others fill trailing spots
-        preferred_types = {"Exacta Standout", "Exacta", "Quinella"}
+        # Quinella excluded — dominant races should play Exacta for higher payouts
+        preferred_types = {"Exacta Standout", "Exacta"}
     elif race_shape == "open":
         # Open races: box for wider coverage — +200% ROI historically
         # Bigger dividends compensate for lower strike rate
@@ -1109,8 +1110,9 @@ def _select_exotic(
         if flexi_pct < 10:
             continue  # Too many combos for $15 budget
 
-        # Score: probability-first, value as tiebreaker
-        score = raw_prob + raw_prob * max(0, value - 1.0) * 0.10
+        # Score: probability weighted by value — lets high-value Exactas
+        # compete against high-probability Quinellas
+        score = raw_prob * (value ** 0.5)
 
         # Preferred type bonus — route to correct shape
         if ec_type in preferred_types:
