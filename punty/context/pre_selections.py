@@ -1160,8 +1160,14 @@ def _select_exotic(
         if flexi_pct < 10:
             continue
 
-        # Score: probability × value — both matter equally
-        score = raw_prob * max(value, 0.1)
+        # VR floor: never select negative-value exotics (VR < 1.0)
+        if value < 1.0:
+            continue
+
+        # Score: probability × value² — value-squared so high-dividend types
+        # (Trifecta VR=3.0 → 9x, First4 VR=3.5 → 12.25x) can overcome
+        # Quinella's inherent probability advantage (3-5x higher raw prob)
+        score = raw_prob * (value ** 2)
 
         # Preferred type bonus
         if ec_type in preferred_types:
