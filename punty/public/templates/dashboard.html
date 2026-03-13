@@ -335,16 +335,16 @@
         .dash-grid > div { display: contents; }
         .dash-accordions { display: contents !important; }
         #live-edge { order: 1; }
-        .dash-sidebar-trend { order: 2; }
+        .dash-meetings { order: 2; }
         .dash-metrics { order: 3; }
-        .dash-meetings { order: 4; }
-        .dash-accordion-bestof { order: 5; }
-        .dash-accordion-sequences { order: 6; }
-        .dash-sidebar-recent { order: 7; }
-        .dash-sidebar-performance { order: 8; }
-        .dash-sidebar-bettype { order: 9; }
-        .dash-sidebar-tiprank { order: 10; }
-        .dash-accordion-results { order: 11; }
+        .dash-sidebar-recent { order: 4; }
+        .dash-pnl-chart { order: 5; }
+        .dash-accordion-bestof { order: 6; }
+        .dash-accordion-sequences { order: 7; }
+        .dash-accordion-results { order: 8; }
+        .dash-sidebar-trend { order: 9; }
+        .dash-sidebar-bettype { order: 10; }
+        .dash-sidebar-tiprank { order: 11; }
         .dash-sidebar-links { order: 12; }
         .metric-value { font-size: 1.1rem; }
         .metric-value-pnl { font-size: 1.1rem; }
@@ -411,8 +411,9 @@
 
                 {# ── Metrics Row ── #}
                 {% set perf = dashboard.performance|default({}) %}
+                <div class="dash-metrics">
                 <div style="text-transform: uppercase; font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.15em; color: var(--text-dim); margin-bottom: 0.25rem; padding-left: 0.25rem;">Today's Stats</div>
-                <div class="metrics-row dash-metrics">
+                <div class="metrics-row">
                     <a href="/stats" class="metric-cell">
                         <div class="metric-label">Bets</div>
                         <div class="metric-value">{{ perf.total_bets|default(0) }}</div>
@@ -443,6 +444,7 @@
                         <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if seven_day_roi|default(0) >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(seven_day_roi|default(0)) }}% ROI</div>
                     </a>
                 </div>
+                </div>{# end dash-metrics wrapper #}
 
                 {# ── Today's Meetings ── #}
                 <div class="dash-meetings">
@@ -488,7 +490,7 @@
                     {# Meeting P&L Chart #}
                     {% set mp = dashboard.meeting_pnl|default([]) %}
                     {% if mp|length > 0 %}
-                    <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
+                    <div class="dash-pnl-chart rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
                          x-data="{ expanded: false }">
                         <div class="px-3 pt-3 pb-1 flex items-center justify-between cursor-pointer"
                              @click="expanded = !expanded; setTimeout(() => window.drawMeetingPnl && window.drawMeetingPnl(), 350)">
@@ -651,7 +653,7 @@ function dashData() {
     } catch(e) {}
 
     return {
-        open: { best_of: true, sequences: false, results: {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
+        open: { best_of: window.innerWidth >= 1024, sequences: false, results: window.innerWidth >= 1024 && {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
         showAll: savedShowAll !== null ? savedShowAll : true,
         hiddenVenues: [],
         meetings: window.__dashMeetings || [],
