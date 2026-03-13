@@ -53,7 +53,7 @@ async def build_calibration_map(db: AsyncSession) -> dict[int, float]:
             FROM picks
             WHERE settled = 1
               AND pick_type = 'selection'
-              AND bet_type IN ('place', 'win', 'saver_win')
+              AND bet_type = 'place'
               AND place_probability IS NOT NULL
               AND place_probability > 0
             GROUP BY pp_bin

@@ -21,6 +21,7 @@ async def create_context_snapshot(
     db: AsyncSession,
     meeting_id: str,
     force: bool = False,
+    prebuilt_context: Optional[dict] = None,
 ) -> Optional[dict[str, Any]]:
     """Create a new context snapshot if data has changed.
 
@@ -28,6 +29,7 @@ async def create_context_snapshot(
         db: Database session
         meeting_id: Meeting to snapshot
         force: Create snapshot even if no changes
+        prebuilt_context: Pre-built context dict to avoid rebuilding
 
     Returns:
         Snapshot dict if created, None if no changes
@@ -42,8 +44,10 @@ async def create_context_snapshot(
     async with lock:
         builder = ContextBuilder(db)
 
-        # Build current context
-        context = await builder.build_meeting_context(meeting_id)
+        # Use pre-built context if provided, otherwise build fresh
+        context = prebuilt_context
+        if not context:
+            context = await builder.build_meeting_context(meeting_id)
         if not context:
             return None
 

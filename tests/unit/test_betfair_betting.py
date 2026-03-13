@@ -55,11 +55,11 @@ class TestCalculateKellyStake:
     """Test the Kelly-proportional staking logic."""
 
     def test_positive_edge_produces_stake(self):
-        """10% edge at $2.00 odds → kelly = 0.10, half = 0.05, capped at 0.06."""
+        """Correct Kelly: (b*p - q) / b at $2.00 odds, 60% PP."""
         stake = calculate_kelly_stake(balance=200.0, place_probability=0.60, odds=2.00)
-        # edge = 0.60 - 0.50 = 0.10, kelly = 0.10/1.0 = 0.10, half = 0.05
-        # 0.05 < 0.06 cap, so stake = 0.05 * 200 = $10
-        assert round(stake, 2) == 10.00  # $10.00
+        # b = 1.0, kelly = (1.0*0.60 - 0.40)/1.0 = 0.20, half = 0.10
+        # capped at 0.06, so stake = 0.06 * 200 = $12
+        assert round(stake, 2) == 12.00
 
     def test_no_edge_returns_zero(self):
         """Zero edge → no bet."""
@@ -74,14 +74,14 @@ class TestCalculateKellyStake:
     def test_large_balance_scales(self):
         """Kelly scales with balance, half-Kelly + 6% cap."""
         stake = calculate_kelly_stake(balance=1000.0, place_probability=0.70, odds=3.00)
-        # edge = 0.70 - 0.333 = 0.367, kelly = 0.367/2.0 = 0.183, half = 0.092
+        # b = 2.0, kelly = (2.0*0.70 - 0.30)/2.0 = 0.55, half = 0.275
         # capped at 0.06, so stake = 0.06 * 1000 = $60
         assert stake == 0.06 * 1000.0  # $60.00
 
     def test_small_edge_floors_to_min(self):
         """Small but positive edge → floored to $5 Betfair minimum."""
         stake = calculate_kelly_stake(balance=50.0, place_probability=0.56, odds=1.80)
-        # edge = 0.56 - 0.556 = 0.004, kelly = 0.004/0.80 = 0.005
+        # b = 0.80, kelly = (0.80*0.56 - 0.44)/0.80 = 0.01, half = 0.005
         # 0.005 * 50 = $0.25 < $5 min → rounds up to $5
         assert stake == 5.00
 
@@ -623,12 +623,12 @@ class TestCalibration:
         calibrated_pp = calibrate_probability(raw_pp, cal_map)
 
         # At $2.00 odds (implied 50%), $1000 balance to avoid min floor:
-        # Raw: edge = 0.25, kelly = 0.25, half = 0.125, capped 0.06 → $60
-        # Calibrated: edge = 0.03, kelly = 0.03, half = 0.015 → $15
+        # Raw: kelly = (1*0.75-0.25)/1 = 0.50, half = 0.25, capped 0.06 → $60
+        # Calibrated: kelly = (1*0.53-0.47)/1 = 0.06, half = 0.03 → $30
         raw_stake = calculate_kelly_stake(1000, raw_pp, 2.00)
         cal_stake = calculate_kelly_stake(1000, calibrated_pp, 2.00)
         assert cal_stake < raw_stake
-        assert cal_stake < raw_stake * 0.5  # At least halved
+        assert cal_stake <= raw_stake * 0.5 + 0.01  # At least halved (with FP tolerance)
 
     def test_pp_floor_rejects_low_calibrated(self):
         """PP floor rejects bets where calibrated probability is below threshold."""

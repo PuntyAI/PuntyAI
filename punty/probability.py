@@ -372,7 +372,8 @@ def _get_calibrated_weights() -> dict[str, float] | None:
     if not weights:
         return None
     # Grid search showed deep_learning=0.00 is optimal — force it to zero
-    # regardless of what calibration file contains
+    # regardless of what calibration file contains.
+    # Note: DEFAULT_WEIGHTS also sets deep_learning=0.0 for consistency.
     weights["deep_learning"] = 0.0
     # Normalise to sum to 1.0
     total = sum(weights.values())
@@ -411,7 +412,7 @@ FACTOR_REGISTRY = {
 #   hp=0.0256, cf=0.0256, pace=0.00, movement=0.00
 # Rounded to clean values that sum to 1.0
 DEFAULT_WEIGHTS = {
-    "form": 0.54,
+    "form": 0.57,
     "market": 0.27,
     "weight_carried": 0.05,
     "jockey_trainer": 0.04,
@@ -420,36 +421,36 @@ DEFAULT_WEIGHTS = {
     "class_fitness": 0.02,
     "movement": 0.00,
     "pace": 0.00,
-    "deep_learning": 0.03,  # validated jockey_trainer patterns: +7% edge, p=0.000
-}  # sums to 1.0 — 2026-03-08: market 0.31→0.27, form 0.50→0.54 to reduce fav bias
+    "deep_learning": 0.00,  # grid search: 0.00 optimal; calibration also forces 0.0
+}  # sums to 1.0 — 2026-03-13: deep_learning 0.03→0.00, redistributed to form
 
 # Distance-specific weight overrides — tuned via batch 2 grid search (seed=123, 400 combos x 500 races per bucket)
 # Middle was biggest win: -0.39% → +9.75% ROI. horse_profile elevated for short/middle distances.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — DL enabled at 0.03 (from form/market)
-        "form": 0.54, "market": 0.27, "weight_carried": 0.05, "barrier": 0.03,
+    "sprint": {  # ≤1100m — matches default weights
+        "form": 0.57, "market": 0.27, "weight_carried": 0.05, "barrier": 0.03,
         "horse_profile": 0.02, "class_fitness": 0.02, "jockey_trainer": 0.04,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
     },
     "short": {  # 1101-1399m — horse_profile 4x boost, pace emerges (batch 2)
-        "form": 0.495, "market": 0.241, "horse_profile": 0.093, "jockey_trainer": 0.058,
+        "form": 0.525, "market": 0.241, "horse_profile": 0.093, "jockey_trainer": 0.058,
         "barrier": 0.023, "weight_carried": 0.023, "class_fitness": 0.023,
-        "pace": 0.013, "movement": 0.00, "deep_learning": 0.03,
+        "pace": 0.013, "movement": 0.00, "deep_learning": 0.00,
     },
     "middle": {  # 1400-1799m — biggest improvement: -0.39% → +9.75% win ROI (batch 2)
-        "form": 0.479, "market": 0.231, "horse_profile": 0.090, "weight_carried": 0.067,
+        "form": 0.509, "market": 0.231, "horse_profile": 0.090, "weight_carried": 0.067,
         "jockey_trainer": 0.056, "barrier": 0.034, "class_fitness": 0.013,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
     },
     "classic": {  # 1800-2199m — jockey_trainer 2x boost (batch 2)
-        "form": 0.485, "market": 0.234, "jockey_trainer": 0.091, "weight_carried": 0.068,
+        "form": 0.515, "market": 0.234, "jockey_trainer": 0.091, "weight_carried": 0.068,
         "horse_profile": 0.036, "barrier": 0.034, "class_fitness": 0.023,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
     },
     "staying": {  # 2200m+ — jockey_trainer & class_fitness elevated (batch 2)
-        "form": 0.485, "market": 0.234, "jockey_trainer": 0.091, "class_fitness": 0.068,
+        "form": 0.515, "market": 0.234, "jockey_trainer": 0.091, "class_fitness": 0.068,
         "weight_carried": 0.046, "horse_profile": 0.046, "barrier": 0.00,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.03,
+        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
     },
 }
 
@@ -457,7 +458,7 @@ DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
 # Key insight: form is much more important for place than previously assumed (0.38 vs 0.25)
 # Market less dominant for place (0.27 vs 0.35) — market prices win probability, not place
 DEFAULT_PLACE_WEIGHTS = {
-    "form": 0.41,
+    "form": 0.44,
     "market": 0.22,
     "class_fitness": 0.09,
     "jockey_trainer": 0.09,
@@ -466,36 +467,36 @@ DEFAULT_PLACE_WEIGHTS = {
     "horse_profile": 0.04,
     "pace": 0.02,
     "movement": 0.00,
-    "deep_learning": 0.03,
-}  # sums to 1.0 — DL enabled for place too (jockey_trainer combos help consistency)
+    "deep_learning": 0.00,
+}  # sums to 1.0 — 2026-03-13: deep_learning 0.03→0.00, redistributed to form
 
 # Distance-specific place weight overrides — tuned via batch 2 grid search
 # Key finding: class_fitness 3x for staying place, jockey_trainer dominant for classic place
 DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — DL enabled at 0.03
-        "form": 0.337, "market": 0.238, "class_fitness": 0.099, "jockey_trainer": 0.099,
+    "sprint": {  # ≤1100m
+        "form": 0.367, "market": 0.238, "class_fitness": 0.099, "jockey_trainer": 0.099,
         "barrier": 0.079, "weight_carried": 0.079, "horse_profile": 0.020,
-        "movement": 0.020, "pace": 0.00, "deep_learning": 0.03,
+        "movement": 0.020, "pace": 0.00, "deep_learning": 0.00,
     },
     "short": {  # 1101-1399m — weight_carried boosted, pace emerges (batch 2)
-        "form": 0.370, "market": 0.262, "weight_carried": 0.087, "class_fitness": 0.054,
+        "form": 0.400, "market": 0.262, "weight_carried": 0.087, "class_fitness": 0.054,
         "jockey_trainer": 0.054, "horse_profile": 0.044, "pace": 0.044,
-        "barrier": 0.033, "movement": 0.022, "deep_learning": 0.03,
+        "barrier": 0.033, "movement": 0.022, "deep_learning": 0.00,
     },
     "middle": {  # 1400-1799m — barrier 3x boost, class_fitness elevated (batch 2)
-        "form": 0.331, "market": 0.274, "class_fitness": 0.091, "barrier": 0.091,
+        "form": 0.361, "market": 0.274, "class_fitness": 0.091, "barrier": 0.091,
         "jockey_trainer": 0.057, "horse_profile": 0.047, "weight_carried": 0.034,
-        "pace": 0.023, "movement": 0.023, "deep_learning": 0.03,
+        "pace": 0.023, "movement": 0.023, "deep_learning": 0.00,
     },
     "classic": {  # 1800-2199m — jockey_trainer dominant for place (batch 2)
-        "form": 0.323, "market": 0.276, "jockey_trainer": 0.143, "class_fitness": 0.085,
+        "form": 0.353, "market": 0.276, "jockey_trainer": 0.143, "class_fitness": 0.085,
         "weight_carried": 0.048, "pace": 0.038, "barrier": 0.029,
-        "horse_profile": 0.029, "movement": 0.00, "deep_learning": 0.03,
+        "horse_profile": 0.029, "movement": 0.00, "deep_learning": 0.00,
     },
     "staying": {  # 2200m+ — class_fitness 3x for staying place (batch 2)
-        "form": 0.375, "market": 0.265, "class_fitness": 0.155, "jockey_trainer": 0.055,
+        "form": 0.405, "market": 0.265, "class_fitness": 0.155, "jockey_trainer": 0.055,
         "barrier": 0.033, "weight_carried": 0.033, "horse_profile": 0.023,
-        "movement": 0.032, "pace": 0.00, "deep_learning": 0.03,
+        "movement": 0.032, "pace": 0.00, "deep_learning": 0.00,
     },
 }
 
@@ -668,7 +669,7 @@ def _calculate_lgbm_probabilities(
         if po and po > 1.0 and win_odds > 1.0:
             divisor = 2 if field_size <= 7 else 3
             expected_place = (win_odds - 1) / divisor + 1
-            if po >= win_odds or po > expected_place * 2.5:
+            if po >= win_odds or po > expected_place * 1.8:
                 po = round(expected_place, 2)
         if po and po > 1.0:
             place_raw_probs[rid] = 1.0 / po
@@ -733,10 +734,10 @@ def _calculate_lgbm_probabilities(
         rid = _get(runner, "id", "")
         blended_place[rid] = _harville_place_probability(rid, blended_win, place_count)
 
-    # Normalize place probs
+    # Normalize place probs with per-runner cap at 0.95
     bp_total = sum(blended_place.values())
     if bp_total > 0:
-        blended_place = {rid: min(0.75, p / bp_total * place_count)
+        blended_place = {rid: min(0.95, p / bp_total * place_count)
                          for rid, p in blended_place.items()}
 
     # ── Step 4: Build results ──

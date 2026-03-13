@@ -878,11 +878,12 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
             pick.tracked_only = True
             pick.no_bet_reason = reason or "No proven edge in this odds band"
             pick.stake = 0.0
-        # Place odds cap — rank-dependent
+        # Place odds cap — rank-dependent (check place_odds, not win odds)
         # Rank 1: $10 cap (strong anchor). Rank 2+: $8 cap (yesterday data: +$33.50)
-        elif pick.bet_type == "Place" and pick.odds:
+        elif pick.bet_type == "Place" and (pick.place_odds or pick.odds):
             place_cap = 10.0 if pick.rank == 1 else 8.0
-            if pick.odds > place_cap:
+            check_odds = pick.place_odds or pick.odds
+            if check_odds > place_cap:
                 pick.tracked_only = True
                 pick.no_bet_reason = f"Place odds > ${place_cap:.0f} (rank {pick.rank})"
                 pick.stake = 0.0

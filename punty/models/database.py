@@ -246,7 +246,7 @@ async def init_db() -> None:
             # Punty's Pick flag (best-bet recommendation per race)
             "ALTER TABLE picks ADD COLUMN is_puntys_pick BOOLEAN DEFAULT 0",
             # Conditions data
-            "ALTER TABLE meetings ADD COLUMN rainfall REAL",
+            "ALTER TABLE meetings ADD COLUMN rainfall TEXT",
             "ALTER TABLE meetings ADD COLUMN irrigation BOOLEAN",
             "ALTER TABLE meetings ADD COLUMN going_stick REAL",
             "ALTER TABLE meetings ADD COLUMN weather_humidity INTEGER",
