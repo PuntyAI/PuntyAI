@@ -109,16 +109,15 @@ def calculate_kelly_stake(
     Uses half-Kelly by default: 75% less variance, only 25% less expected growth.
     Losing hurts more than winning — conservative sizing protects compound growth.
 
-    Kelly fraction = edge / (odds - 1), halved, capped at max_fraction.
+    Kelly fraction = (p * odds - 1) / (odds - 1), halved, capped at max_fraction.
     Stake = kelly_fraction * balance, floored at min_stake.
     """
     if odds <= 1 or balance <= 0 or place_probability <= 0:
         return 0  # No valid bet
-    implied_prob = 1.0 / odds
-    edge = place_probability - implied_prob
-    if edge <= 0:
+    b = odds - 1
+    kelly = (b * place_probability - (1 - place_probability)) / b
+    if kelly <= 0:
         return 0  # Negative edge — don't bet
-    kelly = edge / (odds - 1)
     if half_kelly:
         kelly *= 0.5  # Half-Kelly: dramatically reduces drawdowns
     kelly = min(kelly, max_fraction)

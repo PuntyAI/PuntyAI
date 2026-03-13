@@ -173,9 +173,7 @@ class TwitterDelivery:
                     logger.warning(f"Twitter send attempt {attempt + 1} failed: {e}, retrying in {delay}s")
                     await asyncio.sleep(delay)
 
-        logger.error(f"Twitter API error after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
-        content.status = "delivery_failed"
-        await self.db.commit()
+        logger.error(f"Twitter delivery failed after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
         raise ValueError(f"Twitter API error: {last_error}")
 
     async def send_thread(self, content_id: str) -> dict:
@@ -233,9 +231,7 @@ class TwitterDelivery:
                     logger.warning(f"Twitter thread attempt {attempt + 1} failed: {e}, retrying in {delay}s")
                     await asyncio.sleep(delay)
         else:
-            logger.error(f"Twitter API error after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
-            content.status = "delivery_failed"
-            await self.db.commit()
+            logger.error(f"Twitter thread delivery failed after {MAX_DELIVERY_RETRIES + 1} attempts: {last_error}")
             raise ValueError(f"Twitter API error: {last_error}")
 
         # Update content status and store tweet ID
@@ -398,9 +394,7 @@ class TwitterDelivery:
             }
 
         except Exception as e:
-            logger.error(f"Twitter API error: {e}")
-            content.status = "delivery_failed"
-            await self.db.commit()
+            logger.error(f"Twitter long post delivery failed: {e}")
             raise ValueError(f"Twitter API error: {e}")
 
     def _format_long_post(self, raw_content: str, content_type: str, venue: str) -> str:

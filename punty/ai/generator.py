@@ -432,7 +432,7 @@ class ContentGenerator:
 
             yield evt("Creating context snapshot...")
             try:
-                snapshot = await create_context_snapshot(self.db, meeting_id)
+                snapshot = await create_context_snapshot(self.db, meeting_id, prebuilt_context=context)
             except Exception as e:
                 logger.warning(f"Context snapshot failed for {meeting_id}: {e}")
                 snapshot = None
