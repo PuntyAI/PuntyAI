@@ -164,13 +164,13 @@ async def calibrated_kelly_stake(
             f"(odds ${odds:.2f}, edge shift {(actual_pp - predicted_pp):+.0%})"
         )
 
-    # PP floor gate: reject bets where calibrated probability is too low
+    # PP floor removed — trust PP ranking to select best bets per meeting.
+    # Still calibrate for accurate Kelly sizing.
     if actual_pp < min_calibrated_pp:
         logger.info(
-            f"PP floor rejection: calibrated {actual_pp:.0%} < {min_calibrated_pp:.0%} "
-            f"(predicted {predicted_pp:.0%}, odds ${odds:.2f})"
+            f"PP below old floor: calibrated {actual_pp:.0%} < {min_calibrated_pp:.0%} "
+            f"(predicted {predicted_pp:.0%}, odds ${odds:.2f}) — proceeding anyway"
         )
-        return 0
 
     return calculate_kelly_stake(balance, actual_pp, odds, max_fraction, min_stake)
 

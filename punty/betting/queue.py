@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Default settings
 DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
-DEFAULT_MIN_ODDS = 1.30  # Minimum place odds floor — below this, one miss wipes too many wins
+DEFAULT_MIN_ODDS = 1.01  # Betfair exchange minimum (effectively no floor)
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
 DEFAULT_MIN_PLACE_PROB = 0.40  # Absolute floor — field-size tiers set the real PP thresholds
@@ -30,29 +30,21 @@ DEFAULT_MAX_KELLY_FRACTION = 0.06  # Cap Kelly fraction at 6% (half-Kelly conser
 DEFAULT_KELLY_HALF = True  # True half-Kelly: halve the fraction for 75% less variance
 DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
 DEFAULT_MIN_CALIBRATED_PP = 0.50  # Only bet when calibrated PP >= 50% (volume for compound growth)
-DEFAULT_MAX_PLACE_ODDS = 6.0  # Maximum place odds for queue eligibility
+DEFAULT_MAX_PLACE_ODDS = 999.0  # No ceiling — let PP ranking decide
 MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
-DEFAULT_MAIDEN_MAX_PLACE_ODDS = 1.75  # Tighter ceiling for maiden races (≈$3 win)
-# Data-driven: R1 76.2% place SR vs R2 73.4%. R1 PP≥65% = 81.1% SR.
-# Restrict to Rank 1 only for maximum strike rate.
-MAX_BETFAIR_RANK = 1
-# Field-size-tiered PP floors — larger fields need higher confidence.
-# Data: ≤7 runners 89.7% SR, 8-10 ~73%, 11-14 ~48%, 15+ ~42%.
-# Instead of a hard field cap, scale PP requirement with field size.
-FIELD_PP_TIERS = [
-    (7,  0.45),   # Small fields — inherently easier to place
-    (10, 0.49),   # Standard competitive fields
-    (14, 0.55),   # Larger fields need more confidence
-    (99, 0.65),   # Very large fields — high conviction only
-]
+DEFAULT_MAIDEN_MAX_PLACE_ODDS = 999.0  # No maiden ceiling — best 4 per meet by PP
+# Select from all 4 ranked picks per race, then take best 4 per meeting by PP.
+MAX_BETFAIR_RANK = 4
+# Best 4 bets per meeting — pure PP ranking, no per-race or price gates.
+MAX_BETS_PER_MEETING = 4
 
 
 def _pp_floor_for_field(runner_count: int) -> float:
-    """Return the minimum place probability for a given field size."""
-    for max_runners, pp_floor in FIELD_PP_TIERS:
-        if runner_count <= max_runners:
-            return pp_floor
-    return FIELD_PP_TIERS[-1][1]
+    """Return the minimum place probability for a given field size.
+
+    No longer used as a gate — kept for logging/diagnostics only.
+    """
+    return 0.0  # No PP floor — best 4 per meeting by pure PP ranking
 
 
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
@@ -177,20 +169,18 @@ async def populate_bet_queue(
     meeting_id: str,
     content_id: str,
 ) -> int:
-    """Create BetfairBet entries for the highest place-probability pick per race.
+    """Create BetfairBet entries for the top 4 place-probability picks per meeting.
 
-    Called after content approval. Selects the pick with the best place_probability
-    from each race's selections — pure probability, no value weighting.
+    Called after content approval. Collects the best PP pick from each race,
+    ranks them across the whole meeting, and queues the top 4.
+    No price gates — pure probability ranking decides.
     Returns count of bets queued.
     """
     auto_enabled = await _get_setting(db, "betfair_auto_bet_enabled", "true")
     if auto_enabled.lower() != "true":
         return 0
 
-    # Get best pick per race by PP — restrict to Rank 1-2 only.
-    # Data: Rank 1 places 59%, Rank 2 places 50%, Rank 3 only 35%, Rank 4 only 26%.
-    # LGBM rank is an independent signal — even high-PP Rank 3-4 picks underperform.
-    # Include tracked_only picks — short-priced favs are our best Betfair candidates.
+    # Get best pick per race by PP — consider all 4 ranked picks.
     result = await db.execute(
         select(Pick).where(
             Pick.content_id == content_id,
@@ -200,15 +190,15 @@ async def populate_bet_queue(
         ).order_by(Pick.race_number)
     )
     all_picks = result.scalars().all()
-    # Select highest PP pick per race
+    # Select highest PP pick per race (best candidate from each race)
     best_by_race: dict[int, Pick] = {}
     for pick in all_picks:
         pp = pick.place_probability or 0
         rn = pick.race_number
         if rn not in best_by_race or pp > (best_by_race[rn].place_probability or 0):
             best_by_race[rn] = pick
-    rank1_picks = list(best_by_race.values())
-    if not rank1_picks:
+    race_picks = list(best_by_race.values())
+    if not race_picks:
         return 0
 
     # Load races to get start times
@@ -217,44 +207,24 @@ async def populate_bet_queue(
     )
     races_by_num = {r.race_number: r for r in race_result.scalars().all()}
 
-    max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
-    min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
+    # Count how many are already queued for this meeting
+    existing_count_result = await db.execute(
+        select(func.count(BetfairBet.id)).where(
+            BetfairBet.meeting_id == meeting_id,
+        )
+    )
+    existing_count = existing_count_result.scalar() or 0
+    slots_remaining = max(0, MAX_BETS_PER_MEETING - existing_count)
+    if slots_remaining == 0:
+        return 0
 
-    queued = 0
-    for pick in rank1_picks:
+    # Filter only: scratched runners and NTD (<5 runners = no place market)
+    eligible = []
+    for pick in race_picks:
         race = races_by_num.get(pick.race_number)
         if not race or not race.start_time:
             logger.debug(f"Skipping bet for {meeting_id} R{pick.race_number}: no start time")
             continue
-
-        # Filter by odds floor — ultra-short odds bleed value
-        if pick.place_odds_at_tip and pick.place_odds_at_tip < min_odds:
-            logger.info(
-                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"place_odds ${pick.place_odds_at_tip:.2f} < ${min_odds:.2f} floor"
-            )
-            continue
-
-        # Filter by odds ceiling — reject longshots
-        if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
-            logger.info(
-                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"place_odds ${pick.place_odds_at_tip:.2f} > ${max_place_odds:.2f} ceiling"
-            )
-            continue
-
-        # Maiden races — allow only short-priced favourites (place odds <= $1.75)
-        if race:
-            race_class = (race.class_ or "").lower().rstrip(";").strip()
-            if race_class.startswith(MAIDEN_PREFIXES):
-                maiden_ceiling = DEFAULT_MAIDEN_MAX_PLACE_ODDS
-                place_odds = pick.place_odds_at_tip or 999
-                if place_odds > maiden_ceiling:
-                    logger.info(
-                        f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                        f"maiden race, place odds ${place_odds:.2f} > ${maiden_ceiling:.2f} ceiling"
-                    )
-                    continue
 
         # NTD hard kill — fewer than 5 runners often means only 1 paid place
         race_id = f"{meeting_id}-r{race.race_number}"
@@ -266,17 +236,7 @@ async def populate_bet_queue(
             )
             continue
 
-        # Field-size-tiered PP floor — larger fields need higher confidence
-        effective_min_pp = _pp_floor_for_field(runner_count)
-        if pick.place_probability is not None and pick.place_probability < effective_min_pp:
-            logger.info(
-                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"PP {pick.place_probability:.1%} < {effective_min_pp:.0%} floor "
-                f"(field={runner_count})"
-            )
-            continue
-
-        # Check if already queued (unique constraint)
+        # Check if already queued for this race (unique constraint)
         existing = await db.execute(
             select(BetfairBet).where(
                 BetfairBet.meeting_id == meeting_id,
@@ -298,16 +258,23 @@ async def populate_bet_queue(
             logger.info(f"Skipping bet for {pick.horse_name} R{pick.race_number}: scratched")
             continue
 
-        # Kelly stake per-bet based on this pick's PP and odds
+        eligible.append((pick, race))
+
+    if not eligible:
+        return 0
+
+    # Rank by PP across the entire meeting — take the top N
+    eligible.sort(key=lambda x: x[0].place_probability or 0, reverse=True)
+    top_picks = eligible[:slots_remaining]
+
+    queued = 0
+    for pick, race in top_picks:
+        # Kelly stake — use $5 minimum even if Kelly says no edge
         pp = pick.place_probability or 0
         odds = pick.place_odds_at_tip or 0
         stake = await get_current_stake(db, place_probability=pp, odds=odds)
         if stake <= 0:
-            logger.info(
-                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"Kelly says no edge (PP={pp:.0%}, odds=${odds:.2f})"
-            )
-            continue
+            stake = DEFAULT_MIN_KELLY_STAKE  # Force minimum stake — we trust PP ranking
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         scheduled_at = race.start_time - timedelta(minutes=10)
@@ -325,10 +292,14 @@ async def populate_bet_queue(
         )
         db.add(bet)
         queued += 1
+        logger.info(
+            f"Betfair queue: {pick.horse_name} R{pick.race_number} "
+            f"PP={pp:.0%} odds=${odds:.2f} stake=${stake:.2f}"
+        )
 
     if queued:
         await db.commit()
-        logger.info(f"Betfair queue: {queued} bets queued for {meeting_id} (stake=${stake:.2f})")
+        logger.info(f"Betfair queue: {queued}/{MAX_BETS_PER_MEETING} bets queued for {meeting_id}")
     return queued
 
 
@@ -353,10 +324,7 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
 
     race_id = f"{bet.meeting_id}-r{bet.race_number}"
 
-    max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
-
-    # Load Rank 1 selection picks for this race only
-    # Include tracked_only picks — manual cycle is an explicit override
+    # Load all selection picks for this race — all ranks eligible
     pick_result = await db.execute(
         select(Pick).where(
             Pick.meeting_id == bet.meeting_id,
@@ -367,7 +335,7 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
     )
     candidates = pick_result.scalars().all()
 
-    # Filter out scratched runners and longshots
+    # Filter out scratched runners only — no price gates
     valid = []
     for pick in candidates:
         runner_result = await db.execute(
@@ -378,8 +346,6 @@ async def cycle_bet_selection(db: AsyncSession, bet_id: str) -> dict:
         )
         runner = runner_result.scalar_one_or_none()
         if runner and runner.scratched:
-            continue
-        if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
             continue
         valid.append(pick)
 
@@ -453,8 +419,6 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
     if not queued_bets:
         return 0
 
-    min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
-    max_place_odds = float(await _get_setting(db, "betfair_max_place_odds", str(DEFAULT_MAX_PLACE_ODDS)))
     changes = 0
 
     for bet in queued_bets:
@@ -469,23 +433,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
             logger.info(f"Cancelled {bet.id}: NTD {runner_count} runners")
             continue
 
-        # Check maiden race — cancel if odds drifted above maiden ceiling
-        race_result = await db.execute(
-            select(Race).where(Race.id == race_id)
-        )
-        race = race_result.scalar_one_or_none()
-        race_class_raw = (race.class_ if race else None) or ""
-        if race_class_raw.lower().rstrip(";").strip().startswith(MAIDEN_PREFIXES):
-            place_odds = bet.requested_odds or 999
-            if place_odds > DEFAULT_MAIDEN_MAX_PLACE_ODDS:
-                bet.status = "cancelled"
-                bet.error_message = f"Maiden race, odds ${place_odds:.2f} > ${DEFAULT_MAIDEN_MAX_PLACE_ODDS:.2f}"
-                changes += 1
-                logger.info(f"Cancelled {bet.id}: maiden odds ${place_odds:.2f} above ceiling")
-                continue
-
-        # Load all selection picks for this race — restrict to Rank 1-2
-        # Data: Rank 3-4 place SR 35%/26% — not reliable enough for Betfair
+        # Load all selection picks for this race — all ranks eligible
         pick_result = await db.execute(
             select(Pick).where(
                 Pick.meeting_id == bet.meeting_id,
@@ -499,17 +447,6 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         if not candidates:
             continue
 
-        # Field-size-tiered PP check — cancel if current pick's PP too low
-        pp_floor = _pp_floor_for_field(runner_count)
-        current_pick = next((c for c in candidates if c.id == bet.pick_id), None)
-        current_pp = float(current_pick.place_probability or 0) if current_pick else 0.0
-        if current_pp < pp_floor:
-            bet.status = "cancelled"
-            bet.error_message = f"PP {current_pp:.0%} < {pp_floor:.0%} floor (field={runner_count})"
-            changes += 1
-            logger.info(f"Cancelled {bet.id}: PP {current_pp:.0%} below {pp_floor:.0%} for {runner_count}-runner field")
-            continue
-
         # Check if current horse is scratched
         current_runner_result = await db.execute(
             select(Runner).where(
@@ -520,7 +457,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         current_runner = current_runner_result.scalar_one_or_none()
         current_scratched = current_runner.scratched if current_runner else False
 
-        # Find best non-scratched candidate above min_place_prob and below odds ceiling
+        # Find best non-scratched candidate — pure PP ranking, no price gates
         best_pick = None
         best_pp = 0.0
         for pick in candidates:
@@ -533,14 +470,8 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
             runner = runner_result.scalar_one_or_none()
             if runner and runner.scratched:
                 continue
-            if pick.place_odds_at_tip and pick.place_odds_at_tip > max_place_odds:
-                continue
-            # VR ceiling — Data: VR 1.5+ unprofitable
-            vr = getattr(pick, "value_rating", None)
-            if isinstance(vr, (int, float)) and vr >= 1.5:
-                continue
             pp = pick.place_probability or 0
-            if pp >= min_place_prob and pp > best_pp:
+            if pp > best_pp:
                 best_pp = pp
                 best_pick = pick
 
@@ -605,21 +536,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
         old_odds = bet.requested_odds or 0
         if abs(runner.place_odds - old_odds) > 0.05:
             bet.requested_odds = round(runner.place_odds, 2)
-            # Re-check odds floor/ceiling after update
-            min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
-            if bet.requested_odds < min_odds:
-                bet.status = "cancelled"
-                bet.error_message = f"Live odds ${bet.requested_odds:.2f} below ${min_odds:.2f} floor"
-                changes += 1
-                logger.info(f"Cancelled {bet.id}: odds dropped to ${bet.requested_odds:.2f}")
-                continue
-            if bet.requested_odds > max_place_odds:
-                bet.status = "cancelled"
-                bet.error_message = f"Live odds ${bet.requested_odds:.2f} above ${max_place_odds:.2f} ceiling"
-                changes += 1
-                logger.info(f"Cancelled {bet.id}: odds drifted to ${bet.requested_odds:.2f}")
-                continue
-            # Recalculate Kelly stake with updated odds
+            # Recalculate Kelly stake with updated odds (no cancellation gates)
             pp_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
             pick = pp_result.scalar_one_or_none()
             if pick and pick.place_probability:
@@ -628,11 +545,7 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                     odds=bet.requested_odds,
                 )
                 if new_stake <= 0:
-                    bet.status = "cancelled"
-                    bet.error_message = f"No Kelly edge at live odds ${bet.requested_odds:.2f}"
-                    changes += 1
-                    logger.info(f"Cancelled {bet.id}: no edge at ${bet.requested_odds:.2f}")
-                    continue
+                    new_stake = DEFAULT_MIN_KELLY_STAKE  # Force min stake — trust PP
                 if abs(new_stake - bet.stake) > 0.50:
                     bet.stake = round(new_stake, 2)
             if old_odds > 0:
@@ -700,9 +613,6 @@ async def execute_due_bets(db: AsyncSession) -> int:
     # Safety: check balance
     balance = await get_balance(db)
     min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
-    min_place_prob = float(await _get_setting(db, "betfair_min_place_prob", str(DEFAULT_MIN_PLACE_PROB)))
-    dead_zone_low = float(await _get_setting(db, "betfair_dead_zone_low", str(DEFAULT_DEAD_ZONE_LOW)))
-    dead_zone_high = float(await _get_setting(db, "betfair_dead_zone_high", str(DEFAULT_DEAD_ZONE_HIGH)))
 
     placed = 0
     for bet in due_bets:
@@ -791,35 +701,19 @@ async def execute_due_bets(db: AsyncSession) -> int:
             # Use requested_odds as fallback for stake calculation
             current_odds = bet.requested_odds or 0
 
-        # Min odds floor — ultra-short odds bleed value
-        if current_odds and current_odds < min_odds:
-            bet.status = "cancelled"
-            bet.error_message = f"Odds ${current_odds:.2f} below ${min_odds:.2f} floor"
-            logger.info(f"Betfair: {bet.id} cancelled — odds ${current_odds:.2f} < ${min_odds:.2f} floor")
-            await db.commit()
-            continue
-
-        # Edge gate: PP floor guarantees high strike rate
-        if place_prob > 0 and place_prob < min_place_prob:
-            bet.status = "cancelled"
-            bet.error_message = f"PP {place_prob:.1%} below {min_place_prob:.0%} floor"
-            logger.info(f"Betfair: {bet.id} cancelled — PP {place_prob:.1%} < {min_place_prob:.0%}")
-            await db.commit()
-            continue
-
-        # Kelly stake based on live odds and PP
+        # Kelly stake based on live odds and PP — force minimum if no edge
         stake = await get_current_stake(db, place_probability=place_prob,
                                          odds=current_odds if current_odds > 1 else 0)
         if stake <= 0:
-            bet.status = "cancelled"
-            bet.error_message = f"Kelly: no edge (PP={place_prob:.0%}, odds=${current_odds:.2f})"
-            logger.info(f"Betfair: {bet.id} cancelled — Kelly says no edge")
-            await db.commit()
-            continue
+            stake = DEFAULT_MIN_KELLY_STAKE  # Force min stake — trust PP ranking
+            logger.info(
+                f"Betfair: {bet.id} no Kelly edge (PP={place_prob:.0%}, odds=${current_odds:.2f}) "
+                f"— using min stake ${stake:.2f}"
+            )
 
         bet.stake = round(stake, 2)
-        # BSP: use min_odds as the floor price (minimum acceptable BSP)
-        bet.requested_odds = min_odds
+        # BSP: use $1.01 as the floor price (Betfair exchange minimum)
+        bet.requested_odds = 1.01
 
         if balance < bet.stake:
             bet.status = "cancelled"
