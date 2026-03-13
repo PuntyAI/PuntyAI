@@ -22,7 +22,7 @@ _NZ_CLUB_ALIASES: dict[str, list[str]] = {
     "wyndham rc": ["riverton"],
     "south waikato rc": ["matamata"],
     "manawatu rc": ["awapuni", "trentham"],
-    "auckland thoroughbred racing": ["ellerslie"],
+    "auckland thoroughbred racing": ["ellerslie", "pukekohe park", "pukekohe"],
     "canterbury jockey club": ["riccarton"],
     "otago racing club": ["wingatui"],
     "waikato racing club": ["te rapa"],
@@ -264,23 +264,26 @@ async def _get_nz_meeting_ids() -> list[dict[str, Any]]:
         meeting_id = m.group(1)
         club = link.get_text(strip=True)
 
-        # Venue name is often in a sibling or parent cell — look for it
-        # in the surrounding text (table row or list item)
+        # Venue/course name is a sibling link: /RaceInfo/Clubs-And-Courses/{id}/Racecourse.aspx
+        # e.g. "Fri 13 March | Auckland Thoroughbred Racing | Pukekohe Park"
         parent = link.find_parent(["tr", "li", "div"])
         venue = ""
         if parent:
-            text = parent.get_text(" ", strip=True)
-            # Common patterns: "Sat 7 March | Venue Name" or "Venue: Name"
-            # The venue is usually the last meaningful text after the date
-            for part in text.split("|"):
-                part = part.strip()
-                # Skip parts that are dates or the club name
-                if re.match(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s", part):
-                    continue
-                if part == club:
-                    continue
-                if part:
-                    venue = part
+            # Primary: find the course link (most reliable)
+            course_link = parent.find("a", href=re.compile(r"/Clubs-And-Courses/\d+/"))
+            if course_link:
+                venue = course_link.get_text(strip=True)
+            else:
+                # Fallback: split parent text by | and find non-date, non-club part
+                text = parent.get_text(" ", strip=True)
+                for part in text.split("|"):
+                    part = part.strip()
+                    if re.match(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s", part):
+                        continue
+                    if part == club:
+                        continue
+                    if part:
+                        venue = part
 
         meetings.append({
             "meeting_id": meeting_id,
