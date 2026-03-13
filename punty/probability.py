@@ -566,6 +566,7 @@ def _use_lightgbm() -> bool:
 
 def _calculate_lgbm_probabilities(
     active: list, race: Any, meeting: Any, pool: float = DEFAULT_POOL,
+    market_influence: float | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """LGBM-rank + market-calibrate probability engine.
 
@@ -688,9 +689,12 @@ def _calculate_lgbm_probabilities(
     # away from market. Higher = more trust in LGBM ranking, less market.
     # Dry-run over 669 races: 0.50 = +$1,294 P&L, 36.5% top-1, +10.3% win ROI.
     # Pure LGBM (1.0) gives +$7,838 but breaks calibration completely.
-    # 2026-03-08: Raised 0.50 → 0.55 to reduce market influence (was picking
-    # too many favourites). Market portion: 45% (was 50%).
-    LGBM_RANK_INFLUENCE = 0.55
+    # Now configurable via Settings → lgbm_market_influence (0.0–1.0).
+    # market_influence=0.45 means LGBM_RANK_INFLUENCE=0.55 (the old default).
+    if market_influence is not None:
+        LGBM_RANK_INFLUENCE = max(0.0, min(1.0, 1.0 - market_influence))
+    else:
+        LGBM_RANK_INFLUENCE = 0.55  # Default: 45% market, 55% LGBM
 
     # Build rank-position weights: exponential decay from top to bottom.
     # Top runner gets highest weight, bottom gets lowest.
@@ -940,6 +944,7 @@ def calculate_race_probabilities(
     place_weights: dict[str, float] | None = None,
     dl_patterns: list[dict] | None = None,
     _skip_lgbm: bool = False,
+    market_influence: float | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
 
@@ -969,7 +974,8 @@ def calculate_race_probabilities(
     # LGBM ranks at 45.6% top-1 accuracy (vs tissue 29%, market fav 33.5%).
     # Uses market odds for calibrated probabilities, tissue as tiebreaker.
     if not _skip_lgbm and _use_lightgbm():
-        result = _calculate_lgbm_probabilities(active, race, meeting, pool)
+        result = _calculate_lgbm_probabilities(active, race, meeting, pool,
+                                                market_influence=market_influence)
         if result:
             return result
         logger.warning("LightGBM prediction failed, falling back")
