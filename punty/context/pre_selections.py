@@ -1124,8 +1124,8 @@ def _select_exotic(
         # Overlap rules per type
         runner_list = ec.get("runners", [])
         if ec_type == "Quinella":
-            if overlap_ratio < 1.0:
-                continue
+            # Rank-1 anchor already enforced above; allow partner outside picks
+            pass
         elif ec_type in ("Exacta", "Exacta Standout"):
             if runner_list and rank_map:
                 if rank_map.get(runner_list[0], 99) > 2:
@@ -1158,10 +1158,6 @@ def _select_exotic(
         # Budget feasibility: flexi must be >= 10% to be meaningful
         flexi_pct = EXOTIC_BUDGET / combos * 100 if combos > 0 else 0
         if flexi_pct < 10:
-            continue
-
-        # VR floor: never select negative-value exotics (VR < 1.0)
-        if value < 1.0:
             continue
 
         # Score: probability × value² — value-squared so high-dividend types
@@ -1213,7 +1209,28 @@ def _select_exotic(
     scored.sort(key=lambda x: x[0], reverse=True)
 
     if not scored:
-        return None
+        # Fallback: pick the highest-probability combo from the original list
+        # so every race gets an exotic recommendation
+        fallback = sorted(
+            exotic_combos,
+            key=lambda e: float(str(e.get("probability", 0)).rstrip("%")) / (100 if "%" in str(e.get("probability", 0)) else 1),
+            reverse=True,
+        )
+        if not fallback:
+            return None
+        best = fallback[0]
+        fb_prob = best.get("probability", 0)
+        if isinstance(fb_prob, str):
+            fb_prob = float(fb_prob.rstrip("%")) / 100
+        return RecommendedExotic(
+            exotic_type=best.get("type", ""),
+            runners=best.get("runners", []),
+            runner_names=best.get("runner_names", []),
+            probability=fb_prob,
+            value_ratio=best.get("value", 1.0),
+            num_combos=best.get("combos", 1),
+            format=best.get("format", "boxed"),
+        )
 
     best = scored[0][1]
     best_prob = best.get("probability", 0)
