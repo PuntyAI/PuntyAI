@@ -1,0 +1,122 @@
+{# Shared stats content — included in both desktop and mobile stats sections #}
+{% set perf = dashboard.performance|default({}) %}
+
+{# ── Metrics Row (Today's Stats) ── #}
+<div class="metrics-row">
+    <a href="/stats" class="metric-cell">
+        <div class="metric-label">Bets</div>
+        <div class="metric-value">{{ perf.total_bets|default(0) }}</div>
+    </a>
+    <a href="/stats" class="metric-cell">
+        <div class="metric-label">Winners</div>
+        <div class="metric-value" style="color: var(--cyan);">{{ perf.total_winners|default(0) }}</div>
+    </a>
+    <a href="/stats" class="metric-cell">
+        <div class="metric-label">Strike %</div>
+        {% set sr = (perf.total_winners|default(0) / perf.total_bets * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
+        <div class="metric-value" style="color: var(--yellow);">{{ sr }}%</div>
+    </a>
+    <a href="/stats" class="metric-cell">
+        <div class="metric-label">P&L</div>
+        {% set total_pnl = perf.total_pnl|default(0) %}
+        <div class="metric-value metric-value-pnl" style="color: {{ '#4ade80' if total_pnl >= 0 else '#ef4444' }};">
+            {{ '%+.0f'|format(total_pnl) | replace('+', '+$') | replace('-', '-$') }}
+        </div>
+        {% set today_roi = (total_pnl / (perf.total_bets * 10) * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
+        <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if today_roi >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(today_roi) }}% ROI</div>
+    </a>
+    <a href="/stats" class="metric-cell">
+        <div class="metric-label">7-Day</div>
+        <div class="metric-value" style="color: {{ '#4ade80' if seven_day_pnl >= 0 else '#ef4444' }};">
+            {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
+        </div>
+        <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if seven_day_roi|default(0) >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(seven_day_roi|default(0)) }}% ROI</div>
+    </a>
+</div>
+
+{# ── Meeting P&L Chart ── #}
+{% set mp = dashboard.meeting_pnl|default([]) %}
+{% if mp|length > 0 %}
+<div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
+     x-data="{ expanded: false }">
+    <div class="px-3 pt-3 pb-1 flex items-center justify-between cursor-pointer"
+         @click="expanded = !expanded; setTimeout(() => window.drawMeetingPnl && window.drawMeetingPnl(), 350)">
+        <div class="flex items-center gap-2">
+            <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+            <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-heading uppercase tracking-wider" style="color: var(--text-muted);"
+                  x-text="expanded ? 'Collapse' : 'Expand'"></span>
+            <svg class="w-4 h-4 transition-transform" :class="expanded && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+    </div>
+    <div style="position: relative; padding: 0.5rem 0.75rem 0.75rem; transition: height 0.3s ease;"
+         :style="{ height: expanded ? '380px' : '160px' }">
+        <canvas id="{{ 'meetingPnlChartMobile' if mobile_stats|default(false) else 'meetingPnlChart' }}" style="width: 100%; height: 100%;"></canvas>
+    </div>
+</div>
+{% endif %}
+
+{# ── 7-Day Trend ── #}
+{% if perf_history|default([])|length > 0 %}
+<div class="sidebar-panel">
+    <div class="sidebar-panel-title">7-Day Trend</div>
+    <div class="flex items-end justify-between gap-1" style="height: 48px; padding: 0 0.25rem;">
+        {% for day in perf_history %}
+        {% set bar_pnl = day.pnl|default(0) %}
+        {% set max_abs = perf_history|map(attribute='pnl')|map('abs')|max %}
+        {% set bar_h = ((bar_pnl|abs / max_abs) * 100)|round|int if max_abs > 0 else 10 %}
+        {% set bar_h = [bar_h, 8]|max %}
+        <div class="flex-1 flex flex-col items-center justify-end" style="height: 100%;">
+            <div class="w-full rounded-sm" style="height: {{ bar_h }}%; min-height: 3px; max-height: 100%; background: {% if bar_pnl >= 0 %}rgba(74, 222, 128, 0.6){% else %}rgba(248, 113, 113, 0.5){% endif %};"></div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="flex items-center justify-between mt-2">
+        <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">{{ perf_history|length }} days</span>
+        <span class="font-heading font-bold text-sm" style="color: {% if seven_day_pnl >= 0 %}#4ade80{% else %}#f87171{% endif %};">
+            {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
+            <span class="text-xs" style="color: var(--text-muted);">({{ '%+.1f'|format(seven_day_roi) }}%)</span>
+        </span>
+    </div>
+</div>
+{% endif %}
+
+{# ── By Bet Type ── #}
+{% set bt = dashboard.bet_types|default([]) %}
+{% if bt %}
+<div class="sidebar-panel">
+    <div class="sidebar-panel-title">By Bet Type</div>
+    <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+        {% for b in bt %}
+        <div class="product-bar" style="padding: 0.4rem 0.6rem;">
+            <span class="font-heading font-semibold text-xs text-white flex-1">{{ b.name }}</span>
+            <span class="text-xs" style="color: var(--text-muted);">{{ b.winners }}/{{ b.bets }}</span>
+            <span class="font-heading font-bold text-xs {% if b.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                {{ '+' if b.pnl >= 0 }}${{ '%.0f'|format(b.pnl) }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Tip Rank Rates ── #}
+{% set ranks = stats.pick_ranks|default([]) %}
+{% if ranks %}
+<div class="sidebar-panel">
+    <div class="sidebar-panel-title">By Tip Rank</div>
+    <div class="stat-grid">
+        {% for r in ranks %}
+        <div class="stat-cell" style="display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.4rem 0.5rem;">
+            <span class="rank-badge rank-{{ r.rank }}" style="width: 20px; height: 20px; font-size: 0.65rem;">{{ r.rank }}</span>
+            <div>
+                <div class="font-heading font-bold text-white text-sm">{{ r.rate }}%</div>
+                <div class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.total }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
