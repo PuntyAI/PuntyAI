@@ -110,7 +110,7 @@ _STATE_TRACKS = {
         "roxby downs", "strathalbyn", "streaky bay", "tumby bay", "victoria park",
     ],
     "WA": [
-        "albany", "ascot", "ashburton", "belmont", "beverley", "broome", "bunbury",
+        "albany", "ascot", "belmont", "beverley", "broome", "bunbury",
         "carnarvon", "collie", "derby", "dongara", "esperance", "exmouth", "fitzroy",
         "geraldton", "junction", "kalgoorlie", "kimberley", "kojonup", "kununurra", "landor",
         "lark hill", "laverton", "leinster", "leonora", "meekatharra", "mingenew", "moora",
@@ -129,12 +129,12 @@ _STATE_TRACKS = {
     "HK": ["sha tin", "happy valley"],
     "SGP": ["kranji"],
     "NZ": [
-        "addington", "arawa park", "ascot park", "avondale", "awapuni",
-        "cromwell", "ellerslie", "gore", "hastings", "kurow", "matamata",
-        "new plymouth", "oamaru", "otaki", "pukekohe", "riccarton",
-        "riverton", "rotorua", "ruakaka", "tauranga", "te aroha", "te rapa",
-        "timaru", "trentham", "waimate", "waikouaiti", "wanganui", "wingatui",
-        "woodville",
+        "addington", "arawa park", "ascot park", "ashburton", "avondale", "awapuni",
+        "cambridge", "cromwell", "ellerslie", "gore", "hastings", "hawera",
+        "kurow", "matamata", "new plymouth", "oamaru", "otaki", "pukekohe",
+        "reefton", "riccarton", "riverton", "rotorua", "ruakaka", "tauranga",
+        "te aroha", "te rapa", "timaru", "trentham", "waimate", "waikouaiti",
+        "wanganui", "whanganui", "wingatui", "woodville",
     ],
 }
 

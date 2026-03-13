@@ -1165,7 +1165,19 @@ class ResultsMonitor:
                         ).limit(1)
                     )
                     if not check.scalar_one_or_none():
-                        logger.warning(f"No runner positions set for {meeting.venue} R{race_num} — skipping settlement & generation")
+                        # Reset status so the monitor retries on the next poll cycle.
+                        # Without this, the race stays "Paying" and line 241 skips it forever.
+                        race_id_reset = f"{meeting_id}-r{race_num}"
+                        race_obj = await db.get(Race, race_id_reset)
+                        if race_obj and race_obj.results_status == "Paying":
+                            race_obj.results_status = "Open"
+                            await db.flush()
+                            logger.warning(
+                                f"No runner positions set for {meeting.venue} R{race_num} — "
+                                f"reset status to Open for retry"
+                            )
+                        else:
+                            logger.warning(f"No runner positions set for {meeting.venue} R{race_num} — skipping settlement")
                         continue
 
                     # Settle picks for this race
