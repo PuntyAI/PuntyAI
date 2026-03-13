@@ -58,6 +58,9 @@
 </div>
 {% endif %}
 
+{# ── Below panels only in mobile accordion (sidebar has its own copies for desktop) ── #}
+{% if mobile_stats|default(false) %}
+
 {# ── 7-Day Trend ── #}
 {% if perf_history|default([])|length > 0 %}
 <div class="sidebar-panel">
@@ -120,3 +123,5 @@
     </div>
 </div>
 {% endif %}
+
+{% endif %}{# end mobile_stats #}
