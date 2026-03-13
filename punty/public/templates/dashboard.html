@@ -330,6 +330,12 @@
     }
     .timer-urgent { animation: timer-pulse 1s ease-in-out infinite; }
 
+    /* ── Stats accordion: hide header on desktop (always open) ── */
+    @media (min-width: 1024px) {
+        .dash-stats-accordion-header { display: none !important; }
+        .dash-stats-accordion > div:last-child { display: block !important; }
+    }
+
     /* ── Responsive ── */
     @media (max-width: 1023px) {
         .dash-grid > div { display: contents; }
@@ -340,14 +346,8 @@
         .dash-accordion-bestof { order: 4; }
         .dash-accordion-sequences { order: 5; }
         .dash-accordion-results { order: 6; }
-        .dash-stats-banner { order: 7; display: block !important; margin-top: 0.5rem; }
-        .dash-stats-inline-label { display: none; }
-        .dash-metrics { order: 8; }
-        .dash-pnl-chart { order: 9; }
-        .dash-sidebar-trend { order: 10; }
-        .dash-sidebar-bettype { order: 11; }
-        .dash-sidebar-tiprank { order: 12; }
-        .dash-sidebar-links { order: 13; }
+        .dash-stats-accordion { order: 7; }
+        .dash-sidebar-links { order: 8; }
         .metric-value { font-size: 1.1rem; }
         .metric-value-pnl { font-size: 1.1rem; }
     }
@@ -411,50 +411,7 @@
                     {% include "partials/live_edge.html" %}
                 </div>
 
-                {# ── Stats Banner (mobile separator) ── #}
-                <div class="dash-stats-banner" style="display: none;">
-                    <div class="section-heading" style="margin-bottom: 0;">
-                        <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                        Stats & Performance
-                    </div>
-                </div>
-
-                {# ── Metrics Row ── #}
                 {% set perf = dashboard.performance|default({}) %}
-                <div class="dash-metrics">
-                <div class="dash-stats-inline-label" style="text-transform: uppercase; font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.15em; color: var(--text-dim); margin-bottom: 0.25rem; padding-left: 0.25rem;">Today's Stats</div>
-                <div class="metrics-row">
-                    <a href="/stats" class="metric-cell">
-                        <div class="metric-label">Bets</div>
-                        <div class="metric-value">{{ perf.total_bets|default(0) }}</div>
-                    </a>
-                    <a href="/stats" class="metric-cell">
-                        <div class="metric-label">Winners</div>
-                        <div class="metric-value" style="color: var(--cyan);">{{ perf.total_winners|default(0) }}</div>
-                    </a>
-                    <a href="/stats" class="metric-cell">
-                        <div class="metric-label">Strike %</div>
-                        {% set sr = (perf.total_winners|default(0) / perf.total_bets * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
-                        <div class="metric-value" style="color: var(--yellow);">{{ sr }}%</div>
-                    </a>
-                    <a href="/stats" class="metric-cell">
-                        <div class="metric-label">P&L</div>
-                        {% set total_pnl = perf.total_pnl|default(0) %}
-                        <div class="metric-value metric-value-pnl" style="color: {{ '#4ade80' if total_pnl >= 0 else '#ef4444' }};">
-                            {{ '%+.0f'|format(total_pnl) | replace('+', '+$') | replace('-', '-$') }}
-                        </div>
-                        {% set today_roi = (total_pnl / (perf.total_bets * 10) * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
-                        <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if today_roi >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(today_roi) }}% ROI</div>
-                    </a>
-                    <a href="/stats" class="metric-cell">
-                        <div class="metric-label">7-Day</div>
-                        <div class="metric-value" style="color: {{ '#4ade80' if seven_day_pnl >= 0 else '#ef4444' }};">
-                            {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
-                        </div>
-                        <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if seven_day_roi|default(0) >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(seven_day_roi|default(0)) }}% ROI</div>
-                    </a>
-                </div>
-                </div>{# end dash-metrics wrapper #}
 
                 {# ── Today's Meetings ── #}
                 <div class="dash-meetings">
@@ -497,30 +454,6 @@
                     </div>
                     {% endif %}
 
-                    {# Meeting P&L Chart #}
-                    {% set mp = dashboard.meeting_pnl|default([]) %}
-                    {% if mp|length > 0 %}
-                    <div class="dash-pnl-chart rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
-                         x-data="{ expanded: false }">
-                        <div class="px-3 pt-3 pb-1 flex items-center justify-between cursor-pointer"
-                             @click="expanded = !expanded; setTimeout(() => window.drawMeetingPnl && window.drawMeetingPnl(), 350)">
-                            <div class="flex items-center gap-2">
-                                <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-[10px] font-heading uppercase tracking-wider" style="color: var(--text-muted);"
-                                      x-text="expanded ? 'Collapse' : 'Expand'"></span>
-                                <svg class="w-4 h-4 transition-transform" :class="expanded && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                            </div>
-                        </div>
-                        <div style="position: relative; padding: 0.5rem 0.75rem 0.75rem; transition: height 0.3s ease;"
-                             :style="{ height: expanded ? '380px' : '160px' }">
-                            <canvas id="meetingPnlChart" style="width: 100%; height: 100%;"></canvas>
-                        </div>
-                    </div>
-                    {% endif %}
-
                     {# Results & Wins — open if big_wins non-empty #}
                     <div class="dash-accordion-results rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
                         <div class="dash-accordion-header"
@@ -547,84 +480,156 @@
                     </div>
 
                 </div>{# end accordions #}
+
+                {# ═══════ STATS & PERFORMANCE ACCORDION ═══════ #}
+                <div class="dash-stats-accordion rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
+                    <div class="dash-stats-accordion-header dash-accordion-header" @click="open.stats = !open.stats" style="border: none;">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                            <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Stats & Performance</span>
+                        </div>
+                        <svg class="w-4 h-4 transition-transform" :class="open.stats && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                    <div x-show="open.stats" x-collapse>
+                        <div class="px-3 pb-3" style="display: flex; flex-direction: column; gap: 0.75rem; padding-top: 0.5rem;">
+
+                            {# ── Metrics Row (Today's Stats) ── #}
+                            <div class="metrics-row">
+                                <a href="/stats" class="metric-cell">
+                                    <div class="metric-label">Bets</div>
+                                    <div class="metric-value">{{ perf.total_bets|default(0) }}</div>
+                                </a>
+                                <a href="/stats" class="metric-cell">
+                                    <div class="metric-label">Winners</div>
+                                    <div class="metric-value" style="color: var(--cyan);">{{ perf.total_winners|default(0) }}</div>
+                                </a>
+                                <a href="/stats" class="metric-cell">
+                                    <div class="metric-label">Strike %</div>
+                                    {% set sr = (perf.total_winners|default(0) / perf.total_bets * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
+                                    <div class="metric-value" style="color: var(--yellow);">{{ sr }}%</div>
+                                </a>
+                                <a href="/stats" class="metric-cell">
+                                    <div class="metric-label">P&L</div>
+                                    {% set total_pnl = perf.total_pnl|default(0) %}
+                                    <div class="metric-value metric-value-pnl" style="color: {{ '#4ade80' if total_pnl >= 0 else '#ef4444' }};">
+                                        {{ '%+.0f'|format(total_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                    </div>
+                                    {% set today_roi = (total_pnl / (perf.total_bets * 10) * 100)|round(1) if perf.total_bets|default(0) > 0 else 0 %}
+                                    <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if today_roi >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(today_roi) }}% ROI</div>
+                                </a>
+                                <a href="/stats" class="metric-cell">
+                                    <div class="metric-label">7-Day</div>
+                                    <div class="metric-value" style="color: {{ '#4ade80' if seven_day_pnl >= 0 else '#ef4444' }};">
+                                        {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                    </div>
+                                    <div style="font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 600; color: {{ '#4ade80' if seven_day_roi|default(0) >= 0 else '#ef4444' }}; margin-top: 0.2rem;">{{ '%+.1f'|format(seven_day_roi|default(0)) }}% ROI</div>
+                                </a>
+                            </div>
+
+                            {# ── Meeting P&L Chart ── #}
+                            {% set mp = dashboard.meeting_pnl|default([]) %}
+                            {% if mp|length > 0 %}
+                            <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle); background: var(--bg-card-alt);"
+                                 x-data="{ expanded: false }">
+                                <div class="px-3 pt-3 pb-1 flex items-center justify-between cursor-pointer"
+                                     @click="expanded = !expanded; setTimeout(() => window.drawMeetingPnl && window.drawMeetingPnl(), 350)">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                                        <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] font-heading uppercase tracking-wider" style="color: var(--text-muted);"
+                                              x-text="expanded ? 'Collapse' : 'Expand'"></span>
+                                        <svg class="w-4 h-4 transition-transform" :class="expanded && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                    </div>
+                                </div>
+                                <div style="position: relative; padding: 0.5rem 0.75rem 0.75rem; transition: height 0.3s ease;"
+                                     :style="{ height: expanded ? '380px' : '160px' }">
+                                    <canvas id="meetingPnlChart" style="width: 100%; height: 100%;"></canvas>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {# ── 7-Day Trend ── #}
+                            {% if perf_history|default([])|length > 0 %}
+                            <div class="sidebar-panel">
+                                <div class="sidebar-panel-title">7-Day Trend</div>
+                                <div class="flex items-end justify-between gap-1" style="height: 48px; padding: 0 0.25rem;">
+                                    {% for day in perf_history %}
+                                    {% set bar_pnl = day.pnl|default(0) %}
+                                    {% set max_abs = perf_history|map(attribute='pnl')|map('abs')|max %}
+                                    {% set bar_h = ((bar_pnl|abs / max_abs) * 100)|round|int if max_abs > 0 else 10 %}
+                                    {% set bar_h = [bar_h, 8]|max %}
+                                    <div class="flex-1 flex flex-col items-center justify-end" style="height: 100%;">
+                                        <div class="w-full rounded-sm" style="height: {{ bar_h }}%; min-height: 3px; max-height: 100%; background: {% if bar_pnl >= 0 %}rgba(74, 222, 128, 0.6){% else %}rgba(248, 113, 113, 0.5){% endif %};"></div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="flex items-center justify-between mt-2">
+                                    <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">{{ perf_history|length }} days</span>
+                                    <span class="font-heading font-bold text-sm" style="color: {% if seven_day_pnl >= 0 %}#4ade80{% else %}#f87171{% endif %};">
+                                        {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                                        <span class="text-xs" style="color: var(--text-muted);">({{ '%+.1f'|format(seven_day_roi) }}%)</span>
+                                    </span>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {# ── By Bet Type ── #}
+                            {% set bt = dashboard.bet_types|default([]) %}
+                            {% if bt %}
+                            <div class="sidebar-panel">
+                                <div class="sidebar-panel-title">By Bet Type</div>
+                                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                                    {% for b in bt %}
+                                    <div class="product-bar" style="padding: 0.4rem 0.6rem;">
+                                        <span class="font-heading font-semibold text-xs text-white flex-1">{{ b.name }}</span>
+                                        <span class="text-xs" style="color: var(--text-muted);">{{ b.winners }}/{{ b.bets }}</span>
+                                        <span class="font-heading font-bold text-xs {% if b.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                                            {{ '+' if b.pnl >= 0 }}${{ '%.0f'|format(b.pnl) }}
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {# ── Tip Rank Rates ── #}
+                            {% set ranks = stats.pick_ranks|default([]) %}
+                            {% if ranks %}
+                            <div class="sidebar-panel">
+                                <div class="sidebar-panel-title">By Tip Rank</div>
+                                <div class="stat-grid">
+                                    {% for r in ranks %}
+                                    <div class="stat-cell" style="display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.4rem 0.5rem;">
+                                        <span class="rank-badge rank-{{ r.rank }}" style="width: 20px; height: 20px; font-size: 0.65rem;">{{ r.rank }}</span>
+                                        <div>
+                                            <div class="font-heading font-bold text-white text-sm">{{ r.rate }}%</div>
+                                            <div class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.total }}</div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                        </div>
+                    </div>
+                </div>{# end stats accordion #}
+
             </div>{# end left column #}
 
             {# ═══════ RIGHT COLUMN (35%) — Sidebar ═══════ #}
             <div class="dash-sidebar">
 
-                {# ── 7-Day Trend ── #}
-                {% if perf_history|default([])|length > 0 %}
-                <div class="sidebar-panel dash-sidebar-trend">
-                    <div class="sidebar-panel-title">7-Day Trend</div>
-                    <div class="flex items-end justify-between gap-1" style="height: 48px; padding: 0 0.25rem;">
-                        {% for day in perf_history %}
-                        {% set bar_pnl = day.pnl|default(0) %}
-                        {% set max_abs = perf_history|map(attribute='pnl')|map('abs')|max %}
-                        {% set bar_h = ((bar_pnl|abs / max_abs) * 100)|round|int if max_abs > 0 else 10 %}
-                        {% set bar_h = [bar_h, 8]|max %}
-                        <div class="flex-1 flex flex-col items-center justify-end" style="height: 100%;">
-                            <div class="w-full rounded-sm" style="height: {{ bar_h }}%; min-height: 3px; max-height: 100%; background: {% if bar_pnl >= 0 %}rgba(74, 222, 128, 0.6){% else %}rgba(248, 113, 113, 0.5){% endif %};"></div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    <div class="flex items-center justify-between mt-2">
-                        <span class="text-xs font-heading font-semibold" style="color: var(--text-muted);">{{ perf_history|length }} days</span>
-                        <span class="font-heading font-bold text-sm" style="color: {% if seven_day_pnl >= 0 %}#4ade80{% else %}#f87171{% endif %};">
-                            {{ '%+.0f'|format(seven_day_pnl) | replace('+', '+$') | replace('-', '-$') }}
-                            <span class="text-xs" style="color: var(--text-muted);">({{ '%+.1f'|format(seven_day_roi) }}%)</span>
-                        </span>
-                    </div>
-                </div>
-                {% endif %}
-
                 {# ── Recent Race Results (HTMX auto-refresh every 60s) ── #}
                 {% set recent_race_results = dashboard.recent_race_results|default([]) %}
-                <div id="recent-results"
+                <div class="dash-sidebar-recent" id="recent-results"
                      hx-get="/tips/api/dashboard/recent-results"
                      hx-trigger="every 60s"
                      hx-swap="innerHTML">
                     {% include "partials/recent_results.html" %}
                 </div>
-
-                {# Performance Snapshot removed — duplicates Today's Stats bar #}
-
-                {# ── By Bet Type (compact) ── #}
-                {% set bt = dashboard.bet_types|default([]) %}
-                {% if bt %}
-                <div class="sidebar-panel dash-sidebar-bettype">
-                    <div class="sidebar-panel-title">By Bet Type</div>
-                    <div style="display: flex; flex-direction: column; gap: 0.35rem;">
-                        {% for b in bt %}
-                        <div class="product-bar" style="padding: 0.4rem 0.6rem;">
-                            <span class="font-heading font-semibold text-xs text-white flex-1">{{ b.name }}</span>
-                            <span class="text-xs" style="color: var(--text-muted);">{{ b.winners }}/{{ b.bets }}</span>
-                            <span class="font-heading font-bold text-xs {% if b.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
-                                {{ '+' if b.pnl >= 0 }}${{ '%.0f'|format(b.pnl) }}
-                            </span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-
-                {# ── Tip Rank Rates ── #}
-                {% set ranks = stats.pick_ranks|default([]) %}
-                {% if ranks %}
-                <div class="sidebar-panel dash-sidebar-tiprank">
-                    <div class="sidebar-panel-title">By Tip Rank</div>
-                    <div class="stat-grid">
-                        {% for r in ranks %}
-                        <div class="stat-cell" style="display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.4rem 0.5rem;">
-                            <span class="rank-badge rank-{{ r.rank }}" style="width: 20px; height: 20px; font-size: 0.65rem;">{{ r.rank }}</span>
-                            <div>
-                                <div class="font-heading font-bold text-white text-sm">{{ r.rate }}%</div>
-                                <div class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.total }}</div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
 
                 {# ── Quick Links ── #}
                 <div class="dash-sidebar-links" style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -663,7 +668,7 @@ function dashData() {
     } catch(e) {}
 
     return {
-        open: { best_of: window.innerWidth >= 1024, sequences: false, results: window.innerWidth >= 1024 && {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, performance: false },
+        open: { best_of: window.innerWidth >= 1024, sequences: false, results: window.innerWidth >= 1024 && {{ 'true' if dashboard.big_wins|default([])|length > 0 else 'false' }}, stats: window.innerWidth >= 1024 },
         showAll: savedShowAll !== null ? savedShowAll : true,
         hiddenVenues: [],
         meetings: window.__dashMeetings || [],

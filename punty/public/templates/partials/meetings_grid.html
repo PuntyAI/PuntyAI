@@ -18,8 +18,6 @@
         <div
         {% endif %}
            class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group {% if meet.is_metro|default(false) %}metro-card{% endif %}"
-           :style="isActive('{{ meet.venue }}') ? '' : 'opacity: 0.35;'"
-           {% if not meet.is_metro|default(true) %}x-show="showAll" x-transition{% endif %}
            data-metro="{{ 'true' if meet.is_metro|default(false) else 'false' }}">
             <div class="flex items-start justify-between mb-2">
                 <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors text-sm leading-tight">
@@ -65,70 +63,5 @@
         {% endfor %}
     </div>
 
-    {# ── Filters — below meeting cards ── #}
-    <div style="margin-top: 0.75rem;">
-        <div class="flex items-center justify-between mb-2">
-            <span class="section-heading mb-0" style="font-size: 0.8rem;">
-                <svg class="w-4 h-4" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                Filters
-            </span>
-            <div class="flex items-center gap-2 flex-shrink-0">
-                <button @click="hiddenVenues.length ? (hiddenVenues = []) : null"
-                        x-show="hiddenVenues.length > 0"
-                        x-transition
-                        class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors"
-                        style="color: var(--magenta);">
-                    Clear
-                </button>
-                {% set has_regional = meetings|selectattr('is_metro', 'equalto', false)|list|length > 0 if meetings[0] is mapping and 'is_metro' in meetings[0]|default({}) else false %}
-                {% if has_regional %}
-                <button @click="toggleShowAll()" class="text-xs font-heading font-semibold uppercase tracking-wider transition-colors" style="color: var(--cyan);">
-                    <span x-text="showAll ? 'Metro Only' : 'Show All'">Show All</span>
-                </button>
-                {% endif %}
-            </div>
-        </div>
-        <div class="flex flex-wrap gap-2">
-            {% for meet in meetings %}
-            <button @click="toggleVenue('{{ meet.venue }}')"
-                    class="venue-pill font-heading font-semibold text-xs rounded-full transition-all"
-                    :class="isActive('{{ meet.venue }}') ? 'venue-pill-active' : 'venue-pill-inactive'">
-                {{ meet.venue }}
-            </button>
-            {% endfor %}
-        </div>
-    </div>
-
-    <style>
-    .venue-pill {
-        padding: 0.35rem 0.75rem;
-        cursor: pointer;
-        letter-spacing: 0.02em;
-    }
-    .venue-pill-active {
-        background: rgba(233, 30, 140, 0.15);
-        color: var(--magenta);
-        border: 1px solid rgba(233, 30, 140, 0.4);
-        box-shadow: 0 0 8px rgba(233, 30, 140, 0.1);
-    }
-    .venue-pill-active:hover {
-        background: rgba(233, 30, 140, 0.25);
-        box-shadow: 0 0 12px rgba(233, 30, 140, 0.2);
-    }
-    .venue-pill-inactive {
-        background: rgba(255, 255, 255, 0.03);
-        color: var(--text-muted);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        opacity: 0.55;
-    }
-    .venue-pill-inactive:hover {
-        opacity: 0.8;
-        border-color: rgba(255, 255, 255, 0.15);
-        background: rgba(255, 255, 255, 0.06);
-    }
-    @media (max-width: 639px) {
-        .venue-pill { padding: 0.25rem 0.5rem; font-size: 0.65rem; }
-    }
-    </style>
 </div>
 {% endif %}
