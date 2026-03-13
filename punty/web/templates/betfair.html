@@ -11,7 +11,7 @@
 <div class="max-w-6xl mx-auto space-y-6" x-data="betfairApp()" x-init="init()">
 
     <!-- Settlement toast notifications -->
-    <div class="fixed top-4 right-4 z-50 space-y-2" style="min-width: 320px;">
+    <div class="fixed top-4 right-4 z-50 space-y-2" style="max-width: calc(100vw - 2rem); width: 320px;">
         <template x-for="(toast, i) in toasts" :key="toast.id">
             <div x-show="toast.visible"
                  x-transition:enter="transition ease-out duration-300"

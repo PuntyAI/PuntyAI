@@ -2,13 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PuntyAI">
+    <link rel="apple-touch-icon" href="/static/favicon-64x64.png">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="icon" type="image/png" sizes="64x64" href="/static/favicon-64x64.png">
     <link rel="icon" type="image/png" sizes="48x48" href="/static/favicon-48x48.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
     <title>{% block title %}PuntyAI{% endblock %}</title>
+    <!-- Microsoft Clarity -->
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "vuz7k5a1yy");
+    </script>
     <!-- Tailwind CSS (precompiled) -->
     <link rel="stylesheet" href="/static/tailwind.css">
     <!-- HTMX -->
@@ -37,14 +50,22 @@
         }
 
         * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
         body {
             font-family: 'Source Sans Pro', sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
             min-height: 100vh;
+            min-height: 100dvh;
             line-height: 1.4;
             margin: 0;
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
         }
 
         .htmx-indicator { display: none; }
@@ -99,9 +120,9 @@
 
         .logo-tagline {
             font-family: 'Rajdhani', sans-serif;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             color: var(--text-muted);
-            letter-spacing: 3px;
+            letter-spacing: 2px;
             text-transform: uppercase;
         }
 
@@ -246,10 +267,10 @@
 
     <!-- Header -->
     <header class="site-header">
-        <div class="max-w-[1400px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-8">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-8 py-2 sm:py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4 sm:gap-8">
                 <a href="/" class="flex items-center">
-                    <img src="/static/punty-logo-wide.png" alt="PuntyAI" class="h-20 md:h-24 w-auto" style="object-fit: contain;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <img src="/static/punty-logo-wide.png" alt="PuntyAI" class="h-10 sm:h-16 md:h-24 w-auto" style="object-fit: contain;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="hidden flex-col">
                         <div class="logo-text">PUNTYAI</div>
                         <div class="logo-tagline">Command Centre</div>
@@ -284,7 +305,7 @@
                     <a href="/logout" class="text-xs transition-colors" style="color: var(--text-muted);" onmouseover="this.style.color='var(--magenta)'" onmouseout="this.style.color='var(--text-muted)'">[Logout]</a>
                 {% endif %}
                 <!-- Mobile hamburger -->
-                <button id="mobile-menu-btn" class="md:hidden ml-2 p-1.5 rounded" style="color: var(--text-secondary);" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+                <button id="mobile-menu-btn" class="md:hidden ml-2 p-2.5 rounded" style="color: var(--text-secondary);" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
@@ -292,20 +313,21 @@
             </div>
         </div>
         <!-- Mobile nav dropdown -->
-        <nav id="mobile-menu" class="hidden md:hidden border-t px-4 pb-3 pt-2" style="border-color: var(--border); background: var(--bg-card);">
-            <a href="/" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Dashboard</a>
-            <a href="/meets" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Meets</a>
-            <a href="/content" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Content</a>
-            <a href="/review" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">
+        <nav id="mobile-menu" class="hidden md:hidden border-t px-4 pb-3 pt-1" style="border-color: var(--border); background: var(--bg-card);">
+            <a href="/" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Dashboard</a>
+            <a href="/meets" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Meets</a>
+            <a href="/content" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Content</a>
+            <a href="/review" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">
                 Review
                 <span class="ml-1 bg-punty-magenta/20 text-punty-mbright text-xs px-2 py-0.5 rounded-full"
                       hx-get="/api/content/review-count" hx-trigger="every 60s [document.visibilityState==='visible']" hx-swap="innerHTML">
                     {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
                 </span>
             </a>
-            <a href="/probability" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Calibration</a>
-            <a href="/analytics" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Analytics</a>
-            <a href="/settings" class="block py-2 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Settings</a>
+            <a href="/betfair" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Betfair</a>
+            <a href="/probability" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Calibration</a>
+            <a href="/analytics" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Analytics</a>
+            <a href="/settings" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Settings</a>
         </nav>
     </header>
 
