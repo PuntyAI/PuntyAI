@@ -14,9 +14,9 @@
             <!-- Meeting Selector Dropdown -->
             <div class="relative inline-block">
                 <select id="meeting-selector" onchange="switchMeeting(this.value)"
-                        style="font-family: Orbitron, sans-serif; font-size: 1.8rem; font-weight: 700; letter-spacing: 1px;
+                        style="font-family: Orbitron, sans-serif; font-size: clamp(1.1rem, 5vw, 1.8rem); font-weight: 700; letter-spacing: 1px;
                                background: transparent; border: none; color: var(--text-primary);
-                               cursor: pointer; appearance: none; padding-right: 2rem;"
+                               cursor: pointer; appearance: none; padding-right: 2rem; max-width: 100%;"
                         class="hover:text-punty-coral focus:outline-none">
                     {% for m in all_meetings %}
                     <option value="{{ m.id }}" {% if m.id == meeting.id %}selected{% endif %}
@@ -73,32 +73,32 @@
     <!-- Quick Actions -->
     <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px;" class="p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-3">
         <button onclick="startScrape()" id="scrape-btn"
-                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x1F504; Scrape All Data
+                class="bg-white text-gray-700 px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg border hover:bg-gray-50 text-sm">
+            &#x1F504; Scrape
         </button>
         <button onclick="startSpeedMaps()" id="speedmap-btn"
-                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x1F3C3; Fetch Speed Maps
+                class="bg-white text-gray-700 px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg border hover:bg-gray-50 text-sm">
+            &#x1F3C3; Speed Maps
         </button>
         <button onclick="startGenerate()" id="generate-btn"
-                class="bg-punty-coral text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm">
-            &#x1F4E7; Generate Early Mail
+                class="bg-punty-coral text-white px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm font-medium">
+            &#x1F4E7; Generate
         </button>
         <button onclick="checkResults()" id="results-btn"
-                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x1F3C6; Check Results
+                class="bg-white text-gray-700 px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg border hover:bg-gray-50 text-sm">
+            &#x1F3C6; Results
         </button>
         <button onclick="startPuntReview()" id="puntreview-btn"
-                class="bg-punty-coral text-white px-4 py-2 rounded-lg hover:bg-punty-coral/90">
-            &#x1F4CA; Generate Punt Review
+                class="bg-punty-coral text-white px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg hover:bg-punty-coral/90 text-sm font-medium">
+            &#x1F4CA; Punt Review
         </button>
         <button onclick="preRaceScrape()" id="prerace-btn"
-                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x23F1; Pre-Race Refresh
+                class="bg-white text-gray-700 px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg border hover:bg-gray-50 text-sm">
+            &#x23F1; Pre-Race
         </button>
         <button onclick="toggleMonitor()" id="monitor-btn"
-                class="bg-white text-gray-700 px-4 py-2 rounded-lg border hover:bg-gray-50">
-            &#x1F50D; Start Monitor
+                class="bg-white text-gray-700 px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg border hover:bg-gray-50 text-sm">
+            &#x1F50D; Monitor
         </button>
     </div>
 
@@ -184,14 +184,14 @@
         <!-- Races -->
         <div class="lg:col-span-2">
             <div style="background: var(--bg-card);" class="rounded-lg shadow">
-                <div class="px-6 py-4" style="border-bottom: 1px solid var(--border-subtle);">
+                <div class="px-4 sm:px-6 py-3 sm:py-4" style="border-bottom: 1px solid var(--border-subtle);">
                     <h2 class="text-lg font-semibold" style="color: var(--text-primary);">
                         Races ({{ meeting.races|length }})
                     </h2>
                 </div>
                 <div style="border-color: var(--border-subtle);" class="divide-y">
                     {% for race in meeting.races|sort(attribute='race_number') %}
-                    <div class="p-6" x-data="{ open: false, detail: null }">
+                    <div class="p-3 sm:p-6" x-data="{ open: false, detail: null }">
                         <div class="flex justify-between items-start cursor-pointer" @click="open = !open">
                             <div>
                                 <div class="flex items-center space-x-3">
@@ -238,9 +238,9 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-2 sm:space-x-4 flex-shrink-0 ml-2">
                                 {% if race.start_time %}
-                                <span style="font-family: Orbitron, sans-serif; font-size: 1.1rem; font-weight: 600; color: var(--cyan);">{{ race.start_time.strftime('%H:%M') }}</span>
+                                <span style="font-family: Orbitron, sans-serif; font-size: clamp(0.85rem, 3vw, 1.1rem); font-weight: 600; color: var(--cyan);">{{ race.start_time.strftime('%H:%M') }}</span>
                                 {% endif %}
                                 {% if race_previews_enabled %}
                                 <button hx-post="/api/content/generate"
@@ -263,8 +263,8 @@
                         {% set exotics = race_picks|selectattr('pick_type', 'equalto', 'exotic')|list %}
                         {% set race_sequences = sequences_by_race.get(race.race_number, []) %}
                         {% if selections or exotics or race_sequences %}
-                        <div style="background: var(--bg-card-alt); border-top: 1px solid var(--border-subtle);" class="mt-0 px-4 py-2.5">
-                            <div class="flex flex-wrap items-center gap-2" style="font-family: Rajdhani, sans-serif;">
+                        <div style="background: var(--bg-card-alt); border-top: 1px solid var(--border-subtle);" class="mt-0 px-2 sm:px-4 py-2">
+                            <div class="flex flex-wrap items-start gap-1.5 sm:gap-2" style="font-family: Rajdhani, sans-serif;">
                                 {% for pick in selections|sort(attribute='tip_rank') %}
                                 {% set rank_labels = {1: 'TOP', 2: '2nd', 3: '3rd', 4: 'Roughie'} %}
                                 {% set rank_styles = {1: 'pick-top', 2: 'pick-2nd', 3: 'pick-3rd', 4: 'pick-roughie'} %}
@@ -272,15 +272,15 @@
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold {{ rank_styles.get(pick.tip_rank, 'pick-2nd') }}" {% if is_scratched %}style="text-decoration: line-through; opacity: 0.5;{% if pick.is_puntys_pick %} outline: 2px solid #f472b6; outline-offset: 1px;{% endif %}"{% elif pick.is_puntys_pick %}style="outline: 2px solid #f472b6; outline-offset: 1px;"{% endif %}>
                                     {% if pick.is_puntys_pick %}&#x1F3AF; {% elif pick.tip_rank == 1 %}&#9733; {% endif %}{{ rank_labels.get(pick.tip_rank, '#' ~ pick.tip_rank) }}:
                                     #{{ pick.saddlecloth }} {{ pick.horse_name }}
-                                    {% if is_scratched %}<span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:0 4px;border-radius:3px;font-size:0.65rem;font-weight:700;text-decoration:none;opacity:1;">SCR</span>{% endif %}
+                                    {% if is_scratched %}<span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:0 4px;border-radius:3px;font-size:0.7rem;font-weight:700;text-decoration:none;opacity:1;">SCR</span>{% endif %}
                                     {% set display_odds = pick.place_odds_at_tip if pick.bet_type == 'place' else pick.odds_at_tip %}
                                     {% if display_odds %}${{ "%.2f"|format(display_odds) }}{% endif %}
                                     {% if pick.win_probability %}
                                         {% set prob_pct = (pick.win_probability * 100)|round(0)|int %}
-                                        <span style="background:{% if prob_pct >= 30 %}#166534{% elif prob_pct >= 15 %}#0e7490{% elif prob_pct >= 8 %}#a16207{% else %}#6b7280{% endif %};color:#fff;padding:0 4px;border-radius:3px;font-size:0.65rem;">{{ prob_pct }}%</span>
+                                        <span style="background:{% if prob_pct >= 30 %}#166534{% elif prob_pct >= 15 %}#0e7490{% elif prob_pct >= 8 %}#a16207{% else %}#6b7280{% endif %};color:#fff;padding:0 4px;border-radius:3px;font-size:0.7rem;">{{ prob_pct }}%</span>
                                     {% endif %}
                                     {% if pick.value_rating and pick.value_rating > 1.05 %}
-                                        <span style="color:#4ade80;font-size:0.65rem;" title="Value: {{ '%.2f'|format(pick.value_rating) }}x">VALUE</span>
+                                        <span style="color:#4ade80;font-size:0.7rem;" title="Value: {{ '%.2f'|format(pick.value_rating) }}x">VALUE</span>
                                     {% endif %}
                                     {% if pick.tracked_only %}<span style="opacity:0.5;font-style:italic;text-decoration:line-through;">TRACKED</span>{% elif pick.bet_stake %}<span style="opacity:0.8;">${{ "%.0f"|format(pick.bet_stake) }} {{ (pick.bet_type or 'win')|replace('_', ' ')|title }}</span>{% endif %}
                                     {% if pick.settled %}
@@ -315,17 +315,17 @@
                         {% endif %}
 
                         <!-- Runners -->
-                        <div x-show="open" x-collapse class="mt-4 overflow-x-auto">
+                        <div x-show="open" x-collapse class="mt-4 overflow-x-auto -mx-3 sm:mx-0">
                             <table class="min-w-full text-sm">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Horse</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Jockey</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Wt</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Form</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Speed</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Odds</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500">Horse</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 hidden sm:table-cell">Jockey</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 hidden md:table-cell">Wt</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 hidden sm:table-cell">Form</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500">Speed</th>
+                                        <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500">Odds</th>
                                         {% if race.results_status and race.results_status in ('Paying', 'Closed', 'Interim') %}
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Pos</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Margin</th>
@@ -337,8 +337,8 @@
                                     {% for runner in race.runners|sort(attribute='saddlecloth') %}
                                 <tbody class="divide-y divide-gray-100" x-data="{ expanded: false }">
                                     <tr class="{{ 'line-through text-gray-400' if runner.scratched else '' }}">
-                                        <td class="px-3 py-2">{{ runner.saddlecloth or runner.barrier }}</td>
-                                        <td class="px-3 py-2 font-medium">
+                                        <td class="px-2 sm:px-3 py-2">{{ runner.saddlecloth or runner.barrier }}</td>
+                                        <td class="px-2 sm:px-3 py-2 font-medium">
                                             {{ runner.horse_name }}
                                             {% if runner.scratched %}
                                             <span class="text-red-500 text-xs">(SCR)</span>
@@ -346,10 +346,11 @@
                                             {% if runner.horse_age and runner.horse_sex and not runner.scratched %}
                                             <span class="text-xs text-gray-400">{{ runner.horse_age }}yo {{ runner.horse_sex[0] if runner.horse_sex else '' }}</span>
                                             {% endif %}
+                                            <span class="sm:hidden block text-xs text-gray-400">{{ runner.jockey or '' }}</span>
                                         </td>
-                                        <td class="px-3 py-2 text-xs">{{ runner.jockey or '-' }}</td>
-                                        <td class="px-3 py-2">{{ runner.weight or '-' }}</td>
-                                        <td class="px-3 py-2 font-mono text-xs">{{ runner.last_five or runner.form or '-' }}</td>
+                                        <td class="px-2 sm:px-3 py-2 text-xs hidden sm:table-cell">{{ runner.jockey or '-' }}</td>
+                                        <td class="px-2 sm:px-3 py-2 hidden md:table-cell">{{ runner.weight or '-' }}</td>
+                                        <td class="px-2 sm:px-3 py-2 font-mono text-xs hidden sm:table-cell">{{ runner.last_five or runner.form or '-' }}</td>
                                         <td class="px-3 py-2">
                                             {% if runner.speed_map_position %}
                                             {% set pos_colors = {
@@ -534,7 +535,7 @@
                                                     </svg>
                                                     Extended Form ({{ form_runs|length }} runs)
                                                 </button>
-                                                <div x-show="showForm" x-collapse class="mt-2 overflow-x-auto">
+                                                <div x-show="showForm" x-collapse class="mt-2 -mx-3 overflow-x-auto">
                                                     <table class="min-w-full text-xs">
                                                         <thead class="bg-gray-700/50">
                                                             <tr>
@@ -632,20 +633,20 @@
                             <div class="mt-4 bg-gray-50 rounded-lg border border-gray-200">
                                 <!-- Placings -->
                                 <div class="border-b border-gray-200">
-                                    <div class="px-4 py-2 bg-gray-100 text-xs font-semibold text-gray-500 uppercase flex">
-                                        <span class="w-10">Pos</span>
-                                        <span class="flex-1">Runner</span>
-                                        <span class="w-16 text-right">Win</span>
-                                        <span class="w-16 text-right">Place</span>
+                                    <div class="px-2 sm:px-4 py-2 bg-gray-100 text-xs font-semibold text-gray-500 uppercase flex">
+                                        <span class="w-8 sm:w-10">Pos</span>
+                                        <span class="flex-1 min-w-0">Runner</span>
+                                        <span class="w-14 sm:w-16 text-right">Win</span>
+                                        <span class="w-14 sm:w-16 text-right">Place</span>
                                     </div>
                                     {% set pos_labels = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th'} %}
                                     {% set pos_colors = {1: 'text-green-700 font-bold', 2: 'text-blue-600 font-semibold', 3: 'text-amber-600 font-semibold', 4: 'text-gray-600'} %}
                                     {% for r in [winner, second, third, fourth] if r %}
-                                    <div class="px-4 py-1.5 flex items-center text-sm {{ 'bg-green-50' if r.finish_position == 1 else '' }}">
-                                        <span class="w-10 {{ pos_colors.get(r.finish_position, 'text-gray-600') }}">{{ pos_labels.get(r.finish_position, r.finish_position) }}</span>
-                                        <span class="flex-1">
-                                            <span class="font-medium {{ 'text-gray-900' if r.finish_position <= 2 else 'text-gray-700' }}">{{ r.saddlecloth }}. {{ r.horse_name|upper }}</span>
-                                            <span class="text-xs text-gray-400 ml-1">{{ r.jockey or '' }}</span>
+                                    <div class="px-2 sm:px-4 py-1.5 flex items-center text-sm {{ 'bg-green-50' if r.finish_position == 1 else '' }}">
+                                        <span class="w-8 sm:w-10 {{ pos_colors.get(r.finish_position, 'text-gray-600') }}">{{ pos_labels.get(r.finish_position, r.finish_position) }}</span>
+                                        <span class="flex-1 min-w-0">
+                                            <span class="font-medium truncate block {{ 'text-gray-900' if r.finish_position <= 2 else 'text-gray-700' }}">{{ r.saddlecloth }}. {{ r.horse_name|upper }}</span>
+                                            <span class="text-xs text-gray-400 hidden sm:inline ml-1">{{ r.jockey or '' }}</span>
                                             {% if r.result_margin and r.finish_position > 1 %}
                                             <span class="text-xs text-gray-400 ml-1">({{ r.result_margin }})</span>
                                             {% endif %}
