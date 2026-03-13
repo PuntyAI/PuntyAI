@@ -336,16 +336,18 @@
         .dash-accordions { display: contents !important; }
         #live-edge { order: 1; }
         .dash-meetings { order: 2; }
-        .dash-metrics { order: 3; }
-        .dash-sidebar-recent { order: 4; }
-        .dash-pnl-chart { order: 5; }
-        .dash-accordion-bestof { order: 6; }
-        .dash-accordion-sequences { order: 7; }
-        .dash-accordion-results { order: 8; }
-        .dash-sidebar-trend { order: 9; }
-        .dash-sidebar-bettype { order: 10; }
-        .dash-sidebar-tiprank { order: 11; }
-        .dash-sidebar-links { order: 12; }
+        .dash-sidebar-recent { order: 3; }
+        .dash-accordion-bestof { order: 4; }
+        .dash-accordion-sequences { order: 5; }
+        .dash-accordion-results { order: 6; }
+        .dash-stats-banner { order: 7; display: block !important; margin-top: 0.5rem; }
+        .dash-stats-inline-label { display: none; }
+        .dash-metrics { order: 8; }
+        .dash-pnl-chart { order: 9; }
+        .dash-sidebar-trend { order: 10; }
+        .dash-sidebar-bettype { order: 11; }
+        .dash-sidebar-tiprank { order: 12; }
+        .dash-sidebar-links { order: 13; }
         .metric-value { font-size: 1.1rem; }
         .metric-value-pnl { font-size: 1.1rem; }
     }
@@ -409,10 +411,18 @@
                     {% include "partials/live_edge.html" %}
                 </div>
 
+                {# ── Stats Banner (mobile separator) ── #}
+                <div class="dash-stats-banner" style="display: none;">
+                    <div class="section-heading" style="margin-bottom: 0;">
+                        <svg class="w-5 h-5" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        Stats & Performance
+                    </div>
+                </div>
+
                 {# ── Metrics Row ── #}
                 {% set perf = dashboard.performance|default({}) %}
                 <div class="dash-metrics">
-                <div style="text-transform: uppercase; font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.15em; color: var(--text-dim); margin-bottom: 0.25rem; padding-left: 0.25rem;">Today's Stats</div>
+                <div class="dash-stats-inline-label" style="text-transform: uppercase; font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.15em; color: var(--text-dim); margin-bottom: 0.25rem; padding-left: 0.25rem;">Today's Stats</div>
                 <div class="metrics-row">
                     <a href="/stats" class="metric-cell">
                         <div class="metric-label">Bets</div>
