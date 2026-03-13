@@ -342,7 +342,7 @@
         .dash-accordions { display: contents !important; }
         #live-edge { order: 1; }
         .dash-meetings { order: 2; }
-        .dash-sidebar-recent { order: 3; }
+        #recent-results { order: 3; }
         .dash-accordion-bestof { order: 4; }
         .dash-accordion-sequences { order: 5; }
         .dash-accordion-results { order: 6; }
@@ -416,6 +416,15 @@
                 {# ── Today's Meetings ── #}
                 <div class="dash-meetings">
                     {% include "partials/meetings_grid.html" %}
+                </div>
+
+                {# ── Recent Race Results ── #}
+                {% set recent_race_results = dashboard.recent_race_results|default([]) %}
+                <div id="recent-results"
+                     hx-get="/tips/api/dashboard/recent-results"
+                     hx-trigger="every 60s"
+                     hx-swap="innerHTML">
+                    {% include "partials/recent_results.html" %}
                 </div>
 
                 {# ═══════ ACCORDIONS ═══════ #}
@@ -621,15 +630,6 @@
 
             {# ═══════ RIGHT COLUMN (35%) — Sidebar ═══════ #}
             <div class="dash-sidebar">
-
-                {# ── Recent Race Results (HTMX auto-refresh every 60s) ── #}
-                {% set recent_race_results = dashboard.recent_race_results|default([]) %}
-                <div class="dash-sidebar-recent" id="recent-results"
-                     hx-get="/tips/api/dashboard/recent-results"
-                     hx-trigger="every 60s"
-                     hx-swap="innerHTML">
-                    {% include "partials/recent_results.html" %}
-                </div>
 
                 {# ── Quick Links ── #}
                 <div class="dash-sidebar-links" style="display: flex; flex-direction: column; gap: 0.5rem;">
