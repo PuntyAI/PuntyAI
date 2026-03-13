@@ -425,6 +425,9 @@ PROVIDER_KEYS = {
         "betfair_stake", "betfair_stake_mode", "betfair_min_odds", "betfair_commission_rate", "betfair_max_daily_loss",
         "betfair_min_place_prob",
     ],
+    "probability": [
+        "lgbm_market_influence", "confidence_boost_enabled",
+    ],
 }
 
 

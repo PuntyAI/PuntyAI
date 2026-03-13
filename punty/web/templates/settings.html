@@ -483,6 +483,49 @@
 
         </div>
 
+        <!-- Probability Engine -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-punty-border">
+                <h2 class="text-lg font-semibold text-gray-900">Probability Engine</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-500 mb-2">Controls how market odds influence tip selections. Lower market influence = more independent LGBM-driven picks.</p>
+
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Market Influence: <span id="mi-label" class="font-bold text-gray-700">{{ settings.get('lgbm_market_influence', {}).get('value', '0.45') | float * 100 | round }}%</span></label>
+                    <input type="range" id="prob_market_influence" min="0" max="100" step="5"
+                           value="{{ settings.get('lgbm_market_influence', {}).get('value', '0.45') | float * 100 | round }}"
+                           oninput="document.getElementById('mi-label').textContent = this.value + '%'; document.getElementById('lgbm-label').textContent = (100 - this.value) + '%'"
+                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-punty-coral">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>0% Pure LGBM</span>
+                        <span>LGBM weight: <span id="lgbm-label" class="font-bold text-gray-600">{{ (100 - settings.get('lgbm_market_influence', {}).get('value', '0.45') | float * 100) | round }}%</span></span>
+                        <span>100% Pure Market</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2" style="border-top: 1px solid rgba(0,0,0,0.06);">
+                    <div>
+                        <span class="text-sm text-gray-600">Confidence Boost</span>
+                        <p class="text-xs text-gray-400">+15% boost when tissue rank-1 matches market favourite</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="prob_confidence_boost"
+                               {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}checked{% endif %}
+                               class="sr-only peer">
+                        <div onclick="this.previousElementSibling.checked = !this.previousElementSibling.checked"
+                             class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-punty-coral"></div>
+                    </label>
+                </div>
+
+                <div class="flex space-x-2 pt-3">
+                    <button onclick="saveProbabilitySettings()"
+                            class="bg-punty-coral text-white px-3 py-1 rounded text-sm hover:bg-punty-coral/90">Save Probability Settings</button>
+                    <span id="prob-save-status" class="text-xs text-green-500 py-1 hidden">Saved! Takes effect on next generation.</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Content Generation -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-punty-border">
@@ -1190,6 +1233,19 @@ async function saveBetfairSettings() {
         betfair_commission_rate: document.getElementById('bf_commission').value,
         betfair_max_daily_loss: document.getElementById('bf_max_loss').value,
     });
+}
+
+async function saveProbabilitySettings() {
+    const marketPct = document.getElementById('prob_market_influence').value;
+    const marketVal = (parseFloat(marketPct) / 100).toFixed(2);
+    const boostEnabled = document.getElementById('prob_confidence_boost').checked ? 'true' : 'false';
+    await saveApiKeys('probability', {
+        lgbm_market_influence: marketVal,
+        confidence_boost_enabled: boostEnabled,
+    });
+    const status = document.getElementById('prob-save-status');
+    status.classList.remove('hidden');
+    setTimeout(() => status.classList.add('hidden'), 3000);
 }
 </script>
 {% endblock %}

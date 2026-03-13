@@ -250,6 +250,15 @@ class AppSettings(Base):
             "value": "0.50",
             "description": "Minimum place probability (0-1) to queue a bet — only high-confidence selections",
         },
+        # Probability engine settings
+        "lgbm_market_influence": {
+            "value": "0.45",
+            "description": "Market weight in LGBM blend (0.0 = pure LGBM, 1.0 = pure market). LGBM influence = 1 - this value.",
+        },
+        "confidence_boost_enabled": {
+            "value": "true",
+            "description": "Enable +0.15 confidence boost when tissue rank-1 matches market favourite",
+        },
     }
 
     def to_dict(self) -> dict[str, Any]:

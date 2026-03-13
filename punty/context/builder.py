@@ -63,6 +63,28 @@ class ContextBuilder:
         except Exception as e:
             logger.debug(f"Failed to load DL patterns: {e}")
 
+        # Load market influence setting (0.0 = pure LGBM, 1.0 = pure market)
+        self._market_influence = None
+        self._confidence_boost_enabled = True
+        try:
+            mi_result = await self.db.execute(
+                select(AppSettings).where(AppSettings.key == "lgbm_market_influence")
+            )
+            mi_setting = mi_result.scalar_one_or_none()
+            if mi_setting and mi_setting.value:
+                self._market_influence = float(mi_setting.value)
+                logger.info(f"Market influence: {self._market_influence:.0%} "
+                           f"(LGBM: {1.0 - self._market_influence:.0%})")
+
+            cb_result = await self.db.execute(
+                select(AppSettings).where(AppSettings.key == "confidence_boost_enabled")
+            )
+            cb_setting = cb_result.scalar_one_or_none()
+            if cb_setting and cb_setting.value:
+                self._confidence_boost_enabled = cb_setting.value.lower() == "true"
+        except Exception:
+            logger.debug("Failed to load probability engine settings, using defaults")
+
         # Load tuned bet type thresholds (once for all races)
         self._sel_thresholds = None
         try:
@@ -550,6 +572,7 @@ class ContextBuilder:
                 active_runners, race, meeting_ctx,
                 weights=getattr(self, "_probability_weights", None),
                 dl_patterns=getattr(self, "_dl_patterns", None),
+                market_influence=getattr(self, "_market_influence", None),
             )
 
             # Build median odds lookup from ORM runners (PointsBet/Betfair priority)
@@ -599,7 +622,11 @@ class ContextBuilder:
                     runner_data["_place_prob_raw"] = rp.place_probability
                     runner_data["_edge_raw"] = rp.edge
                     # Tissue engine confidence boost (market agreement signal)
-                    runner_data["_confidence_boost"] = rp.factors.get("_confidence_boost", 0.0)
+                    # Disabled via settings → confidence_boost_enabled = false
+                    if self._confidence_boost_enabled:
+                        runner_data["_confidence_boost"] = rp.factors.get("_confidence_boost", 0.0)
+                    else:
+                        runner_data["_confidence_boost"] = 0.0
                     tissue_price = rp.factors.get("_tissue_price")
                     if tissue_price:
                         runner_data["_tissue_price"] = tissue_price
