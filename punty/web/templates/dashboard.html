@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -20,556 +20,490 @@
         </div>
     </div>
 
-    <!-- Hero Stats Row -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
-            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                {{ all_time_stats.today_winners or 0 }}
-            </div>
-            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Today So Far</div>
+    <!-- ═══ TODAY'S MEETS — always visible, top of page ═══ -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-punty-border flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900">Today's Race Meets</h2>
+            <a href="/meets" class="text-punty-coral hover:underline text-sm">View all</a>
         </div>
-        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
-            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                {{ all_time_stats.total_winners or 0 }}
+        <div class="p-3 sm:p-6">
+            {% if todays_meetings %}
+            <ul class="divide-y divide-punty-border">
+                {% for meeting in todays_meetings %}
+                {% set progress = meeting_progress.get(meeting.id, {}) %}
+                <li class="py-2.5 sm:py-3">
+                    <a href="/meets/{{ meeting.id }}" class="flex justify-between items-center hover:bg-punty-card2 -mx-2 px-2 py-1 rounded">
+                        <div>
+                            <p class="font-medium text-gray-900">{{ meeting.venue }}</p>
+                            <p class="text-sm text-gray-500">
+                                {{ meeting.track_condition or 'TBC' }} |
+                                {{ meeting.races|length if meeting.races else '?' }} races
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            {% if progress.selected %}
+                            <span class="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded font-medium" title="Active - tracking picks">Active</span>
+                            {% else %}
+                            <span class="bg-gray-100 text-gray-400 text-xs px-2 py-1 rounded" title="Not selected">Inactive</span>
+                            {% endif %}
+                            {% if progress.status == 'completed' %}
+                            <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-medium">&#x2714; Done</span>
+                            {% elif progress.status == 'in_progress' %}
+                            <span class="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-medium">{{ progress.label }}</span>
+                            {% elif progress.status == 'not_started' %}
+                            <span class="countdown-timer bg-amber-100 text-amber-900 text-xs px-2 py-1 rounded font-medium" data-start-time="{{ progress.first_race_iso }}">
+                                {{ progress.label }}
+                            </span>
+                            {% elif progress.status == 'no_races' %}
+                            <span class="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">{{ progress.label }}</span>
+                            {% else %}
+                            <span class="text-punty-coral">&#x2192;</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="text-center py-6 text-gray-500">
+                <p class="text-4xl mb-2">&#x1F3C7;</p>
+                <p>No meetings today</p>
+                <a href="/meets" class="text-punty-coral hover:underline text-sm">Add a meeting</a>
             </div>
-            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Total Winners</div>
-        </div>
-        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
-            <div class="text-3xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                {{ todays_meetings|length }}
-            </div>
-            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Meetings Today</div>
-        </div>
-        <div class="bg-punty-card rounded-xl p-4 sm:p-5 border border-punty-border text-center">
-            <div class="text-2xl sm:text-3xl font-display font-black" style="color: var(--punty-cyan);">
-                ${{ token_stats.month_cost if token_stats is defined else '0' }}
-            </div>
-            <div class="text-xs sm:text-sm font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">AI Cost (30d)</div>
-            {% if token_stats is defined and token_stats.today_cost %}
-            <div class="text-xs text-gray-600 mt-0.5">${{ token_stats.today_cost }} today</div>
             {% endif %}
         </div>
     </div>
 
-    <!-- Wins Ticker -->
-    <div id="wins-ticker" class="bg-punty-card rounded-xl border border-punty-border overflow-hidden">
-        <div class="flex items-center px-4 py-2 border-b border-punty-border">
-            <span class="text-punty-magenta text-lg mr-2">&#x1F3C6;</span>
-            <span class="font-heading font-semibold text-sm uppercase tracking-wider text-gray-400">Recent Wins</span>
+    <!-- Pending Reviews (only if items exist) -->
+    {% set review_items = recent_content|selectattr('status', 'equalto', 'pending_review')|list %}
+    {% if review_items %}
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-punty-border flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900">Needs Your Approval</h2>
+            <a href="/review" class="text-punty-coral hover:underline text-sm">Review all</a>
         </div>
-        <div class="ticker-container relative overflow-hidden" style="height: 48px;">
-            <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-4 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
-                <span class="text-gray-500 text-sm">Loading wins...</span>
-            </div>
+        <div class="p-3 sm:p-6">
+            <ul class="divide-y divide-punty-border">
+                {% for item in review_items[:5] %}
+                <li class="py-2.5 sm:py-3">
+                    <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:bg-punty-card2 -mx-2 px-2 py-1 rounded">
+                        <div>
+                            <p class="font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</p>
+                            <p class="text-sm text-gray-500">{{ item.meeting_id }}</p>
+                        </div>
+                        <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Review</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
         </div>
     </div>
+    {% endif %}
 
-    <style>
-        @keyframes ticker-scroll {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-50%); }
-        }
-        .ticker-scroll:hover {
-            animation-play-state: paused;
-        }
-        .win-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 1rem;
-            background: rgba(255,255,255,0.03);
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-        .win-celebration {
-            font-family: 'Rajdhani', sans-serif;
-            font-weight: 700;
-            font-size: 0.9rem;
-            background: var(--gradient-sunset);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .win-horse {
-            color: #fff;
-            font-weight: 600;
-        }
-        .win-venue {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-        .win-amounts {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.75rem;
-        }
-        .win-stake { color: var(--text-muted); }
-        .win-return { color: #4ade80; }
-    </style>
-
-    <!-- 1) Results Monitor Status -->
-    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+    <!-- ═══ RESULTS MONITOR — below meets ═══ -->
+    <div class="bg-white rounded-lg shadow p-3 sm:p-6">
         <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
             <div class="flex items-center">
-                <div class="p-2 sm:p-3 {{ 'bg-green-100' if monitor_status.running else 'bg-gray-100' }} rounded-lg">
-                    <span id="monitor-status-dot" class="text-xl sm:text-2xl">{{ '🟢' if monitor_status.running else '⚪' }}</span>
+                <div class="p-2 {{ 'bg-green-100' if monitor_status.running else 'bg-gray-100' }} rounded-lg">
+                    <span id="monitor-status-dot" class="text-xl">{{ '🟢' if monitor_status.running else '⚪' }}</span>
                 </div>
-                <div class="ml-3 sm:ml-4">
-                    <p class="text-xs sm:text-sm text-gray-500">Results Monitor</p>
-                    <p id="monitor-status-text" class="text-base sm:text-lg font-bold {{ 'text-green-700' if monitor_status.running else 'text-gray-500' }}">
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500">Results Monitor</p>
+                    <p id="monitor-status-text" class="text-sm sm:text-lg font-bold {{ 'text-green-700' if monitor_status.running else 'text-gray-500' }}">
                         {{ 'Running' if monitor_status.running else 'Stopped' }}
                     </p>
-                    {% if monitor_status.last_check %}
-                    <p class="text-xs text-gray-400 truncate max-w-[200px]">Last: {{ monitor_status.last_check }}</p>
-                    {% endif %}
                 </div>
             </div>
             <div class="flex items-center gap-3">
-                <div class="text-right text-xs sm:text-sm text-gray-500">
+                <div class="text-right text-xs text-gray-500">
                     {% set total_processed = 0 %}
                     {% for mid, races in (monitor_status.processed_races or {}).items() %}
                     {% set total_processed = total_processed + races|length %}
                     {% endfor %}
                     <p>{{ total_processed }} processed</p>
-                    <p>{{ (monitor_status.wrapups_generated or [])|length }} wrap-ups</p>
                 </div>
                 <button id="monitor-toggle-btn" onclick="toggleMonitor()"
-                    class="{{ 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' if monitor_status.running else 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200' }} px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg border font-medium text-sm">
+                    class="{{ 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' if monitor_status.running else 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200' }} px-3 py-2.5 sm:py-2 rounded-lg border font-medium text-sm">
                     {{ 'Stop' if monitor_status.running else 'Start' }}
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 2) Today's Meets + Quick Stats -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-punty-border flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-900">Today's Race Meets</h2>
-                <a href="/meets" class="text-punty-coral hover:underline text-sm">View all</a>
+    <!-- ═══ HERO STATS — compact row ═══ -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ all_time_stats.today_winners or 0 }}
             </div>
-            <div class="p-4 sm:p-6">
-                {% if todays_meetings %}
-                <ul class="divide-y divide-punty-border">
-                    {% for meeting in todays_meetings %}
-                    {% set progress = meeting_progress.get(meeting.id, {}) %}
-                    <li class="py-3">
-                        <a href="/meets/{{ meeting.id }}" class="flex justify-between items-center hover:bg-punty-card2 -mx-2 px-2 py-1 rounded">
-                            <div>
-                                <p class="font-medium text-gray-900">{{ meeting.venue }}</p>
-                                <p class="text-sm text-gray-500">
-                                    {{ meeting.track_condition or 'TBC' }} |
-                                    {{ meeting.races|length if meeting.races else '?' }} races
-                                </p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                {% if progress.selected %}
-                                <span class="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded font-medium" title="Active - tracking picks">Active</span>
-                                {% else %}
-                                <span class="bg-gray-100 text-gray-400 text-xs px-2 py-1 rounded" title="Not selected">Inactive</span>
-                                {% endif %}
-                                {% if progress.status == 'completed' %}
-                                <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-medium">&#x2714; Completed</span>
-                                {% elif progress.status == 'in_progress' %}
-                                <span class="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-medium">{{ progress.label }}</span>
-                                {% elif progress.status == 'not_started' %}
-                                <span class="countdown-timer bg-amber-100 text-amber-900 text-xs px-2 py-1 rounded font-medium" data-start-time="{{ progress.first_race_iso }}">
-                                    {{ progress.label }}
-                                </span>
-                                {% elif progress.status == 'no_races' %}
-                                <span class="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">{{ progress.label }}</span>
-                                {% else %}
-                                <span class="text-punty-coral">&#x2192;</span>
-                                {% endif %}
-                            </div>
-                        </a>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <div class="text-center py-8 text-gray-500">
-                    <p class="text-4xl mb-2">&#x1F3C7;</p>
-                    <p>No meetings today</p>
-                    <a href="/meets" class="text-punty-coral hover:underline text-sm">Add a meeting</a>
-                </div>
-                {% endif %}
-            </div>
+            <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Today</div>
         </div>
-
-        <!-- Pending Reviews -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-punty-border flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-900">Needs Your Approval</h2>
-                <a href="/review" class="text-punty-coral hover:underline text-sm">Review all</a>
+        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ all_time_stats.total_winners or 0 }}
             </div>
-            <div class="p-4 sm:p-6">
-                {% set review_items = recent_content|selectattr('status', 'equalto', 'pending_review')|list %}
-                {% if review_items %}
-                <ul class="divide-y divide-punty-border">
-                    {% for item in review_items[:5] %}
-                    <li class="py-3">
-                        <a href="/review/{{ item.id }}" class="flex justify-between items-center hover:bg-punty-card2 -mx-2 px-2 py-1 rounded">
-                            <div>
-                                <p class="font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</p>
-                                <p class="text-sm text-gray-500">{{ item.meeting_id }}</p>
-                            </div>
-                            <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Review</span>
-                        </a>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <div class="text-center py-8 text-gray-500">
-                    <p class="text-4xl mb-2">&#x2705;</p>
-                    <p>All caught up!</p>
-                    <p class="text-sm">No content waiting for review</p>
-                </div>
-                {% endif %}
+            <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Winners</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+            <div class="text-2xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {{ todays_meetings|length }}
             </div>
+            <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Meets</div>
+        </div>
+        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+            <div class="text-xl sm:text-3xl font-display font-black" style="color: var(--punty-cyan);">
+                ${{ token_stats.month_cost if token_stats is defined else '0' }}
+            </div>
+            <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">AI Cost</div>
         </div>
     </div>
 
-    <!-- Activity Log & Pending Jobs -->
-    <div class="bg-white rounded-lg shadow">
-        <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
+    <!-- ═══ ACCORDION: Results & Performance (closed by default) ═══ -->
+    <div x-data="{ open: false }" class="bg-white rounded-lg shadow overflow-hidden">
+        <button @click="open = !open" class="w-full px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center hover:bg-gray-50 transition-colors">
             <div class="flex items-center gap-3">
-                <h2 class="text-lg font-semibold text-gray-900">Activity Log</h2>
-                <span id="dash-scrape-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Idle</span>
+                <span class="text-lg">&#x1F4CA;</span>
+                <h2 class="text-lg font-semibold text-gray-900">Results & Performance</h2>
+                {% if performance and performance.total_bets > 0 %}
+                <span class="text-sm font-medium {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
+                    {{ '%+.1f'|format(performance.total_pnl / performance.total_staked * 100 if performance.total_staked else 0) }}% ROI today
+                </span>
+                {% endif %}
             </div>
-            <a href="/settings" class="text-punty-coral hover:underline text-sm">Settings</a>
-        </div>
-        <div class="p-4">
-            <!-- Pending Jobs -->
-            <div id="dash-pending-jobs" class="flex flex-wrap gap-2 mb-3">
-                <span class="text-xs text-gray-400">Loading jobs...</span>
-            </div>
-            <!-- Log Entries -->
-            <div id="dash-activity-log" class="font-mono text-sm sm:text-xs max-h-64 overflow-y-auto space-y-0.5">
-                <span class="text-gray-400">Loading...</span>
-            </div>
-        </div>
-    </div>
+            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <div x-show="open" x-collapse class="border-t border-punty-border">
+            <div class="space-y-4 sm:space-y-6 p-4 sm:p-6">
 
-    <!-- 3) Today's Performance -->
-    {% if performance and performance.total_bets > 0 %}
-    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-        <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center">
-                <div class="p-2 bg-punty-coral/10 rounded-lg">
-                    <span class="text-xl">&#x1F4CA;</span>
-                </div>
-                <div class="ml-3">
-                    <p class="text-base font-semibold text-gray-900">Today Performance</p>
-                    <p class="text-xs text-gray-400">{{ performance.date }}</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3 text-center">
-            <div>
-                <p class="text-xs text-gray-500 uppercase">Bets</p>
-                <p class="text-lg font-bold text-gray-900">{{ performance.total_bets }}</p>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase">Winners</p>
-                <p class="text-lg font-bold text-gray-900">{{ performance.total_winners }}</p>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase">Staked</p>
-                <p class="text-lg font-bold text-gray-900">{{ '%.0f'|format(performance.total_staked) }}U</p>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase">Returned</p>
-                <p class="text-lg font-bold text-gray-900">{{ '%.0f'|format(performance.total_returned) }}U</p>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase">ROI</p>
-                <p class="text-lg font-bold {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
-                    {{ '%+.1f'|format(performance.total_pnl / performance.total_staked * 100 if performance.total_staked else 0) }}%
-                </p>
-            </div>
-        </div>
-
-        {% set product_labels = {'selection': 'Selections', 'big3': 'Big 3', 'big3_multi': 'Big 3 Multi', 'exotic': 'Exotics', 'sequence': 'Sequences'} %}
-        <div class="space-y-2">
-            {% for ptype, data in performance.by_product.items() %}
-            {% if ptype != 'big3' %}
-            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between text-sm gap-1">
-                <div class="w-24 sm:w-28 font-medium text-gray-700 shrink-0">{{ product_labels.get(ptype, ptype|title) }}</div>
-                <div class="flex-1 mx-1 sm:mx-3 min-w-[3rem]">
-                    <div class="w-full bg-gray-100 rounded-full h-2">
-                        <div class="h-2 rounded-full {{ 'bg-green-500' if data.pnl >= 0 else 'bg-red-400' }}"
-                             style="width: {{ [data.strike_rate, 100]|min }}%"></div>
+                <!-- Wins Ticker -->
+                <div id="wins-ticker" class="bg-punty-card rounded-xl border border-punty-border overflow-hidden">
+                    <div class="flex items-center px-4 py-2 border-b border-punty-border">
+                        <span class="text-punty-magenta text-lg mr-2">&#x1F3C6;</span>
+                        <span class="font-heading font-semibold text-sm uppercase tracking-wider text-gray-400">Recent Wins</span>
+                    </div>
+                    <div class="ticker-container relative overflow-hidden" style="height: 48px;">
+                        <div id="ticker-content" class="ticker-scroll flex items-center gap-8 px-4 whitespace-nowrap" style="animation: ticker-scroll 30s linear infinite;">
+                            <span class="text-gray-500 text-sm">Loading wins...</span>
+                        </div>
                     </div>
                 </div>
-                <div class="w-14 sm:w-20 text-right text-gray-500 shrink-0">{{ data.winners }}/{{ data.bets }}</div>
-                <div class="w-16 sm:w-20 text-right font-medium shrink-0 {{ 'text-green-600' if data.pnl >= 0 else 'text-red-600' }}">
-                    {{ '%+.1f'|format(data.pnl / data.staked * 100 if data.staked else 0) }}%
-                </div>
-            </div>
-            {% endif %}
-            {% endfor %}
 
-        </div>
-    </div>
-    {% endif %}
+                <style>
+                    @keyframes ticker-scroll {
+                        0% { transform: translateX(0); }
+                        100% { transform: translateX(-50%); }
+                    }
+                    .ticker-scroll:hover { animation-play-state: paused; }
+                    .win-item { display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+                    .win-celebration { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.9rem; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+                    .win-horse { color: #fff; font-weight: 600; }
+                    .win-venue { color: var(--text-muted); font-size: 0.85rem; }
+                    .win-amounts { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; }
+                    .win-stake { color: var(--text-muted); }
+                    .win-return { color: #4ade80; }
+                </style>
 
-    <!-- 4) All-Time P&L Chart -->
-    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-        <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
-            <div>
-                <h2 class="text-lg sm:text-xl font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">All-Time P&L</h2>
-                <p class="text-xs text-gray-400">Cumulative profit & loss across all settled meetings</p>
-            </div>
-            {% if cumulative_pnl and cumulative_pnl|length > 0 %}
-            {% set latest = cumulative_pnl[-1] %}
-            <div class="text-right">
-                <div class="text-2xl sm:text-3xl font-bold {{ 'text-green-600' if latest.cumulative_pnl >= 0 else 'text-red-600' }}" style="font-family: Orbitron, sans-serif;">
-                    {{ '%+.1f'|format(latest.cumulative_pnl / latest.cumulative_staked * 100 if latest.cumulative_staked else 0) }}%
+                <!-- Today's Performance -->
+                {% if performance and performance.total_bets > 0 %}
+                <div>
+                    <h3 class="text-base font-semibold text-gray-900 mb-3">Today Performance</h3>
+                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3 text-center">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">Bets</p>
+                            <p class="text-lg font-bold text-gray-900">{{ performance.total_bets }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">Winners</p>
+                            <p class="text-lg font-bold text-gray-900">{{ performance.total_winners }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">Staked</p>
+                            <p class="text-lg font-bold text-gray-900">{{ '%.0f'|format(performance.total_staked) }}U</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">Returned</p>
+                            <p class="text-lg font-bold text-gray-900">{{ '%.0f'|format(performance.total_returned) }}U</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">ROI</p>
+                            <p class="text-lg font-bold {{ 'text-green-600' if performance.total_pnl >= 0 else 'text-red-600' }}">
+                                {{ '%+.1f'|format(performance.total_pnl / performance.total_staked * 100 if performance.total_staked else 0) }}%
+                            </p>
+                        </div>
+                    </div>
+                    {% set product_labels = {'selection': 'Selections', 'big3': 'Big 3', 'big3_multi': 'Big 3 Multi', 'exotic': 'Exotics', 'sequence': 'Sequences'} %}
+                    <div class="space-y-2">
+                        {% for ptype, data in performance.by_product.items() %}
+                        {% if ptype != 'big3' %}
+                        <div class="flex flex-wrap sm:flex-nowrap items-center justify-between text-sm gap-1">
+                            <div class="w-24 sm:w-28 font-medium text-gray-700 shrink-0">{{ product_labels.get(ptype, ptype|title) }}</div>
+                            <div class="flex-1 mx-1 sm:mx-3 min-w-[3rem]">
+                                <div class="w-full bg-gray-100 rounded-full h-2">
+                                    <div class="h-2 rounded-full {{ 'bg-green-500' if data.pnl >= 0 else 'bg-red-400' }}"
+                                         style="width: {{ [data.strike_rate, 100]|min }}%"></div>
+                                </div>
+                            </div>
+                            <div class="w-14 sm:w-20 text-right text-gray-500 shrink-0">{{ data.winners }}/{{ data.bets }}</div>
+                            <div class="w-16 sm:w-20 text-right font-medium shrink-0 {{ 'text-green-600' if data.pnl >= 0 else 'text-red-600' }}">
+                                {{ '%+.1f'|format(data.pnl / data.staked * 100 if data.staked else 0) }}%
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
                 </div>
-                <div class="text-xs text-gray-500">
-                    {{ '%.0f'|format(latest.cumulative_staked) }}U staked &bull;
-                    {{ '%.0f'|format(latest.cumulative_returned) }}U returned
-                </div>
-            </div>
-            {% endif %}
-        </div>
+                {% endif %}
 
-        {% if cumulative_pnl and cumulative_pnl|length > 0 %}
-        <div style="position: relative; height: 280px; width: 100%;">
-            <canvas id="pnlChart"></canvas>
-        </div>
+                <!-- Recent Wins Table -->
+                {% if recent_wins %}
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-base font-semibold text-gray-900">Recent Wins</h3>
+                        <span class="text-xs text-gray-400">{{ recent_wins|length }} latest</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-xs text-gray-500 uppercase">
+                                    <th class="text-left py-2 px-2 sm:px-3">Pick</th>
+                                    <th class="text-left py-2 px-2 sm:px-3 hidden sm:table-cell">Venue</th>
+                                    <th class="text-left py-2 px-2 sm:px-3">Type</th>
+                                    <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Stake</th>
+                                    <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Returned</th>
+                                    <th class="text-right py-2 px-2 sm:px-3">P&L</th>
+                                    <th class="text-left py-2 px-2 sm:px-3 hidden md:table-cell">When</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for win in recent_wins %}
+                                <tr class="border-t hover:bg-gray-50" style="border-color: var(--border-subtle);">
+                                    <td class="py-2 px-2 sm:px-3">
+                                        <a href="https://punty.ai/tips/{{ win.meeting_id }}" target="_blank" class="text-punty-coral hover:underline font-medium">
+                                            {{ win.display_name }}
+                                        </a>
+                                        <span class="sm:hidden block text-xs text-gray-400">{{ win.venue }}{% if win.race_number %} R{{ win.race_number }}{% endif %}</span>
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 text-gray-600 hidden sm:table-cell">{{ win.venue }}{% if win.race_number %} R{{ win.race_number }}{% endif %}</td>
+                                    <td class="py-2 px-2 sm:px-3">
+                                        {% if win.pick_type == 'selection' %}
+                                        <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium
+                                            {% if win.bet_type == 'Win' %}bg-green-100 text-green-700
+                                            {% elif win.bet_type == 'Place' %}bg-blue-100 text-blue-700
+                                            {% elif win.bet_type == 'Each Way' %}bg-purple-100 text-purple-700
+                                            {% else %}bg-gray-100 text-gray-700{% endif %}">
+                                            {{ win.bet_type or win.pick_type }}
+                                        </span>
+                                        {% elif win.pick_type == 'exotic' %}
+                                        <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium bg-orange-100 text-orange-700">Exotic</span>
+                                        {% elif win.pick_type == 'sequence' %}
+                                        <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium bg-yellow-100 text-yellow-700">Sequence</span>
+                                        {% else %}
+                                        <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium bg-gray-100 text-gray-700">{{ win.pick_type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 text-right text-gray-600 hidden sm:table-cell">${{ '%.2f'|format(win.stake) }}</td>
+                                    <td class="py-2 px-2 sm:px-3 text-right font-medium text-green-600 hidden sm:table-cell">${{ '%.2f'|format(win.returned) }}</td>
+                                    <td class="py-2 px-2 sm:px-3 text-right font-bold text-green-600">+${{ '%.2f'|format(win.pnl) }}</td>
+                                    <td class="py-2 px-2 sm:px-3 text-xs text-gray-400 hidden md:table-cell">
+                                        {% if win.date %}{{ win.date }}{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
 
-        <!-- Period breakdown table -->
-        <div class="mt-4 overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead>
-                    <tr class="text-xs text-gray-500 uppercase">
-                        <th class="text-left py-2 px-3">Period</th>
-                        <th class="text-right py-2 px-3">Bets</th>
-                        <th class="text-right py-2 px-3">Winners</th>
-                        <th class="text-right py-2 px-3">Staked</th>
-                        <th class="text-right py-2 px-3">Returned</th>
-                        <th class="text-right py-2 px-3">ROI</th>
-                        <th class="text-right py-2 px-3">Cum. ROI</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for day in cumulative_pnl|reverse %}
-                    {% if day.period_type != 'start' %}
-                    {% set period_icons = {'hour': '⏱', 'day': '📅', 'week': '📆'} %}
-                    <tr class="border-t" style="border-color: var(--border-subtle);">
-                        <td class="py-2 px-3 font-medium">
-                            <span class="text-gray-400 mr-1">{{ period_icons.get(day.period_type, '') }}</span>
-                            {{ day.label or day.date }}
-                        </td>
-                        <td class="py-2 px-3 text-right">{{ day.bets }}</td>
-                        <td class="py-2 px-3 text-right">{{ day.winners }}</td>
-                        <td class="py-2 px-3 text-right">{{ '%.0f'|format(day.staked) }}U</td>
-                        <td class="py-2 px-3 text-right">{{ '%.0f'|format(day.returned) }}U</td>
-                        <td class="py-2 px-3 text-right font-medium {{ 'text-green-600' if day.pnl >= 0 else 'text-red-600' }}">
-                            {{ '%+.1f'|format(day.pnl / day.staked * 100 if day.staked else 0) }}%
-                        </td>
-                        <td class="py-2 px-3 text-right font-bold {{ 'text-green-600' if day.cumulative_pnl >= 0 else 'text-red-600' }}">
-                            {{ '%+.1f'|format(day.cumulative_pnl / day.cumulative_staked * 100 if day.cumulative_staked else 0) }}%
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="text-center py-16 text-gray-500">
-            <p class="text-4xl mb-3">&#x1F4C8;</p>
-            <p class="text-lg font-medium">No settled picks yet</p>
-            <p class="text-sm">Once results come in, your P&L chart will appear here</p>
-        </div>
-        {% endif %}
-    </div>
+                <!-- All-Time P&L Chart -->
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+                        <div>
+                            <h3 class="text-base sm:text-lg font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">All-Time P&L</h3>
+                            <p class="text-xs text-gray-400">Cumulative profit & loss across all settled meetings</p>
+                        </div>
+                        {% if cumulative_pnl and cumulative_pnl|length > 0 %}
+                        {% set latest = cumulative_pnl[-1] %}
+                        <div class="text-right">
+                            <div class="text-2xl sm:text-3xl font-bold {{ 'text-green-600' if latest.cumulative_pnl >= 0 else 'text-red-600' }}" style="font-family: Orbitron, sans-serif;">
+                                {{ '%+.1f'|format(latest.cumulative_pnl / latest.cumulative_staked * 100 if latest.cumulative_staked else 0) }}%
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                {{ '%.0f'|format(latest.cumulative_staked) }}U staked &bull;
+                                {{ '%.0f'|format(latest.cumulative_returned) }}U returned
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
 
-    <!-- Recent Wins -->
-    {% if recent_wins %}
-    <div class="bg-white rounded-lg shadow">
-        <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-punty-border flex justify-between items-center">
-            <h2 class="text-lg font-semibold text-gray-900">Recent Wins</h2>
-            <span class="text-xs text-gray-400">{{ recent_wins|length }} latest</span>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead>
-                    <tr class="text-xs text-gray-500 uppercase">
-                        <th class="text-left py-2 px-2 sm:px-3">Pick</th>
-                        <th class="text-left py-2 px-2 sm:px-3 hidden sm:table-cell">Venue</th>
-                        <th class="text-left py-2 px-2 sm:px-3">Type</th>
-                        <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Stake</th>
-                        <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Returned</th>
-                        <th class="text-right py-2 px-2 sm:px-3">P&L</th>
-                        <th class="text-left py-2 px-2 sm:px-3 hidden md:table-cell">When</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for win in recent_wins %}
-                    <tr class="border-t hover:bg-gray-50" style="border-color: var(--border-subtle);">
-                        <td class="py-2 px-2 sm:px-3">
-                            <a href="https://punty.ai/tips/{{ win.meeting_id }}" target="_blank" class="text-punty-coral hover:underline font-medium">
-                                {{ win.display_name }}
-                            </a>
-                            <span class="sm:hidden block text-xs text-gray-400">{{ win.venue }}{% if win.race_number %} R{{ win.race_number }}{% endif %}</span>
-                        </td>
-                        <td class="py-2 px-2 sm:px-3 text-gray-600 hidden sm:table-cell">{{ win.venue }}{% if win.race_number %} R{{ win.race_number }}{% endif %}</td>
-                        <td class="py-2 px-2 sm:px-3">
-                            {% if win.pick_type == 'selection' %}
-                            <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium
-                                {% if win.bet_type == 'Win' %}bg-green-100 text-green-700
-                                {% elif win.bet_type == 'Place' %}bg-blue-100 text-blue-700
-                                {% elif win.bet_type == 'Each Way' %}bg-purple-100 text-purple-700
-                                {% else %}bg-gray-100 text-gray-700{% endif %}">
-                                {{ win.bet_type or win.pick_type }}
-                            </span>
-                            {% elif win.pick_type == 'exotic' %}
-                            <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium bg-orange-100 text-orange-700">Exotic</span>
-                            {% elif win.pick_type == 'sequence' %}
-                            <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium bg-yellow-100 text-yellow-700">Sequence</span>
-                            {% else %}
-                            <span class="inline-block px-1.5 py-0.5 text-xs rounded font-medium bg-gray-100 text-gray-700">{{ win.pick_type }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-2 px-2 sm:px-3 text-right text-gray-600 hidden sm:table-cell">${{ '%.2f'|format(win.stake) }}</td>
-                        <td class="py-2 px-2 sm:px-3 text-right font-medium text-green-600 hidden sm:table-cell">${{ '%.2f'|format(win.returned) }}</td>
-                        <td class="py-2 px-2 sm:px-3 text-right font-bold text-green-600">+${{ '%.2f'|format(win.pnl) }}</td>
-                        <td class="py-2 px-2 sm:px-3 text-xs text-gray-400 hidden md:table-cell">
-                            {% if win.date %}{{ win.date }}{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
+                    {% if cumulative_pnl and cumulative_pnl|length > 0 %}
+                    <div style="position: relative; height: 280px; width: 100%;">
+                        <canvas id="pnlChart"></canvas>
+                    </div>
 
-    <!-- Quick Stats Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-            <div class="flex items-center">
-                <div class="p-2 sm:p-3 bg-punty-coral/10 rounded-lg">
-                    <span class="text-xl sm:text-2xl">&#x1F3C7;</span>
-                </div>
-                <div class="ml-3 sm:ml-4">
-                    <p class="text-xs sm:text-sm text-gray-500">Today's Meets</p>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">{{ todays_meetings|length }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-            <div class="flex items-center">
-                <div class="p-2 sm:p-3 bg-yellow-100 rounded-lg">
-                    <span class="text-xl sm:text-2xl">&#x1F4DD;</span>
-                </div>
-                <div class="ml-3 sm:ml-4">
-                    <p class="text-xs sm:text-sm text-gray-500">Pending Review</p>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">{{ pending_reviews }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-            <div class="flex items-center">
-                <div class="p-2 sm:p-3 bg-green-100 rounded-lg">
-                    <span class="text-xl sm:text-2xl">&#x2705;</span>
-                </div>
-                <div class="ml-3 sm:ml-4">
-                    <p class="text-xs sm:text-sm text-gray-500">Content Sent</p>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">{{ recent_content|selectattr('status', 'equalto', 'sent')|list|length }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-            <div class="flex items-center">
-                <div class="p-2 sm:p-3 bg-blue-100 rounded-lg">
-                    <span class="text-xl sm:text-2xl">&#x23F0;</span>
-                </div>
-                <div class="ml-3 sm:ml-4">
-                    <p class="text-xs sm:text-sm text-gray-500">Active Jobs</p>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">{{ active_jobs|length }}</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Content -->
-    <div class="bg-white rounded-lg shadow">
-        <div class="px-6 py-4 border-b border-punty-border flex justify-between items-center">
-            <h2 class="text-lg font-semibold text-gray-900">Recent Content</h2>
-            <a href="/content" class="text-punty-coral hover:underline text-sm">View all</a>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-punty-border">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-punty-border">
-                    {% for item in recent_content[:10] %}
-                    <tr class="hover:bg-punty-card2">
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="text-sm font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ item.meeting_id }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            {% set status_colors = {
-                                'draft': 'bg-gray-100 text-gray-800',
-                                'pending_review': 'bg-yellow-100 text-yellow-800',
-                                'approved': 'bg-green-100 text-green-800',
-                                'rejected': 'bg-red-100 text-red-800',
-                                'scheduled': 'bg-blue-100 text-blue-800',
-                                'sent': 'bg-purple-100 text-purple-800',
-                                'superseded': 'bg-gray-100 text-gray-600'
-                            } %}
-                            <span class="px-2 py-1 text-xs rounded {{ status_colors.get(item.status, 'bg-gray-100') }}">
-                                {{ item.status|replace('_', ' ')|title }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ item.created_at|melb('%H:%M') or '-' }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
-                            <a href="/review/{{ item.id }}" class="text-punty-coral hover:underline">View</a>
-                        </td>
-                    </tr>
+                    <!-- Period breakdown table -->
+                    <div class="mt-4 overflow-x-auto -mx-4 sm:mx-0">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-xs text-gray-500 uppercase">
+                                    <th class="text-left py-2 px-2 sm:px-3">Period</th>
+                                    <th class="text-right py-2 px-2 sm:px-3">Bets</th>
+                                    <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Winners</th>
+                                    <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Staked</th>
+                                    <th class="text-right py-2 px-2 sm:px-3 hidden sm:table-cell">Returned</th>
+                                    <th class="text-right py-2 px-2 sm:px-3">ROI</th>
+                                    <th class="text-right py-2 px-2 sm:px-3">Cum.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for day in cumulative_pnl|reverse %}
+                                {% if day.period_type != 'start' %}
+                                {% set period_icons = {'hour': '⏱', 'day': '📅', 'week': '📆'} %}
+                                <tr class="border-t" style="border-color: var(--border-subtle);">
+                                    <td class="py-2 px-2 sm:px-3 font-medium text-xs sm:text-sm">
+                                        <span class="text-gray-400 mr-1 hidden sm:inline">{{ period_icons.get(day.period_type, '') }}</span>
+                                        {{ day.label or day.date }}
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 text-right">{{ day.bets }}</td>
+                                    <td class="py-2 px-2 sm:px-3 text-right hidden sm:table-cell">{{ day.winners }}</td>
+                                    <td class="py-2 px-2 sm:px-3 text-right hidden sm:table-cell">{{ '%.0f'|format(day.staked) }}U</td>
+                                    <td class="py-2 px-2 sm:px-3 text-right hidden sm:table-cell">{{ '%.0f'|format(day.returned) }}U</td>
+                                    <td class="py-2 px-2 sm:px-3 text-right font-medium {{ 'text-green-600' if day.pnl >= 0 else 'text-red-600' }}">
+                                        {{ '%+.1f'|format(day.pnl / day.staked * 100 if day.staked else 0) }}%
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 text-right font-bold {{ 'text-green-600' if day.cumulative_pnl >= 0 else 'text-red-600' }}">
+                                        {{ '%+.1f'|format(day.cumulative_pnl / day.cumulative_staked * 100 if day.cumulative_staked else 0) }}%
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                    <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-gray-500">
-                            No content generated yet. Add a meeting to get started!
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+                    <div class="text-center py-8 text-gray-500">
+                        <p class="text-3xl mb-2">&#x1F4C8;</p>
+                        <p class="text-sm font-medium">No settled picks yet</p>
+                    </div>
+                    {% endif %}
+                </div>
 
-    <!-- Quick Actions -->
-    <div class="bg-punty-blue/10 rounded-lg p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div class="flex flex-wrap gap-3">
-            <button class="bg-punty-blue text-white px-4 py-2 rounded-lg hover:bg-punty-blue/90 flex items-center space-x-2">
-                <span>&#x1F4DD;</span>
-                <span>Generate Early Mail</span>
-            </button>
-            <button class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2">
-                <span>&#x1F426;</span>
-                <span>Post to Twitter</span>
-            </button>
-        </div>
-    </div>
-</div>
+            </div><!-- /space-y-4 accordion inner -->
+        </div><!-- /x-show accordion panel -->
+    </div><!-- /x-data Results & Performance accordion -->
+
+    <!-- ═══ ACCORDION: Content & Activity (closed by default) ═══ -->
+    <div x-data="{ open: false }" class="bg-white rounded-lg shadow overflow-hidden">
+        <button @click="open = !open" class="w-full px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center hover:bg-gray-50 transition-colors">
+            <div class="flex items-center gap-3">
+                <span class="text-lg">&#x1F4CB;</span>
+                <h2 class="text-lg font-semibold text-gray-900">Content & Activity</h2>
+                {% if recent_content %}
+                <span class="text-xs text-gray-400">{{ recent_content|length }} items</span>
+                {% endif %}
+            </div>
+            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <div x-show="open" x-collapse class="border-t border-punty-border">
+            <div class="space-y-4 sm:space-y-6 p-4 sm:p-6">
+
+                <!-- Activity Log -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-semibold text-gray-900">Activity Log</h3>
+                        <span id="dash-scrape-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Idle</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mb-3" id="dash-pending-jobs">
+                        <span class="text-xs text-gray-400">Loading...</span>
+                    </div>
+                    <div id="dash-activity-log" class="text-sm sm:text-xs space-y-0.5 font-mono max-h-48 overflow-y-auto">
+                        <span class="text-gray-400">Loading activity...</span>
+                    </div>
+                </div>
+
+                <!-- Recent Content -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-base font-semibold text-gray-900">Recent Content</h3>
+                        <a href="/content" class="text-punty-coral hover:underline text-sm">View all</a>
+                    </div>
+                    <div class="overflow-x-auto -mx-4 sm:mx-0">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-xs text-gray-500 uppercase">
+                                    <th class="text-left py-2 px-2 sm:px-3">Type</th>
+                                    <th class="text-left py-2 px-2 sm:px-3">Meeting</th>
+                                    <th class="text-left py-2 px-2 sm:px-3">Status</th>
+                                    <th class="text-left py-2 px-2 sm:px-3 hidden sm:table-cell">Created</th>
+                                    <th class="text-left py-2 px-2 sm:px-3">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in recent_content[:10] %}
+                                <tr class="border-t hover:bg-gray-50" style="border-color: var(--border-subtle);">
+                                    <td class="py-2 px-2 sm:px-3 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-gray-900">{{ item.content_type|replace('_', ' ')|title }}</span>
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 whitespace-nowrap text-sm text-gray-500">
+                                        {{ item.meeting_id }}
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 whitespace-nowrap">
+                                        {% set status_colors = {
+                                            'draft': 'bg-gray-100 text-gray-800',
+                                            'pending_review': 'bg-yellow-100 text-yellow-800',
+                                            'approved': 'bg-green-100 text-green-800',
+                                            'rejected': 'bg-red-100 text-red-800',
+                                            'scheduled': 'bg-blue-100 text-blue-800',
+                                            'sent': 'bg-purple-100 text-purple-800',
+                                            'superseded': 'bg-gray-100 text-gray-600'
+                                        } %}
+                                        <span class="px-1.5 py-0.5 text-xs rounded {{ status_colors.get(item.status, 'bg-gray-100') }}">
+                                            {{ item.status|replace('_', ' ')|title }}
+                                        </span>
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
+                                        {{ item.created_at|melb('%H:%M') or '-' }}
+                                    </td>
+                                    <td class="py-2 px-2 sm:px-3 whitespace-nowrap text-sm">
+                                        <a href="/review/{{ item.id }}" class="text-punty-coral hover:underline">View</a>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="px-4 py-6 text-center text-gray-500 text-sm">
+                                        No content generated yet. Add a meeting to get started!
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-punty-blue/10 rounded-lg p-4">
+                    <h3 class="text-base font-semibold text-gray-900 mb-3">Quick Actions</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button class="bg-punty-blue text-white px-4 py-2.5 rounded-lg hover:bg-punty-blue/90 flex items-center space-x-2 text-sm">
+                            <span>&#x1F4DD;</span>
+                            <span>Generate Early Mail</span>
+                        </button>
+                        <button class="bg-gray-800 text-white px-4 py-2.5 rounded-lg hover:bg-gray-700 flex items-center space-x-2 text-sm">
+                            <span>&#x1F426;</span>
+                            <span>Post to Twitter</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div><!-- /space-y-4 accordion inner -->
+        </div><!-- /x-show accordion panel -->
+    </div><!-- /x-data Content & Activity accordion -->
+
+</div><!-- /space-y-4 outer container -->
 {% endblock %}
 
 {% block scripts %}
