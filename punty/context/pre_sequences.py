@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 BASE_OUTLAY = 30.0
 MIN_OUTLAY = 20.0
 MAX_OUTLAY = 80.0  # Shape-driven legs need wider budget (was $60, $40 before that)
-BIG6_MIN_OUTLAY = 20.0
-BIG6_MAX_OUTLAY = 30.0
+BIG6_MIN_OUTLAY = 25.0
+BIG6_MAX_OUTLAY = 25.0
 MIN_FLEXI_PCT = 20.0  # Lowered from 30% — allows 400 combos at $80 budget (5×4×5×4)
 
 # Main quaddie re-enabled with wider legs and edge-based construction.
@@ -832,12 +832,6 @@ def build_smart_sequence(
     Legs classified as anchor (single) / chaos (wide) / normal.
     Outlay $40-$60, budget-optimised by trimming/adding runners by edge.
     """
-    # Kill Big6: 1/59 hits = -95.7% ROI, -$1,627. Not recoverable.
-    is_big6 = "big" in sequence_type.lower() or "6" in sequence_type
-    if is_big6:
-        logger.info(f"Skipping {sequence_type}: Big6 killed (1/59 hits, -95.7% ROI)")
-        return None
-
     # Data-driven track condition filters (Feb 24 audit)
     tc = (track_condition or "").lower()
     if "heavy" in tc:
