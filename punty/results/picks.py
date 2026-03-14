@@ -983,6 +983,18 @@ async def _settle_picks_for_race_impl(
                         dividend = _find_dividend(exotic_divs, key, exclude=["early"])
                         if dividend > 0:
                             break
+                    # Fallback: TAB often labels the first quaddie (e.g. R1-R4) as
+                    # "early quaddie" even when it's the only quaddie at the venue.
+                    # If no strict match, try "early quaddie" as fallback.
+                    if dividend <= 0:
+                        for key in ("early quaddie", "early_quaddie", "early quadrella"):
+                            dividend = _find_dividend(exotic_divs, key)
+                            if dividend > 0:
+                                logger.info(
+                                    f"Quaddie dividend fallback: used '{key}' for "
+                                    f"sequence_type='{seq_type}'"
+                                )
+                                break
                 if dividend > 0:
                     # exotic_stake stores total outlay directly
                     # Calculate flexi return: dividend × (stake / num_combos)
