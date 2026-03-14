@@ -184,11 +184,11 @@ class TestGetWinnerStats:
         from punty.public.routes import get_winner_stats
 
         # Patch the async_session to use our test session
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             # Patch melb_today to return our test date
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
+            with patch("punty.public.pages.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         # Should count: 3 winning selections + 1 winning exotic = 4 winners
@@ -202,10 +202,10 @@ class TestGetWinnerStats:
         """Verify all-time winners includes all pick types."""
         from punty.public.routes import get_winner_stats
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
+            with patch("punty.public.pages.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         # Same as today since all picks are from today
@@ -218,10 +218,10 @@ class TestGetWinnerStats:
         """Verify collected amount includes selections and exotics."""
         from punty.public.routes import get_winner_stats
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
+            with patch("punty.public.pages.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         # Selection returns: (10+25) + (6+5) + (5+15) = 35 + 11 + 20 = 66
@@ -235,10 +235,10 @@ class TestGetWinnerStats:
         """Verify function handles empty picks gracefully."""
         from punty.public.routes import get_winner_stats
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
+            with patch("punty.public.pages.melb_today", return_value=date(2026, 2, 17)):
                 stats = await get_winner_stats()
 
         assert stats["today_winners"] == 0
@@ -256,7 +256,7 @@ class TestGetTipsCalendar:
         """Verify calendar returns meetings that have sent early mail."""
         from punty.public.routes import get_tips_calendar
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             result = await get_tips_calendar(page=1, per_page=30)
@@ -283,7 +283,7 @@ class TestGetTipsCalendar:
         db_session.add(draft_content)
         await db_session.commit()
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             result = await get_tips_calendar(page=1, per_page=30)
@@ -318,7 +318,7 @@ class TestGetTipsCalendar:
 
         await db_session.commit()
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             # Get first page with 2 per page
@@ -363,7 +363,7 @@ class TestGetMeetingTips:
         db_session.add(wrapup)
         await db_session.commit()
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.meeting.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             result = await get_meeting_tips(sample_meeting.id)
@@ -379,7 +379,7 @@ class TestGetMeetingTips:
         """Verify function returns None for non-existent meeting."""
         from punty.public.routes import get_meeting_tips
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.meeting.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             result = await get_meeting_tips("nonexistent-meeting-id")
@@ -395,11 +395,11 @@ class TestGetNextRace:
         """Verify function handles no meetings gracefully."""
         from punty.public.routes import get_next_race
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.dashboard.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
-            with patch("punty.public.routes.melb_today", return_value=date(2026, 2, 17)):
-                with patch("punty.public.routes.melb_now") as mock_now:
+            with patch("punty.public.dashboard.melb_today", return_value=date(2026, 2, 17)):
+                with patch("punty.public.dashboard.melb_now") as mock_now:
                     mock_now.return_value = datetime(2026, 2, 17, 10, 0, 0)
                     result = await get_next_race()
 
@@ -417,7 +417,7 @@ class TestGetRecentWinsPublic:
         """Verify function returns wins with Punty celebrations."""
         from punty.public.routes import get_recent_wins_public
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             result = await get_recent_wins_public(limit=10)
@@ -437,7 +437,7 @@ class TestGetRecentWinsPublic:
         """Verify function respects the limit parameter."""
         from punty.public.routes import get_recent_wins_public
 
-        with patch("punty.public.routes.async_session") as mock_session:
+        with patch("punty.public.pages.async_session") as mock_session:
             mock_session.return_value.__aenter__.return_value = db_session
 
             result = await get_recent_wins_public(limit=2)
