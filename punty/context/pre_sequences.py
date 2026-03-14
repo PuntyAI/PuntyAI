@@ -965,7 +965,9 @@ def build_all_sequence_lanes(
             continue
 
         # Check minimum estimated return threshold
-        min_ret = MIN_RETURN_PCT.get(key, 0.0)
+        # key is "early_quad"/"quaddie"/"big6", normalise to match MIN_RETURN_PCT keys
+        min_ret_key = "early_quaddie" if key == "early_quad" else key
+        min_ret = MIN_RETURN_PCT.get(min_ret_key, 0.0)
         if min_ret > 0 and smart.estimated_return_pct < min_ret:
             logger.info(
                 f"Skipping {label}: est. return {smart.estimated_return_pct:.1f}% "

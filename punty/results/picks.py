@@ -968,7 +968,7 @@ async def _settle_picks_for_race_impl(
                 # Route dividend lookup by explicit sequence_type to prevent
                 # "quaddie" matching "early_quaddie" (and vice versa)
                 if "early" in seq_type:
-                    for key in ("early quaddie", "early_quaddie", "early quadrella"):
+                    for key in ("early quaddie", "early_quaddie", "earlyquaddie", "early quadrella"):
                         dividend = _find_dividend(exotic_divs, key)
                         if dividend > 0:
                             break
@@ -985,16 +985,23 @@ async def _settle_picks_for_race_impl(
                             break
                     # Fallback: TAB often labels the first quaddie (e.g. R1-R4) as
                     # "early quaddie" even when it's the only quaddie at the venue.
-                    # If no strict match, try "early quaddie" as fallback.
+                    # Only use fallback if no separate early_quaddie pick exists for
+                    # this meeting (avoids grabbing the wrong dividend at dual-quaddie venues).
                     if dividend <= 0:
-                        for key in ("early quaddie", "early_quaddie", "early quadrella"):
-                            dividend = _find_dividend(exotic_divs, key)
-                            if dividend > 0:
-                                logger.info(
-                                    f"Quaddie dividend fallback: used '{key}' for "
-                                    f"sequence_type='{seq_type}'"
-                                )
-                                break
+                        has_early_quad_pick = any(
+                            sp.sequence_type and "early" in sp.sequence_type.lower()
+                            for sp in seq_picks
+                            if sp.id != pick.id
+                        )
+                        if not has_early_quad_pick:
+                            for key in ("early quaddie", "early_quaddie", "earlyquaddie", "early quadrella"):
+                                dividend = _find_dividend(exotic_divs, key)
+                                if dividend > 0:
+                                    logger.info(
+                                        f"Quaddie dividend fallback: used '{key}' for "
+                                        f"sequence_type='{seq_type}'"
+                                    )
+                                    break
                 if dividend > 0:
                     # exotic_stake stores total outlay directly
                     # Calculate flexi return: dividend × (stake / num_combos)

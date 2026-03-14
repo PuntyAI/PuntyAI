@@ -100,7 +100,11 @@ async def scrape_meeting_exotics(
                 re.IGNORECASE,
             )
             if m and i + 2 < len(td_texts):
-                pool_name = m.group(1).lower().replace(" ", "")
+                pool_name = m.group(1).lower()
+                # Normalise: "early quaddie" keeps space (settlement expects it)
+                # Other exotics: strip spaces for consistency
+                if pool_name != "early quaddie":
+                    pool_name = pool_name.replace(" ", "")
                 # combo is next, dividend after
                 combo = td_texts[i + 1].strip()
                 div_text = td_texts[i + 2].strip().replace(",", "")

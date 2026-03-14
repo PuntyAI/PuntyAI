@@ -1644,7 +1644,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var isEarlyHeading = /early\s*quadd/i.test(headingText);
                 var isQuaddieHeading = !isEarlyHeading && /quadd/i.test(headingText);
                 var matchedResults = seqResults.filter(function(sr) {
-                    var sType = (sr.type || '').toLowerCase();
+                    var sType = (sr.type || '').toLowerCase().replace(/\s+/g, '_');
                     // Early quaddie heading: only match early_quaddie type
                     if (isEarlyHeading) return sType === 'early_quaddie';
                     // Regular quaddie heading: only match quaddie type (not early)
