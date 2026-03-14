@@ -373,13 +373,14 @@ class TestBuildSmartSequence:
         assert len(result.legs) == 4
         assert MIN_OUTLAY <= result.total_outlay <= MAX_OUTLAY
 
-    def test_big6_killed(self):
-        """Big6 killed: 1/59 hits, -95.7% ROI. Should always return None."""
+    def test_big6_reinstated_at_25(self):
+        """Big6 reinstated with fixed $25 budget."""
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
         race_contexts = [_race_ctx(r) for r in range(3, 9)]
 
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
-        assert result is None
+        assert result is not None
+        assert result.total_outlay == 25.0
 
     def test_missing_leg_returns_none(self):
         """Missing leg analysis for a race should return None."""
@@ -702,13 +703,14 @@ class TestBuildReason:
 # ──────────────────────────────────────────────
 
 class TestStrategyImprovements:
-    def test_big6_killed_in_strategy(self):
-        """Big6 killed: always returns None regardless of input."""
+    def test_big6_reinstated_in_strategy(self):
+        """Big6 reinstated with $25 fixed budget."""
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
         race_contexts = [_race_ctx(r) for r in range(3, 9)]
 
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
-        assert result is None
+        assert result is not None
+        assert result.total_outlay == 25.0
 
     def test_mandatory_fav_inclusion(self):
         """Runner ≤$2.50 must be included in leg even without edge."""
