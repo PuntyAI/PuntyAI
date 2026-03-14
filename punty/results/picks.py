@@ -244,21 +244,37 @@ async def _settle_picks_for_race_impl(
     _venue_match = _re.match(r"^(.+?)-\d{4}-\d{2}-\d{2}$", meeting_id)
     venue_from_id = _venue_match.group(1).replace("-", " ") if _venue_match else ""
 
-    original_field = (race.field_size if race and race.field_size else None) or len(active_runners)
+    # TAB locks paying places at acceptance time (before late scratchings).
+    # Use total runners (including scratched) as the acceptance-time field size,
+    # since race.field_size may have been scraped post-scratch.
+    total_runners_count = len(runners)  # includes scratched — acceptance-time field
+    original_field = (race.field_size if race and race.field_size else None) or total_runners_count
     post_scratch_field = len(active_runners)
 
     if is_international_venue(venue_from_id):
         # HK/international: always 3 places
         num_places = 3
     else:
-        # Australian TAB NTD rules
-        effective_field = max(original_field, post_scratch_field)
+        # Australian TAB NTD rules — use the LARGEST known field count
+        # (acceptance-time count, since late scratchings don't reduce places)
+        effective_field = max(original_field, post_scratch_field, total_runners_count)
         if effective_field <= 4:
             num_places = 0  # No place betting
         elif effective_field <= 7:
             num_places = 2  # NTD — 1st and 2nd only
         else:
             num_places = 3  # 1st, 2nd, and 3rd
+
+    # Ground truth override: if TAB actually paid a 3rd-place dividend,
+    # they clearly paid 3 places regardless of our field-size calculation.
+    if num_places < 3:
+        third_place = [r for r in runners if r.finish_position == 3]
+        if third_place and any(r.place_dividend and r.place_dividend > 0 for r in third_place):
+            logger.info(
+                f"Overriding num_places {num_places} → 3 for {race_id}: "
+                f"TAB paid 3rd-place dividend (ground truth)"
+            )
+            num_places = 3
 
     field_size = post_scratch_field  # for logging
 
@@ -345,7 +361,24 @@ async def _settle_picks_for_race_impl(
                 settled_count += 1
                 continue
 
-            stake = pick.bet_stake if pick.bet_stake is not None and pick.bet_stake > 0 else 1.0
+            stake = pick.bet_stake if pick.bet_stake is not None and pick.bet_stake > 0 else 0.0
+            if stake == 0:
+                # Zero-stake bet — record accuracy but no P&L (same as tracked_only)
+                won = runner.finish_position == 1
+                placed = runner.finish_position is not None and runner.finish_position <= num_places
+                if bet_type in ("win", "saver_win"):
+                    pick.hit = won
+                elif bet_type == "place":
+                    pick.hit = placed if num_places > 0 else False
+                elif bet_type == "each_way":
+                    pick.hit = won or placed
+                else:
+                    pick.hit = won
+                pick.pnl = 0.0
+                pick.settled = True
+                pick.settled_at = now
+                settled_count += 1
+                continue
             won = runner.finish_position == 1
             placed = runner.finish_position is not None and runner.finish_position <= num_places
 
@@ -935,7 +968,7 @@ async def _settle_picks_for_race_impl(
                 # Route dividend lookup by explicit sequence_type to prevent
                 # "quaddie" matching "early_quaddie" (and vice versa)
                 if "early" in seq_type:
-                    for key in ("early quaddie", "early_quaddie", "early quadrella"):
+                    for key in ("early quaddie", "early_quaddie", "earlyquaddie", "early quadrella"):
                         dividend = _find_dividend(exotic_divs, key)
                         if dividend > 0:
                             break
@@ -950,6 +983,25 @@ async def _settle_picks_for_race_impl(
                         dividend = _find_dividend(exotic_divs, key, exclude=["early"])
                         if dividend > 0:
                             break
+                    # Fallback: TAB often labels the first quaddie (e.g. R1-R4) as
+                    # "early quaddie" even when it's the only quaddie at the venue.
+                    # Only use fallback if no separate early_quaddie pick exists for
+                    # this meeting (avoids grabbing the wrong dividend at dual-quaddie venues).
+                    if dividend <= 0:
+                        has_early_quad_pick = any(
+                            sp.sequence_type and "early" in sp.sequence_type.lower()
+                            for sp in seq_picks
+                            if sp.id != pick.id
+                        )
+                        if not has_early_quad_pick:
+                            for key in ("early quaddie", "early_quaddie", "earlyquaddie", "early quadrella"):
+                                dividend = _find_dividend(exotic_divs, key)
+                                if dividend > 0:
+                                    logger.info(
+                                        f"Quaddie dividend fallback: used '{key}' for "
+                                        f"sequence_type='{seq_type}'"
+                                    )
+                                    break
                 if dividend > 0:
                     # exotic_stake stores total outlay directly
                     # Calculate flexi return: dividend × (stake / num_combos)

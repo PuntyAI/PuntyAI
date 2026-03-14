@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 BASE_OUTLAY = 30.0
 MIN_OUTLAY = 20.0
 MAX_OUTLAY = 80.0  # Shape-driven legs need wider budget (was $60, $40 before that)
-BIG6_MIN_OUTLAY = 20.0
-BIG6_MAX_OUTLAY = 30.0
+BIG6_MIN_OUTLAY = 25.0
+BIG6_MAX_OUTLAY = 25.0
 MIN_FLEXI_PCT = 20.0  # Lowered from 30% — allows 400 combos at $80 budget (5×4×5×4)
 
 # Main quaddie re-enabled with wider legs and edge-based construction.
@@ -832,12 +832,6 @@ def build_smart_sequence(
     Legs classified as anchor (single) / chaos (wide) / normal.
     Outlay $40-$60, budget-optimised by trimming/adding runners by edge.
     """
-    # Kill Big6: 1/59 hits = -95.7% ROI, -$1,627. Not recoverable.
-    is_big6 = "big" in sequence_type.lower() or "6" in sequence_type
-    if is_big6:
-        logger.info(f"Skipping {sequence_type}: Big6 killed (1/59 hits, -95.7% ROI)")
-        return None
-
     # Data-driven track condition filters (Feb 24 audit)
     tc = (track_condition or "").lower()
     if "heavy" in tc:
@@ -932,6 +926,10 @@ def build_all_sequence_lanes(
     """
     if sequence_override is not None:
         sequences = sequence_override
+    elif total_races < 6:
+        # TAB doesn't offer quaddie pools at meets with fewer than 6 races
+        logger.info(f"Skipping sequences: only {total_races} races (minimum 6)")
+        return []
     else:
         rules = {
             6:  {"early_quad": (1, 4), "quaddie": (3, 6)},
@@ -971,7 +969,9 @@ def build_all_sequence_lanes(
             continue
 
         # Check minimum estimated return threshold
-        min_ret = MIN_RETURN_PCT.get(key, 0.0)
+        # key is "early_quad"/"quaddie"/"big6", normalise to match MIN_RETURN_PCT keys
+        min_ret_key = "early_quaddie" if key == "early_quad" else key
+        min_ret = MIN_RETURN_PCT.get(min_ret_key, 0.0)
         if min_ret > 0 and smart.estimated_return_pct < min_ret:
             logger.info(
                 f"Skipping {label}: est. return {smart.estimated_return_pct:.1f}% "

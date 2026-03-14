@@ -341,14 +341,23 @@ def _try_parse_json_block(raw_content: str, content_id: str, meeting_id: str) ->
 
     # --- Sequences ---
     for seq in data.get("sequences", []):
-        seq_type = seq.get("type", "").lower()
+        seq_type_raw = seq.get("type", "").lower().strip().replace(" ", "_")
+        # Normalise common variants to canonical names
+        if "early" in seq_type_raw and "quad" in seq_type_raw:
+            seq_type = "early_quaddie"
+        elif "quad" in seq_type_raw:
+            seq_type = "quaddie"
+        elif "big" in seq_type_raw or "6" in seq_type_raw:
+            seq_type = "big6"
+        else:
+            seq_type = seq_type_raw or "quaddie"
         start_race = seq.get("start_race")
         end_race = seq.get("end_race")
         for var in seq.get("variants", []):
             p = _pick_base()
             p["id"] = _next_id()
             p["pick_type"] = "sequence"
-            p["sequence_type"] = seq_type if seq_type else ("quaddie" if "quad" in seq_type else "big6")
+            p["sequence_type"] = seq_type
             p["sequence_variant"] = var.get("name", "").lower()
             legs_raw = var.get("legs", "")
             # Parse "3,4,9/3,2,1/10,4,12,8" into [[3,4,9],[3,2,1],[10,4,12,8]]

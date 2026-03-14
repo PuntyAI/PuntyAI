@@ -287,6 +287,172 @@ async def settle_past_races(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.post("/{meeting_id}/race/{race_number}/dividend")
+async def add_manual_dividend(
+    meeting_id: str,
+    race_number: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually add or update an exotic dividend for a race.
+
+    Merges into existing exotic_results JSON, then re-settles affected picks.
+    Accepts JSON body: {"exotic_type": "quinella", "dividend": 24.50}
+    Optional: {"runners": "1-3"} for result combo display.
+    """
+    if not request.session.get("user"):
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+    import json
+    from punty.models.meeting import Meeting, Race
+    from punty.results.picks import settle_picks_for_race
+
+    body = await request.json()
+    exotic_type = body.get("exotic_type", "").strip().lower()
+    dividend = body.get("dividend")
+    runners_combo = body.get("runners", "")
+
+    if not exotic_type:
+        raise HTTPException(status_code=400, detail="exotic_type is required")
+    if dividend is None:
+        raise HTTPException(status_code=400, detail="dividend is required")
+    try:
+        dividend = float(dividend)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="dividend must be a number")
+    if dividend <= 0:
+        raise HTTPException(status_code=400, detail="dividend must be positive")
+
+    # Load race
+    race_id = f"{meeting_id}-r{race_number}"
+    race = await db.get(Race, race_id)
+    if not race:
+        raise HTTPException(status_code=404, detail=f"Race not found: {race_id}")
+
+    # Merge into existing exotic_results
+    existing = {}
+    if race.exotic_results:
+        try:
+            existing = json.loads(race.exotic_results)
+        except (json.JSONDecodeError, TypeError):
+            existing = {}
+
+    old_value = existing.get(exotic_type)
+    existing[exotic_type] = dividend
+    race.exotic_results = json.dumps(existing)
+    await db.commit()
+
+    logger.info(
+        f"Manual dividend: {meeting_id} R{race_number} {exotic_type}=${dividend:.2f} "
+        f"(was: {old_value})"
+    )
+
+    # Re-settle picks for this race
+    settled_count = 0
+    try:
+        # First unsettled any picks that might need re-settlement
+        from punty.models.pick import Pick
+        from sqlalchemy import select, and_
+
+        # Find picks for this race that are exotic/sequence type
+        picks_result = await db.execute(
+            select(Pick).where(
+                and_(
+                    Pick.meeting_id == meeting_id,
+                    Pick.race_number == race_number,
+                )
+            )
+        )
+        picks = picks_result.scalars().all()
+
+        # For exotic picks on this race, or sequence picks with last leg on this race,
+        # mark unsettled so they get re-processed
+        for pick in picks:
+            if pick.pick_type in ("exotic", "sequence") and pick.settled:
+                if pick.pnl == 0.0 or pick.pnl is None:
+                    # Only re-settle if currently at $0 (missing dividend)
+                    pick.settled = False
+                    pick.pnl = None
+                    pick.hit = None
+        await db.commit()
+
+        # Also check sequences where the last leg is this race
+        seq_result = await db.execute(
+            select(Pick).where(
+                and_(
+                    Pick.meeting_id == meeting_id,
+                    Pick.pick_type == "sequence",
+                )
+            )
+        )
+        seq_picks = seq_result.scalars().all()
+        for sp in seq_picks:
+            if sp.sequence_legs:
+                try:
+                    legs = json.loads(sp.sequence_legs)
+                    start = sp.sequence_start_race or 1
+                    last_leg_race = start + len(legs) - 1
+                    if last_leg_race == race_number and sp.settled and (sp.pnl == 0.0 or sp.pnl is None):
+                        sp.settled = False
+                        sp.pnl = None
+                        sp.hit = None
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        await db.commit()
+
+        settled_count = await settle_picks_for_race(db, meeting_id, race_number)
+    except Exception as e:
+        logger.error(f"Re-settlement after manual dividend failed: {e}")
+
+    return {
+        "status": "ok",
+        "race_id": race_id,
+        "exotic_type": exotic_type,
+        "dividend": dividend,
+        "old_value": old_value,
+        "picks_resettled": settled_count,
+    }
+
+
+@router.get("/unsettled")
+async def get_unsettled_picks(db: AsyncSession = Depends(get_db)):
+    """Get all unsettled picks grouped by meeting, for the admin settlement dashboard."""
+    from sqlalchemy import select, and_
+    from punty.models.pick import Pick
+    from punty.models.meeting import Meeting, Race
+
+    result = await db.execute(
+        select(Pick, Meeting.venue, Meeting.date, Race.results_status)
+        .join(Meeting, Meeting.id == Pick.meeting_id)
+        .outerjoin(Race, and_(
+            Race.meeting_id == Pick.meeting_id,
+            Race.race_number == Pick.race_number,
+        ))
+        .where(Pick.settled == False)
+        .order_by(Meeting.date.desc(), Pick.meeting_id, Pick.race_number)
+    )
+    rows = result.all()
+
+    unsettled = []
+    for pick, venue, meet_date, results_status in rows:
+        unsettled.append({
+            "pick_id": pick.id,
+            "meeting_id": pick.meeting_id,
+            "venue": venue,
+            "date": meet_date.isoformat() if meet_date else None,
+            "race_number": pick.race_number,
+            "pick_type": pick.pick_type,
+            "exotic_type": pick.exotic_type,
+            "sequence_type": pick.sequence_type,
+            "horse_name": pick.horse_name,
+            "bet_stake": float(pick.bet_stake) if pick.bet_stake else None,
+            "exotic_stake": float(pick.exotic_stake) if pick.exotic_stake else None,
+            "results_status": results_status,
+        })
+
+    return {"unsettled": unsettled, "count": len(unsettled)}
+
+
 @router.get("/wins/recent")
 async def get_recent_wins_api(
     limit: int = 20,

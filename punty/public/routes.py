@@ -1052,8 +1052,9 @@ def _compute_pick_data(all_picks: list) -> dict:
 
         # --- Settled sequence/multi results ---
         if pick.settled and pick.pick_type in ("sequence", "big3_multi"):
-            seq_type = pick.sequence_type or pick.pick_type
-            label = (pick.sequence_type or "multi").replace("_", " ").title()
+            # Normalise sequence_type to underscore form (e.g. "early quaddie" -> "early_quaddie")
+            seq_type = (pick.sequence_type or pick.pick_type).lower().replace(" ", "_")
+            label = seq_type.replace("_", " ").title()
             sequence_results.append({
                 "type": seq_type,
                 "variant": pick.sequence_variant,

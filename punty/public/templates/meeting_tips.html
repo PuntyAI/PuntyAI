@@ -1641,14 +1641,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Extract start race from heading (e.g. "Races 1–4" → 1)
                 var headingRaceMatch = headingText.match(/races?\s*(\d+)/i);
                 var headingStartRace = headingRaceMatch ? parseInt(headingRaceMatch[1]) : null;
+                var isEarlyHeading = /early\s*quadd/i.test(headingText);
+                var isQuaddieHeading = !isEarlyHeading && /quadd/i.test(headingText);
                 var matchedResults = seqResults.filter(function(sr) {
-                    var sType = (sr.type || '').toLowerCase();
-                    // Use start_race for precise matching when available
-                    if (sType === 'quaddie' && sr.start_race && headingStartRace) {
-                        return /quaddie/i.test(headingText) && sr.start_race === headingStartRace;
+                    var sType = (sr.type || '').toLowerCase().replace(/\s+/g, '_');
+                    // Early quaddie heading: only match early_quaddie type
+                    if (isEarlyHeading) return sType === 'early_quaddie';
+                    // Regular quaddie heading: only match quaddie type (not early)
+                    if (isQuaddieHeading) {
+                        if (sType !== 'quaddie') return false;
+                        // Use start_race for precise matching when available
+                        if (sr.start_race && headingStartRace) return sr.start_race === headingStartRace;
+                        return true;
                     }
-                    if (/early\s*quaddie/i.test(headingText)) return sType === 'early_quaddie' || sType === 'quaddie';
-                    if (/quaddie/i.test(headingText) && !/early/i.test(headingText)) return sType === 'quaddie';
                     if (/big\s*6/i.test(headingText)) return sType === 'big6';
                     if (/multi/i.test(headingText) || /big\s*3/i.test(headingText)) return sType === 'big3_multi';
                     return false;
@@ -1658,10 +1663,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     var resultsHtml = '<div class="seq-results-card">';
                     resultsHtml += '<div class="seq-results-title">Results</div>';
                     matchedResults.forEach(function(sr) {
-                        var isWin = sr.hit && sr.pnl > 0;
+                        var isHit = sr.hit;
                         var pnlStr = sr.pnl >= 0 ? '+$' + sr.pnl.toFixed(2) : '-$' + Math.abs(sr.pnl).toFixed(2);
-                        var statusClass = isWin ? 'seq-result-win' : (sr.hit ? 'seq-result-push' : 'seq-result-loss');
-                        var statusLabel = isWin ? 'HIT' : 'MISS';
+                        var statusClass = isHit ? (sr.pnl > 0 ? 'seq-result-win' : 'seq-result-push') : 'seq-result-loss';
+                        var statusLabel = isHit ? 'HIT' : 'MISS';
                         resultsHtml += '<div class="seq-result-row ' + statusClass + '">' +
                             '<span class="seq-result-label">' + sr.label + '</span>' +
                             '<span class="seq-result-status">' + statusLabel + '</span>' +

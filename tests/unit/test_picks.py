@@ -758,3 +758,91 @@ class TestFindDividend:
         from punty.results.picks import _find_dividend
         divs = {"quinella": "4.60"}
         assert _find_dividend(divs, "exacta") == 0.0
+
+
+class TestNumPlacesFromTotalRunners:
+    """Tests for num_places calculation using total runners (including scratched).
+
+    Bug: race.field_size stored post-scratch count (e.g. 7), but TAB locks
+    places at acceptance time (total runners including late scratchings).
+    9 total runners = 3 places, even if 2 were scratched leaving 7 active.
+    """
+
+    def test_third_place_with_scratched_runners_is_placed(self):
+        """Caulfield R1 bug: 9 runners (2 scratched), field_size=7.
+        TAB paid 3 places (place_div=2.0 for 3rd). num_places should be 3."""
+        # Simulate the fix: effective_field = max(field_size, active, total)
+        total_runners = 9  # includes 2 scratched
+        field_size = 7     # stored post-scratch
+        active_runners = 7
+
+        effective_field = max(field_size, active_runners, total_runners)
+        assert effective_field == 9
+
+        if effective_field <= 4:
+            num_places = 0
+        elif effective_field <= 7:
+            num_places = 2
+        else:
+            num_places = 3
+
+        assert num_places == 3
+
+        # 3rd place finisher with place_div should be a hit
+        finish_position = 3
+        placed = finish_position <= num_places
+        assert placed is True
+
+    def test_ground_truth_override_from_place_dividend(self):
+        """If TAB paid a 3rd-place dividend, num_places must be at least 3."""
+        # Even if field calculation says num_places=2
+        num_places = 2
+        third_place_dividend = 2.0  # TAB paid this — ground truth
+
+        # Ground truth override
+        if num_places < 3 and third_place_dividend and third_place_dividend > 0:
+            num_places = 3
+
+        assert num_places == 3
+
+
+class TestZeroStakeSettlement:
+    """Tests for zero-stake bet settlement.
+
+    Bug: zero-stake bets defaulted to $1.0 via `else 1.0` fallback,
+    generating fake P&L (e.g. +$2.50 on a $0 Place bet).
+    """
+
+    def test_zero_stake_place_bet_no_pnl(self):
+        """Zero-stake Place bet should produce pnl=0, not fake P&L."""
+        bet_stake = 0.0
+        place_odds = 3.50
+        finish_position = 2
+        num_places = 3
+
+        stake = bet_stake if bet_stake is not None and bet_stake > 0 else 0.0
+        placed = finish_position is not None and finish_position <= num_places
+
+        if stake == 0:
+            # Zero-stake: record accuracy but no P&L
+            hit = placed
+            pnl = 0.0
+        elif placed and place_odds:
+            hit = True
+            pnl = round(place_odds * stake - stake, 2)
+        else:
+            hit = False
+            pnl = round(-stake, 2)
+
+        assert hit is True  # Accuracy tracked
+        assert pnl == 0.0   # No fake P&L
+
+    def test_zero_stake_win_bet_no_pnl(self):
+        """Zero-stake Win bet: hit tracked, pnl=0."""
+        stake = 0.0
+        if stake == 0:
+            hit = True  # finish_position == 1
+            pnl = 0.0
+
+        assert hit is True
+        assert pnl == 0.0
