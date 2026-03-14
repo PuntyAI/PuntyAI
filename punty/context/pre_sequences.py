@@ -926,6 +926,10 @@ def build_all_sequence_lanes(
     """
     if sequence_override is not None:
         sequences = sequence_override
+    elif total_races < 6:
+        # TAB doesn't offer quaddie pools at meets with fewer than 6 races
+        logger.info(f"Skipping sequences: only {total_races} races (minimum 6)")
+        return []
     else:
         rules = {
             6:  {"early_quad": (1, 4), "quaddie": (3, 6)},
