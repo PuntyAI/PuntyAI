@@ -186,9 +186,14 @@
     .metric-value {
         font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 800;
         color: white; margin-top: 0.15rem; line-height: 1.2;
-        word-break: break-all;
+        white-space: nowrap;
     }
     .metric-value-pnl { font-size: 1.6rem; }
+    /* Sidebar stats — narrower column needs smaller text to fit 5 cells */
+    .dash-desktop-stats .metric-value { font-size: 0.95rem; }
+    .dash-desktop-stats .metric-value-pnl { font-size: 0.95rem; }
+    .dash-desktop-stats .metric-label { font-size: 0.55rem; }
+    .dash-desktop-stats .metric-cell { padding: 0.5rem 0.25rem; }
 
     /* ── Accordion ── */
     .dash-accordion-header {
