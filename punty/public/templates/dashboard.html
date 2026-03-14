@@ -498,11 +498,6 @@
 
                 </div>{# end accordions #}
 
-                {# ── Desktop Stats (visible on desktop only, hidden on mobile) ── #}
-                <div class="dash-desktop-stats">
-                    {% include "partials/_stats_content.html" %}
-                </div>
-
                 {# ── Mobile Stats Accordion (visible on mobile only, hidden on desktop) ── #}
                 <div class="dash-stats-accordion rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
                     <div class="dash-accordion-header" @click="open.stats = !open.stats" style="border: none;">
@@ -523,6 +518,11 @@
 
             {# ═══════ RIGHT COLUMN (35%) — Sidebar ═══════ #}
             <div class="dash-sidebar">
+
+                {# ── Desktop Stats (top of sidebar on desktop, hidden on mobile) ── #}
+                <div class="dash-desktop-stats">
+                    {% include "partials/_stats_content.html" %}
+                </div>
 
                 {# ── Recent Race Results ── #}
                 {% set recent_race_results = dashboard.recent_race_results|default([]) %}
