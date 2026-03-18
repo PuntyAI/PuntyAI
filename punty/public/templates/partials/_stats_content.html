@@ -43,7 +43,7 @@
          @click="expanded = !expanded; setTimeout(() => window.drawMeetingPnl && window.drawMeetingPnl(), 350)">
         <div class="flex items-center gap-2">
             <svg class="w-4 h-4" style="color: var(--magenta);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-            <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">P&amp;L by Meeting</span>
+            <span class="font-heading font-bold text-xs uppercase tracking-wider" style="color: var(--text-primary);">P&amp;L by Meeting</span>
         </div>
         <div class="flex items-center gap-1.5">
             <span class="text-[10px] font-heading uppercase tracking-wider" style="color: var(--text-muted);"
@@ -94,7 +94,7 @@
     <div style="display: flex; flex-direction: column; gap: 0.35rem;">
         {% for b in bt %}
         <div class="product-bar" style="padding: 0.4rem 0.6rem;">
-            <span class="font-heading font-semibold text-xs text-white flex-1">{{ b.name }}</span>
+            <span class="font-heading font-semibold text-xs flex-1" style="color: var(--text-primary);">{{ b.name }}</span>
             <span class="text-xs" style="color: var(--text-muted);">{{ b.winners }}/{{ b.bets }}</span>
             <span class="font-heading font-bold text-xs {% if b.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
                 {{ '+' if b.pnl >= 0 }}${{ '%.0f'|format(b.pnl) }}
@@ -115,7 +115,7 @@
         <div class="stat-cell" style="display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.4rem 0.5rem;">
             <span class="rank-badge rank-{{ r.rank }}" style="width: 20px; height: 20px; font-size: 0.65rem;">{{ r.rank }}</span>
             <div>
-                <div class="font-heading font-bold text-white text-sm">{{ r.rate }}%</div>
+                <div class="font-heading font-bold text-sm" style="color: var(--text-primary);">{{ r.rate }}%</div>
                 <div class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.total }}</div>
             </div>
         </div>

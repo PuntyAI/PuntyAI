@@ -11,7 +11,7 @@
         {% for mid, data in best_of.items() %}
         <div class="card p-4" x-show="isActive('{{ data.venue }}')" x-transition>
             <div class="flex items-center justify-between mb-3">
-                <a href="/tips/{{ data.meeting_id }}" class="font-heading font-bold text-white hover:text-punty-mbright transition-colors">
+                <a href="/tips/{{ data.meeting_id }}" class="font-heading font-bold hover:text-punty-mbright transition-colors" style="color: var(--text-primary);">
                     {{ data.venue }}
                 </a>
                 <span class="state-badge state-{{ data.state|lower }}">{{ data.state }}</span>
@@ -25,7 +25,7 @@
                 </div>
                 {% if data.best_winner %}
                 <div class="bom-content">
-                    <span class="font-heading font-bold text-white">{{ data.best_winner.horse }}</span>
+                    <span class="font-heading font-bold" style="color: var(--text-primary);">{{ data.best_winner.horse }}</span>
                     <span class="text-xs" style="color: var(--text-muted);">R{{ data.best_winner.race }}</span>
                     {% if data.best_winner.odds %}
                     <span class="font-heading font-bold text-sm" style="color: var(--cyan);">${{ '%.2f'|format(data.best_winner.odds) }}</span>
@@ -48,7 +48,7 @@
                 </div>
                 {% if data.roughie %}
                 <div class="bom-content">
-                    <span class="font-heading font-bold text-white">{{ data.roughie.horse }}</span>
+                    <span class="font-heading font-bold" style="color: var(--text-primary);">{{ data.roughie.horse }}</span>
                     <span class="text-xs" style="color: var(--text-muted);">R{{ data.roughie.race }}</span>
                     {% if data.roughie.odds %}
                     <span class="font-heading font-bold text-sm" style="color: var(--purple);">${{ '%.2f'|format(data.roughie.odds) }}</span>
@@ -67,10 +67,10 @@
                 </div>
                 {% if data.exotic %}
                 <div class="bom-content">
-                    <span class="font-heading font-bold text-white">{{ data.exotic.type }}</span>
+                    <span class="font-heading font-bold" style="color: var(--text-primary);">{{ data.exotic.type }}</span>
                     <span class="text-xs" style="color: var(--text-muted);">R{{ data.exotic.race }}</span>
                     {% if data.exotic.runners %}
-                    <span class="text-xs text-white">[{{ data.exotic.runners|join(', ') }}]</span>
+                    <span class="text-xs" style="color: var(--text-primary);">[{{ data.exotic.runners|join(', ') }}]</span>
                     {% endif %}
                     {% if data.exotic.stake %}
                     <span class="text-xs" style="color: var(--text-muted);">${{ '%.0f'|format(data.exotic.stake) }}</span>

@@ -77,7 +77,7 @@
     .state-tas { background: rgba(0, 100, 0, 0.2); color: #66bb6a; }
     .state-act { background: rgba(0, 70, 173, 0.15); color: #7eb8ff; }
     .state-nt { background: rgba(196, 100, 0, 0.2); color: #ff9f43; }
-    .state-aus { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+    .state-aus { background: var(--nav-hover-bg); color: var(--text-muted); }
     .state-hk { background: rgba(222, 41, 16, 0.2); color: #ff6b6b; }
 
     /* ── PP Badge ── */
@@ -144,7 +144,7 @@
     }
 
     /* ── Best of Meet slots ── */
-    .bom-slot { padding: 0.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .bom-slot { padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); }
     .bom-slot:last-child { border-bottom: none; }
     .bom-label {
         display: flex; align-items: center; gap: 0.35rem;
@@ -178,14 +178,14 @@
         width: 1px;
         background: var(--border-subtle);
     }
-    .metric-cell:hover { background: rgba(255,255,255,0.03); }
+    .metric-cell:hover { background: var(--nav-hover-bg); }
     .metric-label {
         font-family: 'Rajdhani', sans-serif; font-size: 0.6rem; font-weight: 700;
         text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted);
     }
     .metric-value {
         font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 800;
-        color: white; margin-top: 0.15rem; line-height: 1.2;
+        color: var(--text-primary); margin-top: 0.15rem; line-height: 1.2;
         white-space: nowrap;
     }
     .metric-value-pnl { font-size: 1.6rem; }
@@ -200,9 +200,9 @@
         display: flex; align-items: center; justify-content: space-between;
         padding: 0.625rem 1rem; cursor: pointer; user-select: none;
         border-radius: 10px; border: 1px solid var(--border-subtle);
-        background: rgba(255, 255, 255, 0.02); transition: background 0.15s;
+        background: var(--bg-card-alt); transition: background 0.15s;
     }
-    .dash-accordion-header:hover { background: rgba(255, 255, 255, 0.05); }
+    .dash-accordion-header:hover { background: var(--nav-hover-bg); }
 
     /* ── Metro card highlight ── */
     .metro-card { border-color: rgba(233, 30, 140, 0.2); }
@@ -228,12 +228,12 @@
     .rr-race-card {
         padding: 0.5rem;
         border-radius: 8px;
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.04);
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
         transition: all 0.15s;
     }
     .rr-race-card:hover {
-        background: rgba(255, 255, 255, 0.04);
+        background: var(--nav-hover-bg);
         border-color: rgba(233, 30, 140, 0.2);
     }
     /* ── Recent results table ── */
@@ -242,7 +242,7 @@
         border-collapse: collapse;
         font-size: 0.7rem;
     }
-    .rr-table thead { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .rr-table thead { border-bottom: 1px solid var(--border-subtle); }
     .rr-th-rank, .rr-th-name, .rr-th-pos, .rr-th-pnl {
         font-family: 'Rajdhani', sans-serif;
         font-size: 0.55rem;
@@ -281,7 +281,7 @@
         font-weight: 700;
         font-size: 0.7rem;
     }
-    .rr-row-exotic td { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+    .rr-row-exotic td { border-top: 1px solid var(--border-subtle); }
     .rr-exotic-badge {
         display: inline-flex;
         align-items: center;
@@ -304,7 +304,7 @@
         border: 1px solid var(--border-subtle);
         transition: all 0.15s;
     }
-    .qlink:hover { color: white; border-color: rgba(233,30,140,0.3); background: rgba(255,255,255,0.03); }
+    .qlink:hover { color: var(--text-primary); border-color: rgba(233,30,140,0.3); background: var(--bg-card-alt); }
 
     /* ── Compact stat grid for sidebar ── */
     .stat-grid {
@@ -315,8 +315,8 @@
     .stat-cell {
         padding: 0.5rem;
         border-radius: 8px;
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.04);
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
         text-align: center;
     }
     .stat-cell-label {
@@ -325,7 +325,7 @@
     }
     .stat-cell-value {
         font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 800;
-        color: white; margin-top: 0.1rem;
+        color: var(--text-primary); margin-top: 0.1rem;
     }
 
     /* ── Timer pulse ── */
@@ -444,7 +444,7 @@
                         <div class="dash-accordion-header" @click="open.best_of = !open.best_of" style="border: none; border-radius: 10px 10px 0 0;">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" style="color: var(--yellow);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
-                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Best Of Each Meet</span>
+                                <span class="font-heading font-bold text-xs uppercase tracking-wider" style="color: var(--text-primary);">Best Of Each Meet</span>
                             </div>
                             <svg class="w-4 h-4 transition-transform" :class="open.best_of && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                         </div>
@@ -460,7 +460,7 @@
                         <div class="dash-accordion-header" @click="open.sequences = !open.sequences" style="border: none;">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" style="color: var(--orange);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Sequence Bets</span>
+                                <span class="font-heading font-bold text-xs uppercase tracking-wider" style="color: var(--text-primary);">Sequence Bets</span>
                                 <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(255, 107, 53, 0.12); color: var(--orange);">{{ sequences|length }}</span>
                             </div>
                             <svg class="w-4 h-4 transition-transform" :class="open.sequences && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -478,7 +478,7 @@
                              style="border: none;">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Top Wins</span>
+                                <span class="font-heading font-bold text-xs uppercase tracking-wider" style="color: var(--text-primary);">Top Wins</span>
                                 {% set win_count = [dashboard.big_wins|default([])|length, 5]|min %}
                                 {% if win_count > 0 %}
                                 <span class="text-xs font-heading font-semibold px-2 py-0.5 rounded-full" style="background: rgba(74, 222, 128, 0.12); color: #4ade80;">{{ win_count }}</span>
@@ -503,7 +503,7 @@
                     <div class="dash-accordion-header" @click="open.stats = !open.stats" style="border: none;">
                         <div class="flex items-center gap-2">
                             <svg class="w-4 h-4" style="color: var(--cyan);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                            <span class="font-heading font-bold text-white text-xs uppercase tracking-wider">Stats & Performance</span>
+                            <span class="font-heading font-bold text-xs uppercase tracking-wider" style="color: var(--text-primary);">Stats & Performance</span>
                         </div>
                         <svg class="w-4 h-4 transition-transform" :class="open.stats && 'rotate-180'" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
@@ -566,7 +566,7 @@
                     <div style="display: flex; flex-direction: column; gap: 0.35rem;">
                         {% for b in bt %}
                         <div class="product-bar" style="padding: 0.4rem 0.6rem;">
-                            <span class="font-heading font-semibold text-xs text-white flex-1">{{ b.name }}</span>
+                            <span class="font-heading font-semibold text-xs flex-1" style="color: var(--text-primary);">{{ b.name }}</span>
                             <span class="text-xs" style="color: var(--text-muted);">{{ b.winners }}/{{ b.bets }}</span>
                             <span class="font-heading font-bold text-xs {% if b.pnl >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
                                 {{ '+' if b.pnl >= 0 }}${{ '%.0f'|format(b.pnl) }}
@@ -587,7 +587,7 @@
                         <div class="stat-cell" style="display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.4rem 0.5rem;">
                             <span class="rank-badge rank-{{ r.rank }}" style="width: 20px; height: 20px; font-size: 0.65rem;">{{ r.rank }}</span>
                             <div>
-                                <div class="font-heading font-bold text-white text-sm">{{ r.rate }}%</div>
+                                <div class="font-heading font-bold text-sm" style="color: var(--text-primary);">{{ r.rate }}%</div>
                                 <div class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.total }}</div>
                             </div>
                         </div>
