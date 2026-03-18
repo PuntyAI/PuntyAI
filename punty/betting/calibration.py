@@ -1,11 +1,12 @@
-"""Probability calibration — learns from actual results to correct LGBM predictions.
+"""Probability calibration — learns from actual results to correct predictions.
 
-The LGBM model's place probabilities are miscalibrated above 0.60:
-  Predicted 0.70 → Actual 0.53 (overconfident by 17%)
-  Predicted 0.80 → Actual 0.58 (overconfident by 22%)
+Builds separate win and place calibration maps from settled bet history.
+Win calibration: bins win_probability for Win/Saver Win bets, checks hit rate.
+Place calibration: bins place_probability for Place bets, checks hit rate.
 
-This module builds a calibration map from settled bet history and applies it
-before Kelly staking, so we bet based on REALITY not predictions.
+Applied in two places:
+  1. Kelly staking (Betfair queue) — calibrated PP before edge calculation
+  2. Probability engine (weighted fallback) — corrects win/place overconfidence
 
 Updates automatically on every settlement cycle. More data = better calibration.
 """
@@ -25,7 +26,7 @@ BIN_WIDTH = 0.10
 MIN_SAMPLES = 15  # Need at least 15 bets in a bin to trust it
 
 # Cache: recalculate at most once per hour
-_calibration_cache: Optional[dict] = None
+_calibration_cache: Optional[dict] = None  # {"win": {bin: rate}, "place": {bin: rate}}
 _cache_expires: Optional[datetime] = None
 CACHE_TTL = timedelta(hours=1)
 
@@ -35,36 +36,46 @@ def _bin_index(pp: float) -> int:
     return max(0, min(NUM_BINS - 1, int(pp / BIN_WIDTH)))
 
 
-async def build_calibration_map(db: AsyncSession) -> dict[int, float]:
-    """Build predicted→actual calibration from all settled place bets.
+async def _build_calibration_map_for_type(
+    db: AsyncSession, bet_type: str,
+) -> dict[int, float]:
+    """Build predicted→actual calibration for a specific bet type.
+
+    Args:
+        bet_type: "win" or "place"
 
     Returns: {bin_index: actual_strike_rate} for bins with enough data.
-    Bins without enough data return None (use raw prediction).
     """
-    from punty.models.pick import Pick
+    if bet_type == "win":
+        prob_col = "win_probability"
+        type_filter = "bet_type IN ('win', 'saver_win')"
+        label = "Win"
+    else:
+        prob_col = "place_probability"
+        type_filter = "bet_type = 'place'"
+        label = "Place"
 
-    # Query: group settled place bets by PP bucket, get actual strike rate
     result = await db.execute(
-        text("""
+        text(f"""
             SELECT
-                CAST(place_probability / 0.10 AS INTEGER) as pp_bin,
+                CAST({prob_col} / 0.10 AS INTEGER) as prob_bin,
                 COUNT(*) as cnt,
                 SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END) as hits
             FROM picks
             WHERE settled = 1
               AND pick_type = 'selection'
-              AND bet_type = 'place'
-              AND place_probability IS NOT NULL
-              AND place_probability > 0
-            GROUP BY pp_bin
-            ORDER BY pp_bin
+              AND {type_filter}
+              AND {prob_col} IS NOT NULL
+              AND {prob_col} > 0
+            GROUP BY prob_bin
+            ORDER BY prob_bin
         """)
     )
     rows = result.fetchall()
 
     cal_map = {}
     for row in rows:
-        bin_idx = min(row[0], NUM_BINS - 1)  # Clamp 1.0 edge case
+        bin_idx = min(row[0], NUM_BINS - 1)
         count = row[1]
         hits = row[2]
         if count >= MIN_SAMPLES:
@@ -73,25 +84,43 @@ async def build_calibration_map(db: AsyncSession) -> dict[int, float]:
             actual = cal_map[bin_idx]
             direction = "OVER" if predicted > actual + 0.03 else "UNDER" if predicted < actual - 0.03 else "OK"
             logger.debug(
-                f"Calibration bin {bin_idx} ({predicted:.0%}): "
+                f"{label} calibration bin {bin_idx} ({predicted:.0%}): "
                 f"actual={actual:.1%} n={count} [{direction}]"
             )
 
     return cal_map
 
 
-async def get_calibration_map(db: AsyncSession) -> dict[int, float]:
-    """Get cached calibration map, rebuilding if stale."""
+async def build_calibration_map(db: AsyncSession) -> dict[str, dict[int, float]]:
+    """Build win + place calibration maps from settled bets.
+
+    Returns: {"win": {bin: rate}, "place": {bin: rate}}
+    """
+    win_map = await _build_calibration_map_for_type(db, "win")
+    place_map = await _build_calibration_map_for_type(db, "place")
+    return {"win": win_map, "place": place_map}
+
+
+async def get_calibration_map(
+    db: AsyncSession, bet_type: str = "place",
+) -> dict[int, float]:
+    """Get cached calibration map for a bet type, rebuilding if stale.
+
+    Args:
+        bet_type: "win" or "place" (default "place" for backward compat)
+    """
     global _calibration_cache, _cache_expires
 
     now = datetime.utcnow()
     if _calibration_cache is not None and _cache_expires and now < _cache_expires:
-        return _calibration_cache
+        return _calibration_cache.get(bet_type, {})
 
     _calibration_cache = await build_calibration_map(db)
     _cache_expires = now + CACHE_TTL
-    logger.info(f"Calibration map rebuilt: {len(_calibration_cache)} bins calibrated")
-    return _calibration_cache
+    win_bins = len(_calibration_cache.get("win", {}))
+    place_bins = len(_calibration_cache.get("place", {}))
+    logger.info(f"Calibration maps rebuilt: win={win_bins} bins, place={place_bins} bins")
+    return _calibration_cache.get(bet_type, {})
 
 
 def calibrate_probability(pp: float, cal_map: dict[int, float]) -> float:
@@ -173,6 +202,25 @@ async def calibrated_kelly_stake(
         )
 
     return calculate_kelly_stake(balance, actual_pp, odds, max_fraction, min_stake)
+
+
+async def get_all_calibration_maps(
+    db: AsyncSession,
+) -> dict[str, dict[int, float]]:
+    """Get both win and place calibration maps (cached).
+
+    Returns: {"win": {bin: rate}, "place": {bin: rate}}
+    For use in probability engine to correct both win and place predictions.
+    """
+    global _calibration_cache, _cache_expires
+
+    now = datetime.utcnow()
+    if _calibration_cache is not None and _cache_expires and now < _cache_expires:
+        return _calibration_cache
+
+    _calibration_cache = await build_calibration_map(db)
+    _cache_expires = now + CACHE_TTL
+    return _calibration_cache
 
 
 def invalidate_cache():
