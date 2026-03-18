@@ -712,6 +712,27 @@ def _calculate_lgbm_probabilities(
     if rw_total > 0:
         rank_weights = {rid: w / rw_total for rid, w in rank_weights.items()}
 
+    # ── Market-reality clamp ──
+    # Prevent longshots from getting absurd rank weights in small fields.
+    # Without this, rank 3 of 6 gets 18.6% weight regardless of whether
+    # the horse is $3 or $71. Clamp rank weight to max 3x market-implied.
+    # This preserves LGBM's ranking order but keeps probabilities grounded.
+    MAX_RANK_MARKET_RATIO = 3.0
+    clamped = False
+    for rid in ranked_rids:
+        mkt = market_implied.get(rid, baseline)
+        rw = rank_weights.get(rid, 0)
+        if mkt > 0 and mkt < 0.10:  # Only clamp longshots (< 10% market implied, i.e. > $10)
+            cap = mkt * MAX_RANK_MARKET_RATIO
+            if rw > cap:
+                rank_weights[rid] = cap
+                clamped = True
+    if clamped:
+        # Re-normalize after clamping (redistributes excess to other runners)
+        rw_total = sum(rank_weights.values())
+        if rw_total > 0:
+            rank_weights = {rid: w / rw_total for rid, w in rank_weights.items()}
+
     # Blend: (1 - influence) * market + influence * lgbm_rank_distribution
     blended_win = {}
     for rid in ranked_rids:
