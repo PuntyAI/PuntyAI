@@ -319,7 +319,7 @@
         /* Mobile slide-out menu */
         .mobile-menu-overlay {
             position: fixed; inset: 0; z-index: 60;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.6);
             opacity: 0; visibility: hidden;
             transition: opacity 0.25s, visibility 0.25s;
         }
@@ -489,6 +489,123 @@
         /* Light mode: dropdown gets refined shadow */
         [data-theme="light"] .toolbox-menu {
             box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
+        }
+
+        /* ═══════════════════════════════════════
+           LIGHT MODE OVERRIDES
+           Fixes 200+ hardcoded text-white / color:white
+           across child templates without touching each file.
+        ═══════════════════════════════════════ */
+
+        /* Header stays dark in light mode — logo needs dark bg */
+        [data-theme="light"] .site-header {
+            background: linear-gradient(180deg, #15151f 0%, #0a0a0f 100%) !important;
+            border-bottom-color: rgba(255,255,255,0.08) !important;
+        }
+        [data-theme="light"] .site-header .nav-link,
+        [data-theme="light"] .site-header .toolbox-btn {
+            color: #c0c0cc;
+        }
+        [data-theme="light"] .site-header .nav-link:hover,
+        [data-theme="light"] .site-header .toolbox-btn:hover {
+            color: #ffffff;
+            background: rgba(255,255,255,0.06);
+        }
+        [data-theme="light"] .site-header .social-icon {
+            background: #12121a;
+            border-color: rgba(255,255,255,0.08);
+            color: #c0c0cc;
+        }
+        [data-theme="light"] .site-header .social-icon:hover {
+            color: #e91e8c;
+            border-color: #e91e8c;
+            box-shadow: 0 0 15px rgba(233, 30, 140, 0.3);
+        }
+        [data-theme="light"] .site-header .theme-toggle {
+            background: #1a1a25;
+            border-color: rgba(255,255,255,0.22);
+        }
+        [data-theme="light"] .site-header::before {
+            background: linear-gradient(90deg, #e91e8c 0%, #9d4edd 50%, #00d4ff 100%);
+        }
+
+        /* Slide-out menu: keep dark to match header */
+        [data-theme="light"] .mobile-menu-panel {
+            background: #12121a !important;
+            border-left-color: rgba(255,255,255,0.08) !important;
+        }
+        [data-theme="light"] .mobile-menu-panel a {
+            color: #c0c0cc !important;
+            border-bottom-color: rgba(255,255,255,0.04) !important;
+        }
+        [data-theme="light"] .mobile-menu-panel a:hover {
+            color: #ffffff !important;
+            background: rgba(255,255,255,0.04) !important;
+        }
+        [data-theme="light"] .mobile-menu-panel a.active {
+            color: #e91e8c !important;
+        }
+        [data-theme="light"] .mobile-menu-panel-header {
+            border-bottom-color: rgba(255,255,255,0.08) !important;
+        }
+        [data-theme="light"] .mobile-menu-panel-close {
+            color: #808090;
+        }
+        [data-theme="light"] .mobile-menu-panel .menu-section-label {
+            color: #808090 !important;
+        }
+        [data-theme="light"] .mobile-menu-panel .theme-toggle-label {
+            color: #c0c0cc !important;
+        }
+        [data-theme="light"] .mobile-menu-panel .theme-toggle {
+            background: #1a1a25 !important;
+            border-color: rgba(255,255,255,0.22) !important;
+        }
+
+        /* Override Tailwind text-white in light mode for main content area.
+           Excludes header/footer/mobile-nav (they stay dark). */
+        [data-theme="light"] main .text-white,
+        [data-theme="light"] main .hover\:text-white:hover {
+            color: var(--text-primary) !important;
+        }
+        /* Inline style overrides for light mode content */
+        [data-theme="light"] main [style*="color: white"],
+        [data-theme="light"] main [style*="color:white"],
+        [data-theme="light"] main [style*="color: #fff"],
+        [data-theme="light"] main [style*="color:#fff"] {
+            color: var(--text-primary) !important;
+        }
+
+        /* White SVG icons in light mode */
+        [data-theme="light"] main svg.text-white,
+        [data-theme="light"] main .text-white svg {
+            color: var(--text-primary) !important;
+        }
+
+        /* Hardcoded background overrides — dark bgs in main content */
+        [data-theme="light"] main [style*="background: #0a0a0f"],
+        [data-theme="light"] main [style*="background:#0a0a0f"],
+        [data-theme="light"] main [style*="background-color: #0a0a0f"] {
+            background: var(--bg-dark) !important;
+        }
+        [data-theme="light"] main [style*="background: #12121a"],
+        [data-theme="light"] main [style*="background:#12121a"] {
+            background: var(--bg-card) !important;
+        }
+
+        /* rgba white borders in light mode — swap to dark-based opacity */
+        [data-theme="light"] main [style*="border-color: rgba(255,255,255,"],
+        [data-theme="light"] main [style*="border: 1px solid rgba(255,255,255,"] {
+            border-color: var(--border-subtle) !important;
+        }
+
+        /* Age verification modal stays dark always */
+        #age-modal, #age-modal * {
+            color: #ffffff;
+        }
+        #age-modal .card {
+            background: #12121a !important;
+            border-color: rgba(255,255,255,0.08) !important;
         }
 
         /* Stats counter */
