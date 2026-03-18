@@ -695,7 +695,7 @@ def _calculate_lgbm_probabilities(
     if market_influence is not None:
         LGBM_RANK_INFLUENCE = max(0.0, min(1.0, 1.0 - market_influence))
     else:
-        LGBM_RANK_INFLUENCE = 0.55  # Default: 45% market, 55% LGBM
+        LGBM_RANK_INFLUENCE = 0.88  # Default: 12% market, 88% LGBM
 
     # Build rank-position weights: exponential decay from top to bottom.
     # Top runner gets highest weight, bottom gets lowest.
