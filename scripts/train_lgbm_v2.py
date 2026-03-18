@@ -366,6 +366,27 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
     dist_place = _sf(_record_place_rate(dr))
     trk_place = _sf(_record_place_rate(tr))
 
+    # ── v4 features ──
+    # Leader signal — from settle position
+    is_leader = 1.0 if (settle_pos and not math.isnan(settle_pos) and settle_pos <= 2) else 0.0
+
+    # Staying race
+    is_staying = 1.0 if distance and distance >= 2000 else 0.0
+
+    # Last start won
+    l5_str = str(pf_runner.get("Last5Starts", "") or "")
+    last_start_won = 1.0 if l5_str and l5_str.lstrip("0").startswith("1") else 0.0
+
+    # Country — from Proform state/venue
+    pf_state = race_meta.get("state", "")
+    pf_venue = (race_meta.get("venue", "") or "").lower()
+    if pf_state == "HK" or pf_venue in ("sha tin", "happy valley"):
+        is_australia, is_hong_kong, is_new_zealand = 0.0, 1.0, 0.0
+    elif pf_state == "NZ" or pf_venue in ("ellerslie", "trentham", "riccarton", "te rapa", "otaki", "wingatui", "tauranga", "wanganui", "hastings", "awapuni", "pukekohe"):
+        is_australia, is_hong_kong, is_new_zealand = 0.0, 0.0, 1.0
+    else:
+        is_australia, is_hong_kong, is_new_zealand = 1.0, 0.0, 0.0
+
     # ── Build feature vector (MUST match FEATURE_NAMES order) ──
     return [
         market_prob,
@@ -397,6 +418,9 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
         float(grp_starts), _sf(group_sr),
         dist_place, trk_place,                         # NEW: distance_place_rate, track_place_rate
         float(field_size), float(distance),
+        # ── v4 features ──
+        is_leader, is_staying, last_start_won,
+        is_australia, is_hong_kong, is_new_zealand,
     ]
 
 
