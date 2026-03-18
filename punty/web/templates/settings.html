@@ -509,14 +509,24 @@
                         <span class="text-sm text-gray-600">Confidence Boost</span>
                         <p class="text-xs text-gray-400">+15% boost when tissue rank-1 matches market favourite</p>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer"
-                           onclick="var cb = document.getElementById('prob_confidence_boost'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change'));">
-                        <input type="checkbox" id="prob_confidence_boost"
-                               {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}checked{% endif %}
-                               class="sr-only peer"
-                               onclick="event.stopPropagation();">
-                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-punty-coral"></div>
-                    </label>
+                    <button type="button" id="prob_confidence_boost_btn"
+                            onclick="var cb=document.getElementById('prob_confidence_boost'); cb.checked=!cb.checked; this.setAttribute('data-on', cb.checked);"
+                            data-on="{% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}true{% else %}false{% endif %}"
+                            class="relative w-9 h-5 rounded-full transition-colors duration-200"
+                            style="background: {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}var(--magenta, #e91e8c){% else %}#4b5563{% endif %};">
+                        <span class="absolute top-[2px] rounded-full h-4 w-4 bg-white transition-transform duration-200"
+                              style="left: 2px; transform: {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}translateX(16px){% else %}translateX(0){% endif %};"></span>
+                    </button>
+                    <input type="checkbox" id="prob_confidence_boost"
+                           {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}checked{% endif %}
+                           class="hidden">
+                    <script>
+                    document.getElementById('prob_confidence_boost_btn').addEventListener('click', function() {
+                        var on = this.getAttribute('data-on') === 'true';
+                        this.style.background = on ? 'var(--magenta, #e91e8c)' : '#4b5563';
+                        this.querySelector('span').style.transform = on ? 'translateX(16px)' : 'translateX(0)';
+                    });
+                    </script>
                 </div>
 
                 <div class="flex space-x-2 pt-3">
