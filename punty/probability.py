@@ -1196,6 +1196,21 @@ def calculate_race_probabilities(
             if td_stats and td_stats.wins >= 1:
                 multiplier *= 1.03
 
+        # Staying race compression: 2200m+ races are harder to predict
+        # (0% SR in 4-day audit at 2000m+, staying distance weights already
+        # adapted but confidence should be compressed toward field baseline).
+        # Compress top probabilities toward mean — don't penalize uniformly,
+        # reduce the spread between contenders (form is less predictive in staying).
+        race_dist = _get(race, "distance") or 1400
+        if isinstance(race_dist, (int, float)) and race_dist >= 2200:
+            baseline = 1.0 / field_size if field_size > 0 else 0.08
+            wp = win_probs.get(rid, baseline)
+            # 15% compression toward baseline for staying races
+            compressed = wp * 0.85 + baseline * 0.15
+            # Apply as multiplier relative to current value
+            if wp > 0:
+                multiplier *= compressed / wp
+
         if multiplier != 1.0:
             win_probs[rid] *= multiplier
 

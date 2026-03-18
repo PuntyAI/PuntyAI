@@ -208,11 +208,13 @@ def calculate_pre_selections(
     # Build runner data with probability info
     candidates = _build_candidates(runners)
     if not candidates:
+        logger.info(f"R{race_number}: no candidates (all filtered)")
         return RacePreSelections(
             race_number=race_number, picks=[], exotic=None,
             puntys_pick=None, total_stake=0.0,
             classification=classification,
         )
+    logger.info(f"R{race_number}: {len(candidates)} candidates, field={field_size}, class={classification.race_type}")
 
     # Build lookup from optimizer recommendations: saddlecloth -> BetRecommendation
     rec_lookup = {r.saddlecloth: r for r in optimization.recommendations}
@@ -237,6 +239,16 @@ def calculate_pre_selections(
         reverse=True,
     )
 
+    # Log top candidates after sort
+    for i, c in enumerate(candidates[:6]):
+        lgbm_rank = c.get("lgbm_rank", "?")
+        logger.info(
+            f"R{race_number} candidate #{i+1}: {c['horse_name']} (#{c['saddlecloth']}) "
+            f"WP={c['win_prob']:.1%} PP={c['place_prob']:.1%} "
+            f"odds=${c['odds']:.2f} VR={c['value_rating']:.2f} "
+            f"LGBM={lgbm_rank} boost={c.get('confidence_boost', 0):.2f}"
+        )
+
     # Determine favourite price (lowest odds) for dominant fav logic
     fav_price = min((c["odds"] for c in candidates), default=None)
 
@@ -256,6 +268,12 @@ def calculate_pre_selections(
         # Best value roughie
         roughie_pool.sort(key=lambda c: c["value_rating"], reverse=True)
         roughie = roughie_pool[0]
+        logger.info(
+            f"R{race_number} roughie: {roughie['horse_name']} (#{roughie['saddlecloth']}) "
+            f"odds=${roughie['odds']:.2f} VR={roughie['value_rating']:.2f}"
+        )
+    else:
+        logger.info(f"R{race_number} no qualifying roughie (pool={len(roughie_pool)})")
 
     if is_ntd:
         # NTD path: select top 2 by place_prob from ALL candidates (not roughie)
@@ -386,6 +404,16 @@ def calculate_pre_selections(
 
     # Allocate stakes with edge gating
     _allocate_stakes(picks, race_pool, field_size=field_size)
+
+    # Log final pick summary
+    for p in picks:
+        status = "TRACKED" if p.tracked_only else f"${p.stake:.1f}"
+        reason = f" [{p.no_bet_reason}]" if p.no_bet_reason else ""
+        logger.info(
+            f"R{race_number} pick #{p.rank}: {p.horse_name} (#{p.saddlecloth}) "
+            f"{p.bet_type} {status} WP={p.win_prob:.1%} PP={p.place_prob:.1%} "
+            f"odds=${p.odds:.2f}{reason}"
+        )
 
     # Recalculate exotic combos using our picks + top 6 by probability.
     # Our 4 picks anchor positions 1-2 (Exacta/First4). Positions 2 (Exacta)
@@ -878,6 +906,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
             pick.tracked_only = True
             pick.no_bet_reason = reason or "No proven edge in this odds band"
             pick.stake = 0.0
+            logger.info(
+                f"  edge gate FAIL: {pick.horse_name} (#{pick.saddlecloth}) "
+                f"rank={pick.rank} {pick.bet_type} ${pick.odds:.2f} — {pick.no_bet_reason}"
+            )
         # Place odds cap — rank-dependent (check place_odds, not win odds)
         # Rank 1: $10 cap (strong anchor). Rank 2+: $8 cap (yesterday data: +$33.50)
         elif pick.bet_type == "Place" and (pick.place_odds or pick.odds):
@@ -887,6 +919,20 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
                 pick.tracked_only = True
                 pick.no_bet_reason = f"Place odds > ${place_cap:.0f} (rank {pick.rank})"
                 pick.stake = 0.0
+                logger.info(
+                    f"  edge gate FAIL: {pick.horse_name} (#{pick.saddlecloth}) "
+                    f"rank={pick.rank} — {pick.no_bet_reason}"
+                )
+            else:
+                logger.info(
+                    f"  edge gate PASS: {pick.horse_name} (#{pick.saddlecloth}) "
+                    f"rank={pick.rank} {pick.bet_type} ${pick.odds:.2f}"
+                )
+        else:
+            logger.info(
+                f"  edge gate PASS: {pick.horse_name} (#{pick.saddlecloth}) "
+                f"rank={pick.rank} {pick.bet_type} ${pick.odds:.2f}"
+            )
 
     # Count staked picks
     staked_picks = [p for p in picks if not p.tracked_only]

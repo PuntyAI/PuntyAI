@@ -267,7 +267,6 @@ async def review_content(
         raise HTTPException(status_code=404, detail="Content not found")
 
     if action.action == "approve":
-        content.status = ContentStatus.APPROVED
         content.review_notes = action.notes
 
         # Warn if content mentions scratched runners
@@ -289,7 +288,8 @@ async def review_content(
                         f"Approving {content_id} with scratched runners mentioned: {mentioned}"
                     )
 
-        # Store picks from early mail on approval
+        # Store picks from early mail BEFORE flipping status to APPROVED.
+        # This ensures we never have an approved content with no picks.
         if content.content_type == "early_mail" and content.raw_content:
             # Supersede any previously approved early_mail for this meeting
             from sqlalchemy import delete as sa_delete
@@ -309,9 +309,10 @@ async def review_content(
             try:
                 from punty.results.picks import store_picks_from_content, store_picks_as_memories
                 await store_picks_from_content(db, content.id, content.meeting_id, content.raw_content)
-                # Store picks as memories for learning system
                 await store_picks_as_memories(db, content.meeting_id, content.id)
-                # Populate Betfair auto-bet queue
+                # Picks stored successfully — now safe to approve
+                content.status = ContentStatus.APPROVED
+                # Populate Betfair auto-bet queue (non-blocking)
                 try:
                     from punty.betting.queue import populate_bet_queue
                     await populate_bet_queue(db, content.meeting_id, content.id)
@@ -320,7 +321,17 @@ async def review_content(
                     logging.getLogger(__name__).warning(f"Betfair queue populate: {bf_e}")
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).error(f"Failed to store picks/memories: {e}")
+                logging.getLogger(__name__).error(
+                    f"Failed to store picks for {content.meeting_id}: {e} — "
+                    f"content NOT approved"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Pick storage failed: {e}. Content not approved.",
+                )
+        else:
+            # Non-early-mail content: approve directly (no picks to store)
+            content.status = ContentStatus.APPROVED
     elif action.action == "unapprove":
         content.status = ContentStatus.PENDING_REVIEW.value
         content.review_notes = action.notes or "Unapproved by user"

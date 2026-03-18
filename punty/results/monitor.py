@@ -327,7 +327,6 @@ class ResultsMonitor:
                     logger.critical("Results monitor hit 5 consecutive errors — backing off")
 
             interval = await self._next_interval()
-            logger.debug(f"Next poll in {interval:.0f}s")
             await asyncio.sleep(interval)
 
     async def _check_retrospective_updates(self):
