@@ -785,6 +785,22 @@ def _calculate_lgbm_probabilities(
         # Include LGBM rank in factors for downstream visibility
         lgbm_rank_pos = ranked_rids.index(rid) + 1 if rid in ranked_rids else 99
 
+        factor_scores = {"_lgbm_rank": lgbm_rank_pos}
+        # Add weighted-engine factor scores for auto-tuner visibility
+        try:
+            track_condition = _get(meeting, "track_condition") or _get(race, "track_condition") or ""
+            race_distance = _get(race, "distance") or 1400
+            venue_name = str(_get(meeting, "venue") or "")
+            avg_wt = _average_weight(active)
+            factor_scores["market"] = round(mkt_prob, 4)
+            factor_scores["form"] = round(_form_rating(runner, track_condition, baseline, race, meeting), 4)
+            factor_scores["barrier"] = round(_barrier_draw_factor(runner, field_size, race_distance, venue_name), 4)
+            factor_scores["jockey_trainer"] = round(_jockey_trainer_factor(runner, baseline), 4)
+            factor_scores["weight_carried"] = round(_weight_factor(runner, avg_wt, race_distance, race), 4)
+            factor_scores["horse_profile"] = round(_horse_profile_factor(runner, race), 4)
+        except Exception:
+            pass  # Don't break LGBM path if factor calc fails
+
         results[rid] = RunnerProbability(
             win_probability=round(win_prob, 4),
             place_probability=round(place_prob, 4),
@@ -793,7 +809,7 @@ def _calculate_lgbm_probabilities(
             place_value_rating=round(place_value, 3),
             edge=round(edge, 4),
             recommended_stake=round(stake, 2),
-            factors={"_lgbm_rank": lgbm_rank_pos},
+            factors=factor_scores,
             matched_patterns=[],
         )
 

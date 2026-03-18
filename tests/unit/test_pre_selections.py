@@ -473,7 +473,9 @@ class TestSelectExotic:
             assert result.exotic_type == etype
 
     def test_trifecta_small_field_deprioritised(self):
-        """Trifecta in small fields gets lower score but isn't blocked."""
+        """Trifecta in small fields gets lower score but isn't blocked.
+        Trifecta Box now requires metro (meet_quality >= 2) AND field_size >= 10.
+        """
         combos = [
             {"type": "Trifecta Box", "runners": [1, 2, 3], "runner_names": ["A", "B", "C"],
              "probability": 0.10, "value": 1.5, "combos": 6, "format": "box"},
@@ -484,10 +486,15 @@ class TestSelectExotic:
         result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=6)
         assert result is not None
         assert result.exotic_type == "Quinella"
-        # Large field: Trifecta should win via field-size scaling
-        result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=12)
+        # Large field + metro: Trifecta should win via field-size scaling + preferred type
+        result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=12,
+                                venue_type="metro")
         assert result is not None
         assert result.exotic_type == "Trifecta Box"
+        # Large field but non-metro: Quinella wins (trifecta requires metro)
+        result = _select_exotic(combos, {1, 2, 3}, fav_price=3.0, field_size=12)
+        assert result is not None
+        assert result.exotic_type == "Quinella"
 
 
 # ──────────────────────────────────────────────

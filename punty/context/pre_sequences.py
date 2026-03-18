@@ -20,6 +20,7 @@ MIN_OUTLAY = 20.0
 MAX_OUTLAY = 80.0  # Shape-driven legs need wider budget (was $60, $40 before that)
 BIG6_MIN_OUTLAY = 25.0
 BIG6_MAX_OUTLAY = 25.0
+BIG6_OUTLAY = 5.0   # Hail-mary: 1 pick per leg, fixed $5 ticket
 MIN_FLEXI_PCT = 20.0  # Lowered from 30% — allows 400 combos at $80 budget (5×4×5×4)
 
 # Main quaddie re-enabled with wider legs and edge-based construction.
@@ -30,6 +31,9 @@ MIN_RETURN_PCT = {
     "early_quaddie": 80.0,  # Data: Early Quad -52% ROI (8/57) — raised from 60%
     "quaddie": 30.0,         # Data: Quaddie -43.9% ROI (16/178) — raised from 20%
 }
+
+# LGBM-driven floor: exclude runners with win_prob < 5% from legs
+MIN_LEG_RUNNER_WP = 0.05
 
 # Odds shapes classified as chaos / dividend-decider legs
 CHAOS_SHAPES = {"TRIO", "MID_FAV", "OPEN_BUNCH", "WIDE_OPEN"}
@@ -222,8 +226,17 @@ def _select_runners_for_leg(leg, width: int, value_swap: bool = True) -> list[di
 
     Runners in leg.top_runners are already sorted by composite score
     (win_prob * value blend) from the probability engine.
+
+    Width is raised to include all our ranked picks (tip_rank 1-4) that pass
+    the win_prob floor, so we never exclude our own selections.
     """
     candidates = list(leg.top_runners)
+
+    # Ensure width is at least large enough to include all our picks above floor
+    our_picks = [r for r in candidates
+                 if r.get("_is_pick") and float(r.get("win_prob", 0)) >= MIN_LEG_RUNNER_WP]
+    width = max(width, len(our_picks))
+
     selected = candidates[:width]
 
     if value_swap and width < len(candidates):
@@ -301,6 +314,17 @@ def _calc_estimated_return(lane_legs: list[LaneLeg], legs_data: list) -> tuple[f
         est_return = round((hit_prob / random_hit) * pool_takeout * 100, 1)
     else:
         est_return = 0.0
+
+    # Bonus for legs that include all of our picks: wider legs with all picks
+    # have lower raw payout but significantly higher hit rate. Apply 1.1x per leg
+    # where all 4 picks are present to reflect the improved sequence hit probability.
+    for i, leg in enumerate(lane_legs):
+        selected_sc = set(leg.runners)
+        pick_runners = [r for r in legs_data[i].top_runners if r.get("_is_pick")]
+        if len(pick_runners) >= 4:
+            picks_in_leg = sum(1 for r in pick_runners if r.get("saddlecloth", 0) in selected_sc)
+            if picks_in_leg >= 4:
+                est_return = round(est_return * 1.1, 1)
 
     return (est_return, round(hit_prob * 100, 1))
 
@@ -500,6 +524,16 @@ def _optimiser_select(
             targets.append(min(shape_w, pool_depth))
 
     # Step 4: Apply field-size caps and minimums
+    # Count our picks per leg (above 5% win_prob floor) to ensure we never
+    # exclude our own ranked selections (rank 1-4). Data shows 59% of
+    # "had the winner but didn't include them" misses are rank 3/4.
+    picks_per_leg = []
+    for i in range(num_legs):
+        runners = legs_data[i].top_runners
+        pick_count = sum(1 for r in runners
+                         if r.get("_is_pick") and float(r.get("win_prob", 0)) >= MIN_LEG_RUNNER_WP)
+        picks_per_leg.append(pick_count)
+
     for i in range(num_legs):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
         shape_w = legs_data[i].shape_width if hasattr(legs_data[i], "shape_width") else 3
@@ -517,19 +551,31 @@ def _optimiser_select(
         # Never > 50% of field
         max_half = max(1, field_size // 2) if field_size > 2 else 1
         targets[i] = min(targets[i], max_half)
-        # Field-size-driven minimums
+        # Field-size-driven minimums — ensure we always include all our picks
         if field_size >= 14:
             min_width = 4
         elif is_big6:
-            min_width = 2  # Big6 budget can't support wider
+            # Big6 needs wider legs to compensate for 6 legs
+            if leg_types[i] == "chaos":
+                min_width = min(5, max_half)  # Chaos legs in Big6: min 5
+            else:
+                min_width = min(4, max_half)  # Normal/anchor Big6: min 4
         else:
             min_width = 3  # Quaddie: always 3-wide minimum
+        # Never go below the number of our picks in this race
+        min_width = max(min_width, min(picks_per_leg[i], max_half))
         targets[i] = max(targets[i], min_width)
 
-    # Big6 tighter caps — 2-wide max to fit $20-30 budget (2^6=64 combos)
+    # Big6 wider caps — need wider legs to compensate for 6 legs
+    # (was 2-wide max, now 4-5 to improve hit rate)
     if is_big6:
         for i in range(num_legs):
-            targets[i] = min(targets[i], 2)
+            field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+            max_half = max(1, field_size // 2) if field_size > 2 else 1
+            if leg_types[i] == "chaos":
+                targets[i] = min(targets[i], min(5, max_half))
+            else:
+                targets[i] = min(targets[i], min(4, max_half))
 
     # Step 5: Populate legs
     # Anchor legs: top win_prob runners (favorites = short-priced, predictable)
@@ -538,7 +584,6 @@ def _optimiser_select(
     # LGBM-driven floor: exclude runners with win_prob < 5% from legs.
     # Production data: 2-wide legs hit 45.3% but 3-wide hit 54.5% — wider is
     # better, but only if the extra runners have genuine win chances.
-    MIN_LEG_RUNNER_WP = 0.05  # 5% win probability floor for leg inclusion
     selected = []
     for i in range(num_legs):
         runners = legs_data[i].top_runners
@@ -691,7 +736,10 @@ def _optimiser_select(
     budget_lo = budget * 0.85
     budget_floor = budget * 0.70
 
-    # Trim phase: remove runner causing smallest EV_proxy drop, respecting min 2-wide
+    # Trim phase: remove runner causing smallest EV_proxy drop, respecting min width.
+    # CRITICAL: Never trim a runner that is one of our pre-selected picks (tip_rank 1-4).
+    # Only trim non-pick extension runners. This preserves our core selections while
+    # allowing the optimiser to control width of extension runners.
     for _ in range(20):
         combos = _total_combos()
         cost = combos * (MIN_FLEXI_PCT / 100.0)
@@ -703,15 +751,24 @@ def _optimiser_select(
         best_ev_loss = 999
         for i in range(num_legs):
             field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+            max_half_i = max(1, field_size // 2) if field_size > 2 else 1
             if field_size >= 14:
                 leg_min = 4
             elif is_big6:
-                leg_min = 2
+                if leg_types[i] == "chaos":
+                    leg_min = min(5, max_half_i)
+                else:
+                    leg_min = min(4, max_half_i)
             else:
                 leg_min = 3
+            # Also enforce picks minimum
+            leg_min = max(leg_min, min(picks_per_leg[i], max_half_i))
             if len(selected[i]) <= leg_min:
                 continue
             for j in range(len(selected[i])):
+                # Never trim our own picks — only trim non-pick extension runners
+                if selected[i][j].get("_is_pick"):
+                    continue
                 test = [list(s) for s in selected]
                 test[i].pop(j)
                 new_ev = _calc_ev_proxy(test, legs_data)
@@ -723,6 +780,25 @@ def _optimiser_select(
         if best_trim_leg < 0:
             break
         selected[best_trim_leg].pop(best_trim_j)
+
+    # Safety net: after trim, force-add any missing picks back into their legs.
+    # The trim phase only removes non-picks, but the initial selection may not have
+    # included all picks if width was tight. This ensures all rank 1-4 picks are present.
+    for i in range(num_legs):
+        existing_sc = {r.get("saddlecloth") for r in selected[i]}
+        field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+        max_half_i = max(1, field_size // 2) if field_size > 2 else 1
+        for r in legs_data[i].top_runners:
+            if (r.get("_is_pick")
+                    and r.get("saddlecloth") not in existing_sc
+                    and float(r.get("win_prob", 0)) >= MIN_LEG_RUNNER_WP
+                    and len(selected[i]) < max_half_i):
+                selected[i].append(r)
+                existing_sc.add(r.get("saddlecloth"))
+                logger.info(
+                    f"Safety net: force-added pick {r.get('horse_name')} (rank {r.get('_pick_rank')}) "
+                    f"back into leg {i+1} R{legs_data[i].race_number}"
+                )
 
     # Add phase: add overlays that give best EV_proxy increase per combo cost
     for _ in range(20):
@@ -752,7 +828,10 @@ def _optimiser_select(
             max_half = max(1, field_size // 2) if field_size > 2 else 1
             max_sel = min(max_sel, max_half)
             if is_big6:
-                max_sel = min(max_sel, 2)
+                if leg_types[i] == "chaos":
+                    max_sel = min(max_sel, 5)
+                else:
+                    max_sel = min(max_sel, 4)
             if len(selected[i]) >= max_sel:
                 continue
             existing_sc = {r.get("saddlecloth") for r in selected[i]}
@@ -785,12 +864,18 @@ def _optimiser_select(
     # Step 7: Sanity checks — enforce per-leg minimum width
     for i in range(num_legs):
         field_size = getattr(legs_data[i], "_field_size", len(legs_data[i].top_runners))
+        max_half_i = max(1, field_size // 2) if field_size > 2 else 1
         if field_size >= 14:
             leg_min = 4
         elif is_big6:
-            leg_min = 2
+            if leg_types[i] == "chaos":
+                leg_min = min(5, max_half_i)
+            else:
+                leg_min = min(4, max_half_i)
         else:
             leg_min = 3
+        # Also enforce picks minimum
+        leg_min = max(leg_min, min(picks_per_leg[i], max_half_i))
         while len(selected[i]) < leg_min:
             existing_sc = {r.get("saddlecloth") for r in selected[i]}
             added = False
@@ -832,6 +917,49 @@ def build_smart_sequence(
     Legs classified as anchor (single) / chaos (wide) / normal.
     Outlay $40-$60, budget-optimised by trimming/adding runners by edge.
     """
+    # Big6 hail-mary: 1 pick per leg, fixed $5 ticket (1x1x1x1x1x1 = 1 combo, 500% flexi)
+    # No optimiser, no trim/add loop. Just our rank-1 pick per leg.
+    if "big" in sequence_type.lower() and "6" in sequence_type:
+        prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
+        if not prep:
+            return None
+        legs_data, _outlay, _is_big6 = prep
+        lane_legs = []
+        for leg in legs_data:
+            # Pick rank-1 runner: highest win_prob in top_runners
+            ranked = sorted(
+                leg.top_runners,
+                key=lambda r: float(r.get("win_prob", 0)),
+                reverse=True,
+            )
+            rank1 = ranked[:1] if ranked else []
+            if not rank1:
+                logger.info(f"Big6 hail-mary: no runner found for R{leg.race_number}")
+                return None
+            lane_legs.append(_make_lane_leg(leg, rank1))
+        total_combos = 1  # 1x1x1x1x1x1
+        outlay = BIG6_OUTLAY
+        flexi_pct = round(outlay / total_combos * 100, 1)  # 500%
+        est_return, hit_prob = _calc_estimated_return(lane_legs, legs_data)
+        num_legs_b6 = race_range[1] - race_range[0] + 1
+        chaos_count_b6 = sum(1 for leg in legs_data if _is_chaos_leg(leg))
+        chaos_ratio_b6 = round(chaos_count_b6 / num_legs_b6, 2)
+        risk = _risk_note(legs_data)
+        return SmartSequence(
+            sequence_type=sequence_type,
+            race_start=race_range[0],
+            race_end=race_range[1],
+            legs=lane_legs,
+            total_combos=total_combos,
+            flexi_pct=flexi_pct,
+            total_outlay=outlay,
+            constrained=False,
+            risk_note=risk,
+            estimated_return_pct=est_return,
+            hit_probability=hit_prob,
+            chaos_ratio=chaos_ratio_b6,
+        )
+
     # Data-driven track condition filters (Feb 24 audit)
     tc = (track_condition or "").lower()
     if "heavy" in tc:
@@ -853,12 +981,12 @@ def build_smart_sequence(
                 top_prob = max((float(r.get("win_prob", 0)) for r in top_runners), default=0)
                 leg_confidences.append(top_prob)
         avg_confidence = sum(leg_confidences) / len(leg_confidences) if leg_confidences else 0
-        # Raised from 0.22 to 0.26: early quaddies at -52.3% ROI (8/57 hits).
+        # Raised from 0.26 to 0.30: early quaddies at -52.3% ROI (8/57 hits).
         # Higher confidence bar ensures we only play when model is confident.
-        if avg_confidence < 0.26:
+        if avg_confidence < 0.30:
             logger.info(
                 f"Skipping {sequence_type}: avg top-pick probability {avg_confidence:.2f} "
-                f"< 0.22 threshold (chaos territory)"
+                f"< 0.30 threshold (chaos territory)"
             )
             return None
 
@@ -932,13 +1060,13 @@ def build_all_sequence_lanes(
         return []
     else:
         rules = {
-            6:  {"early_quad": (1, 4), "quaddie": (3, 6)},
-            7:  {"early_quad": (1, 4), "quaddie": (4, 7)},
-            8:  {"early_quad": (1, 4), "quaddie": (5, 8)},
-            9:  {"early_quad": (2, 5), "quaddie": (6, 9)},
-            10: {"early_quad": (3, 6), "quaddie": (7, 10)},
-            11: {"early_quad": (4, 7), "quaddie": (8, 11)},
-            12: {"early_quad": (5, 8), "quaddie": (9, 12)},
+            6:  {"early_quad": (1, 4), "quaddie": (3, 6), "big6": (1, 6)},
+            7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": (2, 7)},
+            8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
+            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
         }
         sequences = rules.get(
             total_races,

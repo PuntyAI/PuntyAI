@@ -162,8 +162,8 @@ class TestFeatureExtraction:
     """Tests for feature extraction from various data sources."""
 
     def test_feature_count(self):
-        """Feature list has 67 features (61 v3 + 6 v4)."""
-        assert NUM_FEATURES == 67
+        """Feature list has 70 features (61 v3 + 9 v4)."""
+        assert NUM_FEATURES == 70
         assert NUM_FEATURES_V3 == 61
 
     def test_db_row_extraction_length(self, sample_db_runner, sample_race, sample_meeting):

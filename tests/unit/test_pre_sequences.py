@@ -373,14 +373,19 @@ class TestBuildSmartSequence:
         assert len(result.legs) == 4
         assert MIN_OUTLAY <= result.total_outlay <= MAX_OUTLAY
 
-    def test_big6_reinstated_at_25(self):
-        """Big6 reinstated with fixed $25 budget."""
+    def test_big6_hail_mary(self):
+        """Big6 now runs as hail-mary: 1 pick per leg, $5 fixed ticket."""
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
         race_contexts = [_race_ctx(r) for r in range(3, 9)]
 
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
         assert result is not None
-        assert result.total_outlay == 25.0
+        assert result.sequence_type == "Big 6"
+        assert result.total_outlay == 5.0
+        assert result.total_combos == 1
+        # Each leg should have exactly 1 runner (hail-mary = rank-1 only)
+        for leg in result.legs:
+            assert len(leg.runners) == 1
 
     def test_missing_leg_returns_none(self):
         """Missing leg analysis for a race should return None."""
@@ -502,7 +507,7 @@ class TestBuildSmartSequence:
 
 class TestBuildAllSequenceLanes:
     def test_8_race_meeting(self):
-        """8-race meeting should produce Early Quaddie and Quaddie (Big6 removed)."""
+        """8-race meeting should produce Early Quaddie, Quaddie, and Big6 hail-mary."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 9)]
         race_contexts = [_race_ctx(r) for r in range(1, 9)]
 
@@ -510,16 +515,19 @@ class TestBuildAllSequenceLanes:
         types = {r.sequence_type for r in results}
         assert "Early Quaddie" in types
         assert "Quaddie" in types
-        assert "Big 6" not in types
+        assert "Big 6" in types
+        big6 = [r for r in results if r.sequence_type == "Big 6"][0]
+        assert big6.smart.total_outlay == 5.0
+        assert big6.smart.total_combos == 1
 
-    def test_7_race_meeting_no_big6(self):
-        """7-race meeting should NOT have Big 6."""
+    def test_7_race_meeting_has_big6(self):
+        """7-race meeting should have Big 6 hail-mary."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 8)]
         race_contexts = [_race_ctx(r) for r in range(1, 8)]
 
         results = build_all_sequence_lanes(7, leg_analysis, race_contexts)
         types = {r.sequence_type for r in results}
-        assert "Big 6" not in types
+        assert "Big 6" in types
         assert "Quaddie" in types
         assert "Early Quaddie" in types
 
@@ -703,14 +711,15 @@ class TestBuildReason:
 # ──────────────────────────────────────────────
 
 class TestStrategyImprovements:
-    def test_big6_reinstated_in_strategy(self):
-        """Big6 reinstated with $25 fixed budget."""
+    def test_big6_hail_mary_in_strategy(self):
+        """Big6 runs as hail-mary — 1 pick per leg, $5 ticket."""
         leg_analysis = [_leg_analysis(r) for r in range(3, 9)]
         race_contexts = [_race_ctx(r) for r in range(3, 9)]
 
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
         assert result is not None
-        assert result.total_outlay == 25.0
+        assert result.total_combos == 1
+        assert result.total_outlay == 5.0
 
     def test_mandatory_fav_inclusion(self):
         """Runner ≤$2.50 must be included in leg even without edge."""

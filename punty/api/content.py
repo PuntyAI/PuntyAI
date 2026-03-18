@@ -72,7 +72,7 @@ async def get_review_queue(db: AsyncSession = Depends(get_db)):
 async def reject_all_pending(db: AsyncSession = Depends(get_db)):
     """Reject all content in pending_review status."""
     from punty.models.content import Content, ContentStatus
-    from sqlalchemy import select, update
+    from sqlalchemy import select
 
     result = await db.execute(
         select(Content).where(Content.status == ContentStatus.PENDING_REVIEW)

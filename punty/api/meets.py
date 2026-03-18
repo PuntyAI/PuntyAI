@@ -1,5 +1,6 @@
 """API endpoints for race meetings."""
 
+import asyncio
 import json
 
 import logging
@@ -156,7 +157,6 @@ async def bulk_scrape_stream():
                         yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue, 'label': f'{venue}: error - {str(e)}', 'status': 'error'})}\n\n"
 
                     # Brief delay between meetings to avoid rate limiting
-                    import asyncio
                     await asyncio.sleep(2)
 
                 yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'All {total_meetings} meetings scraped', 'status': 'complete'})}\n\n"
@@ -209,7 +209,6 @@ async def bulk_speed_maps_stream():
                 except Exception as e:
                     yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': meeting.venue, 'label': f'{meeting.venue}: error - {str(e)}', 'status': 'error'})}\n\n"
 
-                import asyncio
                 await asyncio.sleep(2)
 
             yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'Speed maps complete for {total_meetings} meetings', 'status': 'complete'})}\n\n"
@@ -290,7 +289,6 @@ async def bulk_scrape_and_speedmaps_stream():
                         yield f"data: {json.dumps({'step': speedmap_step, 'total': total_steps, 'meeting': venue, 'label': f'{venue}: speed map error - {str(e)}', 'status': 'error'})}\n\n"
 
                     # Brief delay between meetings
-                    import asyncio
                     await asyncio.sleep(1)
 
                 yield f"data: {json.dumps({'step': total_steps, 'total': total_steps, 'label': f'All {total_meetings} meetings scraped with speed maps', 'status': 'complete'})}\n\n"
@@ -346,7 +344,6 @@ async def bulk_generate_early_mail_stream():
                 except Exception as e:
                     yield f"data: {json.dumps({'step': meeting_num, 'total': total_meetings, 'meeting': venue_name, 'label': f'{venue_name}: error - {str(e)}', 'status': 'error'})}\n\n"
 
-                import asyncio
                 await asyncio.sleep(1)
 
             yield f"data: {json.dumps({'step': total_meetings, 'total': total_meetings, 'label': f'Early mail generated for {total_meetings} meetings', 'status': 'complete'})}\n\n"
