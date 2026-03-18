@@ -421,6 +421,13 @@ async def validate_early_mail_probability(
 
     # Build race data dict with live probabilities from probability engine
     from punty.probability import calculate_race_probabilities
+    from punty.models.settings import AppSettings
+    mi_result = await db.execute(
+        select(AppSettings).where(AppSettings.key == "lgbm_market_influence")
+    )
+    mi_setting = mi_result.scalar_one_or_none()
+    market_influence = float(mi_setting.value) if mi_setting and mi_setting.value else None
+
     race_data: dict[int, dict] = {}
     for race in meeting.races:
         active_runners = [r for r in race.runners if not r.scratched]
@@ -434,6 +441,7 @@ async def validate_early_mail_probability(
             meeting_dict = meeting.to_dict() if hasattr(meeting, "to_dict") else {}
             prob_results = calculate_race_probabilities(
                 runners=runner_dicts, race=race_dict, meeting=meeting_dict,
+                market_influence=market_influence,
             )
         except Exception as e:
             logger.debug("Probability calc failed for R%s: %s", race.race_number, e)
