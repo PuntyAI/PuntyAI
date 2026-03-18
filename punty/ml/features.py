@@ -1076,11 +1076,7 @@ def extract_features_from_runner(
         _f(peak_age_sex_score), _f(flucs_direction),
     ]
 
-    # S1 fix: Zero out features that were NaN in training data to prevent
-    # train/serve distribution mismatch. Remove after retraining with these populated.
-    for _fname in ('jockey_career_a2e', 'jockey_career_pot', 'jockey_l100_sr',
-                    'trainer_l100_sr', 'avg_margin'):
-        fvec[FEATURE_NAMES.index(_fname)] = float('nan')
+    # S1: NaN overrides removed — v5 model trained with these features populated.
 
     return fvec
 
