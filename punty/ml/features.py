@@ -85,6 +85,33 @@ FEATURE_NAMES = [
     "field_beaten_pct",       # avg % of field beaten in last 5 starts
     # Track bias (1) — S23
     "rail_bias_score",        # barrier advantage/disadvantage from rail position
+    # ── Pace / speed map (4) — missing from v3, major gap ──
+    "pf_map_factor",          # PuntingForm map factor (>1 = pace advantage)
+    "pf_speed_rank",          # predicted early speed rank in field
+    "pf_jockey_factor",       # jockey factor from PF speed map
+    "speed_map_encoded",      # leader=1, on_pace=2, midfield=3, backmarker=4, unknown=0
+    # ── Weather (4) — not in any prior version ──
+    "weather_rain_prob",      # hourly rain probability %
+    "weather_wind_speed",     # wind speed km/h
+    "weather_temp",           # temperature celsius
+    "weather_humidity",       # humidity %
+    # ── Gear (2) — strong form reversal signals ──
+    "has_gear_change",        # 1.0 if any gear change this start
+    "blinkers_on",            # 1.0 if wearing blinkers (from gear field)
+    # ── Campaign / fatigue (2) ──
+    "runs_this_prep",         # count of runs since last spell (>60 days gap)
+    "campaign_win_rate",      # win rate this preparation
+    # ── Class specialist (1) ──
+    "class_win_rate",         # win rate at this exact class level
+    # ── Track specialist (1) ──
+    "track_specialist",       # 1.0 if 3+ wins AND 25%+ SR at this track
+    # ── Stewards / excuses (2) ──
+    "has_stewards_issue",     # 1.0 if stewards comment present on last start
+    "has_excuse",             # 1.0 if form excuse flagged (checked, held up, etc.)
+    # ── Age×sex interaction (1) ──
+    "peak_age_sex_score",     # peak performance curve: 4-5yo gelding=1.0, 3yo filly=0.7, 7+yo=0.6
+    # ── Odds flucs / smart money (1) ──
+    "flucs_direction",        # -1=drifting, 0=stable, 1=firming (from odds_flucs array)
 ]
 
 NUM_FEATURES = len(FEATURE_NAMES)  # 67
@@ -353,6 +380,132 @@ def _compute_rail_bias_score(rail_position: Any, barrier: int, field_size: int) 
     return 0.0
 
 
+def _extract_campaign_stats(form_history_raw: Any, days_since: Any) -> tuple[float, float]:
+    """Extract runs this preparation and campaign win rate.
+
+    A preparation ends when there's a gap of > 60 days between runs.
+    Returns (runs_this_prep, campaign_win_rate).
+    """
+    nan = float("nan")
+    parsed = _try_parse_json(form_history_raw)
+    if not parsed or not isinstance(parsed, list):
+        return (nan, nan)
+    runs = 0
+    wins = 0
+    for i, start in enumerate(parsed):
+        if i > 0:
+            # Check gap to previous start
+            days_gap = None
+            try:
+                from datetime import datetime
+                d1 = start.get("date") or start.get("meeting_date")
+                d0 = parsed[i - 1].get("date") or parsed[i - 1].get("meeting_date")
+                if d1 and d0:
+                    dt1 = datetime.strptime(str(d1)[:10], "%Y-%m-%d")
+                    dt0 = datetime.strptime(str(d0)[:10], "%Y-%m-%d")
+                    days_gap = abs((dt0 - dt1).days)
+            except (ValueError, TypeError):
+                pass
+            if days_gap and days_gap > 60:
+                break  # End of this preparation
+        runs += 1
+        pos = start.get("finish_position") or start.get("position")
+        try:
+            if int(pos) == 1:
+                wins += 1
+        except (ValueError, TypeError):
+            pass
+    if runs == 0:
+        return (nan, nan)
+    return (float(runs), wins / runs if runs > 0 else 0.0)
+
+
+def _class_sr_from_stats(stats_raw: Any) -> float:
+    """Extract strike rate from a stats JSON dict (single float, not tuple)."""
+    if not stats_raw:
+        return float("nan")
+    parsed = stats_raw
+    if isinstance(stats_raw, str):
+        parsed = _try_parse_json(stats_raw)
+    if isinstance(parsed, dict):
+        starts = parsed.get("starts", 0)
+        wins = parsed.get("wins", 0)
+        if starts and starts > 0:
+            return wins / starts
+    return float("nan")
+
+
+def _wins_from_stats(stats_raw: Any) -> int:
+    """Extract win count from a stats JSON dict."""
+    if not stats_raw:
+        return 0
+    parsed = stats_raw
+    if isinstance(stats_raw, str):
+        parsed = _try_parse_json(stats_raw)
+    if isinstance(parsed, dict):
+        return int(parsed.get("wins", 0))
+    return 0
+
+
+def _compute_peak_age_sex(age: float, is_gelding: float, is_mare: float) -> float:
+    """Peak performance curve based on age and sex.
+
+    Returns 0.0-1.0 score where 1.0 = peak performance.
+    Peak: 4-5yo geldings. 3yo fillies penalised. 7+ declining.
+    """
+    nan = float("nan")
+    if age is None or age != age:  # NaN check
+        return nan
+    a = float(age)
+    # Base age curve
+    if 4.0 <= a <= 5.0:
+        score = 1.0
+    elif a == 3.0:
+        score = 0.85
+    elif a == 6.0:
+        score = 0.90
+    elif a == 7.0:
+        score = 0.75
+    elif a >= 8.0:
+        score = 0.60
+    elif a <= 2.0:
+        score = 0.70
+    else:
+        score = 0.80
+    # Sex adjustment
+    if is_mare == 1.0 and a == 3.0:
+        score *= 0.85  # 3yo fillies/mares weaker in open
+    return score
+
+
+def _extract_flucs_direction(odds_flucs_raw: Any) -> float:
+    """Extract overall odds movement direction from flucs array.
+
+    Returns: -1.0 (drifting), 0.0 (stable), 1.0 (firming).
+    """
+    nan = float("nan")
+    if not odds_flucs_raw:
+        return nan
+    parsed = odds_flucs_raw
+    if isinstance(odds_flucs_raw, str):
+        parsed = _try_parse_json(odds_flucs_raw)
+    if not parsed or not isinstance(parsed, list) or len(parsed) < 2:
+        return nan
+    try:
+        first = float(parsed[0].get("odds", 0) if isinstance(parsed[0], dict) else parsed[0])
+        last = float(parsed[-1].get("odds", 0) if isinstance(parsed[-1], dict) else parsed[-1])
+        if first <= 0 or last <= 0:
+            return nan
+        pct_change = (first - last) / first
+        if pct_change > 0.10:
+            return 1.0   # Firming (shortened)
+        elif pct_change < -0.10:
+            return -1.0  # Drifting
+        return 0.0  # Stable
+    except (ValueError, TypeError, IndexError):
+        return nan
+
+
 def _extract_avg_margin(form_history_raw: Any) -> float:
     """Extract average margin from last 5 starts in form_history JSON."""
     parsed = _try_parse_json(form_history_raw)
@@ -547,6 +700,48 @@ def extract_features_from_db_row(
     rail_pos = meeting.get("rail_position") if isinstance(meeting, dict) else None
     rail_bias_score = _compute_rail_bias_score(rail_pos, barrier, field_size)
 
+    # ── Pace / speed map (4) ──
+    pf_mf = _safe_float(runner.get("pf_map_factor"))
+    pf_sr = _safe_float(runner.get("pf_speed_rank"))
+    pf_jf = _safe_float(runner.get("pf_jockey_factor"))
+    smp = str(runner.get("speed_map_position") or "").lower()
+    speed_map_encoded = {"leader": 1.0, "on_pace": 2.0, "midfield": 3.0, "backmarker": 4.0}.get(smp, 0.0)
+
+    # ── Weather (4) ──
+    m = meeting if isinstance(meeting, dict) else {}
+    weather_rain_prob = _safe_float(m.get("hourly_rain_prob") or m.get("rain_probability"))
+    weather_wind_speed = _safe_float(m.get("weather_wind_speed") or m.get("wind_speed"))
+    weather_temp = _safe_float(m.get("weather_temp") or m.get("temperature"))
+    weather_humidity = _safe_float(m.get("weather_humidity") or m.get("humidity"))
+
+    # ── Gear (2) ──
+    gear_changes_raw = str(runner.get("gear_changes") or "")
+    has_gear_change = 1.0 if gear_changes_raw.strip() and gear_changes_raw.strip() != "None" else 0.0
+    gear_raw = str(runner.get("gear") or "").lower()
+    blinkers_on = 1.0 if "blinker" in gear_raw or "blink" in gear_raw else 0.0
+
+    # ── Campaign / fatigue (2) ──
+    runs_this_prep, campaign_wr = _extract_campaign_stats(runner.get("form_history"), days_since)
+
+    # ── Class specialist (1) ──
+    class_win_rate = _class_sr_from_stats(runner.get("class_stats"))
+
+    # ── Track specialist (1) ──
+    trk_wins_raw = _wins_from_stats(runner.get("track_stats"))
+    track_specialist = 1.0 if trk_wins_raw >= 3 and trk_sr and trk_sr >= 0.25 else 0.0
+
+    # ── Stewards / excuses (2) ──
+    stew = str(runner.get("stewards_comment") or "")
+    has_stewards_issue = 1.0 if stew.strip() and stew.strip() != "None" else 0.0
+    excuses = runner.get("form_excuses") or ""
+    has_excuse = 1.0 if excuses and str(excuses).strip() and str(excuses).strip() != "None" else 0.0
+
+    # ── Age×sex interaction (1) ──
+    peak_age_sex_score = _compute_peak_age_sex(age, is_gelding, is_mare)
+
+    # ── Odds flucs / smart money (1) ──
+    flucs_direction = _extract_flucs_direction(runner.get("odds_flucs"))
+
     return [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -582,6 +777,20 @@ def extract_features_from_db_row(
         is_australia, is_hong_kong, is_new_zealand,
         _f(head_to_head_wins), _f(field_beaten_pct),
         rail_bias_score,
+        # Pace / speed map (4)
+        _f(pf_mf), _f(pf_sr), _f(pf_jf), speed_map_encoded,
+        # Weather (4)
+        _f(weather_rain_prob), _f(weather_wind_speed), _f(weather_temp), _f(weather_humidity),
+        # Gear (2)
+        has_gear_change, blinkers_on,
+        # Campaign (2)
+        _f(runs_this_prep), _f(campaign_wr),
+        # Class/track specialist (2)
+        _f(class_win_rate), track_specialist,
+        # Stewards/excuses (2)
+        has_stewards_issue, has_excuse,
+        # Age×sex + flucs (2)
+        _f(peak_age_sex_score), _f(flucs_direction),
     ]
 
 
@@ -775,6 +984,47 @@ def extract_features_from_runner(
     rail_pos = _get(meeting, "rail_position")
     rail_bias_score = _compute_rail_bias_score(rail_pos, barrier, field_size)
 
+    # ── Pace / speed map (4) ──
+    pf_mf = _safe_float(_get(runner, "pf_map_factor"))
+    pf_sr = _safe_float(_get(runner, "pf_speed_rank"))
+    pf_jf = _safe_float(_get(runner, "pf_jockey_factor"))
+    smp = str(_get(runner, "speed_map_position") or "").lower()
+    speed_map_encoded = {"leader": 1.0, "on_pace": 2.0, "midfield": 3.0, "backmarker": 4.0}.get(smp, 0.0)
+
+    # ── Weather (4) ──
+    weather_rain_prob = _safe_float(_get(meeting, "hourly_rain_prob") or _get(meeting, "rain_probability"))
+    weather_wind_speed = _safe_float(_get(meeting, "weather_wind_speed") or _get(meeting, "wind_speed"))
+    weather_temp = _safe_float(_get(meeting, "weather_temp") or _get(meeting, "temperature"))
+    weather_humidity = _safe_float(_get(meeting, "weather_humidity") or _get(meeting, "humidity"))
+
+    # ── Gear (2) ──
+    gear_changes_raw = str(_get(runner, "gear_changes") or "")
+    has_gear_change = 1.0 if gear_changes_raw.strip() and gear_changes_raw.strip() != "None" else 0.0
+    gear_raw = str(_get(runner, "gear") or "").lower()
+    blinkers_on = 1.0 if "blinker" in gear_raw or "blink" in gear_raw else 0.0
+
+    # ── Campaign / fatigue (2) ──
+    runs_this_prep, campaign_wr = _extract_campaign_stats(form_history_raw, days_since)
+
+    # ── Class specialist (1) ──
+    class_win_rate = _class_sr_from_stats(_get(runner, "class_stats"))
+
+    # ── Track specialist (1) ──
+    trk_wins_raw = _wins_from_stats(_get(runner, "track_stats"))
+    track_specialist = 1.0 if trk_wins_raw >= 3 and trk_sr and trk_sr >= 0.25 else 0.0
+
+    # ── Stewards / excuses (2) ──
+    stew = str(_get(runner, "stewards_comment") or "")
+    has_stewards_issue = 1.0 if stew.strip() and stew.strip() != "None" else 0.0
+    excuses = _get(runner, "form_excuses") or ""
+    has_excuse = 1.0 if excuses and str(excuses).strip() and str(excuses).strip() != "None" else 0.0
+
+    # ── Age×sex interaction (1) ──
+    peak_age_sex_score = _compute_peak_age_sex(age, is_gelding, is_mare)
+
+    # ── Odds flucs / smart money (1) ──
+    flucs_direction = _extract_flucs_direction(_get(runner, "odds_flucs"))
+
     fvec = [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -810,13 +1060,23 @@ def extract_features_from_runner(
         is_australia, is_hong_kong, is_new_zealand,
         _f(head_to_head_wins), _f(field_beaten_pct),
         rail_bias_score,
+        # Pace / speed map (4)
+        _f(pf_mf), _f(pf_sr), _f(pf_jf), speed_map_encoded,
+        # Weather (4)
+        _f(weather_rain_prob), _f(weather_wind_speed), _f(weather_temp), _f(weather_humidity),
+        # Gear (2)
+        has_gear_change, blinkers_on,
+        # Campaign (2)
+        _f(runs_this_prep), _f(campaign_wr),
+        # Class/track specialist (2)
+        _f(class_win_rate), track_specialist,
+        # Stewards/excuses (2)
+        has_stewards_issue, has_excuse,
+        # Age×sex + flucs (2)
+        _f(peak_age_sex_score), _f(flucs_direction),
     ]
 
-    # S1 fix: Zero out features that were NaN in training data to prevent
-    # train/serve distribution mismatch. Remove after retraining with these populated.
-    for _fname in ('jockey_career_a2e', 'jockey_career_pot', 'jockey_l100_sr',
-                    'trainer_l100_sr', 'avg_margin'):
-        fvec[FEATURE_NAMES.index(_fname)] = float('nan')
+    # S1: NaN overrides removed — v5 model trained with these features populated.
 
     return fvec
 

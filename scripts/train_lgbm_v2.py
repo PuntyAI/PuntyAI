@@ -387,6 +387,138 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
     else:
         is_australia, is_hong_kong, is_new_zealand = 1.0, 0.0, 0.0
 
+    # ── v5 features: pace/speed map ──
+    # Proform doesn't have pf_map_factor/speed_rank/jockey_factor directly in form JSONs
+    # but InRun settling is available. Map factor and speed rank are NaN in training.
+    pf_mf_val = nan  # Not in Proform training data
+    pf_sr_val = nan  # Not in Proform training data
+    pf_jf_val = nan  # Not in Proform training data
+    # Speed map encoded from settling position
+    if not math.isnan(settle_pos) and settle_pos > 0:
+        if settle_pos <= 0.15:
+            sme = 1.0   # leader
+        elif settle_pos <= 0.35:
+            sme = 2.0   # on_pace
+        elif settle_pos <= 0.65:
+            sme = 3.0   # midfield
+        else:
+            sme = 4.0   # backmarker
+    else:
+        sme = 0.0
+
+    # ── v5: weather ──
+    # Proform has track condition but not live weather — use NaN
+    weather_rain = nan
+    weather_wind = nan
+    weather_temp_val = nan
+    weather_hum = nan
+
+    # ── v5: gear ──
+    gear_str = (pf_runner.get("Gear", "") or "").lower()
+    gear_change_str = (pf_runner.get("GearChange", "") or "")
+    has_gc = 1.0 if gear_change_str.strip() else 0.0
+    blinkers = 1.0 if "blinker" in gear_str or "blink" in gear_str else 0.0
+
+    # ── v5: campaign / fatigue ──
+    runs_prep = 0
+    prep_wins = 0
+    for i, f in enumerate(real_forms):
+        if i > 0:
+            try:
+                d1 = datetime.fromisoformat(f.get("MeetingDate", "").replace("T00:00:00", ""))
+                d0 = datetime.fromisoformat(real_forms[i-1].get("MeetingDate", "").replace("T00:00:00", ""))
+                if abs((d0 - d1).days) > 60:
+                    break
+            except (ValueError, TypeError):
+                pass
+        runs_prep += 1
+        if f.get("Position") == 1:
+            prep_wins += 1
+    runs_this_prep_val = float(runs_prep) if runs_prep > 0 else nan
+    campaign_wr_val = prep_wins / runs_prep if runs_prep > 0 else nan
+
+    # ── v5: class specialist ──
+    # Use the current race class to look for matching class in form history
+    race_class = (race_meta.get("race_class", "") or "").lower()
+    class_starts = 0
+    class_wins = 0
+    for f in real_forms:
+        fc = (f.get("RaceClass", "") or "").rstrip(";").strip().lower()
+        if fc and race_class and fc == race_class:
+            class_starts += 1
+            if f.get("Position") == 1:
+                class_wins += 1
+    class_wr = class_wins / class_starts if class_starts >= 2 else nan
+
+    # ── v5: track specialist ──
+    trk_specialist = 1.0 if trk_starts >= 3 and trk_sr is not None and trk_sr >= 0.25 else 0.0
+
+    # ── v5: stewards / excuses ──
+    has_stew = 0.0
+    has_exc = 0.0
+    if real_forms:
+        stew_txt = real_forms[0].get("StewardsComment", "") or ""
+        if stew_txt.strip():
+            has_stew = 1.0
+        # Check for common excuse keywords in last start
+        comment = (real_forms[0].get("Comment", "") or "").lower()
+        excuse_keywords = ("checked", "held up", "blocked", "bumped", "hampered",
+                          "steadied", "crowded", "shifted", "lost rider", "eased")
+        if any(kw in comment for kw in excuse_keywords):
+            has_exc = 1.0
+
+    # ── v5: age×sex peak ──
+    age_val = _sf(pf_runner.get("Age"))
+    if not math.isnan(age_val):
+        if 4 <= age_val <= 5:
+            peak = 1.0
+        elif age_val == 3:
+            peak = 0.85
+        elif age_val == 6:
+            peak = 0.90
+        elif age_val == 7:
+            peak = 0.75
+        elif age_val >= 8:
+            peak = 0.60
+        elif age_val <= 2:
+            peak = 0.70
+        else:
+            peak = 0.80
+        if is_mare == 1.0 and age_val == 3:
+            peak *= 0.85
+    else:
+        peak = nan
+
+    # ── v5: flucs direction ──
+    if real_forms:
+        opening_f, starting_f = _parse_flucs(real_forms[0].get("Flucs", ""))
+        if opening_f and starting_f and opening_f > 1 and starting_f > 1:
+            pct_chg = (opening_f - starting_f) / opening_f
+            if pct_chg > 0.10:
+                flucs_dir = 1.0   # firming
+            elif pct_chg < -0.10:
+                flucs_dir = -1.0  # drifting
+            else:
+                flucs_dir = 0.0
+        else:
+            flucs_dir = nan
+    else:
+        flucs_dir = nan
+
+    # ── v5: head-to-head and field beaten (need field context — NaN in training) ──
+    h2h_wins = nan
+    # Field beaten % from form history
+    fb_pcts = []
+    for f in real_forms[:5]:
+        pos = f.get("Position")
+        fld = f.get("Starters") or f.get("FieldSize", 0)
+        if pos and fld and fld > 1:
+            fb_pcts.append((fld - pos) / (fld - 1))
+    field_beaten = statistics.mean(fb_pcts) if fb_pcts else nan
+
+    # ── v5: rail bias ── (not available in Proform training data)
+    rail_bias = nan
+
     # ── Build feature vector (MUST match FEATURE_NAMES order) ──
     return [
         market_prob,
@@ -402,9 +534,9 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
         _sf(fu_sr), float(fu_starts),
         _sf(su_sr), float(su_starts),
         _sf(l5_score), _sf(l5_wins), _sf(l5_places),
-        form_trend_val, _sf(place_vs_market),         # NEW: form_trend, place_vs_market
+        form_trend_val, _sf(place_vs_market),
         _sf(prize_per_start), handicap, avg_marg,
-        _sf(class_diff),                               # NEW: class_differential
+        _sf(class_diff),
         _sf(days_since), settle_pos,
         _sf(barrier_relative), barrier_raw,
         jockey_career_sr, jockey_career_a2e, jockey_career_pot,
@@ -416,11 +548,21 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
         is_gelding, is_mare,
         price_move_pct,
         float(grp_starts), _sf(group_sr),
-        dist_place, trk_place,                         # NEW: distance_place_rate, track_place_rate
+        dist_place, trk_place,
         float(field_size), float(distance),
         # ── v4 features ──
         is_leader, is_staying, last_start_won,
         is_australia, is_hong_kong, is_new_zealand,
+        _sf(h2h_wins), _sf(field_beaten),
+        _sf(rail_bias),
+        # ── v5 features ──
+        _sf(pf_mf_val), _sf(pf_sr_val), _sf(pf_jf_val), sme,
+        _sf(weather_rain), _sf(weather_wind), _sf(weather_temp_val), _sf(weather_hum),
+        has_gc, blinkers,
+        _sf(runs_this_prep_val), _sf(campaign_wr_val),
+        _sf(class_wr), trk_specialist,
+        has_stew, has_exc,
+        _sf(peak), _sf(flucs_dir),
     ]
 
 
