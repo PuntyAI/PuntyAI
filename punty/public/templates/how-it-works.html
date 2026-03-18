@@ -28,11 +28,11 @@
         transition: all 0.15s; text-decoration: none; cursor: pointer;
     }
     .hiw-nav-item:hover {
-        color: var(--text-secondary); background: rgba(255, 255, 255, 0.05);
+        color: var(--text-secondary); background: var(--bg-card-alt);
     }
     .hiw-nav-item.active {
-        color: white; background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.12);
+        color: var(--text-primary); background: var(--bg-card-alt);
+        border-color: var(--border-default);
     }
     .hiw-nav-step {
         width: 18px; height: 18px; border-radius: 50%;
@@ -179,7 +179,7 @@
                                     Each runner's calculated probability is compared to the market odds.
                                     When our model rates a horse higher than the market —
                                     that's a value bet. A value rating above
-                                    <strong class="text-white">1.05x</strong> means we see at least a 5% edge.
+                                    <strong style="color: var(--text-primary);">1.05x</strong> means we see at least a 5% edge.
                                 </p>
                             </div>
                             <div class="p-4 rounded-lg" style="background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.2);">
@@ -250,19 +250,19 @@
                         <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--magenta);">→</span>
-                                <span><strong class="text-white">Big 3:</strong> Punty's three most confident picks of the day, combined into a multi</span>
+                                <span><strong style="color: var(--text-primary);">Big 3:</strong> Punty's three most confident picks of the day, combined into a multi</span>
                             </li>
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--magenta);">→</span>
-                                <span><strong class="text-white">Race-by-Race:</strong> Top 3 + Roughie for every race with brief analysis</span>
+                                <span><strong style="color: var(--text-primary);">Race-by-Race:</strong> Top 3 + Roughie for every race with brief analysis</span>
                             </li>
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--magenta);">→</span>
-                                <span><strong class="text-white">Exotics:</strong> Trifecta and exacta boxes where value presents</span>
+                                <span><strong style="color: var(--text-primary);">Exotics:</strong> Trifecta and exacta boxes where value presents</span>
                             </li>
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--magenta);">→</span>
-                                <span><strong class="text-white">Quaddie:</strong> Multiple coverage options for the quaddie legs</span>
+                                <span><strong style="color: var(--text-primary);">Quaddie:</strong> Multiple coverage options for the quaddie legs</span>
                             </li>
                         </ul>
                     </div>
@@ -287,15 +287,15 @@
                         <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--orange);">&#x1F3C7;</span>
-                                <span><strong class="text-white">Win Celebrations:</strong> When a big-priced pick salutes, Punty lets you know with a live celebration post</span>
+                                <span><strong style="color: var(--text-primary);">Win Celebrations:</strong> When a big-priced pick salutes, Punty lets you know with a live celebration post</span>
                             </li>
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--orange);">&#x1F3C1;</span>
-                                <span><strong class="text-white">Pace Analysis:</strong> After enough races, Punty reads the track bias and tells you if the speed map predictions are holding up or if you need to adjust your quaddie legs</span>
+                                <span><strong style="color: var(--text-primary);">Pace Analysis:</strong> After enough races, Punty reads the track bias and tells you if the speed map predictions are holding up or if you need to adjust your quaddie legs</span>
                             </li>
                             <li class="flex items-start gap-2">
                                 <span style="color: var(--orange);">&#x2705;</span>
-                                <span><strong class="text-white">Win Ticks:</strong> Winning selections get a green tick right on the tips page so you can see what hit at a glance</span>
+                                <span><strong style="color: var(--text-primary);">Win Ticks:</strong> Winning selections get a green tick right on the tips page so you can see what hit at a glance</span>
                             </li>
                         </ul>
                     </div>
@@ -321,7 +321,7 @@
                         </p>
                         <p style="color: var(--text-secondary);">
                             Want to see the numbers yourself? Check our
-                            <a href="/tips" class="font-semibold hover:text-white transition-colors" style="color: var(--cyan);">daily tips</a>
+                            <a href="/tips" class="font-semibold transition-colors" style="color: var(--cyan);">daily tips</a>
                             &mdash; every winner gets a badge, every result is tracked. Full transparency, no hiding.
                         </p>
                     </div>
@@ -358,11 +358,11 @@
                     <ul class="text-sm space-y-2" style="color: var(--text-secondary);">
                         <li class="flex items-start gap-2">
                             <span style="color: var(--magenta);">&#x2192;</span>
-                            <span><strong class="text-white">Win bet</strong> on your top pick - the one you agree with most</span>
+                            <span><strong style="color: var(--text-primary);">Win bet</strong> on your top pick - the one you agree with most</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <span style="color: var(--magenta);">&#x2192;</span>
-                            <span><strong class="text-white">Saver or Place</strong> on a second pick if you want coverage</span>
+                            <span><strong style="color: var(--text-primary);">Saver or Place</strong> on a second pick if you want coverage</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <span style="color: var(--magenta);">&#x2192;</span>
@@ -380,15 +380,15 @@
                     <ul class="text-sm space-y-2" style="color: var(--text-secondary);">
                         <li class="flex items-start gap-2">
                             <span style="color: var(--cyan);">&#x2192;</span>
-                            <span><strong class="text-white">Skinny ($10)</strong> - when you're confident in the favourites</span>
+                            <span><strong style="color: var(--text-primary);">Skinny ($10)</strong> - when you're confident in the favourites</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <span style="color: var(--cyan);">&#x2192;</span>
-                            <span><strong class="text-white">Balanced ($50)</strong> - the sweet spot for most meetings</span>
+                            <span><strong style="color: var(--text-primary);">Balanced ($50)</strong> - the sweet spot for most meetings</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <span style="color: var(--cyan);">&#x2192;</span>
-                            <span><strong class="text-white">Wide ($100)</strong> - only when there's genuine uncertainty across legs</span>
+                            <span><strong style="color: var(--text-primary);">Wide ($100)</strong> - only when there's genuine uncertainty across legs</span>
                         </li>
                     </ul>
                 </div>
@@ -441,7 +441,7 @@
 
             <div class="card p-6 mt-6 text-center" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
                 <p class="text-sm" style="color: var(--text-secondary);">
-                    <strong class="text-white">Bottom line:</strong> Use Punty as a starting point for your own punting decisions.
+                    <strong style="color: var(--text-primary);">Bottom line:</strong> Use Punty as a starting point for your own punting decisions.
                     The analysis, speed maps, and form are all there - your job is to pick the bets that make sense to you.
                     Don't bet what you can't afford to lose, and never chase losses.
                 </p>

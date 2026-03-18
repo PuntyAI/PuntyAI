@@ -30,7 +30,7 @@
             <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Today's Meetings</span>
             <a href="/tips/{{ meeting.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all" style="background: var(--gradient-sunset); color: #fff;">{{ meeting.venue }}</a>
             {% for m in same_day_meetings %}
-            <a href="/tips/{{ m.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all hover:brightness-125" style="background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); border: 1px solid var(--border-subtle);">{{ m.venue }}</a>
+            <a href="/tips/{{ m.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all hover:brightness-125" style="background: var(--bg-card-alt); color: var(--text-secondary); border: 1px solid var(--border-subtle);">{{ m.venue }}</a>
             {% endfor %}
         </div>
         {% endif %}
@@ -77,7 +77,7 @@
 
         <!-- Venue Stats (inline — mobile only, sidebar on desktop) -->
         {% if venue_stats %}
-        <div class="flex flex-wrap items-center gap-4 mb-8 px-4 py-3 rounded-lg lg:hidden" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);">
+        <div class="flex flex-wrap items-center gap-4 mb-8 px-4 py-3 rounded-lg lg:hidden" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
             <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Punty at {{ meeting.venue }}</span>
             <div class="flex items-center gap-1.5">
                 <span class="text-sm font-heading font-bold" style="color: var(--cyan);">{{ venue_stats.rate }}%</span>
@@ -178,13 +178,13 @@
                             <div class="flex items-center gap-2 mb-1">
                                 <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: #4ade80;">Winner!</span>
                                 {% if update.race_number %}
-                                <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">R{{ update.race_number }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-card-alt); color: var(--text-muted);">R{{ update.race_number }}</span>
                                 {% endif %}
                             </div>
                             {% else %}
                             <div class="flex items-center gap-2 mb-1">
                                 <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: var(--cyan);">Track Read</span>
-                                <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">After R{{ update.race_number }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-card-alt); color: var(--text-muted);">After R{{ update.race_number }}</span>
                             </div>
                             {% endif %}
                             <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">{{ update.content }}</p>
@@ -465,13 +465,14 @@
     }
     .section-nav-item:hover {
         color: var(--text-secondary);
-        background: rgba(255, 255, 255, 0.05);
+        background: var(--bg-card-alt);
     }
     .section-nav-item.active {
-        color: white;
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.12);
+        color: var(--text-primary);
+        background: var(--bg-card-alt);
+        border-color: var(--border-default);
     }
+
     .section-nav-dot {
         width: 6px; height: 6px; border-radius: 50%;
         opacity: 0.5; transition: opacity 0.15s;
@@ -481,7 +482,7 @@
         .section-nav { margin: 0 -2rem 0; padding: 0 2rem; }
     }
     .section-nav-divider {
-        height: 1px; background: rgba(255, 255, 255, 0.04); margin: 0;
+        height: 1px; background: var(--border-subtle); margin: 0;
     }
 
     /* Tips Content */
@@ -491,9 +492,9 @@
         color: #d0d0dc;
     }
     .tips-content p { margin-bottom: 1rem; }
-    .tips-content strong, .tips-content b { color: white; font-weight: 600; }
+    .tips-content strong, .tips-content b { color: var(--text-primary); font-weight: 600; }
     .tips-content .tips-heading {
-        color: white;
+        color: var(--text-primary);
         font-family: 'Rajdhani', sans-serif;
         font-weight: 700;
         margin-top: 1.5rem;
@@ -635,9 +636,9 @@
         display: flex; align-items: center; justify-content: space-between;
         padding: 1rem 1.25rem; cursor: pointer; user-select: none;
         border-radius: 12px; border: 1px solid var(--border-subtle);
-        background: rgba(255, 255, 255, 0.02); transition: background 0.15s;
+        background: var(--bg-card-alt); transition: background 0.15s;
     }
-    .section-toggle:hover { background: rgba(255, 255, 255, 0.05); }
+    .section-toggle:hover { background: var(--bg-card-alt); }
     .section-chevron {
         width: 1.25rem; height: 1.25rem; color: var(--text-muted);
         transition: transform 0.2s;
@@ -647,7 +648,7 @@
     .section-open .section-body {
         display: block; padding: 0 1.25rem 1.25rem;
         border: 1px solid var(--border-subtle); border-top: none; border-radius: 0 0 12px 12px;
-        background: rgba(255, 255, 255, 0.01);
+        background: var(--bg-card);
     }
     .section-open .section-chevron { transform: rotate(180deg); }
 
@@ -659,9 +660,9 @@
     .race-accordion-header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 0.875rem 1.25rem; cursor: pointer; user-select: none;
-        background: rgba(255, 255, 255, 0.02); transition: background 0.15s;
+        background: var(--bg-card-alt); transition: background 0.15s;
     }
-    .race-accordion-header:hover { background: rgba(255, 255, 255, 0.05); }
+    .race-accordion-header:hover { background: var(--bg-card-alt); }
     .race-accordion-header .accordion-chevron {
         transition: transform 0.2s; color: var(--text-muted);
     }
@@ -690,11 +691,11 @@
         display: inline-flex; align-items: center; justify-content: center;
         min-width: 2rem; height: 1.625rem; padding: 0 0.5rem; border-radius: 6px;
         font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.75rem;
-        background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
         color: var(--text-muted); cursor: pointer; transition: all 0.15s;
     }
     .race-nav-pill:hover {
-        color: var(--text-secondary); background: rgba(255, 255, 255, 0.1);
+        color: var(--text-secondary); background: var(--bg-card-alt);
     }
     .race-nav-pill.active {
         background: var(--gradient-sunset); color: white; border-color: transparent;
@@ -756,15 +757,15 @@
         display: inline-block; font-family: 'Rajdhani', sans-serif; font-weight: 700;
         font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em;
         padding: 1px 5px; border-radius: 3px; margin-right: 3px;
-        background: rgba(255, 255, 255, 0.06); color: var(--text-muted); vertical-align: baseline;
+        background: var(--bg-card-alt); color: var(--text-muted); vertical-align: baseline;
     }
     .sel-bet { color: var(--cyan); }
     .sel-bet .sel-label { color: var(--cyan); background: rgba(0, 212, 255, 0.1); }
     .sel-bet.sel-nobet { color: #888; opacity: 1; }
-    .sel-bet.sel-nobet .sel-label { color: #888; background: rgba(255, 255, 255, 0.06); }
+    .sel-bet.sel-nobet .sel-label { color: #888; background: var(--bg-card-alt); }
     .sel-winpct { color: var(--text-secondary); }
     .sel-winpct .sel-label { background: rgba(157, 78, 221, 0.1); color: var(--purple); }
-    .sel-conf .sel-label { background: rgba(255, 255, 255, 0.06); }
+    .sel-conf .sel-label { background: var(--bg-card-alt); }
     .sel-conf-hig { color: #4ade80; font-weight: 700; }
     .sel-conf-med { color: var(--yellow); font-weight: 700; }
     .sel-conf-low { color: var(--text-muted); font-weight: 700; }
@@ -856,12 +857,12 @@
         line-height: 1.8; color: #d0d0dc;
     }
     .open-section-body p { margin-bottom: 0.75rem; }
-    .open-section-body strong, .open-section-body b { color: white; font-weight: 600; }
+    .open-section-body strong, .open-section-body b { color: var(--text-primary); font-weight: 600; }
 
     /* Sequence results card */
     .seq-results-card {
         margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem;
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--bg-card-alt);
         border: 1px solid var(--border-subtle);
     }
     .seq-results-title {
@@ -874,7 +875,7 @@
         padding: 0.4rem 0; font-family: 'Rajdhani', sans-serif; font-size: 0.85rem;
     }
     .seq-result-row + .seq-result-row {
-        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        border-top: 1px solid var(--border-subtle);
     }
     .seq-result-label {
         flex: 1; color: var(--text-secondary); font-weight: 500;
@@ -930,7 +931,7 @@
         padding: 0.875rem 1rem;
         border-radius: 10px;
         border: 1px solid var(--border-subtle);
-        background: rgba(255, 255, 255, 0.02);
+        background: var(--bg-card-alt);
     }
     .seq-variant-skinny {
         border-color: rgba(0, 212, 255, 0.25);
@@ -968,7 +969,7 @@
     }
     .seq-variant-cost {
         font-family: 'Orbitron', sans-serif; font-weight: 700;
-        font-size: 0.8rem; color: white;
+        font-size: 0.8rem; color: var(--text-primary);
     }
     .seq-legs {
         display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;
@@ -982,7 +983,7 @@
         min-width: 1.5rem; height: 1.5rem; padding: 0 0.35rem;
         border-radius: 4px; font-family: 'Rajdhani', sans-serif;
         font-weight: 700; font-size: 0.8rem;
-        background: rgba(255, 255, 255, 0.08); color: var(--text-secondary);
+        background: var(--bg-card-alt); color: var(--text-secondary);
     }
     .seq-leg-sep {
         color: var(--text-muted); font-weight: 700; font-size: 0.9rem;
@@ -1117,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (raceData) {
             headerHtml += '<span class="race-pill">R' + raceData.num + '</span>';
             headerHtml += '<div class="min-w-0">';
-            headerHtml += '<div class="font-heading font-bold text-white text-sm truncate">' + (raceData.name || 'Race ' + raceData.num) + '</div>';
+            headerHtml += '<div class="font-heading font-bold text-sm truncate" style="color: var(--text-primary)">' + (raceData.name || 'Race ' + raceData.num) + '</div>';
             var meta = [];
             if (raceData.dist) meta.push(raceData.dist + 'm');
             if (raceData.cls) meta.push(raceData.cls);
@@ -1253,7 +1254,7 @@ document.addEventListener('DOMContentLoaded', function() {
             big3Acc.id = 'big3-acc';
             var big3Header = document.createElement('div');
             big3Header.className = 'race-accordion-header';
-            big3Header.innerHTML = '<div class="flex items-center gap-3"><span class="race-pill" style="background: linear-gradient(135deg, var(--purple), var(--magenta));">&#9733;</span><div><div class="font-heading font-bold text-white text-sm">Big 3 & Multi</div></div></div>' +
+            big3Header.innerHTML = '<div class="flex items-center gap-3"><span class="race-pill" style="background: linear-gradient(135deg, var(--purple), var(--magenta));">&#9733;</span><div><div class="font-heading font-bold text-sm" style="color: var(--text-primary)">Big 3 & Multi</div></div></div>' +
                 '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
             big3Header.onclick = function() { big3Acc.classList.toggle('open'); };
             var big3Body = document.createElement('div');
@@ -1631,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var seqPill = '<span class="race-pill" style="background: linear-gradient(135deg, var(--yellow), var(--orange));">&#9830;</span>';
             header.innerHTML = '<div class="flex items-center gap-3">' + seqPill +
-                '<div class="font-heading font-bold text-white text-sm">' + sec.heading.textContent + '</div></div>' +
+                '<div class="font-heading font-bold text-sm" style="color: var(--text-primary)">' + sec.heading.textContent + '</div></div>' +
                 '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
 
             // Add sequence results card if we have settled data

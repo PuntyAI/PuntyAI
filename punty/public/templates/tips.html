@@ -34,11 +34,11 @@
         transition: all 0.15s; text-decoration: none;
     }
     .tips-subnav-item:hover {
-        color: var(--text-secondary); background: rgba(255, 255, 255, 0.05);
+        color: var(--text-secondary); background: var(--bg-card-alt);
     }
     .tips-subnav-item.active {
-        color: white; background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.12);
+        color: var(--text-primary); background: var(--bg-card-alt);
+        border-color: var(--border-default);
     }
     .tips-subnav-dot {
         width: 6px; height: 6px; border-radius: 50%;
@@ -91,7 +91,7 @@
 
         <!-- Quick Stats -->
         <div id="tips-stats-bar"></div>
-        <div id="tips-stats" class="hidden flex flex-wrap items-center justify-center gap-6 mb-6 px-4 py-3 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);"></div>
+        <div id="tips-stats" class="hidden flex flex-wrap items-center justify-center gap-6 mb-6 px-4 py-3 rounded-lg" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);"></div>
         <script>
         fetch('/api/public/bet-type-stats').then(r=>r.json()).then(data=>{
             const sel = data.filter(s => s.category === 'Selections');
@@ -234,7 +234,7 @@
                         <span class="text-2xl font-display font-black text-white">{{ day.meetings[0].date.strftime('%d') if day.meetings[0].date else '' }}</span>
                     </div>
                     <div>
-                        <h2 class="font-heading font-bold text-xl text-white">{{ day.date_formatted }}</h2>
+                        <h2 class="font-heading font-bold text-xl" style="color: var(--text-primary);">{{ day.date_formatted }}</h2>
                         <p class="text-sm" style="color: var(--text-muted);">{{ day.meetings|length }} meeting{% if day.meetings|length != 1 %}s{% endif %}</p>
                     </div>
                 </div>
@@ -251,7 +251,7 @@
                                 </svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors truncate">{{ meeting.venue }}</div>
+                                <div class="font-heading font-bold group-hover:text-punty-mbright transition-colors truncate" style="color: var(--text-primary);">{{ meeting.venue }}</div>
                                 {% if meeting.track_condition %}
                                 <div class="text-xs" style="color: var(--cyan);">{{ meeting.track_condition }}</div>
                                 {% endif %}

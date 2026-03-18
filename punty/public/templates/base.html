@@ -101,9 +101,9 @@
            THEME TOKENS — Light
         ═══════════════════════════════════════ */
         [data-theme="light"] {
-            --bg-dark: #f5f5fa;
+            --bg-dark: #eeedf5;
             --bg-card: #ffffff;
-            --bg-card-alt: #f0eef6;
+            --bg-card-alt: #f5f4fb;
             --bg-header: linear-gradient(180deg, #faf9ff 0%, #f5f5fa 100%);
             --bg-nav-blur: rgba(245, 245, 250, 0.92);
             --magenta: #c4007c;
@@ -115,8 +115,8 @@
             --text-secondary: #2d2a42;
             --text-muted: #6b6888;
             --text-heading: #0f0e1a;
-            --border-subtle: rgba(0,0,0,0.10);
-            --border-default: rgba(0,0,0,0.15);
+            --border-subtle: rgba(0,0,0,0.12);
+            --border-default: rgba(0,0,0,0.18);
             --gradient-sunset: linear-gradient(180deg, #e91e8c 0%, #ff6b35 50%, #ffc107 100%);
             --gradient-header: linear-gradient(90deg, #c4007c 0%, #6d28d9 50%, #0077a8 100%);
             --nav-hover-bg: rgba(0,0,0,0.04);
@@ -474,20 +474,43 @@
             border-radius: 14px;
             transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
         }
-        /* Light mode: cards get subtle elevation shadow for depth */
+        /* Light mode: cards MUST stand out from background with shadow + border */
         [data-theme="light"] .card {
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+            border-color: rgba(0,0,0,0.10) !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
         }
         [data-theme="light"] .card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.07);
         }
-        /* Light mode: header gets a subtle bottom shadow for separation */
+        /* Light mode: any panel/container that uses bg-card needs definition */
+        [data-theme="light"] .sidebar-panel,
+        [data-theme="light"] .metrics-row,
+        [data-theme="light"] .win-card,
+        [data-theme="light"] .rr-race-card,
+        [data-theme="light"] .le-card {
+            border-color: rgba(0,0,0,0.10) !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+        }
+        /* Light mode: stat cells need visible borders */
+        [data-theme="light"] .stat-cell {
+            border-color: rgba(0,0,0,0.10) !important;
+        }
+        /* Light mode: header gets shadow for separation */
         [data-theme="light"] .site-header {
-            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.10);
         }
         /* Light mode: dropdown gets refined shadow */
         [data-theme="light"] .toolbox-menu {
-            box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+        }
+        /* Light mode: accordion headers need visible border */
+        [data-theme="light"] .dash-accordion-header {
+            border-color: rgba(0,0,0,0.10) !important;
+            background: #f8f7fd !important;
+        }
+        /* Light mode: tab bars need card-like treatment */
+        [data-theme="light"] [style*="border-radius"][style*="background: var(--bg-card)"] {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
         }
 
         /* ═══════════════════════════════════════
