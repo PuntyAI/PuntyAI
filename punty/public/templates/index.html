@@ -26,8 +26,8 @@
         position: absolute;
         inset: 0;
         background-image:
-            linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            linear-gradient(var(--border-subtle) 1px, transparent 1px),
+            linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
         background-size: 60px 60px;
         pointer-events: none;
         mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
@@ -130,10 +130,10 @@
     .ticker-wrap {
         overflow: hidden;
         padding: 1rem 0;
-        border-top: 1px solid rgba(255,255,255,0.06);
-        border-bottom: 1px solid rgba(255,255,255,0.06);
+        border-top: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
         margin: 2.5rem 0;
-        background: rgba(255,255,255,0.008);
+        background: var(--bg-card-alt);
     }
     .ticker-track {
         display: flex;
@@ -209,12 +209,12 @@
     .state-wa { background: rgba(255, 215, 0, 0.2); color: #ffc107; }
     .state-tas { background: rgba(0, 100, 0, 0.2); color: #66bb6a; }
     .state-hk { background: rgba(222, 41, 16, 0.2); color: #ff6b6b; }
-    .state-aus { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+    .state-aus { background: var(--bg-card-alt); color: var(--text-muted); }
 
     /* ── How It Works ── */
     .hiw-section {
         position: relative;
-        background: linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(233,30,140,0.015) 100%);
+        background: linear-gradient(180deg, var(--bg-card-alt) 0%, rgba(233,30,140,0.015) 100%);
     }
     .hiw-steps {
         position: relative;
@@ -304,13 +304,13 @@
     /* ── Section divider ── */
     .section-divider {
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+        background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
         margin: 0;
     }
 
     /* ── Footer adjustments ── */
     footer .footer-heading {
-        color: rgba(255,255,255,0.7);
+        color: var(--text-secondary);
     }
 
     /* ── Noise texture overlay (global subtle) ── */
@@ -353,8 +353,8 @@
             {# Left: Copy #}
             <div class="hero-text">
                 <h1 class="font-display font-bold leading-tight" style="font-size: clamp(2.25rem, 5vw, 3.75rem);">
-                    <span class="text-white">Beat the </span><span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Market.</span><br>
-                    <span class="text-white" style="opacity: 0.75;">Don't Chase It.</span>
+                    <span style="color: var(--text-primary);">Beat the </span><span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Market.</span><br>
+                    <span style="color: var(--text-primary); opacity: 0.75;">Don't Chase It.</span>
                 </h1>
                 <p class="text-lg md:text-xl" style="color: var(--text-secondary); margin-top: 1.5rem; margin-bottom: 2.5rem;">
                     AI-powered probability engine finds value on the track so you don't chase favourites.
@@ -404,17 +404,17 @@
         {% if stats.best_bet %}
         <div class="ticker-item">
             <span style="color: var(--magenta);">LATEST WIN</span>
-            <span class="text-white font-bold">{{ stats.best_bet.name }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ stats.best_bet.name }}</span>
             <span class="pnl-green">${{ '%.0f'|format(stats.best_bet.pnl) }}</span>
         </div>
         {% endif %}
         <div class="ticker-item">
             <span>TODAY'S WINNERS</span>
-            <span class="text-white font-bold">{{ stats.today_winners }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ stats.today_winners }}</span>
         </div>
         <div class="ticker-item">
             <span>ALL-TIME WINNERS</span>
-            <span class="text-white font-bold">{{ stats.alltime_winners }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ stats.alltime_winners }}</span>
         </div>
         <div class="ticker-item">
             <span>TOTAL COLLECTED</span>
@@ -422,23 +422,23 @@
         </div>
         <div class="ticker-item">
             <span>MEETINGS TODAY</span>
-            <span class="text-white font-bold">{{ meetings|length }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ meetings|length }}</span>
         </div>
         {# Duplicate for seamless loop #}
         {% if stats.best_bet %}
         <div class="ticker-item">
             <span style="color: var(--magenta);">LATEST WIN</span>
-            <span class="text-white font-bold">{{ stats.best_bet.name }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ stats.best_bet.name }}</span>
             <span class="pnl-green">${{ '%.0f'|format(stats.best_bet.pnl) }}</span>
         </div>
         {% endif %}
         <div class="ticker-item">
             <span>TODAY'S WINNERS</span>
-            <span class="text-white font-bold">{{ stats.today_winners }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ stats.today_winners }}</span>
         </div>
         <div class="ticker-item">
             <span>ALL-TIME WINNERS</span>
-            <span class="text-white font-bold">{{ stats.alltime_winners }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ stats.alltime_winners }}</span>
         </div>
         <div class="ticker-item">
             <span>TOTAL COLLECTED</span>
@@ -446,7 +446,7 @@
         </div>
         <div class="ticker-item">
             <span>MEETINGS TODAY</span>
-            <span class="text-white font-bold">{{ meetings|length }}</span>
+            <span class="font-bold" style="color: var(--text-primary);">{{ meetings|length }}</span>
         </div>
     </div>
 </div>
@@ -473,7 +473,7 @@
             {% for meet in meetings %}
             <a href="/tips/{{ meet.meeting_id }}" class="meeting-card {% if meet.is_metro %}metro-card{% endif %}">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="font-heading font-bold text-white text-sm">{{ meet.venue }}</span>
+                    <span class="font-heading font-bold text-sm" style="color: var(--text-primary);">{{ meet.venue }}</span>
                     <span class="state-badge state-{{ meet.state|lower }}">{{ meet.state }}</span>
                 </div>
                 {% if meet.is_metro %}
@@ -495,7 +495,7 @@
         {% else %}
         <div class="card p-8 text-center">
             <div class="text-4xl mb-3">&#x1F3C7;</div>
-            <p class="font-heading font-semibold text-white mb-1">No Racing Today</p>
+            <p class="font-heading font-semibold mb-1" style="color: var(--text-primary);">No Racing Today</p>
             <p class="text-sm" style="color: var(--text-secondary);">Check back tomorrow for Punty's tips.</p>
         </div>
         {% endif %}
@@ -518,21 +518,21 @@
                 <div class="hiw-step">
                     <div class="hiw-num">1</div>
                     <div>
-                        <h3 class="font-heading font-bold text-white text-lg">Analyse Every Data Point</h3>
+                        <h3 class="font-heading font-bold text-lg" style="color: var(--text-primary);">Analyse Every Data Point</h3>
                         <p class="text-sm" style="color: var(--text-secondary);">Form, speed maps, track conditions, jockey/trainer stats, market movements — all processed automatically.</p>
                     </div>
                 </div>
                 <div class="hiw-step">
                     <div class="hiw-num">2</div>
                     <div>
-                        <h3 class="font-heading font-bold text-white text-lg">Build Probability Models</h3>
+                        <h3 class="font-heading font-bold text-lg" style="color: var(--text-primary);">Build Probability Models</h3>
                         <p class="text-sm" style="color: var(--text-secondary);">Machine learning models with calibrated factor weights generate win and place probabilities for every runner.</p>
                     </div>
                 </div>
                 <div class="hiw-step">
                     <div class="hiw-num">3</div>
                     <div>
-                        <h3 class="font-heading font-bold text-white text-lg">Find the Edge</h3>
+                        <h3 class="font-heading font-bold text-lg" style="color: var(--text-primary);">Find the Edge</h3>
                         <p class="text-sm" style="color: var(--text-secondary);">Model probability vs market odds. When our model says 33% and the market says 25%, that's value.</p>
                     </div>
                 </div>
@@ -542,14 +542,14 @@
                 <div class="hiw-step">
                     <div class="hiw-num">4</div>
                     <div>
-                        <h3 class="font-heading font-bold text-white text-lg">Allocate Smart Stakes</h3>
+                        <h3 class="font-heading font-bold text-lg" style="color: var(--text-primary);">Allocate Smart Stakes</h3>
                         <p class="text-sm" style="color: var(--text-secondary);">$20 per race. Win bets only on $4-$6 sweet spot. Place bets for shorter prices. Risk-managed exotics.</p>
                     </div>
                 </div>
                 <div class="hiw-step">
                     <div class="hiw-num">5</div>
                     <div>
-                        <h3 class="font-heading font-bold text-white text-lg">Track Every Cent</h3>
+                        <h3 class="font-heading font-bold text-lg" style="color: var(--text-primary);">Track Every Cent</h3>
                         <p class="text-sm" style="color: var(--text-secondary);">Every bet settled automatically against official dividends. Full P&L ledger — no hiding the losses.</p>
                     </div>
                 </div>

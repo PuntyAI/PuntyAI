@@ -62,7 +62,7 @@
     }
     .venue-row {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+        padding: 0.5rem 0; border-bottom: 1px solid var(--border-subtle);
     }
     .venue-row:last-child { border-bottom: none; }
 
@@ -82,7 +82,7 @@
         background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
         transition: border-color 0.15s;
     }
-    .upcoming-row:hover { border-color: rgba(255,255,255,0.1); }
+    .upcoming-row:hover { border-color: var(--border-default); }
     .edge-glow {
         border-color: rgba(74, 222, 128, 0.25);
         box-shadow: 0 0 12px rgba(74, 222, 128, 0.06);
@@ -92,7 +92,7 @@
     .bt-row {
         display: grid; grid-template-columns: 100px 1fr 60px 60px 70px;
         gap: 0.5rem; align-items: center; padding: 0.6rem 0;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
+        border-bottom: 1px solid var(--border-subtle);
     }
     .bt-row:last-child { border-bottom: none; }
     @media (max-width: 480px) {
@@ -139,7 +139,7 @@
     }
     .vr-good { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
     .vr-great { background: rgba(74, 222, 128, 0.25); color: #22c55e; }
-    .vr-meh { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+    .vr-meh { background: var(--bg-card-alt); color: var(--text-muted); }
 </style>
 {% endblock %}
 
@@ -223,7 +223,7 @@
             <div class="rounded-xl p-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
                 <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">P&amp;L by Type</div>
                 {% for b in bt %}
-                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: rgba(255,255,255,0.04);">
+                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: var(--border-subtle);">
                     <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ b.name }}</span>
                     <div class="flex items-center gap-3">
                         <span class="text-xs" style="color: var(--text-muted);">{{ b.bets }} bet{{ 's' if b.bets != 1 }}</span>
@@ -240,7 +240,7 @@
                 <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">Pick Strike Rate</div>
                 {% set rank_colors = ['var(--magenta)', 'var(--cyan)', 'var(--yellow)', '#a855f7'] %}
                 {% for r in rs %}
-                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: rgba(255,255,255,0.04);">
+                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: var(--border-subtle);">
                     <div class="flex items-center gap-2">
                         <span class="font-display text-xs font-bold" style="color: {{ rank_colors[loop.index0] }};">#{{ r.rank }}</span>
                         <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ r.label }}</span>
@@ -499,7 +499,7 @@
                     <div class="product-bar">
                         <div class="w-24 sm:w-28 font-heading font-semibold text-sm" style="color: {{ product_colors.get(ptype, 'var(--text-secondary)') }};">{{ product_labels.get(ptype, ptype|title) }}</div>
                         <div class="flex-1 mx-1">
-                            <div class="w-full rounded-full h-2" style="background: rgba(255,255,255,0.06);">
+                            <div class="w-full rounded-full h-2" style="background: var(--bg-card-alt);">
                                 <div class="h-2 rounded-full" style="width: {{ [data.strike_rate, 100]|min }}%; background: {{ product_colors.get(ptype, 'var(--text-secondary)') }};"></div>
                             </div>
                         </div>
@@ -517,7 +517,7 @@
             <div class="mb-6">
                 <h2 class="font-heading font-bold text-sm uppercase tracking-wider mb-3" style="color: var(--text-muted);">By Bet Type</h2>
                 <div class="rounded-xl p-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                    <div class="bt-row" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    <div class="bt-row" style="border-bottom: 1px solid var(--border-subtle);">
                         <div class="text-[10px] font-heading font-bold uppercase" style="color: var(--text-muted);">Type</div>
                         <div></div>
                         <div class="text-[10px] font-heading font-bold uppercase text-right" style="color: var(--text-muted);">SR%</div>
@@ -528,7 +528,7 @@
                     <div class="bt-row">
                         <div class="font-heading font-semibold text-sm" style="color: var(--text-primary);">{{ bt.name }}</div>
                         <div>
-                            <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.06);">
+                            <div class="w-full rounded-full h-1.5" style="background: var(--bg-card-alt);">
                                 <div class="h-1.5 rounded-full" style="width: {{ [bt.strike_rate, 100]|min }}%; background: var(--magenta);"></div>
                             </div>
                         </div>
