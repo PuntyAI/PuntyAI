@@ -68,10 +68,18 @@ async def store_picks_from_content(
         )
         meeting = result.scalar_one_or_none()
         if meeting:
+            # Load market influence from DB
+            from punty.models.settings import AppSettings
+            mi_result = await db.execute(
+                select(AppSettings).where(AppSettings.key == "lgbm_market_influence")
+            )
+            mi_setting = mi_result.scalar_one_or_none()
+            market_influence = float(mi_setting.value) if mi_setting and mi_setting.value else None
+
             for race in meeting.races:
                 active = [r for r in race.runners if not r.scratched]
                 if active:
-                    probs = calculate_race_probabilities(active, race, meeting)
+                    probs = calculate_race_probabilities(active, race, meeting, market_influence=market_influence)
                     # Map by saddlecloth for easy lookup
                     for runner in active:
                         if runner.id in probs:

@@ -916,6 +916,19 @@ class ContextBuilder:
         if not race:
             return {}
 
+        # Load market influence if not already set by build_meeting_context
+        if self._market_influence is None:
+            from punty.models.settings import AppSettings
+            try:
+                mi_result = await self.db.execute(
+                    select(AppSettings).where(AppSettings.key == "lgbm_market_influence")
+                )
+                mi_setting = mi_result.scalar_one_or_none()
+                if mi_setting and mi_setting.value:
+                    self._market_influence = float(mi_setting.value)
+            except Exception:
+                pass
+
         meeting_context = {
             "venue": race.meeting.venue,
             "date": race.meeting.date.isoformat(),
