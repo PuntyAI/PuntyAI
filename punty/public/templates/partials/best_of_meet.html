@@ -31,9 +31,6 @@
                     <span class="font-heading font-bold text-sm" style="color: var(--cyan);">${{ '%.2f'|format(data.best_winner.odds) }}</span>
                     {% endif %}
                     <span class="type-badge type-selection">{{ data.best_winner.bet_type }}</span>
-                    {% if data.best_winner.is_puntys_pick %}
-                    <span class="pp-badge">PP</span>
-                    {% endif %}
                 </div>
                 {% else %}
                 <div class="text-xs" style="color: var(--text-muted);">No standout pick</div>
