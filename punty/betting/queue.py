@@ -39,14 +39,6 @@ MAX_BETFAIR_RANK = 4
 MAX_BETS_PER_MEETING = 4
 
 
-def _pp_floor_for_field(runner_count: int) -> float:
-    """Return the minimum place probability for a given field size.
-
-    No longer used as a gate — kept for logging/diagnostics only.
-    """
-    return 0.0  # No PP floor — best 4 per meeting by pure PP ranking
-
-
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
     """Count non-scratched runners in a race."""
     result = await db.execute(
@@ -843,6 +835,7 @@ async def settle_betfair_bets(
                 f"BSP update for {bet.id}: {bet.matched_odds or bet.requested_odds:.2f} -> {bsp:.2f}"
             )
             bet.matched_odds = bsp
+            bet.size_matched = bf_result.get("size_matched", bet.stake)
 
     commission_rate = float(await _get_setting(db, "betfair_commission_rate", str(DEFAULT_COMMISSION_RATE)))
     odds = bet.matched_odds or bet.requested_odds or 0

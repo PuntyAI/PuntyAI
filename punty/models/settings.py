@@ -142,18 +142,6 @@ class AppSettings(Base):
 
     # Default settings
     DEFAULTS = {
-        "unit_value": {
-            "value": "1",
-            "description": "Value of 1U in dollars",
-        },
-        "persona_swearing": {
-            "value": "true",
-            "description": "Allow Punty to use colorful language",
-        },
-        "use_emojis": {
-            "value": "false",
-            "description": "Use emojis in content (PUNTY_MASTER says no)",
-        },
         "openai_api_key": {
             "value": "",
             "description": "OpenAI API key",
@@ -249,6 +237,14 @@ class AppSettings(Base):
         "betfair_min_place_prob": {
             "value": "0.50",
             "description": "Minimum place probability (0-1) to queue a bet — only high-confidence selections",
+        },
+        "betfair_max_kelly_fraction": {
+            "value": "0.06",
+            "description": "Maximum Kelly fraction per bet (0.01-0.20)",
+        },
+        "betfair_min_calibrated_pp": {
+            "value": "0.50",
+            "description": "Minimum calibrated place probability to queue a Betfair bet",
         },
         # Probability engine settings
         "lgbm_market_influence": {

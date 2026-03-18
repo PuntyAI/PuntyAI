@@ -632,8 +632,16 @@ async def _settle_picks_for_race_impl(
 
         all_won = all(p.hit for p in big3_picks)
         stake = multi_pick.exotic_stake or 10.0
-        if all_won and multi_pick.multi_odds:
-            multi_pick.pnl = round(multi_pick.multi_odds * stake - stake, 2)
+        if all_won:
+            odds = multi_pick.multi_odds
+            if not odds:
+                logger.warning(f"Big3 multi all won but multi_odds missing for {multi_pick.id}, using odds_at_tip fallback")
+                fallback_odds = 1.0
+                for p in big3_picks:
+                    if p.odds_at_tip:
+                        fallback_odds *= p.odds_at_tip
+                odds = fallback_odds
+            multi_pick.pnl = round(odds * stake - stake, 2)
         else:
             multi_pick.pnl = round(-stake, 2)
         multi_pick.hit = all_won
@@ -1001,7 +1009,7 @@ async def _settle_picks_for_race_impl(
                     if dividend <= 0:
                         has_early_quad_pick = any(
                             sp.sequence_type and "early" in sp.sequence_type.lower()
-                            for sp in seq_picks
+                            for sp in sequence_picks
                             if sp.id != pick.id
                         )
                         if not has_early_quad_pick:

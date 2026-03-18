@@ -80,6 +80,11 @@ FEATURE_NAMES = [
     "is_australia",           # 1.0 if Australian venue
     "is_hong_kong",           # 1.0 if HK venue (Sha Tin, Happy Valley)
     "is_new_zealand",         # 1.0 if NZ venue
+    # Head-to-head & field beaten (2) — S21
+    "head_to_head_wins",      # count of horses in today's field beaten in past meetings
+    "field_beaten_pct",       # avg % of field beaten in last 5 starts
+    # Track bias (1) — S23
+    "rail_bias_score",        # barrier advantage/disadvantage from rail position
 ]
 
 NUM_FEATURES = len(FEATURE_NAMES)  # 67
@@ -255,6 +260,97 @@ def capped_f(d: dict, key: str, min_runners: int = 20) -> Optional[float]:
         return None
     val = d.get(key) or d.get(key.title())
     return float(val) if val is not None else None
+
+
+def _extract_head_to_head_wins(form_history_raw: Any, field_horse_names: set[str]) -> float:
+    """Count how many horses in today's field this horse has beaten in past races.
+
+    Scans form_history JSON for past races where both this horse and another
+    horse in today's field were present, and this horse finished ahead.
+    """
+    parsed = _try_parse_json(form_history_raw)
+    if not parsed or not isinstance(parsed, list) or not field_horse_names:
+        return float("nan")
+    beaten = set()
+    for race_entry in parsed[:10]:  # Check last 10 starts
+        if not isinstance(race_entry, dict):
+            continue
+        finish = race_entry.get("FinishPosition") or race_entry.get("finish_position")
+        if not finish:
+            continue
+        try:
+            my_pos = int(finish)
+        except (ValueError, TypeError):
+            continue
+        # Check other runners in this past race
+        other_runners = race_entry.get("other_runners") or race_entry.get("OtherRunners") or []
+        if not isinstance(other_runners, list):
+            continue
+        for other in other_runners:
+            if not isinstance(other, dict):
+                continue
+            other_name = (other.get("horse_name") or other.get("HorseName") or "").strip().upper()
+            other_pos = other.get("finish_position") or other.get("FinishPosition")
+            if not other_name or not other_pos:
+                continue
+            try:
+                other_pos = int(other_pos)
+            except (ValueError, TypeError):
+                continue
+            if other_name in field_horse_names and my_pos < other_pos:
+                beaten.add(other_name)
+    return float(len(beaten)) if beaten else 0.0
+
+
+def _extract_field_beaten_pct(form_history_raw: Any) -> float:
+    """Average percentage of the field beaten in last 5 starts.
+
+    E.g., finished 3rd in 12 runners = beat 9/11 = 81.8%.
+    """
+    parsed = _try_parse_json(form_history_raw)
+    if not parsed or not isinstance(parsed, list):
+        return float("nan")
+    pcts = []
+    for race_entry in parsed[:5]:
+        if not isinstance(race_entry, dict):
+            continue
+        finish = race_entry.get("FinishPosition") or race_entry.get("finish_position")
+        field = race_entry.get("Starters") or race_entry.get("starters") or race_entry.get("field_size")
+        if not finish or not field:
+            continue
+        try:
+            pos = int(finish)
+            total = int(field)
+        except (ValueError, TypeError):
+            continue
+        if total <= 1 or pos < 1:
+            continue
+        beaten_count = total - pos
+        pcts.append(beaten_count / (total - 1))  # % of other runners beaten
+    if pcts:
+        return statistics.mean(pcts)
+    return float("nan")
+
+
+def _compute_rail_bias_score(rail_position: Any, barrier: int, field_size: int) -> float:
+    """Compute barrier advantage/disadvantage from rail position.
+
+    - True rail + inside barrier (<=4): advantage = 0.1
+    - Rail out 3m+ and outside barrier (> field_size - 3): advantage = 0.1
+    - Otherwise: 0.0
+    """
+    if not rail_position or not barrier or field_size < 2:
+        return 0.0
+    rail = str(rail_position).lower().strip()
+    if "true" in rail and barrier <= 4:
+        return 0.1
+    # Parse "out Xm" pattern
+    out_match = re.search(r"out\s+(\d+)", rail)
+    if out_match:
+        out_metres = int(out_match.group(1))
+        if out_metres >= 3 and barrier > field_size - 3:
+            return 0.1
+    return 0.0
 
 
 def _extract_avg_margin(form_history_raw: Any) -> float:
@@ -443,6 +539,14 @@ def extract_features_from_db_row(
     is_hong_kong = 1.0 if state == "HK" else 0.0
     is_new_zealand = 1.0 if state == "NZ" else 0.0
 
+    # Head-to-head & field beaten (S21) — not available in backtest.db context
+    head_to_head_wins = nan
+    field_beaten_pct = _extract_field_beaten_pct(runner.get("form_history"))
+
+    # Rail bias score (S23)
+    rail_pos = meeting.get("rail_position") if isinstance(meeting, dict) else None
+    rail_bias_score = _compute_rail_bias_score(rail_pos, barrier, field_size)
+
     return [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -476,6 +580,8 @@ def extract_features_from_db_row(
         # ── v4 features ──
         is_leader, is_staying, last_start_won,
         is_australia, is_hong_kong, is_new_zealand,
+        _f(head_to_head_wins), _f(field_beaten_pct),
+        rail_bias_score,
     ]
 
 
@@ -486,6 +592,7 @@ def extract_features_from_db_row(
 def extract_features_from_runner(
     runner: Any, race: Any, meeting: Any,
     field_size: int, avg_weight: float, overround: float = 1.0,
+    **kwargs: Any,
 ) -> list:
     """Extract feature vector from live Runner ORM object."""
     nan = float("nan")
@@ -657,7 +764,18 @@ def extract_features_from_runner(
     is_hong_kong = 1.0 if state == "HK" else 0.0
     is_new_zealand = 1.0 if state == "NZ" else 0.0
 
-    return [
+    # Head-to-head & field beaten (S21)
+    # field_horse_names populated by extract_features_batch via _field_names kwarg
+    field_names = kwargs.get("_field_names", set())
+    form_history_raw = _get(runner, "form_history")
+    head_to_head_wins = _extract_head_to_head_wins(form_history_raw, field_names)
+    field_beaten_pct = _extract_field_beaten_pct(form_history_raw)
+
+    # Rail bias score (S23)
+    rail_pos = _get(meeting, "rail_position")
+    rail_bias_score = _compute_rail_bias_score(rail_pos, barrier, field_size)
+
+    fvec = [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
         _f(td_sr), float(td_starts),
@@ -690,7 +808,17 @@ def extract_features_from_runner(
         # ── v4 features ──
         is_leader, is_staying, last_start_won,
         is_australia, is_hong_kong, is_new_zealand,
+        _f(head_to_head_wins), _f(field_beaten_pct),
+        rail_bias_score,
     ]
+
+    # S1 fix: Zero out features that were NaN in training data to prevent
+    # train/serve distribution mismatch. Remove after retraining with these populated.
+    for _fname in ('jockey_career_a2e', 'jockey_career_pot', 'jockey_l100_sr',
+                    'trainer_l100_sr', 'avg_margin'):
+        fvec[FEATURE_NAMES.index(_fname)] = float('nan')
+
+    return fvec
 
 
 def extract_features_batch(
@@ -732,9 +860,19 @@ def extract_features_batch(
             overround += 1.0 / median
     overround = overround if overround > 0 else 1.0
 
+    # Collect field horse names for head-to-head feature (S21)
+    field_names = set()
+    for r in active:
+        name = _get(r, "horse_name")
+        if name:
+            field_names.add(str(name).strip().upper())
+
     rows = []
     for r in active:
-        row = extract_features_from_runner(r, race, meeting, field_size, avg_weight, overround)
+        row = extract_features_from_runner(
+            r, race, meeting, field_size, avg_weight, overround,
+            _field_names=field_names,
+        )
         rows.append(row)
 
     return np.array(rows, dtype=np.float64)

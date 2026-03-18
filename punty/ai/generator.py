@@ -357,6 +357,9 @@ class ContentGenerator:
                 raise ValueError(event.get("label", "Generation failed"))
         return result
 
+    # TODO S25: Consider asyncio.gather() for parallel meeting generation to reduce wall-clock time
+    # Currently bulk generation in api/meets.py calls generate_early_mail_stream() sequentially
+    # per meeting. Parallel generation would reduce total time but needs rate-limit awareness.
     async def generate_early_mail_stream(
         self,
         meeting_id: str,
@@ -449,6 +452,7 @@ class ContentGenerator:
 
             # Add learning from past predictions if available (timeout after 30s)
             # Uses a separate DB session to avoid poisoning the main generator session
+            rag_active = False
             try:
                 learning_context = await asyncio.wait_for(
                     self._build_learning_context_safe(context), timeout=30
@@ -461,6 +465,11 @@ class ContentGenerator:
                 learning_context = ""
             if learning_context:
                 context_str += "\n" + learning_context
+                rag_active = True
+                # S24: Log RAG context size and content summary
+                assessment_count = learning_context.count("PAST RACE ASSESSMENT")
+                memory_count = learning_context.count("Similar Past Situations")
+                logger.info(f"RAG context: {len(learning_context)} chars, assessments={assessment_count}, memories={memory_count}")
 
             system_prompt = f"""{personality}
 
@@ -511,6 +520,7 @@ class ContentGenerator:
                 "meeting_id": meeting_id,
                 "content_type": ContentType.EARLY_MAIL.value,
                 "context_snapshot_id": snapshot["id"] if snapshot else None,
+                "rag_active": rag_active,
             }
 
             if save:
