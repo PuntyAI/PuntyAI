@@ -40,10 +40,9 @@
     <script>
     (function(){
         var t = localStorage.getItem('punty-theme');
-        if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
         if (t) document.documentElement.setAttribute('data-theme', t);
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.content = t === 'light' ? '#f5f5fa' : '#0a0a0f';
+        if (m && t) m.content = t === 'light' ? '#f5f5fa' : '#0a0a0f';
     })();
     </script>
     <!-- Tailwind CSS (precompiled) -->
@@ -113,11 +112,11 @@
             --yellow: #a07800;
             --purple: #6d28d9;
             --text-primary: #0f0e1a;
-            --text-secondary: #3d3a55;
-            --text-muted: #8a87a8;
+            --text-secondary: #2d2a42;
+            --text-muted: #6b6888;
             --text-heading: #0f0e1a;
-            --border-subtle: rgba(0,0,0,0.07);
-            --border-default: rgba(0,0,0,0.10);
+            --border-subtle: rgba(0,0,0,0.10);
+            --border-default: rgba(0,0,0,0.15);
             --gradient-sunset: linear-gradient(180deg, #e91e8c 0%, #ff6b35 50%, #ffc107 100%);
             --gradient-header: linear-gradient(90deg, #c4007c 0%, #6d28d9 50%, #0077a8 100%);
             --nav-hover-bg: rgba(0,0,0,0.04);
@@ -608,6 +607,82 @@
             border-color: rgba(255,255,255,0.08) !important;
         }
 
+        /* ═══════════════════════════════════════
+           LIGHT MODE — comprehensive fixups for
+           rgba(255,255,255) patterns, neon badge
+           colors, and hover states in child templates.
+        ═══════════════════════════════════════ */
+
+        /* Metric values — white text on cards */
+        [data-theme="light"] .metric-value,
+        [data-theme="light"] .stat-cell-value {
+            color: var(--text-primary) !important;
+        }
+
+        /* State badges — darken for white bg readability */
+        [data-theme="light"] .state-vic { background: rgba(0, 70, 173, 0.10); color: #0046ad; }
+        [data-theme="light"] .state-nsw { background: rgba(0, 130, 180, 0.10); color: #006d96; }
+        [data-theme="light"] .state-qld { background: rgba(150, 0, 0, 0.10); color: #9e0000; }
+        [data-theme="light"] .state-sa  { background: rgba(200, 0, 0, 0.08); color: #b30000; }
+        [data-theme="light"] .state-wa  { background: rgba(180, 150, 0, 0.10); color: #8a7000; }
+        [data-theme="light"] .state-tas { background: rgba(0, 100, 0, 0.10); color: #006400; }
+        [data-theme="light"] .state-act { background: rgba(0, 70, 173, 0.08); color: #0046ad; }
+        [data-theme="light"] .state-nt  { background: rgba(180, 90, 0, 0.10); color: #a05500; }
+        [data-theme="light"] .state-hk  { background: rgba(200, 30, 10, 0.10); color: #b31a0a; }
+
+        /* rgba(255,255,255,...) backgrounds → light equivalents */
+        [data-theme="light"] .metric-cell:hover { background: rgba(0,0,0,0.02) !important; }
+        [data-theme="light"] .dash-accordion-header { background: rgba(0,0,0,0.02); }
+        [data-theme="light"] .dash-accordion-header:hover { background: rgba(0,0,0,0.04); }
+        [data-theme="light"] .stat-cell { background: var(--bg-card-alt); border-color: var(--border-subtle); }
+        [data-theme="light"] .rr-race-card { background: var(--bg-card-alt); border-color: var(--border-subtle); }
+        [data-theme="light"] .rr-race-card:hover { background: rgba(0,0,0,0.02); border-color: rgba(196,0,124,0.2); }
+
+        /* Table borders — rgba white → dark-based */
+        [data-theme="light"] .rr-table thead { border-bottom-color: var(--border-subtle); }
+        [data-theme="light"] .rr-row-exotic td { border-top-color: var(--border-subtle); }
+        [data-theme="light"] .bom-slot { border-bottom-color: var(--border-subtle); }
+
+        /* Quick links hover */
+        [data-theme="light"] .qlink:hover {
+            color: var(--text-primary) !important;
+            border-color: rgba(196,0,124,0.3);
+            background: rgba(0,0,0,0.02);
+        }
+
+        /* Meeting card borders — rgba white → theme */
+        [data-theme="light"] .metro-card { border-color: rgba(196,0,124,0.15); }
+
+        /* Trend bars — green/red stay but ensure readability */
+        [data-theme="light"] .win-card-hero { border-left-color: #15803d; }
+        [data-theme="light"] .win-card-loss { border-left-color: #dc2626; }
+
+        /* Product bar */
+        [data-theme="light"] .product-bar { background: var(--bg-card-alt); border-color: var(--border-subtle); }
+
+        /* Broad catch-all: any inline rgba(255,255,255,...) backgrounds in main */
+        [data-theme="light"] main [style*="background: rgba(255,255,255,"],
+        [data-theme="light"] main [style*="background:rgba(255,255,255,"],
+        [data-theme="light"] main [style*="background: rgba(255, 255, 255,"],
+        [data-theme="light"] main [style*="background:rgba(255, 255, 255,"] {
+            background: var(--bg-card-alt) !important;
+        }
+
+        /* Broad catch-all: any inline rgba(255,255,255,...) borders in main */
+        [data-theme="light"] main [style*="border-color: rgba(255,255,255,"],
+        [data-theme="light"] main [style*="border-color:rgba(255,255,255,"],
+        [data-theme="light"] main [style*="border: 1px solid rgba(255,255,255,"],
+        [data-theme="light"] main [style*="border-top: 1px solid rgba(255,255,255,"],
+        [data-theme="light"] main [style*="border-bottom: 1px solid rgba(255,255,255,"] {
+            border-color: var(--border-subtle) !important;
+        }
+
+        /* Live edge card — fix rgba white patterns in CSS classes */
+        [data-theme="light"] .le-row { background: transparent; }
+        [data-theme="light"] .le-row:hover { background: rgba(0,0,0,0.02); }
+        [data-theme="light"] .le-glow-bar { background: linear-gradient(90deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02)) !important; }
+        [data-theme="light"] .le-card { border-color: var(--border-subtle); }
+
         /* Stats counter */
         .stat-number {
             font-family: 'Orbitron', sans-serif;
@@ -1070,15 +1145,9 @@
         return {
             theme: 'dark',
             init() {
-                // Check localStorage first, then system preference, default dark
+                // localStorage only — default dark for new visitors
                 var saved = localStorage.getItem('punty-theme');
-                if (saved) {
-                    this.theme = saved;
-                } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-                    this.theme = 'light';
-                } else {
-                    this.theme = 'dark';
-                }
+                this.theme = saved || 'dark';
                 // Update meta theme-color for mobile browser chrome
                 this._updateMeta();
             },
