@@ -424,6 +424,7 @@ PROVIDER_KEYS = {
         "betfair_auto_bet_enabled", "betfair_balance", "betfair_initial_balance",
         "betfair_stake", "betfair_stake_mode", "betfair_min_odds", "betfair_commission_rate", "betfair_max_daily_loss",
         "betfair_min_place_prob",
+        "betfair_max_kelly_fraction", "betfair_min_calibrated_pp",
     ],
     "probability": [
         "lgbm_market_influence", "confidence_boost_enabled",

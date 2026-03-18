@@ -42,6 +42,9 @@ ROUGHIE_MIN_VALUE = 1.10
 # Punty's Pick exotic threshold
 EXOTIC_PUNTYS_PICK_VALUE = 1.5  # exotic needs 1.5x value to be Punty's Pick
 
+# Exotic budget — default fallback (dynamic budget via _get_exotic_budget)
+EXOTIC_BUDGET = 15.0
+
 
 def _load_thresholds(overrides: dict | None = None) -> dict:
     """Build thresholds dict from module defaults, with optional overrides."""
@@ -93,6 +96,7 @@ class RecommendedExotic:
     value_ratio: float
     num_combos: int
     format: str                 # "flat" or "boxed"
+    budget: float = EXOTIC_BUDGET  # dynamic budget based on meet quality
 
 
 @dataclass
@@ -1025,7 +1029,19 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
             p.stake = max(MIN_STAKE, round(p.stake * scale / STAKE_STEP) * STAKE_STEP)
 
 
-EXOTIC_BUDGET = 15.0  # $15 total budget per exotic bet
+def _get_exotic_budget(meet_quality: float) -> float:
+    """Scale exotic budget by meet quality.
+
+    Country meets (quality 0): $10 — thin pools, smaller dividends
+    Provincial meets (quality 1): $15 — standard
+    Metro meets (quality >= 2): $20 — deeper pools, bigger dividends
+    """
+    if meet_quality >= 2:
+        return 20.0
+    elif meet_quality >= 1:
+        return 15.0
+    else:
+        return 10.0
 
 
 def _select_exotic(
@@ -1051,7 +1067,7 @@ def _select_exotic(
     High-quality meets with big fields → trifecta/first4 (bigger dividends)
     Lower-quality meets with thin fields → quinella/exacta (higher strike rate)
 
-    Budget: $15 total, flexi % = budget / (combos × $1).
+    Budget: dynamic ($10 country / $15 provincial / $20 metro).
     """
     if not exotic_combos:
         return None
@@ -1100,6 +1116,9 @@ def _select_exotic(
     elif pm >= 50_000:
         meet_quality += 0.5
 
+    # ── Dynamic budget by meet quality ──
+    budget = _get_exotic_budget(meet_quality)
+
     # ── Minimum field sizes by type, relative to meet quality ──
     # Higher quality meets tolerate smaller fields (better horses, deeper pools)
     # Country needs bigger fields for meaningful dividends
@@ -1127,30 +1146,44 @@ def _select_exotic(
 
     # ── Preferred types by race shape × meet quality ──
     # Shape drives structure, quality drives ambition
+    # Trifecta conditions: metro only (meet_quality >= 2),
+    #   Box requires field_size >= 10, Standout requires top pick win_prob >= 0.25
+    top_pick_wp = max((p.win_prob for p in picks), default=0) if picks else 0
+    allow_tri_box = meet_quality >= 2 and field_size >= 10
+    allow_tri_standout = meet_quality >= 2 and top_pick_wp >= 0.25
+
     if race_shape == "dominant":
         if meet_quality >= 2:
-            # Metro/big-field standout → Trifecta Standout anchored on rank 1
-            preferred_types = {"Exacta Standout", "Trifecta Standout", "Exacta"}
+            # Metro/big-field standout → Trifecta Standout anchored on rank 1 (if qualified)
+            preferred_types = {"Exacta Standout", "Exacta"}
+            if allow_tri_standout:
+                preferred_types.add("Trifecta Standout")
         else:
             # Country standout → simpler Exacta structures
             preferred_types = {"Exacta Standout", "Exacta"}
     elif race_shape == "open":
         if meet_quality >= 2:
             # Metro open → wide boxes for big dividends
-            preferred_types = {"Trifecta Box", "First4 Box", "First4"}
+            preferred_types = {"First4 Box", "First4"}
+            if allow_tri_box:
+                preferred_types.add("Trifecta Box")
         elif meet_quality >= 1:
-            # Provincial open → Trifecta box or quinella
-            preferred_types = {"Trifecta Box", "Quinella"}
+            # Provincial open → quinella (trifecta box removed — provincial only)
+            preferred_types = {"Quinella"}
         else:
             # Country open → stick to quinella (thin dividends otherwise)
             preferred_types = {"Quinella"}
     else:  # structured
         if meet_quality >= 2:
-            # Metro structured → Trifecta box or First4
-            preferred_types = {"Trifecta Box", "Trifecta Standout", "First4", "Quinella"}
+            # Metro structured → First4 or quinella, trifecta if qualified
+            preferred_types = {"First4", "Quinella"}
+            if allow_tri_box:
+                preferred_types.add("Trifecta Box")
+            if allow_tri_standout:
+                preferred_types.add("Trifecta Standout")
         elif meet_quality >= 1:
-            # Provincial structured → Trifecta box or quinella
-            preferred_types = {"Trifecta Box", "Quinella"}
+            # Provincial structured → quinella (trifecta box removed — provincial only)
+            preferred_types = {"Quinella"}
         else:
             # Country structured → quinella or exacta
             preferred_types = {"Quinella", "Exacta"}
@@ -1203,8 +1236,13 @@ def _select_exotic(
         combos = max(1, ec.get("combos", 1))
 
         # Budget feasibility: flexi must be >= 10% to be meaningful
-        flexi_pct = EXOTIC_BUDGET / combos * 100 if combos > 0 else 0
+        flexi_pct = budget / combos * 100 if combos > 0 else 0
         if flexi_pct < 10:
+            continue
+
+        # Trifecta minimum value ratio: 1.5x (higher bar than other exotics)
+        # Trifectas are harder to hit, so only play when value clearly justifies it
+        if ec_type in ("Trifecta Standout", "Trifecta Box") and value < 1.5:
             continue
 
         # Score: probability × value² — value-squared so high-dividend types
@@ -1277,6 +1315,7 @@ def _select_exotic(
             value_ratio=best.get("value", 1.0),
             num_combos=best.get("combos", 1),
             format=best.get("format", "boxed"),
+            budget=budget,
         )
 
     best = scored[0][1]
@@ -1292,6 +1331,7 @@ def _select_exotic(
         value_ratio=best.get("value", 1.0),
         num_combos=best.get("combos", 1),
         format=best.get("format", "boxed"),
+        budget=budget,
     )
 
 
@@ -1524,7 +1564,7 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
         ex = pre_sel.exotic
         runners_str = ", ".join(str(r) for r in ex.runners)
         names_str = ", ".join(ex.runner_names)
-        budget = EXOTIC_BUDGET
+        budget = ex.budget
         combos = max(1, ex.num_combos)
         unit_cost = round(budget / combos, 2)
         flexi_pct = round(budget / combos * 100, 1) if combos > 1 else 100.0
@@ -1553,7 +1593,7 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
             runners_str = ", ".join(str(r) for r in pp.exotic_runners)
             val_str = f" (Value: {pp.exotic_value:.1f}x)" if pp.exotic_value else ""
             lines.append(
-                f"  PUNTY'S PICK: {pp.exotic_type} [{runners_str}] — ${EXOTIC_BUDGET:.0f}{val_str}"
+                f"  PUNTY'S PICK: {pp.exotic_type} [{runners_str}] — ${(ex.budget if ex else EXOTIC_BUDGET):.0f}{val_str}"
             )
         elif pp.horse_name and pp.saddlecloth:
             lines.append(

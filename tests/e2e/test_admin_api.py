@@ -69,7 +69,7 @@ class TestSettingsAPI:
         assert resp.status == 200
         body = resp.json()
         assert isinstance(body, dict)
-        assert "unit_value" in body
+        assert "openai_api_key" in body
 
     def test_weights(self, auth_page):
         resp = auth_page.request.get("/api/settings/weights")
