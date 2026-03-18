@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
-"""Train LightGBM v2 — from Proform data with rich features.
+"""Train LightGBM v2 — from Proform data + live DB with rich features.
 
 Unlike v1 (trained on backtest.db with 20+ NaN features), this version loads
 directly from Proform JSON files which have full A2E/PoT jockey/trainer stats,
 combo career/last100, group/stakes records, avg margins, and settling positions.
 
+Can also load settled runners from the live punty.db to combine with Proform data,
+and supports --auto mode for automated weekly retraining with model deployment.
+
 Usage:
     python scripts/train_lgbm_v2.py
     python scripts/train_lgbm_v2.py --data-dir D:\\Punty\\DatafromProform
+    python scripts/train_lgbm_v2.py --auto --db-path data/punty_live.db
 """
 
 import argparse
 import json
 import math
 import re
+import shutil
+import sqlite3
 import statistics
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -28,7 +35,7 @@ from sklearn.metrics import log_loss, roc_auc_score
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from punty.ml.features import FEATURE_NAMES, NUM_FEATURES
+from punty.ml.features import FEATURE_NAMES, NUM_FEATURES, extract_features_from_runner
 
 DEFAULT_DATA_DIR = Path(r"D:\Punty\DatafromProform")
 
@@ -584,14 +591,33 @@ def load_proform_data(data_dir: Path) -> tuple[list[list[float]], list[int], lis
     skipped_no_pos = 0
     skipped_no_sp = 0
 
-    # Process year directories — deduplicate by using only '2025' if both exist
-    # (2026 directory contains the same data with 2025 dates)
+    # Process year directories — deduplicate intelligently
+    # If a '2025' directory exists, prefer it. Other dirs (e.g. '2026') may contain
+    # the same 2025-dated data re-exported. Only skip dirs that are true duplicates
+    # (same form file counts as another dir).
     year_dirs = sorted(d for d in data_dir.iterdir() if d.is_dir())
     if len(year_dirs) > 1:
-        # Check if multiple dirs contain same data by looking at file prefixes
-        # Use only the dir matching the actual year in meeting dates
-        year_dirs = [year_dirs[0]]
-        print(f"  Note: Using only {year_dirs[0].name}/ directory (others contain duplicates)")
+        # Count form files per dir to detect duplicates
+        dir_file_counts = {}
+        for yd in year_dirs:
+            count = sum(1 for m in range(1, 13)
+                        if (yd / MONTH_DIRS[m] / "Form").exists()
+                        for _ in (yd / MONTH_DIRS[m] / "Form").glob("*.json"))
+            dir_file_counts[yd.name] = count
+
+        # Prefer '2025' if it exists; skip other dirs with the same file count
+        seen_counts = set()
+        deduped = []
+        # Sort to process '2025' first if present
+        priority = sorted(year_dirs, key=lambda d: (d.name != "2025", d.name))
+        for yd in priority:
+            cnt = dir_file_counts[yd.name]
+            if cnt in seen_counts and cnt > 0:
+                print(f"  Note: Skipping {yd.name}/ ({cnt} form files — duplicate of earlier dir)")
+                continue
+            seen_counts.add(cnt)
+            deduped.append(yd)
+        year_dirs = deduped
     for year_dir in year_dirs:
         year = year_dir.name
         print(f"\n  Processing {year}...")
@@ -697,6 +723,128 @@ def load_proform_data(data_dir: Path) -> tuple[list[list[float]], list[int], lis
     print(f"\nTotal: {total_runners:,} runners from {total_files} files in {elapsed:.1f}s")
     print(f"  Skipped (no position): {skipped_no_pos:,}")
     print(f"  Skipped (no SP): {skipped_no_sp:,}")
+
+    return X_list, y_win, y_place, race_ids, dates
+
+
+# ── Live DB data loading ──────────────────────────────────────────────
+
+
+def load_live_db_data(db_path: Path) -> tuple[list[list[float]], list[int], list[int], list[str], list[str]]:
+    """Load settled runners from live punty.db, extract features via the live inference path.
+
+    Uses extract_features_from_runner() from punty.ml.features to ensure
+    train/serve feature consistency.
+
+    Returns the same format as load_proform_data(): (X_list, y_win, y_place, race_ids, dates).
+    """
+    print(f"\nLoading live DB data from {db_path}...")
+    start = time.time()
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = """
+        SELECT r.*, ra.distance, ra.class as race_class, ra.prize_money, ra.race_number,
+               ra.field_size as race_field_size,
+               m.id as meeting_id, m.venue, m.date as meeting_date, m.track_condition as meeting_track_condition,
+               m.weather_condition, m.weather_temp, m.weather_wind_speed,
+               m.weather_humidity, m.rail_position, m.penetrometer
+        FROM runners r
+        JOIN races ra ON r.race_id = ra.id
+        JOIN meetings m ON ra.meeting_id = m.id
+        WHERE r.finish_position IS NOT NULL AND r.scratched = 0 AND r.current_odds > 1.0
+        AND m.date >= '2026-01-01'
+        ORDER BY m.date, ra.race_number, r.saddlecloth
+    """
+
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        print("  No settled runners found in live DB")
+        return [], [], [], [], []
+
+    # Group rows by race_id to compute per-race stats (field_size, avg_weight)
+    race_groups: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        row_dict = dict(row)
+        race_groups[row_dict["race_id"]].append(row_dict)
+
+    X_list: list[list[float]] = []
+    y_win: list[int] = []
+    y_place: list[int] = []
+    race_ids: list[str] = []
+    dates: list[str] = []
+    total_runners = 0
+    skipped_features = 0
+
+    for race_id, race_runners in race_groups.items():
+        field_size = len(race_runners)
+        weights = [r["weight"] for r in race_runners if r.get("weight") and r["weight"] > 40]
+        avg_weight = statistics.mean(weights) if weights else 56.0
+
+        # Build meeting and race dicts for extract_features_from_runner
+        first = race_runners[0]
+        meeting_dict = {
+            "id": first["meeting_id"],
+            "venue": first["venue"],
+            "date": first["meeting_date"],
+            "track_condition": first["meeting_track_condition"],
+            "weather_condition": first.get("weather_condition"),
+            "weather_temp": first.get("weather_temp"),
+            "weather_wind_speed": first.get("weather_wind_speed"),
+            "weather_humidity": first.get("weather_humidity"),
+            "rail_position": first.get("rail_position"),
+            "penetrometer": first.get("penetrometer"),
+        }
+
+        race_dict = {
+            "id": race_id,
+            "distance": first.get("distance") or 1400,
+            "class": first.get("race_class"),
+            "prize_money": first.get("prize_money"),
+            "race_number": first.get("race_number"),
+            "field_size": field_size,
+        }
+
+        race_date = str(first.get("meeting_date", ""))[:10]
+
+        for runner_row in race_runners:
+            pos = runner_row.get("finish_position")
+            if pos is None or pos == 0:
+                continue
+
+            # runner_row is already a dict — extract_features_from_runner uses _get()
+            # which supports both dicts and ORM objects
+            try:
+                features = extract_features_from_runner(
+                    runner_row, race_dict, meeting_dict,
+                    field_size=field_size, avg_weight=avg_weight,
+                )
+            except Exception:
+                skipped_features += 1
+                continue
+
+            if len(features) != NUM_FEATURES:
+                skipped_features += 1
+                continue
+
+            X_list.append(features)
+            y_win.append(1 if pos == 1 else 0)
+            place_cutoff = 2 if field_size <= 7 else 3
+            y_place.append(1 if pos <= place_cutoff else 0)
+            race_ids.append(race_id)
+            dates.append(race_date)
+            total_runners += 1
+
+    elapsed = time.time() - start
+    n_races = len(race_groups)
+    print(f"  Live DB: {total_runners:,} runners from {n_races:,} races in {elapsed:.1f}s")
+    if skipped_features:
+        print(f"  Skipped (feature extraction errors): {skipped_features:,}")
 
     return X_list, y_win, y_place, race_ids, dates
 
@@ -958,20 +1106,114 @@ def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val):
     return best_results
 
 
+def _pull_live_db(db_path: Path) -> bool:
+    """SCP the live DB from the server. Returns True on success."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    ssh_key = Path.home() / ".ssh" / "id_ed25519"
+    cmd = [
+        "scp", "-i", str(ssh_key),
+        "root@209.38.86.195:/opt/puntyai/data/punty.db",
+        str(db_path),
+    ]
+    print(f"\n  Pulling live DB from server...")
+    print(f"    {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if result.returncode == 0:
+        size_mb = db_path.stat().st_size / (1024 * 1024)
+        print(f"    OK — {size_mb:.1f} MB downloaded to {db_path}")
+        return True
+    else:
+        print(f"    ERROR: SCP failed (rc={result.returncode})")
+        if result.stderr:
+            print(f"    {result.stderr.strip()}")
+        return False
+
+
+def _deploy_model() -> bool:
+    """Deploy the trained model files to the server and restart."""
+    ssh_key = Path.home() / ".ssh" / "id_ed25519"
+    ssh_base = ["ssh", "-i", str(ssh_key), "root@209.38.86.195"]
+    scp_base = ["scp", "-i", str(ssh_key)]
+
+    files_to_deploy = [
+        str(MODEL_DIR / "lgbm_win_model.txt"),
+        str(MODEL_DIR / "lgbm_place_model.txt"),
+        str(MODEL_DIR / "lgbm_metadata.json"),
+    ]
+
+    print(f"\n  Deploying model to server...")
+
+    # SCP model files
+    cmd = scp_base + files_to_deploy + ["root@209.38.86.195:/opt/puntyai/punty/data/"]
+    print(f"    Uploading {len(files_to_deploy)} files...")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        print(f"    ERROR: SCP upload failed (rc={result.returncode})")
+        if result.stderr:
+            print(f"    {result.stderr.strip()}")
+        return False
+
+    # Restart service
+    cmd = ssh_base + ["systemctl restart puntyai"]
+    print(f"    Restarting puntyai service...")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        print(f"    WARNING: Service restart failed (rc={result.returncode})")
+        if result.stderr:
+            print(f"    {result.stderr.strip()}")
+        return False
+
+    print(f"    Deployed and restarted successfully!")
+    return True
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Train LightGBM v2 from Proform data")
+    parser = argparse.ArgumentParser(description="Train LightGBM v2 from Proform + live DB data")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR,
                         help="Path to Proform data directory")
+    parser.add_argument("--db-path", type=Path, default=ROOT / "data" / "punty_live.db",
+                        help="Path to live punty.db for supplementary training data")
     parser.add_argument("--tune", action="store_true",
                         help="Run hyperparameter search before final training")
+    parser.add_argument("--auto", action="store_true",
+                        help="Automated retrain: pull DB, train, deploy if improved")
     args = parser.parse_args()
+
+    # ── Auto mode: pull the DB from server first ──
+    if args.auto:
+        print("=" * 60)
+        print("  AUTO RETRAIN MODE")
+        print("=" * 60)
+        if not _pull_live_db(args.db_path):
+            print("FATAL: Could not pull live DB from server. Aborting auto retrain.")
+            sys.exit(1)
 
     data_dir = args.data_dir
     if not data_dir.exists():
         print(f"ERROR: Data directory not found: {data_dir}")
         sys.exit(1)
 
+    # ── Load Proform data ──
     X_list, y_win_list, y_place_list, race_ids, dates = load_proform_data(data_dir)
+    proform_count = len(X_list)
+    print(f"\n  Proform: {proform_count:,} runners loaded")
+
+    # ── Load live DB data (if available) ──
+    live_count = 0
+    if args.db_path.exists():
+        live_X, live_yw, live_yp, live_rids, live_dates = load_live_db_data(args.db_path)
+        if live_X:
+            X_list.extend(live_X)
+            y_win_list.extend(live_yw)
+            y_place_list.extend(live_yp)
+            race_ids.extend(live_rids)
+            dates.extend(live_dates)
+            live_count = len(live_X)
+            print(f"  Live DB: {live_count:,} runners loaded")
+    else:
+        print(f"  Live DB: not found at {args.db_path} (skipping)")
+
+    print(f"  Combined: {len(X_list):,} runners (Proform {proform_count:,} + Live {live_count:,})")
 
     X = np.array(X_list, dtype=np.float64)
     y_win = np.array(y_win_list, dtype=np.int32)
@@ -996,11 +1238,19 @@ def main():
         pct = non_nan / X.shape[0] * 100
         print(f"    {feat:25s}: {pct:5.1f}% ({non_nan:,} / {X.shape[0]:,})")
 
-    # ── Temporal split ──
-    # 2025 Jan-Oct: train, 2025 Nov: val, 2025 Dec + 2026: test
-    train_mask = np.array([d[:7] <= "2025-10" for d in dates])
-    val_mask = np.array([d[:7] == "2025-11" for d in dates])
-    test_mask = np.array([d[:7] >= "2025-12" for d in dates])
+    # ── Dynamic temporal split ──
+    # Train on all data except last 6 weeks, val = next 2 weeks, test = last 4 weeks
+    all_dates = sorted(set(d for d in dates if d))
+    if len(all_dates) >= 42:
+        test_cutoff = all_dates[-28]   # Last 4 weeks = test
+        val_cutoff = all_dates[-42]    # 2 weeks before test = val
+    else:
+        test_cutoff = "2025-12"
+        val_cutoff = "2025-11"
+    train_mask = np.array([d < val_cutoff for d in dates])
+    val_mask = np.array([(d >= val_cutoff and d < test_cutoff) for d in dates])
+    test_mask = np.array([d >= test_cutoff for d in dates])
+    print(f"\n  Split: train < {val_cutoff}, val {val_cutoff}–{test_cutoff}, test >= {test_cutoff}")
 
     for name, mask in [("train", train_mask), ("val", val_mask), ("test", test_mask)]:
         n = mask.sum()
@@ -1014,8 +1264,8 @@ def main():
     rids_val = [r for r, m in zip(race_ids, val_mask) if m]
     rids_test = [r for r, m in zip(race_ids, test_mask) if m]
 
-    # ── Hyperparameter search (optional) ──
-    if args.tune:
+    # ── Hyperparameter search (optional, skipped in --auto mode) ──
+    if args.tune and not args.auto:
         best_params = hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val)
         # Apply best params globally for final training
         global LGBM_PARAMS
@@ -1068,6 +1318,36 @@ def main():
     val_metrics_place = evaluate_model(place_model, X_val, yp_val, rids_val, "Validation")
     test_metrics_place = evaluate_model(place_model, X_test, yp_test, rids_test, "Test")
 
+    # ── Auto mode: compare with existing model before saving ──
+    if args.auto:
+        meta_path = MODEL_DIR / "lgbm_metadata.json"
+        if meta_path.exists():
+            with open(meta_path) as f:
+                old_meta = json.load(f)
+
+            old_win_auc = old_meta.get("win_model", {}).get("test_metrics", {}).get("auc", 0)
+            old_place_auc = old_meta.get("place_model", {}).get("test_metrics", {}).get("auc", 0)
+            new_win_auc = test_metrics_win["auc"]
+            new_place_auc = test_metrics_place["auc"]
+
+            # Average AUC across both models as the comparison metric
+            old_avg = (old_win_auc + old_place_auc) / 2
+            new_avg = (new_win_auc + new_place_auc) / 2
+
+            print(f"\n{'='*60}")
+            print(f"  AUTO RETRAIN — Model Comparison")
+            print(f"{'='*60}")
+            print(f"  Old model:  Win AUC={old_win_auc:.4f}  Place AUC={old_place_auc:.4f}  Avg={old_avg:.4f}")
+            print(f"  New model:  Win AUC={new_win_auc:.4f}  Place AUC={new_place_auc:.4f}  Avg={new_avg:.4f}")
+
+            if new_avg <= old_avg:
+                print(f"\n  NEW MODEL DID NOT IMPROVE (avg AUC {new_avg:.4f} <= {old_avg:.4f})")
+                print(f"  Keeping existing model. No deployment.")
+                print(f"{'='*60}")
+                sys.exit(0)
+            else:
+                print(f"\n  NEW MODEL IMPROVED! (avg AUC {new_avg:.4f} > {old_avg:.4f}, +{new_avg - old_avg:.4f})")
+
     # ── Save models ──
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1078,21 +1358,29 @@ def main():
     win_model.save_model(str(win_path))
     place_model.save_model(str(place_path))
 
+    data_sources = ["Proform JSON"]
+    if live_count > 0:
+        data_sources.append(f"Live DB ({live_count:,} runners)")
+
     metadata = {
         "version": 2,
         "feature_names": FEATURE_NAMES,
         "num_features": NUM_FEATURES,
         "training_date": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "data_source": "Proform JSON",
+        "data_source": " + ".join(data_sources),
         "data_dir": str(data_dir),
+        "db_path": str(args.db_path) if args.db_path.exists() else None,
+        "proform_samples": proform_count,
+        "live_db_samples": live_count,
         "train_samples": int(train_mask.sum()),
         "val_samples": int(val_mask.sum()),
         "test_samples": int(test_mask.sum()),
-        "temporal_split": {"train": "2025-01 to 2025-10", "val": "2025-11", "test": "2025-12+"},
+        "temporal_split": {"train": f"< {val_cutoff}", "val": f"{val_cutoff} to {test_cutoff}", "test": f">= {test_cutoff}"},
         "lgbm_params_default": LGBM_PARAMS,
         "lgbm_params_win": {k: v for k, v in win_lgbm.items() if k != "verbose"},
         "lgbm_params_place": {k: v for k, v in place_lgbm.items() if k != "verbose"},
-        "tuned": args.tune,
+        "tuned": args.tune and not args.auto,
+        "auto_retrain": args.auto,
         "win_model": {
             "best_iteration": win_model.best_iteration,
             "val_metrics": val_metrics_win,
@@ -1114,6 +1402,10 @@ def main():
     print(f"  Place:    {place_path} ({place_path.stat().st_size / 1024:.0f} KB)")
     print(f"  Metadata: {meta_path}")
     print(f"{'='*60}")
+
+    # ── Auto mode: deploy to server ──
+    if args.auto:
+        _deploy_model()
 
 
 if __name__ == "__main__":
