@@ -68,9 +68,23 @@ FEATURE_NAMES = [
     "track_place_rate",     # place rate at this track
     # Race context (2)
     "field_size", "distance",
+    # ── New features (v4) ── added after 61-feature v3 model ──
+    # These are extracted but only used after model retrain.
+    # Pace signal (1)
+    "is_leader",              # 1.0 if speed_map_position == leader
+    # Distance signal (1)
+    "is_staying",             # 1.0 if distance >= 2000m
+    # Form signal (1)
+    "last_start_won",         # 1.0 if last-five starts with '1'
+    # Country (3) — one-hot for AU/HK/NZ
+    "is_australia",           # 1.0 if Australian venue
+    "is_hong_kong",           # 1.0 if HK venue (Sha Tin, Happy Valley)
+    "is_new_zealand",         # 1.0 if NZ venue
 ]
 
-NUM_FEATURES = len(FEATURE_NAMES)  # 61
+NUM_FEATURES = len(FEATURE_NAMES)  # 67
+# Features the current trained model knows (v3). New features appended after this.
+NUM_FEATURES_V3 = 61
 
 
 # ──────────────────────────────────────────────
@@ -409,6 +423,26 @@ def extract_features_from_db_row(
     # Race context
     distance = race.get("distance") or 1400
 
+    # ── v4 features ──
+    # Leader signal — from Proform speed map settle position
+    settle_raw = runner.get("pf_settle") or runner.get("speed_map_position") or ""
+    is_leader = 1.0 if (isinstance(settle_raw, str) and settle_raw == "leader") or (isinstance(settle_raw, (int, float)) and settle_raw and settle_raw <= 2) else 0.0
+
+    # Staying race
+    is_staying = 1.0 if distance and distance >= 2000 else 0.0
+
+    # Last start won
+    l5_raw = runner.get("last_five") or runner.get("form", "")
+    last_start_won = 1.0 if l5_raw and str(l5_raw).lstrip("0").startswith("1") else 0.0
+
+    # Country — derive from meeting venue
+    venue = (meeting.get("venue") or "").lower() if isinstance(meeting, dict) else ""
+    from punty.venues import guess_state
+    state = guess_state(venue)
+    is_australia = 1.0 if state not in ("HK", "SGP", "NZ", "JP", "UK", "") else 0.0
+    is_hong_kong = 1.0 if state == "HK" else 0.0
+    is_new_zealand = 1.0 if state == "NZ" else 0.0
+
     return [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -439,6 +473,9 @@ def extract_features_from_db_row(
         _f(group_starts), _f(group_sr),
         _f(dist_place), _f(trk_place),
         float(field_size), float(distance),
+        # ── v4 features ──
+        is_leader, is_staying, last_start_won,
+        is_australia, is_hong_kong, is_new_zealand,
     ]
 
 
@@ -599,6 +636,27 @@ def extract_features_from_runner(
     # Race context
     distance = _get(race, "distance") or 1400
 
+    # ── v4 features ──
+    # Leader signal — from speed map position
+    smp = (_get(runner, "speed_map_position") or "").lower() if isinstance(_get(runner, "speed_map_position"), str) else ""
+    settle_num = _safe_float(_get(runner, "pf_settle"))
+    is_leader = 1.0 if smp == "leader" or (settle_num and settle_num <= 2) else 0.0
+
+    # Staying race
+    is_staying = 1.0 if distance and distance >= 2000 else 0.0
+
+    # Last start won
+    l5_raw = str(last_five or "")
+    last_start_won = 1.0 if l5_raw and l5_raw.lstrip("0").startswith("1") else 0.0
+
+    # Country — derive from meeting venue
+    venue_str = str(_get(meeting, "venue") or "").strip()
+    from punty.venues import guess_state
+    state = guess_state(venue_str)
+    is_australia = 1.0 if state not in ("HK", "SGP", "NZ", "JP", "UK", "") else 0.0
+    is_hong_kong = 1.0 if state == "HK" else 0.0
+    is_new_zealand = 1.0 if state == "NZ" else 0.0
+
     return [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -629,6 +687,9 @@ def extract_features_from_runner(
         _f(group_starts), _f(group_sr),
         _f(dist_place), _f(trk_place),
         float(field_size), float(distance),
+        # ── v4 features ──
+        is_leader, is_staying, last_start_won,
+        is_australia, is_hong_kong, is_new_zealand,
     ]
 
 

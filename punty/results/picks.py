@@ -129,6 +129,7 @@ async def void_picks_for_meeting(db: AsyncSession, meeting_id: str) -> int:
         pick.hit = False
         pick.pnl = 0.0
         pick.settled_at = now
+        pick.no_bet_reason = (pick.no_bet_reason or "") + " [voided:meeting_abandoned]"
         count += 1
     if count:
         await db.flush()
@@ -158,6 +159,7 @@ async def void_picks_for_race(db: AsyncSession, meeting_id: str, race_number: in
         pick.hit = False
         pick.pnl = 0.0
         pick.settled_at = now
+        pick.no_bet_reason = (pick.no_bet_reason or "") + " [voided:race_abandoned]"
         count += 1
     if count:
         await db.flush()
@@ -215,6 +217,7 @@ async def _settle_picks_for_race_impl(
             pick.hit = False
             pick.settled = True
             pick.settled_at = now
+            pick.no_bet_reason = (pick.no_bet_reason or "") + " [voided:all_scratched]"
             settled_count += 1
         await db.commit()
         return settled_count
@@ -395,8 +398,8 @@ async def _settle_picks_for_race_impl(
 
             # Prefer actual tote dividends (ground truth) when available.
             # Fall back to tip-time odds only when tote is missing (some NSW venues).
-            win_odds = runner.win_dividend or pick.odds_at_tip
-            place_odds = runner.place_dividend or pick.place_odds_at_tip
+            win_odds = runner.win_dividend if runner.win_dividend is not None else pick.odds_at_tip
+            place_odds = runner.place_dividend if runner.place_dividend is not None else pick.place_odds_at_tip
 
             # Sanity: place odds should NEVER exceed win odds (impossible in real markets).
             # If they do, the place odds are likely garbage (e.g. win $2.70 / place $6.00).
@@ -821,7 +824,7 @@ async def _settle_picks_for_race_impl(
 
             if hit and dividend > 0:
                 # Flexi formula: return = dividend × (stake / combos)
-                flexi_pct = stake / combos if combos > 0 else stake
+                flexi_pct = stake / combos if combos > 0 else 1.0
                 return_amount = dividend * flexi_pct
                 pick.pnl = round(return_amount - stake, 2)
             elif hit and dividend == 0:

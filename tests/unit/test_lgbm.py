@@ -12,6 +12,7 @@ import pytest
 from punty.ml.features import (
     FEATURE_NAMES,
     NUM_FEATURES,
+    NUM_FEATURES_V3,
     _parse_stats,
     _score_last_five,
     _sr_from_stats,
@@ -120,6 +121,8 @@ def mock_runner_orm():
     r.trainer_stats = "500: 60-50-40"
     r.scratched = False
     r.place_odds = None
+    r.speed_map_position = "on_pace"
+    r.form_history = None
     return r
 
 
@@ -159,8 +162,9 @@ class TestFeatureExtraction:
     """Tests for feature extraction from various data sources."""
 
     def test_feature_count(self):
-        """Feature list has exactly 61 features."""
-        assert NUM_FEATURES == 61
+        """Feature list has 67 features (61 v3 + 6 v4)."""
+        assert NUM_FEATURES == 67
+        assert NUM_FEATURES_V3 == 61
 
     def test_db_row_extraction_length(self, sample_db_runner, sample_race, sample_meeting):
         """Extraction from DB row produces correct-length vector."""
