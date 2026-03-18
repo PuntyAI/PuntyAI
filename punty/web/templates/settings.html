@@ -492,14 +492,14 @@
                 <p class="text-sm text-gray-500 mb-2">Controls how market odds influence tip selections. Lower market influence = more independent LGBM-driven picks.</p>
 
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">Market Influence: <span id="mi-label" class="font-bold text-gray-700">{{ settings.get('lgbm_market_influence', {}).get('value', '0.45') | float * 100 | round }}%</span></label>
-                    <input type="range" id="prob_market_influence" min="0" max="100" step="5"
-                           value="{{ settings.get('lgbm_market_influence', {}).get('value', '0.45') | float * 100 | round }}"
+                    <label class="block text-xs text-gray-500 mb-1">Market Influence: <span id="mi-label" class="font-bold text-gray-700">{{ settings.get('lgbm_market_influence', {}).get('value', '0.12') | float * 100 | round }}%</span></label>
+                    <input type="range" id="prob_market_influence" min="0" max="100" step="1"
+                           value="{{ settings.get('lgbm_market_influence', {}).get('value', '0.12') | float * 100 | round }}"
                            oninput="document.getElementById('mi-label').textContent = this.value + '%'; document.getElementById('lgbm-label').textContent = (100 - this.value) + '%'"
                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-punty-coral">
                     <div class="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0% Pure LGBM</span>
-                        <span>LGBM weight: <span id="lgbm-label" class="font-bold text-gray-600">{{ (100 - settings.get('lgbm_market_influence', {}).get('value', '0.45') | float * 100) | round }}%</span></span>
+                        <span>LGBM weight: <span id="lgbm-label" class="font-bold text-gray-600">{{ (100 - settings.get('lgbm_market_influence', {}).get('value', '0.12') | float * 100) | round }}%</span></span>
                         <span>100% Pure Market</span>
                     </div>
                 </div>

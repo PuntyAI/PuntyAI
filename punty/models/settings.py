@@ -252,7 +252,7 @@ class AppSettings(Base):
         },
         # Probability engine settings
         "lgbm_market_influence": {
-            "value": "0.45",
+            "value": "0.12",
             "description": "Market weight in LGBM blend (0.0 = pure LGBM, 1.0 = pure market). LGBM influence = 1 - this value.",
         },
         "confidence_boost_enabled": {
