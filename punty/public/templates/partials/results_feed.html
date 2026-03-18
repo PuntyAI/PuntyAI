@@ -25,9 +25,6 @@
                         {% if win.tip_rank %}
                         <span class="rank-badge rank-{{ win.tip_rank }}">{{ win.tip_rank }}</span>
                         {% endif %}
-                        {% if win.is_puntys_pick %}
-                        <span class="pp-badge">PP</span>
-                        {% endif %}
                         <span class="type-badge type-{{ win.pick_type }}">{{ win.pick_type|replace('_', ' ')|title }}</span>
                     </div>
                     <div class="text-xs" style="color: var(--text-muted);">

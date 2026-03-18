@@ -572,18 +572,6 @@
         color: #ef4444; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.5));
     }
 
-    .puntys-pick {
-        display: inline-flex; align-items: center; gap: 4px;
-        background: linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(233, 30, 140, 0.15));
-        border: 1px solid rgba(255, 107, 53, 0.25);
-        border-radius: 6px; padding: 2px 8px; margin-right: 4px;
-    }
-    .puntys-pick strong {
-        background: var(--gradient-sunset);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
     /* Live Updates */
     .live-badge {
         display: inline-flex; align-items: center; gap: 6px;
@@ -735,21 +723,6 @@
         font-family: 'Orbitron', sans-serif; font-size: 1.5rem; font-weight: 700;
         letter-spacing: 0.05em;
         background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-
-    /* Punty's Pick inline badge */
-    .pp-badge {
-        display: inline-flex; align-items: center; gap: 4px;
-        margin-left: 8px; padding: 3px 10px 3px 6px; border-radius: 8px;
-        font-family: 'Rajdhani', sans-serif; font-weight: 700;
-        font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase;
-        background: linear-gradient(135deg, rgba(233, 30, 140, 0.25), rgba(255, 107, 53, 0.25));
-        color: #ff69b4; border: 1px solid rgba(233, 30, 140, 0.5);
-        vertical-align: middle; white-space: nowrap;
-        box-shadow: 0 0 6px rgba(233, 30, 140, 0.3);
-    }
-    .pp-badge img {
-        width: 16px; height: 16px; border-radius: 50%; object-fit: cover;
     }
 
     /* Selection metadata labels */
@@ -1024,7 +997,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
     var loseExotics = {{ losing_exotics | tojson }};
-    var ppPicks = {{ pp_picks | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
     var seqResults = {{ sequence_results | tojson }};
     var scratchedPicks = {{ scratched_picks | tojson }};
@@ -1456,34 +1428,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Remove Punty's Pick content (badge is now inline on staked picks)
-            var pickEls = body.querySelectorAll('.puntys-pick');
-            for (var pi = 0; pi < pickEls.length; pi++) {
-                var pickP = pickEls[pi].closest('p') || pickEls[pi].parentElement;
-                if (!pickP) continue;
-                // Check if this <p> also contains exotic content (merged by <br>)
-                var hasExotic = /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*/i.test(pickP.textContent.trim());
-                if (hasExotic) {
-                    // Only strip PP nodes from the shared paragraph, keep exotic
-                    var ppSpan = pickEls[pi];
-                    // Remove everything from the <br> before PP span to end of paragraph
-                    var toRemove = [];
-                    var foundPP = false;
-                    var children = Array.from(pickP.childNodes);
-                    for (var ci = children.length - 1; ci >= 0; ci--) {
-                        var child = children[ci];
-                        if (child === ppSpan || (child.contains && child.contains(ppSpan))) { foundPP = true; }
-                        if (foundPP) {
-                            toRemove.push(child);
-                            // Stop at the <br> before the PP line
-                            if (child.nodeName === 'BR') break;
-                        }
-                    }
-                    toRemove.forEach(function(n) { n.remove(); });
-                } else {
-                    pickP.remove();
-                }
-            }
         }
 
         // For race sections, move exotic title with exotic paragraph
@@ -1776,17 +1720,6 @@ document.addEventListener('DOMContentLoaded', function() {
             p.parentNode.replaceChild(fragment, p);
         });
 
-        // Inline Punty's Pick badge for sequence sections
-        var remaining = body.querySelectorAll('p');
-        remaining.forEach(function(p) {
-            if (p.querySelector('.puntys-pick') || /Punty.s\s+Pick/i.test(p.textContent)) {
-                var badge = document.createElement('span');
-                badge.className = 'pp-badge';
-                badge.textContent = "Punty's Pick";
-                while (p.firstChild) p.removeChild(p.firstChild);
-                p.appendChild(badge);
-            }
-        });
     }
 
     // --- Winner Badges ---
@@ -2057,80 +1990,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Punty's Pick badges (data-driven, placed after BET line) ---
-    (function() {
-        if (!puntsContainer || !ppPicks || !Object.keys(ppPicks).length) return;
-        var accordions = puntsContainer.querySelectorAll('.race-accordion');
-        accordions.forEach(function(acc) {
-            var pill = acc.querySelector('.race-pill');
-            if (!pill) return;
-            var raceNum = parseInt((pill.textContent || '').replace(/\D/g, ''));
-            if (!raceNum || !ppPicks[String(raceNum)]) return;
-            var ppSc = ppPicks[String(raceNum)];
-
-            // Build finish position map for this race
-            var fpMap = {};
-            var raceObj = racesData.find(function(r) { return r.num === raceNum; });
-            if (raceObj) {
-                raceObj.runners.forEach(function(r) { if (r.fp) fpMap[r.sc] = r.fp; });
-            }
-
-            var strongs = acc.querySelectorAll('.race-accordion-body strong');
-            for (var si = 0; si < strongs.length; si++) {
-                var sel = strongs[si];
-                if (sel.closest('.puntys-pick')) continue;
-                // Extract saddlecloth from text after <strong>
-                var sib = sel.nextSibling;
-                var nextText = '';
-                while (sib) {
-                    if (sib.nodeType === 3) { nextText += sib.textContent; break; }
-                    if (sib.nodeType === 1 && sib.tagName === 'BR') break;
-                    if (sib.nodeType === 1) { nextText += sib.textContent; break; }
-                    break;
-                }
-                var scMatch = nextText.match(/\((?:Race\s*\d+,\s*)?No\.?\s*(\d+)\)/);
-                if (!scMatch) continue;
-                var sc = parseInt(scMatch[1]);
-                if (sc !== ppSc) continue;
-
-                // Find the .sel-bet element for this selection
-                var nextSel = strongs[si + 1] || null;
-                var node = sel.nextSibling;
-                var betEl = null;
-                while (node && node !== nextSel) {
-                    if (node.nodeType === 1 && node.classList && node.classList.contains('sel-bet')) {
-                        betEl = node;
-                        break;
-                    }
-                    node = node.nextSibling;
-                }
-
-                // Build PP badge
-                var badge = document.createElement('span');
-                badge.className = 'pp-badge';
-                var img = document.createElement('img');
-                img.src = '/static/punty-character.jpg';
-                img.alt = 'Punty';
-                badge.appendChild(img);
-                var label = "Punty\u2019s Pick";
-                // Add finish position result if available
-                var fp = fpMap[sc];
-                if (fp) {
-                    var ordinal = fp === 1 ? '1st' : fp === 2 ? '2nd' : fp === 3 ? '3rd' : fp + 'th';
-                    label += ' \u2014 ' + ordinal;
-                }
-                badge.appendChild(document.createTextNode(label));
-
-                // Insert inline after the BET line (after .sel-bet element)
-                if (betEl && betEl.nextSibling) {
-                    betEl.parentNode.insertBefore(badge, betEl.nextSibling);
-                } else if (betEl) {
-                    betEl.parentNode.appendChild(badge);
-                }
-                break; // Only one PP per race
-            }
-        });
-    })();
 
     // --- Section Nav: smooth scroll + scroll spy ---
     (function() {
