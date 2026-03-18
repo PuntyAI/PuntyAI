@@ -21,7 +21,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
-                        <span class="font-heading font-bold text-white">{{ win.display_name }}</span>
+                        <span class="font-heading font-bold" style="color: var(--text-primary);">{{ win.display_name }}</span>
                         {% if win.tip_rank %}
                         <span class="rank-badge rank-{{ win.tip_rank }}">{{ win.tip_rank }}</span>
                         {% endif %}
@@ -31,7 +31,7 @@
                         <span class="type-badge type-{{ win.pick_type }}">{{ win.pick_type|replace('_', ' ')|title }}</span>
                     </div>
                     <div class="text-xs" style="color: var(--text-muted);">
-                        <a href="/tips/{{ win.meeting_id }}" class="hover:text-white transition-colors">{{ win.venue }} R{{ win.race_number }}</a>
+                        <a href="/tips/{{ win.meeting_id }}" class="hover:text-punty-mbright transition-colors">{{ win.venue }} R{{ win.race_number }}</a>
                         {% if win.bet_type %} &middot; {{ win.bet_type }}{% endif %}
                     </div>
                 </div>

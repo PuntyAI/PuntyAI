@@ -20,7 +20,7 @@
            class="card p-4 hover:border-punty-magenta transition-all hover:-translate-y-1 group {% if meet.is_metro|default(false) %}metro-card{% endif %}"
            data-metro="{{ 'true' if meet.is_metro|default(false) else 'false' }}">
             <div class="flex items-start justify-between mb-2">
-                <div class="font-heading font-bold text-white group-hover:text-punty-mbright transition-colors text-sm leading-tight">
+                <div class="font-heading font-bold group-hover:text-punty-mbright transition-colors text-sm leading-tight" style="color: var(--text-primary);">
                     {{ meet.venue }}
                 </div>
                 <span class="state-badge state-{{ meet.state|lower }}">{{ meet.state }}</span>

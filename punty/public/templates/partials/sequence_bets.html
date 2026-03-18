@@ -13,7 +13,7 @@
         <div class="card px-4 py-3" style="border-color: rgba(255, 107, 53, 0.2);" x-show="isActive('{{ seq.venue }}')" x-transition>
             {# Header row: venue, type badge, countdown, combos, link #}
             <div class="flex items-center gap-2 mb-1.5">
-                <span class="font-heading font-bold text-white text-sm">{{ seq.venue }}</span>
+                <span class="font-heading font-bold text-sm" style="color: var(--text-primary);">{{ seq.venue }}</span>
                 <span class="type-badge" style="background: rgba(255, 107, 53, 0.15); color: var(--orange);">{{ seq.type }}{% if seq.variant %} {{ seq.variant }}{% endif %}</span>
                 {% if seq.first_leg_time %}
                 <span class="text-xs font-heading font-semibold seq-countdown" data-start="{{ seq.first_leg_time }}" style="color: var(--yellow);">
@@ -29,7 +29,7 @@
             {% set last_race = seq.legs[-1].race %}
             <div class="text-xs" style="line-height: 1.6;">
                 <span class="font-heading font-bold" style="color: var(--text-muted);">R{{ first_race }}-{{ last_race }}:</span>
-                <span class="font-heading font-semibold text-white">
+                <span class="font-heading font-semibold" style="color: var(--text-primary);">
                     {%- for leg in seq.legs -%}
                         {%- if not loop.first -%}<span style="color: var(--orange); opacity: 0.6;">/</span>{%- endif -%}
                         {{- leg.runners|join(',') -}}
