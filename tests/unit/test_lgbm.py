@@ -315,13 +315,14 @@ class TestConfigToggle:
 class TestInference:
 
     def test_models_available_when_missing(self):
-        """models_available() returns False when model files don't exist."""
+        """models_available() returns False when no model files exist."""
         from punty.ml import inference
         inference.clear_cache()
 
-        with patch.object(inference, "WIN_MODEL_PATH", Path("/nonexistent/win.txt")):
-            with patch.object(inference, "PLACE_MODEL_PATH", Path("/nonexistent/place.txt")):
-                assert inference.models_available() is False
+        with patch.object(inference, "RANK_MODEL_PATH", Path("/nonexistent/rank.txt")):
+            with patch.object(inference, "WIN_MODEL_PATH", Path("/nonexistent/win.txt")):
+                with patch.object(inference, "PLACE_MODEL_PATH", Path("/nonexistent/place.txt")):
+                    assert inference.models_available() is False
 
         inference.clear_cache()
 
@@ -330,29 +331,33 @@ class TestInference:
         from punty.ml import inference
         inference.clear_cache()
 
-        with patch.object(inference, "WIN_MODEL_PATH", Path("/nonexistent/win.txt")):
-            with patch.object(inference, "PLACE_MODEL_PATH", Path("/nonexistent/place.txt")):
-                result = inference.predict_race([mock_runner_orm], sample_race, sample_meeting)
-                assert result == {}
+        with patch.object(inference, "RANK_MODEL_PATH", Path("/nonexistent/rank.txt")):
+            with patch.object(inference, "WIN_MODEL_PATH", Path("/nonexistent/win.txt")):
+                with patch.object(inference, "PLACE_MODEL_PATH", Path("/nonexistent/place.txt")):
+                    result = inference.predict_race([mock_runner_orm], sample_race, sample_meeting)
+                    assert result == {}
 
         inference.clear_cache()
 
     def test_predict_race_with_fixture_models(
         self, fixture_model_dir, mock_runner_orm, sample_race, sample_meeting,
     ):
-        """predict_race returns probabilities with fixture models."""
+        """predict_race returns probabilities with fixture models (legacy binary)."""
         from punty.ml import inference
         inference.clear_cache()
 
-        with patch.object(inference, "WIN_MODEL_PATH", fixture_model_dir / "lgbm_win_model.txt"):
-            with patch.object(inference, "PLACE_MODEL_PATH", fixture_model_dir / "lgbm_place_model.txt"):
-                result = inference.predict_race([mock_runner_orm], sample_race, sample_meeting)
-                assert len(result) == 1
-                rid = mock_runner_orm.id
-                assert rid in result
-                win_prob, place_prob = result[rid]
-                assert 0.0 < win_prob < 1.0
-                assert 0.0 < place_prob < 1.0
+        # Test with legacy binary models (rank model absent)
+        with patch.object(inference, "RANK_MODEL_PATH", Path("/nonexistent/rank.txt")):
+            with patch.object(inference, "WIN_MODEL_PATH", fixture_model_dir / "lgbm_win_model.txt"):
+                with patch.object(inference, "PLACE_MODEL_PATH", fixture_model_dir / "lgbm_place_model.txt"):
+                    result = inference.predict_race([mock_runner_orm], sample_race, sample_meeting)
+                    assert len(result) == 1
+                    rid = mock_runner_orm.id
+                    assert rid in result
+                    win_prob, place_prob = result[rid]
+                    assert 0.0 < win_prob < 1.0
+                    assert 0.0 < place_prob < 1.0
+                    assert place_prob >= win_prob  # enforced by binary fallback
 
         inference.clear_cache()
 
