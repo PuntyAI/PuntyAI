@@ -86,6 +86,15 @@
         }
         button:disabled { pointer-events: none; }
 
+        /* Form validation */
+        input:invalid:not(:placeholder-shown):not(:focus) {
+            border-color: #f87171 !important;
+            box-shadow: 0 0 0 2px rgba(248,113,113,0.15);
+        }
+        input:valid:not(:placeholder-shown):not([value=""]) {
+            border-color: rgba(74,222,128,0.4) !important;
+        }
+
         /* Scanlines */
         .scanlines {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -308,7 +317,7 @@
                     <a href="/logout" class="text-xs transition-colors" style="color: var(--text-muted);" onmouseover="this.style.color='var(--magenta)'" onmouseout="this.style.color='var(--text-muted)'">[Logout]</a>
                 {% endif %}
                 <!-- Mobile hamburger -->
-                <button id="mobile-menu-btn" class="md:hidden ml-2 p-2.5 rounded" style="color: var(--text-secondary);" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+                <button id="mobile-menu-btn" class="md:hidden ml-2 p-2.5 rounded" style="color: var(--text-secondary);" aria-label="Toggle navigation menu" aria-expanded="false" onclick="var m=document.getElementById('mobile-menu'); m.classList.toggle('hidden'); this.setAttribute('aria-expanded', !m.classList.contains('hidden'))">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
@@ -347,13 +356,39 @@
     <!-- Toast notifications -->
     <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
+    <!-- Themed confirm modal -->
+    <div id="punty-modal-overlay" class="fixed inset-0 z-[9998] hidden" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="w-full max-w-md rounded-xl shadow-2xl" style="background: var(--bg-card); border: 1px solid var(--border-subtle);">
+                <div class="px-6 py-4" style="border-bottom: 1px solid var(--border-subtle);">
+                    <h3 id="punty-modal-title" class="text-lg font-semibold" style="font-family: Rajdhani, sans-serif; color: var(--text-primary);">Confirm</h3>
+                </div>
+                <div class="px-6 py-4">
+                    <p id="punty-modal-message" class="text-sm" style="color: var(--text-secondary); white-space: pre-line;"></p>
+                </div>
+                <div class="px-6 py-4 flex justify-end gap-3" style="border-top: 1px solid var(--border-subtle);">
+                    <button id="punty-modal-cancel" class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" style="color: var(--text-secondary); background: rgba(255,255,255,0.06);">Cancel</button>
+                    <button id="punty-modal-confirm" class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors" style="background: var(--magenta);">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // CSRF token
+        // CSRF token with retry
         var csrfToken = '';
-        fetch('/api/csrf-token').then(r => r.json()).then(d => {
-            csrfToken = d.csrf_token;
-            document.body.setAttribute('hx-headers', JSON.stringify({'X-CSRF-Token': csrfToken}));
-        });
+        (function fetchCsrf(attempt) {
+            fetch('/api/csrf-token').then(function(r) { return r.json(); }).then(function(d) {
+                csrfToken = d.csrf_token;
+                document.body.setAttribute('hx-headers', JSON.stringify({'X-CSRF-Token': csrfToken}));
+            }).catch(function() {
+                if (attempt < 3) {
+                    setTimeout(function() { fetchCsrf(attempt + 1); }, 1000 * Math.pow(2, attempt));
+                } else {
+                    console.error('CSRF token fetch failed after 3 retries');
+                }
+            });
+        })(0);
 
         var _origFetch = window.fetch;
         window.fetch = function(url, opts) {
@@ -369,6 +404,40 @@
             }
             return _origFetch.call(this, url, opts);
         };
+
+        function puntyConfirm(title, message, confirmText, cancelText) {
+            return new Promise(function(resolve) {
+                var overlay = document.getElementById('punty-modal-overlay');
+                document.getElementById('punty-modal-title').textContent = title || 'Confirm';
+                document.getElementById('punty-modal-message').textContent = message || 'Are you sure?';
+                var confirmBtn = document.getElementById('punty-modal-confirm');
+                var cancelBtn = document.getElementById('punty-modal-cancel');
+                confirmBtn.textContent = confirmText || 'Confirm';
+                cancelBtn.textContent = cancelText || 'Cancel';
+                overlay.classList.remove('hidden');
+                function cleanup(result) {
+                    overlay.classList.add('hidden');
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    overlay.removeEventListener('click', onOverlay);
+                    resolve(result);
+                }
+                function onConfirm() { cleanup(true); }
+                function onCancel() { cleanup(false); }
+                function onOverlay(e) { if (e.target === overlay) cleanup(false); }
+                confirmBtn.addEventListener('click', onConfirm);
+                cancelBtn.addEventListener('click', onCancel);
+                overlay.addEventListener('click', onOverlay);
+            });
+        }
+
+        // Override htmx confirm to use themed modal
+        document.body.addEventListener('htmx:confirm', function(evt) {
+            evt.preventDefault();
+            puntyConfirm('Confirm', evt.detail.question, 'Yes', 'Cancel').then(function(confirmed) {
+                if (confirmed) evt.detail.issueRequest();
+            });
+        });
 
         function showToast(message, type = 'info') {
             const colors = {

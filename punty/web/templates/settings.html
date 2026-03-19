@@ -74,15 +74,17 @@
         <div class="p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Resend API Key</label>
+                    <label for="resend_api_key" class="block text-sm font-medium text-gray-700 mb-1">Resend API Key</label>
                     <input type="password" id="resend_api_key"
                            class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
                            placeholder="re_..."
+                           pattern="re_.*"
+                           title="Resend API keys start with 're_'"
                            value="{{ settings.get('resend_api_key', {}).get('value', '') }}">
                     <p class="text-xs text-gray-500 mt-1">Get your API key from <a href="https://resend.com/api-keys" target="_blank" class="text-punty-coral hover:underline">resend.com</a></p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">From Address</label>
+                    <label for="email_from" class="block text-sm font-medium text-gray-700 mb-1">From Address</label>
                     <input type="text" id="email_from"
                            class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
                            placeholder="PuntyAI <noreply@punty.ai>"
@@ -90,7 +92,7 @@
                     <p class="text-xs text-gray-500 mt-1">Must be from a verified domain</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Notification Email</label>
+                    <label for="notification_email" class="block text-sm font-medium text-gray-700 mb-1">Notification Email</label>
                     <input type="email" id="notification_email"
                            class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2"
                            placeholder="punty@punty.ai"
@@ -179,7 +181,7 @@
 
                 <!-- OpenAI -->
                 <div id="openai-section">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
+                    <label for="oai_key" class="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
                     <div id="openai-display" class="flex items-center space-x-2">
                         <span class="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-punty-card2 text-sm text-gray-600">
                             {{ api_key_status.openai if api_key_status.openai else 'Not configured' }}
@@ -192,6 +194,8 @@
                     </div>
                     <div id="openai-edit" class="hidden space-y-2 mt-2">
                         <input type="text" id="oai_key" placeholder="sk-proj-..."
+                               pattern="sk-.*"
+                               title="OpenAI API keys start with 'sk-'"
                                class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
                             <button onclick="saveApiKeys('openai', {openai_api_key: document.getElementById('oai_key').value})"
@@ -317,6 +321,8 @@
                     </div>
                     <div id="anthropic-edit" class="hidden space-y-2 mt-2">
                         <input type="text" id="anthropic_key" placeholder="Anthropic API Key (sk-ant-...)"
+                               pattern="sk-ant-.*"
+                               title="Anthropic API keys start with 'sk-ant-'"
                                class="w-full bg-punty-card2 border border-punty-border text-white rounded-lg px-3 py-2 text-sm">
                         <div class="flex space-x-2">
                             <button onclick="saveApiKeys('anthropic', {anthropic_api_key: document.getElementById('anthropic_key').value})"
@@ -500,9 +506,12 @@
                         <p class="text-xs text-gray-400">+15% boost when tissue rank-1 matches market favourite</p>
                     </div>
                     <button type="button" id="prob_confidence_boost_btn"
-                            onclick="var cb=document.getElementById('prob_confidence_boost'); cb.checked=!cb.checked; this.setAttribute('data-on', cb.checked);"
+                            role="switch"
+                            aria-checked="{% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}true{% else %}false{% endif %}"
+                            aria-label="Toggle confidence boost"
+                            onclick="var cb=document.getElementById('prob_confidence_boost'); cb.checked=!cb.checked; this.setAttribute('data-on', cb.checked); this.setAttribute('aria-checked', cb.checked);"
                             data-on="{% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}true{% else %}false{% endif %}"
-                            class="relative w-9 h-5 rounded-full transition-colors duration-200"
+                            class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-punty-coral focus:ring-offset-2 focus:ring-offset-gray-900"
                             style="background: {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}var(--magenta, #e91e8c){% else %}#4b5563{% endif %};">
                         <span class="absolute top-[2px] rounded-full h-4 w-4 bg-white transition-transform duration-200"
                               style="left: 2px; transform: {% if settings.get('confidence_boost_enabled', {}).get('value', 'true') == 'true' %}translateX(16px){% else %}translateX(0){% endif %};"></span>
@@ -808,7 +817,7 @@ async function saveProbabilityWeights() {
 }
 
 async function resetProbabilityWeights() {
-    if (!confirm('Reset probability weights to defaults?')) return;
+    if (!await puntyConfirm('Reset Weights', 'Reset probability weights to defaults?', 'Reset', 'Cancel')) return;
     try {
         const resp = await fetch('/api/settings/probability-weights/reset', {method: 'POST'});
         if (resp.ok) {
@@ -955,7 +964,7 @@ async function toggleAutomation() {
 }
 
 async function runMorningPrepNow() {
-    if (!confirm('Run the morning prep job now? This will scrape all data and generate early mail for selected meetings.')) {
+    if (!await puntyConfirm('Run Morning Prep', 'Run the morning prep job now? This will scrape all data and generate early mail for selected meetings.', 'Run Now', 'Cancel')) {
         return;
     }
 
@@ -1134,7 +1143,7 @@ async function savePersonality() {
 }
 
 async function resetPersonality() {
-    if (!confirm('Reset personality to default? This will reload the page.')) return;
+    if (!await puntyConfirm('Reset Personality', 'Reset personality to default? This will reload the page.', 'Reset', 'Cancel')) return;
 
     try {
         const resp = await fetch('/api/settings/personality');
@@ -1147,7 +1156,7 @@ async function resetPersonality() {
 }
 
 async function cleanupDatabase() {
-    if (!confirm('Delete all superseded, rejected, and stale content? This cannot be undone.')) return;
+    if (!await puntyConfirm('Database Cleanup', 'Delete all superseded, rejected, and stale content? This cannot be undone.', 'Clean Up', 'Cancel')) return;
 
     const statusEl = document.getElementById('cleanup-status');
     statusEl.textContent = 'Cleaning up...';

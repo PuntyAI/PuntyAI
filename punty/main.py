@@ -20,6 +20,29 @@ from punty.api import meets, content, scheduler, delivery, settings as settings_
 from punty.results.monitor import ResultsMonitor
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Set security headers on all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.clarity.ms https://www.bugherd.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https: blob:; "
+            "connect-src 'self' https://www.clarity.ms https://www.bugherd.com; "
+            "frame-src 'none'; "
+            "object-src 'none'; "
+            "base-uri 'self'"
+        )
+        return response
+
+
 class CacheControlMiddleware(BaseHTTPMiddleware):
     """Set Cache-Control headers for static assets and public API responses."""
 
@@ -242,7 +265,8 @@ app = FastAPI(
 )
 
 # Middleware stack (order matters — added in reverse, outermost first):
-# SessionMiddleware → HostnameRoutingMiddleware → RateLimit → AuthMiddleware → CSRFMiddleware → GZip → CacheControl
+# SessionMiddleware → HostnameRoutingMiddleware → RateLimit → AuthMiddleware → CSRFMiddleware → GZip → CacheControl → SecurityHeaders
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CacheControlMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CSRFMiddleware)
