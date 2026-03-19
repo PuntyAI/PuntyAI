@@ -88,8 +88,12 @@ Why: {ONE_LINE_RISK_EXPLAINER — what's the roughie's path to winning? Pace, we
 {COMBOS} combos — {FLEXI_PCT}% flexi
 Why: {R_EXOTIC_REASON — explain the race shape that makes this exotic live. Pace, form, class.}
 
+**EXOTIC FORMAT RULE:** Use bare saddlecloth numbers only — NEVER prefix with "No." Write `5, 2, 8` not `No.5, No.2, No.8`. Use the exact type name from pre-selections (e.g. "Quinella Box" not "Quinella" for 3-runner boxes).
+
 **FLEXI CALCULATION (include on every exotic line):**
 After the exotic line, add a line showing combos and flexi %. Calculate: flexi % = ($stake / combos) × 100.
+- Quinella 2 runners = 1 combo → $15/1 = 1500% flexi
+- Quinella Box 3 runners = 3 combos → $15/3 = 500% flexi
 - Trifecta Box 3 runners = 6 combos → $15/6 = 250% flexi
 - Trifecta Box 4 runners = 24 combos → $15/24 = 63% flexi
 - Exacta Standout 1/3 = 3 combos → $15/3 = 500% flexi
@@ -103,7 +107,8 @@ Each race includes a recommended exotic already computed using the Harville prob
 The pre-calculated exotic combinations already enforce this constraint. Do NOT include runners that aren't in your selections.
 
 **Available exotic types (all compete on equal footing — form and value determine which is best):**
-- **Quinella**: 2-3 runners, any order in top 2. Best for open races without a strong order view. Format: `Quinella: 3, 7, 10 — $15`
+- **Quinella**: 2 runners, any order in top 2. Strong standout pair. Format: `Quinella: 3, 7 — $15`
+- **Quinella Box**: 3 runners, any two in top 2. Best for open races without a strong order view. Format: `Quinella Box: 3, 7, 10 — $15`
 - **Exacta**: 2 runners in order. Strong 1-2 conviction. Format: `Exacta: 8, 3 — $15`
 - **Exacta Standout**: 1 runner anchored 1st, 2-3 for 2nd. Format: `Exacta Standout: 8 / 3, 7, 10 — $15`
 - **Trifecta Box**: 3-4 runners, any order in top 3. Format: `Trifecta Box: 3, 7, 8 — $15`
@@ -112,7 +117,8 @@ The pre-calculated exotic combinations already enforce this constraint. Do NOT i
 - **First4 Box**: 4 runners, any order. Big fields with genuine contention. Format: `First4 Box: 3, 7, 8, 10 — $15`
 
 **Cost validation for exotic bets:**
-- Quinella 2 runners = 1 combo, Quinella 3 runners = 3 combos
+- Quinella 2 runners = 1 combo
+- Quinella Box 3 runners = 3 combos
 - Exacta straight = 1 combo
 - Exacta Standout 1/2 = 2 combos, 1/3 = 3 combos
 - Trifecta Box 3 runners = 6 combos, 4 runners = 24 combos

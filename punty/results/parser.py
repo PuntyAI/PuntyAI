@@ -132,7 +132,7 @@ _PUNTYS_PICK_BET = re.compile(
 # Exotic Punty's Pick format:
 #   *Punty's Pick:* Trifecta Box [1, 5, 8, 12] — $20 (Value: 1.8x)
 _PUNTYS_PICK_EXOTIC = re.compile(
-    r"(Trifecta\s+Box|Trifecta\s+Standout|Exacta|Quinella|First4\s+Box|First4)\s*"
+    r"(Trifecta\s+Box|Trifecta\s+Standout|Exacta\s+Standout|Exacta|Quinella\s+Box|Quinella|First4\s+Box|First4)\s*"
     r"\[([^\]]+)\]\s*"
     r"[–\-—]\s*\$(\d+\.?\d*)"
     r"(?:\s*\(Value:\s*(\d+\.?\d*)x\))?",
@@ -161,7 +161,7 @@ def _normalize_bet_type(raw: str) -> str:
 def _normalize_exotic_type(raw: str) -> str:
     """Normalize exotic type to canonical name for consistent tracking.
 
-    Canonical names: Exacta, Quinella, Trifecta Box, First4 Box
+    Canonical names: Exacta, Quinella, Quinella Box, Trifecta Box, First4 Box
     """
     t = raw.strip().lower()
     # Remove parentheses and extra whitespace
@@ -180,6 +180,8 @@ def _normalize_exotic_type(raw: str) -> str:
             return "Exacta Standout"
         return "Exacta"
     if "quinella" in t or "quin" in t:
+        if "box" in t:
+            return "Quinella Box"
         return "Quinella"
     return raw.strip()
 

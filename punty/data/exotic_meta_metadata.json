@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "model_type": "binary_classifier",
+  "purpose": "Exotic type selector \u2014 predicts P(hit) for each exotic type given race context",
+  "feature_names": [
+    "field_size",
+    "distance_bucket",
+    "class_bucket",
+    "track_cond_bucket",
+    "venue_type",
+    "prize_money_bucket",
+    "wp_spread",
+    "wp_hhi",
+    "top1_wp",
+    "rank1_wp",
+    "rank2_wp",
+    "rank3_wp",
+    "rank4_wp",
+    "gap_12",
+    "gap_23",
+    "gap_34",
+    "fav_odds",
+    "odds_spread",
+    "avg_top4_value",
+    "exotic_type_code",
+    "num_combo_runners",
+    "num_combos"
+  ],
+  "num_features": 22,
+  "exotic_type_codes": {
+    "Quinella": 1,
+    "Quinella Box": 2,
+    "Exacta": 3,
+    "Exacta Standout": 4,
+    "Trifecta Standout": 5,
+    "Trifecta Box": 6,
+    "First4": 7,
+    "First4 Box": 8
+  },
+  "training_date": "2026-03-20 10:32:36",
+  "data_dir": "D:\\Punty\\DatafromProform",
+  "total_races": 19714,
+  "train_rows": 112214,
+  "val_rows": 17008,
+  "test_rows": 16060,
+  "temporal_split": {
+    "train": "< 2025-10-19",
+    "val": "2025-10-19 to 2025-11-24",
+    "test": ">= 2025-11-24"
+  },
+  "lgbm_params": {
+    "objective": "binary",
+    "metric": [
+      "binary_logloss",
+      "auc"
+    ],
+    "num_leaves": 31,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "min_data_in_leaf": 50,
+    "feature_fraction": 0.8,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 5,
+    "lambda_l1": 0.1,
+    "lambda_l2": 1.0,
+    "seed": 42,
+    "is_unbalanced": false
+  },
+  "best_iteration": 79,
+  "num_trees": 79,
+  "train_hit_rate": 43.84
+}
