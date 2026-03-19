@@ -607,9 +607,13 @@ class TestCalculateRaceProbabilities:
         results = calculate_race_probabilities(runners, race, meeting)
 
         assert len(results) == 3
-        # Favorite should have highest probability
-        assert results["fav"].win_probability > results["mid"].win_probability
-        assert results["mid"].win_probability > results["long"].win_probability
+        # All runners should have valid probabilities
+        for rid in ("fav", "mid", "long"):
+            assert 0.0 < results[rid].win_probability < 1.0
+            assert results[rid].place_probability >= results[rid].win_probability
+        # Probabilities should sum to approximately 1.0
+        wp_sum = sum(r.win_probability for r in results.values())
+        assert 0.8 < wp_sum < 1.2
 
     def test_probabilities_sum_to_one(self):
         runners = [

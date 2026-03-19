@@ -51,8 +51,10 @@ MONTH_DIRS = {
 MODEL_DIR = ROOT / "punty" / "data"
 
 LGBM_PARAMS = {
-    "objective": "binary",
-    "metric": ["binary_logloss", "auc"],
+    "objective": "lambdarank",
+    "metric": "ndcg",
+    "ndcg_eval_at": [1, 3, 5],
+    "label_gain": [0, 1, 2, 3],  # relevance gains: 0=unplaced, 1=3rd, 2=2nd, 3=1st
     "num_leaves": 63,
     "max_depth": 7,
     "learning_rate": 0.05,
@@ -64,6 +66,15 @@ LGBM_PARAMS = {
     "lambda_l2": 1.0,
     "verbose": -1,
     "seed": 42,
+}
+
+# Legacy params for backward compat reference
+LGBM_PARAMS_BINARY = {
+    "objective": "binary",
+    "metric": ["binary_logloss", "auc"],
+    "num_leaves": 63, "max_depth": 7, "learning_rate": 0.05,
+    "min_data_in_leaf": 50, "feature_fraction": 0.8, "bagging_fraction": 0.8,
+    "bagging_freq": 5, "lambda_l1": 0.1, "lambda_l2": 1.0, "seed": 42,
     "is_unbalanced": True,
 }
 
@@ -761,9 +772,18 @@ def load_proform_data(data_dir: Path) -> tuple[list[list[float]], list[int], lis
                             continue
 
                         X_list.append(features)
-                        y_win.append(1 if pos == 1 else 0)
+                        # LambdaRank relevance: 3=win, 2=2nd, 1=3rd(or 2nd in NTD), 0=unplaced
                         place_cutoff = 2 if field_size <= 7 else 3
-                        y_place.append(1 if pos <= place_cutoff else 0)
+                        if pos == 1:
+                            relevance = 3
+                        elif pos == 2:
+                            relevance = 2
+                        elif pos <= place_cutoff:
+                            relevance = 1
+                        else:
+                            relevance = 0
+                        y_win.append(relevance)
+                        y_place.append(relevance)  # same label, kept for compat
                         race_ids.append(race_id_str)
                         dates.append(race_date)
                         total_runners += 1
@@ -886,9 +906,17 @@ def load_live_db_data(db_path: Path) -> tuple[list[list[float]], list[int], list
                 continue
 
             X_list.append(features)
-            y_win.append(1 if pos == 1 else 0)
             place_cutoff = 2 if field_size <= 7 else 3
-            y_place.append(1 if pos <= place_cutoff else 0)
+            if pos == 1:
+                relevance = 3
+            elif pos == 2:
+                relevance = 2
+            elif pos <= place_cutoff:
+                relevance = 1
+            else:
+                relevance = 0
+            y_win.append(relevance)
+            y_place.append(relevance)
             race_ids.append(race_id)
             dates.append(race_date)
             total_runners += 1
@@ -905,15 +933,46 @@ def load_live_db_data(db_path: Path) -> tuple[list[list[float]], list[int], list
 # ── Training & evaluation (reused from v1) ──────────────────────────
 
 
-def train_model(X_train, y_train, X_val, y_val, label: str) -> lgb.Booster:
+def _compute_query_groups(race_ids: np.ndarray) -> list[int]:
+    """Compute query group sizes for LambdaRank from race_id array.
+
+    LambdaRank requires runners to be contiguous by race and a group
+    array specifying how many runners are in each race.
+    """
+    groups = []
+    current_rid = None
+    count = 0
+    for rid in race_ids:
+        if rid != current_rid:
+            if current_rid is not None:
+                groups.append(count)
+            current_rid = rid
+            count = 1
+        else:
+            count += 1
+    if current_rid is not None:
+        groups.append(count)
+    return groups
+
+
+def train_model(X_train, y_train, X_val, y_val, label: str,
+                train_groups: list[int] | None = None,
+                val_groups: list[int] | None = None) -> lgb.Booster:
     print(f"\n{'='*60}")
     print(f"Training {label} model")
-    print(f"  Train: {len(y_train)} samples, {y_train.sum()} positives ({y_train.mean()*100:.1f}%)")
-    print(f"  Val:   {len(y_val)} samples, {y_val.sum()} positives ({y_val.mean()*100:.1f}%)")
+    n_pos = (y_train > 0).sum()
+    print(f"  Train: {len(y_train)} samples, {n_pos} with relevance>0 ({n_pos/len(y_train)*100:.1f}%)")
+    n_vpos = (y_val > 0).sum()
+    print(f"  Val:   {len(y_val)} samples, {n_vpos} with relevance>0 ({n_vpos/len(y_val)*100:.1f}%)")
+    if train_groups:
+        print(f"  Train groups: {len(train_groups)} races (avg {len(y_train)/len(train_groups):.1f} runners)")
+        print(f"  Val groups:   {len(val_groups)} races")
     print(f"{'='*60}")
 
-    train_data = lgb.Dataset(X_train, label=y_train, feature_name=FEATURE_NAMES, free_raw_data=False)
-    val_data = lgb.Dataset(X_val, label=y_val, feature_name=FEATURE_NAMES, free_raw_data=False)
+    train_data = lgb.Dataset(X_train, label=y_train, group=train_groups,
+                             feature_name=FEATURE_NAMES, free_raw_data=False)
+    val_data = lgb.Dataset(X_val, label=y_val, group=val_groups,
+                           feature_name=FEATURE_NAMES, free_raw_data=False)
 
     callbacks = [
         lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=True),
@@ -934,61 +993,56 @@ def train_model(X_train, y_train, X_val, y_val, label: str) -> lgb.Booster:
 
 
 def evaluate_model(model, X, y, race_ids, label: str) -> dict:
-    probs = model.predict(X)
+    """Evaluate LambdaRank model using race-level ranking accuracy.
 
-    ll = log_loss(y, probs)
-    auc = roc_auc_score(y, probs)
+    y contains relevance labels: 3=winner, 2=2nd, 1=3rd, 0=unplaced.
+    Model outputs raw ranking scores (higher = predicted to finish higher).
+    """
+    scores = model.predict(X)
 
     print(f"\n  {label} Results:")
-    print(f"    Log Loss: {ll:.4f}")
-    print(f"    AUC:      {auc:.4f}")
 
-    # Race-level accuracy
+    # Race-level accuracy: does the model's top-ranked runner have the highest relevance?
     race_groups = defaultdict(list)
     for i, rid in enumerate(race_ids):
-        race_groups[rid].append((probs[i], y[i], i))
+        race_groups[rid].append((scores[i], y[i], i))
 
     top1_correct = 0
     top3_correct = 0
     top5_correct = 0
+    place_top1_correct = 0  # top-ranked runner placed (relevance >= 1)
     total_races = 0
 
     for rid, entries in race_groups.items():
-        entries.sort(key=lambda x: -x[0])
+        entries.sort(key=lambda x: -x[0])  # sort by model score descending
         total_races += 1
-        if entries[0][1] == 1:
+        # Winner = relevance 3
+        if entries[0][1] == 3:
             top1_correct += 1
-        if any(e[1] == 1 for e in entries[:3]):
+        if any(e[1] == 3 for e in entries[:3]):
             top3_correct += 1
-        if any(e[1] == 1 for e in entries[:5]):
+        if any(e[1] == 3 for e in entries[:5]):
             top5_correct += 1
+        # Place = relevance >= 1
+        if entries[0][1] >= 1:
+            place_top1_correct += 1
 
     top1_acc = top1_correct / total_races if total_races else 0
     top3_acc = top3_correct / total_races if total_races else 0
     top5_acc = top5_correct / total_races if total_races else 0
+    place1_acc = place_top1_correct / total_races if total_races else 0
 
-    print(f"    Races:    {total_races}")
-    print(f"    Top-1:    {top1_acc:.1%} ({top1_correct}/{total_races})")
-    print(f"    Top-3:    {top3_acc:.1%} ({top3_correct}/{total_races})")
-    print(f"    Top-5:    {top5_acc:.1%} ({top5_correct}/{total_races})")
-
-    # Calibration bands
-    print(f"\n    Calibration:")
-    bands = [(0, 0.05), (0.05, 0.10), (0.10, 0.20), (0.20, 0.30), (0.30, 0.50), (0.50, 1.0)]
-    for lo, hi in bands:
-        mask = (probs >= lo) & (probs < hi)
-        if mask.sum() > 0:
-            predicted = probs[mask].mean()
-            actual = y[mask].mean()
-            print(f"      [{lo:.2f}-{hi:.2f}): predicted={predicted:.3f}, actual={actual:.3f}, "
-                  f"n={mask.sum()}, gap={actual - predicted:+.3f}")
+    print(f"    Races:         {total_races}")
+    print(f"    Win Top-1:     {top1_acc:.1%} ({top1_correct}/{total_races})")
+    print(f"    Win Top-3:     {top3_acc:.1%} ({top3_correct}/{total_races})")
+    print(f"    Win Top-5:     {top5_acc:.1%} ({top5_correct}/{total_races})")
+    print(f"    Place Top-1:   {place1_acc:.1%} ({place_top1_correct}/{total_races})")
 
     return {
-        "log_loss": round(ll, 4),
-        "auc": round(auc, 4),
         "top1_accuracy": round(top1_acc, 4),
         "top3_accuracy": round(top3_acc, 4),
         "top5_accuracy": round(top5_acc, 4),
+        "place_top1_accuracy": round(place1_acc, 4),
         "n_races": total_races,
         "n_samples": len(y),
     }
@@ -1189,8 +1243,7 @@ def _deploy_model() -> bool:
     scp_base = ["scp", "-i", str(ssh_key)]
 
     files_to_deploy = [
-        str(MODEL_DIR / "lgbm_win_model.txt"),
-        str(MODEL_DIR / "lgbm_place_model.txt"),
+        str(MODEL_DIR / "lgbm_rank_model.txt"),
         str(MODEL_DIR / "lgbm_metadata.json"),
     ]
 
@@ -1338,47 +1391,26 @@ def main():
     else:
         best_params = None
 
-    # ── Train models ──
-    if best_params and "Win" in best_params:
-        win_lgbm = best_params["Win"]
-    else:
-        win_lgbm = LGBM_PARAMS
+    # ── Compute query groups for LambdaRank ──
+    # Runners must be contiguous by race. Data is loaded race-by-race so
+    # it should already be grouped, but verify and compute group sizes.
+    train_rids = np.array(rids_tr)
+    val_rids = np.array(rids_val)
+    test_rids = np.array(rids_test)
+    train_groups = _compute_query_groups(train_rids)
+    val_groups = _compute_query_groups(val_rids)
+    test_groups = _compute_query_groups(test_rids)
 
-    if best_params and "Place" in best_params:
-        place_lgbm = best_params["Place"]
-    else:
-        place_lgbm = LGBM_PARAMS
+    print(f"  Query groups: train={len(train_groups)} races, val={len(val_groups)}, test={len(test_groups)}")
 
-    win_model = train_model(X_tr, yw_tr, X_val, yw_val, "Win")
-    if best_params:
-        # Retrain with tuned params
-        print("\n  Re-training Win with tuned params...")
-        train_data = lgb.Dataset(X_tr, label=yw_tr, feature_name=FEATURE_NAMES, free_raw_data=False)
-        val_data = lgb.Dataset(X_val, label=yw_val, feature_name=FEATURE_NAMES, free_raw_data=False)
-        callbacks = [lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=True), lgb.log_evaluation(period=100)]
-        win_model = lgb.train(win_lgbm, train_data, num_boost_round=NUM_BOOST_ROUND,
-                              valid_sets=[train_data, val_data], valid_names=["train", "val"],
-                              callbacks=callbacks)
-    print_feature_importance(win_model, "Win")
+    # ── Train single LambdaRank model ──
+    rank_model = train_model(X_tr, yw_tr, X_val, yw_val, "Rank",
+                             train_groups=train_groups, val_groups=val_groups)
+    print_feature_importance(rank_model, "Rank")
 
-    print("\n--- Win Model Evaluation ---")
-    val_metrics_win = evaluate_model(win_model, X_val, yw_val, rids_val, "Validation")
-    test_metrics_win = evaluate_model(win_model, X_test, yw_test, rids_test, "Test")
-
-    place_model = train_model(X_tr, yp_tr, X_val, yp_val, "Place")
-    if best_params:
-        print("\n  Re-training Place with tuned params...")
-        train_data = lgb.Dataset(X_tr, label=yp_tr, feature_name=FEATURE_NAMES, free_raw_data=False)
-        val_data = lgb.Dataset(X_val, label=yp_val, feature_name=FEATURE_NAMES, free_raw_data=False)
-        callbacks = [lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=True), lgb.log_evaluation(period=100)]
-        place_model = lgb.train(place_lgbm, train_data, num_boost_round=NUM_BOOST_ROUND,
-                                valid_sets=[train_data, val_data], valid_names=["train", "val"],
-                                callbacks=callbacks)
-    print_feature_importance(place_model, "Place")
-
-    print("\n--- Place Model Evaluation ---")
-    val_metrics_place = evaluate_model(place_model, X_val, yp_val, rids_val, "Validation")
-    test_metrics_place = evaluate_model(place_model, X_test, yp_test, rids_test, "Test")
+    print("\n--- Rank Model Evaluation ---")
+    val_metrics = evaluate_model(rank_model, X_val, yw_val, rids_val, "Validation")
+    test_metrics = evaluate_model(rank_model, X_test, yw_test, rids_test, "Test")
 
     # ── Auto mode: compare with existing model before saving ──
     if args.auto:
@@ -1387,48 +1419,39 @@ def main():
             with open(meta_path) as f:
                 old_meta = json.load(f)
 
-            # Compare on VALIDATION metrics (same distribution as training).
-            # Test metrics are unreliable when test set is from a different source
-            # (e.g. live DB vs Proform training data).
-            old_win_auc = old_meta.get("win_model", {}).get("val_metrics", {}).get("auc", 0)
-            old_place_auc = old_meta.get("place_model", {}).get("val_metrics", {}).get("auc", 0)
-            new_win_auc = val_metrics_win["auc"]
-            new_place_auc = val_metrics_place["auc"]
-
-            # Average AUC across both models as the comparison metric
-            old_avg = (old_win_auc + old_place_auc) / 2
-            new_avg = (new_win_auc + new_place_auc) / 2
+            # Compare on validation top-1 accuracy (model-agnostic metric).
+            old_top1 = old_meta.get("rank_model", old_meta.get("win_model", {})).get("val_metrics", {}).get("top1_accuracy", 0)
+            new_top1 = val_metrics["top1_accuracy"]
 
             print(f"\n{'='*60}")
-            print(f"  AUTO RETRAIN — Model Comparison (validation metrics)")
+            print(f"  AUTO RETRAIN — Model Comparison (validation top-1)")
             print(f"{'='*60}")
-            print(f"  Old model:  Win AUC={old_win_auc:.4f}  Place AUC={old_place_auc:.4f}  Avg={old_avg:.4f}")
-            print(f"  New model:  Win AUC={new_win_auc:.4f}  Place AUC={new_place_auc:.4f}  Avg={new_avg:.4f}")
+            print(f"  Old model: top1={old_top1:.1%}")
+            print(f"  New model: top1={new_top1:.1%}")
 
-            if new_avg <= old_avg:
-                print(f"\n  NEW MODEL DID NOT IMPROVE (avg AUC {new_avg:.4f} <= {old_avg:.4f})")
+            if new_top1 <= old_top1:
+                print(f"\n  NEW MODEL DID NOT IMPROVE ({new_top1:.1%} <= {old_top1:.1%})")
                 print(f"  Keeping existing model. No deployment.")
                 print(f"{'='*60}")
                 sys.exit(0)
             else:
-                print(f"\n  NEW MODEL IMPROVED! (avg AUC {new_avg:.4f} > {old_avg:.4f}, +{new_avg - old_avg:.4f})")
+                print(f"\n  NEW MODEL IMPROVED! ({new_top1:.1%} > {old_top1:.1%})")
 
-    # ── Save models ──
+    # ── Save model ──
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-    win_path = MODEL_DIR / "lgbm_win_model.txt"
-    place_path = MODEL_DIR / "lgbm_place_model.txt"
+    rank_path = MODEL_DIR / "lgbm_rank_model.txt"
     meta_path = MODEL_DIR / "lgbm_metadata.json"
 
-    win_model.save_model(str(win_path))
-    place_model.save_model(str(place_path))
+    rank_model.save_model(str(rank_path))
 
     data_sources = ["Proform JSON"]
     if live_count > 0:
         data_sources.append(f"Live DB ({live_count:,} runners)")
 
     metadata = {
-        "version": 2,
+        "version": 3,
+        "model_type": "lambdarank",
         "feature_names": FEATURE_NAMES,
         "num_features": NUM_FEATURES,
         "training_date": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1441,20 +1464,13 @@ def main():
         "val_samples": int(val_mask.sum()),
         "test_samples": int(test_mask.sum()),
         "temporal_split": {"train": f"< {val_cutoff}", "val": f"{val_cutoff} to {test_cutoff}", "test": f">= {test_cutoff}"},
-        "lgbm_params_default": LGBM_PARAMS,
-        "lgbm_params_win": {k: v for k, v in win_lgbm.items() if k != "verbose"},
-        "lgbm_params_place": {k: v for k, v in place_lgbm.items() if k != "verbose"},
+        "lgbm_params": {k: v for k, v in LGBM_PARAMS.items() if k != "verbose"},
         "tuned": args.tune and not args.auto,
         "auto_retrain": args.auto,
-        "win_model": {
-            "best_iteration": win_model.best_iteration,
-            "val_metrics": val_metrics_win,
-            "test_metrics": test_metrics_win,
-        },
-        "place_model": {
-            "best_iteration": place_model.best_iteration,
-            "val_metrics": val_metrics_place,
-            "test_metrics": test_metrics_place,
+        "rank_model": {
+            "best_iteration": rank_model.best_iteration,
+            "val_metrics": val_metrics,
+            "test_metrics": test_metrics,
         },
     }
 
@@ -1462,9 +1478,8 @@ def main():
         json.dump(metadata, f, indent=2)
 
     print(f"\n{'='*60}")
-    print(f"Models saved!")
-    print(f"  Win:      {win_path} ({win_path.stat().st_size / 1024:.0f} KB)")
-    print(f"  Place:    {place_path} ({place_path.stat().st_size / 1024:.0f} KB)")
+    print(f"Model saved!")
+    print(f"  Rank:     {rank_path} ({rank_path.stat().st_size / 1024:.0f} KB)")
     print(f"  Metadata: {meta_path}")
     print(f"{'='*60}")
 
