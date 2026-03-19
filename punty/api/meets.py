@@ -474,7 +474,14 @@ async def get_race_probabilities(
     mi_setting = mi_result.scalar_one_or_none()
     market_influence = float(mi_setting.value) if mi_setting and mi_setting.value else None
 
-    probs = calculate_race_probabilities(active_runners, race, meeting, market_influence=market_influence)
+    mmi_result = await db.execute(
+        select(AppSettings).where(AppSettings.key == "maiden_market_influence")
+    )
+    mmi_setting = mmi_result.scalar_one_or_none()
+    maiden_market_influence = float(mmi_setting.value) if mmi_setting and mmi_setting.value else None
+
+    probs = calculate_race_probabilities(active_runners, race, meeting, market_influence=market_influence,
+                                         maiden_market_influence=maiden_market_influence)
 
     return {
         "meeting_id": meeting_id,

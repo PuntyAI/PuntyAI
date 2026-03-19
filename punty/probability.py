@@ -568,6 +568,7 @@ def _use_lightgbm() -> bool:
 def _calculate_lgbm_probabilities(
     active: list, race: Any, meeting: Any, pool: float = DEFAULT_POOL,
     market_influence: float | None = None,
+    maiden_market_influence: float | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """LGBM-rank + market-calibrate probability engine.
 
@@ -692,10 +693,19 @@ def _calculate_lgbm_probabilities(
     # Pure LGBM (1.0) gives +$7,838 but breaks calibration completely.
     # Now configurable via Settings → lgbm_market_influence (0.0–1.0).
     # market_influence=0.45 means LGBM_RANK_INFLUENCE=0.55 (the old default).
-    if market_influence is not None:
-        LGBM_RANK_INFLUENCE = max(0.0, min(1.0, 1.0 - market_influence))
+    #
+    # Maiden races use a separate setting (maiden_market_influence) because
+    # LGBM has less training data for maidens — higher market weight compensates.
+    race_class = (_get(race, "class_") or "").lower()
+    is_maiden = "maiden" in race_class or "mdn" in race_class
+    if is_maiden and maiden_market_influence is not None:
+        effective_influence = maiden_market_influence
+        logger.info(f"Maiden race — using maiden market influence: {effective_influence:.0%}")
+    elif market_influence is not None:
+        effective_influence = market_influence
     else:
-        LGBM_RANK_INFLUENCE = 0.88  # Default: 12% market, 88% LGBM
+        effective_influence = 0.12  # Default: 12% market, 88% LGBM
+    LGBM_RANK_INFLUENCE = max(0.0, min(1.0, 1.0 - effective_influence))
 
     # Build rank-position weights: exponential decay from top to bottom.
     # Top runner gets highest weight, bottom gets lowest.
@@ -983,6 +993,7 @@ def calculate_race_probabilities(
     dl_patterns: list[dict] | None = None,
     _skip_lgbm: bool = False,
     market_influence: float | None = None,
+    maiden_market_influence: float | None = None,
 ) -> dict[str, "RunnerProbability"]:
     """Calculate probabilities for all active runners in a race.
 
@@ -1013,7 +1024,8 @@ def calculate_race_probabilities(
     # Uses market odds for calibrated probabilities, tissue as tiebreaker.
     if not _skip_lgbm and _use_lightgbm():
         result = _calculate_lgbm_probabilities(active, race, meeting, pool,
-                                                market_influence=market_influence)
+                                                market_influence=market_influence,
+                                                maiden_market_influence=maiden_market_influence)
         if result:
             return result
         logger.warning("LightGBM prediction failed, falling back")

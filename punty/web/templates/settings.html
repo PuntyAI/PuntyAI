@@ -480,6 +480,20 @@
                     </div>
                 </div>
 
+                <div style="border-top: 1px solid rgba(0,0,0,0.06); padding-top: 0.5rem;">
+                    <label class="block text-xs text-gray-500 mb-1">Maiden Market Influence: <span id="mmi-label" class="font-bold text-gray-700">{{ settings.get('maiden_market_influence', {}).get('value', '0.40') | float * 100 | round }}%</span></label>
+                    <input type="range" id="prob_maiden_market_influence" min="0" max="100" step="1"
+                           value="{{ settings.get('maiden_market_influence', {}).get('value', '0.40') | float * 100 | round }}"
+                           oninput="document.getElementById('mmi-label').textContent = this.value + '%'; document.getElementById('maiden-lgbm-label').textContent = (100 - this.value) + '%'"
+                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-punty-coral">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>0% Pure LGBM</span>
+                        <span>LGBM weight: <span id="maiden-lgbm-label" class="font-bold text-gray-600">{{ (100 - settings.get('maiden_market_influence', {}).get('value', '0.40') | float * 100) | round }}%</span></span>
+                        <span>100% Pure Market</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">Overrides market influence for Maiden races only (less LGBM data available)</p>
+                </div>
+
                 <div class="flex items-center justify-between pt-2" style="border-top: 1px solid rgba(0,0,0,0.06);">
                     <div>
                         <span class="text-sm text-gray-600">Confidence Boost</span>
@@ -1194,9 +1208,12 @@ async function saveBetfairSettings() {
 async function saveProbabilitySettings() {
     const marketPct = document.getElementById('prob_market_influence').value;
     const marketVal = (parseFloat(marketPct) / 100).toFixed(2);
+    const maidenPct = document.getElementById('prob_maiden_market_influence').value;
+    const maidenVal = (parseFloat(maidenPct) / 100).toFixed(2);
     const boostEnabled = document.getElementById('prob_confidence_boost').checked ? 'true' : 'false';
     await saveApiKeys('probability', {
         lgbm_market_influence: marketVal,
+        maiden_market_influence: maidenVal,
         confidence_boost_enabled: boostEnabled,
     });
     const status = document.getElementById('prob-save-status');

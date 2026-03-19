@@ -65,6 +65,7 @@ class ContextBuilder:
 
         # Load market influence setting (0.0 = pure LGBM, 1.0 = pure market)
         self._market_influence = None
+        self._maiden_market_influence = None
         self._confidence_boost_enabled = True
         try:
             mi_result = await self.db.execute(
@@ -75,6 +76,14 @@ class ContextBuilder:
                 self._market_influence = float(mi_setting.value)
                 logger.info(f"Market influence: {self._market_influence:.0%} "
                            f"(LGBM: {1.0 - self._market_influence:.0%})")
+
+            mmi_result = await self.db.execute(
+                select(AppSettings).where(AppSettings.key == "maiden_market_influence")
+            )
+            mmi_setting = mmi_result.scalar_one_or_none()
+            if mmi_setting and mmi_setting.value:
+                self._maiden_market_influence = float(mmi_setting.value)
+                logger.info(f"Maiden market influence: {self._maiden_market_influence:.0%}")
 
             cb_result = await self.db.execute(
                 select(AppSettings).where(AppSettings.key == "confidence_boost_enabled")
@@ -573,6 +582,7 @@ class ContextBuilder:
                 weights=getattr(self, "_probability_weights", None),
                 dl_patterns=getattr(self, "_dl_patterns", None),
                 market_influence=getattr(self, "_market_influence", None),
+                maiden_market_influence=getattr(self, "_maiden_market_influence", None),
             )
 
             # Build median odds lookup from ORM runners (PointsBet/Betfair priority)
@@ -926,6 +936,12 @@ class ContextBuilder:
                 mi_setting = mi_result.scalar_one_or_none()
                 if mi_setting and mi_setting.value:
                     self._market_influence = float(mi_setting.value)
+                mmi_result = await self.db.execute(
+                    select(AppSettings).where(AppSettings.key == "maiden_market_influence")
+                )
+                mmi_setting = mmi_result.scalar_one_or_none()
+                if mmi_setting and mmi_setting.value:
+                    self._maiden_market_influence = float(mmi_setting.value)
             except Exception:
                 pass
 

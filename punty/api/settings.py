@@ -427,7 +427,7 @@ PROVIDER_KEYS = {
         "betfair_max_kelly_fraction", "betfair_min_calibrated_pp",
     ],
     "probability": [
-        "lgbm_market_influence", "confidence_boost_enabled",
+        "lgbm_market_influence", "maiden_market_influence", "confidence_boost_enabled",
     ],
 }
 
