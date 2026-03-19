@@ -134,7 +134,8 @@ def _correct_sequence_legs(raw_content: str, pre_built_sequences: list) -> str:
 # Regex to match exotic lines in AI output
 # e.g. "Exacta: 3, 4 — $15" or "Trifecta Box: 3, 9, 6 — $20"
 _EXOTIC_LINE_RE = re.compile(
-    r"(Exacta|Quinella|Trifecta\s*Box|Trifecta|First\s*4)\s*:\s*([\d,\s]+)\s*[—\-–]\s*\$(\d+)",
+    r"(Exacta\s*Standout|Exacta|Quinella\s*Box|Quinella|Trifecta\s*(?:Box|Standout)|Trifecta|First\s*4(?:\s*Box)?)"
+    r"\s*:\s*([\d,\s/No.]+)\s*[—\-–]\s*\$(\d+)",
     re.IGNORECASE,
 )
 # Regex to match race headers: "Race 2 – Herald Sun Plate" or "## Race 2"
@@ -188,9 +189,9 @@ def _correct_exotic_runners(raw_content: str, races: list) -> str:
         if not em:
             continue
 
-        # Parse AI's runners
-        ai_runners_str = em.group(2).strip()
-        ai_runners = [int(x.strip()) for x in ai_runners_str.split(",") if x.strip().isdigit()]
+        # Parse AI's runners (strip "No." prefixes the AI sometimes adds)
+        ai_runners_str = re.sub(r"No\.?\s*", "", em.group(2).strip())
+        ai_runners = [int(x) for x in re.findall(r"\d+", ai_runners_str)]
         ai_runners_set = set(ai_runners)
         stake = int(em.group(3))
 

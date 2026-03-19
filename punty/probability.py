@@ -3266,6 +3266,7 @@ def calculate_exotic_combinations(
     # Per-type value thresholds based on actual P&L data
     VALUE_THRESHOLDS = {
         "Quinella": 1.2,           # High-probability play, both runners in selections
+        "Quinella Box": 1.2,       # 3-runner box, same threshold as straight quinella
         "Exacta": 1.1,             # Lowered — wider position 2 pool needs lower bar
         "Trifecta Standout": 1.1,  # Anchored on rank 1 — lower bar like Exacta
         "Trifecta Box": 1.2,       # Box = more combos, need stronger value signal
@@ -3334,7 +3335,7 @@ def calculate_exotic_combinations(
 
         if max(r["win_prob"] for r in top3) >= MIN_LEAD_PROB:
             results.append(ExoticCombination(
-                exotic_type="Quinella",
+                exotic_type="Quinella Box",
                 runners=[r["saddlecloth"] for r in top3],
                 runner_names=[r.get("horse_name", "") for r in top3],
                 estimated_probability=round(box_our_prob, 6),

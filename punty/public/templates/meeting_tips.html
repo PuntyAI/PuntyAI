@@ -1441,7 +1441,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (el.classList && el.classList.contains('exotic-title')) {
                     exoticTitle = el;
                 }
-                if (el.tagName === 'P' && /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))\s*:/i.test(el.textContent.trim())) {
+                if (el.tagName === 'P' && /^(Trifecta|Exacta|Quinella|First\s*(?:Four|4))(?:\s+(?:Box|Standout))?\s*:/i.test(el.textContent.trim())) {
                     exoticLine = el;
                 }
             }
@@ -1454,7 +1454,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var exoticParas = body.querySelectorAll('p');
             for (var ep = 0; ep < exoticParas.length; ep++) {
                 var eTxt = exoticParas[ep].textContent.trim();
-                var exRe = /^(Trifecta\s+Box|Trifecta\s+Standout|Exacta\s+Standout|Exacta|Quinella|First\s*(?:Four|4))\s*:\s*(.+?)\s*[—–\-]\s*\$(\d+(?:\.\d+)?)/i;
+                var exRe = /^(Trifecta\s+Box|Trifecta\s+Standout|Exacta\s+Standout|Exacta|Quinella\s+Box|Quinella|First\s*(?:Four|4)(?:\s+Box)?)\s*:\s*(.+?)\s*[—–\-]\s*\$(\d+(?:\.\d+)?)/i;
                 var exM = exRe.exec(eTxt);
                 if (exM && !exoticParas[ep].querySelector('.flexi-badge')) {
                     var exType = exM[1].toLowerCase().replace(/\s+/g, ' ');
