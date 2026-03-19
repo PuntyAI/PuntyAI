@@ -278,7 +278,7 @@ _personality_cache = _PersonalityCache()
 class ContentGenerator:
     """Orchestrates content generation with context and prompts."""
 
-    def __init__(self, db: AsyncSession, model: str = "gpt-5.4"):
+    def __init__(self, db: AsyncSession, model: str = "gpt-5.4-mini"):
         self.db = db
         from punty.config import settings as app_settings
         if app_settings.mock_external:
