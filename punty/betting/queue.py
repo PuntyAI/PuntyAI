@@ -186,12 +186,16 @@ async def populate_bet_queue(
         ).order_by(Pick.race_number)
     )
     all_picks = result.scalars().all()
-    # Select highest PP pick per race (best candidate from each race)
+    # Select highest WIN PROBABILITY pick per race.
+    # WP is context-aware (v7 LambdaRank with 102 interaction features) and
+    # WP >= 22% yields 75.4% place SR at 18.4% ROI on 31-day backtest.
+    # Runners with highest WP reliably place — simpler and more consistent
+    # than using the Harville-derived PP which has normalisation artifacts.
     best_by_race: dict[int, Pick] = {}
     for pick in all_picks:
-        pp = pick.place_probability or 0
+        wp = pick.win_probability or 0
         rn = pick.race_number
-        if rn not in best_by_race or pp > (best_by_race[rn].place_probability or 0):
+        if rn not in best_by_race or wp > (best_by_race[rn].win_probability or 0):
             best_by_race[rn] = pick
     race_picks = list(best_by_race.values())
     if not race_picks:
@@ -265,20 +269,16 @@ async def populate_bet_queue(
             logger.info(f"Betfair queue BLOCKED: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
             continue
 
-        # ── Context-aware PP threshold ──
-        # Raise PP floor for harder race contexts where upsets are more likely.
-        pp = pick.place_probability or 0
-        distance = race.distance or 0
-        tc = (meeting_tc or "").lower()
-
-        # Staying races (2000m+): require PP >= 70% (harder to predict)
-        if distance >= 2000 and pp < 0.70:
-            logger.info(f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} — staying {distance}m, PP {pp:.0%} < 70%")
-            continue
-
-        # Soft/heavy track: require PP >= 65% (more upsets)
-        if ("soft" in tc or "heavy" in tc) and pp < 0.65:
-            logger.info(f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} — {tc}, PP {pp:.0%} < 65%")
+        # ── Win probability floor ──
+        # WP >= 22% yields 75.4% place SR at 18.4% ROI (31-day backtest).
+        # WP is already context-aware via v7 LambdaRank (102 interaction features),
+        # so a flat threshold works across all race types.
+        wp = pick.win_probability or 0
+        if wp < 0.22:
+            logger.info(
+                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                f"— WP {wp:.0%} < 22%"
+            )
             continue
 
         eligible.append((pick, race))
@@ -286,8 +286,8 @@ async def populate_bet_queue(
     if not eligible:
         return 0
 
-    # Rank by PP across the entire meeting — take the top N
-    eligible.sort(key=lambda x: x[0].place_probability or 0, reverse=True)
+    # Rank by WIN PROBABILITY across the entire meeting — take the top N
+    eligible.sort(key=lambda x: x[0].win_probability or 0, reverse=True)
     top_picks = eligible[:slots_remaining]
 
     queued = 0
