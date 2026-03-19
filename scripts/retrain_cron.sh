@@ -36,4 +36,21 @@ else
     echo "$LOG_PREFIX Retrain exited with code $RETRAIN_EXIT (model not improved or error)"
 fi
 
+# Retrain Betfair meta-model (bet selector)
+echo "$LOG_PREFIX Starting Betfair meta-model retrain..."
+python3 scripts/train_bf_meta.py \
+    --data-dir /opt/puntyai/proform_data \
+    2>&1
+
+META_EXIT=$?
+
+if [ $META_EXIT -eq 0 ]; then
+    echo "$LOG_PREFIX Meta-model retrain completed successfully"
+    # Restart to pick up new meta-model
+    systemctl restart puntyai
+    echo "$LOG_PREFIX Service restarted with new meta-model"
+else
+    echo "$LOG_PREFIX Meta-model retrain exited with code $META_EXIT"
+fi
+
 echo "$LOG_PREFIX Done"
