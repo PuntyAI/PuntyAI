@@ -171,6 +171,11 @@ async def populate_bet_queue(
     if auto_enabled.lower() != "true":
         return 0
 
+    # Load meeting for track condition context
+    meeting_result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = meeting_result.scalar_one_or_none()
+    meeting_tc = meeting.track_condition if meeting else ""
+
     # Get best pick per race by PP — consider all 4 ranked picks.
     result = await db.execute(
         select(Pick).where(
@@ -237,7 +242,7 @@ async def populate_bet_queue(
         if existing.scalar_one_or_none():
             continue
 
-        # Check runner not scratched
+        # Check runner not scratched + load runner data for context filters
         runner_result = await db.execute(
             select(Runner).where(
                 Runner.race_id == race.id,
@@ -247,6 +252,33 @@ async def populate_bet_queue(
         runner = runner_result.scalar_one_or_none()
         if runner and runner.scratched:
             logger.info(f"Skipping bet for {pick.horse_name} R{pick.race_number}: scratched")
+            continue
+
+        # ── Context-aware queue filters ──
+        # Hard blocks only for data dead zones where LGBM can't help.
+        # For everything else, trust the LGBM's PP — the v7 model with
+        # 102 context interaction features already penalises wide barriers,
+        # backmarkers, long spells etc. via learned patterns.
+
+        # 6yo+: 0% SR on 54 Betfair bets — genuine dead zone
+        if runner and runner.horse_age and runner.horse_age >= 6:
+            logger.info(f"Betfair queue BLOCKED: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
+            continue
+
+        # ── Context-aware PP threshold ──
+        # Raise PP floor for harder race contexts where upsets are more likely.
+        pp = pick.place_probability or 0
+        distance = race.distance or 0
+        tc = (meeting_tc or "").lower()
+
+        # Staying races (2000m+): require PP >= 70% (harder to predict)
+        if distance >= 2000 and pp < 0.70:
+            logger.info(f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} — staying {distance}m, PP {pp:.0%} < 70%")
+            continue
+
+        # Soft/heavy track: require PP >= 65% (more upsets)
+        if ("soft" in tc or "heavy" in tc) and pp < 0.65:
+            logger.info(f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} — {tc}, PP {pp:.0%} < 65%")
             continue
 
         eligible.append((pick, race))

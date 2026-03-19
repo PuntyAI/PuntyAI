@@ -146,11 +146,15 @@ class TestPopulateBetQueue:
         enabled_result = MagicMock()
         enabled_result.scalar_one_or_none.return_value = enabled_setting
 
-        # Second call returns empty picks
+        # Second call returns meeting (for track condition context)
+        meeting_result = MagicMock()
+        meeting_result.scalar_one_or_none.return_value = MagicMock(track_condition="Good 4")
+
+        # Third call returns empty picks
         empty_result = MagicMock()
         empty_result.scalars.return_value.all.return_value = []
 
-        mock_db.execute = AsyncMock(side_effect=[enabled_result, empty_result])
+        mock_db.execute = AsyncMock(side_effect=[enabled_result, meeting_result, empty_result])
         count = await populate_bet_queue(mock_db, "sale-2026-03-02", "content-1")
         assert count == 0
 
