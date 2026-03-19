@@ -1242,10 +1242,12 @@ def _select_exotic(
         if ec_type in ("Trifecta Standout", "Trifecta Box") and value < 1.5:
             continue
 
-        # Score: probability × value² — value-squared so high-dividend types
-        # (Trifecta VR=3.0 → 9x, First4 VR=3.5 → 12.25x) can overcome
-        # Quinella's inherent probability advantage (3-5x higher raw prob)
-        score = raw_prob * (value ** 2)
+        # Score: probability × capped_value² — cap value at 2.5x so extreme-value
+        # roughie combos (e.g. VR=6.8x at 8% prob) can't dominate over higher-probability
+        # plays with moderate value (e.g. quinella at 12% prob, VR=2.2x).
+        # Without cap, VR=6.8 scores 46x vs VR=2.2 at 4.8x — roughie always wins.
+        capped_value = min(value, 2.5)
+        score = raw_prob * (capped_value ** 2)
 
         # Preferred type bonus
         if ec_type in preferred_types:
