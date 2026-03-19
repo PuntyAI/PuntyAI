@@ -112,10 +112,27 @@ FEATURE_NAMES = [
     "peak_age_sex_score",     # peak performance curve: 4-5yo gelding=1.0, 3yo filly=0.7, 7+yo=0.6
     # ── Odds flucs / smart money (1) ──
     "flucs_direction",        # -1=drifting, 0=stable, 1=firming (from odds_flucs array)
+    # ── v6: Context buckets (4) — ordinal-encoded for LightGBM tree splits ──
+    "distance_bucket",        # 1=sprint, 2=short, 3=middle, 4=classic, 5=staying
+    "track_cond_bucket",      # 1=firm, 2=good, 3=soft, 4=heavy, 5=synthetic
+    "class_bucket",           # 1=maiden, 2=restricted, 3=benchmark, 4=handicap, 5=open, 6=group
+    "venue_type_code",        # 1=metro, 2=provincial, 3=country
+    # ── v6: Interaction features (10) — context-dependent factor weighting ──
+    "jockey_sr_x_cond",       # jockey_career_sr * horse's SR on today's track condition
+    "barrier_rel_x_dist",    # barrier_relative * distance decay (barrier matters more in sprints)
+    "form_score_x_cond",     # last5_score * horse's condition SR (form relevance by going)
+    "weight_diff_x_dist",    # weight_diff * distance/1400 (weight penalty grows with distance)
+    "settle_pos_x_dist",     # settle_pos * distance decay (pace advantage by distance)
+    "jockey_sr_x_class",     # jockey_career_sr * class_bucket/6 (jockey importance by class)
+    "barrier_rel_x_field",   # barrier_relative * field_size/16 (barrier in big fields)
+    "trainer_sr_x_venue",    # trainer_career_sr * venue_type/3 (trainer metro/country spec)
+    "form_trend_x_class",    # form_trend * class_bucket/6 (improving form by class)
+    "days_since_x_class",    # (days_since/365) * class_bucket/6 (freshness by class)
 ]
 
-NUM_FEATURES = len(FEATURE_NAMES)  # 67
-# Features the current trained model knows (v3). New features appended after this.
+NUM_FEATURES = len(FEATURE_NAMES)  # 102
+# Features the current trained model knows (v5). New features appended after this.
+NUM_FEATURES_V5 = 88
 NUM_FEATURES_V3 = 61
 
 
@@ -478,6 +495,125 @@ def _compute_peak_age_sex(age: float, is_gelding: float, is_mare: float) -> floa
     return score
 
 
+# ──────────────────────────────────────────────
+# Context bucket encoders (v6 interaction features)
+# ──────────────────────────────────────────────
+
+def _distance_bucket(distance: Any) -> float:
+    """Ordinal encode distance into racing context buckets."""
+    d = _safe_float(distance)
+    if d is None:
+        return 0.0
+    if d < 1200:
+        return 1.0   # sprint
+    if d < 1400:
+        return 2.0   # short
+    if d < 1800:
+        return 3.0   # middle
+    if d < 2200:
+        return 4.0   # classic
+    return 5.0        # staying
+
+
+def _track_cond_bucket(condition: Any) -> float:
+    """Ordinal encode track condition (wetness scale)."""
+    if not condition:
+        return 0.0
+    c = str(condition).lower().strip()
+    if "firm" in c:
+        return 1.0
+    if "good" in c:
+        return 2.0
+    if "soft" in c or "dead" in c:
+        return 3.0
+    if "heavy" in c:
+        return 4.0
+    if "synth" in c or "all weather" in c:
+        return 5.0
+    return 0.0
+
+
+def _class_bucket(race_class: Any) -> float:
+    """Ordinal encode race class."""
+    if not race_class:
+        return 0.0
+    c = str(race_class).lower().strip()
+    if "maiden" in c or "mdn" in c:
+        return 1.0
+    if any(x in c for x in ("restricted", "cg&e", "cg ", "c,g", "f&m")):
+        return 2.0
+    if "benchmark" in c or c.startswith("bm"):
+        return 3.0
+    if "handicap" in c or "hcp" in c:
+        return 4.0
+    if any(x in c for x in ("open", "wfa", "weight for age", "set weight")):
+        return 5.0
+    if any(x in c for x in ("group", "listed", "stakes")):
+        return 6.0
+    if "class" in c:
+        return 2.0
+    return 0.0
+
+
+def _venue_type_code(venue: Any) -> float:
+    """1=metro, 2=provincial, 3=country."""
+    if not venue:
+        return 0.0
+    try:
+        from punty.venues import is_metro
+        if is_metro(str(venue)):
+            return 1.0
+        return 3.0  # Default country (provincial detection would need separate list)
+    except Exception:
+        return 0.0
+
+
+def _condition_sr_for_today(
+    track_cond: float, good_sr: Any, soft_sr: Any, heavy_sr: Any, firm_sr: Any,
+) -> float:
+    """Select the horse's strike rate matching today's track condition."""
+    nan = float("nan")
+    if track_cond == 1.0:
+        return _f(firm_sr) if firm_sr is not None and firm_sr == firm_sr else _f(good_sr)
+    if track_cond == 2.0:
+        return _f(good_sr)
+    if track_cond == 3.0:
+        return _f(soft_sr)
+    if track_cond == 4.0:
+        return _f(heavy_sr)
+    return _f(good_sr)  # default to good
+
+
+def _dist_decay(distance_bucket: float) -> float:
+    """Distance decay factor — barrier/pace matters less as distance increases."""
+    return {1.0: 1.0, 2.0: 0.85, 3.0: 0.65, 4.0: 0.4, 5.0: 0.2}.get(distance_bucket, 0.5)
+
+
+def _compute_interaction_features(
+    distance_bucket: float, track_cond_bucket: float, class_bucket: float,
+    venue_type: float, jockey_sr: float, barrier_rel: float, l5_score: float,
+    weight_diff: float, settle: float, trainer_sr: float, form_trend: float,
+    days_since: float, field_size: float, cond_sr: float,
+) -> list[float]:
+    """Compute 10 multiplicative interaction features."""
+    nan = float("nan")
+    dist_decay = _dist_decay(distance_bucket)
+    class_norm = class_bucket / 6.0 if class_bucket > 0 else nan
+
+    return [
+        _f(jockey_sr) * _f(cond_sr) if _f(jockey_sr) == _f(jockey_sr) and _f(cond_sr) == _f(cond_sr) else nan,
+        _f(barrier_rel) * dist_decay if _f(barrier_rel) == _f(barrier_rel) else nan,
+        _f(l5_score) * _f(cond_sr) if _f(l5_score) == _f(l5_score) and _f(cond_sr) == _f(cond_sr) else nan,
+        _f(weight_diff) * (_f(float(distance_bucket)) * 400 / 1400) if _f(weight_diff) == _f(weight_diff) else nan,
+        _f(settle) * dist_decay if _f(settle) == _f(settle) else nan,
+        _f(jockey_sr) * class_norm if _f(jockey_sr) == _f(jockey_sr) and class_norm == class_norm else nan,
+        _f(barrier_rel) * (field_size / 16.0) if _f(barrier_rel) == _f(barrier_rel) and field_size > 0 else nan,
+        _f(trainer_sr) * (venue_type / 3.0) if _f(trainer_sr) == _f(trainer_sr) and venue_type > 0 else nan,
+        _f(form_trend) * class_norm if _f(form_trend) == _f(form_trend) and class_norm == class_norm else nan,
+        (_f(days_since) / 365.0) * class_norm if _f(days_since) == _f(days_since) and class_norm == class_norm else nan,
+    ]
+
+
 def _extract_flucs_direction(odds_flucs_raw: Any) -> float:
     """Extract overall odds movement direction from flucs array.
 
@@ -742,6 +878,20 @@ def extract_features_from_db_row(
     # ── Odds flucs / smart money (1) ──
     flucs_direction = _extract_flucs_direction(runner.get("odds_flucs"))
 
+    # ── v6: Context buckets + interaction features (14) ──
+    dist_bkt = _distance_bucket(distance)
+    tc_raw = (meeting.get("track_condition") or "") if isinstance(meeting, dict) else ""
+    tc_bkt = _track_cond_bucket(tc_raw)
+    cls_bkt = _class_bucket(race.get("class") if isinstance(race, dict) else "")
+    vt_code = _venue_type_code(meeting.get("venue") if isinstance(meeting, dict) else "")
+    cond_sr = _condition_sr_for_today(tc_bkt, good_sr, soft_sr, heavy_sr, firm_sr)
+    interactions = _compute_interaction_features(
+        dist_bkt, tc_bkt, cls_bkt, vt_code,
+        jockey_career_sr, barrier_relative, l5_score, weight_diff,
+        settle, trainer_career_sr, form_trend_val, days_since,
+        field_size, cond_sr,
+    )
+
     return [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -791,7 +941,9 @@ def extract_features_from_db_row(
         has_stewards_issue, has_excuse,
         # Age×sex + flucs (2)
         _f(peak_age_sex_score), _f(flucs_direction),
-    ]
+        # ── v6: Context buckets (4) + interactions (10) ──
+        dist_bkt, tc_bkt, cls_bkt, vt_code,
+    ] + interactions
 
 
 # ──────────────────────────────────────────────
@@ -1025,6 +1177,20 @@ def extract_features_from_runner(
     # ── Odds flucs / smart money (1) ──
     flucs_direction = _extract_flucs_direction(_get(runner, "odds_flucs"))
 
+    # ── v6: Context buckets + interaction features (14) ──
+    dist_bkt = _distance_bucket(distance)
+    tc_raw = str(_get(meeting, "track_condition") or "")
+    tc_bkt = _track_cond_bucket(tc_raw)
+    cls_bkt = _class_bucket(str(_get(race, "class_") or _get(race, "class") or ""))
+    vt_code = _venue_type_code(str(_get(meeting, "venue") or ""))
+    cond_sr = _condition_sr_for_today(tc_bkt, good_sr, soft_sr, heavy_sr, firm_sr)
+    interactions = _compute_interaction_features(
+        dist_bkt, tc_bkt, cls_bkt, vt_code,
+        jockey_career_sr, barrier_relative, l5_score, weight_diff,
+        settle, trainer_career_sr, form_trend_val, days_since,
+        field_size, cond_sr,
+    )
+
     fvec = [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -1074,7 +1240,9 @@ def extract_features_from_runner(
         has_stewards_issue, has_excuse,
         # Age×sex + flucs (2)
         _f(peak_age_sex_score), _f(flucs_direction),
-    ]
+        # ── v6: Context buckets (4) + interactions (10) ──
+        dist_bkt, tc_bkt, cls_bkt, vt_code,
+    ] + interactions
 
     # S1: NaN overrides removed — v5 model trained with these features populated.
 

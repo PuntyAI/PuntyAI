@@ -200,6 +200,34 @@ def _form_trend_proform(positions: list[int | None]) -> float | None:
     return num / den if den != 0 else 0.0
 
 
+# ── v6 context interaction helpers ──────────────────────────────────
+
+def _compute_v6_interactions(
+    distance, condition, race_class, venue,
+    jockey_sr, barrier_rel, l5_score, weight_diff,
+    settle, trainer_sr, form_trend, days_since,
+    field_size, good_sr, soft_sr, heavy_sr, firm_sr,
+) -> list[float]:
+    """Compute 14 v6 features: 4 buckets + 10 interactions."""
+    from punty.ml.features import (
+        _distance_bucket, _track_cond_bucket, _class_bucket,
+        _venue_type_code, _condition_sr_for_today,
+        _compute_interaction_features, _f,
+    )
+    dist_bkt = _distance_bucket(distance)
+    tc_bkt = _track_cond_bucket(condition)
+    cls_bkt = _class_bucket(race_class)
+    vt_code = _venue_type_code(venue)
+    cond_sr = _condition_sr_for_today(tc_bkt, good_sr, soft_sr, heavy_sr, firm_sr)
+    interactions = _compute_interaction_features(
+        dist_bkt, tc_bkt, cls_bkt, vt_code,
+        jockey_sr, barrier_rel, l5_score, weight_diff,
+        settle, trainer_sr, form_trend, days_since,
+        field_size, cond_sr,
+    )
+    return [dist_bkt, tc_bkt, cls_bkt, vt_code] + interactions
+
+
 # ── Feature extraction from Proform runner ──────────────────────────
 
 
@@ -570,6 +598,16 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
         _sf(class_wr), trk_specialist,
         has_stew, has_exc,
         _sf(peak), _sf(flucs_dir),
+        # ── v6: Context buckets + interaction features (14) ──
+        *_compute_v6_interactions(
+            distance, race_meta.get("condition", ""), race_meta.get("race_class", ""),
+            race_meta.get("venue", ""),
+            jockey_career_sr, barrier_relative, l5_score, weight_diff,
+            settle_pos, trainer_career_sr, form_trend_val, days_since,
+            field_size,
+            cond_data["good"][0], cond_data["soft"][0],
+            cond_data["heavy"][0], cond_data["firm"][0],
+        ),
     ]
 
 

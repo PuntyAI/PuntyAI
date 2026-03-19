@@ -98,6 +98,13 @@ def predict_race(
         if X.shape[0] == 0:
             return {}
 
+        # Handle feature count mismatch during model transition.
+        # New features are appended, so truncating to model's expected
+        # count is safe — the first N features are identical.
+        model_n_features = _models["win"].num_feature()
+        if X.shape[1] > model_n_features:
+            X = X[:, :model_n_features]
+
         win_probs = _models["win"].predict(X)
         place_probs = _models["place"].predict(X)
 
