@@ -428,6 +428,12 @@ async def validate_early_mail_probability(
     mi_setting = mi_result.scalar_one_or_none()
     market_influence = float(mi_setting.value) if mi_setting and mi_setting.value else None
 
+    mmi_result = await db.execute(
+        select(AppSettings).where(AppSettings.key == "maiden_market_influence")
+    )
+    mmi_setting = mmi_result.scalar_one_or_none()
+    maiden_market_influence = float(mmi_setting.value) if mmi_setting and mmi_setting.value else None
+
     race_data: dict[int, dict] = {}
     for race in meeting.races:
         active_runners = [r for r in race.runners if not r.scratched]
@@ -442,6 +448,7 @@ async def validate_early_mail_probability(
             prob_results = calculate_race_probabilities(
                 runners=runner_dicts, race=race_dict, meeting=meeting_dict,
                 market_influence=market_influence,
+                maiden_market_influence=maiden_market_influence,
             )
         except Exception as e:
             logger.debug("Probability calc failed for R%s: %s", race.race_number, e)

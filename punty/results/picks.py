@@ -76,10 +76,17 @@ async def store_picks_from_content(
             mi_setting = mi_result.scalar_one_or_none()
             market_influence = float(mi_setting.value) if mi_setting and mi_setting.value else None
 
+            mmi_result = await db.execute(
+                select(AppSettings).where(AppSettings.key == "maiden_market_influence")
+            )
+            mmi_setting = mmi_result.scalar_one_or_none()
+            maiden_market_influence = float(mmi_setting.value) if mmi_setting and mmi_setting.value else None
+
             for race in meeting.races:
                 active = [r for r in race.runners if not r.scratched]
                 if active:
-                    probs = calculate_race_probabilities(active, race, meeting, market_influence=market_influence)
+                    probs = calculate_race_probabilities(active, race, meeting, market_influence=market_influence,
+                                                        maiden_market_influence=maiden_market_influence)
                     # Map by saddlecloth for easy lookup
                     for runner in active:
                         if runner.id in probs:
