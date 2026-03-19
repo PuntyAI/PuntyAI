@@ -71,8 +71,31 @@ credentials/
 *.pem
 *.key
 
-# Debug scripts
+# Debug & ad-hoc scripts
 debug_*.py
+scripts/_*.py
+scripts/_*.txt
+scripts/_*.sql
+scripts/*.json
+tmp_*.py
+tmp_*.txt
+
+# Log & debug artifacts
+*_logs.txt
+*_out.txt
+*_check*.txt
+ssh_*.txt
+prerace_logs.txt
+recent_logs*.txt
+
+# Temporary data
+*tmp_*.json
+TEST_REPORT.md
+expected/
+images/
+yesterday_gen.txt
+test_err.txt
+test_output.txt
 
 # Windows artifacts
 nul

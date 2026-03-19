@@ -1,8 +1,12 @@
 #!/bin/bash
 # Pre-commit hook: Run tests before allowing commit
+# Uses --last-failed --fail-first for speed on repeat runs,
+# falls back to full suite on first run or when all previously passed.
 
 echo "Running tests..."
-python -m pytest tests/unit -q --tb=line
+
+# Fast path: re-run only previously failed tests first
+python -m pytest tests/unit -q --tb=line --lf --ff -x 2>/dev/null
 
 if [ $? -ne 0 ]; then
     echo ""

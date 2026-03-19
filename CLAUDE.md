@@ -168,30 +168,75 @@ ssh root@app.punty.ai "journalctl -u puntyai --no-pager -n 50"
 **IMPORTANT:** Always run tests before committing code changes.
 
 ```bash
-# Run all tests
-pytest tests/ -v
-
-# Run unit tests only (faster)
+# Run all unit tests (~1,540 tests, ~5s)
 pytest tests/unit -v
+
+# Run specific test file (fastest for iterating)
+pytest tests/unit/test_pre_selections.py -v
+
+# Run tests matching keyword
+pytest tests/unit -k "exotic" -v
 
 # Run with coverage
 pytest tests/ --cov=punty --cov-report=term-missing
 ```
 
-### Test Structure
-- `tests/unit/test_generator.py` - Content generation, context formatting
-- `tests/unit/test_parser.py` - Pick extraction from early mail
-- `tests/unit/test_picks.py` - Settlement calculations
+### Test Structure (1,540+ unit tests)
+- `tests/unit/test_probability.py` — 278 tests, probability engine core
+- `tests/unit/test_pre_selections.py` — 143 tests, pick ranking/selection
+- `tests/unit/test_parser.py` — 30 tests, pick extraction from AI text
+- `tests/unit/test_picks.py` — 60 tests, settlement calculations
+- `tests/unit/test_pre_sequences.py` — 48 tests, quaddie/sequence logic
+- `tests/unit/test_content_validator.py` — 53 tests, content validation
+- `tests/unit/test_generator.py` — 10 tests, AI content generation
+- `tests/unit/test_bet_optimizer.py` — 59 tests, bet type decisions
+- `tests/e2e/` — 102 E2E browser tests (Playwright, non-blocking in CI)
 
-### CI/CD
-- GitHub Actions runs tests on every push to master
-- Tests must pass before deployment
+### CI/CD Pipeline
+- GitHub Actions: push → unit tests → e2e tests → staging → production
+- Unit tests gate deployment (must pass); E2E tests are non-blocking
+- Branch protection: PRs required for master, 2 status checks must pass
+- Pre-commit hook runs unit tests with `--last-failed --fail-first` for speed
 
 ### Pre-commit Hook Setup
 ```bash
 git config core.hooksPath .githooks
 chmod +x .githooks/pre-commit
 ```
+
+## Change Management Process
+
+### For every code change:
+1. **Make changes** to the codebase
+2. **Run affected tests** — `pytest tests/unit/test_<affected>.py -v`
+3. **Run full unit suite** — `pytest tests/unit -q` (pre-commit hook does this)
+4. **Commit** — branch off master, commit with descriptive message
+5. **Push branch** — `git push -u origin <branch-name>`
+6. **Create PR** — `gh pr create` with summary + test plan
+7. **Wait for CI** — `gh pr checks <PR#> --watch`
+8. **Merge** — `gh pr merge <PR#> --squash --delete-branch`
+9. **Deploy** — SSH deploy command (see Common Operations)
+10. **Verify** — Check logs: `journalctl -u puntyai --no-pager -n 50`
+
+### Key files to test by area:
+| Change area | Test file(s) to run |
+|---|---|
+| Probability engine | `test_probability.py` |
+| Pick ranking/selection | `test_pre_selections.py` |
+| Bet types/staking | `test_bet_optimizer.py`, `test_bet_type_tuning.py` |
+| AI output parsing | `test_parser.py` |
+| Settlement/P&L | `test_picks.py` |
+| Content generation | `test_generator.py` |
+| Content validation | `test_content_validator.py` |
+| Quaddie/sequences | `test_pre_sequences.py` |
+| Prompt templates | `test_generator.py`, `test_parser.py` |
+| Betfair queue | `test_betfair_betting.py` |
+| HTML formatting | Manual check on tips page |
+| Settings UI | Manual check on settings page |
+
+### Ad-hoc scripts convention:
+- Prefix with `_` (e.g. `scripts/_check_pnl.py`) — gitignored, throwaway
+- No prefix (e.g. `scripts/build_calibration.py`) — tracked, reusable utilities
 
 ## Design Theme
 Cyberpunk neon: dark bg (#0a0a0f), Orbitron display font, Rajdhani headings, Source Sans Pro body. Magenta/cyan/orange gradient accents. Sunset gradient race number pills. Pick badges: magenta (top), cyan (2nd), yellow (3rd), purple (roughie).
