@@ -1,6 +1,7 @@
 """Tests for Betfair meta-model bet selector."""
 
 import math
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -156,29 +157,45 @@ class TestPredictFallback:
         clear_cache()
 
     def test_predict_returns_negative_when_no_model(self):
-        features = _make_features()
-        prob = predict_place_probability(features)
-        assert prob == -1.0
+        import punty.betting.meta_model as mm
+        clear_cache()
+        with patch.object(mm, "META_MODEL_PATH", Path("/nonexistent/model.txt")):
+            features = _make_features()
+            prob = predict_place_probability(features)
+            assert prob == -1.0
+        clear_cache()
 
     def test_should_bet_falls_back_to_wp_above_threshold(self):
-        features = _make_features(wp=0.25)
-        result, prob, reason = should_bet(features, threshold=0.65, wp=0.25)
-        assert result is True
-        assert prob == 0.25
-        assert "WP fallback" in reason
+        import punty.betting.meta_model as mm
+        clear_cache()
+        with patch.object(mm, "META_MODEL_PATH", Path("/nonexistent/model.txt")):
+            features = _make_features(wp=0.25)
+            result, prob, reason = should_bet(features, threshold=0.65, wp=0.25)
+            assert result is True
+            assert prob == 0.25
+            assert "WP fallback" in reason
+        clear_cache()
 
     def test_should_bet_falls_back_to_wp_below_threshold(self):
-        features = _make_features(wp=0.18)
-        result, prob, reason = should_bet(features, threshold=0.65, wp=0.18)
-        assert result is False
+        import punty.betting.meta_model as mm
+        clear_cache()
+        with patch.object(mm, "META_MODEL_PATH", Path("/nonexistent/model.txt")):
+            features = _make_features(wp=0.18)
+            result, prob, reason = should_bet(features, threshold=0.65, wp=0.18)
+            assert result is False
+        clear_cache()
         assert prob == 0.18
         assert "WP fallback" in reason
 
     def test_should_bet_no_wp_available(self):
-        features = _make_features()
-        result, prob, reason = should_bet(features, threshold=0.65, wp=None)
-        assert result is False
-        assert "No model and no WP" in reason
+        import punty.betting.meta_model as mm
+        clear_cache()
+        with patch.object(mm, "META_MODEL_PATH", Path("/nonexistent/model.txt")):
+            features = _make_features()
+            result, prob, reason = should_bet(features, threshold=0.65, wp=None)
+            assert result is False
+            assert "No model and no WP" in reason
+        clear_cache()
 
     def test_should_bet_wp_at_exact_threshold(self):
         """WP exactly at 22% should pass."""
@@ -313,11 +330,13 @@ class TestCustomThreshold:
 class TestEdgeCases:
     def test_all_nan_features(self):
         """Model should handle all-NaN features gracefully."""
+        import punty.betting.meta_model as mm
         features = [float("nan")] * NUM_META_FEATURES
-        # Should return -1.0 (no model loaded), not crash
         clear_cache()
-        prob = predict_place_probability(features)
-        assert prob == -1.0
+        with patch.object(mm, "META_MODEL_PATH", Path("/nonexistent/model.txt")):
+            prob = predict_place_probability(features)
+            assert prob == -1.0
+        clear_cache()
 
     def test_empty_features_list(self):
         """Wrong-length features should not crash."""
