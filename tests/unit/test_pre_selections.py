@@ -744,7 +744,7 @@ class TestCalculatePreSelections:
         assert result.race_number == 1
         assert len(result.picks) == 4
         assert result.total_stake <= 20.5
-        assert result.puntys_pick is not None
+        assert result.puntys_pick is None  # Punty's Pick removed
 
     def test_pick_order_by_ev(self):
         """Highest win probability runner should be pick #1."""

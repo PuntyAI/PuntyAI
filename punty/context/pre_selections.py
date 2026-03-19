@@ -507,9 +507,6 @@ def calculate_pre_selections(
         prize_money=race_context.get("prize_money", 0),
     )
 
-    # Calculate Punty's Pick
-    puntys_pick = _calculate_puntys_pick(picks, exotic)
-
     total_stake = sum(p.stake for p in picks)
     notes = _generate_notes(picks, exotic, candidates, field_size=field_size,
                             win_capped=win_capped, is_ntd=is_ntd)
@@ -524,7 +521,7 @@ def calculate_pre_selections(
         race_number=race_number,
         picks=picks,
         exotic=exotic,
-        puntys_pick=puntys_pick,
+        puntys_pick=None,
         total_stake=round(total_stake, 2),
         notes=notes,
         classification=classification,
@@ -1504,16 +1501,8 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
 
     for pick in pre_sel.picks:
         rank_label = "Roughie" if pick.is_roughie else f"Pick #{pick.rank}"
-        prob_label = (
-            f"{pick.win_prob * 100:.1f}%"
-            if pick.bet_type in ("Win", "Saver Win")
-            else f"{pick.place_prob * 100:.1f}%"
-        )
-        value_label = (
-            f"{pick.value_rating:.2f}x"
-            if pick.bet_type in ("Win", "Saver Win")
-            else f"{pick.place_value_rating:.2f}x"
-        )
+        prob_label = f"Win: {pick.win_prob * 100:.1f}% | Place: {pick.place_prob * 100:.1f}%"
+        value_label = f"{pick.value_rating:.2f}x"
 
         lines.append(
             f"  {rank_label}: {pick.horse_name} (No.{pick.saddlecloth}) "
@@ -1585,20 +1574,5 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
             lines.append(f"  NOTE: {note}")
 
     lines.append(f"  Total stake: ${pre_sel.total_stake:.2f}")
-
-    # Punty's Pick — explicit instruction for the AI
-    pp = pre_sel.puntys_pick
-    if pp:
-        if pp.pick_type == "exotic" and pp.exotic_type:
-            runners_str = ", ".join(str(r) for r in pp.exotic_runners)
-            val_str = f" (Value: {pp.exotic_value:.1f}x)" if pp.exotic_value else ""
-            lines.append(
-                f"  PUNTY'S PICK: {pp.exotic_type} [{runners_str}] — ${(ex.budget if ex else EXOTIC_BUDGET):.0f}{val_str}"
-            )
-        elif pp.horse_name and pp.saddlecloth:
-            lines.append(
-                f"  PUNTY'S PICK: {pp.horse_name} (No.{pp.saddlecloth}) "
-                f"${pp.odds:.2f} {pp.bet_type}"
-            )
 
     return "\n".join(lines)

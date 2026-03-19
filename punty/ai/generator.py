@@ -1741,7 +1741,6 @@ class ContentGenerator:
             parts.append(f"- Exacta min value: {exotic_t.get('min_value_exacta', 1.1):.1f}x")
             parts.append(f"- Quinella min value: {exotic_t.get('min_value_quinella', 1.0):.1f}x")
             parts.append(f"- First4 min value: {exotic_t.get('min_value_first4', 1.5):.1f}x")
-            parts.append(f"- Punty's Pick exotic value: {exotic_t.get('puntys_pick_value', 1.5):.1f}x")
             parts.append("Use these thresholds when selecting exotics, NOT the defaults in the prompt.")
             parts.append("")
         except Exception:
