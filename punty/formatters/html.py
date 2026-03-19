@@ -297,7 +297,7 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         content, flags=re.MULTILINE | re.IGNORECASE
     )
     content = re.sub(
-        r'^\s*Probability:\s*(.+)$',
+        r'^\s*(?:Probability|Win):\s*(.+)$',
         r'<span class="sel-prob"><span class="sel-label">Prob</span> \1</span>',
         content, flags=re.MULTILINE | re.IGNORECASE
     )
