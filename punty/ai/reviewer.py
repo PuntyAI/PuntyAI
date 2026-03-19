@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ContentReviewer:
     """Handles AI-assisted content review and fixes."""
 
-    def __init__(self, db: AsyncSession, model: str = "gpt-4o"):
+    def __init__(self, db: AsyncSession, model: str = "gpt-5.4-nano"):
         self.db = db
         self.ai_client = AIClient(model=model)
 
