@@ -771,6 +771,15 @@ def _calculate_lgbm_probabilities(
         blended_place = {rid: min(0.95, p / bp_total * place_count)
                          for rid, p in blended_place.items()}
 
+    # Enforce place_prob >= win_prob (placing includes winning).
+    # Normalisation can compress a strong favourite's place_prob below their
+    # blended win_prob, which is mathematically impossible and breaks
+    # downstream staking decisions and Betfair queue ordering.
+    for rid in blended_place:
+        wp = blended_win.get(rid, 0)
+        if blended_place[rid] < wp:
+            blended_place[rid] = wp
+
     # ── Step 4: Build results ──
     results = {}
     for runner in active:

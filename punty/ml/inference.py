@@ -111,7 +111,13 @@ def predict_race(
         results = {}
         for i, runner in enumerate(active):
             rid = _get(runner, "id", "")
-            results[rid] = (float(win_probs[i]), float(place_probs[i]))
+            wp = float(win_probs[i])
+            pp = float(place_probs[i])
+            # Enforce: place_prob >= win_prob (placing includes winning).
+            # Win and place models are trained independently and can disagree.
+            if pp < wp:
+                pp = wp
+            results[rid] = (wp, pp)
 
         return results
 
