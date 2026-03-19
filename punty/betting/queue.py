@@ -14,6 +14,8 @@ from punty.models.pick import Pick
 from punty.models.meeting import Meeting, Race, Runner
 from punty.models.settings import AppSettings
 
+from punty.betting.meta_model import meta_model_available, should_bet as meta_should_bet, extract_meta_features
+
 logger = logging.getLogger(__name__)
 
 # Default settings
@@ -155,6 +157,111 @@ async def get_current_stake(db: AsyncSession, place_probability: float = 0,
             return DEFAULT_BASE_STAKE
 
 
+async def _meta_model_decision(
+    db: AsyncSession,
+    pick, runner, race, meeting, wp: float,
+    race_picks: list, runner_count: int,
+) -> tuple[bool, float, str] | None:
+    """Run the meta-model to decide if this pick should be queued.
+
+    Returns (should_bet, probability, reason) or None if model unavailable.
+    Extracts meta-features from the pick/runner/race/meeting context.
+    """
+    if not meta_model_available():
+        return None
+
+    try:
+        from punty.ml.features import (
+            _distance_bucket, _track_cond_bucket, _class_bucket,
+            _venue_type_code, _score_last_five, _form_trend,
+            _parse_stats, _safe_float,
+        )
+
+        # WP margin — gap between this pick's WP and next best in race
+        all_wps = sorted(
+            [p.win_probability or 0 for p in race_picks if p.win_probability],
+            reverse=True,
+        )
+        if len(all_wps) >= 2:
+            wp_margin = all_wps[0] - all_wps[1]
+        else:
+            wp_margin = 0.0
+
+        # Odds
+        odds = pick.odds_at_tip or (pick.place_odds_at_tip * 3 if pick.place_odds_at_tip else 0) or 0
+
+        # Buckets from race/meeting
+        distance = race.distance if race else 1400
+        dist_bucket = _distance_bucket(distance)
+        cls_bucket = _class_bucket(race.class_ if race else "")
+        tc = meeting.track_condition if meeting else ""
+        tc_bucket = _track_cond_bucket(tc)
+        venue_type = _venue_type_code(meeting.venue if meeting else "")
+
+        # Runner-level features
+        barrier_rel = float("nan")
+        age = float("nan")
+        days_since = float("nan")
+        form_score = float("nan")
+        form_trend_val = float("nan")
+        speed_map_pos = float("nan")
+        weight_diff = float("nan")
+        career_win_pct = float("nan")
+        career_place_pct = float("nan")
+
+        if runner:
+            barrier = runner.barrier or 0
+            barrier_rel = (barrier - 1) / (runner_count - 1) if barrier and runner_count > 1 else float("nan")
+            age = float(runner.horse_age) if runner.horse_age else float("nan")
+            days_since = float(runner.days_since_last_run) if runner.days_since_last_run else float("nan")
+
+            last_five = runner.last_five or ""
+            form_score = _safe_float(_score_last_five(last_five))
+            form_trend_val = _safe_float(_form_trend(last_five))
+
+            smp = (runner.speed_map_position or "").lower()
+            speed_map_pos = {"leader": 1.0, "on_pace": 2.0, "midfield": 3.0, "backmarker": 4.0}.get(smp, float("nan"))
+
+            weight = runner.weight or 0
+            weight_diff = float("nan")  # Would need field avg — use NaN (LightGBM handles it)
+
+            career = _parse_stats(runner.career_record)
+            if career and career[0] > 0:
+                career_win_pct = career[1] / career[0]
+                career_place_pct = (career[1] + career[2] + career[3]) / career[0]
+
+        # Value rating = WP / market implied
+        market_implied = 1.0 / odds if odds and odds > 1 else 0.0
+        value_rating = wp / market_implied if market_implied > 0 else float("nan")
+
+        features = extract_meta_features(
+            wp=wp,
+            wp_margin=wp_margin,
+            odds=odds,
+            field_size=runner_count,
+            distance_bucket=dist_bucket,
+            class_bucket=cls_bucket,
+            track_cond_bucket=tc_bucket,
+            venue_type=venue_type,
+            barrier_relative=barrier_rel,
+            age=age,
+            days_since=days_since,
+            form_score=form_score,
+            form_trend=form_trend_val,
+            value_rating=value_rating,
+            speed_map_pos=speed_map_pos,
+            weight_diff=weight_diff,
+            career_win_pct=career_win_pct,
+            career_place_pct=career_place_pct,
+        )
+
+        return meta_should_bet(features, threshold=0.65, wp=wp)
+
+    except Exception as e:
+        logger.warning("Meta-model decision failed: %s — falling back to WP", e)
+        return None
+
+
 async def populate_bet_queue(
     db: AsyncSession,
     meeting_id: str,
@@ -269,17 +376,36 @@ async def populate_bet_queue(
             logger.info(f"Betfair queue BLOCKED: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
             continue
 
-        # ── Win probability floor ──
-        # WP >= 22% yields 75.4% place SR at 18.4% ROI (31-day backtest).
-        # WP is already context-aware via v7 LambdaRank (102 interaction features),
-        # so a flat threshold works across all race types.
+        # ── Meta-model or WP floor ──
+        # The meta-model is a learned selector trained on "does LGBM rank 1
+        # actually place?" — it replaces the flat WP >= 22% threshold when
+        # available. Falls back to WP >= 22% if model not loaded.
         wp = pick.win_probability or 0
-        if wp < 0.22:
+
+        # Try meta-model first
+        meta_decision = await _meta_model_decision(
+            db, pick, runner, race, meeting, wp, race_picks, runner_count,
+        )
+        if meta_decision is not None:
+            should, prob, reason = meta_decision
+            if not should:
+                logger.info(
+                    f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                    f"— {reason}"
+                )
+                continue
             logger.info(
-                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— WP {wp:.0%} < 22%"
+                f"Betfair queue PASS: {pick.horse_name} R{pick.race_number} "
+                f"— {reason}"
             )
-            continue
+        else:
+            # Fallback: flat WP threshold
+            if wp < 0.22:
+                logger.info(
+                    f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                    f"— WP {wp:.0%} < 22%"
+                )
+                continue
 
         eligible.append((pick, race))
 

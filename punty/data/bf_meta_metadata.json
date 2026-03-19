@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "model_type": "binary_classifier",
+  "purpose": "Betfair bet selector \u2014 predicts if LGBM rank 1 pick will place",
+  "feature_names": [
+    "wp",
+    "wp_margin",
+    "odds",
+    "field_size",
+    "distance_bucket",
+    "class_bucket",
+    "track_cond_bucket",
+    "venue_type",
+    "barrier_relative",
+    "age",
+    "days_since",
+    "form_score",
+    "form_trend",
+    "value_rating",
+    "speed_map_pos",
+    "weight_diff",
+    "career_win_pct",
+    "career_place_pct"
+  ],
+  "num_features": 18,
+  "training_date": "2026-03-20 08:10:27",
+  "data_dir": "D:\\Punty\\DatafromProform",
+  "train_races": 15232,
+  "val_races": 2336,
+  "test_races": 2146,
+  "temporal_split": {
+    "train": "< 2025-10-19",
+    "val": "2025-10-19 to 2025-11-24",
+    "test": ">= 2025-11-24"
+  },
+  "lgbm_params": {
+    "objective": "binary",
+    "metric": [
+      "binary_logloss",
+      "auc"
+    ],
+    "num_leaves": 31,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "min_data_in_leaf": 30,
+    "feature_fraction": 0.8,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 5,
+    "lambda_l1": 0.1,
+    "lambda_l2": 1.0,
+    "seed": 42,
+    "is_unbalanced": false
+  },
+  "best_iteration": 15,
+  "num_trees": 15,
+  "default_threshold": 0.65,
+  "val_best": {
+    "threshold": 0.8,
+    "bets": 2300,
+    "placed": 2179,
+    "sr": 94.7,
+    "roi": 61.8
+  },
+  "test_best": {
+    "threshold": 0.8,
+    "bets": 2072,
+    "placed": 1822,
+    "sr": 87.9,
+    "roi": 48.0
+  },
+  "train_place_rate": 95.4
+}
