@@ -37,7 +37,10 @@ sys.path.insert(0, str(ROOT))
 
 from punty.ml.features import FEATURE_NAMES, NUM_FEATURES, extract_features_from_runner
 
-DEFAULT_DATA_DIR = Path(r"D:\Punty\DatafromProform")
+# Proform data directory — check server path first, fall back to local Windows path
+_SERVER_DATA_DIR = Path("/opt/puntyai/proform_data")
+_LOCAL_DATA_DIR = Path(r"D:\Punty\DatafromProform")
+DEFAULT_DATA_DIR = _SERVER_DATA_DIR if _SERVER_DATA_DIR.exists() else _LOCAL_DATA_DIR
 
 MONTH_DIRS = {
     1: "January", 2: "February", 3: "March", 4: "April",
@@ -1221,7 +1224,9 @@ def main():
     parser = argparse.ArgumentParser(description="Train LightGBM v2 from Proform + live DB data")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR,
                         help="Path to Proform data directory")
-    parser.add_argument("--db-path", type=Path, default=ROOT / "data" / "punty_live.db",
+    _server_db = Path("/opt/puntyai/data/punty.db")
+    _default_db = _server_db if _server_db.exists() else ROOT / "data" / "punty_live.db"
+    parser.add_argument("--db-path", type=Path, default=_default_db,
                         help="Path to live punty.db for supplementary training data")
     parser.add_argument("--tune", action="store_true",
                         help="Run hyperparameter search before final training")
@@ -1382,17 +1387,20 @@ def main():
             with open(meta_path) as f:
                 old_meta = json.load(f)
 
-            old_win_auc = old_meta.get("win_model", {}).get("test_metrics", {}).get("auc", 0)
-            old_place_auc = old_meta.get("place_model", {}).get("test_metrics", {}).get("auc", 0)
-            new_win_auc = test_metrics_win["auc"]
-            new_place_auc = test_metrics_place["auc"]
+            # Compare on VALIDATION metrics (same distribution as training).
+            # Test metrics are unreliable when test set is from a different source
+            # (e.g. live DB vs Proform training data).
+            old_win_auc = old_meta.get("win_model", {}).get("val_metrics", {}).get("auc", 0)
+            old_place_auc = old_meta.get("place_model", {}).get("val_metrics", {}).get("auc", 0)
+            new_win_auc = val_metrics_win["auc"]
+            new_place_auc = val_metrics_place["auc"]
 
             # Average AUC across both models as the comparison metric
             old_avg = (old_win_auc + old_place_auc) / 2
             new_avg = (new_win_auc + new_place_auc) / 2
 
             print(f"\n{'='*60}")
-            print(f"  AUTO RETRAIN — Model Comparison")
+            print(f"  AUTO RETRAIN — Model Comparison (validation metrics)")
             print(f"{'='*60}")
             print(f"  Old model:  Win AUC={old_win_auc:.4f}  Place AUC={old_place_auc:.4f}  Avg={old_avg:.4f}")
             print(f"  New model:  Win AUC={new_win_auc:.4f}  Place AUC={new_place_auc:.4f}  Avg={new_avg:.4f}")
