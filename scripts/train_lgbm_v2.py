@@ -731,6 +731,18 @@ def load_proform_data(data_dir: Path) -> tuple[list[list[float]], list[int], lis
                     race_date = meta.get("date", "")
                     race_id_str = f"{meta.get('venue', 'unk')}-{race_date}-{race_id}"
 
+                    # Infer TrackCondition from runner Forms if not in meetings.json.
+                    # Proform meetings.json has TrackCondition=None for all races,
+                    # but each runner's Forms[0] (this race) has it as "G4","S5","H8" etc.
+                    if not meta.get("condition"):
+                        for r in race_runners:
+                            forms = [f for f in r.get("Forms", []) if not f.get("IsBarrierTrial")]
+                            if forms:
+                                tc = forms[0].get("TrackCondition", "")
+                                if tc:
+                                    meta["condition"] = tc
+                                    break
+
                     for r in race_runners:
                         pos = r.get("Position")
                         if pos is None or pos == 0:
@@ -1277,11 +1289,18 @@ def main():
         print(f"    {feat:25s}: {pct:5.1f}% ({non_nan:,} / {X.shape[0]:,})")
 
     # ── Dynamic temporal split ──
-    # Train on all data except last 6 weeks, val = next 2 weeks, test = last 4 weeks
+    # Use Proform data's own date range for balanced split.
+    # Previous issue: live DB data pushed cutoffs so val/test were tiny (3K samples)
+    # and from a different distribution than train (190K Proform samples).
+    # Fix: split by date count ensuring 75% train / 12.5% val / 12.5% test,
+    # so val and test come from the same source as train.
     all_dates = sorted(set(d for d in dates if d))
-    if len(all_dates) >= 42:
-        test_cutoff = all_dates[-28]   # Last 4 weeks = test
-        val_cutoff = all_dates[-42]    # 2 weeks before test = val
+    n_dates = len(all_dates)
+    if n_dates >= 42:
+        val_idx = int(n_dates * 0.75)
+        test_idx = int(n_dates * 0.875)
+        val_cutoff = all_dates[val_idx]
+        test_cutoff = all_dates[test_idx]
     else:
         test_cutoff = "2025-12"
         val_cutoff = "2025-11"

@@ -88,19 +88,36 @@
     "has_stewards_issue",
     "has_excuse",
     "peak_age_sex_score",
-    "flucs_direction"
+    "flucs_direction",
+    "distance_bucket",
+    "track_cond_bucket",
+    "class_bucket",
+    "venue_type_code",
+    "jockey_sr_x_cond",
+    "barrier_rel_x_dist",
+    "form_score_x_cond",
+    "weight_diff_x_dist",
+    "settle_pos_x_dist",
+    "jockey_sr_x_class",
+    "barrier_rel_x_field",
+    "trainer_sr_x_venue",
+    "form_trend_x_class",
+    "days_since_x_class"
   ],
-  "num_features": 88,
-  "training_date": "2026-03-18 21:28:16",
-  "data_source": "Proform JSON",
+  "num_features": 102,
+  "training_date": "2026-03-19 21:12:08",
+  "data_source": "Proform JSON + Live DB (12,589 runners)",
   "data_dir": "D:\\Punty\\DatafromProform",
-  "train_samples": 154034,
-  "val_samples": 19326,
-  "test_samples": 17378,
+  "db_path": "data\\punty.db",
+  "proform_samples": 190738,
+  "live_db_samples": 12589,
+  "train_samples": 165477,
+  "val_samples": 24225,
+  "test_samples": 13625,
   "temporal_split": {
-    "train": "2025-01 to 2025-10",
-    "val": "2025-11",
-    "test": "2025-12+"
+    "train": "< 2025-11-18",
+    "val": "2025-11-18 to 2025-12-30",
+    "test": ">= 2025-12-30"
   },
   "lgbm_params_default": {
     "objective": "binary",
@@ -158,46 +175,47 @@
     "is_unbalanced": true
   },
   "tuned": false,
+  "auto_retrain": false,
   "win_model": {
-    "best_iteration": 651,
+    "best_iteration": 636,
     "val_metrics": {
-      "log_loss": 0.1569,
-      "auc": 0.9496,
-      "top1_accuracy": 0.74,
-      "top3_accuracy": 0.9119,
-      "top5_accuracy": 0.966,
-      "n_races": 2031,
-      "n_samples": 19326
+      "log_loss": 0.1445,
+      "auc": 0.9575,
+      "top1_accuracy": 0.7555,
+      "top3_accuracy": 0.9232,
+      "top5_accuracy": 0.9803,
+      "n_races": 2487,
+      "n_samples": 24225
     },
     "test_metrics": {
-      "log_loss": 0.1489,
-      "auc": 0.9554,
-      "top1_accuracy": 0.7416,
-      "top3_accuracy": 0.9286,
-      "top5_accuracy": 0.981,
-      "n_races": 1792,
-      "n_samples": 17378
+      "log_loss": 0.7353,
+      "auc": 0.6143,
+      "top1_accuracy": 0.3239,
+      "top3_accuracy": 0.6697,
+      "top5_accuracy": 0.8498,
+      "n_races": 1871,
+      "n_samples": 13625
     }
   },
   "place_model": {
-    "best_iteration": 792,
+    "best_iteration": 870,
     "val_metrics": {
-      "log_loss": 0.3735,
-      "auc": 0.8824,
-      "top1_accuracy": 0.8439,
-      "top3_accuracy": 0.9823,
-      "top5_accuracy": 0.9975,
-      "n_races": 2031,
-      "n_samples": 19326
+      "log_loss": 0.3616,
+      "auc": 0.8895,
+      "top1_accuracy": 0.8585,
+      "top3_accuracy": 0.9799,
+      "top5_accuracy": 0.9984,
+      "n_races": 2487,
+      "n_samples": 24225
     },
     "test_metrics": {
-      "log_loss": 0.3684,
-      "auc": 0.8856,
-      "top1_accuracy": 0.8477,
-      "top3_accuracy": 0.981,
-      "top5_accuracy": 0.9972,
-      "n_races": 1792,
-      "n_samples": 17378
+      "log_loss": 0.9234,
+      "auc": 0.6536,
+      "top1_accuracy": 0.5949,
+      "top3_accuracy": 0.9439,
+      "top5_accuracy": 0.9909,
+      "n_races": 1871,
+      "n_samples": 13625
     }
   }
 }

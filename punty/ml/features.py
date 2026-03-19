@@ -516,28 +516,37 @@ def _distance_bucket(distance: Any) -> float:
 
 
 def _track_cond_bucket(condition: Any) -> float:
-    """Ordinal encode track condition (wetness scale)."""
+    """Ordinal encode track condition (wetness scale).
+
+    Handles both full names ("Good 4", "Soft 5", "Heavy 8") and
+    Proform short codes ("G4", "S5", "H8", "F", "Syn").
+    """
     if not condition:
         return 0.0
     c = str(condition).lower().strip()
-    if "firm" in c:
+    # Proform short codes: G/G3/G4 = good, S5/S6/S7 = soft, H8/H9/H10 = heavy, F = firm
+    if c.startswith("f") and (len(c) <= 2 or "firm" in c):
         return 1.0
-    if "good" in c:
+    if c.startswith("g") or "good" in c:
         return 2.0
-    if "soft" in c or "dead" in c:
+    if c.startswith("s") and c[0:1] == "s" and (len(c) <= 2 or c[1:2].isdigit()) or "soft" in c or "dead" in c:
         return 3.0
-    if "heavy" in c:
+    if c.startswith("h") and (len(c) <= 3 or "heavy" in c):
         return 4.0
-    if "synth" in c or "all weather" in c:
+    if "synth" in c or "syn" in c or "all weather" in c:
         return 5.0
     return 0.0
 
 
 def _class_bucket(race_class: Any) -> float:
-    """Ordinal encode race class."""
+    """Ordinal encode race class.
+
+    Handles both live DB formats ("Maiden", "BM64") and
+    Proform formats ("Maiden;", "Benchmark 58;", "Class 1;").
+    """
     if not race_class:
         return 0.0
-    c = str(race_class).lower().strip()
+    c = str(race_class).lower().strip().rstrip(";").strip()
     if "maiden" in c or "mdn" in c:
         return 1.0
     if any(x in c for x in ("restricted", "cg&e", "cg ", "c,g", "f&m")):
@@ -571,17 +580,25 @@ def _venue_type_code(venue: Any) -> float:
 def _condition_sr_for_today(
     track_cond: float, good_sr: Any, soft_sr: Any, heavy_sr: Any, firm_sr: Any,
 ) -> float:
-    """Select the horse's strike rate matching today's track condition."""
-    nan = float("nan")
-    if track_cond == 1.0:
-        return _f(firm_sr) if firm_sr is not None and firm_sr == firm_sr else _f(good_sr)
-    if track_cond == 2.0:
-        return _f(good_sr)
-    if track_cond == 3.0:
-        return _f(soft_sr)
-    if track_cond == 4.0:
-        return _f(heavy_sr)
-    return _f(good_sr)  # default to good
+    """Select the horse's strike rate matching today's track condition.
+
+    Falls back to any available condition SR when the primary is unavailable,
+    preferring conditions closest on the wetness scale.
+    """
+    # Map condition bucket to ordered preference list
+    preference = {
+        1.0: [firm_sr, good_sr, soft_sr, heavy_sr],    # Firm → try good, soft, heavy
+        2.0: [good_sr, firm_sr, soft_sr, heavy_sr],    # Good → try firm, soft, heavy
+        3.0: [soft_sr, good_sr, heavy_sr, firm_sr],    # Soft → try good, heavy, firm
+        4.0: [heavy_sr, soft_sr, good_sr, firm_sr],    # Heavy → try soft, good, firm
+    }
+    candidates = preference.get(track_cond, [good_sr, soft_sr, heavy_sr, firm_sr])
+
+    for sr in candidates:
+        v = _f(sr)
+        if v == v:  # not NaN
+            return v
+    return float("nan")
 
 
 def _dist_decay(distance_bucket: float) -> float:

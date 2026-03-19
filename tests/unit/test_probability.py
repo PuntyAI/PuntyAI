@@ -2855,12 +2855,12 @@ class TestRankPlaceProbabilityInvariant:
         still follow win probability, not raw market place odds.
         """
         runners = [
-            # Runner A: higher win prob ($4.00) but longer place odds ($2.50)
-            _make_runner(id="rank1", current_odds=4.0, place_odds=2.50, last_five="12131",
-                         career_record="15: 5-3-2"),
-            # Runner B: lower win prob ($5.50) but shorter place odds ($2.00)
-            _make_runner(id="rank2", current_odds=5.5, place_odds=2.00, last_five="22312",
-                         career_record="15: 3-4-3"),
+            # Runner A: clearly higher win prob ($2.50) but longer place odds ($2.00)
+            _make_runner(id="rank1", current_odds=2.5, place_odds=2.00, last_five="11121",
+                         career_record="20: 8-4-3"),
+            # Runner B: clearly lower win prob ($8.00) but shorter place odds ($1.80)
+            _make_runner(id="rank2", current_odds=8.0, place_odds=1.80, last_five="32425",
+                         career_record="15: 2-3-3"),
             _make_runner(id="r3", current_odds=7.0, place_odds=2.80, last_five="33452"),
             _make_runner(id="r4", current_odds=10.0, place_odds=3.50, last_five="45567"),
             _make_runner(id="r5", current_odds=14.0, place_odds=4.50, last_five="56789"),
