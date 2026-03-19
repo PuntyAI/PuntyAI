@@ -151,11 +151,11 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_win_at_long_odds(self):
-        """$8 odds rank 1 → Win (rank 1 always backs to win)."""
+    def test_top_pick_place_at_long_odds(self):
+        """$8 odds rank 1 → Place (Config B: odds >= $7 shifts to Place)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
 
     def test_top_pick_win_at_2_50(self):
         """$2.50 rank 1 → Win (rank 1 always backs to win)."""

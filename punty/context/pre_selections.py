@@ -21,7 +21,7 @@ RACE_POOL = POOL_STANDARD  # default (for backward compat)
 MIN_STAKE = 1.0        # minimum bet
 STAKE_STEP = 0.50      # round to nearest 50c
 SINGLE_PICK_CAP = 15.0 # max stake when only 1 pick passes edge gate
-MAX_STAKED_PICKS = 2   # max picks with real stakes per race (picks #3+ tracked only)
+MAX_STAKED_PICKS = 3   # max picks with real stakes per race (picks #4+ tracked only)
 
 # Bet type thresholds (defaults — can be overridden by tuned thresholds)
 WIN_MIN_PROB = 0.18          # 18% win prob minimum for Win bet
@@ -166,6 +166,8 @@ def calculate_pre_selections(
     runners = race_context.get("runners", [])
     probs = race_context.get("probabilities", {})
     exotic_combos = probs.get("exotic_combinations", [])
+    race_class = race_context.get("class", "")
+    race_distance = race_context.get("distance", 0)
 
     thresholds = _load_thresholds(selection_thresholds)
 
@@ -290,6 +292,7 @@ def calculate_pre_selections(
             picks.append(_make_pick_from_optimizer(
                 c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
                 thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
             ))
             used_saddlecloths.add(c["saddlecloth"])
 
@@ -311,6 +314,7 @@ def calculate_pre_selections(
             pick = _make_pick_from_optimizer(
                 c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
                 thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
             )
             pick.tracked_only = True
             pick.no_bet_reason = "NTD field — only 2 staked picks"
@@ -323,6 +327,7 @@ def calculate_pre_selections(
             pick = _make_pick_from_optimizer(
                 roughie, 4, is_roughie=True, rec_lookup=rec_lookup,
                 thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
             )
             pick.tracked_only = True
             pick.no_bet_reason = "NTD field — only 2 staked picks"
@@ -342,6 +347,7 @@ def calculate_pre_selections(
             picks.append(_make_pick_from_optimizer(
                 c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
                 thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
             ))
             used_saddlecloths.add(c["saddlecloth"])
 
@@ -357,6 +363,7 @@ def calculate_pre_selections(
             picks.append(_make_pick_from_optimizer(
                 remaining[0], 3, is_roughie=False, rec_lookup=rec_lookup,
                 thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
             ))
             used_saddlecloths.add(remaining[0]["saddlecloth"])
 
@@ -365,6 +372,7 @@ def calculate_pre_selections(
             picks.append(_make_pick_from_optimizer(
                 roughie, 4, is_roughie=True, rec_lookup=rec_lookup,
                 thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
             ))
             used_saddlecloths.add(roughie["saddlecloth"])
         elif len(picks) < 4:
@@ -374,13 +382,20 @@ def calculate_pre_selections(
                     picks.append(_make_pick_from_optimizer(
                         c, len(picks) + 1, is_roughie=False, rec_lookup=rec_lookup,
                         thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                        race_class=race_class, distance=race_distance,
                     ))
                     used_saddlecloths.add(c["saddlecloth"])
                     break
 
-    # Ensure at least one Win/Saver Win bet (mandatory rule)
-    # Skip for PLACE_LEVERAGE — this classification can go all-Place
-    if classification.race_type != "PLACE_LEVERAGE":
+    # Ensure at least one Win/Saver Win bet — but only when the conditional
+    # bet type logic assigned Win to rank 1. If rank 1 was shifted to Place
+    # (Class/Open race, staying, or long odds), respect that decision.
+    # Skip for PLACE_LEVERAGE — this classification can go all-Place.
+    rank1_shifted_to_place = any(
+        p.rank == 1 and not p.is_roughie and p.bet_type == "Place"
+        for p in picks
+    )
+    if classification.race_type != "PLACE_LEVERAGE" and not rank1_shifted_to_place:
         _ensure_win_bet(picks)
 
     # Cap win-exposed bets to avoid spreading win risk across too many horses
@@ -400,7 +415,7 @@ def calculate_pre_selections(
         for pick in picks[MAX_STAKED_PICKS:]:
             if not pick.tracked_only:
                 pick.tracked_only = True
-                pick.no_bet_reason = "Stake concentrated on top 2 picks"
+                pick.no_bet_reason = "Stake concentrated on top 3 picks"
                 pick.stake = 0.0
 
     # Determine race pool using 3-tier confidence system
@@ -580,26 +595,48 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
     return candidates
 
 
-def _determine_bet_type(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None) -> str:
-    """Determine bet type: Rank 1 = Win, Rank 2+ = Place. Simple.
+def _determine_bet_type(
+    c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None,
+    field_size: int = 12, fav_price: float | None = None,
+    race_class: str = "", distance: int = 0,
+) -> str:
+    """Determine bet type using data-driven conditional rules.
 
-    Only exception: ≤4 runner fields have no place market → Win for all.
+    Rank 1: Win by default, shifted to Place when conditions favour it.
+    Rank 2+: Always Place.
+
+    Config B (validated on 1,340 picks, 31 days):
+      Win when: odds < $7 AND not Class/Open race AND distance < 2000m
+      Place when: odds >= $7 OR Class/Open race OR staying 2000m+
+
+    Win subset: 63% of races, +11.5% ROI
+    Place subset: 37% of races, +5.5% ROI
+    Combined: +$1,438 vs -$103 under all-Win
     """
     # ≤4 runners: no place betting available
     if field_size <= 4:
         return "Win"
 
-    # Rank 1: Win (back the horse we think will win)
+    # Rank 1: conditional Win/Place
     if rank == 1 and not is_roughie:
+        odds = c.get("odds", 0)
+        rc = (race_class or "").lower()
+        is_class_open = "class" in rc or "open" in rc
+        is_staying = distance >= 2000
+        is_long_odds = odds >= 7.0
+
+        # Shift to Place when Win historically loses money
+        if is_class_open or is_staying or is_long_odds:
+            return "Place"
         return "Win"
 
     # Everyone else: Place (saver)
     return "Place"
 
 
-def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None) -> RecommendedPick:
+def _make_pick(c: dict, rank: int, is_roughie: bool, thresholds: dict | None = None, field_size: int = 12, fav_price: float | None = None, race_class: str = "", distance: int = 0) -> RecommendedPick:
     """Create a RecommendedPick from candidate data (legacy path)."""
-    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
+    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price, race_class=race_class, distance=distance)
     tracked_only = False
     no_bet_reason = None
     expected_return = _expected_return(c, bet_type)
@@ -631,15 +668,18 @@ def _make_pick_from_optimizer(
     thresholds: dict | None = None,
     field_size: int = 12,
     fav_price: float | None = None,
+    race_class: str = "",
+    distance: int = 0,
 ) -> RecommendedPick:
     """Create a RecommendedPick using optimizer recommendation when available.
 
     Falls back to legacy _determine_bet_type if no optimizer recommendation
     exists for this saddlecloth (shouldn't happen in practice).
     """
-    # Simple rule: rank 1 = Win, rank 2+ = Place (optimizer recommendation ignored
-    # for bet type — kept for stake % and edge calculations only)
-    bet_type = _determine_bet_type(c, rank, is_roughie, thresholds, field_size=field_size, fav_price=fav_price)
+    bet_type = _determine_bet_type(
+        c, rank, is_roughie, thresholds, field_size=field_size,
+        fav_price=fav_price, race_class=race_class, distance=distance,
+    )
     tracked_only = False
     no_bet_reason = None
 
