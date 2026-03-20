@@ -96,15 +96,15 @@
             <table class="w-full text-sm" id="ledger-table">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50">
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Meet</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Race</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(0,'text')">Time<span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(1,'text')">Meet<span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(2,'text')">Race<span class="sort-arrow"></span></th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Bet</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Odds</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Stake</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Return</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">P&amp;L</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(4,'text')">Bet<span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(5,'num')">Odds<span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(6,'num')">Stake<span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(7,'num')">Return<span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(8,'num')">P&amp;L<span class="sort-arrow"></span></th>
                         <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Running</th>
                     </tr>
                 </thead>
@@ -145,10 +145,10 @@
                         <td class="px-3 py-2 text-right whitespace-nowrap {{ 'text-green-600 font-medium' if bet.returned > 0 else 'text-gray-400' }}">
                             {% if bet.returned > 0 %}${{ '%.2f'|format(bet.returned) }}{% else %}$0{% endif %}
                         </td>
-                        <td class="px-3 py-2 text-right whitespace-nowrap font-bold {{ 'text-green-600' if bet.pnl > 0 else ('text-red-600' if bet.pnl < 0 else 'text-gray-400') }}">
+                        <td class="px-3 py-2 text-right whitespace-nowrap font-bold pnl-cell {{ 'text-green-600' if bet.pnl > 0 else ('text-red-600' if bet.pnl < 0 else 'text-gray-400') }}" data-val="{{ bet.pnl }}">
                             {{ '%+.2f'|format(bet.pnl) | replace('+', '+$') | replace('-', '-$') }}
                         </td>
-                        <td class="px-3 py-2 text-right whitespace-nowrap font-medium {{ 'text-green-600' if bet.running_pnl >= 0 else 'text-red-600' }}">
+                        <td class="px-3 py-2 text-right whitespace-nowrap font-medium run-cell {{ 'text-green-600' if bet.running_pnl >= 0 else 'text-red-600' }}">
                             {{ '%+.0f'|format(bet.running_pnl) | replace('+', '+$') | replace('-', '-$') }}
                         </td>
                     </tr>
@@ -176,40 +176,90 @@
 
 <script>
 var currentMeetFilter = 'all';
+var currentTypeFilter = 'all';
+var sortCol = -1;
+var sortAsc = true;
 
-function filterByMeet(meet) {
-    currentMeetFilter = meet;
-    applyFilters();
+function recalcRunning() {
+    var rows = document.querySelectorAll('.bet-row');
+    var running = 0;
+    rows.forEach(function(row) {
+        if (row.style.display === 'none') return;
+        var pnlCell = row.querySelector('.pnl-cell');
+        var runCell = row.querySelector('.run-cell');
+        if (pnlCell && runCell) {
+            var pnl = parseFloat(pnlCell.getAttribute('data-val')) || 0;
+            running += pnl;
+            var prefix = running >= 0 ? '+$' : '-$';
+            runCell.textContent = prefix + Math.abs(running).toFixed(0);
+            runCell.className = 'px-3 py-2 text-right whitespace-nowrap font-medium run-cell ' +
+                (running >= 0 ? 'text-green-600' : 'text-red-600');
+        }
+    });
 }
 
-function applyFilters() {
+function applyAllFilters() {
     var rows = document.querySelectorAll('.bet-row');
     rows.forEach(function(row) {
         var meetMatch = currentMeetFilter === 'all' || row.getAttribute('data-meet') === currentMeetFilter;
-        var typeMatch = row.style.display !== 'none-by-type';
-        row.style.display = meetMatch ? '' : 'none';
+        var hit = row.getAttribute('data-hit') === '1';
+        var pickType = row.getAttribute('data-type');
+        var typeMatch = true;
+        if (currentTypeFilter === 'winners') typeMatch = hit;
+        else if (currentTypeFilter === 'losers') typeMatch = !hit;
+        else if (currentTypeFilter === 'selections') typeMatch = pickType === 'selection';
+        else if (currentTypeFilter === 'exotics') typeMatch = pickType === 'exotic';
+        else if (currentTypeFilter === 'sequences') typeMatch = pickType === 'sequence' || pickType === 'big3_multi';
+        row.style.display = (meetMatch && typeMatch) ? '' : 'none';
     });
+    recalcRunning();
+}
+
+function filterByMeet(meet) {
+    currentMeetFilter = meet;
+    applyAllFilters();
 }
 
 function filterBets(type) {
-    var rows = document.querySelectorAll('.bet-row');
-    rows.forEach(function(row) {
-        var hit = row.getAttribute('data-hit') === '1';
-        var pickType = row.getAttribute('data-type');
-        var show = true;
-        if (type === 'winners') show = hit;
-        else if (type === 'losers') show = !hit;
-        else if (type === 'selections') show = pickType === 'selection';
-        else if (type === 'exotics') show = pickType === 'exotic';
-        else if (type === 'sequences') show = pickType === 'sequence' || pickType === 'big3_multi';
-        row.style.display = show ? '' : 'none';
-    });
+    currentTypeFilter = type;
+    applyAllFilters();
     document.querySelectorAll('.filter-btn').forEach(function(btn) {
         btn.classList.remove('active', 'bg-gray-800', 'text-white');
         btn.classList.add('bg-gray-100', 'text-gray-700');
     });
     event.target.classList.remove('bg-gray-100', 'text-gray-700');
     event.target.classList.add('active', 'bg-gray-800', 'text-white');
+}
+
+function sortTable(colIdx, type) {
+    var table = document.getElementById('ledger-table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr.bet-row'));
+
+    if (sortCol === colIdx) { sortAsc = !sortAsc; }
+    else { sortCol = colIdx; sortAsc = true; }
+
+    rows.sort(function(a, b) {
+        var aVal = a.cells[colIdx].textContent.trim();
+        var bVal = b.cells[colIdx].textContent.trim();
+        if (type === 'num') {
+            aVal = parseFloat(aVal.replace(/[^0-9.\-]/g, '')) || 0;
+            bVal = parseFloat(bVal.replace(/[^0-9.\-]/g, '')) || 0;
+        }
+        if (aVal < bVal) return sortAsc ? -1 : 1;
+        if (aVal > bVal) return sortAsc ? 1 : -1;
+        return 0;
+    });
+
+    rows.forEach(function(row) { tbody.appendChild(row); });
+
+    // Update arrows
+    table.querySelectorAll('.sort-arrow').forEach(function(s) { s.textContent = ''; });
+    var th = table.querySelectorAll('th')[colIdx];
+    var arrow = th ? th.querySelector('.sort-arrow') : null;
+    if (arrow) arrow.textContent = sortAsc ? ' \u25B2' : ' \u25BC';
+
+    recalcRunning();
 }
 </script>
 {% endblock %}

@@ -974,7 +974,11 @@ async def balance_sheet_page(
         # Race time for chronological display
         race_time = ""
         if race and race.start_time:
-            race_time = race.start_time
+            rt = str(race.start_time)
+            # Extract just HH:MM from various formats
+            if " " in rt:
+                rt = rt.split(" ")[-1]  # "2026-03-20 10:47:00" → "10:47:00"
+            race_time = rt[:5] if len(rt) >= 5 else rt  # "10:47:00" → "10:47"
 
         entry = {
             "venue": venue,
