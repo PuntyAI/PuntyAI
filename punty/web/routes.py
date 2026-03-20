@@ -905,6 +905,12 @@ async def balance_sheet_page(
     daily_bets = 0
     daily_winners = 0
 
+    # Build race lookup per meeting for sequence time resolution
+    meeting_races = {}
+    for pick, meeting, race in rows:
+        if race and race.race_number:
+            meeting_races.setdefault(meeting.id, {})[race.race_number] = race
+
     for pick, meeting, race in rows:
         # Skip non-bet picks
         if pick.pick_type == "big3":
@@ -972,9 +978,25 @@ async def balance_sheet_page(
             odds = 0
 
         # Race time for chronological display
+        # For sequences/multis, use the last leg's race time
         race_time = ""
         if race and race.start_time:
             race_time = race.start_time
+        elif pick.pick_type in ("sequence", "big3_multi"):
+            # Find the last race in the sequence from the meeting
+            last_rn = None
+            if pick.pick_type == "sequence" and pick.sequence_start_race:
+                # Sequence covers 4 or 6 consecutive races
+                num_legs = 6 if "big" in (pick.sequence_type or "").lower() else 4
+                last_rn = (pick.sequence_start_race or 1) + num_legs - 1
+            elif pick.pick_type == "big3_multi":
+                # Big3 multi: use the last race in the meeting
+                last_rn = max(meeting_races.get(meeting.id, {}).keys(), default=None)
+            meet_race_map = meeting_races.get(meeting.id, {})
+            if last_rn and last_rn in meet_race_map:
+                last_race = meet_race_map[last_rn]
+                if last_race and last_race.start_time:
+                    race_time = last_race.start_time
 
         entry = {
             "venue": venue,
