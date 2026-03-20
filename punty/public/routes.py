@@ -2853,10 +2853,22 @@ async def get_daily_dashboard() -> dict:
             if entries:
                 meeting_pnl.append({"venue": venue, "data": entries})
 
-        # ── Summary counts for has_data logic ──
-        total_picks = len(all_rows)
-        total_settled = len(settled_rows)
-        total_upcoming = len(unsettled_rows)
+        # ── Summary counts (staked picks only, matching P&L by Type) ──
+        def _is_staked(pick):
+            """True if this pick has a real stake (not tracked_only/no_bet/big3)."""
+            if pick.pick_type == "big3":
+                return False
+            if pick.tracked_only:
+                return False
+            bt = str(pick.bet_type or "").lower().replace("_", " ")
+            if bt in ("no bet", "no_bet", "exotics only", "exotics_only"):
+                return False
+            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            return bool(stake and stake > 0)
+
+        total_picks = sum(1 for p, *_ in all_rows if _is_staked(p))
+        total_settled = sum(1 for p, *_ in settled_rows if _is_staked(p))
+        total_upcoming = sum(1 for p, *_ in unsettled_rows if _is_staked(p))
 
         return {
             "date": today.strftime("%d %B %Y").lstrip("0"),
