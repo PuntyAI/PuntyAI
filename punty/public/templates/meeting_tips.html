@@ -1105,8 +1105,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Status badge or countdown
         if (raceData) {
-            if (raceData.status && ['Paying', 'Closed', 'Final'].indexOf(raceData.status) !== -1) {
-                headerHtml += '<span class="fg-results-badge mr-2">Final</span>';
+            if (raceData.status && ['Paying', 'Closed', 'Final', 'Interim'].indexOf(raceData.status) !== -1) {
+                var statusLabel = raceData.status === 'Interim' ? 'Closed' : 'Final';
+                headerHtml += '<span class="fg-results-badge mr-2">' + statusLabel + '</span>';
             } else if (raceData.time && meetingDate) {
                 // Countdown for upcoming races (AEDT = +11:00)
                 var raceMs = Date.parse(meetingDate + 'T' + raceData.time + ':00+11:00');
