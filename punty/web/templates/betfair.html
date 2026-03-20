@@ -963,27 +963,7 @@ function betfairApp() {
                         this.buildFallback(data);
                     }
                 }
-                // Check if Chart.js rendered to canvas — if canvas is still blank, use fallback
-                if (useChartJs && !this.chartFallback) {
-                    await new Promise(r => setTimeout(r, 500));
-                    const canvas = document.getElementById('pnlChart');
-                    if (canvas) {
-                        const ctx = canvas.getContext('2d');
-                        const px = ctx.getImageData(0, 0, Math.max(1, canvas.width), 1).data;
-                        const hasContent = px.some(v => v > 0);
-                        if (!hasContent) {
-                            console.warn('Chart.js rendered empty canvas — switching to fallback');
-                            if (this._chart) { this._chart.destroy(); this._chart = null; }
-                            if (this.chartRange === 1) {
-                                const r2 = await fetch('/api/betfair/chart-data/today');
-                                this.buildTodayFallback(await r2.json());
-                            } else {
-                                const r2 = await fetch('/api/betfair/chart-data');
-                                this.buildFallback(await r2.json());
-                            }
-                        }
-                    }
-                }
+                // Chart.js fallback detection removed — trust the Chart.js render
             } catch (e) { this.chartError = `Chart error: ${e.message}`; console.error('Chart load failed:', e); }
         },
 

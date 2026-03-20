@@ -876,7 +876,7 @@ async def balance_sheet_page(
             Meeting.selected == True,
             Pick.settled == True,
         )
-        .order_by(Meeting.venue, Pick.race_number, Pick.tip_rank)
+        .order_by(Race.start_time, Meeting.venue, Pick.race_number, Pick.tip_rank)
     )
     rows = result.all()
 
@@ -971,9 +971,15 @@ async def balance_sheet_page(
         if pick.pick_type != "selection":
             odds = 0
 
+        # Race time for chronological display
+        race_time = ""
+        if race and race.start_time:
+            race_time = race.start_time
+
         entry = {
             "venue": venue,
             "race_number": pick.race_number or 0,
+            "race_time": race_time,
             "description": description,
             "bet_type": bet_label,
             "stake": round(stake, 2),
