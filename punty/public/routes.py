@@ -2561,7 +2561,7 @@ async def get_daily_dashboard() -> dict:
                 continue
             bt_stats[bt]["bets"] += 1
             bt_stats[bt]["settled"] += 1
-            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            stake = pick.exotic_stake if pick.pick_type in ("exotic", "sequence", "big3_multi") else pick.bet_stake
             bt_stats[bt]["staked"] += stake or 0
             bt_stats[bt]["pnl"] += pick.pnl or 0
             if pick.hit:
@@ -2574,7 +2574,7 @@ async def get_daily_dashboard() -> dict:
                 continue
             if pick.tracked_only:
                 continue
-            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            stake = pick.exotic_stake if pick.pick_type in ("exotic", "sequence", "big3_multi") else pick.bet_stake
             if not stake or stake <= 0:
                 continue
             bt_stats[bt]["bets"] += 1
@@ -2860,7 +2860,7 @@ async def get_daily_dashboard() -> dict:
             bt = str(pick.bet_type or "").lower().replace("_", " ")
             if bt in ("no bet", "no_bet", "exotics only", "exotics_only"):
                 return False
-            stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
+            stake = pick.exotic_stake if pick.pick_type in ("exotic", "sequence", "big3_multi") else pick.bet_stake
             return bool(stake and stake > 0)
 
         total_picks = sum(1 for p, *_ in all_rows if _is_staked(p))

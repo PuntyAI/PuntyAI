@@ -1237,6 +1237,65 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             big3Acc.appendChild(big3Header);
             big3Acc.appendChild(big3Body);
+
+            // Add Big3 Multi result badge if settled
+            var b3Result = (seqResults || []).filter(function(sr) {
+                return (sr.type || '').toLowerCase().replace(/\s+/g, '_') === 'big3_multi';
+            });
+            if (b3Result.length > 0) {
+                var sr = b3Result[0];
+                var pnlAbs = Math.abs(sr.pnl).toFixed(0);
+                var pnlStr = sr.pnl >= 0 ? '+$' + pnlAbs : '-$' + pnlAbs;
+                var statusClass = sr.hit ? 'seq-result-win' : 'seq-result-loss';
+                var statusLabel = sr.hit ? 'WON' : 'MISS';
+                var resultCard = document.createElement('div');
+                resultCard.className = 'seq-results-card';
+                var resultRow = document.createElement('div');
+                resultRow.className = 'seq-result-row ' + statusClass;
+                var labelSpan = document.createElement('span');
+                labelSpan.className = 'seq-result-label';
+                labelSpan.textContent = 'Big 3 Multi';
+                var statusSpan = document.createElement('span');
+                statusSpan.className = 'seq-result-status';
+                statusSpan.textContent = statusLabel;
+                var pnlSpan = document.createElement('span');
+                pnlSpan.className = 'seq-result-pnl';
+                pnlSpan.textContent = pnlStr;
+                resultRow.appendChild(labelSpan);
+                resultRow.appendChild(statusSpan);
+                resultRow.appendChild(pnlSpan);
+                resultCard.appendChild(resultRow);
+                big3Body.appendChild(resultCard);
+            }
+
+            // Add per-leg tick/cross to Big3 horses
+            var big3Paras = big3Body.querySelectorAll('p, strong, b');
+            for (var bpi = 0; bpi < big3Paras.length; bpi++) {
+                var bpEl = big3Paras[bpi];
+                var bpText = bpEl.textContent || '';
+                var bpRaceMatch = bpText.match(/Race\s+(\d+)/i);
+                if (bpRaceMatch) {
+                    var bpRaceNum = parseInt(bpRaceMatch[1]);
+                    var bpScMatch = bpText.match(/No\.?\s*(\d+)/i);
+                    var bpSc = bpScMatch ? parseInt(bpScMatch[1]) : null;
+                    if (bpSc && bpRaceNum) {
+                        var bpWinners = winners[bpRaceNum] || [];
+                        var bpRaceData = racesData ? racesData[bpRaceNum] : null;
+                        var bpSettled = bpRaceData && bpRaceData.status && ['Paying', 'Closed', 'Final'].indexOf(bpRaceData.status) !== -1;
+                        if (bpWinners.indexOf(bpSc) !== -1) {
+                            var wonBadge = document.createElement('span');
+                            wonBadge.style.cssText = 'color: #4ade80; font-weight: bold; margin-left: 6px;';
+                            wonBadge.textContent = '✓ WON';
+                            bpEl.parentNode.insertBefore(wonBadge, bpEl.nextSibling);
+                        } else if (bpSettled) {
+                            var missBadge = document.createElement('span');
+                            missBadge.style.cssText = 'color: #ef4444; margin-left: 6px;';
+                            missBadge.textContent = '✗';
+                            bpEl.parentNode.insertBefore(missBadge, bpEl.nextSibling);
+                        }
+                    }
+                }
+            }
         } else {
             // No Big 3 found — show everything directly
             var overviewDiv = document.createElement('div');

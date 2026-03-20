@@ -1025,14 +1025,16 @@ def build_all_sequence_lanes(
         logger.info(f"Skipping sequences: only {total_races} races (minimum 6)")
         return []
     else:
+        # TAB sequence pools: early quaddie needs 8+ races,
+        # big6 needs 8+ races, quaddie is last 4 races (6+ meets)
         rules = {
-            6:  {"early_quad": (1, 4), "quaddie": (3, 6), "big6": (1, 6)},
-            7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": (2, 7)},
+            6:  {"quaddie": (3, 6)},
+            7:  {"quaddie": (4, 7)},
             8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
-            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
-            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
-            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
-            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
+            9:  {"early_quad": (1, 4), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (1, 4), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (1, 4), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (1, 4), "quaddie": (9, 12), "big6": (7, 12)},
         }
         sequences = rules.get(
             total_races,
