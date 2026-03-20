@@ -104,18 +104,17 @@ Name the three legs with race numbers.
 If it hit: show the payout.
 If it missed: name the leg(s) that failed and how close they got.
 
-*Punty's Picks — How'd They Go?*
-Review each of Punty's recommended bets (the "Punty's Pick" lines from the Early Mail).
-For each race, show the outcome:
+*Race by Race — How'd We Go?*
+Review the top pick (rank 1) for each race and the outcome:
 
 Format:
 - R<#>: *<Horse>* <bet_type> — <outcome>
-  (e.g. "R3: *Speed Demon* Win — BANG! Won at $4.50, +$27" or "R5: *Longshot Larry* Win — 4th, map didn't hold. The pace collapsed and the closers cleaned up.")
+  (e.g. "R3: *Speed Demon* Win — BANG! Won at $4.50, +$27" or "R5: *Longshot Larry* Place — 4th, map didn't hold. The pace collapsed and the closers cleaned up.")
 
 **IMPORTANT: When a pick misses, briefly explain WHY it missed using racing factors** — don't just say "ran 4th." Say "ran 4th — got caught wide on the turn and the track was playing inside all day."
 
 After listing individual races, add a one-line summary:
-"Punty's Picks: X/Y hit for +/-$Z"
+"Selections: X/Y hit for +/-$Z"
 
 *What We Learned — The Factors That Mattered*
 THIS IS THE KEY SECTION. 3-4 paragraphs breaking down the factors that decided today's racing.
@@ -159,10 +158,10 @@ Keep this to 2-3 punchy paragraphs. This is actionable intelligence for next tim
 
 *Quick Hits (Race-by-Race)*
 One line per race. Every race. No skipping.
-Show ALL Punty wins for that race (win, place, each way, exotics).
+Show ALL wins for that race (win, place, each way, exotics).
 
 Format:
-- R<#>: <Winner> ($<div>) — <Punty's top pick> ran <pos>
+- R<#>: <Winner> ($<div>) — our top pick ran <pos>
 
 If Punty had ANY winners, format as:
 - R<#>: *<Winner>* ($<div>) — BANG <bet_type> +$<return>
