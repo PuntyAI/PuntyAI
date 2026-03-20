@@ -439,11 +439,51 @@ def build_exotic_dataset(races: list[dict], rank_model) -> tuple:
 
             hit = checker(top_positions, n_picks)
 
-            # Sample weight: estimated dividend for hits, 1.0 for misses
+            # Confidence-appropriate weighting: reward hits that match the
+            # exotic type's intended use case, penalise lucky flukes.
+            # This teaches the model to select exotics based on confidence
+            # profile, not just value overlay.
+            gap_12 = top_wps[0] - top_wps[1] if len(top_wps) >= 2 else 0
+            gap_23 = top_wps[1] - top_wps[2] if len(top_wps) >= 3 else 0
+            gap_34 = top_wps[2] - top_wps[3] if len(top_wps) >= 4 else 0
+
             if hit:
                 est_div = _estimate_exotic_dividend(exotic_type, top_odds, field_size)
-                weight = max(1.0, est_div)
+                base_weight = max(1.0, est_div)
+
+                # Confidence multiplier: reward hits in appropriate contexts
+                conf_mult = 1.0
+                if exotic_type in ("Exacta",):
+                    # Exacta should hit when gap_12 is large (high confidence in order)
+                    conf_mult = 2.0 if gap_12 > 0.06 and top_wps[0] > 0.22 else 0.5
+                elif exotic_type in ("Exacta Standout",):
+                    # Exacta standout: rank 1 strong, moderate confidence in 2nd
+                    conf_mult = 1.5 if top_wps[0] > 0.20 else 0.7
+                elif exotic_type in ("Quinella",):
+                    # Quinella: strong top 2, clear gap to 3rd
+                    conf_mult = 1.5 if gap_23 > 0.04 else 0.8
+                elif exotic_type in ("Quinella Box",):
+                    # Quinella Box: open race, small gaps — this IS the right choice
+                    conf_mult = 1.5 if gap_12 < 0.05 else 0.8
+                elif exotic_type in ("Trifecta Standout",):
+                    # Tri standout: rank 1 must be strong
+                    conf_mult = 1.5 if top_wps[0] > 0.22 else 0.6
+                elif exotic_type == "Trifecta Box":
+                    # 3-runner: top 3 separated from field
+                    conf_mult = 1.3 if gap_34 > 0.03 else 0.7
+                elif exotic_type == "Trifecta Box 4":
+                    # 4-runner: roughie must be live (genuine 4th contender)
+                    conf_mult = 1.5 if top_wps[3] > 0.10 else 0.5
+                elif exotic_type in ("First4",):
+                    conf_mult = 1.0  # Rare, let data speak
+                elif exotic_type in ("First4 Box",):
+                    # Need all picks genuinely live
+                    conf_mult = 1.3 if top_wps[3] > 0.08 else 0.5
+
+                weight = base_weight * conf_mult
             else:
+                # Misses: slight upweight when the exotic was appropriate but unlucky
+                # (teaches model not to avoid appropriate types just because SR < 50%)
                 weight = 1.0
 
             # Use "Trifecta Box" as the type code for both 3 and 4 runner variants

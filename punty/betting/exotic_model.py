@@ -83,6 +83,11 @@ EXOTIC_FEATURE_NAMES = [
     "best_combo_rank",    # best (lowest) rank among combo runners
     "worst_combo_rank",   # worst (highest) rank — roughie=4
     "avg_combo_wp",       # average WP of runners in this combo
+
+    # Confidence interactions (3 features) — does the exotic match the race?
+    "is_maiden",          # 1 if maiden race, 0 otherwise (form unreliable)
+    "complexity_vs_confidence",  # num_combos / (avg_combo_wp * 100) — high = ambitious for context
+    "order_confidence",   # gap_12 * rank1_wp — high = confident in finishing order
 ]
 
 NUM_EXOTIC_FEATURES = len(EXOTIC_FEATURE_NAMES)
@@ -257,6 +262,10 @@ def extract_exotic_features(
         _safe_float(best_combo_rank),
         _safe_float(worst_combo_rank),
         _safe_float(avg_combo_wp),
+        # Confidence interactions
+        1.0 if class_bucket == 1.0 else 0.0,  # is_maiden
+        float(num_combos) / (avg_combo_wp * 100) if avg_combo_wp > 0 else float("nan"),  # complexity_vs_confidence
+        _safe_float(gap_12 * wps[0]),  # order_confidence
     ]
 
 

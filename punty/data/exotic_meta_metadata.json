@@ -29,9 +29,12 @@
     "anchor_wp",
     "best_combo_rank",
     "worst_combo_rank",
-    "avg_combo_wp"
+    "avg_combo_wp",
+    "is_maiden",
+    "complexity_vs_confidence",
+    "order_confidence"
   ],
-  "num_features": 27,
+  "num_features": 30,
   "exotic_type_codes": {
     "Quinella": 1,
     "Quinella Box": 2,
@@ -42,7 +45,7 @@
     "First4": 7,
     "First4 Box": 8
   },
-  "training_date": "2026-03-20 11:14:31",
+  "training_date": "2026-03-20 13:44:49",
   "data_dir": "D:\\Punty\\DatafromProform",
   "total_races": 19714,
   "train_rows": 125861,
@@ -71,7 +74,7 @@
     "seed": 42,
     "is_unbalanced": false
   },
-  "best_iteration": 60,
-  "num_trees": 60,
+  "best_iteration": 75,
+  "num_trees": 75,
   "train_hit_rate": 45.15
 }

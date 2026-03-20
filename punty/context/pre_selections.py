@@ -1324,10 +1324,11 @@ def _select_exotic(
                 capped_value = min(value, 2.5)
                 score = raw_prob * (capped_value ** 2)
             else:
-                # Score = model's P(hit) × capped value — model already accounts
-                # for combo composition, race context, field size, etc.
+                # Score = P(hit)² × √value — probability dominates, value is a
+                # mild tiebreaker. This prevents high-value roughie combos from
+                # beating higher-probability plays.
                 capped_value = min(value, 2.5)
-                score = hit_prob * capped_value
+                score = (hit_prob ** 2) * (capped_value ** 0.5)
         else:
             # Hand-tuned scoring fallback
             capped_value = min(value, 2.5)
