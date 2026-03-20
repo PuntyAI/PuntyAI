@@ -999,7 +999,16 @@ async def settle_betfair_bets(
     odds = bet.matched_odds or bet.requested_odds or 0
 
     now = melb_now_naive()
-    hit_threshold = 1 if is_win_bet else 3  # win = 1st only, place = top 3
+    # Betfair place cutoff: 8+ runners = top 3, 5-7 = top 2, ≤4 = win only
+    if is_win_bet:
+        hit_threshold = 1
+    else:
+        race_id_q = await db.execute(
+            select(Race.id).where(Race.meeting_id == bet.meeting_id, Race.race_number == bet.race_number)
+        )
+        race_id_val = race_id_q.scalar()
+        runner_count = await _count_active_runners(db, race_id_val) if race_id_val else 8
+        hit_threshold = 3 if runner_count >= 8 else 2
 
     if finish_pos <= hit_threshold:
         gross_profit = (odds - 1) * bet.stake
