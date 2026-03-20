@@ -459,6 +459,10 @@ async def _settle_picks_for_race_impl(
             if dh > 1:
                 win_odds = win_odds / dh if win_odds else win_odds
                 place_odds = place_odds / dh if place_odds else place_odds
+                # Re-check place > win after dead heat adjustment
+                if win_odds and place_odds and place_odds > win_odds:
+                    divisor = 2 if num_places == 2 else 3
+                    place_odds = round((win_odds - 1) / divisor + 1, 2)
 
             if bet_type in ("win", "saver_win"):
                 pick.hit = won

@@ -243,8 +243,8 @@ def extract_exotic_features(
         _prize_money_bucket(prize_money),
         _safe_float(wp_spread),
         _safe_float(wp_hhi),
-        _safe_float(wps[0]),
-        _safe_float(wps[0]),
+        _safe_float(wps[0]),  # top1_wp
+        _safe_float(wps[0]),  # rank1_wp — TODO: duplicate of top1_wp, fix on next retrain
         _safe_float(wps[1]),
         _safe_float(wps[2]),
         _safe_float(wps[3]),

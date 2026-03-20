@@ -45,7 +45,7 @@ def _selection(
     rank: int = 1,
 ) -> dict:
     """Build a mock selection pick."""
-    return {
+    pick = {
         "pick_type": "selection",
         "race_number": race,
         "saddlecloth": sc,
@@ -54,6 +54,9 @@ def _selection(
         "bet_stake": stake,
         "tip_rank": rank,
     }
+    if rank == 0:
+        pick["is_puntys_pick"] = True
+    return pick
 
 
 def _exotic(race: int, exotic_type: str, runners, stake: float = 20.0) -> dict:

@@ -628,21 +628,29 @@ def _calculate_lgbm_probabilities(
     except Exception:
         pass  # Tissue failure is fine — LGBM ranking stands alone
 
-    # Apply tissue tiebreaker: bubble-sort adjacent pairs within 5% LGBM gap
-    for i in range(len(ranked_rids) - 1):
-        rid_a = ranked_rids[i]
-        rid_b = ranked_rids[i + 1]
-        lgbm_gap = lgbm_ranks[rid_a] - lgbm_ranks[rid_b]
-        if lgbm_gap < 0.05 and tissue_probs:
-            t_a = tissue_probs.get(rid_a, 0)
-            t_b = tissue_probs.get(rid_b, 0)
-            # If tissue strongly disagrees (>8% tissue gap favouring B), swap
-            if t_b - t_a > 0.08:
-                ranked_rids[i], ranked_rids[i + 1] = ranked_rids[i + 1], ranked_rids[i]
-                logger.debug(
-                    "Tissue tiebreak: swapped %s (lgbm=%.3f, tissue=%.3f) with %s (lgbm=%.3f, tissue=%.3f)",
-                    rid_b, lgbm_ranks[rid_b], t_b, rid_a, lgbm_ranks[rid_a], t_a,
-                )
+    # Apply tissue tiebreaker: multi-pass bubble sort within 5% LGBM gap
+    # Multiple passes ensure correct ordering for 3-way near-ties
+    if tissue_probs:
+        swapped = True
+        max_passes = min(5, len(ranked_rids))
+        passes = 0
+        while swapped and passes < max_passes:
+            swapped = False
+            passes += 1
+            for i in range(len(ranked_rids) - 1):
+                rid_a = ranked_rids[i]
+                rid_b = ranked_rids[i + 1]
+                lgbm_gap = lgbm_ranks[rid_a] - lgbm_ranks[rid_b]
+                if lgbm_gap < 0.05:
+                    t_a = tissue_probs.get(rid_a, 0)
+                    t_b = tissue_probs.get(rid_b, 0)
+                    if t_b - t_a > 0.08:
+                        ranked_rids[i], ranked_rids[i + 1] = ranked_rids[i + 1], ranked_rids[i]
+                        swapped = True
+                        logger.debug(
+                            "Tissue tiebreak (pass %d): swapped %s (tissue=%.3f) with %s (tissue=%.3f)",
+                            passes, rid_b, t_b, rid_a, t_a,
+                        )
 
     # ── Step 3: Market-calibrated probabilities ──
     # Use market odds (overround-adjusted) as the base probability.
@@ -765,11 +773,28 @@ def _calculate_lgbm_probabilities(
         rid = _get(runner, "id", "")
         blended_place[rid] = _harville_place_probability(rid, blended_win, place_count)
 
-    # Normalize place probs with per-runner cap at 0.95
+    # Normalize place probs with per-runner cap at 0.95, then re-normalize
+    # so total equals place_count (clip-then-redistribute, not clip-then-leave)
     bp_total = sum(blended_place.values())
     if bp_total > 0:
-        blended_place = {rid: min(0.95, p / bp_total * place_count)
-                         for rid, p in blended_place.items()}
+        scaled = {rid: p / bp_total * place_count for rid, p in blended_place.items()}
+        # Clip then redistribute excess to uncapped runners
+        capped = {}
+        excess = 0.0
+        uncapped_total = 0.0
+        for rid, p in scaled.items():
+            if p > 0.95:
+                excess += p - 0.95
+                capped[rid] = 0.95
+            else:
+                capped[rid] = p
+                uncapped_total += p
+        if excess > 0 and uncapped_total > 0:
+            for rid in capped:
+                if capped[rid] < 0.95:
+                    capped[rid] += excess * (capped[rid] / uncapped_total)
+                    capped[rid] = min(0.95, capped[rid])
+        blended_place = capped
 
     # Enforce place_prob >= win_prob (placing includes winning).
     # Normalisation can compress a strong favourite's place_prob below their

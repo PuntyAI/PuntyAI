@@ -694,10 +694,12 @@ def _make_pick_from_optimizer(
     race_class: str = "",
     distance: int = 0,
 ) -> RecommendedPick:
-    """Create a RecommendedPick using optimizer recommendation when available.
+    """Create a RecommendedPick from optimizer context.
 
-    Falls back to legacy _determine_bet_type if no optimizer recommendation
-    exists for this saddlecloth (shouldn't happen in practice).
+    Note: rec_lookup (optimizer bet recommendations) is not used — bet type
+    is determined by the bettype meta-model via _determine_bet_type() which
+    supersedes the optimizer's per-runner recommendations. The optimizer's
+    race classification (DOMINANT_EDGE etc.) is used upstream for pool sizing.
     """
     bet_type = _determine_bet_type(
         c, rank, is_roughie, thresholds, field_size=field_size,
