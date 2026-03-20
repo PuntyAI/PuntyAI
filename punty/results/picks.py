@@ -831,18 +831,19 @@ async def _settle_picks_for_race_impl(
                         combos = others_n if others_n >= 1 else 1
                     elif "first" in exotic_type:
                         combos = others_n * (others_n - 1) * (others_n - 2) if others_n >= 3 else 1
+                elif "quinella" in exotic_type:
+                    # Quinella is always any-order — combos = nC2
+                    combos = n * (n - 1) // 2 if n >= 2 else 1
                 elif is_boxed or ("box" in exotic_type):
                     # Box formula — any order permutations
                     if "trifecta" in exotic_type:
                         combos = n * (n - 1) * (n - 2) if n >= 3 else 1
                     elif "exacta" in exotic_type:
                         combos = n * (n - 1) if n >= 2 else 1
-                    elif "quinella" in exotic_type:
-                        combos = n * (n - 1) // 2 if n >= 2 else 1
                     elif "first" in exotic_type:
                         combos = n * (n - 1) * (n - 2) * (n - 3) if n >= 4 else 1
                 else:
-                    # Straight bet — fixed order, 1 combo
+                    # Straight bet (exacta, trifecta, first4) — fixed order, 1 combo
                     combos = 1
 
             # Stake is the total outlay for this exotic bet
