@@ -798,19 +798,16 @@ class TestSequenceTrackFilters:
         ctxs = [_race_ctx(i) for i in range(5, 9)]
         return legs, ctxs
 
-    def test_heavy_track_returns_none(self):
-        """Heavy track → no sequence."""
+    def test_heavy_track_not_hard_killed(self):
+        """Heavy track — no longer hard-killed, meta-model decides."""
         legs, ctxs = self._build_inputs()
-        result = build_smart_sequence("Quaddie", (5, 8), legs, ctxs,
-                                      track_condition="Heavy 9")
-        assert result is None
+        # Should not crash — may return None for viability reasons but not track gate
+        build_smart_sequence("Quaddie", (5, 8), legs, ctxs, track_condition="Heavy 9")
 
-    def test_soft_6_returns_none(self):
-        """Soft 6+ → no sequence."""
+    def test_soft_6_not_hard_killed(self):
+        """Soft 6+ — no longer hard-killed, meta-model decides."""
         legs, ctxs = self._build_inputs()
-        result = build_smart_sequence("Quaddie", (5, 8), legs, ctxs,
-                                      track_condition="Soft 6")
-        assert result is None
+        build_smart_sequence("Quaddie", (5, 8), legs, ctxs, track_condition="Soft 6")
 
     def test_soft_5_allowed(self):
         """Soft 5 → sequence allowed."""

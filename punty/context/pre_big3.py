@@ -169,12 +169,7 @@ def calculate_pre_big3(race_contexts: list[dict]) -> Big3Recommendation | None:
     multi_odds = top_horses[0].win_odds * top_horses[1].win_odds * top_horses[2].win_odds
     ev = multi_prob * multi_odds * POOL_TAKEOUT
 
-    # Skip if combined odds too low — multi must pay enough to justify risk
-    if multi_odds < MIN_COMBINED_ODDS:
-        logger.info(
-            f"Big 3 skipped: combined odds ${multi_odds:.1f} < ${MIN_COMBINED_ODDS:.0f} minimum"
-        )
-        return None
+    # Minimum odds gate removed — sequence meta-model learns when to play/skip (PR #238).
 
     best = Big3Recommendation(
         horses=top_horses,
