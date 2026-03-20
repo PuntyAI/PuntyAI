@@ -96,15 +96,15 @@
             <table class="w-full text-sm" id="ledger-table">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50">
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Meet</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Race</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(0,'text')">Time <span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(1,'text')">Meet <span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(2,'text')">Race <span class="sort-arrow"></span></th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Bet</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Odds</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Stake</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Return</th>
-                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">P&amp;L</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(4,'text')">Bet <span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(5,'num')">Odds <span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(6,'num')">Stake <span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(7,'num')">Return <span class="sort-arrow"></span></th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-800" onclick="sortTable(8,'num')">P&amp;L <span class="sort-arrow"></span></th>
                         <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Running</th>
                     </tr>
                 </thead>
@@ -176,34 +176,66 @@
 
 <script>
 var currentMeetFilter = 'all';
+var currentTypeFilter = 'all';
+var sortCol = -1;
+var sortAsc = true;
 
 function filterByMeet(meet) {
     currentMeetFilter = meet;
-    applyFilters();
+    applyAllFilters();
 }
 
-function applyFilters() {
+function applyAllFilters() {
     var rows = document.querySelectorAll('.bet-row');
     rows.forEach(function(row) {
         var meetMatch = currentMeetFilter === 'all' || row.getAttribute('data-meet') === currentMeetFilter;
-        var typeMatch = row.style.display !== 'none-by-type';
-        row.style.display = meetMatch ? '' : 'none';
+        var hit = row.getAttribute('data-hit') === '1';
+        var pickType = row.getAttribute('data-type');
+        var typeMatch = true;
+        if (currentTypeFilter === 'winners') typeMatch = hit;
+        else if (currentTypeFilter === 'losers') typeMatch = !hit;
+        else if (currentTypeFilter === 'selections') typeMatch = pickType === 'selection';
+        else if (currentTypeFilter === 'exotics') typeMatch = pickType === 'exotic';
+        else if (currentTypeFilter === 'sequences') typeMatch = pickType === 'sequence' || pickType === 'big3_multi';
+        row.style.display = (meetMatch && typeMatch) ? '' : 'none';
     });
 }
 
-function filterBets(type) {
-    var rows = document.querySelectorAll('.bet-row');
-    rows.forEach(function(row) {
-        var hit = row.getAttribute('data-hit') === '1';
-        var pickType = row.getAttribute('data-type');
-        var show = true;
-        if (type === 'winners') show = hit;
-        else if (type === 'losers') show = !hit;
-        else if (type === 'selections') show = pickType === 'selection';
-        else if (type === 'exotics') show = pickType === 'exotic';
-        else if (type === 'sequences') show = pickType === 'sequence' || pickType === 'big3_multi';
-        row.style.display = show ? '' : 'none';
+function sortTable(colIdx, type) {
+    var table = document.getElementById('ledger-table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr.bet-row'));
+
+    if (sortCol === colIdx) {
+        sortAsc = !sortAsc;
+    } else {
+        sortCol = colIdx;
+        sortAsc = true;
+    }
+
+    rows.sort(function(a, b) {
+        var aVal = a.cells[colIdx].textContent.trim();
+        var bVal = b.cells[colIdx].textContent.trim();
+        if (type === 'num') {
+            aVal = parseFloat(aVal.replace(/[^0-9.\-]/g, '')) || 0;
+            bVal = parseFloat(bVal.replace(/[^0-9.\-]/g, '')) || 0;
+        }
+        if (aVal < bVal) return sortAsc ? -1 : 1;
+        if (aVal > bVal) return sortAsc ? 1 : -1;
+        return 0;
     });
+
+    rows.forEach(function(row) { tbody.appendChild(row); });
+
+    // Update arrow indicators
+    table.querySelectorAll('.sort-arrow').forEach(function(s) { s.textContent = ''; });
+    var arrow = table.querySelectorAll('th')[colIdx].querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = sortAsc ? ' \u25B2' : ' \u25BC';
+}
+
+function filterBets(type) {
+    currentTypeFilter = type;
+    applyAllFilters();
     document.querySelectorAll('.filter-btn').forEach(function(btn) {
         btn.classList.remove('active', 'bg-gray-800', 'text-white');
         btn.classList.add('bg-gray-100', 'text-gray-700');
