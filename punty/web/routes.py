@@ -843,3 +843,195 @@ async def learnings_page(request: Request, db: AsyncSession = Depends(get_db)):
             "stats": stats,
         },
     )
+
+
+@router.get("/balance-sheet", response_class=HTMLResponse)
+@router.get("/balance-sheet/{date_str}", response_class=HTMLResponse)
+async def balance_sheet_page(
+    request: Request,
+    date_str: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily balance sheet — every bet listed chronologically with per-meet P&L."""
+    from punty.models.meeting import Runner
+    from zoneinfo import ZoneInfo
+
+    MELB = ZoneInfo("Australia/Melbourne")
+
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            target_date = melb_now().date()
+    else:
+        target_date = melb_now().date()
+
+    # Get all settled picks for the date
+    result = await db.execute(
+        select(Pick, Meeting, Race)
+        .join(Meeting, Pick.meeting_id == Meeting.id)
+        .outerjoin(Race, and_(Race.meeting_id == Pick.meeting_id, Race.race_number == Pick.race_number))
+        .where(
+            Meeting.date == target_date,
+            Meeting.selected == True,
+            Pick.settled == True,
+        )
+        .order_by(Meeting.venue, Pick.race_number, Pick.tip_rank)
+    )
+    rows = result.all()
+
+    # Get runner info for horse names
+    runner_cache = {}
+    if rows:
+        race_ids = set()
+        for pick, meeting, race in rows:
+            if race and pick.saddlecloth:
+                race_ids.add(race.id)
+        if race_ids:
+            runner_result = await db.execute(
+                select(Runner).where(Runner.race_id.in_(race_ids))
+            )
+            for r in runner_result.scalars().all():
+                runner_cache[(r.race_id, r.saddlecloth)] = r
+
+    # Build ledger entries grouped by meeting
+    meetings_data = {}
+    daily_staked = 0.0
+    daily_returned = 0.0
+    daily_pnl = 0.0
+    daily_bets = 0
+    daily_winners = 0
+
+    for pick, meeting, race in rows:
+        # Skip non-bet picks
+        if pick.pick_type == "big3":
+            continue
+        if pick.pick_type == "selection":
+            bt = (pick.bet_type or "").lower().replace("_", " ")
+            if bt in ("no bet", "no_bet", "exotics only", "exotics_only"):
+                continue
+            if pick.tracked_only:
+                continue
+
+        stake = pick.exotic_stake if pick.pick_type in ("exotic", "sequence", "big3_multi") else pick.bet_stake
+        if not stake or stake <= 0:
+            continue
+
+        venue = meeting.venue or "Unknown"
+        if venue not in meetings_data:
+            meetings_data[venue] = {
+                "venue": venue,
+                "bets": [],
+                "staked": 0.0,
+                "returned": 0.0,
+                "pnl": 0.0,
+                "winners": 0,
+                "total_bets": 0,
+            }
+
+        pnl = pick.pnl or 0
+        returned = stake + pnl if pnl > -stake else 0.0
+
+        # Get horse name
+        horse_name = pick.horse_name or ""
+        if not horse_name and pick.saddlecloth and race:
+            runner = runner_cache.get((race.id, pick.saddlecloth))
+            if runner:
+                horse_name = runner.horse_name or ""
+
+        # Determine bet type label
+        if pick.pick_type == "selection":
+            bet_label = (pick.bet_type or "Unknown").replace("_", " ").title()
+            if bet_label == "Saver Win":
+                bet_label = "Win"
+        elif pick.pick_type == "exotic":
+            bet_label = pick.exotic_type or "Exotic"
+        elif pick.pick_type == "sequence":
+            bet_label = (pick.sequence_type or "Sequence").replace("_", " ").title()
+        elif pick.pick_type == "big3_multi":
+            bet_label = "Big3 Multi"
+        else:
+            bet_label = pick.pick_type or "Unknown"
+
+        # Odds
+        odds = pick.odds_at_tip or 0
+        if pick.pick_type == "exotic":
+            odds = 0  # exotics don't have single odds
+
+        entry = {
+            "race_number": pick.race_number or 0,
+            "horse_name": horse_name,
+            "saddlecloth": pick.saddlecloth or 0,
+            "bet_type": bet_label,
+            "stake": round(stake, 2),
+            "odds": round(odds, 2) if odds else 0,
+            "pnl": round(pnl, 2),
+            "returned": round(returned, 2),
+            "hit": bool(pick.hit),
+            "tip_rank": pick.tip_rank,
+            "pick_type": pick.pick_type,
+        }
+
+        meetings_data[venue]["bets"].append(entry)
+        meetings_data[venue]["staked"] += stake
+        meetings_data[venue]["returned"] += returned
+        meetings_data[venue]["pnl"] += pnl
+        meetings_data[venue]["total_bets"] += 1
+        if pick.hit:
+            meetings_data[venue]["winners"] += 1
+
+        daily_staked += stake
+        daily_returned += returned
+        daily_pnl += pnl
+        daily_bets += 1
+        if pick.hit:
+            daily_winners += 1
+
+    # Round meeting totals
+    for m in meetings_data.values():
+        m["staked"] = round(m["staked"], 2)
+        m["returned"] = round(m["returned"], 2)
+        m["pnl"] = round(m["pnl"], 2)
+
+    # Sort meetings by venue name
+    sorted_meetings = sorted(meetings_data.values(), key=lambda m: m["venue"])
+
+    # Get available dates for navigation
+    dates_result = await db.execute(
+        select(Meeting.date)
+        .where(Meeting.selected == True)
+        .group_by(Meeting.date)
+        .order_by(Meeting.date.desc())
+        .limit(30)
+    )
+    available_dates = [r[0].isoformat() for r in dates_result.all()]
+
+    # Previous/next date
+    prev_date = None
+    next_date = None
+    for i, d in enumerate(available_dates):
+        if d == target_date.isoformat():
+            if i + 1 < len(available_dates):
+                prev_date = available_dates[i + 1]
+            if i > 0:
+                next_date = available_dates[i - 1]
+            break
+
+    return templates.TemplateResponse(
+        "balance_sheet.html",
+        {
+            "request": request,
+            "target_date": target_date,
+            "date_display": target_date.strftime("%A, %d %B %Y"),
+            "meetings": sorted_meetings,
+            "daily_staked": round(daily_staked, 2),
+            "daily_returned": round(daily_returned, 2),
+            "daily_pnl": round(daily_pnl, 2),
+            "daily_roi": round(daily_pnl / daily_staked * 100, 1) if daily_staked > 0 else 0,
+            "daily_bets": daily_bets,
+            "daily_winners": daily_winners,
+            "available_dates": available_dates,
+            "prev_date": prev_date,
+            "next_date": next_date,
+        },
+    )

@@ -325,7 +325,7 @@ async def populate_bet_queue(
     if slots_remaining == 0:
         return 0
 
-    # Filter only: scratched runners and NTD (<5 runners = no place market)
+    # Filter only: scratched runners and NTD (<8 runners = reduced place market)
     eligible = []
     for pick in race_picks:
         race = races_by_num.get(pick.race_number)
@@ -333,10 +333,10 @@ async def populate_bet_queue(
             logger.debug(f"Skipping bet for {meeting_id} R{pick.race_number}: no start time")
             continue
 
-        # NTD hard kill — fewer than 5 runners often means only 1 paid place
+        # NTD hard kill — fewer than 8 runners means only top-2 place (reduced edge)
         race_id = f"{meeting_id}-r{race.race_number}"
         runner_count = await _count_active_runners(db, race_id)
-        if runner_count < 5:
+        if runner_count < 8:
             logger.info(
                 f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
                 f"NTD — {runner_count} runners (too few for place betting)"
@@ -573,11 +573,11 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
     for bet in queued_bets:
         race_id = f"{bet.meeting_id}-r{bet.race_number}"
 
-        # NTD hard kill — fewer than 5 runners often means only 1 paid place
+        # NTD hard kill — fewer than 8 runners means reduced place market
         runner_count = await _count_active_runners(db, race_id)
-        if runner_count < 5:
+        if runner_count < 8:
             bet.status = "cancelled"
-            bet.error_message = f"NTD — {runner_count} runners (too few for place betting)"
+            bet.error_message = f"NTD — {runner_count} runners (need 8+ for full place market)"
             changes += 1
             logger.info(f"Cancelled {bet.id}: NTD {runner_count} runners")
             continue
