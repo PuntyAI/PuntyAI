@@ -141,10 +141,11 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
     )
 
     # Sequence headings: EARLY QUADDIE (...), MAIN QUADDIE (...), BIG 6 (...)
+    # AI may wrap in *bold* markers: *EARLY QUADDIE* (Races 1-4)
     content = re.sub(
-        r'^((?:EARLY\s+|MAIN\s+)?QUADDIE|BIG\s*6)\s*(\(.*?\))?\s*$',
+        r'^\*{0,2}((?:EARLY\s+|MAIN\s+)?QUADDIE(?:\s*\(main\))?|BIG\s*6)\*{0,2}\s*(\(.*?\))?\s*$',
         lambda m: f'## {m.group(1)}{" " + m.group(2) if m.group(2) else ""}',
-        content, flags=re.MULTILINE,
+        content, flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # Trailing section headings: NUGGETS FROM THE TRACK, FINAL WORD FROM ...
