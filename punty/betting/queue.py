@@ -150,6 +150,14 @@ async def get_current_stake(db: AsyncSession, place_probability: float = 0,
         initial_balance = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
         base_stake = float(await _get_setting(db, "betfair_stake", str(DEFAULT_BASE_STAKE)))
         return calculate_stake(balance, initial_balance, base_stake)
+    elif mode.lower().endswith("%"):
+        # Percentage of balance mode: e.g. "7.5%" → 7.5% of current balance
+        try:
+            pct = float(mode.rstrip("%")) / 100.0
+            stake = round(balance * pct, 2)
+            return max(1.0, stake)  # minimum $1
+        except ValueError:
+            return DEFAULT_BASE_STAKE
     else:
         try:
             return max(0.50, float(mode))
