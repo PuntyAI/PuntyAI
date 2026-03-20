@@ -1111,8 +1111,13 @@ def _select_exotic(
         from punty.ml.features import _distance_bucket, _track_cond_bucket, _class_bucket, _venue_type_code
 
         if exotic_model_available() and picks:
-            rank_wps = [p.win_prob for p in sorted(picks, key=lambda p: p.rank)]
-            rank_odds = [p.odds for p in sorted(picks, key=lambda p: p.rank)]
+            sorted_picks = sorted(picks, key=lambda p: p.rank)
+            rank_wps = [p.win_prob for p in sorted_picks]
+            rank_odds = [p.odds for p in sorted_picks]
+
+            # Build saddlecloth → rank/WP maps for combo composition features
+            sc_to_rank = {p.saddlecloth: p.rank for p in sorted_picks}
+            sc_to_wp = {p.saddlecloth: p.win_prob for p in sorted_picks}
 
             scored = score_exotic_candidates(
                 exotic_combos,
@@ -1124,6 +1129,8 @@ def _select_exotic(
                 prize_money=float(prize_money or 0),
                 rank_wps=rank_wps,
                 rank_odds=rank_odds,
+                saddlecloth_to_rank=sc_to_rank,
+                saddlecloth_to_wp=sc_to_wp,
             )
 
             if scored:

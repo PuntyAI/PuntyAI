@@ -24,9 +24,14 @@
     "avg_top4_value",
     "exotic_type_code",
     "num_combo_runners",
-    "num_combos"
+    "num_combos",
+    "anchor_rank",
+    "anchor_wp",
+    "best_combo_rank",
+    "worst_combo_rank",
+    "avg_combo_wp"
   ],
-  "num_features": 22,
+  "num_features": 27,
   "exotic_type_codes": {
     "Quinella": 1,
     "Quinella Box": 2,
@@ -37,12 +42,12 @@
     "First4": 7,
     "First4 Box": 8
   },
-  "training_date": "2026-03-20 10:32:36",
+  "training_date": "2026-03-20 11:14:31",
   "data_dir": "D:\\Punty\\DatafromProform",
   "total_races": 19714,
-  "train_rows": 112214,
-  "val_rows": 17008,
-  "test_rows": 16060,
+  "train_rows": 125861,
+  "val_rows": 19069,
+  "test_rows": 18036,
   "temporal_split": {
     "train": "< 2025-10-19",
     "val": "2025-10-19 to 2025-11-24",
@@ -66,7 +71,7 @@
     "seed": 42,
     "is_unbalanced": false
   },
-  "best_iteration": 79,
-  "num_trees": 79,
-  "train_hit_rate": 43.84
+  "best_iteration": 60,
+  "num_trees": 60,
+  "train_hit_rate": 45.15
 }

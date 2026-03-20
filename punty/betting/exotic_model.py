@@ -76,6 +76,13 @@ EXOTIC_FEATURE_NAMES = [
     "exotic_type_code",   # 1-8 encoding per EXOTIC_TYPE_CODES
     "num_combo_runners",  # number of runners in the combo
     "num_combos",         # number of permutations/combinations
+
+    # Combo composition (5 features) — WHO is in this specific combo
+    "anchor_rank",        # rank of the 1st runner in combo (1=top pick, 4=roughie)
+    "anchor_wp",          # WP of the anchor runner
+    "best_combo_rank",    # best (lowest) rank among combo runners
+    "worst_combo_rank",   # worst (highest) rank — roughie=4
+    "avg_combo_wp",       # average WP of runners in this combo
 ]
 
 NUM_EXOTIC_FEATURES = len(EXOTIC_FEATURE_NAMES)
@@ -160,6 +167,8 @@ def extract_exotic_features(
     exotic_type: str,
     num_combo_runners: int,
     num_combos: int,
+    combo_runner_ranks: list[int] | None = None,
+    combo_runner_wps: list[float] | None = None,
 ) -> list[float]:
     """Build the exotic feature vector. Order must match EXOTIC_FEATURE_NAMES.
 
@@ -175,6 +184,8 @@ def extract_exotic_features(
         exotic_type: Exotic type name (e.g. "Quinella Box").
         num_combo_runners: Number of runners in the exotic combination.
         num_combos: Number of permutations/combinations.
+        combo_runner_ranks: Ranks (1-4) of the runners in this specific combo.
+        combo_runner_wps: WPs of the runners in this specific combo.
     """
     nan = float("nan")
 
@@ -209,6 +220,15 @@ def extract_exotic_features(
     # Exotic type code
     type_code = float(EXOTIC_TYPE_CODES.get(exotic_type, 0))
 
+    # Combo composition — who's actually in this specific combo
+    c_ranks = combo_runner_ranks or [1, 2]  # default to top 2
+    c_wps = combo_runner_wps or wps[:2]
+    anchor_rank = float(c_ranks[0]) if c_ranks else nan
+    anchor_wp = _safe_float(c_wps[0]) if c_wps else nan
+    best_combo_rank = float(min(c_ranks)) if c_ranks else nan
+    worst_combo_rank = float(max(c_ranks)) if c_ranks else nan
+    avg_combo_wp = sum(c_wps) / len(c_wps) if c_wps else nan
+
     return [
         float(field_size),
         _safe_float(distance_bucket),
@@ -232,6 +252,11 @@ def extract_exotic_features(
         type_code,
         float(num_combo_runners),
         float(num_combos),
+        _safe_float(anchor_rank),
+        _safe_float(anchor_wp),
+        _safe_float(best_combo_rank),
+        _safe_float(worst_combo_rank),
+        _safe_float(avg_combo_wp),
     ]
 
 
@@ -267,11 +292,15 @@ def score_exotic_candidates(
     prize_money: float,
     rank_wps: list[float],
     rank_odds: list[float],
+    saddlecloth_to_rank: dict[int, int] | None = None,
+    saddlecloth_to_wp: dict[int, float] | None = None,
 ) -> list[tuple[dict, float, float]]:
     """Score all candidate exotics using the meta-model.
 
     Args:
         candidates: List of exotic combo dicts from calculate_exotic_combinations.
+        saddlecloth_to_rank: Map saddlecloth → rank (1-4) for combo composition.
+        saddlecloth_to_wp: Map saddlecloth → WP for combo composition.
         (remaining kwargs): Race context features.
 
     Returns:
@@ -282,11 +311,19 @@ def score_exotic_candidates(
     if not _load_exotic_model():
         return []
 
+    sc_rank = saddlecloth_to_rank or {}
+    sc_wp = saddlecloth_to_wp or {}
+
     results = []
     for ec in candidates:
         exotic_type = ec.get("type", "")
         if exotic_type not in EXOTIC_TYPE_CODES:
             continue
+
+        # Map combo runners to their ranks and WPs
+        runners = ec.get("runners", [])
+        combo_ranks = [sc_rank.get(r, 4) for r in runners]  # default rank 4 if unknown
+        combo_wps = [sc_wp.get(r, 0.05) for r in runners]
 
         features = extract_exotic_features(
             field_size=field_size,
@@ -298,8 +335,10 @@ def score_exotic_candidates(
             rank_wps=rank_wps,
             rank_odds=rank_odds,
             exotic_type=exotic_type,
-            num_combo_runners=len(ec.get("runners", [])),
+            num_combo_runners=len(runners),
             num_combos=max(1, ec.get("combos", 1)),
+            combo_runner_ranks=combo_ranks,
+            combo_runner_wps=combo_wps,
         )
 
         prob = predict_exotic_hit_probability(features)
