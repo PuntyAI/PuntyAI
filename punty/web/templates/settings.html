@@ -542,7 +542,7 @@
                            hx-put="/api/settings/enable_early_mail"
                            hx-trigger="change"
                            hx-swap="none"
-                           hx-vals='{"value": "{{ 'false' if settings.get('enable_early_mail', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                           hx-vals='js:{value: event.target.checked ? "true" : "false"}'>
                     <div>
                         <span class="text-sm font-medium text-gray-700">Early Mail</span>
                         <p class="text-xs text-gray-500">Generate daily tips for meetings</p>
@@ -556,7 +556,7 @@
                            hx-put="/api/settings/enable_meeting_wrapup"
                            hx-trigger="change"
                            hx-swap="none"
-                           hx-vals='{"value": "{{ 'false' if settings.get('enable_meeting_wrapup', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                           hx-vals='js:{value: event.target.checked ? "true" : "false"}'>
                     <div>
                         <span class="text-sm font-medium text-gray-700">Meet Review</span>
                         <p class="text-xs text-gray-500">Generate end of meet summary and P&L review</p>
@@ -570,7 +570,7 @@
                            hx-put="/api/settings/enable_race_previews"
                            hx-trigger="change"
                            hx-swap="none"
-                           hx-vals='{"value": "{{ 'false' if settings.get('enable_race_previews', {}).get('value', 'false') == 'true' else 'true' }}"}'>
+                           hx-vals='js:{value: event.target.checked ? "true" : "false"}'>
                     <div>
                         <span class="text-sm font-medium text-gray-700">Individual Race Previews</span>
                         <p class="text-xs text-gray-500">Generate per-race commentary (future feature - requires sectionals)</p>
@@ -584,7 +584,7 @@
                            hx-put="/api/settings/enable_results"
                            hx-trigger="change"
                            hx-swap="none"
-                           hx-vals='{"value": "{{ 'false' if settings.get('enable_results', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                           hx-vals='js:{value: event.target.checked ? "true" : "false"}'>
                     <div>
                         <span class="text-sm font-medium text-gray-700">Race Results</span>
                         <p class="text-xs text-gray-500">Generate per-race results commentary when results come in</p>
@@ -598,7 +598,7 @@
                            hx-put="/api/settings/enable_live_alerts"
                            hx-trigger="change"
                            hx-swap="none"
-                           hx-vals='{"value": "{{ 'false' if settings.get('enable_live_alerts', {}).get('value', 'true') == 'true' else 'true' }}"}'>
+                           hx-vals='js:{value: event.target.checked ? "true" : "false"}'>
                     <div>
                         <span class="text-sm font-medium text-gray-700">Live Alerts</span>
                         <p class="text-xs text-gray-500">Post scratching, track change, jockey/gear alerts during racing</p>
