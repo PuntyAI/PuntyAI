@@ -67,6 +67,36 @@ EARLY_STOPPING_ROUNDS = 50
 NUM_BOOST_ROUND = 500
 
 
+def _class_bucket_val(race_class: str) -> float:
+    """Quick class bucket for training."""
+    c = (race_class or "").lower().strip().rstrip(";")
+    if "maiden" in c:
+        return 1.0
+    if "benchmark" in c or c.startswith("bm"):
+        return 3.0
+    if "handicap" in c or "hcp" in c:
+        return 4.0
+    if any(x in c for x in ("open", "wfa")):
+        return 5.0
+    if any(x in c for x in ("group", "listed", "stakes")):
+        return 6.0
+    return 2.0
+
+
+def _distance_bucket_val(distance) -> float:
+    """Quick distance bucket for training."""
+    d = float(distance or 1400)
+    if d < 1200:
+        return 1.0
+    if d < 1400:
+        return 2.0
+    if d < 1800:
+        return 3.0
+    if d < 2200:
+        return 4.0
+    return 5.0
+
+
 def load_proform_meetings(data_dir: Path) -> list[dict]:
     """Load Proform data grouped by meeting → races → runners."""
     print(f"Loading Proform meetings from {data_dir}...")
@@ -282,6 +312,23 @@ def _check_sequence_hit(leg_results: list[dict], strict: bool = False) -> bool:
     return all(r["any_top3_won"] for r in leg_results)
 
 
+# Typical outlays by sequence type
+TYPICAL_OUTLAYS = {
+    "Early Quaddie": 30.0,
+    "Quaddie": 30.0,
+    "Big 6": 5.0,
+    "Big3 Multi": 10.0,
+}
+
+# Typical combos by type (with multi-runner legs)
+TYPICAL_COMBOS = {
+    "Early Quaddie": 81,   # ~3 per leg × 4 legs = 3^4
+    "Quaddie": 81,
+    "Big 6": 1,            # 1 pick per leg
+    "Big3 Multi": 1,       # straight multi
+}
+
+
 def _estimate_sequence_dividend(leg_results: list[dict]) -> float:
     """Estimate sequence dividend from SP odds of winners."""
     product = 1.0
@@ -291,6 +338,22 @@ def _estimate_sequence_dividend(leg_results: list[dict]) -> float:
             product *= sp
     # Rough pool-based dividend estimate
     return product * 0.65  # pool takeout
+
+
+def _is_profitable(leg_results: list[dict], seq_type: str) -> tuple[bool, float]:
+    """Would this sequence have been profitable?
+
+    Returns (profitable: bool, estimated_roi: float).
+    A sequence is profitable if estimated payout > outlay.
+    """
+    outlay = TYPICAL_OUTLAYS.get(seq_type, 30.0)
+    combos = TYPICAL_COMBOS.get(seq_type, 1)
+    flexi = outlay / combos if combos > 0 else outlay
+
+    est_div = _estimate_sequence_dividend(leg_results)
+    payout = est_div * flexi  # flexi % of full dividend
+    roi = (payout - outlay) / outlay if outlay > 0 else 0
+    return payout > outlay, roi
 
 
 def build_sequence_dataset(meetings: list[dict], rank_model) -> tuple:
@@ -372,21 +435,37 @@ def build_sequence_dataset(meetings: list[dict], rank_model) -> tuple:
             if len(leg_results) < len(leg_race_numbers):
                 continue  # Missing race data
 
-            # Big3 Multi uses single pick (rank 1 must win all 3)
-            # Sequences use multi-runner legs (any of top 3 wins)
+            # Label by PROFITABILITY, not just hit/miss
+            # A sequence that hits but pays less than the outlay is a loss
             is_multi = seq_type == "Big3 Multi"
             hit = _check_sequence_hit(leg_results, strict=is_multi)
+            profitable, est_roi = _is_profitable(leg_results, seq_type)
 
-            # Weight: estimated dividend for hits
-            if hit:
-                est_div = _estimate_sequence_dividend(leg_results)
-                weight = max(1.0, est_div)
-            else:
-                weight = 1.0
+            # Label: 1 = profitable (hit AND payout > outlay), 0 = loss
+            label = 1 if (hit and profitable) else 0
+
+            # Equal weights — let the model learn from the natural distribution
+            weight = 1.0
 
             # Extract features
             leg_wps = [r["rank1_wp"] for r in leg_results]
             leg_fields = [float(r["field_size"]) for r in leg_results]
+
+            # Extract per-leg class and distance context
+            leg_classes = []
+            leg_distances = []
+            leg_prizes = []
+            for rn in leg_race_numbers:
+                if rn in races:
+                    race_meta = races[rn]["meta"]
+                    leg_classes.append(_class_bucket_val(race_meta.get("race_class", "")))
+                    leg_distances.append(_distance_bucket_val(race_meta.get("distance", 1400)))
+                    leg_prizes.append(float(race_meta.get("prize_money", 0) or 0))
+
+            avg_cls = sum(leg_classes) / len(leg_classes) if leg_classes else 0
+            avg_dist = sum(leg_distances) / len(leg_distances) if leg_distances else 0
+            avg_prize = sum(leg_prizes) / len(leg_prizes) if leg_prizes else 0
+            pm_bucket = 4.0 if avg_prize >= 100000 else (3.0 if avg_prize >= 50000 else (2.0 if avg_prize >= 25000 else 1.0))
 
             from punty.betting.sequence_model import extract_sequence_features
             feat = extract_sequence_features(
@@ -395,22 +474,25 @@ def build_sequence_dataset(meetings: list[dict], rank_model) -> tuple:
                 leg_field_sizes=leg_fields,
                 track_condition=tc,
                 venue_type=vt,
-                total_combos=1 if is_multi else 3 ** len(leg_results),  # approximate combo count
+                total_combos=1 if is_multi else 3 ** len(leg_results),
                 estimated_return_pct=0.0,
                 hit_probability=0.0,
+                avg_class_bucket=avg_cls,
+                avg_distance_bucket=avg_dist,
+                prize_money_bucket=pm_bucket,
             )
 
             if len(feat) != NUM_SEQ_FEATURES:
                 continue
 
             X_all.append(feat)
-            y_all.append(1 if hit else 0)
+            y_all.append(label)
             w_all.append(weight)
             dates.append(date)
             types_list.append(seq_type)
 
             type_stats[seq_type]["total"] += 1
-            if hit:
+            if label:
                 type_stats[seq_type]["hits"] += 1
 
     elapsed = time.time() - start

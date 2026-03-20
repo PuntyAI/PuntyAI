@@ -69,6 +69,13 @@ SEQ_FEATURE_NAMES = [
     "total_combos",       # how many combinations in the ticket
     "estimated_return_pct",  # estimated return %
     "hit_probability",    # model's estimated P(all legs hit)
+
+    # Race context per meeting (5 features)
+    "avg_class_bucket",   # average class across legs (maiden=1 to group=6)
+    "avg_distance_bucket",  # average distance across legs
+    "prize_money_bucket", # meeting quality from prize money
+    "has_chaos_leg",      # 1 if any leg has top WP < 15% (open/chaos)
+    "wp_product",         # product of all leg top WPs (combined probability)
 ]
 
 NUM_SEQ_FEATURES = len(SEQ_FEATURE_NAMES)
@@ -159,6 +166,9 @@ def extract_sequence_features(
     total_combos: int = 1,
     estimated_return_pct: float = 0.0,
     hit_probability: float = 0.0,
+    avg_class_bucket: float = 0.0,
+    avg_distance_bucket: float = 0.0,
+    prize_money_bucket: float = 0.0,
 ) -> list[float]:
     """Build the sequence feature vector."""
     num_legs = len(leg_wps)
@@ -177,6 +187,12 @@ def extract_sequence_features(
     field_var = max_field - min_field
 
     tc_bucket = _track_cond_bucket(track_condition)
+
+    # Derived context
+    has_chaos = 1.0 if any(w < 0.15 for w in leg_wps) else 0.0
+    wp_product = 1.0
+    for w in leg_wps:
+        wp_product *= max(w, 0.01)
 
     return [
         type_code,
@@ -198,6 +214,11 @@ def extract_sequence_features(
         float(total_combos),
         _safe_float(estimated_return_pct),
         _safe_float(hit_probability),
+        _safe_float(avg_class_bucket),
+        _safe_float(avg_distance_bucket),
+        _safe_float(prize_money_bucket),
+        has_chaos,
+        _safe_float(wp_product),
     ]
 
 
@@ -211,6 +232,9 @@ def should_play_sequence(
     total_combos: int = 1,
     estimated_return_pct: float = 0.0,
     hit_probability: float = 0.0,
+    avg_class_bucket: float = 0.0,
+    avg_distance_bucket: float = 0.0,
+    prize_money_bucket: float = 0.0,
     threshold: float = DEFAULT_SEQ_THRESHOLD,
 ) -> tuple[bool, float, str]:
     """Decide whether to play this sequence.
@@ -231,6 +255,9 @@ def should_play_sequence(
         total_combos=total_combos,
         estimated_return_pct=estimated_return_pct,
         hit_probability=hit_probability,
+        avg_class_bucket=avg_class_bucket,
+        avg_distance_bucket=avg_distance_bucket,
+        prize_money_bucket=prize_money_bucket,
     )
 
     try:
