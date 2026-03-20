@@ -151,15 +151,18 @@ def _check_first4_box(top_positions: list[int], n_runners: int) -> bool:
     return all(p <= 4 for p in top_positions[:4])
 
 
+# Each entry: (checker_fn, min_runners_needed, num_combos, combo_ranks)
+# combo_ranks tells the training which of our ranked picks form this combo
 EXOTIC_CHECKERS = {
-    "Quinella":          (_check_quinella, 2, 1),
-    "Quinella Box":      (_check_quinella_box, 3, 3),
-    "Exacta":            (_check_exacta, 2, 1),
-    "Exacta Standout":   (_check_exacta_standout, 2, 3),  # 1 anchor / 3 others
-    "Trifecta Standout": (_check_trifecta_standout, 3, 6),
-    "Trifecta Box":      (_check_trifecta_box3, 3, 6),  # 3-runner
-    "First4":            (_check_first4, 4, 1),
-    "First4 Box":        (_check_first4_box, 4, 24),
+    "Quinella":            (_check_quinella, 2, 1, [1, 2]),
+    "Quinella Box":        (_check_quinella_box, 3, 3, [1, 2, 3]),
+    "Exacta":              (_check_exacta, 2, 1, [1, 2]),
+    "Exacta Standout":     (_check_exacta_standout, 2, 3, [1, 2, 3]),
+    "Trifecta Standout":   (_check_trifecta_standout, 3, 6, [1, 2, 3]),
+    "Trifecta Box":        (_check_trifecta_box3, 3, 6, [1, 2, 3]),      # 3-runner
+    "Trifecta Box 4":      (_check_trifecta_box4, 4, 24, [1, 2, 3, 4]),  # 4-runner (wider)
+    "First4":              (_check_first4, 4, 1, [1, 2, 3, 4]),
+    "First4 Box":          (_check_first4_box, 4, 24, [1, 2, 3, 4]),
 }
 
 
@@ -424,14 +427,14 @@ def build_exotic_dataset(races: list[dict], rank_model) -> tuple:
         race_date = meta.get("date", "")
 
         # Simulate each exotic type
-        for exotic_type, (checker, min_runners, num_combos) in EXOTIC_CHECKERS.items():
+        for exotic_type, (checker, min_runners, num_combos, combo_ranks) in EXOTIC_CHECKERS.items():
             if n_picks < min_runners:
                 continue
 
             # Field-size gates (same as production)
-            if exotic_type in ("Trifecta Standout", "Trifecta Box") and field_size < 7:
+            if "Trifecta" in exotic_type and field_size < 7:
                 continue
-            if exotic_type in ("First4", "First4 Box") and field_size < 8:
+            if "First4" in exotic_type and field_size < 8:
                 continue
 
             hit = checker(top_positions, n_picks)
@@ -442,6 +445,12 @@ def build_exotic_dataset(races: list[dict], rank_model) -> tuple:
                 weight = max(1.0, est_div)
             else:
                 weight = 1.0
+
+            # Use "Trifecta Box" as the type code for both 3 and 4 runner variants
+            # (production generates both under the same type name)
+            model_type = exotic_type.replace(" 4", "")  # "Trifecta Box 4" → "Trifecta Box"
+
+            combo_wps = [top_wps[r - 1] for r in combo_ranks if r - 1 < len(top_wps)]
 
             # Build feature vector
             from punty.betting.exotic_model import extract_exotic_features
@@ -454,9 +463,11 @@ def build_exotic_dataset(races: list[dict], rank_model) -> tuple:
                 prize_money=prize_money,
                 rank_wps=top_wps,
                 rank_odds=top_odds,
-                exotic_type=exotic_type,
-                num_combo_runners=min_runners,
+                exotic_type=model_type,
+                num_combo_runners=len(combo_ranks),
                 num_combos=num_combos,
+                combo_runner_ranks=combo_ranks,
+                combo_runner_wps=combo_wps,
             )
 
             if len(feat) != NUM_EXOTIC_FEATURES:
@@ -466,9 +477,9 @@ def build_exotic_dataset(races: list[dict], rank_model) -> tuple:
             y_all.append(1 if hit else 0)
             w_all.append(weight)
             dates.append(race_date)
-            types_list.append(exotic_type)
+            types_list.append(model_type)
 
-            type_stats[exotic_type]["total"] += 1
+            type_stats[exotic_type]["total"] += 1  # Track original name for display
             if hit:
                 type_stats[exotic_type]["hits"] += 1
 
