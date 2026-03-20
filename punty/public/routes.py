@@ -2611,11 +2611,8 @@ async def get_daily_dashboard() -> dict:
                 rank_stats[rank] = {"bets": 0, "hits": 0}
             rank_stats[rank]["bets"] += 1
             fp = runner.finish_position if runner else None
-            if fp:
-                if rank == 1 and fp == 1:
-                    rank_stats[rank]["hits"] += 1
-                elif rank >= 2 and fp <= 3:
-                    rank_stats[rank]["hits"] += 1
+            if fp and fp <= 3:
+                rank_stats[rank]["hits"] += 1
         rank_strike = []
         for rank in sorted(rank_stats.keys()):
             rs = rank_stats[rank]
@@ -2625,7 +2622,7 @@ async def get_daily_dashboard() -> dict:
                 "bets": rs["bets"],
                 "hits": rs["hits"],
                 "strike": strike,
-                "label": "Win" if rank == 1 else "Place",
+                "label": "Place",
             })
 
         # ── Insights ──

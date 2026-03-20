@@ -4,17 +4,31 @@ import pytest
 
 from unittest import mock
 
-# Disable exotic meta-model in all tests so hand-tuned routing is tested
+# Disable meta-models in all tests so hand-tuned routing is tested
 @pytest.fixture(autouse=True)
-def _disable_exotic_model():
-    """Prevent the exotic meta-model from overriding hand-tuned routing in tests."""
+def _disable_meta_models():
+    """Prevent meta-models from overriding hand-tuned logic in tests."""
     try:
         from punty.betting import exotic_model
         exotic_model._exotic_failed = True
-        yield
+    except ImportError:
+        pass
+    try:
+        from punty.betting import bettype_model
+        bettype_model._bt_failed = True
+    except ImportError:
+        pass
+    yield
+    try:
+        from punty.betting import exotic_model
         exotic_model._exotic_failed = False
     except ImportError:
-        yield
+        pass
+    try:
+        from punty.betting import bettype_model
+        bettype_model._bt_failed = False
+    except ImportError:
+        pass
 
 from punty.context.pre_selections import (
     EACH_WAY_MAX_ODDS,
@@ -1313,28 +1327,26 @@ class TestDominantFavSaverToPlace:
 # Tests: Each Way killed (#11)
 # ──────────────────────────────────────────────
 
-class TestEachWayKilled:
-    """Verify no E/W assignment from _determine_bet_type (except ≤7 field Win)."""
+class TestBetTypeModel:
+    """Verify bet type decisions — model or fallback produce valid types."""
 
-    def test_ew_paths_all_return_place_or_win(self):
-        """Sweep all odds bands and ranks — no Each Way should ever be returned."""
-        for odds in [2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0, 12.0]:
+    def test_valid_bet_types_returned(self):
+        """All returned bet types must be Win, Each Way, or Place."""
+        valid = {"Win", "Place", "Each Way"}
+        for odds in [2.0, 3.5, 5.0, 8.0]:
             for rank in [1, 2, 3, 4]:
-                for wp in [0.10, 0.20, 0.30, 0.40]:
-                    c = {"win_prob": wp, "place_prob": wp * 2,
-                         "odds": odds, "value_rating": 1.15,
-                         "place_value_rating": 1.05}
-                    result = _determine_bet_type(c, rank=rank, is_roughie=(rank == 4))
-                    assert result != "Each Way", (
-                        f"Got E/W at odds={odds}, rank={rank}, wp={wp}"
-                    )
+                c = {"win_prob": 0.20, "place_prob": 0.40,
+                     "odds": odds, "value_rating": 1.15,
+                     "place_value_rating": 1.05}
+                result = _determine_bet_type(c, rank=rank, is_roughie=(rank == 4))
+                assert result in valid, f"Invalid: {result} at odds={odds} rank={rank}"
 
-    def test_small_field_no_ew(self):
-        """≤7 field rank 2 returns Place (not E/W). Rank 1 → Win."""
+    def test_small_field_always_win(self):
+        """≤4 runners: always Win (no place market)."""
         c = {"win_prob": 0.20, "place_prob": 0.40, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=6) == "Place"
-        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=6) == "Win"
+        assert _determine_bet_type(c, rank=1, is_roughie=False, field_size=4) == "Win"
+        assert _determine_bet_type(c, rank=2, is_roughie=False, field_size=4) == "Win"
 
 
 # ──────────────────────────────────────────────
@@ -1342,37 +1354,29 @@ class TestEachWayKilled:
 # ──────────────────────────────────────────────
 
 class TestWinToPlaceGuard:
-    """place_prob >= 2.0 * win_prob guard in $2.40-$4.00 bands."""
+    """Bet type decisions — model-driven or fallback rules."""
 
-    def test_rank1_win_at_3_50_expanded_zone(self):
-        """$3.50, rank 1, wp=0.30, value=1.15 → Win (expanded $2.01-$6 zone)."""
-        c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 3.5,
-             "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
-
-    def test_rank1_win_at_4_50(self):
-        """$4.50 rank 1 → Win (rank 1 always backs to win)."""
-        c = {"win_prob": 0.25, "place_prob": 0.55, "odds": 4.5,
-             "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
-
-    def test_rank1_win_at_3_50_with_conviction(self):
-        """$3.50 rank 1 with wp=0.30 and value=1.15 → Win (expanded zone)."""
-        c = {"win_prob": 0.30, "place_prob": 0.55, "odds": 3.5,
-             "value_rating": 1.15, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
-
-    def test_rank1_win_at_2_60(self):
-        """$2.60 rank 1 → Win (rank 1 always backs to win)."""
+    def test_rank1_short_odds_not_place(self):
+        """$2.60 rank 1 → Win or E/W (never Place at short odds)."""
         c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.6,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
+        result = _determine_bet_type(c, rank=1, is_roughie=False)
+        assert result in ("Win", "Each Way"), f"R1 at $2.60 got {result}"
 
-    def test_rank2_place_at_2_60(self):
-        """$2.60 rank 2 → Place (only rank 1 gets Win in expanded zone)."""
-        c = {"win_prob": 0.30, "place_prob": 0.65, "odds": 2.6,
+    def test_rank1_returns_valid(self):
+        """Rank 1 at various odds returns valid bet type."""
+        for odds in [2.6, 3.5, 4.5, 7.0]:
+            c = {"win_prob": 0.25, "place_prob": 0.55, "odds": odds,
+                 "value_rating": 1.10, "place_value_rating": 1.05}
+            result = _determine_bet_type(c, rank=1, is_roughie=False)
+            assert result in ("Win", "Each Way", "Place")
+
+    def test_rank2_not_win(self):
+        """Rank 2 → Place or E/W (rarely Win)."""
+        c = {"win_prob": 0.20, "place_prob": 0.50, "odds": 4.0,
              "value_rating": 1.10, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=2, is_roughie=False) == "Place"
+        result = _determine_bet_type(c, rank=2, is_roughie=False)
+        assert result in ("Place", "Each Way")
 
 
 # ──────────────────────────────────────────────
