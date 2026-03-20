@@ -2534,7 +2534,7 @@ async def get_daily_dashboard() -> dict:
         edge_picks.sort(key=lambda x: x.get("value_rating") or 0, reverse=True)
 
         # ── Bet type breakdown (P&L from settled only; unsettled in count + staked) ──
-        bt_stats = defaultdict(lambda: {"bets": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
+        bt_stats = defaultdict(lambda: {"bets": 0, "settled": 0, "winners": 0, "staked": 0.0, "pnl": 0.0})
 
         def _classify_bt(pick):
             """Classify pick into normalized bet type label, or None to skip."""
@@ -2560,6 +2560,7 @@ async def get_daily_dashboard() -> dict:
             if not bt:
                 continue
             bt_stats[bt]["bets"] += 1
+            bt_stats[bt]["settled"] += 1
             stake = pick.exotic_stake if pick.pick_type == "exotic" else pick.bet_stake
             bt_stats[bt]["staked"] += stake or 0
             bt_stats[bt]["pnl"] += pick.pnl or 0
@@ -2578,8 +2579,15 @@ async def get_daily_dashboard() -> dict:
                 continue
             bt_stats[bt]["bets"] += 1
             bt_stats[bt]["staked"] += stake
+        # Tote-style ordering
+        _BT_ORDER = {
+            "Win": 1, "Place": 2, "Each Way": 3,
+            "Exacta": 4, "Quinella": 5, "Trifecta": 6, "First4": 7,
+            "Early Quaddie": 8, "Quaddie": 9, "Big6": 10,
+            "Big3 Multi": 11,
+        }
         bet_types = []
-        for bt, data in sorted(bt_stats.items()):
+        for bt, data in bt_stats.items():
             if bt in ("Skip", "None", "skip", "none", "", None):
                 continue
             data["strike_rate"] = round(data["winners"] / data["bets"] * 100, 1) if data["bets"] else 0
@@ -2588,6 +2596,7 @@ async def get_daily_dashboard() -> dict:
             data["staked"] = round(data["staked"], 2)
             data["pnl"] = round(data["pnl"], 2)
             bet_types.append(data)
+        bet_types.sort(key=lambda x: _BT_ORDER.get(x["name"], 99))
 
         # ── Rank Strike Rates ──
         # Rank 1: win strike (1st place), Rank 2-4: place strike (top 3)
