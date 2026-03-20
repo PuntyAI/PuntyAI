@@ -1277,32 +1277,10 @@ def _select_exotic(
         if fav_saddlecloth and fav_saddlecloth not in runners:
             continue
 
-        # Overlap rules per type
+        # ALL exotic runners must come from our selections (top 3 + roughie)
         runner_list = ec.get("runners", [])
-        if ec_type in ("Quinella", "Quinella Box"):
-            # Rank-1 anchor already enforced above; allow partner outside picks
-            pass
-        elif ec_type in ("Exacta", "Exacta Standout"):
-            if runner_list and rank_map:
-                if rank_map.get(runner_list[0], 99) > 2:
-                    continue
-            elif runner_list and runner_list[0] not in selection_saddlecloths:
-                continue
-        elif ec_type in ("Trifecta Standout",):
-            # Rank 1 must anchor position 1 (already enforced by generation)
-            if runner_list and rank_map:
-                if rank_map.get(runner_list[0], 99) > 1:
-                    continue
-        elif ec_type in ("Trifecta Box",):
-            # At least 2 runners must be in our selections
-            if overlap < min(2, n_runners):
-                continue
-        elif ec_type in ("First4", "First4 Box"):
-            if len(runner_list) >= 2:
-                if sum(1 for r in runner_list[:2] if r in selection_saddlecloths) < 2:
-                    continue
-            elif overlap < min(2, n_runners):
-                continue
+        if not all(r in selection_saddlecloths for r in runner_list):
+            continue
 
         # Parse probability and value
         raw_prob = ec.get("probability", 0)

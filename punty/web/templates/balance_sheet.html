@@ -76,6 +76,13 @@
         <button onclick="filterBets('selections')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Selections</button>
         <button onclick="filterBets('exotics')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Exotics</button>
         <button onclick="filterBets('sequences')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Sequences</button>
+        <span class="text-gray-300">|</span>
+        <select onchange="filterByMeet(this.value)" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border-0">
+            <option value="all">All Meets</option>
+            {% for meet in meet_summaries %}
+            <option value="{{ meet.venue }}">{{ meet.venue }}</option>
+            {% endfor %}
+        </select>
     </div>
 
     {% if bets|length == 0 %}
@@ -89,6 +96,7 @@
             <table class="w-full text-sm" id="ledger-table">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50">
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Meet</th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Race</th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
@@ -104,7 +112,9 @@
                     {% for bet in bets %}
                     <tr class="bet-row {{ 'bg-green-50/50' if bet.hit else '' }}"
                         data-hit="{{ '1' if bet.hit else '0' }}"
-                        data-type="{{ bet.pick_type }}">
+                        data-type="{{ bet.pick_type }}"
+                        data-meet="{{ bet.venue }}">
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{{ bet.race_time or '—' }}</td>
                         <td class="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-700">{{ bet.venue }}</td>
                         <td class="px-3 py-2 whitespace-nowrap">
                             {% if bet.race_number > 0 %}
@@ -147,7 +157,7 @@
                 <!-- Daily Total -->
                 <tfoot>
                     <tr class="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                        <td colspan="5" class="px-3 py-2 text-gray-700">Daily Total</td>
+                        <td colspan="6" class="px-3 py-2 text-gray-700">Daily Total</td>
                         <td class="px-3 py-2 text-right text-gray-900">${{ '%.2f'|format(daily_staked) }}</td>
                         <td class="px-3 py-2 text-right {{ 'text-green-600' if daily_returned > 0 else 'text-gray-400' }}">${{ '%.2f'|format(daily_returned) }}</td>
                         <td class="px-3 py-2 text-right {{ 'text-green-600' if daily_pnl >= 0 else 'text-red-600' }}">
@@ -165,6 +175,22 @@
 </div>
 
 <script>
+var currentMeetFilter = 'all';
+
+function filterByMeet(meet) {
+    currentMeetFilter = meet;
+    applyFilters();
+}
+
+function applyFilters() {
+    var rows = document.querySelectorAll('.bet-row');
+    rows.forEach(function(row) {
+        var meetMatch = currentMeetFilter === 'all' || row.getAttribute('data-meet') === currentMeetFilter;
+        var typeMatch = row.style.display !== 'none-by-type';
+        row.style.display = meetMatch ? '' : 'none';
+    });
+}
+
 function filterBets(type) {
     var rows = document.querySelectorAll('.bet-row');
     rows.forEach(function(row) {
