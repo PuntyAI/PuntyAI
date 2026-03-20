@@ -1105,71 +1105,27 @@ def _select_exotic(
     if not exotic_combos:
         return None
 
-    # ── Try learned meta-model first ──
+    # ── Try to load meta-model for scoring (used after filtering below) ──
+    _use_meta_model = False
+    _meta_sc_to_rank: dict[int, int] = {}
+    _meta_sc_to_wp: dict[int, float] = {}
+    _meta_rank_wps: list[float] = []
+    _meta_rank_odds: list[float] = []
     try:
-        from punty.betting.exotic_model import exotic_model_available, score_exotic_candidates
+        from punty.betting.exotic_model import exotic_model_available, predict_exotic_hit_probability, extract_exotic_features
         from punty.ml.features import _distance_bucket, _track_cond_bucket, _class_bucket, _venue_type_code
 
         if exotic_model_available() and picks:
+            _use_meta_model = True
             sorted_picks = sorted(picks, key=lambda p: p.rank)
-            rank_wps = [p.win_prob for p in sorted_picks]
-            rank_odds = [p.odds for p in sorted_picks]
-
-            # Build saddlecloth → rank/WP maps for combo composition features
-            sc_to_rank = {p.saddlecloth: p.rank for p in sorted_picks}
-            sc_to_wp = {p.saddlecloth: p.win_prob for p in sorted_picks}
-
-            scored = score_exotic_candidates(
-                exotic_combos,
-                field_size=field_size,
-                distance_bucket=_distance_bucket(distance),
-                class_bucket=_class_bucket(race_class),
-                track_cond_bucket=_track_cond_bucket(track_condition),
-                venue_type=_venue_type_code(venue_type),
-                prize_money=float(prize_money or 0),
-                rank_wps=rank_wps,
-                rank_odds=rank_odds,
-                saddlecloth_to_rank=sc_to_rank,
-                saddlecloth_to_wp=sc_to_wp,
-            )
-
-            if scored:
-                best_ec, best_prob, best_score = scored[0]
-                best_prob_raw = best_ec.get("probability", 0)
-                if isinstance(best_prob_raw, str):
-                    best_prob_raw = float(best_prob_raw.rstrip("%")) / 100
-
-                # Determine budget using same logic as hand-tuned path
-                vt = (venue_type or "").lower()
-                mq = 2 if "metro" in vt else (1 if "provincial" in vt else 0)
-                if field_size and field_size >= 12:
-                    mq += 1
-                pm = float(prize_money or 0)
-                if pm >= 100_000:
-                    mq += 1
-                elif pm >= 50_000:
-                    mq += 0.5
-                budget = _get_exotic_budget(mq)
-
-                logger.info(
-                    "Exotic meta-model selected %s (prob=%.1f%%, score=%.4f) for field=%d",
-                    best_ec.get("type", "?"), best_prob * 100, best_score, field_size,
-                )
-
-                return RecommendedExotic(
-                    exotic_type=best_ec.get("type", ""),
-                    runners=best_ec.get("runners", []),
-                    runner_names=best_ec.get("runner_names", []),
-                    probability=best_prob_raw,
-                    value_ratio=best_ec.get("value", 1.0),
-                    num_combos=best_ec.get("combos", 1),
-                    format=best_ec.get("format", "boxed"),
-                    budget=budget,
-                )
+            _meta_rank_wps = [p.win_prob for p in sorted_picks]
+            _meta_rank_odds = [p.odds for p in sorted_picks]
+            _meta_sc_to_rank = {p.saddlecloth: p.rank for p in sorted_picks}
+            _meta_sc_to_wp = {p.saddlecloth: p.win_prob for p in sorted_picks}
     except ImportError:
-        pass  # exotic_model module not available
+        pass
     except Exception as e:
-        logger.debug("Exotic meta-model failed, using hand-tuned routing: %s", e)
+        logger.debug("Exotic meta-model unavailable: %s", e)
 
     # ── Hard gates ──
     tc = (track_condition or "").lower()
@@ -1342,58 +1298,78 @@ def _select_exotic(
         if ec_type in ("Trifecta Standout", "Trifecta Box") and value < 1.5:
             continue
 
-        # Score: probability × capped_value² — cap value at 2.5x so extreme-value
-        # roughie combos (e.g. VR=6.8x at 8% prob) can't dominate over higher-probability
-        # plays with moderate value (e.g. quinella at 12% prob, VR=2.2x).
-        # Without cap, VR=6.8 scores 46x vs VR=2.2 at 4.8x — roughie always wins.
-        capped_value = min(value, 2.5)
-        score = raw_prob * (capped_value ** 2)
-
-        # Preferred type bonus — gentle nudge, not hard exclusion
-        if ec_type in preferred_types:
-            score *= 1.15
+        # ── Scoring: meta-model or hand-tuned ──
+        if _use_meta_model:
+            # Meta-model: learned score from race context + combo composition
+            combo_ranks = [_meta_sc_to_rank.get(r, 4) for r in runner_list]
+            combo_wps_list = [_meta_sc_to_wp.get(r, 0.05) for r in runner_list]
+            features = extract_exotic_features(
+                field_size=field_size,
+                distance_bucket=_distance_bucket(distance),
+                class_bucket=_class_bucket(race_class),
+                track_cond_bucket=_track_cond_bucket(track_condition),
+                venue_type=_venue_type_code(venue_type),
+                prize_money=float(prize_money or 0),
+                rank_wps=_meta_rank_wps,
+                rank_odds=_meta_rank_odds,
+                exotic_type=ec_type,
+                num_combo_runners=n_runners,
+                num_combos=combos,
+                combo_runner_ranks=combo_ranks,
+                combo_runner_wps=combo_wps_list,
+            )
+            hit_prob = predict_exotic_hit_probability(features)
+            if hit_prob < 0:
+                # Model prediction failed — fall back to hand-tuned
+                capped_value = min(value, 2.5)
+                score = raw_prob * (capped_value ** 2)
+            else:
+                # Score = model's P(hit) × capped value — model already accounts
+                # for combo composition, race context, field size, etc.
+                capped_value = min(value, 2.5)
+                score = hit_prob * capped_value
         else:
-            score *= 0.90
+            # Hand-tuned scoring fallback
+            capped_value = min(value, 2.5)
+            score = raw_prob * (capped_value ** 2)
 
-        # Wide box penalty — 4-runner Trifecta Box and 5-runner First4 Box
-        # need a genuine roughie to justify the combo explosion
-        if ec_type == "Trifecta Box" and n_runners >= 4 and not roughie_is_live:
-            score *= 0.50  # Heavy penalty without roughie confidence
-        if ec_type == "First4 Box" and n_runners >= 5 and not roughie_is_live:
-            score *= 0.40  # Even heavier — 120 combos needs all picks firing
+            # Preferred type bonus — gentle nudge, not hard exclusion
+            if ec_type in preferred_types:
+                score *= 1.15
+            else:
+                score *= 0.90
 
-        # Anchor rank bonus (capped at 1.40x combined to prevent
-        # Quinella from stacking bonuses to beat everything)
-        anchor_bonus = 1.0
-        if rank_map:
-            best_rank = min(rank_map.get(r, 99) for r in runners)
-            if best_rank == 1:
-                anchor_bonus *= 1.20
-            elif best_rank == 2:
-                anchor_bonus *= 1.10
-            if all(r in selection_saddlecloths for r in runners):
-                anchor_bonus *= 1.10
-        score *= min(anchor_bonus, 1.40)  # Cap combined bonus
+            # Wide box penalty — 4-runner Trifecta Box and 5-runner First4 Box
+            # need a genuine roughie to justify the combo explosion
+            if ec_type == "Trifecta Box" and n_runners >= 4 and not roughie_is_live:
+                score *= 0.50
+            if ec_type == "First4 Box" and n_runners >= 5 and not roughie_is_live:
+                score *= 0.40
 
-        # Field-size context: mild continuous scaling
-        # Smaller fields → quinella/exacta slightly favoured
-        # Larger fields → trifecta/first4 slightly favoured
-        # Kept gentle so value/probability still drive the decision
-        if field_size:
-            if ec_type in ("Quinella", "Quinella Box"):
-                # Neutral in mid fields, mild penalty in very large fields
-                score *= max(0.90, min(1.10, 1.18 - field_size * 0.02))
-            elif ec_type in ("Exacta", "Exacta Standout"):
-                # Flat — exacta works everywhere
-                score *= max(0.95, min(1.10, 0.85 + field_size * 0.02))
-            elif ec_type in ("Trifecta Standout", "Trifecta Box"):
-                # Mild field-size boost
-                score *= max(0.80, min(1.15, 0.55 + field_size * 0.05))
-            elif ec_type in ("First4", "First4 Box"):
-                # Needs field depth but not as aggressively
-                score *= max(0.70, min(1.20, 0.40 + field_size * 0.06))
+            # Anchor rank bonus
+            anchor_bonus = 1.0
+            if rank_map:
+                best_rank = min(rank_map.get(r, 99) for r in runners)
+                if best_rank == 1:
+                    anchor_bonus *= 1.20
+                elif best_rank == 2:
+                    anchor_bonus *= 1.10
+                if all(r in selection_saddlecloths for r in runners):
+                    anchor_bonus *= 1.10
+            score *= min(anchor_bonus, 1.40)
 
-        # Soft track penalty
+            # Field-size scaling
+            if field_size:
+                if ec_type in ("Quinella", "Quinella Box"):
+                    score *= max(0.90, min(1.10, 1.18 - field_size * 0.02))
+                elif ec_type in ("Exacta", "Exacta Standout"):
+                    score *= max(0.95, min(1.10, 0.85 + field_size * 0.02))
+                elif ec_type in ("Trifecta Standout", "Trifecta Box"):
+                    score *= max(0.80, min(1.15, 0.55 + field_size * 0.05))
+                elif ec_type in ("First4", "First4 Box"):
+                    score *= max(0.70, min(1.20, 0.40 + field_size * 0.06))
+
+        # Soft track penalty (applied to both paths)
         score *= soft_penalty
 
         scored.append((score, ec))
@@ -1425,10 +1401,17 @@ def _select_exotic(
             budget=budget,
         )
 
-    best = scored[0][1]
+    best_score, best = scored[0]
     best_prob = best.get("probability", 0)
     if isinstance(best_prob, str):
         best_prob = float(best_prob.rstrip("%")) / 100
+
+    scoring_method = "meta-model" if _use_meta_model else "hand-tuned"
+    logger.info(
+        "Exotic selected (%s): %s %s (score=%.4f, value=%.2fx) for field=%d",
+        scoring_method, best.get("type", "?"), best.get("runners", []),
+        best_score, best.get("value", 1.0), field_size,
+    )
 
     return RecommendedExotic(
         exotic_type=best.get("type", ""),
