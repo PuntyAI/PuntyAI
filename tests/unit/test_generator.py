@@ -107,15 +107,15 @@ class TestGetSequenceLanes:
     """Tests for _get_sequence_lanes static method."""
 
     def test_sequence_lanes_7_races(self):
-        """Test sequence lanes for 7-race meeting."""
+        """7-race meeting: quaddie only (TAB doesn't offer early quad/big6)."""
         result = ContentGenerator._get_sequence_lanes(7)
 
-        assert result["early_quad"] == (1, 4)
+        assert "early_quad" not in result
         assert result["quaddie"] == (4, 7)
-        assert result["big6"] is None
+        assert "big6" not in result
 
     def test_sequence_lanes_8_races(self):
-        """Test sequence lanes for 8-race meeting."""
+        """8-race meeting: all three sequence types."""
         result = ContentGenerator._get_sequence_lanes(8)
 
         assert result["early_quad"] == (1, 4)
@@ -123,10 +123,10 @@ class TestGetSequenceLanes:
         assert result["big6"] == (3, 8)
 
     def test_sequence_lanes_10_races(self):
-        """Test sequence lanes for 10-race meeting."""
+        """10-race meeting: all three with correct ranges."""
         result = ContentGenerator._get_sequence_lanes(10)
 
-        assert result["early_quad"] == (3, 6)
+        assert result["early_quad"] == (1, 4)
         assert result["quaddie"] == (7, 10)
         assert result["big6"] == (5, 10)
 
