@@ -520,16 +520,16 @@ class TestBuildAllSequenceLanes:
         assert big6.smart.total_outlay == 5.0
         assert big6.smart.total_combos == 1
 
-    def test_7_race_meeting_has_big6(self):
-        """7-race meeting should have Big 6 hail-mary."""
+    def test_7_race_meeting_quaddie_only(self):
+        """7-race meeting: quaddie only (no early quad or big6 — TAB doesn't offer)."""
         leg_analysis = [_leg_analysis(r) for r in range(1, 8)]
         race_contexts = [_race_ctx(r) for r in range(1, 8)]
 
         results = build_all_sequence_lanes(7, leg_analysis, race_contexts)
         types = {r.sequence_type for r in results}
-        assert "Big 6" in types
         assert "Quaddie" in types
-        assert "Early Quaddie" in types
+        assert "Big 6" not in types
+        assert "Early Quaddie" not in types
 
     def test_empty_analysis(self):
         results = build_all_sequence_lanes(8, [], [])
