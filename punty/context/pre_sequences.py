@@ -23,14 +23,7 @@ BIG6_MAX_OUTLAY = 25.0
 BIG6_OUTLAY = 5.0   # Hail-mary: 1 pick per leg, fixed $5 ticket
 MIN_FLEXI_PCT = 20.0  # Lowered from 30% — allows 400 combos at $80 budget (5×4×5×4)
 
-# Main quaddie re-enabled with wider legs and edge-based construction.
-ENABLE_MAIN_QUADDIE = True
-
-# Minimum estimated return % thresholds — skip sequences below these
-MIN_RETURN_PCT = {
-    "early_quaddie": 80.0,  # Data: Early Quad -52% ROI (8/57) — raised from 60%
-    "quaddie": 30.0,         # Data: Quaddie -43.9% ROI (16/178) — raised from 20%
-}
+    # Hard-coded gates removed — sequence meta-model handles play/skip (PR #238)
 
 # LGBM-driven floor: exclude runners with win_prob < 5% from legs
 MIN_LEG_RUNNER_WP = 0.05
@@ -960,35 +953,8 @@ def build_smart_sequence(
             chaos_ratio=chaos_ratio_b6,
         )
 
-    # Data-driven track condition filters (Feb 24 audit)
-    tc = (track_condition or "").lower()
-    if "heavy" in tc:
-        return None  # All winning sequences were Good 3-4
-    soft_match = re.search(r'soft\s*(\d+)', tc)
-    if soft_match and int(soft_match.group(1)) >= 6:
-        return None  # Zero sequence wins on Soft 6+
-
-    # Early quaddie confidence gate: skip if average top-pick probability is too low
-    # Early races (R1-R4) have worse data quality and less settled odds
-    if "early" in sequence_type.lower():
-        start, end = race_range
-        leg_map = {la["race_number"]: la for la in leg_analysis}
-        leg_confidences = []
-        for rn in range(start, end + 1):
-            la = leg_map.get(rn)
-            if la:
-                top_runners = la.get("top_runners", [])
-                top_prob = max((float(r.get("win_prob", 0)) for r in top_runners), default=0)
-                leg_confidences.append(top_prob)
-        avg_confidence = sum(leg_confidences) / len(leg_confidences) if leg_confidences else 0
-        # Raised from 0.26 to 0.30: early quaddies at -52.3% ROI (8/57 hits).
-        # Higher confidence bar ensures we only play when model is confident.
-        if avg_confidence < 0.30:
-            logger.info(
-                f"Skipping {sequence_type}: avg top-pick probability {avg_confidence:.2f} "
-                f"< 0.30 threshold (chaos territory)"
-            )
-            return None
+    # Track condition and confidence gates removed — sequence meta-model
+    # now learns when to play/skip from historical data (PR #238).
 
     prep = _prepare_legs_data(sequence_type, race_range, leg_analysis, race_contexts)
     if not prep:
@@ -1087,25 +1053,45 @@ def build_all_sequence_lanes(
         if not race_range:
             continue
 
-        if key == "quaddie" and not ENABLE_MAIN_QUADDIE:
-            logger.info("Main Quaddie suppressed (ENABLE_MAIN_QUADDIE=False)")
-            continue
-
         smart = build_smart_sequence(label, race_range, leg_analysis, race_contexts,
                                      track_condition=track_condition)
         if not smart:
             continue
 
-        # Check minimum estimated return threshold
-        # key is "early_quad"/"quaddie"/"big6", normalise to match MIN_RETURN_PCT keys
-        min_ret_key = "early_quaddie" if key == "early_quad" else key
-        min_ret = MIN_RETURN_PCT.get(min_ret_key, 0.0)
-        if min_ret > 0 and smart.estimated_return_pct < min_ret:
-            logger.info(
-                f"Skipping {label}: est. return {smart.estimated_return_pct:.1f}% "
-                f"< minimum {min_ret:.0f}%"
-            )
-            continue
+        # Meta-model play/skip gate (replaces hard-coded return % floors)
+        try:
+            from punty.betting.sequence_model import sequence_model_available, should_play_sequence
+            if sequence_model_available():
+                # Extract per-leg features for the model
+                leg_map = {la["race_number"]: la for la in leg_analysis}
+                leg_wps = []
+                leg_fields = []
+                for rn in range(smart.race_start, smart.race_end + 1):
+                    la = leg_map.get(rn, {})
+                    top_runners = la.get("top_runners", [])
+                    top_wp = max((float(r.get("win_prob", 0)) for r in top_runners), default=0)
+                    leg_wps.append(top_wp)
+                    leg_fields.append(la.get("field_size", 10))
+
+                play, prob, reason = should_play_sequence(
+                    sequence_type=label,
+                    leg_wps=leg_wps,
+                    leg_field_sizes=leg_fields,
+                    track_condition=track_condition,
+                    total_combos=smart.total_combos,
+                    estimated_return_pct=smart.estimated_return_pct,
+                    hit_probability=smart.hit_probability,
+                )
+                if not play:
+                    logger.info(f"Sequence model skipped {label}: {reason}")
+                    continue
+                logger.info(
+                    f"Sequence model approved {label} (prob={prob:.1%}): {reason}"
+                )
+        except ImportError:
+            pass  # Module not yet available — play all sequences
+        except Exception as e:
+            logger.debug(f"Sequence model error, playing {label}: {e}")
 
         # Build legacy SequenceLane for backward compat
         balanced_lane = SequenceLane(
