@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Balance Sheet - PuntyAI{% endblock %}
+{% block title %}Ledger - PuntyAI{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -24,7 +24,7 @@
         </div>
     </div>
 
-    <!-- Daily Summary -->
+    <!-- Daily Summary Cards -->
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div class="bg-white rounded-lg shadow p-4 text-center">
             <div class="text-xs text-gray-500 uppercase tracking-wider">Bets</div>
@@ -51,78 +51,77 @@
         </div>
     </div>
 
-    {% if meetings|length == 0 %}
-    <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-        No settled bets for this date.
+    <!-- Per-Meet Summary Cards -->
+    {% if meet_summaries|length > 0 %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {% for meet in meet_summaries %}
+        <div class="bg-white rounded-lg shadow p-3 {{ 'border-l-4 border-green-500' if meet.pnl >= 0 else 'border-l-4 border-red-500' }}">
+            <div class="font-bold text-sm text-gray-900">{{ meet.venue }}</div>
+            <div class="flex justify-between items-center mt-1">
+                <span class="text-xs text-gray-500">{{ meet.bets }} bets &bull; {{ meet.winners }}W</span>
+                <span class="font-bold text-sm {{ 'text-green-600' if meet.pnl >= 0 else 'text-red-600' }}">
+                    {{ '%+.0f'|format(meet.pnl) | replace('+', '+$') | replace('-', '-$') }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
     </div>
     {% endif %}
 
-    <!-- Per-Meeting Sections -->
-    {% for meet in meetings %}
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-        <!-- Meeting Header -->
-        <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center {{ 'bg-green-50' if meet.pnl >= 0 else 'bg-red-50' }}">
-            <div>
-                <h2 class="font-bold text-lg text-gray-900">{{ meet.venue }}</h2>
-                <span class="text-xs text-gray-500">{{ meet.total_bets }} bets &bull; {{ meet.winners }} winners &bull; ${{ '%.0f'|format(meet.staked) }} staked</span>
-            </div>
-            <div class="text-right">
-                <div class="text-lg font-bold {{ 'text-green-600' if meet.pnl >= 0 else 'text-red-600' }}">
-                    {{ '%+.0f'|format(meet.pnl) | replace('+', '+$') | replace('-', '-$') }}
-                </div>
-                {% set meet_roi = (meet.pnl / meet.staked * 100) if meet.staked > 0 else 0 %}
-                <div class="text-xs {{ 'text-green-500' if meet_roi >= 0 else 'text-red-500' }}">{{ '%+.1f'|format(meet_roi) }}%</div>
-            </div>
-        </div>
+    <!-- Filter buttons -->
+    <div class="flex flex-wrap gap-2" id="filters">
+        <button onclick="filterBets('all')" class="filter-btn active px-3 py-1 rounded-full text-xs font-medium bg-gray-800 text-white">All</button>
+        <button onclick="filterBets('winners')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Winners</button>
+        <button onclick="filterBets('losers')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Losers</button>
+        <button onclick="filterBets('selections')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Selections</button>
+        <button onclick="filterBets('exotics')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Exotics</button>
+        <button onclick="filterBets('sequences')" class="filter-btn px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">Sequences</button>
+    </div>
 
-        <!-- Bet Table -->
+    {% if bets|length == 0 %}
+    <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+        No settled bets for this date.
+    </div>
+    {% else %}
+    <!-- Flat Chronological Bet Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="w-full text-sm" id="ledger-table">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50">
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Meet</th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Race</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Horse</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Bet</th>
                         <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Odds</th>
                         <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Stake</th>
                         <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Return</th>
                         <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">P&amp;L</th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Running</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    {% set running_pnl = namespace(val=0) %}
-                    {% for bet in meet.bets %}
-                    {% set running_pnl.val = running_pnl.val + bet.pnl %}
-                    <tr class="{{ 'bg-green-50/50' if bet.hit else '' }}">
+                    {% for bet in bets %}
+                    <tr class="bet-row {{ 'bg-green-50/50' if bet.hit else '' }}"
+                        data-hit="{{ '1' if bet.hit else '0' }}"
+                        data-type="{{ bet.pick_type }}">
+                        <td class="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-700">{{ bet.venue }}</td>
                         <td class="px-3 py-2 whitespace-nowrap">
                             {% if bet.race_number > 0 %}
-                            <span class="inline-block w-7 h-7 rounded-full text-center leading-7 text-xs font-bold text-white" style="background: linear-gradient(135deg, var(--sunset-start, #f97316), var(--sunset-end, #ec4899));">R{{ bet.race_number }}</span>
+                            <span class="inline-block w-7 h-7 rounded-full text-center leading-7 text-xs font-bold text-white" style="background: linear-gradient(135deg, #f97316, #ec4899);">R{{ bet.race_number }}</span>
                             {% else %}
                             <span class="text-gray-400">—</span>
                             {% endif %}
                         </td>
                         <td class="px-3 py-2">
-                            {% if bet.horse_name %}
-                            <span class="font-medium text-gray-900">{{ bet.horse_name }}</span>
-                            {% if bet.saddlecloth > 0 %}
-                            <span class="text-gray-400 text-xs">({{ bet.saddlecloth }})</span>
-                            {% endif %}
-                            {% elif bet.pick_type == 'exotic' %}
-                            <span class="text-gray-500 italic">{{ bet.bet_type }}</span>
-                            {% elif bet.pick_type in ('sequence', 'big3_multi') %}
-                            <span class="text-gray-500 italic">{{ bet.bet_type }}</span>
-                            {% else %}
-                            <span class="text-gray-400">—</span>
-                            {% endif %}
+                            <span class="font-medium text-gray-900">{{ bet.description or '—' }}</span>
                         </td>
                         <td class="px-3 py-2 whitespace-nowrap">
                             {% if bet.pick_type == 'selection' %}
                             <span class="inline-block px-2 py-0.5 rounded text-xs font-medium
                                 {% if bet.bet_type == 'Win' %}bg-blue-100 text-blue-800
                                 {% elif bet.bet_type == 'Each Way' %}bg-purple-100 text-purple-800
-                                {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                {{ bet.bet_type }}
-                            </span>
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">{{ bet.bet_type }}</span>
                             {% elif bet.pick_type == 'exotic' %}
                             <span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{{ bet.bet_type }}</span>
                             {% else %}
@@ -139,23 +138,52 @@
                         <td class="px-3 py-2 text-right whitespace-nowrap font-bold {{ 'text-green-600' if bet.pnl > 0 else ('text-red-600' if bet.pnl < 0 else 'text-gray-400') }}">
                             {{ '%+.2f'|format(bet.pnl) | replace('+', '+$') | replace('-', '-$') }}
                         </td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap font-medium {{ 'text-green-600' if bet.running_pnl >= 0 else 'text-red-600' }}">
+                            {{ '%+.0f'|format(bet.running_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
-                <!-- Meeting Total -->
+                <!-- Daily Total -->
                 <tfoot>
                     <tr class="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                        <td colspan="4" class="px-3 py-2 text-gray-700">Meeting Total</td>
-                        <td class="px-3 py-2 text-right text-gray-900">${{ '%.2f'|format(meet.staked) }}</td>
-                        <td class="px-3 py-2 text-right {{ 'text-green-600' if meet.returned > 0 else 'text-gray-400' }}">${{ '%.2f'|format(meet.returned) }}</td>
-                        <td class="px-3 py-2 text-right {{ 'text-green-600' if meet.pnl >= 0 else 'text-red-600' }}">
-                            {{ '%+.2f'|format(meet.pnl) | replace('+', '+$') | replace('-', '-$') }}
+                        <td colspan="5" class="px-3 py-2 text-gray-700">Daily Total</td>
+                        <td class="px-3 py-2 text-right text-gray-900">${{ '%.2f'|format(daily_staked) }}</td>
+                        <td class="px-3 py-2 text-right {{ 'text-green-600' if daily_returned > 0 else 'text-gray-400' }}">${{ '%.2f'|format(daily_returned) }}</td>
+                        <td class="px-3 py-2 text-right {{ 'text-green-600' if daily_pnl >= 0 else 'text-red-600' }}">
+                            {{ '%+.2f'|format(daily_pnl) | replace('+', '+$') | replace('-', '-$') }}
+                        </td>
+                        <td class="px-3 py-2 text-right {{ 'text-green-600' if daily_pnl >= 0 else 'text-red-600' }}">
+                            {{ '%+.0f'|format(daily_pnl) | replace('+', '+$') | replace('-', '-$') }}
                         </td>
                     </tr>
                 </tfoot>
             </table>
         </div>
     </div>
-    {% endfor %}
+    {% endif %}
 </div>
+
+<script>
+function filterBets(type) {
+    var rows = document.querySelectorAll('.bet-row');
+    rows.forEach(function(row) {
+        var hit = row.getAttribute('data-hit') === '1';
+        var pickType = row.getAttribute('data-type');
+        var show = true;
+        if (type === 'winners') show = hit;
+        else if (type === 'losers') show = !hit;
+        else if (type === 'selections') show = pickType === 'selection';
+        else if (type === 'exotics') show = pickType === 'exotic';
+        else if (type === 'sequences') show = pickType === 'sequence' || pickType === 'big3_multi';
+        row.style.display = show ? '' : 'none';
+    });
+    document.querySelectorAll('.filter-btn').forEach(function(btn) {
+        btn.classList.remove('active', 'bg-gray-800', 'text-white');
+        btn.classList.add('bg-gray-100', 'text-gray-700');
+    });
+    event.target.classList.remove('bg-gray-100', 'text-gray-700');
+    event.target.classList.add('active', 'bg-gray-800', 'text-white');
+}
+</script>
 {% endblock %}

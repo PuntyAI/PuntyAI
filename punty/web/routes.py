@@ -894,8 +894,11 @@ async def balance_sheet_page(
             for r in runner_result.scalars().all():
                 runner_cache[(r.race_id, r.saddlecloth)] = r
 
-    # Build ledger entries grouped by meeting
-    meetings_data = {}
+    # Build flat chronological ledger + per-meet summaries
+    import json as _json
+
+    all_bets = []
+    meet_summaries = {}
     daily_staked = 0.0
     daily_returned = 0.0
     daily_pnl = 0.0
@@ -918,28 +921,39 @@ async def balance_sheet_page(
             continue
 
         venue = meeting.venue or "Unknown"
-        if venue not in meetings_data:
-            meetings_data[venue] = {
-                "venue": venue,
-                "bets": [],
-                "staked": 0.0,
-                "returned": 0.0,
-                "pnl": 0.0,
-                "winners": 0,
-                "total_bets": 0,
-            }
+        if venue not in meet_summaries:
+            meet_summaries[venue] = {"staked": 0.0, "pnl": 0.0, "bets": 0, "winners": 0}
 
         pnl = pick.pnl or 0
         returned = stake + pnl if pnl > -stake else 0.0
 
-        # Get horse name
-        horse_name = pick.horse_name or ""
-        if not horse_name and pick.saddlecloth and race:
-            runner = runner_cache.get((race.id, pick.saddlecloth))
-            if runner:
-                horse_name = runner.horse_name or ""
+        # Description: horse name for selections, runners for exotics/sequences
+        description = ""
+        if pick.pick_type == "selection":
+            horse_name = pick.horse_name or ""
+            if not horse_name and pick.saddlecloth and race:
+                runner = runner_cache.get((race.id, pick.saddlecloth))
+                if runner:
+                    horse_name = runner.horse_name or ""
+            sc_str = f" ({pick.saddlecloth})" if pick.saddlecloth else ""
+            description = f"{horse_name}{sc_str}"
+        elif pick.pick_type in ("exotic", "sequence", "big3_multi"):
+            # Show runners as numbers
+            runners_raw = pick.exotic_runners or pick.sequence_legs
+            if runners_raw:
+                try:
+                    parsed = _json.loads(runners_raw) if isinstance(runners_raw, str) else runners_raw
+                    if isinstance(parsed, list):
+                        if parsed and isinstance(parsed[0], list):
+                            # Sequence legs: [[1,2,3], [4,5], ...]
+                            leg_strs = [",".join(str(x) for x in leg) for leg in parsed]
+                            description = " / ".join(leg_strs)
+                        else:
+                            description = ", ".join(str(x) for x in parsed)
+                except (ValueError, TypeError):
+                    description = str(runners_raw)
 
-        # Determine bet type label
+        # Bet type label
         if pick.pick_type == "selection":
             bet_label = (pick.bet_type or "Unknown").replace("_", " ").title()
             if bet_label == "Saver Win":
@@ -953,32 +967,29 @@ async def balance_sheet_page(
         else:
             bet_label = pick.pick_type or "Unknown"
 
-        # Odds
         odds = pick.odds_at_tip or 0
-        if pick.pick_type == "exotic":
-            odds = 0  # exotics don't have single odds
+        if pick.pick_type != "selection":
+            odds = 0
 
         entry = {
+            "venue": venue,
             "race_number": pick.race_number or 0,
-            "horse_name": horse_name,
-            "saddlecloth": pick.saddlecloth or 0,
+            "description": description,
             "bet_type": bet_label,
             "stake": round(stake, 2),
             "odds": round(odds, 2) if odds else 0,
             "pnl": round(pnl, 2),
             "returned": round(returned, 2),
             "hit": bool(pick.hit),
-            "tip_rank": pick.tip_rank,
             "pick_type": pick.pick_type,
         }
+        all_bets.append(entry)
 
-        meetings_data[venue]["bets"].append(entry)
-        meetings_data[venue]["staked"] += stake
-        meetings_data[venue]["returned"] += returned
-        meetings_data[venue]["pnl"] += pnl
-        meetings_data[venue]["total_bets"] += 1
+        meet_summaries[venue]["staked"] += stake
+        meet_summaries[venue]["pnl"] += pnl
+        meet_summaries[venue]["bets"] += 1
         if pick.hit:
-            meetings_data[venue]["winners"] += 1
+            meet_summaries[venue]["winners"] += 1
 
         daily_staked += stake
         daily_returned += returned
@@ -987,14 +998,20 @@ async def balance_sheet_page(
         if pick.hit:
             daily_winners += 1
 
-    # Round meeting totals
-    for m in meetings_data.values():
-        m["staked"] = round(m["staked"], 2)
-        m["returned"] = round(m["returned"], 2)
-        m["pnl"] = round(m["pnl"], 2)
+    # Round and sort meet summaries
+    sorted_meets = []
+    for venue, data in sorted(meet_summaries.items()):
+        data["venue"] = venue
+        data["staked"] = round(data["staked"], 2)
+        data["pnl"] = round(data["pnl"], 2)
+        data["roi"] = round(data["pnl"] / data["staked"] * 100, 1) if data["staked"] > 0 else 0
+        sorted_meets.append(data)
 
-    # Sort meetings by venue name
-    sorted_meetings = sorted(meetings_data.values(), key=lambda m: m["venue"])
+    # Add running P&L tally to bets
+    running = 0.0
+    for bet in all_bets:
+        running += bet["pnl"]
+        bet["running_pnl"] = round(running, 2)
 
     # Get available dates for navigation
     dates_result = await db.execute(
@@ -1023,7 +1040,8 @@ async def balance_sheet_page(
             "request": request,
             "target_date": target_date,
             "date_display": target_date.strftime("%A, %d %B %Y"),
-            "meetings": sorted_meetings,
+            "bets": all_bets,
+            "meet_summaries": sorted_meets,
             "daily_staked": round(daily_staked, 2),
             "daily_returned": round(daily_returned, 2),
             "daily_pnl": round(daily_pnl, 2),
