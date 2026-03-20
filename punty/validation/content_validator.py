@@ -334,7 +334,7 @@ def _validate_puntys_picks(
 ) -> None:
     """Validate Punty's Pick selections have sufficient probability."""
     puntys = [p for p in all_picks
-              if p.get("pick_type") == "selection" and p.get("tip_rank") == 0]
+              if p.get("pick_type") == "selection" and p.get("is_puntys_pick")]
 
     for pick in puntys:
         sc = pick.get("saddlecloth")

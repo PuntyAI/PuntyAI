@@ -431,7 +431,12 @@ async def populate_bet_queue(
         odds = pick.place_odds_at_tip or 0
         stake = await get_current_stake(db, place_probability=pp, odds=odds)
         if stake <= 0:
-            stake = DEFAULT_MIN_KELLY_STAKE  # Force minimum stake — we trust PP ranking
+            # Kelly says no edge — skip bet instead of forcing minimum
+            logger.info(
+                f"Skipping {pick.horse_name} R{pick.race_number}: "
+                f"Kelly edge <= 0 (PP={pp:.0%}, odds={odds:.2f})"
+            )
+            continue
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         scheduled_at = race.start_time - timedelta(minutes=10)
