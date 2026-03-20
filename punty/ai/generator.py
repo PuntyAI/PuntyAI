@@ -1043,14 +1043,17 @@ class ContentGenerator:
 
     @staticmethod
     def _get_sequence_lanes(total_races: int) -> dict:
-        """Get quaddie, early quaddie and big 6 race ranges based on meeting size."""
+        """Get quaddie, early quaddie and big 6 race ranges based on meeting size.
+        TAB pools: early quaddie + big6 need 8+ races; 6-7 race meets = quaddie only.
+        """
         rules = {
-            7:  {"early_quad": (1, 4), "quaddie": (4, 7), "big6": None},
+            6:  {"quaddie": (3, 6)},
+            7:  {"quaddie": (4, 7)},
             8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
-            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
-            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
-            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
-            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
+            9:  {"early_quad": (1, 4), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (1, 4), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (1, 4), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (1, 4), "quaddie": (9, 12), "big6": (7, 12)},
         }
         return rules.get(total_races, rules.get(min(rules.keys(), key=lambda k: abs(k - total_races)), {}))
 
