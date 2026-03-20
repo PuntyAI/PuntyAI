@@ -1066,12 +1066,25 @@ def build_all_sequence_lanes(
                 leg_map = {la["race_number"]: la for la in leg_analysis}
                 leg_wps = []
                 leg_fields = []
+                leg_classes = []
+                leg_dists = []
+                leg_prizes = []
                 for rn in range(smart.race_start, smart.race_end + 1):
                     la = leg_map.get(rn, {})
                     top_runners = la.get("top_runners", [])
                     top_wp = max((float(r.get("win_prob", 0)) for r in top_runners), default=0)
                     leg_wps.append(top_wp)
                     leg_fields.append(la.get("field_size", 10))
+                    # Context from race_contexts
+                    rc = next((c for c in race_contexts if c.get("race_number") == rn), {})
+                    leg_classes.append(rc.get("class_bucket", 0))
+                    leg_dists.append(rc.get("distance_bucket", 0))
+                    leg_prizes.append(float(rc.get("prize_money", 0) or 0))
+
+                avg_cls = sum(leg_classes) / len(leg_classes) if leg_classes else 0
+                avg_dist = sum(leg_dists) / len(leg_dists) if leg_dists else 0
+                avg_prize = sum(leg_prizes) / len(leg_prizes) if leg_prizes else 0
+                pm_bucket = 4.0 if avg_prize >= 100000 else (3.0 if avg_prize >= 50000 else (2.0 if avg_prize >= 25000 else 1.0))
 
                 play, prob, reason = should_play_sequence(
                     sequence_type=label,
@@ -1081,6 +1094,9 @@ def build_all_sequence_lanes(
                     total_combos=smart.total_combos,
                     estimated_return_pct=smart.estimated_return_pct,
                     hit_probability=smart.hit_probability,
+                    avg_class_bucket=avg_cls,
+                    avg_distance_bucket=avg_dist,
+                    prize_money_bucket=pm_bucket,
                 )
                 if not play:
                     logger.info(f"Sequence model skipped {label}: {reason}")

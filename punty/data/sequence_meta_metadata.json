@@ -21,16 +21,21 @@
     "venue_type",
     "total_combos",
     "estimated_return_pct",
-    "hit_probability"
+    "hit_probability",
+    "avg_class_bucket",
+    "avg_distance_bucket",
+    "prize_money_bucket",
+    "has_chaos_leg",
+    "wp_product"
   ],
-  "num_features": 19,
+  "num_features": 24,
   "seq_type_codes": {
     "Early Quaddie": 1,
     "Quaddie": 2,
     "Big 6": 3,
     "Big3 Multi": 4
   },
-  "training_date": "2026-03-20 12:27:32",
+  "training_date": "2026-03-20 12:49:59",
   "data_dir": "D:\\Punty\\DatafromProform",
   "total_meetings": 2647,
   "train_rows": 7772,
@@ -58,7 +63,7 @@
     "lambda_l2": 1.0,
     "seed": 42
   },
-  "best_iteration": 4,
-  "num_trees": 4,
-  "train_hit_rate": 80.42
+  "best_iteration": 94,
+  "num_trees": 94,
+  "train_hit_rate": 67.14
 }
