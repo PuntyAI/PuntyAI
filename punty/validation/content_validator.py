@@ -395,13 +395,13 @@ async def validate_early_mail_probability(
     This is the async entry point that loads race data from the database
     and runs the validator. Call this from the approval flow.
     """
-    from punty.results.parser import extract_all_picks
+    from punty.results.parser import parse_early_mail
     from punty.models.meeting import Meeting, Race, Runner
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     # Parse picks from content
-    parsed_picks = extract_all_picks(content_raw, meeting_id)
+    parsed_picks = parse_early_mail(content_raw, "", meeting_id)
 
     # Load race data with probabilities
     result = await db.execute(
