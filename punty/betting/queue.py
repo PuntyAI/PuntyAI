@@ -385,35 +385,41 @@ async def populate_bet_queue(
             logger.info(f"Betfair queue BLOCKED: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
             continue
 
-        # ── Hard WP floor — non-negotiable ──
-        # WP >= 22% yields 75.4% place SR at 18.4% ROI on 31-day backtest.
-        # Meta-model can add additional filtering ON TOP of WP floor, but
-        # NEVER bypass it. Low-WP picks have proven unprofitable.
+        # ── Context-aware filtering (data-backed from 234 settled bets) ──
+        # PP is context-aware via LGBM v7 → Harville. Dead-zone caps cut
+        # proven losing segments. No flat WP threshold — WP varies by field.
+        #
+        # Historical combos (R1 only):
+        #   PP>=55 + field 8-13 + odds<$5: 127 bets, 73.2% SR, +$48 P&L
+        #   field 8-11 + odds<$5:          133 bets, 73.7% SR, +$79 P&L
+        #   PP>=55 + field 10-11:           45 bets, 82.2% SR, +$22 P&L
         wp = pick.win_probability or 0
+        pp = pick.place_probability or 0
+        odds = pick.odds_at_tip or 0
 
-        if wp < 0.22:
+        # PP floor: 55% place probability (context-aware via Harville)
+        if pp < 0.55:
             logger.info(
                 f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— WP {wp:.0%} < 22% (hard floor)"
+                f"— PP {pp:.0%} < 55%"
             )
             continue
 
-        # Meta-model: additional learned filter on top of WP floor
-        meta_decision = await _meta_model_decision(
-            db, pick, runner, race, meeting, wp, race_picks, runner_count,
-        )
-        if meta_decision is not None:
-            should, prob, reason = meta_decision
-            if not should:
-                logger.info(
-                    f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                    f"— {reason}"
-                )
-                continue
+        # Field cap: 14+ runners = 33% SR, proven dead zone
+        if runner_count > 13:
             logger.info(
-                f"Betfair queue PASS: {pick.horse_name} R{pick.race_number} "
-                f"— {reason}"
+                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                f"— field {runner_count} > 13 (dead zone)"
             )
+            continue
+
+        # Odds cap: $5+ win odds = 36% SR on R1 place bets
+        if odds >= 5.0:
+            logger.info(
+                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                f"— odds ${odds:.2f} >= $5 (longshot dead zone)"
+            )
+            continue
 
         eligible.append((pick, race))
 
