@@ -35,9 +35,10 @@ DEFAULT_MIN_CALIBRATED_PP = 0.50  # Only bet when calibrated PP >= 50% (volume f
 DEFAULT_MAX_PLACE_ODDS = 999.0  # No ceiling — let PP ranking decide
 MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
 DEFAULT_MAIDEN_MAX_PLACE_ODDS = 999.0  # No maiden ceiling — best 4 per meet by PP
-# Select from all 4 ranked picks per race, then take best 4 per meeting by PP.
-MAX_BETFAIR_RANK = 4
-# Best 4 bets per meeting — pure PP ranking, no per-race or price gates.
+# RANK 1 ONLY — highest probability pick per race. Non-R1 picks have
+# demonstrably worse place SR and dilute the edge.
+MAX_BETFAIR_RANK = 1
+# Best 4 bets per meeting — pure WP ranking across R1 picks.
 MAX_BETS_PER_MEETING = 4
 
 
@@ -384,13 +385,20 @@ async def populate_bet_queue(
             logger.info(f"Betfair queue BLOCKED: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
             continue
 
-        # ── Meta-model or WP floor ──
-        # The meta-model is a learned selector trained on "does LGBM rank 1
-        # actually place?" — it replaces the flat WP >= 22% threshold when
-        # available. Falls back to WP >= 22% if model not loaded.
+        # ── Hard WP floor — non-negotiable ──
+        # WP >= 22% yields 75.4% place SR at 18.4% ROI on 31-day backtest.
+        # Meta-model can add additional filtering ON TOP of WP floor, but
+        # NEVER bypass it. Low-WP picks have proven unprofitable.
         wp = pick.win_probability or 0
 
-        # Try meta-model first
+        if wp < 0.22:
+            logger.info(
+                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                f"— WP {wp:.0%} < 22% (hard floor)"
+            )
+            continue
+
+        # Meta-model: additional learned filter on top of WP floor
         meta_decision = await _meta_model_decision(
             db, pick, runner, race, meeting, wp, race_picks, runner_count,
         )
@@ -406,14 +414,6 @@ async def populate_bet_queue(
                 f"Betfair queue PASS: {pick.horse_name} R{pick.race_number} "
                 f"— {reason}"
             )
-        else:
-            # Fallback: flat WP threshold
-            if wp < 0.22:
-                logger.info(
-                    f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                    f"— WP {wp:.0%} < 22%"
-                )
-                continue
 
         eligible.append((pick, race))
 
