@@ -1292,12 +1292,14 @@ async def get_performance_history(
             func.sum(case((Pick.hit == True, 1), else_=0)).label("winners"),
             func.sum(func.coalesce(Pick.bet_stake, Pick.exotic_stake, 0)).label("total_staked"),
         )
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date >= start_date,
             Meeting.date <= end_date,
             Meeting.selected == True,
             Pick.settled == True,
+            Content.status.notin_(["superseded", "rejected"]),
             Pick.pick_type != "big3",  # P&L tracked on multi row
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
@@ -1353,11 +1355,13 @@ async def get_cumulative_pnl(db: AsyncSession) -> list[dict]:
     # Only include sequences if they hit (won)
     result = await db.execute(
         select(Pick, Race.start_time, Meeting.date)
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .outerjoin(Race, (Race.meeting_id == Pick.meeting_id) & (Race.race_number == Pick.race_number))
         .where(
             Meeting.selected == True,
             Pick.settled == True,
+            Content.status.notin_(["superseded", "rejected"]),
             Pick.pick_type != "big3",  # big3 individual rows don't have P&L, only big3_multi does
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
@@ -1785,12 +1789,14 @@ async def get_recent_wins(db: AsyncSession, limit: int = 20) -> list[dict]:
     # Get recent settled wins, ordered by settled_at descending
     result = await db.execute(
         select(Pick, Meeting)
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
             Pick.pnl > 0,  # Only profitable wins
+            Content.status.notin_(["superseded", "rejected"]),
         )
         .order_by(Pick.settled_at.desc())
         .limit(limit)
@@ -1841,12 +1847,14 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
     # Today's winners
     today_result = await db.execute(
         select(func.count(Pick.id))
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
             Meeting.date == today,
+            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             Pick.pick_type != "big3",
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
@@ -1857,11 +1865,13 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
     # All-time winners
     total_result = await db.execute(
         select(func.count(Pick.id))
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
+            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             Pick.pick_type != "big3",
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
@@ -1875,11 +1885,13 @@ async def get_all_time_stats(db: AsyncSession) -> dict:
             func.sum(Pick.bet_stake + Pick.pnl).filter(Pick.bet_stake.isnot(None)),
             func.sum(Pick.exotic_stake + Pick.pnl).filter(Pick.exotic_stake.isnot(None)),
         )
+        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.selected == True,
             Pick.settled == True,
             Pick.hit == True,
+            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             Pick.pick_type != "big3",
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
