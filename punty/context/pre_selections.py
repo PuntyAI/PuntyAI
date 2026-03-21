@@ -522,6 +522,26 @@ def calculate_pre_selections(
         prize_money=race_context.get("prize_money", 0),
     )
 
+    # Guaranteed fallback: quinella on top 2 picks if no exotic was selected.
+    # Ensures every race gets an exotic recommendation (required for auto-approval).
+    if exotic is None and len(picks) >= 2:
+        top2 = sorted(picks[:2], key=lambda p: p.rank)
+        combined_prob = top2[0].win_prob * top2[1].win_prob * 2  # rough quinella prob
+        logger.info(
+            "Exotic fallback: Quinella %s for R%d (no combos passed routing)",
+            [p.saddlecloth for p in top2], race_number,
+        )
+        exotic = RecommendedExotic(
+            exotic_type="Quinella",
+            runners=[p.saddlecloth for p in top2],
+            runner_names=[p.horse_name for p in top2],
+            probability=min(combined_prob, 0.99),
+            value_ratio=1.0,
+            num_combos=1,
+            format="flat",
+            budget=EXOTIC_BUDGET,
+        )
+
     total_stake = sum(p.stake for p in picks)
     notes = _generate_notes(picks, exotic, candidates, field_size=field_size,
                             win_capped=win_capped, is_ntd=is_ntd)

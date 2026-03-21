@@ -97,6 +97,76 @@ def replace_banned_words(content: str, seed: int = 0) -> str:
     return content
 
 
+def _inject_missing_sequences(raw: str) -> str:
+    """Inject sequence text sections from JSON block when AI omitted them.
+
+    The AI sometimes puts sequences only in the JSON data block but doesn't
+    write visible text sections (EARLY QUADDIE / QUADDIE / BIG 6 headings).
+    The frontend needs these headings to render sequence accordions.
+    """
+    import json as _json
+
+    # Check if text already has sequence headings (before JSON block)
+    json_start = raw.find("```json")
+    text_part = raw[:json_start] if json_start > 0 else raw
+    if re.search(r'(?i)^\*{0,2}(EARLY\s+QUADDIE|QUADDIE|BIG\s*6)', text_part, re.MULTILINE):
+        return raw  # Already has sequence sections
+
+    # Extract JSON block
+    m = re.search(r'```json\s*\n(.*?)\n```', raw, re.DOTALL)
+    if not m:
+        return raw
+    try:
+        data = _json.loads(m.group(1))
+    except (ValueError, _json.JSONDecodeError):
+        return raw
+
+    sequences = data.get("sequences", [])
+    if not sequences:
+        return raw
+
+    # Build text sections for each sequence
+    sections = []
+    for seq in sequences:
+        seq_type = seq.get("type", "")
+        start = seq.get("start_race", "?")
+        end = seq.get("end_race", "?")
+        variants = seq.get("variants", [])
+        if not variants:
+            continue
+
+        heading = f"*{seq_type.upper()}* (Races {start}-{end})"
+        lines = [heading]
+        for v in variants:
+            name = v.get("name", "Smart")
+            legs = v.get("legs", "")
+            combos = v.get("combos", 0)
+            unit = v.get("unit_price", 0)
+            total = v.get("total", 0)
+            lines.append(f"{name}: {legs} ({combos} combos × ${unit:.2f} = ${total:.2f})")
+        sections.append("\n".join(lines))
+
+    if not sections:
+        return raw
+
+    # Insert before NUGGETS or FIND OUT MORE or the JSON block
+    seq_text = "\n\n*SEQUENCE LANES*\n\n" + "\n\n".join(sections) + "\n"
+    insert_patterns = [
+        r'^\*{1,2}(?:Nuggets|NUGGETS)',
+        r'^\*{1,2}(?:FIND OUT MORE|Find out more)',
+        r'^```json',
+    ]
+    for pat in insert_patterns:
+        ins = re.search(pat, raw, re.MULTILINE)
+        if ins:
+            return raw[:ins.start()] + seq_text + "\n" + raw[ins.start():]
+
+    # Fallback: append before JSON
+    if json_start > 0:
+        return raw[:json_start] + seq_text + "\n" + raw[json_start:]
+    return raw + seq_text
+
+
 def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 0) -> str:
     """Format raw content as HTML for public display.
 
@@ -109,6 +179,11 @@ def format_html(raw_content: str, content_type: str = "early_mail", seed: int = 
         HTML-formatted content
     """
     from punty.formatters import strip_json_block
+
+    # Inject sequence sections from JSON if AI omitted them from text
+    if content_type == "early_mail":
+        raw_content = _inject_missing_sequences(raw_content)
+
     content = strip_json_block(raw_content)
 
     # Replace banned words first

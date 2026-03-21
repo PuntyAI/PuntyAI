@@ -911,7 +911,51 @@ async def execute_due_bets(db: AsyncSession) -> int:
             logger.error(f"Betfair: failed {bet.id} — {bet.error_message}")
 
     await db.commit()
+
+    # Update displayed stakes on remaining queued bets to reflect balance changes
+    if placed:
+        await recalculate_queued_stakes(db)
+
     return placed
+
+
+async def recalculate_queued_stakes(db: AsyncSession) -> int:
+    """Recalculate Kelly stakes on all queued (not yet placed) bets.
+
+    Called after settlement so the queue display reflects compound growth:
+    after a loss, subsequent bets shrink; after a win, they grow.
+    The execution-time recalculation in execute_due_bets() is the authority,
+    but this keeps the displayed stakes accurate for the user.
+    """
+    result = await db.execute(
+        select(BetfairBet).where(
+            BetfairBet.status == "queued",
+        )
+    )
+    queued_bets = result.scalars().all()
+    if not queued_bets:
+        return 0
+
+    updated = 0
+    for bet in queued_bets:
+        # Load pick for PP
+        pick_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
+        pick = pick_result.scalar_one_or_none()
+        pp = (pick.place_probability if pick else None) or 0
+        odds = bet.requested_odds or 0
+
+        new_stake = await get_current_stake(db, place_probability=pp, odds=odds)
+        if new_stake <= 0:
+            new_stake = DEFAULT_MIN_KELLY_STAKE
+
+        if abs(new_stake - bet.stake) > 0.01:
+            bet.stake = round(new_stake, 2)
+            updated += 1
+
+    if updated:
+        await db.commit()
+        logger.info(f"Recalculated stakes on {updated} queued bets")
+    return updated
 
 
 async def settle_betfair_bets(
@@ -1053,6 +1097,12 @@ async def settle_betfair_bets(
         f"Betfair settled: {bet.id} — {'HIT' if bet.hit else 'MISS'} "
         f"pnl=${bet.pnl:+.2f} (balance: ${balance:.2f})"
     )
+
+    # Recalculate displayed stakes on remaining queued bets so the queue
+    # reflects current Kelly sizing (compound growth: after a loss the next
+    # bet should be smaller, after a win it should be larger).
+    await recalculate_queued_stakes(db)
+
     return 1
 
 

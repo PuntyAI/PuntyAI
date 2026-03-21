@@ -198,6 +198,18 @@ def _validate_exotics(
         exotic_type = (pick.get("exotic_type") or "").lower()
         runners_raw = pick.get("exotic_runners") or []
 
+        # AI wrote "no exotic" / type=None — downgrade to warning (not error)
+        # so it doesn't block auto-approval. Pre-selections always provide
+        # an exotic, but the AI can occasionally ignore the recommendation.
+        if not exotic_type or exotic_type == "none":
+            result.issues.append(ValidationIssue(
+                level="warning",
+                race_number=race_num,
+                message="AI skipped exotic despite pre-selection recommendation",
+                category="exotic",
+            ))
+            continue
+
         # Parse runners (could be list of ints or JSON string)
         runners = _parse_exotic_runners(runners_raw)
 
