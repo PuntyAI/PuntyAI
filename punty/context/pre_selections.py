@@ -1269,7 +1269,7 @@ def _select_exotic(
             preferred_types.add("First4")
     elif race_shape == "open":
         # No clear order → quinella boxes, trifecta box if field allows
-        preferred_types = {"Quinella", "Quinella Box", "Exacta"}
+        preferred_types = {"Quinella", "Quinella Box"}
         if allow_tri_box:
             preferred_types.add("Trifecta Box")
         if allow_first4:
@@ -1278,7 +1278,7 @@ def _select_exotic(
                 preferred_types.add("First4 Box")
     else:  # structured
         # Moderate separation → balanced mix of all types
-        preferred_types = {"Quinella", "Quinella Box", "Exacta", "Exacta Standout"}
+        preferred_types = {"Quinella", "Quinella Box", "Exacta Standout"}
         if allow_tri_standout:
             preferred_types.add("Trifecta Standout")
         if allow_tri_box and roughie_is_live:
@@ -1319,6 +1319,12 @@ def _select_exotic(
         # Trifecta minimum value ratio: 1.5x (higher bar than other exotics)
         # Trifectas are harder to hit, so only play when value clearly justifies it
         if ec_type in ("Trifecta Standout", "Trifecta Box") and value < 1.5:
+            continue
+
+        # Exacta certainty gate: lead runner must have >= 25% WP.
+        # Exactas = "we know the winner, options for 2nd". Without a genuine
+        # standout anchoring 1st, quinella boxes are the better structure.
+        if ec_type in ("Exacta", "Exacta Standout") and picks and top_pick_wp < 0.25:
             continue
 
         # ── Scoring: meta-model or hand-tuned ──

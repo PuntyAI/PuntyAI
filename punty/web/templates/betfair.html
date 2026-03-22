@@ -937,10 +937,14 @@ function betfairApp() {
             try {
                 this.chartError = '';
                 this.chartFallback = false;
+                // Ensure canvas is visible (fallback path hides it)
+                const canvas = document.getElementById('pnlChart');
+                if (canvas) canvas.style.display = '';
                 const useChartJs = typeof Chart !== 'undefined';
 
                 if (this.chartRange === 1) {
                     const resp = await fetch('/api/betfair/chart-data/today');
+                    if (!resp.ok) { this.chartError = `API error: ${resp.status}`; return; }
                     const data = await resp.json();
                     if (useChartJs) {
                         try { this.renderTodayChart(data); } catch (e) {
@@ -973,7 +977,6 @@ function betfairApp() {
                         this.buildFallback(data);
                     }
                 }
-                // Chart.js fallback detection removed — trust the Chart.js render
             } catch (e) { this.chartError = `Chart error: ${e.message}`; console.error('Chart load failed:', e); }
         },
 
