@@ -44,6 +44,17 @@ MAX_BETFAIR_RANK = 1
 MAX_BETS_PER_MEETING = 99
 
 
+def _estimate_place_odds(win_odds: float, field_size: int = 12) -> float:
+    """Estimate Betfair place odds from win odds via Harville divisor.
+
+    Uses /3 for 8+ runner fields (3 places), /2 for 5-7 (2 places).
+    """
+    if win_odds <= 1.0:
+        return 1.0
+    divisor = 2 if 5 <= field_size <= 7 else 3
+    return round((win_odds - 1) / divisor + 1, 2)
+
+
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
     """Count non-scratched runners in a race."""
     result = await db.execute(
@@ -434,15 +445,20 @@ async def populate_bet_queue(
 
     queued = 0
     for pick, race in top_picks:
-        # Kelly stake — use $5 minimum even if Kelly says no edge
         pp = pick.place_probability or 0
-        odds = pick.place_odds_at_tip or 0
-        stake = await get_current_stake(db, place_probability=pp, odds=odds)
+        win_odds = pick.odds_at_tip or 0
+        # Estimate Betfair place odds from win odds via Harville divisor.
+        # Tote place_odds_at_tip are pool-derived ($1.10-$1.30) and far too
+        # compressed for Kelly — they always produce negative edge, forcing
+        # every bet to the $5 minimum.  Exchange place odds are closer to
+        # (win - 1) / 3 + 1 for 8+ runner fields.
+        est_place_odds = _estimate_place_odds(win_odds)
+        stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
         if stake <= 0:
             # Kelly says no edge — skip bet instead of forcing minimum
             logger.info(
                 f"Skipping {pick.horse_name} R{pick.race_number}: "
-                f"Kelly edge <= 0 (PP={pp:.0%}, odds={odds:.2f})"
+                f"Kelly edge <= 0 (PP={pp:.0%}, est_place=${est_place_odds:.2f})"
             )
             continue
 
@@ -457,14 +473,15 @@ async def populate_bet_queue(
             horse_name=pick.horse_name or "Unknown",
             saddlecloth=pick.saddlecloth,
             stake=stake,
-            requested_odds=pick.place_odds_at_tip,
+            requested_odds=round(est_place_odds, 2),
             scheduled_at=scheduled_at,
         )
         db.add(bet)
         queued += 1
         logger.info(
             f"Betfair queue: {pick.horse_name} R{pick.race_number} "
-            f"PP={pp:.0%} odds=${odds:.2f} stake=${stake:.2f}"
+            f"PP={pp:.0%} win=${win_odds:.2f} est_place=${est_place_odds:.2f} "
+            f"stake=${stake:.2f}"
         )
 
     if queued:
