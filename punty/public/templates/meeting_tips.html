@@ -708,6 +708,12 @@
         background: rgba(74, 222, 128, 0.15); color: #4ade80;
         text-transform: uppercase; letter-spacing: 0.05em;
     }
+    .fg-abandoned-badge {
+        font-size: 0.6rem; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        padding: 1px 6px; border-radius: 4px;
+        background: rgba(239, 68, 68, 0.15); color: #ef4444;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
 
     /* Punty's Punts section header */
     .punts-section-header {
@@ -1105,7 +1111,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Status badge or countdown
         if (raceData) {
-            if (raceData.status && ['Paying', 'Closed', 'Final', 'Interim'].indexOf(raceData.status) !== -1) {
+            if (raceData.status === 'Abandoned') {
+                headerHtml += '<span class="fg-abandoned-badge mr-2">Abandoned</span>';
+            } else if (raceData.status && ['Paying', 'Closed', 'Final', 'Interim'].indexOf(raceData.status) !== -1) {
                 var statusLabel = raceData.status === 'Interim' ? 'Closed' : 'Final';
                 headerHtml += '<span class="fg-results-badge mr-2">' + statusLabel + '</span>';
             } else if (raceData.time && meetingDate) {

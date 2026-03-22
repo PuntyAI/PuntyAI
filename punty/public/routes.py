@@ -2975,7 +2975,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
     has_unfinished = False
     for r in races:
         status = r.get("status") or ""
-        if status in ("Paying", "Closed", "Final"):
+        if status in ("Paying", "Closed", "Final", "Abandoned"):
             continue
         has_unfinished = True
         if r.get("time"):
