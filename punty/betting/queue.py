@@ -38,8 +38,10 @@ DEFAULT_MAIDEN_MAX_PLACE_ODDS = 999.0  # No maiden ceiling — best 4 per meet b
 # RANK 1 ONLY — highest probability pick per race. Non-R1 picks have
 # demonstrably worse place SR and dilute the edge.
 MAX_BETFAIR_RANK = 1
-# Best 4 bets per meeting — pure WP ranking across R1 picks.
-MAX_BETS_PER_MEETING = 4
+# No per-meeting cap — let PP >= 55% + context filters decide.
+# Backtest 2026-03-09→22: 70 bets, 72.9% SR, +$856 from $362
+# vs actual 177 bets, 65.5% SR, -$26. Fewer better bets > volume.
+MAX_BETS_PER_MEETING = 99
 
 
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
@@ -405,11 +407,11 @@ async def populate_bet_queue(
             )
             continue
 
-        # Field cap: 14+ runners = 33% SR, proven dead zone
-        if runner_count > 13:
+        # Field cap: 16+ runners = dead zone (raised from 13 → 15 after backtest)
+        if runner_count > 15:
             logger.info(
                 f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— field {runner_count} > 13 (dead zone)"
+                f"— field {runner_count} > 15 (dead zone)"
             )
             continue
 
@@ -467,7 +469,7 @@ async def populate_bet_queue(
 
     if queued:
         await db.commit()
-        logger.info(f"Betfair queue: {queued}/{MAX_BETS_PER_MEETING} bets queued for {meeting_id}")
+        logger.info(f"Betfair queue: {queued} bets queued for {meeting_id}")
     return queued
 
 
