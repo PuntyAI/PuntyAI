@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 SPONSOR_PREFIXES = [
     "sportsbet", "ladbrokes", "bet365", "tab", "neds", "pointsbet",
     "unibet", "betfair", "palmerbet", "bluebet", "topsport", "aquis",
-    "picklebet park", "beaumont",
+    "picklebet park",
 ]
 
 # Venue aliases: map alternative names to canonical form
@@ -35,6 +35,7 @@ VENUE_ALIASES = {
     # PointsBet aliases
     "caulfield heath": "caulfield",
     # PF-specific aliases
+    "beaumont": "newcastle",
     "beaumont newcastle": "newcastle",
     # Southside = synthetic track at same venue
     "southside pakenham": "pakenham",
