@@ -388,7 +388,11 @@ class PuntingFormScraper(BaseScraper):
         for m in meetings:
             track = m.get("track")
             track_name = (track.get("name", "") if isinstance(track, dict) else "").lower().strip()
+            clean_track = normalize_venue(track_name)
             if track_name == clean_venue or track_name == venue_lower:
+                candidates.append((track_name, int(m["meetingId"])))
+            # Canonical match: both sides normalize to same venue (e.g. "beaumont" → "newcastle")
+            elif clean_track and clean_track == clean_venue:
                 candidates.append((track_name, int(m["meetingId"])))
             # Partial match: "Pakenham" matches "Sportsbet Pakenham"
             elif track_name in clean_venue or clean_venue in track_name:
