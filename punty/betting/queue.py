@@ -347,6 +347,8 @@ async def populate_bet_queue(
         if rn not in best_by_race or wp > (best_by_race[rn].win_probability or 0):
             best_by_race[rn] = pick
     race_picks = list(best_by_race.values())
+    if not race_picks:
+        return 0
 
     # Load races to get start times
     race_result = await db.execute(
