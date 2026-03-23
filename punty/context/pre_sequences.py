@@ -211,6 +211,10 @@ def _prepare_legs_data(
         outlay = round(MIN_OUTLAY + chaos_ratio * (MAX_OUTLAY - MIN_OUTLAY), 0)
         outlay = max(MIN_OUTLAY, min(MAX_OUTLAY, outlay))
 
+    # Mon/Tue/Thu: halve sequence outlay (thin cards, worse ROI)
+    from punty.context.pre_selections import _midweek_multiplier
+    outlay = round(outlay * _midweek_multiplier(), 0)
+
     return (legs_data, outlay, is_big6)
 
 
