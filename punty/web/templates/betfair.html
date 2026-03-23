@@ -192,7 +192,7 @@
             </div>
         </div>
         <div style="height: 280px; position: relative; width: 100%;" id="pnlChartContainer">
-            <canvas id="pnlChart"></canvas>
+            <canvas id="pnlChart" x-ref="pnlChart"></canvas>
             <div x-show="chartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466;">
                 <span x-text="chartError"></span>
             </div>
@@ -938,7 +938,7 @@ function betfairApp() {
                 this.chartError = '';
                 this.chartFallback = false;
                 // Ensure canvas is visible (fallback path hides it)
-                const canvas = document.getElementById('pnlChart');
+                const canvas = this.$refs.pnlChart;
                 if (canvas) canvas.style.display = '';
                 const useChartJs = typeof Chart !== 'undefined';
 
@@ -983,19 +983,11 @@ function betfairApp() {
         },
 
         renderTodayChart(data) {
-            let canvas = document.getElementById('pnlChart');
+            const canvas = this.$refs.pnlChart;
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
             if (this._chart) {
                 this._chart.destroy();
                 this._chart = null;
-            }
-            const container = document.getElementById('pnlChartContainer');
-            if (container) {
-                const newCanvas = document.createElement('canvas');
-                newCanvas.id = 'pnlChart';
-                const oldCanvas = container.querySelector('canvas');
-                if (oldCanvas) container.replaceChild(newCanvas, oldCanvas);
-                canvas = newCanvas;
             }
 
             const settled = data.settled || [];
@@ -1140,21 +1132,13 @@ function betfairApp() {
         },
 
         renderChart(data) {
-            let canvas = document.getElementById('pnlChart');
+            const canvas = this.$refs.pnlChart;
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
 
-            // Destroy existing chart cleanly — replace canvas to avoid stale context
+            // Destroy existing chart cleanly
             if (this._chart) {
                 this._chart.destroy();
                 this._chart = null;
-            }
-            const container = document.getElementById('pnlChartContainer');
-            if (container) {
-                const newCanvas = document.createElement('canvas');
-                newCanvas.id = 'pnlChart';
-                const oldCanvas = container.querySelector('canvas');
-                if (oldCanvas) container.replaceChild(newCanvas, oldCanvas);
-                canvas = newCanvas;
             }
 
             // Filter series by range
@@ -1200,8 +1184,6 @@ function betfairApp() {
                 // Also show the point before as null-bridge
                 if (lastIdx > 0) bestCase[lastIdx - 1] = series[lastIdx - 1].cumulative_pnl;
             }
-
-            if (this._chart) this._chart.destroy();
 
             const gridColor = 'rgba(128,128,160,0.1)';
             const tickColor = 'rgba(128,128,160,0.5)';
@@ -1306,7 +1288,7 @@ function betfairApp() {
                 + ' ' + pts[0].x + ',' + zeroY;
             this.fallbackSvg = { w: W, h: H, zeroY, linePts, fillPts, points: pts, lastVal: points[points.length - 1] };
             this.chartFallback = true;
-            const canvas = document.getElementById('pnlChart');
+            const canvas = this.$refs.pnlChart;
             if (canvas) canvas.style.display = 'none';
         },
 
