@@ -31,6 +31,7 @@ DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
 DEFAULT_MAX_KELLY_FRACTION = 0.06  # Cap Kelly fraction at 6% (half-Kelly conservative)
 DEFAULT_KELLY_HALF = True  # True half-Kelly: halve the fraction for 75% less variance
 DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
+DEFAULT_KELLY_FALLBACK_STAKE = 12.50  # Flat stake when Kelly sees no edge but quality filters pass
 DEFAULT_MIN_CALIBRATED_PP = 0.50  # Only bet when calibrated PP >= 50% (volume for compound growth)
 DEFAULT_MAX_PLACE_ODDS = 999.0  # No ceiling — let PP ranking decide
 MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
@@ -454,13 +455,20 @@ async def populate_bet_queue(
         # (win - 1) / 3 + 1 for 8+ runner fields.
         est_place_odds = _estimate_place_odds(win_odds)
         stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
-        if stake <= 0:
-            # Kelly says no edge — skip bet instead of forcing minimum
+        # Minimum stake floor for all bets passing quality filters.
+        # Kelly often returns $5 min or $0 for short-priced place bets,
+        # but backtest shows 77% SR on these — use fallback as floor.
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if stake < fallback:
             logger.info(
-                f"Skipping {pick.horse_name} R{pick.race_number}: "
-                f"Kelly edge <= 0 (PP={pp:.0%}, est_place=${est_place_odds:.2f})"
+                f"Stake floor {pick.horse_name} R{pick.race_number}: "
+                f"Kelly=${stake:.2f} (PP={pp:.0%}, est_place=${est_place_odds:.2f}) "
+                f"→ raised to ${fallback:.2f}"
             )
-            continue
+            stake = fallback
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         scheduled_at = race.start_time - timedelta(minutes=10)

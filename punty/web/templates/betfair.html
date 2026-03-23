@@ -192,48 +192,8 @@
             </div>
         </div>
         <div style="height: 280px; position: relative; width: 100%;" id="pnlChartContainer">
-            <canvas id="pnlChart" style="width: 100%; height: 100%;"></canvas>
-            <div x-show="chartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466;">
-                <span x-text="chartError"></span>
-            </div>
-            <!-- Fallback SVG cumulative P&L chart -->
-            <div x-show="chartFallback && !chartError" class="absolute inset-0" style="padding: 8px 0 0 0;">
-                <svg :viewBox="'0 0 ' + fallbackSvg.w + ' ' + fallbackSvg.h" preserveAspectRatio="none"
-                     style="width:100%;height:calc(100% - 28px);display:block;">
-                    <!-- Zero line -->
-                    <line :x1="0" :y1="fallbackSvg.zeroY" :x2="fallbackSvg.w" :y2="fallbackSvg.zeroY"
-                          stroke="rgba(128,128,160,0.25)" stroke-width="0.5" stroke-dasharray="4,3"/>
-                    <!-- Gradient fill -->
-                    <defs>
-                        <linearGradient id="fbGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" :stop-color="fallbackSvg.lastVal >= 0 ? 'rgba(0,212,255,0.25)' : 'rgba(255,68,102,0.25)'"/>
-                            <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
-                        </linearGradient>
-                    </defs>
-                    <polygon :points="fallbackSvg.fillPts" fill="url(#fbGrad)"/>
-                    <!-- Line -->
-                    <polyline :points="fallbackSvg.linePts" fill="none"
-                              :stroke="fallbackSvg.lastVal >= 0 ? '#00d4ff' : '#ff4466'" stroke-width="2"
-                              stroke-linejoin="round" stroke-linecap="round"/>
-                    <!-- Points -->
-                    <template x-for="(pt, i) in fallbackSvg.points" :key="i">
-                        <circle :cx="pt.x" :cy="pt.y" r="3.5"
-                                :fill="pt.hit ? '#00ff88' : '#ff4466'" :stroke="pt.hit ? '#00ff88' : '#ff4466'" stroke-width="1"/>
-                    </template>
-                </svg>
-                <!-- X-axis labels + cumulative values -->
-                <div style="display:flex;justify-content:space-between;padding:0 4px;height:28px;align-items:center;overflow:hidden;">
-                    <template x-for="(pt, i) in fallbackSvg.points" :key="i">
-                        <div style="flex:1;text-align:center;min-width:0;">
-                            <div style="font-size:0.6rem;font-weight:700;font-family:'Orbitron',sans-serif;"
-                                 :style="'color:' + (pt.cum >= 0 ? '#00ff88' : '#ff4466')"
-                                 x-text="(pt.cum >= 0 ? '+$' : '-$') + Math.abs(pt.cum).toFixed(0)"></div>
-                            <div style="font-size:0.5rem;color:rgba(128,128,160,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-                                 x-text="pt.label"></div>
-                        </div>
-                    </template>
-                </div>
-            </div>
+            <canvas id="pnlChart"></canvas>
+            <div id="pnlChartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466; display: none; z-index: 2;"></div>
         </div>
     </div>
 
@@ -880,7 +840,14 @@ function betfairApp() {
                 await new Promise(r => setTimeout(r, 250));
             }
             await this.loadChart();
-            setInterval(() => this.refresh(), 30000);
+            setInterval(async () => {
+                await this.refresh();
+                // Re-render chart after refresh — Alpine reactivity can clear canvas pixels
+                if (this._lastChartData) {
+                    await new Promise(r => setTimeout(r, 50));
+                    try { this.renderChart(this._lastChartData); } catch(e) {}
+                }
+            }, 30000);
             setInterval(() => this.loadChart(), 60000);
             setInterval(() => this.loadCalibration(), 300000); // Refresh calibration every 5min
         },
@@ -933,11 +900,16 @@ function betfairApp() {
             } catch (e) { console.error('Failed to refresh queue:', e); }
         },
 
+        _showChartError(msg) {
+            const el = document.getElementById('pnlChartError');
+            if (el) { el.textContent = msg; el.style.display = msg ? 'flex' : 'none'; }
+            this.chartError = msg;
+        },
+
         async loadChart() {
             try {
-                this.chartError = '';
+                this._showChartError('');
                 this.chartFallback = false;
-                // Ensure canvas is visible (fallback path hides it)
                 const canvas = document.getElementById('pnlChart');
                 if (canvas) canvas.style.display = '';
                 const useChartJs = typeof Chart !== 'undefined';
@@ -968,12 +940,14 @@ function betfairApp() {
                         this.chartError = 'No Betfair data yet';
                         return;
                     }
+                    this._lastChartData = data;
                     if (useChartJs) {
                         try { this.renderChart(data); } catch (e) {
                             console.error('Chart.js render failed, using fallback:', e);
                             this.buildFallback(data);
                         }
                     } else {
+                        console.log('Using SVG fallback (Chart.js not loaded)');
                         this.buildFallback(data);
                     }
                 }
@@ -983,7 +957,10 @@ function betfairApp() {
         renderTodayChart(data) {
             const canvas = document.getElementById('pnlChart');
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
-            if (this._chart) this._chart.destroy();
+            if (this._chart) {
+                this._chart.destroy();
+                this._chart = null;
+            }
 
             const settled = data.settled || [];
             const pending = data.pending || [];
@@ -1130,6 +1107,12 @@ function betfairApp() {
             const canvas = document.getElementById('pnlChart');
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
 
+            // Destroy existing chart cleanly
+            if (this._chart) {
+                this._chart.destroy();
+                this._chart = null;
+            }
+
             // Filter series by range
             let series = data.series || [];
             if (this.chartRange > 0 && series.length > this.chartRange) {
@@ -1140,9 +1123,6 @@ function betfairApp() {
             }
 
             if (series.length === 0) {
-                // Empty state
-                if (this._chart) this._chart.destroy();
-                this._chart = null;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = 'rgba(128,128,160,0.5)';
@@ -1176,8 +1156,6 @@ function betfairApp() {
                 // Also show the point before as null-bridge
                 if (lastIdx > 0) bestCase[lastIdx - 1] = series[lastIdx - 1].cumulative_pnl;
             }
-
-            if (this._chart) this._chart.destroy();
 
             const gridColor = 'rgba(128,128,160,0.1)';
             const tickColor = 'rgba(128,128,160,0.5)';
@@ -1217,6 +1195,7 @@ function betfairApp() {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
