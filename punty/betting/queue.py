@@ -978,8 +978,13 @@ async def recalculate_queued_stakes(db: AsyncSession) -> int:
         odds = bet.requested_odds or 0
 
         new_stake = await get_current_stake(db, place_probability=pp, odds=odds)
-        if new_stake <= 0:
-            new_stake = DEFAULT_MIN_KELLY_STAKE
+        # Apply same $12.50 floor as populate_bet_queue
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if new_stake < fallback:
+            new_stake = fallback
 
         if abs(new_stake - bet.stake) > 0.01:
             bet.stake = round(new_stake, 2)
