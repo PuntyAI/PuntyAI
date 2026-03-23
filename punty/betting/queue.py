@@ -89,6 +89,25 @@ async def set_balance(db: AsyncSession, balance: float) -> None:
     await db.commit()
 
 
+async def sync_betfair_balance(db: AsyncSession) -> bool:
+    """Fetch real balance from Betfair API and update app setting.
+
+    Returns True if sync succeeded, False if API unavailable.
+    """
+    try:
+        from punty.betting.betfair_client import get_account_balance
+        real_balance = await get_account_balance(db)
+        if real_balance is not None:
+            old = await get_balance(db)
+            await set_balance(db, real_balance)
+            if abs(real_balance - old) > 0.01:
+                logger.info(f"Betfair balance synced: ${old:.2f} → ${real_balance:.2f}")
+            return True
+    except Exception as e:
+        logger.warning(f"Betfair balance sync failed: {e}")
+    return False
+
+
 def calculate_stake(balance: float, initial_balance: float = DEFAULT_INITIAL_BALANCE,
                     base_stake: float = DEFAULT_BASE_STAKE) -> float:
     """Calculate current stake based on balance growth (legacy doubling formula).
@@ -337,16 +356,15 @@ async def populate_bet_queue(
     )
     races_by_num = {r.race_number: r for r in race_result.scalars().all()}
 
-    # Count how many are already queued for this meeting
+    # Count how many PLACE bets are already queued for this meeting
     existing_count_result = await db.execute(
         select(func.count(BetfairBet.id)).where(
             BetfairBet.meeting_id == meeting_id,
+            BetfairBet.bet_type == "place",
         )
     )
     existing_count = existing_count_result.scalar() or 0
     slots_remaining = max(0, MAX_BETS_PER_MEETING - existing_count)
-    if slots_remaining == 0:
-        return 0
 
     # Filter only: scratched runners and NTD (<8 runners = reduced place market)
     eligible = []
@@ -366,12 +384,10 @@ async def populate_bet_queue(
             )
             continue
 
-        # Check if already queued for this race (unique constraint)
+        # Check if place bet already queued for this race
+        place_bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         existing = await db.execute(
-            select(BetfairBet).where(
-                BetfairBet.meeting_id == meeting_id,
-                BetfairBet.race_number == pick.race_number,
-            )
+            select(BetfairBet).where(BetfairBet.id == place_bet_id)
         )
         if existing.scalar_one_or_none():
             continue
@@ -437,9 +453,6 @@ async def populate_bet_queue(
 
         eligible.append((pick, race))
 
-    if not eligible:
-        return 0
-
     # Rank by WIN PROBABILITY across the entire meeting — take the top N
     eligible.sort(key=lambda x: x[0].win_probability or 0, reverse=True)
     top_picks = eligible[:slots_remaining]
@@ -492,9 +505,74 @@ async def populate_bet_queue(
             f"stake=${stake:.2f}"
         )
 
+    # ── Win bets for high-WP picks (WP >= 40%, +19.7% ROI on 256 bets) ──
+    # Separate from place bets — a race can have both a place and a win bet.
+    MIN_WIN_WP = 0.40
+    win_queued = 0
+    for pick in best_by_race.values():
+        wp = pick.win_probability or 0
+        if wp < MIN_WIN_WP:
+            continue
+        race = races_by_num.get(pick.race_number)
+        if not race or not race.start_time:
+            continue
+        win_odds = pick.odds_at_tip or 0
+        if win_odds <= 1.0 or win_odds >= 10.0:
+            continue
+        # Skip if runner scratched or age 6+
+        runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race.id,
+                Runner.saddlecloth == pick.saddlecloth,
+            )
+        )
+        runner = runner_result.scalar_one_or_none()
+        if runner and runner.scratched:
+            continue
+        if runner and runner.horse_age and runner.horse_age >= 6:
+            continue
+
+        win_bet_id = f"bf-{meeting_id}-r{pick.race_number}-win"
+        # Check if already queued
+        existing = await db.execute(
+            select(BetfairBet).where(BetfairBet.id == win_bet_id)
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        # Kelly on win odds with WP as probability
+        stake = await get_current_stake(db, place_probability=wp, odds=win_odds)
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if stake < fallback:
+            stake = fallback
+
+        scheduled_at = race.start_time - timedelta(minutes=10)
+        bet = BetfairBet(
+            id=win_bet_id,
+            pick_id=pick.id,
+            meeting_id=meeting_id,
+            race_number=pick.race_number,
+            horse_name=pick.horse_name or "Unknown",
+            saddlecloth=pick.saddlecloth,
+            stake=stake,
+            requested_odds=round(win_odds, 2),
+            bet_type="win",
+            scheduled_at=scheduled_at,
+        )
+        db.add(bet)
+        win_queued += 1
+        logger.info(
+            f"Betfair WIN queue: {pick.horse_name} R{pick.race_number} "
+            f"WP={wp:.0%} odds=${win_odds:.2f} stake=${stake:.2f}"
+        )
+
+    queued += win_queued
     if queued:
         await db.commit()
-        logger.info(f"Betfair queue: {queued} bets queued for {meeting_id}")
+        logger.info(f"Betfair queue: {queued} bets queued for {meeting_id} ({win_queued} win)")
     return queued
 
 
@@ -739,8 +817,9 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                     db, place_probability=pick.place_probability,
                     odds=bet.requested_odds,
                 )
-                if new_stake <= 0:
-                    new_stake = DEFAULT_MIN_KELLY_STAKE  # Force min stake — trust PP
+                _fb = float(await _get_setting(db, "betfair_kelly_fallback_stake", str(DEFAULT_KELLY_FALLBACK_STAKE)))
+                if new_stake < _fb:
+                    new_stake = _fb
                 if abs(new_stake - bet.stake) > 0.50:
                     bet.stake = round(new_stake, 2)
             if old_odds > 0:
@@ -896,15 +975,15 @@ async def execute_due_bets(db: AsyncSession) -> int:
             # Use requested_odds as fallback for stake calculation
             current_odds = bet.requested_odds or 0
 
-        # Kelly stake based on live odds and PP — force minimum if no edge
+        # Kelly stake based on live odds and PP — apply $12.50 floor
         stake = await get_current_stake(db, place_probability=place_prob,
                                          odds=current_odds if current_odds > 1 else 0)
-        if stake <= 0:
-            stake = DEFAULT_MIN_KELLY_STAKE  # Force min stake — trust PP ranking
-            logger.info(
-                f"Betfair: {bet.id} no Kelly edge (PP={place_prob:.0%}, odds=${current_odds:.2f}) "
-                f"— using min stake ${stake:.2f}"
-            )
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if stake < fallback:
+            stake = fallback
 
         bet.stake = round(stake, 2)
         # BSP: use $1.01 as the floor price (Betfair exchange minimum)
@@ -945,8 +1024,9 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
     await db.commit()
 
-    # Update displayed stakes on remaining queued bets to reflect balance changes
+    # Sync balance from Betfair and update displayed stakes
     if placed:
+        await sync_betfair_balance(db)
         await recalculate_queued_stakes(db)
 
     return placed
@@ -978,8 +1058,13 @@ async def recalculate_queued_stakes(db: AsyncSession) -> int:
         odds = bet.requested_odds or 0
 
         new_stake = await get_current_stake(db, place_probability=pp, odds=odds)
-        if new_stake <= 0:
-            new_stake = DEFAULT_MIN_KELLY_STAKE
+        # Apply same $12.50 floor as populate_bet_queue
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if new_stake < fallback:
+            new_stake = fallback
 
         if abs(new_stake - bet.stake) > 0.01:
             bet.stake = round(new_stake, 2)
@@ -1011,9 +1096,29 @@ async def settle_betfair_bets(
             BetfairBet.settled == False,
         )
     )
-    bet = result.scalar_one_or_none()
-    if not bet:
+    bets_to_settle = result.scalars().all()
+    if not bets_to_settle:
         return 0
+
+    settled_count = 0
+    for bet in bets_to_settle:
+        settled_count += await _settle_single_bet(db, bet, meeting_id, race_number)
+
+    # Recalculate displayed stakes on remaining queued bets
+    if settled_count:
+        await recalculate_queued_stakes(db)
+
+    return settled_count
+
+
+async def _settle_single_bet(
+    db: AsyncSession,
+    bet: BetfairBet,
+    meeting_id: str,
+    race_number: int,
+) -> int:
+    """Settle a single Betfair bet. Returns 1 if settled, 0 if not ready."""
+    is_win_bet = getattr(bet, "bet_type", "place") == "win"
 
     # Find the runner's finish position
     race_id = f"{meeting_id}-r{race_number}"
@@ -1113,12 +1218,14 @@ async def settle_betfair_bets(
     bet.settled_at = now
     bet.status = "settled"
 
-    # Update balance: stake was deducted at placement, now add back stake + net profit if hit
-    balance = await get_balance(db)
-    if bet.hit:
-        balance += bet.stake + bet.pnl  # Return stake + net profit
-    # If miss, stake was already deducted — nothing to do
-    await set_balance(db, balance)
+    # Sync real balance from Betfair API (authoritative)
+    synced = await sync_betfair_balance(db)
+    if not synced:
+        # Fallback: manual balance tracking if Betfair API unavailable
+        balance = await get_balance(db)
+        if bet.hit:
+            balance += bet.stake + bet.pnl
+        await set_balance(db, balance)
 
     await db.commit()
 
@@ -1126,15 +1233,11 @@ async def settle_betfair_bets(
     from punty.betting.calibration import invalidate_cache
     invalidate_cache()
 
+    balance = await get_balance(db)
     logger.info(
         f"Betfair settled: {bet.id} — {'HIT' if bet.hit else 'MISS'} "
         f"pnl=${bet.pnl:+.2f} (balance: ${balance:.2f})"
     )
-
-    # Recalculate displayed stakes on remaining queued bets so the queue
-    # reflects current Kelly sizing (compound growth: after a loss the next
-    # bet should be smaller, after a win it should be larger).
-    await recalculate_queued_stakes(db)
 
     return 1
 

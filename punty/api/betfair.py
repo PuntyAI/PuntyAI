@@ -179,9 +179,10 @@ async def get_chart_data(db: AsyncSession = Depends(get_db)):
     from collections import defaultdict
     from punty.betting.queue import get_balance, _get_setting, DEFAULT_INITIAL_BALANCE
 
-    result = await db.execute(
-        select(BetfairBet).where(BetfairBet.settled == True).order_by(BetfairBet.settled_at)
-    )
+    # Configurable start date — only show P&L from this date onwards
+    pnl_start = await _get_setting(db, "betfair_pnl_start_date", "")
+    query = select(BetfairBet).where(BetfairBet.settled == True).order_by(BetfairBet.settled_at)
+    result = await db.execute(query)
     all_bets = result.scalars().all()
 
     # Group by date extracted from meeting_id (e.g. "sale-2026-03-02" → "2026-03-02")
@@ -205,6 +206,8 @@ async def get_chart_data(db: AsyncSession = Depends(get_db)):
 
     # Build sorted daily series with cumulative P&L and balance
     sorted_dates = sorted(daily.keys())
+    if pnl_start:
+        sorted_dates = [d for d in sorted_dates if d >= pnl_start]
     series = []
     cumulative = 0
     for d in sorted_dates:

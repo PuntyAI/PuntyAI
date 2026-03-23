@@ -15,7 +15,7 @@ class BetfairBet(Base):
 
     __tablename__ = "betfair_bets"
     __table_args__ = (
-        UniqueConstraint("meeting_id", "race_number", name="uq_betfair_bet_meeting_race"),
+        UniqueConstraint("meeting_id", "race_number", "bet_type", name="uq_betfair_bet_meeting_race_type"),
     )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)  # e.g. bf-sale-2026-03-02-r1

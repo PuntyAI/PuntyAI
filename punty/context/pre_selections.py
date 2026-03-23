@@ -1111,19 +1111,31 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
             p.stake = max(MIN_STAKE, round(p.stake * scale / STAKE_STEP) * STAKE_STEP)
 
 
+def _midweek_multiplier() -> float:
+    """Return 0.5 on Mon/Tue/Thu (thin cards, worse exotic ROI), 1.0 otherwise."""
+    from punty.config import melb_today
+    dow = melb_today().weekday()  # 0=Mon, 1=Tue, ..., 6=Sun
+    if dow in (0, 1, 3):  # Mon, Tue, Thu
+        return 0.5
+    return 1.0
+
+
 def _get_exotic_budget(meet_quality: float) -> float:
-    """Scale exotic budget by meet quality.
+    """Scale exotic budget by meet quality and day of week.
 
     Country meets (quality 0): $10 — thin pools, smaller dividends
     Provincial meets (quality 1): $15 — standard
     Metro meets (quality >= 2): $20 — deeper pools, bigger dividends
+
+    Mon/Tue/Thu: halved (thin cards, worse exotic ROI historically).
     """
     if meet_quality >= 2:
-        return 20.0
+        base = 20.0
     elif meet_quality >= 1:
-        return 15.0
+        base = 15.0
     else:
-        return 10.0
+        base = 10.0
+    return base * _midweek_multiplier()
 
 
 def _select_exotic(
