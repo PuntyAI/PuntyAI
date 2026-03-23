@@ -455,21 +455,20 @@ async def populate_bet_queue(
         # (win - 1) / 3 + 1 for 8+ runner fields.
         est_place_odds = _estimate_place_odds(win_odds)
         stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
-        if stake <= 0:
-            # Kelly sees no edge at estimated place odds, but this bet passed
-            # all quality filters (PP>=55%, field 8-15, odds<$5, age<6).
-            # Backtest: 155 Kelly-rejected bets placed at 77% SR, +$48 P&L.
-            # Use flat fallback stake instead of skipping.
-            fallback = float(await _get_setting(
-                db, "betfair_kelly_fallback_stake",
-                str(DEFAULT_KELLY_FALLBACK_STAKE),
-            ))
-            stake = fallback
+        # Minimum stake floor for all bets passing quality filters.
+        # Kelly often returns $5 min or $0 for short-priced place bets,
+        # but backtest shows 77% SR on these — use fallback as floor.
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if stake < fallback:
             logger.info(
-                f"Kelly fallback {pick.horse_name} R{pick.race_number}: "
-                f"Kelly edge <= 0 (PP={pp:.0%}, est_place=${est_place_odds:.2f}) "
-                f"→ using ${fallback:.2f} flat stake"
+                f"Stake floor {pick.horse_name} R{pick.race_number}: "
+                f"Kelly=${stake:.2f} (PP={pp:.0%}, est_place=${est_place_odds:.2f}) "
+                f"→ raised to ${fallback:.2f}"
             )
+            stake = fallback
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         scheduled_at = race.start_time - timedelta(minutes=10)

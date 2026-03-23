@@ -192,10 +192,10 @@
             </div>
         </div>
         <div style="height: 280px; position: relative; width: 100%;" id="pnlChartContainer">
-            <canvas id="pnlChart" x-ref="pnlChart"></canvas>
-            <div x-show="chartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466;">
-                <span x-text="chartError"></span>
+            <div x-ignore style="position:absolute;inset:0;">
+                <canvas id="pnlChart" style="width:100%;height:100%;"></canvas>
             </div>
+            <div id="pnlChartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466; display: none; z-index: 2;"></div>
             <!-- Fallback SVG cumulative P&L chart -->
             <div x-show="chartFallback && !chartError" class="absolute inset-0" style="padding: 8px 0 0 0;">
                 <svg :viewBox="'0 0 ' + fallbackSvg.w + ' ' + fallbackSvg.h" preserveAspectRatio="none"
@@ -940,12 +940,17 @@ function betfairApp() {
             } catch (e) { console.error('Failed to refresh queue:', e); }
         },
 
+        _showChartError(msg) {
+            const el = document.getElementById('pnlChartError');
+            if (el) { el.textContent = msg; el.style.display = msg ? 'flex' : 'none'; }
+            this.chartError = msg;
+        },
+
         async loadChart() {
             try {
-                this.chartError = '';
+                this._showChartError('');
                 this.chartFallback = false;
-                // Ensure canvas is visible (fallback path hides it)
-                const canvas = this.$refs.pnlChart;
+                const canvas = document.getElementById('pnlChart');
                 if (canvas) canvas.style.display = '';
                 const useChartJs = typeof Chart !== 'undefined';
 
@@ -990,7 +995,7 @@ function betfairApp() {
         },
 
         renderTodayChart(data) {
-            const canvas = this.$refs.pnlChart;
+            const canvas = document.getElementById('pnlChart');
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
             if (this._chart) {
                 this._chart.destroy();
@@ -1139,7 +1144,7 @@ function betfairApp() {
         },
 
         renderChart(data) {
-            const canvas = this.$refs.pnlChart;
+            const canvas = document.getElementById('pnlChart');
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
 
             // Destroy existing chart cleanly
@@ -1295,7 +1300,7 @@ function betfairApp() {
                 + ' ' + pts[0].x + ',' + zeroY;
             this.fallbackSvg = { w: W, h: H, zeroY, linePts, fillPts, points: pts, lastVal: points[points.length - 1] };
             this.chartFallback = true;
-            const canvas = this.$refs.pnlChart;
+            const canvas = document.getElementById('pnlChart');
             if (canvas) canvas.style.display = 'none';
         },
 
