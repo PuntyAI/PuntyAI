@@ -89,6 +89,25 @@ async def set_balance(db: AsyncSession, balance: float) -> None:
     await db.commit()
 
 
+async def sync_betfair_balance(db: AsyncSession) -> bool:
+    """Fetch real balance from Betfair API and update app setting.
+
+    Returns True if sync succeeded, False if API unavailable.
+    """
+    try:
+        from punty.betting.betfair_client import get_account_balance
+        real_balance = await get_account_balance(db)
+        if real_balance is not None:
+            old = await get_balance(db)
+            await set_balance(db, real_balance)
+            if abs(real_balance - old) > 0.01:
+                logger.info(f"Betfair balance synced: ${old:.2f} → ${real_balance:.2f}")
+            return True
+    except Exception as e:
+        logger.warning(f"Betfair balance sync failed: {e}")
+    return False
+
+
 def calculate_stake(balance: float, initial_balance: float = DEFAULT_INITIAL_BALANCE,
                     base_stake: float = DEFAULT_BASE_STAKE) -> float:
     """Calculate current stake based on balance growth (legacy doubling formula).
@@ -945,8 +964,9 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
     await db.commit()
 
-    # Update displayed stakes on remaining queued bets to reflect balance changes
+    # Sync balance from Betfair and update displayed stakes
     if placed:
+        await sync_betfair_balance(db)
         await recalculate_queued_stakes(db)
 
     return placed
@@ -1118,12 +1138,14 @@ async def settle_betfair_bets(
     bet.settled_at = now
     bet.status = "settled"
 
-    # Update balance: stake was deducted at placement, now add back stake + net profit if hit
-    balance = await get_balance(db)
-    if bet.hit:
-        balance += bet.stake + bet.pnl  # Return stake + net profit
-    # If miss, stake was already deducted — nothing to do
-    await set_balance(db, balance)
+    # Sync real balance from Betfair API (authoritative)
+    synced = await sync_betfair_balance(db)
+    if not synced:
+        # Fallback: manual balance tracking if Betfair API unavailable
+        balance = await get_balance(db)
+        if bet.hit:
+            balance += bet.stake + bet.pnl
+        await set_balance(db, balance)
 
     await db.commit()
 
@@ -1131,6 +1153,7 @@ async def settle_betfair_bets(
     from punty.betting.calibration import invalidate_cache
     invalidate_cache()
 
+    balance = await get_balance(db)
     logger.info(
         f"Betfair settled: {bet.id} — {'HIT' if bet.hit else 'MISS'} "
         f"pnl=${bet.pnl:+.2f} (balance: ${balance:.2f})"
