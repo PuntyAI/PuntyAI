@@ -758,8 +758,9 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
                     db, place_probability=pick.place_probability,
                     odds=bet.requested_odds,
                 )
-                if new_stake <= 0:
-                    new_stake = DEFAULT_MIN_KELLY_STAKE  # Force min stake — trust PP
+                _fb = float(await _get_setting(db, "betfair_kelly_fallback_stake", str(DEFAULT_KELLY_FALLBACK_STAKE)))
+                if new_stake < _fb:
+                    new_stake = _fb
                 if abs(new_stake - bet.stake) > 0.50:
                     bet.stake = round(new_stake, 2)
             if old_odds > 0:
@@ -915,15 +916,15 @@ async def execute_due_bets(db: AsyncSession) -> int:
             # Use requested_odds as fallback for stake calculation
             current_odds = bet.requested_odds or 0
 
-        # Kelly stake based on live odds and PP — force minimum if no edge
+        # Kelly stake based on live odds and PP — apply $12.50 floor
         stake = await get_current_stake(db, place_probability=place_prob,
                                          odds=current_odds if current_odds > 1 else 0)
-        if stake <= 0:
-            stake = DEFAULT_MIN_KELLY_STAKE  # Force min stake — trust PP ranking
-            logger.info(
-                f"Betfair: {bet.id} no Kelly edge (PP={place_prob:.0%}, odds=${current_odds:.2f}) "
-                f"— using min stake ${stake:.2f}"
-            )
+        fallback = float(await _get_setting(
+            db, "betfair_kelly_fallback_stake",
+            str(DEFAULT_KELLY_FALLBACK_STAKE),
+        ))
+        if stake < fallback:
+            stake = fallback
 
         bet.stake = round(stake, 2)
         # BSP: use $1.01 as the floor price (Betfair exchange minimum)
