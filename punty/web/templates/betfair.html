@@ -880,7 +880,14 @@ function betfairApp() {
                 await new Promise(r => setTimeout(r, 250));
             }
             await this.loadChart();
-            setInterval(() => this.refresh(), 30000);
+            setInterval(async () => {
+                await this.refresh();
+                // Re-render chart after refresh — Alpine reactivity can clear canvas pixels
+                if (this._lastChartData) {
+                    await new Promise(r => setTimeout(r, 50));
+                    try { this.renderChart(this._lastChartData); } catch(e) {}
+                }
+            }, 30000);
             setInterval(() => this.loadChart(), 60000);
             setInterval(() => this.loadCalibration(), 300000); // Refresh calibration every 5min
         },
@@ -968,9 +975,9 @@ function betfairApp() {
                         this.chartError = 'No Betfair data yet';
                         return;
                     }
-                    console.log('Chart data loaded:', data.series.length, 'days, Chart.js:', useChartJs);
+                    this._lastChartData = data;
                     if (useChartJs) {
-                        try { this.renderChart(data); console.log('Chart rendered OK'); } catch (e) {
+                        try { this.renderChart(data); } catch (e) {
                             console.error('Chart.js render failed, using fallback:', e);
                             this.buildFallback(data);
                         }
