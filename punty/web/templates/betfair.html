@@ -192,7 +192,7 @@
             </div>
         </div>
         <div style="height: 280px; position: relative; width: 100%;" id="pnlChartContainer">
-            <canvas id="pnlChart" style="width: 100%; height: 100%;"></canvas>
+            <canvas id="pnlChart"></canvas>
             <div x-show="chartError" class="absolute inset-0 flex items-center justify-center text-sm" style="color: #ff4466;">
                 <span x-text="chartError"></span>
             </div>
@@ -968,12 +968,14 @@ function betfairApp() {
                         this.chartError = 'No Betfair data yet';
                         return;
                     }
+                    console.log('Chart data loaded:', data.series.length, 'days, Chart.js:', useChartJs);
                     if (useChartJs) {
-                        try { this.renderChart(data); } catch (e) {
+                        try { this.renderChart(data); console.log('Chart rendered OK'); } catch (e) {
                             console.error('Chart.js render failed, using fallback:', e);
                             this.buildFallback(data);
                         }
                     } else {
+                        console.log('Using SVG fallback (Chart.js not loaded)');
                         this.buildFallback(data);
                     }
                 }
