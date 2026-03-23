@@ -983,9 +983,20 @@ function betfairApp() {
         },
 
         renderTodayChart(data) {
-            const canvas = document.getElementById('pnlChart');
+            let canvas = document.getElementById('pnlChart');
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
-            if (this._chart) this._chart.destroy();
+            if (this._chart) {
+                this._chart.destroy();
+                this._chart = null;
+            }
+            const container = document.getElementById('pnlChartContainer');
+            if (container) {
+                const newCanvas = document.createElement('canvas');
+                newCanvas.id = 'pnlChart';
+                const oldCanvas = container.querySelector('canvas');
+                if (oldCanvas) container.replaceChild(newCanvas, oldCanvas);
+                canvas = newCanvas;
+            }
 
             const settled = data.settled || [];
             const pending = data.pending || [];
@@ -1129,8 +1140,22 @@ function betfairApp() {
         },
 
         renderChart(data) {
-            const canvas = document.getElementById('pnlChart');
+            let canvas = document.getElementById('pnlChart');
             if (!canvas) { this.chartError = 'Canvas element not found'; return; }
+
+            // Destroy existing chart cleanly — replace canvas to avoid stale context
+            if (this._chart) {
+                this._chart.destroy();
+                this._chart = null;
+            }
+            const container = document.getElementById('pnlChartContainer');
+            if (container) {
+                const newCanvas = document.createElement('canvas');
+                newCanvas.id = 'pnlChart';
+                const oldCanvas = container.querySelector('canvas');
+                if (oldCanvas) container.replaceChild(newCanvas, oldCanvas);
+                canvas = newCanvas;
+            }
 
             // Filter series by range
             let series = data.series || [];
@@ -1142,9 +1167,6 @@ function betfairApp() {
             }
 
             if (series.length === 0) {
-                // Empty state
-                if (this._chart) this._chart.destroy();
-                this._chart = null;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = 'rgba(128,128,160,0.5)';
