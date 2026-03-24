@@ -102,7 +102,7 @@ class TestMinOddsFloor:
     """Test the minimum odds floor (exchange minimum)."""
 
     def test_min_odds_default(self):
-        assert DEFAULT_MIN_ODDS == 1.01  # Betfair exchange minimum — no price gate
+        assert DEFAULT_MIN_ODDS == 1.25  # BSP floor — bets below this lapse
 
     def test_kelly_zero_at_short_odds(self):
         """At $1.20 odds, implied = 83%. PP=80% has negative edge → $0."""
