@@ -332,7 +332,7 @@ async def place_bet(
     eliminating the 53% non-fill rate from LIMIT orders.
 
     The price parameter sets a minimum acceptable BSP — if BSP is below this,
-    the bet is cancelled by the exchange. Set to DEFAULT_MIN_ODDS ($1.30) as
+    the bet is cancelled by the exchange. Set to DEFAULT_MIN_ODDS ($1.25) as
     our floor.
 
     Returns: {bet_id, status, size_matched, average_price_matched} or {status: 'failed', error: ...}

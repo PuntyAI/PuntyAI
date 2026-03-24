@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Default settings
 DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
-DEFAULT_MIN_ODDS = 1.01  # Betfair exchange minimum (effectively no floor)
+DEFAULT_MIN_ODDS = 1.25  # BSP floor — bets below this lapse. BSP<1.25 lost -12.1% ROI on 63 bets despite 75% SR
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -20.0
 DEFAULT_MIN_PLACE_PROB = 0.40  # Absolute floor — field-size tiers set the real PP thresholds
@@ -39,10 +39,10 @@ DEFAULT_MAIDEN_MAX_PLACE_ODDS = 999.0  # No maiden ceiling — best 4 per meet b
 # RANK 1 ONLY — highest probability pick per race. Non-R1 picks have
 # demonstrably worse place SR and dilute the edge.
 MAX_BETFAIR_RANK = 1
-# No per-meeting cap — let PP >= 55% + context filters decide.
-# Backtest 2026-03-09→22: 70 bets, 72.9% SR, +$856 from $362
-# vs actual 177 bets, 65.5% SR, -$26. Fewer better bets > volume.
-MAX_BETS_PER_MEETING = 99
+# Cap at 5 per meeting — take our highest-PP picks only.
+# Mon/Tue 23-24 Mar: 7 bets on Port Mac, 72% SR but -$17.93.
+# Concentrating on top-5 by PP reduces exposure on weaker races.
+MAX_BETS_PER_MEETING = 5
 
 
 def _estimate_place_odds(win_odds: float, field_size: int = 12) -> float:
@@ -453,8 +453,13 @@ async def populate_bet_queue(
 
         eligible.append((pick, race))
 
-    # Rank by WIN PROBABILITY across the entire meeting — take the top N
-    eligible.sort(key=lambda x: x[0].win_probability or 0, reverse=True)
+    if not eligible:
+        return 0
+
+    # Rank by PLACE PROBABILITY (contextual) — take the top N per meeting.
+    # PP is Harville-derived from LGBM v7 with 102 context features,
+    # making it the best single measure of place likelihood.
+    eligible.sort(key=lambda x: x[0].place_probability or 0, reverse=True)
     top_picks = eligible[:slots_remaining]
 
     queued = 0
@@ -986,8 +991,8 @@ async def execute_due_bets(db: AsyncSession) -> int:
             stake = fallback
 
         bet.stake = round(stake, 2)
-        # BSP: use $1.01 as the floor price (Betfair exchange minimum)
-        bet.requested_odds = 1.01
+        # BSP: use min_odds as the floor price — bets below this lapse
+        bet.requested_odds = min_odds
 
         if balance < bet.stake:
             bet.status = "cancelled"
