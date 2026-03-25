@@ -991,8 +991,21 @@ async def execute_due_bets(db: AsyncSession) -> int:
             stake = fallback
 
         bet.stake = round(stake, 2)
-        # BSP: use min_odds as the floor price — bets below this lapse
-        bet.requested_odds = min_odds
+
+        # Use live exchange odds as BSP floor — if live price is available
+        # and above our minimum, use it. Otherwise fall back to min_odds.
+        # This ensures we take real market depth into account rather than
+        # relying on Harville estimates that diverge from exchange prices.
+        bsp_floor = min_odds
+        if current_odds and current_odds >= min_odds:
+            # Live odds available — use them as floor (BSP typically settles
+            # near or above the last traded price)
+            bsp_floor = round(current_odds, 2)
+            logger.info(
+                f"Betfair: {bet.id} using live odds ${current_odds:.2f} as BSP floor "
+                f"(min=${min_odds})"
+            )
+        bet.requested_odds = bsp_floor
 
         if balance < bet.stake:
             bet.status = "cancelled"
@@ -1002,8 +1015,9 @@ async def execute_due_bets(db: AsyncSession) -> int:
             continue
 
         # Place BSP bet — guaranteed fill at market-clearing price
+        # Floor = live odds or min_odds, whichever is applicable
         result = await place_bet(db, market["market_id"], selection_id,
-                                  bet.stake, min_odds, use_bsp=True)
+                                  bet.stake, bsp_floor, use_bsp=True)
 
         if result.get("status") == "SUCCESS" or result.get("bet_id"):
             bet.status = "placed"
