@@ -23,7 +23,7 @@ DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.25  # BSP floor — bets below this lapse. BSP<1.25 lost -12.1% ROI on 63 bets despite 75% SR
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
-DEFAULT_MAX_DAILY_LOSS = -80.0  # 15% of ~$520 balance. -$20 was too tight — one $42 Kelly loss killed the day
+DEFAULT_MAX_DAILY_LOSS = -150.0  # ~30% of balance. Need room for Kelly-sized losses without blocking the day
 DEFAULT_MIN_PLACE_PROB = 0.40  # Absolute floor — field-size tiers set the real PP thresholds
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
@@ -46,14 +46,21 @@ MAX_BETS_PER_MEETING = 5
 
 
 def _estimate_place_odds(win_odds: float, field_size: int = 12) -> float:
-    """Estimate Betfair place odds from win odds via Harville divisor.
+    """Estimate Betfair exchange place odds from win odds via Harville divisor.
 
     Uses /3 for 8+ runner fields (3 places), /2 for 5-7 (2 places).
+    Applies 15% exchange uplift: Betfair BSP place odds are consistently
+    higher than Harville estimates (avg +$0.63 on 50 settled bets).
+    Without this, Kelly sees compressed odds, computes zero edge, and
+    every bet defaults to the $12.50 fallback — effectively flat staking.
     """
     if win_odds <= 1.0:
         return 1.0
     divisor = 2 if 5 <= field_size <= 7 else 3
-    return round((win_odds - 1) / divisor + 1, 2)
+    harville = (win_odds - 1) / divisor + 1
+    # 15% exchange uplift — empirical: BSP averages 15-40% above Harville
+    exchange_est = 1 + (harville - 1) * 1.15
+    return round(exchange_est, 2)
 
 
 async def _count_active_runners(db: AsyncSession, race_id: str) -> int:
@@ -427,11 +434,58 @@ async def populate_bet_queue(
         pp = pick.place_probability or 0
         odds = pick.odds_at_tip or 0
 
-        # PP floor: 55% place probability (context-aware via Harville)
-        if pp < 0.55:
+        # PP floor: 62% place probability (context-aware via Harville)
+        # Backtest: PP<62% = 57-58% SR regardless of dominance.
+        # PP>=62% + dominance>=1.15 = 73-84% SR with positive ROI.
+        if pp < 0.62:
             logger.info(
                 f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— PP {pp:.0%} < 55%"
+                f"— PP {pp:.0%} < 62%"
+            )
+            continue
+
+        # Probability share: R1 must hold >= 33% of the probability mass
+        # among our top 4 picks. When share < 33%, the field is too
+        # competitive and our edge is thin (50-62% SR, negative ROI).
+        # Share >= 40% = 81% SR, +14.6% ROI on 21 bets.
+        r2_pick = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == pick.race_number,
+                Pick.pick_type == "selection",
+                Pick.tip_rank == 2,
+            )
+        )
+        r3_pick = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == pick.race_number,
+                Pick.pick_type == "selection",
+                Pick.tip_rank == 3,
+            )
+        )
+        r4_pick = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == pick.race_number,
+                Pick.pick_type == "selection",
+                Pick.tip_rank == 4,
+            )
+        )
+        r2 = r2_pick.scalar_one_or_none()
+        r3 = r3_pick.scalar_one_or_none()
+        r4 = r4_pick.scalar_one_or_none()
+        r2_pp = r2.place_probability if r2 and r2.place_probability else 0
+        r3_pp = r3.place_probability if r3 and r3.place_probability else 0
+        r4_pp = r4.place_probability if r4 and r4.place_probability else 0
+        total_pp = pp + r2_pp + r3_pp + r4_pp
+        prob_share = pp / total_pp if total_pp > 0 else 0
+
+        if prob_share < 0.33:
+            logger.info(
+                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                f"— prob share {prob_share:.0%} < 33% "
+                f"(R1={pp:.0%} R2={r2_pp:.0%} R3={r3_pp:.0%} R4={r4_pp:.0%})"
             )
             continue
 
@@ -992,20 +1046,11 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         bet.stake = round(stake, 2)
 
-        # Use live exchange odds as BSP floor — if live price is available
-        # and above our minimum, use it. Otherwise fall back to min_odds.
-        # This ensures we take real market depth into account rather than
-        # relying on Harville estimates that diverge from exchange prices.
-        bsp_floor = min_odds
-        if current_odds and current_odds >= min_odds:
-            # Live odds available — use them as floor (BSP typically settles
-            # near or above the last traded price)
-            bsp_floor = round(current_odds, 2)
-            logger.info(
-                f"Betfair: {bet.id} using live odds ${current_odds:.2f} as BSP floor "
-                f"(min=${min_odds})"
-            )
-        bet.requested_odds = bsp_floor
+        # BSP floor: use the fixed minimum only. BSP settles 5-15% below
+        # the last traded back price, so using live odds as floor causes
+        # orders to lapse (47% cancellation rate). The floor only exists
+        # to reject ultra-short prices, not to track the market.
+        bet.requested_odds = min_odds
 
         if balance < bet.stake:
             bet.status = "cancelled"
@@ -1015,9 +1060,8 @@ async def execute_due_bets(db: AsyncSession) -> int:
             continue
 
         # Place BSP bet — guaranteed fill at market-clearing price
-        # Floor = live odds or min_odds, whichever is applicable
         result = await place_bet(db, market["market_id"], selection_id,
-                                  bet.stake, bsp_floor, use_bsp=True)
+                                  bet.stake, min_odds, use_bsp=True)
 
         if result.get("status") == "SUCCESS" or result.get("bet_id"):
             bet.status = "placed"
@@ -1283,9 +1327,12 @@ async def get_queue_summary(db: AsyncSession) -> dict:
     result = await db.execute(
         select(BetfairBet).where(
             BetfairBet.meeting_id.like(f"%-{today.isoformat()}%"),
-        ).order_by(BetfairBet.scheduled_at)
+        ).order_by(BetfairBet.scheduled_at.asc())
     )
     today_bets = result.scalars().all()
+    # Sort in Python as well — mixed datetime formats from rescheduling
+    # can confuse DB string ordering
+    today_bets.sort(key=lambda b: b.scheduled_at or "")
 
     # All-time settled stats
     all_result = await db.execute(
