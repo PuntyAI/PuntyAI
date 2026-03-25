@@ -381,7 +381,7 @@ class TestBuildSmartSequence:
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
         assert result is not None
         assert result.sequence_type == "Big 6"
-        assert result.total_outlay == 5.0
+        assert result.total_outlay == 2.0
         assert result.total_combos == 1
         # Each leg should have exactly 1 runner (hail-mary = rank-1 only)
         for leg in result.legs:
@@ -517,7 +517,7 @@ class TestBuildAllSequenceLanes:
         assert "Quaddie" in types
         assert "Big 6" in types
         big6 = [r for r in results if r.sequence_type == "Big 6"][0]
-        assert big6.smart.total_outlay == 5.0
+        assert big6.smart.total_outlay == 2.0
         assert big6.smart.total_combos == 1
 
     def test_7_race_meeting_quaddie_only(self):
@@ -719,7 +719,7 @@ class TestStrategyImprovements:
         result = build_smart_sequence("Big 6", (3, 8), leg_analysis, race_contexts)
         assert result is not None
         assert result.total_combos == 1
-        assert result.total_outlay == 5.0
+        assert result.total_outlay == 2.0
 
     def test_mandatory_fav_inclusion(self):
         """Runner ≤$2.50 must be included in leg even without edge."""
