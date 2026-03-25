@@ -18,6 +18,7 @@ class BetfairBetScheduler:
         self.last_check: datetime | None = None
         self.bets_placed_today = 0
         self._task: asyncio.Task | None = None
+        self._tick_count = 0  # 30s ticks — sync balance every 120 ticks (1 hour)
 
     def start(self):
         if self.running:
@@ -52,9 +53,10 @@ class BetfairBetScheduler:
             await asyncio.sleep(30)
 
     async def _tick(self):
-        from punty.betting.queue import execute_due_bets, refresh_bet_selections
+        from punty.betting.queue import execute_due_bets, refresh_bet_selections, sync_betfair_balance
 
         self.last_check = melb_now_naive()
+        self._tick_count += 1
         async with async_session() as db:
             swaps = await refresh_bet_selections(db)
             if swaps:
@@ -63,6 +65,12 @@ class BetfairBetScheduler:
             if placed:
                 self.bets_placed_today += placed
                 logger.info(f"BetfairBetScheduler: placed {placed} bets this tick")
+
+            # Sync balance from Betfair API every hour (120 × 30s ticks)
+            if self._tick_count % 120 == 0:
+                synced = await sync_betfair_balance(db)
+                if not synced:
+                    logger.warning("BetfairBetScheduler: hourly balance sync failed")
 
 
     async def _recover_zombie_bets(self):
