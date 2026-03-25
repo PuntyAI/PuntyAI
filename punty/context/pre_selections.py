@@ -43,7 +43,7 @@ ROUGHIE_MIN_VALUE = 1.10
 EXOTIC_PUNTYS_PICK_VALUE = 1.5  # exotic needs 1.5x value to be Punty's Pick
 
 # Exotic budget — default fallback (dynamic budget via _get_exotic_budget)
-EXOTIC_BUDGET = 15.0
+EXOTIC_BUDGET = 8.0
 
 
 def _load_thresholds(overrides: dict | None = None) -> dict:
@@ -1123,18 +1123,21 @@ def _midweek_multiplier() -> float:
 def _get_exotic_budget(meet_quality: float) -> float:
     """Scale exotic budget by meet quality and day of week.
 
-    Country meets (quality 0): $10 — thin pools, smaller dividends
-    Provincial meets (quality 1): $15 — standard
-    Metro meets (quality >= 2): $20 — deeper pools, bigger dividends
+    Halved from original to reduce bleed — exotics are -9.4% ROI on $27K
+    staked. Lower stakes let the model learn while limiting damage.
 
-    Mon/Tue/Thu: halved (thin cards, worse exotic ROI historically).
+    Country meets (quality 0): $5 — thin pools, smaller dividends
+    Provincial meets (quality 1): $8 — standard
+    Metro meets (quality >= 2): $10 — deeper pools, bigger dividends
+
+    Mon/Tue/Thu: halved again (thin cards, worse exotic ROI historically).
     """
     if meet_quality >= 2:
-        base = 20.0
-    elif meet_quality >= 1:
-        base = 15.0
-    else:
         base = 10.0
+    elif meet_quality >= 1:
+        base = 8.0
+    else:
+        base = 5.0
     return base * _midweek_multiplier()
 
 
@@ -1256,47 +1259,76 @@ def _select_exotic(
     # Soft track penalty — Data: Good/Firm +21% ROI, any Soft -37% ROI
     soft_penalty = 0.65 if "soft" in tc else 1.0
 
-    # ── Preferred types by race shape ──
-    # All types compete everywhere; shape provides a mild nudge toward the
-    # structures that suit the race. Quality gates only restrict the wider
-    # box types (4-runner Trifecta Box, 5-runner First4 Box).
+    # ── Field-size routing: only allow types in their profitable zones ──
+    # Data-backed from 1,797 settled exotics. Each type has field-size
+    # sweet spots where ROI is positive and dead zones where it hemorrhages.
+    # The meta-model still picks the best option, but from a pre-filtered
+    # set that excludes proven losing segments.
+    #
+    # Field 5-7:   Quinella Box -2%, Quinella -8% (predictable small fields)
+    # Field 8-9:   Exacta Standout +59%, Quinella Box -5% (balanced)
+    # Field 10-11: Exacta Standout +127%, Quinella -3% (standout picks shine)
+    # Field 12-13: Quinella -7%, Trifecta Box -7% (near break-even only)
+    # Field 14+:   Exacta +364%, Quinella +6% (big dividends)
     top_pick_wp = max((p.win_prob for p in picks), default=0) if picks else 0
     roughie_wp = min((p.win_prob for p in picks), default=0) if picks else 0
-
-    # Standout types need a clear top pick; boxes need field depth
-    allow_tri_standout = meet_quality >= 1 and top_pick_wp >= 0.20
-    allow_tri_box = meet_quality >= 1 and field_size >= 9
-    allow_first4 = meet_quality >= 1 and field_size >= 8
-
-    # Wide boxes (4-runner tri, 5-runner F4) only when roughie is genuine
-    # — these are speculative, only worth it when all 4 picks are live
     roughie_is_live = roughie_wp >= 0.08
 
+    # Build allowed types from field-size profitability data
+    # All 8 exotic types — used when field_size unknown (0)
+    ALL_EXOTIC_TYPES = {
+        "Quinella", "Quinella Box", "Exacta", "Exacta Standout",
+        "Trifecta Standout", "Trifecta Box", "First4", "First4 Box",
+    }
+    allowed_types: set[str] = set()
+
+    if field_size == 0:
+        # Unknown field size — allow all types, let model decide
+        allowed_types = ALL_EXOTIC_TYPES
+    elif field_size <= 7:
+        # Small fields: our picks cover high % of field
+        allowed_types = {"Quinella", "Quinella Box"}
+        if top_pick_wp >= 0.20:
+            allowed_types.add("Trifecta Standout")  # +354% in small fields
+            allowed_types.add("Exacta Standout")
+        if roughie_is_live:
+            allowed_types.add("First4 Box")  # +102% in small fields
+    elif field_size <= 9:
+        # Mid-small: Exacta Standout sweet spot (+59%)
+        allowed_types = {"Exacta Standout", "Quinella Box", "Quinella"}
+        if top_pick_wp >= 0.20:
+            allowed_types.add("Trifecta Standout")  # +2% break-even
+        if top_pick_wp >= 0.25:
+            allowed_types.add("Exacta")
+    elif field_size <= 11:
+        # Mid-large: Exacta Standout dominant (+127%)
+        allowed_types = {"Exacta Standout", "Quinella", "Quinella Box"}
+        if top_pick_wp >= 0.25:
+            allowed_types.add("Exacta")
+    elif field_size <= 13:
+        # Large: most types struggle, Quinella/Tri Box near break-even
+        allowed_types = {"Quinella", "Quinella Box"}
+        if roughie_is_live and meet_quality >= 1:
+            allowed_types.add("Trifecta Box")  # -7% near break-even
+        if top_pick_wp >= 0.25:
+            allowed_types.add("Exacta")
+    else:
+        # 14+: Exacta dominates (+364%), Quinella profitable (+6%)
+        allowed_types = {"Exacta", "Quinella"}
+        if top_pick_wp >= 0.25:
+            allowed_types.add("Exacta Standout")
+
+    # Race shape still nudges preferred types within the allowed set
     if race_shape == "dominant":
-        # Clear standout → exacta/trifecta standout structures
-        preferred_types = {"Exacta Standout", "Exacta", "Quinella"}
-        if allow_tri_standout:
-            preferred_types.add("Trifecta Standout")
-        if allow_first4:
-            preferred_types.add("First4")
+        preferred_types = allowed_types & {"Exacta Standout", "Exacta", "Quinella", "Trifecta Standout"}
     elif race_shape == "open":
-        # No clear order → quinella boxes, trifecta box if field allows
-        preferred_types = {"Quinella", "Quinella Box"}
-        if allow_tri_box:
-            preferred_types.add("Trifecta Box")
-        if allow_first4:
-            preferred_types.add("First4")
-            if roughie_is_live:
-                preferred_types.add("First4 Box")
+        preferred_types = allowed_types & {"Quinella", "Quinella Box", "Trifecta Box", "First4 Box"}
     else:  # structured
-        # Moderate separation → balanced mix of all types
-        preferred_types = {"Quinella", "Quinella Box", "Exacta Standout"}
-        if allow_tri_standout:
-            preferred_types.add("Trifecta Standout")
-        if allow_tri_box and roughie_is_live:
-            preferred_types.add("Trifecta Box")
-        if allow_first4:
-            preferred_types.add("First4")
+        preferred_types = allowed_types & {"Quinella", "Quinella Box", "Exacta Standout", "Trifecta Standout"}
+
+    # Fallback: if shape intersection is empty, use all allowed types
+    if not preferred_types:
+        preferred_types = allowed_types
 
     # ── Score and filter combos ──
     scored = []
@@ -1306,6 +1338,10 @@ def _select_exotic(
         overlap = len(runners & selection_saddlecloths)
         overlap_ratio = overlap / n_runners if n_runners else 0
         ec_type = ec.get("type", "")
+
+        # Field-size routing: skip types outside their profitable zone
+        if ec_type and ec_type not in allowed_types:
+            continue
 
         # Anchor enforcement
         if fav_saddlecloth and fav_saddlecloth not in runners:

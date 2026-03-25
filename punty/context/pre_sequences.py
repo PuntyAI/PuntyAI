@@ -15,12 +15,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-BASE_OUTLAY = 30.0
-MIN_OUTLAY = 20.0
-MAX_OUTLAY = 80.0  # Shape-driven legs need wider budget (was $60, $40 before that)
-BIG6_MIN_OUTLAY = 25.0
-BIG6_MAX_OUTLAY = 25.0
-BIG6_OUTLAY = 5.0   # Hail-mary: 1 pick per leg, fixed $5 ticket
+BASE_OUTLAY = 15.0   # Halved: sequences -37% ROI on $15K staked
+MIN_OUTLAY = 10.0    # Halved: reduce bleed while model learns
+MAX_OUTLAY = 40.0    # Halved: cap exposure on chaos-heavy tickets
+BIG6_MIN_OUTLAY = 5.0
+BIG6_MAX_OUTLAY = 5.0
+BIG6_OUTLAY = 2.0    # Hail-mary: 1 pick per leg, fixed $2 ticket
 MIN_FLEXI_PCT = 20.0  # Lowered from 30% — allows 400 combos at $80 budget (5×4×5×4)
 
     # Hard-coded gates removed — sequence meta-model handles play/skip (PR #238)
