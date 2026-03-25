@@ -23,7 +23,7 @@ DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
 DEFAULT_MIN_ODDS = 1.25  # BSP floor — bets below this lapse. BSP<1.25 lost -12.1% ROI on 63 bets despite 75% SR
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
-DEFAULT_MAX_DAILY_LOSS = -20.0
+DEFAULT_MAX_DAILY_LOSS = -80.0  # 15% of ~$520 balance. -$20 was too tight — one $42 Kelly loss killed the day
 DEFAULT_MIN_PLACE_PROB = 0.40  # Absolute floor — field-size tiers set the real PP thresholds
 DEFAULT_EDGE_MULTIPLIER = 1.10  # 10% edge over implied probability required
 DEFAULT_DEAD_ZONE_LOW = 1.60  # Dead zone lower bound (skip bets in this range)
@@ -489,7 +489,7 @@ async def populate_bet_queue(
             stake = fallback
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
-        scheduled_at = race.start_time - timedelta(minutes=10)
+        scheduled_at = race.start_time - timedelta(minutes=3)
 
         bet = BetfairBet(
             id=bet_id,
@@ -554,7 +554,7 @@ async def populate_bet_queue(
         if stake < fallback:
             stake = fallback
 
-        scheduled_at = race.start_time - timedelta(minutes=10)
+        scheduled_at = race.start_time - timedelta(minutes=3)
         bet = BetfairBet(
             id=win_bet_id,
             pick_id=pick.id,
@@ -853,9 +853,9 @@ async def execute_due_bets(db: AsyncSession) -> int:
     )
 
     now = melb_now_naive()
-    cutoff = now - timedelta(minutes=15)
+    cutoff = now - timedelta(minutes=8)
 
-    # Auto-cancel bets that missed their window (scheduled_at + 10min < now)
+    # Auto-cancel bets that missed their window (scheduled_at + 8min < now)
     expired_result = await db.execute(
         select(BetfairBet).where(
             BetfairBet.status == "queued",
