@@ -60,16 +60,23 @@ async def fetch_kash_ratings(race_date: date | None = None) -> list[dict]:
                 saddlecloth = int(parts[0]) if len(parts) == 2 and parts[0].isdigit() else None
                 horse_name = parts[1] if len(parts) == 2 else raw_name
 
+                # Parse numeric fields safely — KASH sometimes returns "Unknown"
+                def _safe_float(val):
+                    try:
+                        return float(val) if val is not None else None
+                    except (ValueError, TypeError):
+                        return None
+
                 runners.append({
                     "venue": venue,
                     "race_number": race_num,
                     "race_speed": race_speed,
                     "saddlecloth": saddlecloth,
                     "horse_name": horse_name,
-                    "rated_price": runner.get("ratedPrice"),
-                    "speed_cat": runner.get("speedcat", ""),
-                    "early_speed": runner.get("early_speed"),
-                    "late_speed": runner.get("late_speed"),
+                    "rated_price": _safe_float(runner.get("ratedPrice")),
+                    "speed_cat": runner.get("speedcat", "") or "",
+                    "early_speed": _safe_float(runner.get("early_speed")),
+                    "late_speed": _safe_float(runner.get("late_speed")),
                     "bf_selection_id": runner.get("bfExchangeSelectionId"),
                     "bf_market_id": runner.get("bfExchangeMarketId"),
                 })
