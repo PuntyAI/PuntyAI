@@ -244,6 +244,12 @@ class Runner(Base):
     odds_pointsbet: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     odds_flucs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # KASH model (Betfair Data Scientists daily ratings)
+    kash_rated_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    kash_speed_cat: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    kash_early_speed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    kash_late_speed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Result fields
     finish_position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     result_margin: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

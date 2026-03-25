@@ -1699,6 +1699,23 @@ async def weekly_blog_job() -> dict:
     return results
 
 
+async def daily_kash_ratings() -> dict:
+    """Fetch KASH model ratings from Betfair and apply to today's runners.
+
+    Runs at 6:00 AM after morning scrape has loaded runner data.
+    KASH provides rated prices and speed data as a benchmark.
+    """
+    from punty.scrapers.kash_ratings import apply_kash_ratings
+
+    try:
+        matched = await apply_kash_ratings()
+        logger.info(f"KASH ratings job: {matched} runners updated")
+        return {"status": "ok", "matched": matched}
+    except Exception as e:
+        logger.error(f"KASH ratings job failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 async def _upsert_setting(db, key: str, value: str):
     """Upsert an AppSettings row."""
     from punty.models.settings import AppSettings

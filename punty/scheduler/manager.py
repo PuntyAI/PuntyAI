@@ -237,7 +237,7 @@ class SchedulerManager:
         """
         from punty.scheduler.jobs import daily_calendar_scrape, daily_morning_scrape
         from punty.scheduler.jobs import weekly_pattern_refresh, weekly_blog_job
-        from punty.scheduler.jobs import mid_morning_odds_refresh
+        from punty.scheduler.jobs import mid_morning_odds_refresh, daily_kash_ratings
         from punty.config import MELB_TZ
 
         logger.info("Scheduling daily calendar scrape job for 00:05 Melbourne time")
@@ -258,6 +258,17 @@ class SchedulerManager:
             daily_morning_scrape,
             trigger_type="cron",
             hour=5,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
+        # KASH ratings from Betfair Data Scientists — 6:00 AM
+        # Fetches model rated prices + speed data as benchmark
+        self.add_job(
+            "daily-kash-ratings",
+            daily_kash_ratings,
+            trigger_type="cron",
+            hour=6,
             minute=0,
             timezone=MELB_TZ,
         )

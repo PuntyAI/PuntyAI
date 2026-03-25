@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 # Default settings
 DEFAULT_INITIAL_BALANCE = 50.0
 DEFAULT_BASE_STAKE = 2.0
-DEFAULT_MIN_ODDS = 1.25  # BSP floor — bets below this lapse. BSP<1.25 lost -12.1% ROI on 63 bets despite 75% SR
+DEFAULT_MIN_PLACE_ODDS = 1.30  # BSP floor for place bets — $1.25 divs bleed at any SR
+DEFAULT_MIN_WIN_ODDS = 1.50  # BSP floor for win bets — below this, Kelly edge is nil
 DEFAULT_COMMISSION_RATE = 0.00  # Betfair commission (0% with discount rate)
 DEFAULT_MAX_DAILY_LOSS = -150.0  # ~30% of balance. Need room for Kelly-sized losses without blocking the day
 DEFAULT_MIN_PLACE_PROB = 0.40  # Absolute floor — field-size tiers set the real PP thresholds
@@ -130,6 +131,12 @@ def calculate_stake(balance: float, initial_balance: float = DEFAULT_INITIAL_BAL
     return base_stake * (2 ** doublings)
 
 
+MAX_EDGE_CAP = 0.10  # Cap assumed edge at 10% — "edge cliff" protection.
+# When model sees PP=90% but implied=70%, the 20% gap is more likely
+# model overconfidence than real edge. Extreme apparent edges correlate
+# with information gaps (trials, track bias) not captured in features.
+
+
 def calculate_kelly_stake(
     balance: float,
     place_probability: float,
@@ -141,15 +148,20 @@ def calculate_kelly_stake(
     """Kelly-proportional staking: bet more when edge is larger.
 
     Uses half-Kelly by default: 75% less variance, only 25% less expected growth.
-    Losing hurts more than winning — conservative sizing protects compound growth.
+    Edge is capped at MAX_EDGE_CAP (10%) to protect against model overconfidence
+    — the "edge cliff" where extreme apparent edges are actually information gaps.
 
     Kelly fraction = (p * odds - 1) / (odds - 1), halved, capped at max_fraction.
     Stake = kelly_fraction * balance, floored at min_stake.
     """
     if odds <= 1 or balance <= 0 or place_probability <= 0:
         return 0  # No valid bet
+    # Edge cap: limit how much our probability can exceed implied probability.
+    # Prevents Kelly from over-sizing when model is overconfident.
+    implied_prob = 1.0 / odds
+    capped_prob = min(place_probability, implied_prob + MAX_EDGE_CAP)
     b = odds - 1
-    kelly = (b * place_probability - (1 - place_probability)) / b
+    kelly = (b * capped_prob - (1 - capped_prob)) / b
     if kelly <= 0:
         return 0  # Negative edge — don't bet
     if half_kelly:
@@ -851,7 +863,8 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
     # Safety: check balance
     balance = await get_balance(db)
-    min_odds = float(await _get_setting(db, "betfair_min_odds", str(DEFAULT_MIN_ODDS)))
+    min_place_odds = float(await _get_setting(db, "betfair_min_place_odds", str(DEFAULT_MIN_PLACE_ODDS)))
+    min_win_odds = float(await _get_setting(db, "betfair_min_win_odds", str(DEFAULT_MIN_WIN_ODDS)))
 
     placed = 0
     for bet in due_bets:
@@ -963,10 +976,10 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         bet.stake = round(stake, 2)
 
-        # BSP floor: use the fixed minimum only. BSP settles 5-15% below
-        # the last traded back price, so using live odds as floor causes
-        # orders to lapse (47% cancellation rate). The floor only exists
-        # to reject ultra-short prices, not to track the market.
+        # LIMIT_ON_CLOSE floor: reject ultra-short BSP prices.
+        # Place floor $1.30 (divs below this bleed at any SR).
+        # Win floor $1.50 (Kelly edge is nil below this).
+        min_odds = min_win_odds if bet.bet_type == "win" else min_place_odds
         bet.requested_odds = min_odds
 
         if balance < bet.stake:

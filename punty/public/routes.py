@@ -3324,12 +3324,40 @@ async def bf_tracker_dashboard(request: Request):
         return None
 
     def _calc_stats(bets_list):
+        import math
         total = len(bets_list)
         if total == 0:
-            return {"bets": 0, "wins": 0, "losses": 0, "pnl": 0, "roi": 0, "strike_rate": 0, "staked": 0}
+            return {"bets": 0, "wins": 0, "losses": 0, "pnl": 0, "roi": 0,
+                    "strike_rate": 0, "staked": 0, "edge_sig": None}
         wins = sum(1 for b in bets_list if b.hit)
         total_pnl = sum(b.pnl or 0 for b in bets_list)
         total_staked = sum(b.stake or 0 for b in bets_list)
+        # Statistical significance: t-statistic for edge.
+        # t = (POT * sqrt(n)) / sqrt((1+POT) * (avg_odds - 1 - POT))
+        # POT = profit on turnover (ROI as decimal)
+        # From Betfair Data Scientists hub — proper test for whether
+        # results are skill or variance.
+        edge_sig = None
+        if total >= 10 and total_staked > 0:
+            pot = total_pnl / total_staked
+            avg_odds = total_staked / total / (total_staked / total) if total else 0
+            # Compute average matched odds from settled bets
+            odds_sum = sum(b.matched_odds or b.requested_odds or 2.0 for b in bets_list)
+            avg_odds = odds_sum / total if total else 2.0
+            denom = (1 + pot) * (avg_odds - 1 - pot)
+            if denom > 0:
+                t_stat = (pot * math.sqrt(total)) / math.sqrt(denom)
+                # Two-sided p-value approximation (normal for large n)
+                p_value = 2 * (1 - 0.5 * (1 + math.erf(abs(t_stat) / math.sqrt(2))))
+                confidence = (1 - p_value) * 100
+                edge_sig = {
+                    "t_stat": round(t_stat, 2),
+                    "p_value": round(p_value, 4),
+                    "confidence": round(confidence, 1),
+                    "verdict": "Edge confirmed" if p_value < 0.05 else
+                               "Promising" if p_value < 0.15 else
+                               "Inconclusive" if p_value < 0.50 else "No edge detected",
+                }
         return {
             "bets": total,
             "wins": wins,
@@ -3338,6 +3366,7 @@ async def bf_tracker_dashboard(request: Request):
             "roi": round((total_pnl / total_staked * 100) if total_staked > 0 else 0, 1),
             "strike_rate": round((wins / total * 100) if total > 0 else 0, 1),
             "staked": round(total_staked, 2),
+            "edge_sig": edge_sig,
         }
 
     def _calc_period(bets_list):
