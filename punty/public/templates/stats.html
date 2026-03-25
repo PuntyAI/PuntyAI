@@ -214,45 +214,88 @@
         </div>
         {% endif %}
 
-        <!-- ═══ P&L by Type + Pick Strike Rate ═══ -->
+        <!-- ═══ P&L by Type ═══ -->
         {% set bt = bet_types|default([]) %}
-        {% set rs = rank_strike|default([]) %}
-        {% if bt|length > 0 or rs|length > 0 %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            {% if bt|length > 0 %}
-            <div class="rounded-xl p-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">P&amp;L by Type</div>
+        {% if bt|length > 0 %}
+        <div class="rounded-xl p-4 mb-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle); overflow-x: auto;">
+            <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">P&amp;L by Type</div>
+            <table style="width: 100%; border-collapse: collapse; min-width: 480px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                        <th class="text-left font-heading text-[10px] font-bold uppercase tracking-wider pb-2" style="color: var(--text-muted);">Type</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--text-muted);">Total</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--text-muted);">Settled</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--text-muted);">Won</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--text-muted);">SR%</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--text-muted);">ROI</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 pl-2" style="color: var(--text-muted);">P&amp;L</th>
+                    </tr>
+                </thead>
+                <tbody>
                 {% for b in bt %}
-                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: var(--border-subtle);">
-                    <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ b.name }}</span>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs" style="color: var(--text-muted);">{{ b.settled }}/{{ b.bets }}</span>
-                        <span class="text-xs font-heading font-semibold" style="color: {{ '#4ade80' if b.roi >= 0 else '#ef4444' }};">{{ '%+.0f'|format(b.roi) }}%</span>
-                        <span class="font-display font-bold text-sm" style="color: {{ '#4ade80' if b.pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(b.pnl) | replace('+', '+$') | replace('-', '-$') }}</span>
-                    </div>
-                </div>
+                    {% set sr = (b.winners / b.settled * 100)|round(1) if b.settled else 0 %}
+                    <tr style="{% if not loop.last %}border-bottom: 1px solid var(--border-subtle);{% endif %}">
+                        <td class="font-heading font-semibold text-sm py-1.5" style="color: var(--text-secondary);">{{ b.name }}</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ b.bets }}</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ b.settled }}</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-secondary);">{{ b.winners }}</td>
+                        <td class="text-right text-xs font-heading font-semibold py-1.5 px-2" style="color: {{ '#4ade80' if sr >= 40 else '#facc15' if sr >= 20 else '#ef4444' }};">{{ '%.0f'|format(sr) }}%</td>
+                        <td class="text-right text-xs font-heading font-semibold py-1.5 px-2" style="color: {{ '#4ade80' if b.roi >= 0 else '#ef4444' }};">{{ '%+.0f'|format(b.roi) }}%</td>
+                        <td class="text-right font-display font-bold text-sm py-1.5 pl-2" style="color: {{ '#4ade80' if b.pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(b.pnl) | replace('+', '+$') | replace('-', '-$') }}</td>
+                    </tr>
                 {% endfor %}
-            </div>
-            {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
-            {% if rs|length > 0 %}
-            <div class="rounded-xl p-4" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle);">
-                <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">Pick Strike Rate</div>
-                {% set rank_colors = ['var(--magenta)', 'var(--cyan)', 'var(--yellow)', '#a855f7'] %}
+        <!-- ═══ Pick Strike Rate ═══ -->
+        {% set rs = rank_strike|default([]) %}
+        {% if rs|length > 0 %}
+        <div class="rounded-xl p-4 mb-6" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle); overflow-x: auto;">
+            <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">Pick Strike Rate</div>
+            {% set rank_colors = ['var(--magenta)', 'var(--cyan)', 'var(--yellow)', '#a855f7'] %}
+            <table style="width: 100%; border-collapse: collapse; min-width: 560px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                        <th class="text-left font-heading text-[10px] font-bold uppercase tracking-wider pb-2" style="color: var(--text-muted);" rowspan="2">Pick</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-2" style="color: var(--text-muted);" rowspan="2">Total</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-2" style="color: var(--text-muted);" rowspan="2">Settled</th>
+                        <th class="text-center font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-1" style="color: var(--cyan); border-bottom: 1px solid rgba(0, 212, 255, 0.2);" colspan="3">Win</th>
+                        <th class="text-center font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-1" style="color: var(--magenta); border-bottom: 1px solid rgba(233, 30, 140, 0.2);" colspan="3">Place</th>
+                    </tr>
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">Won</th>
+                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">SR%</th>
+                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">P&amp;L</th>
+                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">Won</th>
+                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">SR%</th>
+                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">P&amp;L</th>
+                    </tr>
+                </thead>
+                <tbody>
                 {% for r in rs %}
-                <div class="flex justify-between items-center py-1.5 {% if not loop.last %}border-b{% endif %}" style="border-color: var(--border-subtle);">
-                    <div class="flex items-center gap-2">
-                        <span class="font-display text-xs font-bold" style="color: {{ rank_colors[loop.index0] }};">#{{ r.rank }}</span>
-                        <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ r.label }}</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs" style="color: var(--text-muted);">{{ r.hits }}/{{ r.bets }}</span>
-                        <span class="font-display font-bold text-sm" style="color: {{ '#4ade80' if r.strike >= 40 else '#facc15' if r.strike >= 25 else '#ef4444' }};">{{ r.strike }}%</span>
-                    </div>
-                </div>
+                    <tr style="{% if not loop.last %}border-bottom: 1px solid var(--border-subtle);{% endif %}">
+                        <td class="py-1.5">
+                            <div class="flex items-center gap-2">
+                                <span class="font-display text-xs font-bold" style="color: {{ rank_colors[loop.index0 % 4] }};">#{{ r.rank }}</span>
+                                <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ r.label }}</span>
+                            </div>
+                        </td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ r.total }}</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ r.completed }}</td>
+                        {# Win columns #}
+                        <td class="text-right text-xs py-1.5 px-1" style="color: var(--text-secondary);">{{ r.win_won }}/{{ r.win_total }}</td>
+                        <td class="text-right text-xs font-heading font-semibold py-1.5 px-1" style="color: {{ '#4ade80' if r.win_sr >= 40 else '#facc15' if r.win_sr >= 20 else '#ef4444' if r.win_total > 0 else 'var(--text-muted)' }};">{{ '%.0f'|format(r.win_sr) }}%</td>
+                        <td class="text-right text-xs font-display font-bold py-1.5 px-1" style="color: {{ '#4ade80' if r.win_pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(r.win_pnl) | replace('+', '+$') | replace('-', '-$') }}</td>
+                        {# Place columns #}
+                        <td class="text-right text-xs py-1.5 px-1" style="color: var(--text-secondary);">{{ r.place_won }}/{{ r.place_total }}</td>
+                        <td class="text-right text-xs font-heading font-semibold py-1.5 px-1" style="color: {{ '#4ade80' if r.place_sr >= 40 else '#facc15' if r.place_sr >= 25 else '#ef4444' if r.place_total > 0 else 'var(--text-muted)' }};">{{ '%.0f'|format(r.place_sr) }}%</td>
+                        <td class="text-right text-xs font-display font-bold py-1.5 px-1" style="color: {{ '#4ade80' if r.place_pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(r.place_pnl) | replace('+', '+$') | replace('-', '-$') }}</td>
+                    </tr>
                 {% endfor %}
-            </div>
-            {% endif %}
+                </tbody>
+            </table>
         </div>
         {% endif %}
 

@@ -2598,31 +2598,78 @@ async def get_daily_dashboard() -> dict:
             bet_types.append(data)
         bet_types.sort(key=lambda x: _BT_ORDER.get(x["name"], 99))
 
-        # ── Rank Strike Rates ──
-        # Rank 1: win strike (1st place), Rank 2-4: place strike (top 3)
+        # ── Rank Strike Rates (win + place split, includes roughie) ──
+        _rank_zero = lambda: {
+            "total": 0, "completed": 0,
+            "win_won": 0, "win_total": 0, "win_staked": 0.0, "win_pnl": 0.0,
+            "place_won": 0, "place_total": 0, "place_staked": 0.0, "place_pnl": 0.0,
+        }
         rank_stats = {}
+        # Settled selections — full stats
         for pick, runner, race, meeting in settled_rows:
             if pick.pick_type != "selection" or not pick.tip_rank:
                 continue
-            if (pick.bet_type or "").lower() == "no_bet":
+            bt = (pick.bet_type or "").lower().replace("_", " ")
+            if bt in ("no bet", "no_bet"):
                 continue
             rank = pick.tip_rank
             if rank not in rank_stats:
-                rank_stats[rank] = {"bets": 0, "hits": 0}
-            rank_stats[rank]["bets"] += 1
+                rank_stats[rank] = _rank_zero()
+            rs = rank_stats[rank]
+            rs["total"] += 1
+            rs["completed"] += 1
             fp = runner.finish_position if runner else None
+            stake = pick.bet_stake or 0
+            pnl = pick.pnl or 0
+            # Win strike: finished 1st
+            if fp == 1:
+                rs["win_won"] += 1
+            rs["win_total"] += 1
+            rs["win_staked"] += stake
+            rs["win_pnl"] += pnl
+            # Place strike: finished top 3
             if fp and fp <= 3:
-                rank_stats[rank]["hits"] += 1
+                rs["place_won"] += 1
+            rs["place_total"] += 1
+            rs["place_staked"] += stake
+            rs["place_pnl"] += pnl
+        # Unsettled selections — count toward total only
+        for pick, runner, race, meeting in unsettled_rows:
+            if pick.pick_type != "selection" or not pick.tip_rank:
+                continue
+            bt = (pick.bet_type or "").lower().replace("_", " ")
+            if bt in ("no bet", "no_bet"):
+                continue
+            if pick.tracked_only and not pick.tip_rank == 4:
+                continue  # skip non-roughie tracked_only
+            rank = pick.tip_rank
+            if rank not in rank_stats:
+                rank_stats[rank] = _rank_zero()
+            rank_stats[rank]["total"] += 1
+
+        _rank_labels = {1: "Punty's Pick", 2: "Second Pick", 3: "Third Pick", 4: "Roughie"}
         rank_strike = []
         for rank in sorted(rank_stats.keys()):
             rs = rank_stats[rank]
-            strike = round(rs["hits"] / rs["bets"] * 100, 1) if rs["bets"] else 0
+            win_sr = round(rs["win_won"] / rs["win_total"] * 100, 1) if rs["win_total"] else 0
+            place_sr = round(rs["place_won"] / rs["place_total"] * 100, 1) if rs["place_total"] else 0
+            win_roi = round(rs["win_pnl"] / rs["win_staked"] * 100, 1) if rs["win_staked"] else 0
+            place_roi = round(rs["place_pnl"] / rs["place_staked"] * 100, 1) if rs["place_staked"] else 0
             rank_strike.append({
                 "rank": rank,
-                "bets": rs["bets"],
-                "hits": rs["hits"],
-                "strike": strike,
-                "label": "Place",
+                "label": _rank_labels.get(rank, f"#{rank}"),
+                "total": rs["total"],
+                "completed": rs["completed"],
+                "win_won": rs["win_won"],
+                "win_total": rs["win_total"],
+                "win_sr": win_sr,
+                "win_roi": win_roi,
+                "win_pnl": round(rs["win_pnl"], 2),
+                "place_won": rs["place_won"],
+                "place_total": rs["place_total"],
+                "place_sr": place_sr,
+                "place_roi": place_roi,
+                "place_pnl": round(rs["place_pnl"], 2),
             })
 
         # ── Insights ──

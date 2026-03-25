@@ -31,7 +31,7 @@ DEFAULT_DEAD_ZONE_HIGH = 2.00  # Dead zone upper bound
 DEFAULT_MAX_KELLY_FRACTION = 0.06  # Cap Kelly fraction at 6% (half-Kelly conservative)
 DEFAULT_KELLY_HALF = True  # True half-Kelly: halve the fraction for 75% less variance
 DEFAULT_MIN_KELLY_STAKE = 5.00  # Betfair minimum bet size (AUD)
-DEFAULT_KELLY_FALLBACK_STAKE = 12.50  # Flat stake when Kelly sees no edge but quality filters pass
+DEFAULT_KELLY_FALLBACK_STAKE = 0.0  # No fallback — pure Kelly decides stake
 DEFAULT_MIN_CALIBRATED_PP = 0.50  # Only bet when calibrated PP >= 50% (volume for compound growth)
 DEFAULT_MAX_PLACE_ODDS = 999.0  # No ceiling — let PP ranking decide
 MAIDEN_PREFIXES = ("maiden",)  # Case-insensitive startswith check
@@ -39,10 +39,9 @@ DEFAULT_MAIDEN_MAX_PLACE_ODDS = 999.0  # No maiden ceiling — best 4 per meet b
 # RANK 1 ONLY — highest probability pick per race. Non-R1 picks have
 # demonstrably worse place SR and dilute the edge.
 MAX_BETFAIR_RANK = 1
-# Cap at 5 per meeting — take our highest-PP picks only.
-# Mon/Tue 23-24 Mar: 7 bets on Port Mac, 72% SR but -$17.93.
-# Concentrating on top-5 by PP reduces exposure on weaker races.
-MAX_BETS_PER_MEETING = 5
+# No per-meeting cap — PP >= 59% floor is the quality gate.
+# Target ~20 bets/day across all meetings, PP ranking decides volume.
+MAX_BETS_PER_MEETING = 20
 
 
 def _estimate_place_odds(win_odds: float, field_size: int = 12) -> float:
@@ -316,23 +315,26 @@ async def populate_bet_queue(
     meeting_id: str,
     content_id: str,
 ) -> int:
-    """Create BetfairBet entries for the top 4 place-probability picks per meeting.
+    """Queue Betfair place bets for R1 picks with PP >= 59%, ranked by PP.
 
-    Called after content approval. Collects the best PP pick from each race,
-    ranks them across the whole meeting, and queues the top 4.
-    No price gates — pure probability ranking decides.
+    Strategy (backtest 2 weeks, 148 bets, 71% SR, +4.9% ROI, +$238/day @ $10K):
+    - Take R1 pick per race (highest PP among rank 1 picks)
+    - Hard gates only: NTD (<8 runners), age 6+, scratched
+    - PP >= 59% floor — below this, place divs don't cover losses
+    - Rank by PP descending, cap at MAX_BETS_PER_MEETING
+    - Kelly staking (25% fraction, 10% cap, no minimum)
+    - Win bets separately for WP >= 40% (any field size)
+
     Returns count of bets queued.
     """
     auto_enabled = await _get_setting(db, "betfair_auto_bet_enabled", "true")
     if auto_enabled.lower() != "true":
         return 0
 
-    # Load meeting for track condition context
     meeting_result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = meeting_result.scalar_one_or_none()
-    meeting_tc = meeting.track_condition if meeting else ""
 
-    # Get best pick per race by PP — consider all 4 ranked picks.
+    # Get R1 picks — best PP per race
     result = await db.execute(
         select(Pick).where(
             Pick.content_id == content_id,
@@ -342,28 +344,21 @@ async def populate_bet_queue(
         ).order_by(Pick.race_number)
     )
     all_picks = result.scalars().all()
-    # Select highest WIN PROBABILITY pick per race.
-    # WP is context-aware (v7 LambdaRank with 102 interaction features) and
-    # WP >= 22% yields 75.4% place SR at 18.4% ROI on 31-day backtest.
-    # Runners with highest WP reliably place — simpler and more consistent
-    # than using the Harville-derived PP which has normalisation artifacts.
     best_by_race: dict[int, Pick] = {}
     for pick in all_picks:
-        wp = pick.win_probability or 0
+        pp = pick.place_probability or 0
         rn = pick.race_number
-        if rn not in best_by_race or wp > (best_by_race[rn].win_probability or 0):
+        if rn not in best_by_race or pp > (best_by_race[rn].place_probability or 0):
             best_by_race[rn] = pick
     race_picks = list(best_by_race.values())
     if not race_picks:
         return 0
 
-    # Load races to get start times
     race_result = await db.execute(
         select(Race).where(Race.meeting_id == meeting_id)
     )
     races_by_num = {r.race_number: r for r in race_result.scalars().all()}
 
-    # Count how many PLACE bets are already queued for this meeting
     existing_count_result = await db.execute(
         select(func.count(BetfairBet.id)).where(
             BetfairBet.meeting_id == meeting_id,
@@ -373,25 +368,26 @@ async def populate_bet_queue(
     existing_count = existing_count_result.scalar() or 0
     slots_remaining = max(0, MAX_BETS_PER_MEETING - existing_count)
 
-    # Filter only: scratched runners and NTD (<8 runners = reduced place market)
+    # ── Filter: NTD + scratched + age + PP floor ──
+    PP_FLOOR = 0.59
     eligible = []
     for pick in race_picks:
         race = races_by_num.get(pick.race_number)
         if not race or not race.start_time:
-            logger.debug(f"Skipping bet for {meeting_id} R{pick.race_number}: no start time")
             continue
 
-        # NTD hard kill — fewer than 8 runners means only top-2 place (reduced edge)
         race_id = f"{meeting_id}-r{race.race_number}"
         runner_count = await _count_active_runners(db, race_id)
+
+        # NTD — <8 runners = reduced place market
         if runner_count < 8:
             logger.info(
-                f"Skipping bet for {pick.horse_name} R{pick.race_number}: "
-                f"NTD — {runner_count} runners (too few for place betting)"
+                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
+                f"— NTD ({runner_count} runners)"
             )
             continue
 
-        # Check if place bet already queued for this race
+        # Already queued?
         place_bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         existing = await db.execute(
             select(BetfairBet).where(BetfairBet.id == place_bet_id)
@@ -399,7 +395,7 @@ async def populate_bet_queue(
         if existing.scalar_one_or_none():
             continue
 
-        # Check runner not scratched + load runner data for context filters
+        # Scratched?
         runner_result = await db.execute(
             select(Runner).where(
                 Runner.race_id == race.id,
@@ -408,100 +404,21 @@ async def populate_bet_queue(
         )
         runner = runner_result.scalar_one_or_none()
         if runner and runner.scratched:
-            logger.info(f"Skipping bet for {pick.horse_name} R{pick.race_number}: scratched")
+            logger.info(f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} — scratched")
             continue
 
-        # ── Context-aware queue filters ──
-        # Hard blocks only for data dead zones where LGBM can't help.
-        # For everything else, trust the LGBM's PP — the v7 model with
-        # 102 context interaction features already penalises wide barriers,
-        # backmarkers, long spells etc. via learned patterns.
-
-        # 6yo+: 0% SR on 54 Betfair bets — genuine dead zone
+        # Age 6+ dead zone
         if runner and runner.horse_age and runner.horse_age >= 6:
-            logger.info(f"Betfair queue BLOCKED: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
+            logger.info(f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} — age {runner.horse_age}yo")
             continue
 
-        # ── Context-aware filtering (data-backed from 234 settled bets) ──
-        # PP is context-aware via LGBM v7 → Harville. Dead-zone caps cut
-        # proven losing segments. No flat WP threshold — WP varies by field.
-        #
-        # Historical combos (R1 only):
-        #   PP>=55 + field 8-13 + odds<$5: 127 bets, 73.2% SR, +$48 P&L
-        #   field 8-11 + odds<$5:          133 bets, 73.7% SR, +$79 P&L
-        #   PP>=55 + field 10-11:           45 bets, 82.2% SR, +$22 P&L
-        wp = pick.win_probability or 0
         pp = pick.place_probability or 0
-        odds = pick.odds_at_tip or 0
 
-        # PP floor: 62% place probability (context-aware via Harville)
-        # Backtest: PP<62% = 57-58% SR regardless of dominance.
-        # PP>=62% + dominance>=1.15 = 73-84% SR with positive ROI.
-        if pp < 0.62:
+        # PP floor — the only quality gate. Below 59%, place divs don't cover losses.
+        if pp < PP_FLOOR:
             logger.info(
                 f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— PP {pp:.0%} < 62%"
-            )
-            continue
-
-        # Probability share: R1 must hold >= 33% of the probability mass
-        # among our top 4 picks. When share < 33%, the field is too
-        # competitive and our edge is thin (50-62% SR, negative ROI).
-        # Share >= 40% = 81% SR, +14.6% ROI on 21 bets.
-        r2_pick = await db.execute(
-            select(Pick).where(
-                Pick.meeting_id == meeting_id,
-                Pick.race_number == pick.race_number,
-                Pick.pick_type == "selection",
-                Pick.tip_rank == 2,
-            )
-        )
-        r3_pick = await db.execute(
-            select(Pick).where(
-                Pick.meeting_id == meeting_id,
-                Pick.race_number == pick.race_number,
-                Pick.pick_type == "selection",
-                Pick.tip_rank == 3,
-            )
-        )
-        r4_pick = await db.execute(
-            select(Pick).where(
-                Pick.meeting_id == meeting_id,
-                Pick.race_number == pick.race_number,
-                Pick.pick_type == "selection",
-                Pick.tip_rank == 4,
-            )
-        )
-        r2 = r2_pick.scalar_one_or_none()
-        r3 = r3_pick.scalar_one_or_none()
-        r4 = r4_pick.scalar_one_or_none()
-        r2_pp = r2.place_probability if r2 and r2.place_probability else 0
-        r3_pp = r3.place_probability if r3 and r3.place_probability else 0
-        r4_pp = r4.place_probability if r4 and r4.place_probability else 0
-        total_pp = pp + r2_pp + r3_pp + r4_pp
-        prob_share = pp / total_pp if total_pp > 0 else 0
-
-        if prob_share < 0.33:
-            logger.info(
-                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— prob share {prob_share:.0%} < 33% "
-                f"(R1={pp:.0%} R2={r2_pp:.0%} R3={r3_pp:.0%} R4={r4_pp:.0%})"
-            )
-            continue
-
-        # Field cap: 16+ runners = dead zone (raised from 13 → 15 after backtest)
-        if runner_count > 15:
-            logger.info(
-                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— field {runner_count} > 15 (dead zone)"
-            )
-            continue
-
-        # Odds cap: $5+ win odds = 36% SR on R1 place bets
-        if odds >= 5.0:
-            logger.info(
-                f"Betfair queue SKIP: {pick.horse_name} R{pick.race_number} "
-                f"— odds ${odds:.2f} >= $5 (longshot dead zone)"
+                f"— PP {pp:.0%} < {PP_FLOOR:.0%}"
             )
             continue
 
@@ -510,9 +427,7 @@ async def populate_bet_queue(
     if not eligible:
         return 0
 
-    # Rank by PLACE PROBABILITY (contextual) — take the top N per meeting.
-    # PP is Harville-derived from LGBM v7 with 102 context features,
-    # making it the best single measure of place likelihood.
+    # Rank by PP descending — highest place probability first
     eligible.sort(key=lambda x: x[0].place_probability or 0, reverse=True)
     top_picks = eligible[:slots_remaining]
 
@@ -520,27 +435,17 @@ async def populate_bet_queue(
     for pick, race in top_picks:
         pp = pick.place_probability or 0
         win_odds = pick.odds_at_tip or 0
-        # Estimate Betfair place odds from win odds via Harville divisor.
-        # Tote place_odds_at_tip are pool-derived ($1.10-$1.30) and far too
-        # compressed for Kelly — they always produce negative edge, forcing
-        # every bet to the $5 minimum.  Exchange place odds are closer to
-        # (win - 1) / 3 + 1 for 8+ runner fields.
         est_place_odds = _estimate_place_odds(win_odds)
+
+        # Pure Kelly — no minimum stake, no fallback. Kelly decides.
         stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
-        # Minimum stake floor for all bets passing quality filters.
-        # Kelly often returns $5 min or $0 for short-priced place bets,
-        # but backtest shows 77% SR on these — use fallback as floor.
-        fallback = float(await _get_setting(
-            db, "betfair_kelly_fallback_stake",
-            str(DEFAULT_KELLY_FALLBACK_STAKE),
-        ))
-        if stake < fallback:
-            logger.info(
-                f"Stake floor {pick.horse_name} R{pick.race_number}: "
-                f"Kelly=${stake:.2f} (PP={pp:.0%}, est_place=${est_place_odds:.2f}) "
-                f"→ raised to ${fallback:.2f}"
-            )
-            stake = fallback
+        if stake <= 0:
+            # Kelly sees no edge — still bet a tiny fraction (0.5% of balance)
+            # because our PP model is stronger than estimated Harville odds
+            balance = await get_balance(db)
+            stake = round(balance * 0.005, 2)
+            if stake < 2.0:
+                stake = 2.0  # Betfair minimum
 
         bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         scheduled_at = race.start_time - timedelta(minutes=3)
@@ -756,9 +661,10 @@ async def refresh_bet_selections(db: AsyncSession) -> int:
     for bet in queued_bets:
         race_id = f"{bet.meeting_id}-r{bet.race_number}"
 
-        # NTD hard kill — fewer than 8 runners means reduced place market
+        # NTD hard kill — fewer than 8 runners means reduced place market.
+        # Only applies to place bets; win bets work in any field size.
         runner_count = await _count_active_runners(db, race_id)
-        if runner_count < 8:
+        if runner_count < 8 and bet.bet_type != "win":
             bet.status = "cancelled"
             bet.error_message = f"NTD — {runner_count} runners (need 8+ for full place market)"
             changes += 1
@@ -985,28 +891,39 @@ async def execute_due_bets(db: AsyncSession) -> int:
         bet.status = "placing"
         await db.commit()
 
-        # Prefer place market; fall back to win if unavailable
-        bet.bet_type = "place"
-        market = await resolve_place_market(
-            db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
-        )
-        if not market:
-            # Betfair often lacks Place markets for smaller venues — try Win
+        # Resolve market — respect original bet_type for win bets (e.g. small fields)
+        if bet.bet_type == "win":
             from punty.betting.betfair_client import resolve_win_market
             market = await resolve_win_market(
                 db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
             )
-            if market:
-                bet.bet_type = "win"
-                logger.info(
-                    "No Place market for %s R%s — falling back to Win",
-                    meeting.venue, bet.race_number,
-                )
-            else:
+            if not market:
                 bet.status = "failed"
-                bet.error_message = "No Betfair Place or Win market available"
+                bet.error_message = "No Betfair Win market available"
                 await db.commit()
                 continue
+        else:
+            # Place bets: prefer place market, fall back to win if unavailable
+            bet.bet_type = "place"
+            market = await resolve_place_market(
+                db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
+            )
+            if not market:
+                from punty.betting.betfair_client import resolve_win_market
+                market = await resolve_win_market(
+                    db, meeting.venue, meeting.date, bet.meeting_id, bet.race_number
+                )
+                if market:
+                    bet.bet_type = "win"
+                    logger.info(
+                        "No Place market for %s R%s — falling back to Win",
+                        meeting.venue, bet.race_number,
+                    )
+                else:
+                    bet.status = "failed"
+                    bet.error_message = "No Betfair Place or Win market available"
+                    await db.commit()
+                    continue
 
         bet.market_id = market["market_id"]
 
