@@ -54,6 +54,20 @@ def _strip_venue_prefix(venue: str) -> str:
             venue = venue[len(prefix) + 1:]
             break
 
+    # Compound venue names — Betfair uses the short form
+    # Built from 7-day "no markets found" log analysis
+    compound_map = {
+        "Sandown-Lakeside": "Sandown",
+        "Sandown Lakeside": "Sandown",
+        "Flemington-VRC": "Flemington",
+        "Randwick-Kensington": "Kensington",
+        "Morphettville Parks": "Morphettville",
+        "Caulfield Heath": "Caulfield",
+        "Yarra Glen": "Yarra Valley",
+    }
+    if venue in compound_map:
+        return compound_map[venue]
+
     # Surface suffixes — Betfair drops these
     suffixes = [
         "Synthetic Poly Track", "Synthetic", "Poly Track",
