@@ -1900,8 +1900,9 @@ async def refresh_pointsbet_odds(meeting_id: str, db: AsyncSession) -> int:
 
     # Get race count for this meeting
     from punty.models.meeting import Race
+    from sqlalchemy import func as _func
     race_count_result = await db.execute(
-        select(func.count(Race.id)).where(Race.meeting_id == meeting_id)
+        select(_func.count(Race.id)).where(Race.meeting_id == meeting_id)
     )
     race_count = race_count_result.scalar() or 8
 
