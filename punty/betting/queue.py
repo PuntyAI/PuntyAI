@@ -443,11 +443,57 @@ async def populate_bet_queue(
     eligible.sort(key=lambda x: x[0].place_probability or 0, reverse=True)
     top_picks = eligible[:slots_remaining]
 
+    # ── Compute WP gap for bet type routing ──
+    # Gap = R1 WP - R2 WP. Determines win vs place:
+    #   >= 15%: Win bet (48% SR, +3.2% ROI on 5,954 races)
+    #   8-15%:  Place bet (65-73% SR, +0.7% ROI)
+    #   < 8%:   Place bet (competitive race, safer option)
+    # Data: 21,452 KASH-rated races, full year 2025-2026.
+    WIN_GAP_THRESHOLD = 0.15
+
+    # Pre-load R2 WP per race for gap calculation
+    r2_wp_cache = {}
+    for pick, race in top_picks:
+        r2_result = await db.execute(
+            select(Pick.win_probability).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == pick.race_number,
+                Pick.pick_type == "selection",
+                Pick.tip_rank == 2,
+            ).limit(1)
+        )
+        r2_wp = r2_result.scalar_one_or_none() or 0
+        r2_wp_cache[pick.race_number] = r2_wp
+
     queued = 0
     for pick, race in top_picks:
         pp = pick.place_probability or 0
+        wp = pick.win_probability or 0
         win_odds = pick.odds_at_tip or 0
         est_place_odds = _estimate_place_odds(win_odds)
+
+        # ── Gap-based bet type routing ──
+        r2_wp = r2_wp_cache.get(pick.race_number, 0)
+        wp_gap = wp - r2_wp
+        if wp_gap >= WIN_GAP_THRESHOLD and win_odds > 1.0:
+            bet_type = "win"
+            kelly_odds = win_odds
+            kelly_prob = wp
+            bet_id = f"bf-{meeting_id}-r{pick.race_number}"
+            requested_odds = win_odds  # Will be overridden to LOC floor at execution
+        else:
+            bet_type = "place"
+            kelly_odds = est_place_odds
+            kelly_prob = pp
+            bet_id = f"bf-{meeting_id}-r{pick.race_number}"
+            requested_odds = est_place_odds
+
+        # Check if already queued
+        existing = await db.execute(
+            select(BetfairBet).where(BetfairBet.id == bet_id)
+        )
+        if existing.scalar_one_or_none():
+            continue
 
         # KASH consensus — modifies Kelly stake based on model agreement
         race_id = f"{meeting_id}-r{race.race_number}"
@@ -459,38 +505,28 @@ async def populate_bet_queue(
         )
         runner = runner_result.scalar_one_or_none()
         kash_price = runner.kash_rated_price if runner and hasattr(runner, "kash_rated_price") else None
-        kash_multiplier = 1.0  # Default: no adjustment
+        kash_multiplier = 1.0
         if kash_price and win_odds:
             kash_implied = 1.0 / kash_price if kash_price > 0 else 0
-            our_wp = pick.win_probability or 0
-            divergence = abs(our_wp - kash_implied)
-            if divergence < 0.10:
-                consensus = "AGREE"
-                # Two independent models agree — full confidence
-                kash_multiplier = 1.0
-            else:
-                consensus = "DIVERGE"
-                # Models disagree — reduce stake by 15%
+            divergence = abs(wp - kash_implied)
+            consensus = "AGREE" if divergence < 0.10 else "DIVERGE"
+            if consensus == "DIVERGE":
                 kash_multiplier = 0.85
             logger.info(
                 f"KASH {consensus}: {pick.horse_name} R{pick.race_number} "
-                f"— our WP={our_wp:.0%} KASH={kash_implied:.0%} "
-                f"(KASH ${kash_price:.2f} vs ours ${win_odds:.2f}) "
+                f"— our WP={wp:.0%} KASH={kash_implied:.0%} "
                 f"kelly_mult={kash_multiplier}"
             )
 
-        # Pure Kelly — no minimum stake, no fallback. Kelly decides.
-        stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
-        stake *= kash_multiplier  # KASH consensus adjustment
+        # Kelly staking
+        stake = await get_current_stake(db, place_probability=kelly_prob, odds=kelly_odds)
+        stake *= kash_multiplier
         if stake <= 0:
-            # Kelly sees no edge — still bet a tiny fraction (0.5% of balance)
-            # because our PP model is stronger than estimated Harville odds
             balance = await get_balance(db)
             stake = round(balance * 0.005, 2)
             if stake < 2.0:
-                stake = 2.0  # Betfair minimum
+                stake = 2.0
 
-        bet_id = f"bf-{meeting_id}-r{pick.race_number}"
         scheduled_at = race.start_time - timedelta(minutes=3)
 
         bet = BetfairBet(
@@ -501,85 +537,23 @@ async def populate_bet_queue(
             horse_name=pick.horse_name or "Unknown",
             saddlecloth=pick.saddlecloth,
             stake=stake,
-            requested_odds=round(est_place_odds, 2),
+            requested_odds=round(requested_odds, 2),
+            bet_type=bet_type,
             scheduled_at=scheduled_at,
         )
         db.add(bet)
         queued += 1
         logger.info(
             f"Betfair queue: {pick.horse_name} R{pick.race_number} "
-            f"PP={pp:.0%} win=${win_odds:.2f} est_place=${est_place_odds:.2f} "
-            f"stake=${stake:.2f}"
+            f"{bet_type.upper()} gap={wp_gap:.0%} PP={pp:.0%} WP={wp:.0%} "
+            f"odds=${win_odds:.2f} stake=${stake:.2f}"
         )
 
-    # ── Win bets for high-WP picks (WP >= 40%, +19.7% ROI on 256 bets) ──
-    # Separate from place bets — a race can have both a place and a win bet.
-    MIN_WIN_WP = 0.40
-    win_queued = 0
-    for pick in best_by_race.values():
-        wp = pick.win_probability or 0
-        if wp < MIN_WIN_WP:
-            continue
-        race = races_by_num.get(pick.race_number)
-        if not race or not race.start_time:
-            continue
-        win_odds = pick.odds_at_tip or 0
-        if win_odds <= 1.0 or win_odds >= 10.0:
-            continue
-        # Skip if runner scratched or age 6+
-        runner_result = await db.execute(
-            select(Runner).where(
-                Runner.race_id == race.id,
-                Runner.saddlecloth == pick.saddlecloth,
-            )
-        )
-        runner = runner_result.scalar_one_or_none()
-        if runner and runner.scratched:
-            continue
-        if runner and runner.horse_age and runner.horse_age >= 6:
-            continue
-
-        win_bet_id = f"bf-{meeting_id}-r{pick.race_number}-win"
-        # Check if already queued
-        existing = await db.execute(
-            select(BetfairBet).where(BetfairBet.id == win_bet_id)
-        )
-        if existing.scalar_one_or_none():
-            continue
-
-        # Kelly on win odds with WP as probability
-        stake = await get_current_stake(db, place_probability=wp, odds=win_odds)
-        fallback = float(await _get_setting(
-            db, "betfair_kelly_fallback_stake",
-            str(DEFAULT_KELLY_FALLBACK_STAKE),
-        ))
-        if stake < fallback:
-            stake = fallback
-
-        scheduled_at = race.start_time - timedelta(minutes=3)
-        bet = BetfairBet(
-            id=win_bet_id,
-            pick_id=pick.id,
-            meeting_id=meeting_id,
-            race_number=pick.race_number,
-            horse_name=pick.horse_name or "Unknown",
-            saddlecloth=pick.saddlecloth,
-            stake=stake,
-            requested_odds=round(win_odds, 2),
-            bet_type="win",
-            scheduled_at=scheduled_at,
-        )
-        db.add(bet)
-        win_queued += 1
-        logger.info(
-            f"Betfair WIN queue: {pick.horse_name} R{pick.race_number} "
-            f"WP={wp:.0%} odds=${win_odds:.2f} stake=${stake:.2f}"
-        )
-
-    queued += win_queued
     if queued:
         await db.commit()
-        logger.info(f"Betfair queue: {queued} bets queued for {meeting_id} ({win_queued} win)")
+        win_count = sum(1 for p, r in top_picks
+                        if (p.win_probability or 0) - r2_wp_cache.get(p.race_number, 0) >= WIN_GAP_THRESHOLD)
+        logger.info(f"Betfair queue: {queued} bets for {meeting_id} ({win_count} win, {queued - win_count} place)")
     return queued
 
 
