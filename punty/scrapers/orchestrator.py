@@ -1900,7 +1900,7 @@ async def refresh_pointsbet_odds(meeting_id: str, db: AsyncSession) -> int:
 
     pb = PointsBetScraper()
     try:
-        odds = await pb.get_meeting_odds(meeting.venue, meeting.date)
+        odds = await pb.scrape_odds_for_meeting(meeting.venue, meeting.date)
         if odds:
             await _merge_pointsbet_odds(db, meeting_id, odds)
             await db.commit()
