@@ -449,7 +449,7 @@ async def populate_bet_queue(
         win_odds = pick.odds_at_tip or 0
         est_place_odds = _estimate_place_odds(win_odds)
 
-        # KASH consensus check — log divergence for analysis
+        # KASH consensus — modifies Kelly stake based on model agreement
         race_id = f"{meeting_id}-r{race.race_number}"
         runner_result = await db.execute(
             select(Runner).where(
@@ -459,20 +459,29 @@ async def populate_bet_queue(
         )
         runner = runner_result.scalar_one_or_none()
         kash_price = runner.kash_rated_price if runner and hasattr(runner, "kash_rated_price") else None
+        kash_multiplier = 1.0  # Default: no adjustment
         if kash_price and win_odds:
-            # Convert KASH rated price to implied prob for comparison
             kash_implied = 1.0 / kash_price if kash_price > 0 else 0
             our_wp = pick.win_probability or 0
             divergence = abs(our_wp - kash_implied)
-            consensus = "AGREE" if divergence < 0.10 else "DIVERGE"
+            if divergence < 0.10:
+                consensus = "AGREE"
+                # Two independent models agree — full confidence
+                kash_multiplier = 1.0
+            else:
+                consensus = "DIVERGE"
+                # Models disagree — reduce stake by 15%
+                kash_multiplier = 0.85
             logger.info(
                 f"KASH {consensus}: {pick.horse_name} R{pick.race_number} "
                 f"— our WP={our_wp:.0%} KASH={kash_implied:.0%} "
-                f"(KASH ${kash_price:.2f} vs ours ${win_odds:.2f})"
+                f"(KASH ${kash_price:.2f} vs ours ${win_odds:.2f}) "
+                f"kelly_mult={kash_multiplier}"
             )
 
         # Pure Kelly — no minimum stake, no fallback. Kelly decides.
         stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
+        stake *= kash_multiplier  # KASH consensus adjustment
         if stake <= 0:
             # Kelly sees no edge — still bet a tiny fraction (0.5% of balance)
             # because our PP model is stronger than estimated Harville odds

@@ -1369,9 +1369,19 @@ async def mid_morning_odds_refresh() -> dict:
 
             results["meetings"].append(meeting_info)
 
+    # Fetch KASH ratings after odds refresh — models published ~10am AEST
+    try:
+        from punty.scrapers.kash_ratings import apply_kash_ratings
+        kash_matched = await apply_kash_ratings()
+        results["kash_matched"] = kash_matched
+        logger.info(f"KASH ratings applied: {kash_matched} runners")
+    except Exception as e:
+        logger.warning(f"KASH ratings failed during mid-morning refresh: {e}")
+        results["kash_error"] = str(e)
+
     results["completed_at"] = melb_now().isoformat()
     log_system(
-        f"Mid-morning odds refresh complete: {len(meetings)} meetings (display only)",
+        f"Mid-morning refresh complete: {len(meetings)} meetings + KASH ratings",
         status="success",
     )
     logger.info(f"Mid-morning odds refresh complete: {results}")
