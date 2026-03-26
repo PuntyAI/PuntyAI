@@ -118,6 +118,112 @@ def _load_kash_index() -> dict[tuple[str, str], dict]:
     return _KASH_INDEX
 
 
+def _get_v9_features(pf_runner: dict, race_meta: dict, distance: int) -> list[float]:
+    """Extract v9 signal-driven features from Proform runner data.
+
+    Returns [kri_score, kri_trend, position_change, weight_change,
+             distance_change, margin_last, condition_record_sr, combo_a2e]
+    """
+    nan = float("nan")
+    forms = [f for f in pf_runner.get("Forms", []) if not f.get("IsBarrierTrial")]
+
+    # KRI
+    kri_score = nan
+    kri_trend = nan
+    kri_vals = []
+    for f in forms[:5]:
+        kri = f.get("KRI")
+        if kri is not None:
+            try:
+                kri_vals.append(float(kri))
+            except (ValueError, TypeError):
+                pass
+    if kri_vals:
+        kri_score = kri_vals[0]
+        if len(kri_vals) >= 3:
+            recent = sum(kri_vals[:2]) / 2
+            older = sum(kri_vals[2:min(4, len(kri_vals))]) / len(kri_vals[2:min(4, len(kri_vals))])
+            kri_trend = recent - older
+
+    # Position change (settle → finish from last start)
+    position_change = nan
+    if forms:
+        inrun = forms[0].get("InRun", "")
+        settle = None
+        finish_pos = forms[0].get("Position")
+        if inrun and "settling_down" in inrun:
+            for part in inrun.strip().rstrip(";").split(";"):
+                if "settling_down" in part and "," in part:
+                    try:
+                        settle = int(part.split(",")[1].strip())
+                    except (ValueError, IndexError):
+                        pass
+        if settle is not None and finish_pos is not None:
+            try:
+                position_change = float(settle - int(finish_pos))
+            except (ValueError, TypeError):
+                pass
+
+    # Weight change
+    weight_change = nan
+    current_weight = pf_runner.get("Weight")
+    if current_weight and forms and forms[0].get("Weight"):
+        try:
+            weight_change = float(current_weight) - float(forms[0]["Weight"])
+        except (ValueError, TypeError):
+            pass
+
+    # Distance change
+    distance_change = nan
+    if distance and forms and forms[0].get("Distance"):
+        try:
+            distance_change = float(distance) - float(forms[0]["Distance"])
+        except (ValueError, TypeError):
+            pass
+
+    # Margin last start
+    margin_last = nan
+    if forms:
+        if forms[0].get("Position") == 1:
+            margin_last = 0.0
+        elif forms[0].get("Margin") is not None:
+            try:
+                margin_last = float(forms[0]["Margin"])
+            except (ValueError, TypeError):
+                pass
+
+    # Condition-specific career SR
+    condition_record_sr = nan
+    tc = race_meta.get("condition", "")
+    if tc.upper().startswith("G"):
+        rec = pf_runner.get("GoodRecord")
+    elif tc.upper().startswith("S"):
+        rec = pf_runner.get("SoftRecord")
+    elif tc.upper().startswith("H"):
+        rec = pf_runner.get("HeavyRecord")
+    else:
+        rec = None
+    if rec and isinstance(rec, dict):
+        starts = rec.get("Starts", 0)
+        firsts = rec.get("Firsts", 0)
+        if starts and starts > 0:
+            condition_record_sr = firsts / starts
+
+    # Combo A2E
+    combo_a2e = nan
+    combo_data = pf_runner.get("TrainerJockeyA2E_Career")
+    if combo_data and isinstance(combo_data, dict):
+        a2e = combo_data.get("A2E")
+        if a2e is not None:
+            try:
+                combo_a2e = float(a2e)
+            except (ValueError, TypeError):
+                pass
+
+    return [kri_score, kri_trend, position_change, weight_change,
+            distance_change, margin_last, condition_record_sr, combo_a2e]
+
+
 def _get_kash_features(horse_name: str, race_date: str, market_prob: float) -> list[float]:
     """Look up KASH features for a runner. Returns [wp_implied, early_speed, late_speed, consensus]."""
     nan = float("nan")
@@ -712,13 +818,21 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
             cond_data["good"][0], cond_data["soft"][0],
             cond_data["heavy"][0], cond_data["firm"][0],
         ),
-        # ── v8: KASH features (4) ──
+        # ── v8: KASH features (4) — DEPRECATED (external model, NaN) ──
         *_get_kash_features(
             pf_runner.get("Name", ""),
             race_meta.get("date", ""),
             market_prob,
         ),
+        # ── v9: Signal-driven features (8) ──
+        *_get_v9_features(pf_runner, race_meta, distance),
     ]
+
+    # Override external model features to NaN (independence)
+    fvec[0] = nan  # market_prob (index 0)
+    # flucs_direction and price_move_pct — find their indices
+    # Feature indices: flucs_direction=97, price_move_pct=50 (from FEATURE_NAMES)
+    # Leave as-is for now — training with these as NaN will teach model to ignore
 
 
 # ── Data loading ────────────────────────────────────────────────────

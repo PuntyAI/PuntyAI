@@ -128,11 +128,21 @@ FEATURE_NAMES = [
     "trainer_sr_x_venue",    # trainer_career_sr * venue_type/3 (trainer metro/country spec)
     "form_trend_x_class",    # form_trend * class_bucket/6 (improving form by class)
     "days_since_x_class",    # (days_since/365) * class_bucket/6 (freshness by class)
-    # ── v8: KASH model features (4) — independent Betfair model as benchmark ──
-    "kash_wp_implied",       # 1/kash_rated_price — KASH model's implied win probability
-    "kash_early_speed",      # KASH early speed rating (0-1 scale)
-    "kash_late_speed",       # KASH late speed rating (1-5 scale, NaN if unknown)
-    "kash_consensus",        # 1.0 if our market_prob and KASH implied agree within 10%, else 0.0
+    # ── v8: KASH model features (4) — DEPRECATED: set to NaN at inference ──
+    # Kept for backward compat with trained model indices. Retrain will learn to ignore.
+    "kash_wp_implied",       # DEPRECATED — external model prediction
+    "kash_early_speed",      # DEPRECATED — external model
+    "kash_late_speed",       # DEPRECATED — external model
+    "kash_consensus",        # DEPRECATED — external model
+    # ── v9: Signal-driven features (8) — from 381K runner audit ──
+    "kri_score",             # KRI from most recent start (0-100) — 10x discriminator
+    "kri_trend",             # Recent 2 KRI avg vs older 2 (positive = improving)
+    "position_change",       # Settle→finish from last start (positive = gained ground)
+    "weight_change",         # Weight today vs last start (positive = gained = class up)
+    "distance_change",       # Distance today vs last start (metres, 0 = same)
+    "margin_last",           # Margin beaten last start (lengths, 0 = won)
+    "condition_record_sr",   # SR on today's specific going (good/soft/heavy)
+    "combo_a2e",             # Trainer+jockey combo A2E value
 ]
 
 NUM_FEATURES = len(FEATURE_NAMES)  # 102
@@ -1213,19 +1223,136 @@ def extract_features_from_runner(
         field_size, cond_sr,
     )
 
-    # ── v8: KASH model features (4) ──
-    # Independent model from Betfair Data Scientists — rated prices + speed data.
-    # Provides consensus signal (two models agree = higher confidence) and
-    # pace data from a different methodology than our speed map scraper.
-    kash_rp = _safe_float(_get(runner, "kash_rated_price"))
-    kash_wp_implied = 1.0 / kash_rp if kash_rp and kash_rp > 0 else nan
-    kash_early_spd = _safe_float(_get(runner, "kash_early_speed")) or nan
-    kash_late_spd = _safe_float(_get(runner, "kash_late_speed")) or nan
-    # Consensus: 1.0 if our implied prob and KASH implied prob agree within 10%
-    if not math.isnan(kash_wp_implied) and not math.isnan(market_prob):
-        kash_consensus = 1.0 if abs(market_prob - kash_wp_implied) < 0.10 else 0.0
+    # ── INDEPENDENCE: Override external model features to NaN ──
+    # market_prob is feature #1 (index 0) — set to NaN so LGBM ignores it.
+    # Model is 100% independent — no market, KASH, or PF predictions in features.
+    market_prob = nan  # Override — was computed above for other uses but NOT for LGBM
+    flucs_direction = nan  # Odds-derived — override
+    price_move_pct = nan  # Odds-derived — override
+    place_vs_market = nan  # Market comparison — override
+
+    # ── v8: KASH features — DEPRECATED (external model, set to NaN) ──
+    kash_wp_implied = nan
+    kash_early_spd = nan
+    kash_late_spd = nan
+    kash_consensus = nan
+
+    # ── v9: Signal-driven features (8) ──
+    import json as _json_v9
+
+    # KRI score from form_history
+    kri_score = nan
+    kri_trend = nan
+    position_change_val = nan
+    margin_last_val = nan
+    fh_raw = _get(runner, "form_history")
+    if fh_raw:
+        try:
+            fh = _json_v9.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+            if isinstance(fh, list):
+                # KRI from recent starts
+                kri_vals = []
+                for s in fh[:5]:
+                    if isinstance(s, dict) and not s.get("is_trial"):
+                        k = s.get("kri")
+                        if k is not None:
+                            try:
+                                kri_vals.append(float(k))
+                            except (ValueError, TypeError):
+                                pass
+                if kri_vals:
+                    kri_score = kri_vals[0]
+                    if len(kri_vals) >= 3:
+                        recent = sum(kri_vals[:2]) / 2
+                        older = sum(kri_vals[2:min(4, len(kri_vals))]) / len(kri_vals[2:min(4, len(kri_vals))])
+                        kri_trend = recent - older
+
+                # Position change (settle → finish) from last start
+                if fh and isinstance(fh[0], dict):
+                    settle = fh[0].get("settled")
+                    finish = fh[0].get("position") or fh[0].get("pos")
+                    if settle is not None and finish is not None:
+                        try:
+                            position_change_val = float(int(settle) - int(finish))
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Margin last start
+                    margin_raw = fh[0].get("margin")
+                    if margin_raw is not None:
+                        try:
+                            margin_last_val = float(margin_raw)
+                        except (ValueError, TypeError):
+                            pass
+                    if fh[0].get("position") == 1 or fh[0].get("pos") == 1:
+                        margin_last_val = 0.0
+        except (ValueError, TypeError):
+            pass
+
+    # Weight change (today vs last start)
+    weight_change_val = nan
+    if weight and fh_raw:
+        try:
+            fh2 = _json_v9.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+            if isinstance(fh2, list) and fh2 and isinstance(fh2[0], dict):
+                last_wt = fh2[0].get("weight")
+                if last_wt is not None:
+                    weight_change_val = weight - float(last_wt)
+        except (ValueError, TypeError):
+            pass
+
+    # Distance change (today vs last start)
+    distance_change_val = nan
+    if distance and fh_raw:
+        try:
+            fh3 = _json_v9.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+            if isinstance(fh3, list) and fh3 and isinstance(fh3[0], dict):
+                last_dist = fh3[0].get("distance")
+                if last_dist is not None:
+                    distance_change_val = float(distance) - float(last_dist)
+        except (ValueError, TypeError):
+            pass
+
+    # Condition-specific career SR (on today's going)
+    condition_record_sr = nan
+    tc_raw_v9 = str(_get(meeting, "track_condition") or "").upper()
+    if tc_raw_v9.startswith("G"):
+        cond_rec = _get(runner, "good_track_stats") or _get(runner, "GoodRecord")
+    elif tc_raw_v9.startswith("S"):
+        cond_rec = _get(runner, "soft_track_stats") or _get(runner, "SoftRecord")
+    elif tc_raw_v9.startswith("H"):
+        cond_rec = _get(runner, "heavy_track_stats") or _get(runner, "HeavyRecord")
     else:
-        kash_consensus = nan
+        cond_rec = None
+    if cond_rec:
+        csr, cstarts = _sr_from_stats(cond_rec) if isinstance(cond_rec, str) else (None, 0)
+        if isinstance(cond_rec, dict):
+            cstarts = cond_rec.get("Starts", 0)
+            if cstarts and cstarts > 0:
+                csr = cond_rec.get("Firsts", 0) / cstarts
+        if csr is not None and csr > 0:
+            condition_record_sr = float(csr)
+
+    # Combo A2E (trainer+jockey together)
+    combo_a2e_val = nan
+    combo_raw = _get(runner, "TrainerJockeyA2E_Career")
+    if not combo_raw:
+        # Try from jockey_stats JSON
+        jstats = _get(runner, "jockey_stats")
+        if jstats:
+            try:
+                jj = _json_v9.loads(jstats) if isinstance(jstats, str) else jstats
+                if isinstance(jj, dict) and "combo_career" in jj:
+                    combo_raw = jj["combo_career"]
+            except (ValueError, TypeError):
+                pass
+    if isinstance(combo_raw, dict):
+        a2e = combo_raw.get("a2e") or combo_raw.get("A2E")
+        if a2e is not None:
+            try:
+                combo_a2e_val = float(a2e)
+            except (ValueError, TypeError):
+                pass
 
     fvec = [
         market_prob,
@@ -1279,8 +1406,11 @@ def extract_features_from_runner(
         # ── v6: Context buckets (4) + interactions (10) ──
         dist_bkt, tc_bkt, cls_bkt, vt_code,
     ] + interactions + [
-        # ── v8: KASH model features (4) ──
+        # ── v8: KASH (DEPRECATED — NaN) ──
         kash_wp_implied, kash_early_spd, kash_late_spd, kash_consensus,
+        # ── v9: Signal-driven features (8) ──
+        _f(kri_score), _f(kri_trend), _f(position_change_val), _f(weight_change_val),
+        _f(distance_change_val), _f(margin_last_val), _f(condition_record_sr), _f(combo_a2e_val),
     ]
 
     # S1: NaN overrides removed — v5 model trained with these features populated.
