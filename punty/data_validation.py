@@ -422,6 +422,7 @@ async def validate_integrations(db: AsyncSession, target_date: date | None = Non
     if target_date is None:
         target_date = melb_today()
     issues = 0
+    total_runners = 0
 
     # ── KASH ratings: should have data for today if it's after 10am ──
     from datetime import datetime
