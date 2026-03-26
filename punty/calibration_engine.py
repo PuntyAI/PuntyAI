@@ -84,13 +84,20 @@ def _class_bucket(cls: str) -> str:
     return "other"
 
 
+METRO_VENUES = {
+    "flemington", "caulfield", "moonee valley", "sandown", "randwick",
+    "rosehill", "canterbury", "warwick farm", "eagle farm", "doomben",
+    "morphettville", "ascot", "belmont", "hobart",
+}
+
 def _venue_type(venue: str) -> str:
     """Metro vs provincial vs country."""
-    from punty.venues import get_venue_type
-    try:
-        return get_venue_type(venue) or "country"
-    except Exception:
+    if not venue:
         return "country"
+    v = venue.lower().strip()
+    if v in METRO_VENUES:
+        return "metro"
+    return "country"
 
 
 def get_context_key(distance: int, condition: str, race_class: str, venue: str) -> str:
