@@ -765,8 +765,9 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
     rail_bias = nan
 
     # ── Build feature vector (MUST match FEATURE_NAMES order) ──
-    return [
-        market_prob,
+    # market_prob set to NaN — model is 100% independent of market signals
+    fvec = [
+        nan,  # market_prob → NaN (independence)
         career_win_pct, career_place_pct, _sf(career_starts),
         _sf(td_sr), float(td_starts),
         _sf(dist_sr), float(dist_starts),
@@ -827,12 +828,7 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
         # ── v9: Signal-driven features (8) ──
         *_get_v9_features(pf_runner, race_meta, distance),
     ]
-
-    # Override external model features to NaN (independence)
-    fvec[0] = nan  # market_prob (index 0)
-    # flucs_direction and price_move_pct — find their indices
-    # Feature indices: flucs_direction=97, price_move_pct=50 (from FEATURE_NAMES)
-    # Leave as-is for now — training with these as NaN will teach model to ignore
+    return fvec
 
 
 # ── Data loading ────────────────────────────────────────────────────
