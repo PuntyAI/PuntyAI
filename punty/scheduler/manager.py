@@ -295,6 +295,20 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
+        # Weekly weight calibration — Sunday 2am AEST
+        # Analyses last 90 days of settled picks, optimises factor weights
+        # per context cell (distance × condition × class × venue_type)
+        from punty.scheduler.jobs import weekly_weight_calibration
+        self.add_job(
+            "weekly-weight-calibration",
+            weekly_weight_calibration,
+            trigger_type="cron",
+            day_of_week="sun",
+            hour=2,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
         # Weekly pattern refresh — Thursday 10pm
         self.add_job(
             "weekly-pattern-refresh",

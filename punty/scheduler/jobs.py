@@ -1826,6 +1826,25 @@ async def post_kash_probability_refresh() -> dict:
         return {"status": "error", "error": str(e)}
 
 
+async def weekly_weight_calibration() -> dict:
+    """Weekly auto-calibration of probability engine weights per context cell.
+
+    Runs Sunday 2am AEST. Analyses last 90 days of settled picks, finds
+    optimal factor weights per (distance × condition × class × venue_type) cell.
+    """
+    from punty.models.database import async_session
+    from punty.calibration_engine import calibrate_weights
+
+    try:
+        async with async_session() as db:
+            result = await calibrate_weights(db)
+        logger.info(f"Weekly calibration: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Weekly calibration failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 async def daily_validation_sweep() -> dict:
     """Run comprehensive data validation on today's races.
 

@@ -106,6 +106,15 @@ async def lifespan(app: FastAPI):
             _personality_cache.set(setting.value)
             logger.info("Personality prompt loaded from database")
 
+        # Load context-aware calibrated weights
+        try:
+            from punty.calibration_engine import load_calibration_cache
+            cells = await load_calibration_cache(db)
+            if cells:
+                logger.info(f"Calibrated weights loaded: {cells} context cells")
+        except Exception as e:
+            logger.debug(f"Calibration cache not available: {e}")
+
     if not settings.disable_background:
         # Start scheduler
         from punty.scheduler.manager import scheduler_manager

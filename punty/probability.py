@@ -1078,12 +1078,23 @@ def calculate_race_probabilities(
     if weights:
         w = weights
     else:
-        cal = _get_calibrated_weights()
-        if cal:
-            w = cal
-        else:
-            dist_bucket = _get_dist_bucket(race_distance)
-            w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
+        # Try context-aware calibrated weights first (from weekly auto-calibration)
+        try:
+            from punty.calibration_engine import get_calibrated_weights, _CALIBRATION_CACHE
+            if _CALIBRATION_CACHE:
+                track_cond = _get(meeting, "track_condition") or ""
+                race_cls = _get(race, "class_") or _get(race, "class") or ""
+                venue = _get(meeting, "venue") or ""
+                w = get_calibrated_weights(race_distance, track_cond, race_cls, venue)
+            else:
+                raise ImportError  # Fall through to distance defaults
+        except (ImportError, Exception):
+            cal = _get_calibrated_weights()
+            if cal:
+                w = cal
+            else:
+                dist_bucket = _get_dist_bucket(race_distance)
+                w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
 
     # Apply track condition adjustments — heavy/soft reduce form predictiveness,
     # increase barrier importance (inside rail advantage in wet going)
