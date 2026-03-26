@@ -1173,7 +1173,9 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     Unsettled bets are included in bet count and staked totals
     but do NOT affect P&L — they are pending, not losses.
     """
-    # Settled picks — actual results
+    # Settled picks — actual results.
+    # Include ALL content statuses (even superseded) — a settled pick is settled
+    # regardless of whether the content was later regenerated.
     settled_result = await db.execute(
         select(
             Pick.pick_type,
@@ -1183,13 +1185,11 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             func.sum(Pick.exotic_stake).label("total_staked_exotic"),
             func.sum(Pick.bet_stake).label("total_staked_bet"),
         )
-        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date == target_date,
             Meeting.selected == True,
             Pick.settled == True,
-            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             Pick.pick_type != "big3",
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
@@ -1198,7 +1198,8 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     )
     settled_rows = settled_result.all()
 
-    # Unsettled picks — deduct stake, 0 wins
+    # Unsettled picks — keep content filter here to avoid double-counting
+    # from both superseded and active content versions
     unsettled_result = await db.execute(
         select(
             Pick.pick_type,
