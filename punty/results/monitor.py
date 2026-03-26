@@ -1208,6 +1208,15 @@ class ResultsMonitor:
                     except Exception as e:
                         logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
 
+                    # Validate settlement data quality
+                    try:
+                        from punty.validation import validate_settlement
+                        v_issues = await validate_settlement(db, meeting_id, race_num)
+                        if v_issues:
+                            logger.warning(f"Validation: {v_issues} issues for {meeting.venue} R{race_num}")
+                    except Exception as e:
+                        logger.debug(f"Post-settlement validation failed: {e}")
+
                     # Check intraday loss threshold after settlement
                     try:
                         from punty.monitoring.performance import check_intraday_loss

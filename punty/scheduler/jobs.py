@@ -1726,6 +1726,28 @@ async def daily_kash_ratings() -> dict:
         return {"status": "error", "error": str(e)}
 
 
+async def daily_validation_sweep() -> dict:
+    """Run comprehensive data validation on today's races.
+
+    Checks: runner data quality, probability consistency, settlement math,
+    exotic dividends, integration health (KASH, Betfair, odds).
+    Logs issues to /issues page.
+
+    Runs at 22:00 AEST — after all races have finished and settled.
+    """
+    from punty.models.database import async_session
+    from punty.validation import validate_today
+
+    try:
+        async with async_session() as db:
+            summary = await validate_today(db)
+        logger.info(f"Daily validation: {summary}")
+        return summary
+    except Exception as e:
+        logger.error(f"Daily validation failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 async def _upsert_setting(db, key: str, value: str):
     """Upsert an AppSettings row."""
     from punty.models.settings import AppSettings

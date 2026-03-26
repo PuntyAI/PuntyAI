@@ -286,6 +286,19 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
+        # Daily validation sweep — 10pm AEST
+        # Checks all today's races for data quality, settlement math,
+        # integration health (KASH, Betfair, odds)
+        from punty.scheduler.jobs import daily_validation_sweep
+        self.add_job(
+            "daily-validation-sweep",
+            daily_validation_sweep,
+            trigger_type="cron",
+            hour=22,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
         # Weekly blog generation — Friday 8am
         self.add_job(
             "weekly-blog",
