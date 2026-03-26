@@ -448,9 +448,13 @@ async def meeting_detail(
 
 
 @router.get("/content", response_class=HTMLResponse)
-async def content_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Content management page."""
-    result = await db.execute(select(Content).order_by(Content.created_at.desc()).limit(100))
+async def content_page(request: Request, status: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Content management page with optional status filter."""
+    query = select(Content)
+    if status and status in ("draft", "pending_review", "approved", "rejected",
+                             "regenerating", "scheduled", "sent", "superseded"):
+        query = query.where(Content.status == status)
+    result = await db.execute(query.order_by(Content.created_at.desc()).limit(200))
     content_items = result.scalars().all()
 
     # Group by status — single query instead of N queries

@@ -23,7 +23,7 @@
 
     <!-- Status Filters -->
     <div class="flex flex-wrap gap-2">
-        <a href="/content" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300">
+        <a href="/content" class="px-4 py-2 rounded-lg {{ 'ring-2 ring-white bg-gray-300 text-gray-900' if not request.query_params.get('status') else 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
             All ({{ status_counts.values()|sum }})
         </a>
         {% for status, count in status_counts.items() %}
@@ -32,10 +32,13 @@
             'pending_review': 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
             'approved': 'bg-green-100 text-green-700 hover:bg-green-200',
             'rejected': 'bg-red-100 text-red-700 hover:bg-red-200',
+            'regenerating': 'bg-orange-100 text-orange-700 hover:bg-orange-200',
             'scheduled': 'bg-blue-100 text-blue-700 hover:bg-blue-200',
-            'sent': 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+            'sent': 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+            'superseded': 'bg-gray-100 text-gray-500 hover:bg-gray-200'
         } %}
-        <a href="/content?status={{ status }}" class="px-4 py-2 rounded-lg {{ colors.get(status, 'bg-gray-100') }}">
+        {% set is_active = request.query_params.get('status') == status %}
+        <a href="/content?status={{ status }}" class="px-4 py-2 rounded-lg {{ 'ring-2 ring-white ' if is_active }}{{ colors.get(status, 'bg-gray-100') }}">
             {{ status|replace('_', ' ')|title }} ({{ count }})
         </a>
         {% endfor %}
