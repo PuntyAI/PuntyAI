@@ -410,44 +410,47 @@ FACTOR_REGISTRY = {
 # All predictions from OUR data: form, fitness, connections, pace, physical, class.
 # External models (KASH, market, PF predictions) used ONLY as post-prediction sense check.
 DEFAULT_WEIGHTS = {
-    "form": 0.40,              # Was 0.57 — reduced because KRI/closing extracted as standalone
-    "kri": 0.12,               # NEW — strongest non-market signal (62.8% vs 6.4% win SR, 10x spread)
-    "jockey_trainer": 0.10,    # Was 0.04 — elevated for combo SR (3.3x predictor)
-    "pace": 0.06,              # Was 0.00 — settle 1-2 = 13.5% vs settle 12 = 7.7%
-    "weight_carried": 0.06,    # Was 0.05 — weight gained = class promotion signal
-    "barrier": 0.05,           # Was 0.03 — condition-dependent barrier scoring
-    "horse_profile": 0.05,     # Was 0.02 — sex/age×class strong discriminators
-    "closing_ability": 0.05,   # NEW — gained 3+ spots = 12.4% vs lost 3+ = 8.3%
-    "class_fitness": 0.05,     # Was 0.02 — elevated for condition records
-    "deep_learning": 0.06,     # Was 0.00 — re-enabled for pattern signals
-}  # sums to 1.0 — 2026-03-26: market/movement/KASH REMOVED, 100% own data
+    "form": 0.43,              # Grid search avg: 24-53% across distances (form is king)
+    "kri": 0.12,               # Grid search: 6-16% (sprint high, staying low)
+    "jockey_trainer": 0.08,    # Grid search: 5-14% (critical for classic/staying)
+    "class_fitness": 0.07,     # Grid search: 2-14% (critical for staying)
+    "weight_carried": 0.07,    # Grid search: 3-14% (important for short distances)
+    "pace": 0.05,              # Grid search: 3-8% (sprint high, staying low)
+    "deep_learning": 0.05,     # Grid search: 2-8% (consistent across all)
+    "closing_ability": 0.04,   # Grid search: 3-8% (staying high)
+    "barrier": 0.04,           # Grid search: 2-7% (sprint high)
+    "horse_profile": 0.05,     # Grid search: 3-8%
+}  # sums to 1.0 — GRID SEARCH OPTIMISED on 7,700+ holdout races
 
-# Distance-specific weight overrides — data-driven from 381K runner audit
+# Distance-specific weight overrides — GRID SEARCH OPTIMISED (200 random trials × 5 buckets)
+# Tested on Nov-Dec 2025 holdout (7,700+ races). Best win/place SR per distance.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — KRI + pace critical (explosive speed + early position)
-        "form": 0.40, "kri": 0.14, "jockey_trainer": 0.08, "pace": 0.08,
-        "weight_carried": 0.06, "horse_profile": 0.05, "barrier": 0.06,
-        "closing_ability": 0.05, "class_fitness": 0.04, "deep_learning": 0.04,
+    "sprint": {  # ≤1100m — form dominates, KRI + pace critical (1768 races, 23.1% win)
+        "form": 0.485, "kri": 0.156, "pace": 0.081, "barrier": 0.066,
+        "jockey_trainer": 0.061, "deep_learning": 0.038, "horse_profile": 0.036,
+        "closing_ability": 0.029, "weight_carried": 0.027, "class_fitness": 0.021,
     },
-    "short": {  # 1101-1399m
-        "form": 0.40, "kri": 0.12, "jockey_trainer": 0.09, "pace": 0.07,
-        "weight_carried": 0.06, "horse_profile": 0.05, "barrier": 0.05,
-        "closing_ability": 0.05, "class_fitness": 0.06, "deep_learning": 0.05,
+    "short": {  # 1101-1399m — form + KRI + weight (2378 races, 21.4% win)
+        "form": 0.407, "kri": 0.148, "weight_carried": 0.135, "barrier": 0.070,
+        "horse_profile": 0.053, "closing_ability": 0.050, "jockey_trainer": 0.046,
+        "class_fitness": 0.035, "pace": 0.033, "deep_learning": 0.024,
     },
-    "middle": {  # 1400-1799m — jockey/class gains importance
-        "form": 0.40, "kri": 0.10, "jockey_trainer": 0.10, "pace": 0.05,
-        "weight_carried": 0.07, "horse_profile": 0.05, "barrier": 0.04,
-        "closing_ability": 0.05, "class_fitness": 0.08, "deep_learning": 0.06,
+    "middle": {  # 1400-1799m — form dominates, KRI still strong (2570 races, 21.9% win)
+        "form": 0.505, "kri": 0.131, "class_fitness": 0.082, "deep_learning": 0.060,
+        "jockey_trainer": 0.050, "weight_carried": 0.049, "pace": 0.035,
+        "closing_ability": 0.032, "horse_profile": 0.031, "barrier": 0.025,
     },
-    "classic": {  # 1800-2199m — connections + class dominate
-        "form": 0.40, "kri": 0.07, "jockey_trainer": 0.13, "pace": 0.04,
-        "weight_carried": 0.07, "horse_profile": 0.05, "barrier": 0.03,
-        "closing_ability": 0.05, "class_fitness": 0.10, "deep_learning": 0.06,
+    "classic": {  # 1800-2199m — form + jockey + class (746 races, 21.2% win)
+        "form": 0.528, "jockey_trainer": 0.123, "class_fitness": 0.072,
+        "kri": 0.057, "weight_carried": 0.059, "deep_learning": 0.038,
+        "horse_profile": 0.036, "closing_ability": 0.033, "pace": 0.032,
+        "barrier": 0.023,
     },
-    "staying": {  # 2200m+ — class + connections critical, KRI less relevant
-        "form": 0.40, "kri": 0.05, "jockey_trainer": 0.15, "pace": 0.03,
-        "weight_carried": 0.06, "horse_profile": 0.05, "barrier": 0.02,
-        "closing_ability": 0.05, "class_fitness": 0.13, "deep_learning": 0.06,
+    "staying": {  # 2200m+ — form LOW, class + jockey critical (238 races, 20.2% win)
+        "form": 0.239, "class_fitness": 0.144, "jockey_trainer": 0.138,
+        "kri": 0.090, "deep_learning": 0.082, "closing_ability": 0.080,
+        "horse_profile": 0.078, "weight_carried": 0.063, "pace": 0.055,
+        "barrier": 0.030,
     },
 }
 
