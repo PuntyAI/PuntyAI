@@ -1292,17 +1292,66 @@ def print_feature_importance(model: lgb.Booster, label: str):
             print(f"    {name:25s} {imp:10.1f}  {bar}")
 
 
-def _quick_train(params, X_tr, y_tr, X_val, y_val):
-    """Train a model silently, return (booster, best_iteration, val_logloss, val_auc)."""
-    train_data = lgb.Dataset(X_tr, label=y_tr, feature_name=FEATURE_NAMES, free_raw_data=False)
-    val_data = lgb.Dataset(X_val, label=y_val, feature_name=FEATURE_NAMES, free_raw_data=False)
+def _quick_train(params, X_tr, y_tr, X_val, y_val, rids_tr=None, rids_val=None):
+    """Train a model silently. Supports both binary and lambdarank.
+
+    For lambdarank, rids_tr/rids_val must be provided for group construction.
+    Returns (booster, best_iteration, val_score, 0).
+    """
+    is_rank = params.get("objective") == "lambdarank"
+
+    if is_rank and rids_tr is not None and rids_val is not None:
+        # Build group sizes for ranking
+        from collections import Counter
+        tr_groups = []
+        current_rid = None
+        current_count = 0
+        for rid in rids_tr:
+            if rid != current_rid:
+                if current_count > 0:
+                    tr_groups.append(current_count)
+                current_rid = rid
+                current_count = 1
+            else:
+                current_count += 1
+        if current_count > 0:
+            tr_groups.append(current_count)
+
+        val_groups = []
+        current_rid = None
+        current_count = 0
+        for rid in rids_val:
+            if rid != current_rid:
+                if current_count > 0:
+                    val_groups.append(current_count)
+                current_rid = rid
+                current_count = 1
+            else:
+                current_count += 1
+        if current_count > 0:
+            val_groups.append(current_count)
+
+        train_data = lgb.Dataset(X_tr, label=y_tr, group=tr_groups,
+                                 feature_name=FEATURE_NAMES, free_raw_data=False)
+        val_data = lgb.Dataset(X_val, label=y_val, group=val_groups,
+                               feature_name=FEATURE_NAMES, free_raw_data=False)
+    else:
+        train_data = lgb.Dataset(X_tr, label=y_tr, feature_name=FEATURE_NAMES, free_raw_data=False)
+        val_data = lgb.Dataset(X_val, label=y_val, feature_name=FEATURE_NAMES, free_raw_data=False)
+
     callbacks = [lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(period=0)]
     model = lgb.train(params, train_data, num_boost_round=NUM_BOOST_ROUND,
                       valid_sets=[val_data], valid_names=["val"], callbacks=callbacks)
-    probs = model.predict(X_val)
-    ll = log_loss(y_val, probs)
-    auc = roc_auc_score(y_val, probs)
-    return model, model.best_iteration, ll, auc
+
+    if is_rank:
+        # For ranking, use NDCG as score (higher is better, negate for min search)
+        score = -model.best_score["val"]["ndcg@1"]
+        return model, model.best_iteration, score, 0
+    else:
+        probs = model.predict(X_val)
+        ll = log_loss(y_val, probs)
+        auc = roc_auc_score(y_val, probs)
+        return model, model.best_iteration, ll, auc
 
 
 def _race_top1(model, X, y, race_ids):
@@ -1315,8 +1364,21 @@ def _race_top1(model, X, y, race_ids):
     return correct / len(groups) if groups else 0
 
 
-def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val):
-    """Grid search over key LGBM hyperparams. Returns best params for win and place."""
+def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_tr, rids_val):
+    """Grid search over key LGBM hyperparams for LambdaRank model."""
+    # Single ranking model (not separate win/place)
+    print(f"\n{'='*60}")
+    print(f"  Hyperparameter search: LambdaRank model")
+    print(f"  {X_tr.shape[0]} train, {X_val.shape[0]} val samples")
+    print(f"{'='*60}")
+
+    base = dict(LGBM_PARAMS)
+    best_score = float("inf")  # Negated NDCG (lower = better)
+    best_params = dict(base)
+
+    y_tr = yw_tr  # LambdaRank uses relevance labels (same as win labels for us)
+    y_val = yw_val
+
     param_grid = {
         "num_leaves": [31, 63, 127],
         "max_depth": [5, 7, 10, -1],
@@ -1328,107 +1390,70 @@ def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val):
         "lambda_l2": [0.0, 1.0, 5.0],
     }
 
-    # Phase 1: tree structure (num_leaves × max_depth × min_data_in_leaf)
-    # Phase 2: sampling (feature_fraction × bagging_fraction)
-    # Phase 3: regularisation (lambda_l1 × lambda_l2)
-    # Phase 4: learning rate with best of above
-    # This staged approach = 3×4×3 + 3×3 + 3×3 + 3 = 57 combos (not 3^8 = 6561)
+    # Phase 1: tree structure
+    print(f"\n  Phase 1: Tree structure ({3*4*3} combos)...")
+    p1_results = []
+    for nl in param_grid["num_leaves"]:
+        for md in param_grid["max_depth"]:
+            for mdl in param_grid["min_data_in_leaf"]:
+                p = dict(base)
+                p["num_leaves"] = nl
+                p["max_depth"] = md
+                p["min_data_in_leaf"] = mdl
+                _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+                p1_results.append((score, itr, nl, md, mdl))
+                if score < best_score:
+                    best_score = score
+                    best_params.update({"num_leaves": nl, "max_depth": md, "min_data_in_leaf": mdl})
 
-    base = dict(LGBM_PARAMS)
-    best_results = {}
+    p1_results.sort()
+    print(f"    Top 5 tree combos (NDCG@1, higher=better):")
+    for score, itr, nl, md, mdl in p1_results[:5]:
+        print(f"      leaves={nl:3d} depth={md:2d} min_leaf={mdl:3d} -> NDCG@1={-score:.5f} itr={itr}")
 
-    for model_label, y_tr, y_val in [("Win", yw_tr, yw_val), ("Place", yp_tr, yp_val)]:
-        print(f"\n{'='*60}")
-        print(f"  Hyperparameter search: {model_label} model")
-        print(f"{'='*60}")
-
-        best_ll = float("inf")
-        best_params = dict(base)
-
-        # Phase 1: tree structure
-        print(f"\n  Phase 1: Tree structure ({3*4*3} combos)...")
-        p1_results = []
-        for nl in param_grid["num_leaves"]:
-            for md in param_grid["max_depth"]:
-                for mdl in param_grid["min_data_in_leaf"]:
-                    p = dict(base)
-                    p["num_leaves"] = nl
-                    p["max_depth"] = md
-                    p["min_data_in_leaf"] = mdl
-                    _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-                    p1_results.append((ll, auc, itr, nl, md, mdl))
-                    if ll < best_ll:
-                        best_ll = ll
-                        best_params.update({"num_leaves": nl, "max_depth": md, "min_data_in_leaf": mdl})
-
-        p1_results.sort()
-        print(f"    Top 5 tree combos:")
-        for ll, auc, itr, nl, md, mdl in p1_results[:5]:
-            print(f"      leaves={nl:3d} depth={md:2d} min_leaf={mdl:3d} -> logloss={ll:.5f} auc={auc:.4f} itr={itr}")
-
-        # Phase 2: sampling
-        print(f"\n  Phase 2: Sampling ({3*3} combos)...")
-        p2_results = []
-        for ff in param_grid["feature_fraction"]:
-            for bf in param_grid["bagging_fraction"]:
-                p = dict(best_params)
-                p["feature_fraction"] = ff
-                p["bagging_fraction"] = bf
-                _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-                p2_results.append((ll, auc, itr, ff, bf))
-                if ll < best_ll:
-                    best_ll = ll
-                    best_params.update({"feature_fraction": ff, "bagging_fraction": bf})
-
-        p2_results.sort()
-        print(f"    Top 3 sampling combos:")
-        for ll, auc, itr, ff, bf in p2_results[:3]:
-            print(f"      feat_frac={ff:.1f} bag_frac={bf:.1f} -> logloss={ll:.5f} auc={auc:.4f}")
-
-        # Phase 3: regularisation
-        print(f"\n  Phase 3: Regularisation ({3*3} combos)...")
-        p3_results = []
-        for l1 in param_grid["lambda_l1"]:
-            for l2 in param_grid["lambda_l2"]:
-                p = dict(best_params)
-                p["lambda_l1"] = l1
-                p["lambda_l2"] = l2
-                _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-                p3_results.append((ll, auc, itr, l1, l2))
-                if ll < best_ll:
-                    best_ll = ll
-                    best_params.update({"lambda_l1": l1, "lambda_l2": l2})
-
-        p3_results.sort()
-        print(f"    Top 3 reg combos:")
-        for ll, auc, itr, l1, l2 in p3_results[:3]:
-            print(f"      L1={l1:.1f} L2={l2:.1f} -> logloss={ll:.5f} auc={auc:.4f}")
-
-        # Phase 4: learning rate (lower LR + more trees)
-        print(f"\n  Phase 4: Learning rate refinement...")
-        p4_results = []
-        for lr in param_grid["learning_rate"]:
+    # Phase 2: sampling
+    print(f"\n  Phase 2: Sampling ({3*3} combos)...")
+    for ff in param_grid["feature_fraction"]:
+        for bf in param_grid["bagging_fraction"]:
             p = dict(best_params)
-            p["learning_rate"] = lr
-            _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-            p4_results.append((ll, auc, itr, lr))
-            if ll < best_ll:
-                best_ll = ll
-                best_params["learning_rate"] = lr
+            p["feature_fraction"] = ff
+            p["bagging_fraction"] = bf
+            _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+            if score < best_score:
+                best_score = score
+                best_params.update({"feature_fraction": ff, "bagging_fraction": bf})
+                print(f"    New best: feat={ff} bag={bf} NDCG@1={-score:.5f}")
 
-        p4_results.sort()
-        for ll, auc, itr, lr in p4_results:
-            print(f"      lr={lr:.3f} -> logloss={ll:.5f} auc={auc:.4f} itr={itr}")
+    # Phase 3: regularisation
+    print(f"\n  Phase 3: Regularisation ({3*3} combos)...")
+    for l1 in param_grid["lambda_l1"]:
+        for l2 in param_grid["lambda_l2"]:
+            p = dict(best_params)
+            p["lambda_l1"] = l1
+            p["lambda_l2"] = l2
+            _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+            if score < best_score:
+                best_score = score
+                best_params.update({"lambda_l1": l1, "lambda_l2": l2})
+                print(f"    New best: L1={l1} L2={l2} NDCG@1={-score:.5f}")
 
-        # Summary
-        print(f"\n  Best {model_label} params (logloss={best_ll:.5f}):")
-        for k in ["num_leaves", "max_depth", "min_data_in_leaf", "feature_fraction",
-                   "bagging_fraction", "lambda_l1", "lambda_l2", "learning_rate"]:
-            print(f"    {k}: {best_params[k]}")
+    # Phase 4: learning rate
+    print(f"\n  Phase 4: Learning rate refinement...")
+    for lr in param_grid["learning_rate"]:
+        p = dict(best_params)
+        p["learning_rate"] = lr
+        _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+        if score < best_score:
+            best_score = score
+            best_params["learning_rate"] = lr
+        print(f"      lr={lr:.3f} -> NDCG@1={-score:.5f} itr={itr}")
 
-        best_results[model_label] = best_params
+    print(f"\n  Best params (NDCG@1={-best_score:.5f}):")
+    for k in ["num_leaves", "max_depth", "min_data_in_leaf", "feature_fraction",
+               "bagging_fraction", "lambda_l1", "lambda_l2", "learning_rate"]:
+        print(f"    {k}: {best_params[k]}")
 
-    return best_results
+    return {"Rank": best_params}
 
 
 def _pull_live_db(db_path: Path) -> bool:
@@ -1599,7 +1624,7 @@ def main():
 
     # ── Hyperparameter search (optional, skipped in --auto mode) ──
     if args.tune and not args.auto:
-        best_params = hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val)
+        best_params = hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_tr, rids_val)
         # Apply best params globally for final training
         global LGBM_PARAMS
         # Use win params as base, override per model in train calls
