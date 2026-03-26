@@ -2199,21 +2199,23 @@ class TestProfileColtContext:
         # 3yo near-peak (+0.02) + colt in maiden (+0.08) = 0.60
         assert score > 0.55
 
-    def test_colt_open_penalty(self):
+    def test_colt_benchmark_positive(self):
         runner = _make_runner(horse_sex="Colt", horse_age=4)
         race = _make_race(class_="BM78")
         score = _horse_profile_factor(runner, race)
-        # 4yo peak (+0.05) + colt in open (-0.02) = 0.53
-        assert score < 0.55
+        # 4yo peak (+0.05) + colt (+0.03) + age×class BM 4yo (+0.04) = 0.62
+        assert score > 0.55
 
-    def test_gelding_unaffected_by_class(self):
+    def test_gelding_benchmark_adjusted(self):
         runner = _make_runner(horse_sex="Gelding", horse_age=4)
         race_maiden = _make_race(class_="Maiden")
         race_open = _make_race(class_="BM78")
         score_maiden = _horse_profile_factor(runner, race_maiden)
         score_open = _horse_profile_factor(runner, race_open)
-        # Geldings get same bonus regardless of class
-        assert score_maiden == score_open
+        # Geldings now affected by age×class interaction (4yo in BM = boost)
+        # So scores may differ between maiden and BM
+        assert score_maiden > 0.5  # Should be positive for 4yo gelding
+        assert score_open > 0.5
 
 
 class TestWeightLowClassAmplification:

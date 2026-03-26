@@ -1621,11 +1621,32 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
         signal_sum += career_score * career_weight
         signals += career_weight
 
-    # Average condition score — aggregate across all track conditions (Q5-Q1: 10.6%)
+    # ── CONDITION-SPECIFIC RECORD — elevated weight on today's surface ──
+    # Data (381K audit): Good SR 50%+ on Good = 38.8% win vs 0-10% = 4.1% (9x spread)
+    # This is the #2 strongest non-market signal after KRI.
+    tc_lower = str(track_condition or "").lower()
+    if "heavy" in tc_lower:
+        cond_field = "heavy_track_stats"
+        cond_weight = 3.0  # Heavy track record is critical
+    elif "soft" in tc_lower:
+        cond_field = "soft_track_stats"
+        cond_weight = 2.5
+    elif "good" in tc_lower or "firm" in tc_lower:
+        cond_field = "good_track_stats"
+        cond_weight = 2.0
+    else:
+        cond_field = None
+        cond_weight = 1.0
+    if cond_field:
+        cond_s = parse_stats_string(_get(runner, cond_field))
+        if cond_s and cond_s.starts >= 3:
+            signal_sum += _stat_to_score(cond_s.win_rate, baseline, "condition_specific") * cond_weight
+            signals += cond_weight
+    # Also keep aggregate condition score as supplementary
     cond_total_starts = 0
     cond_total_wins = 0
-    for cond_field in ("good_track_stats", "soft_track_stats", "heavy_track_stats"):
-        cond_s = parse_stats_string(_get(runner, cond_field))
+    for cf in ("good_track_stats", "soft_track_stats", "heavy_track_stats"):
+        cond_s = parse_stats_string(_get(runner, cf))
         if cond_s:
             cond_total_starts += cond_s.starts
             cond_total_wins += cond_s.wins
@@ -1634,40 +1655,51 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
         signal_sum += _stat_to_score(avg_cond_wr, baseline) * 0.4
         signals += 0.4
 
-    # Form trend sub-signal: improving form gets a small boost, declining penalised
-    form_trend = _get_form_trend(runner)
-    if form_trend == "improving":
-        signal_sum += 0.55  # slight positive (0.5 baseline + 0.05)
-        signals += 1.0
-    elif form_trend == "declining":
-        signal_sum += 0.45  # slight negative (0.5 baseline - 0.05)
-        signals += 1.0
-
-    # KRI sub-signal: Kick Reaction Index (0-100) with recency weighting
-    fh_for_kri = _get(runner, "form_history")
-    if fh_for_kri:
+    # ── LAST-START MARGIN — beaten <0.5L = 17.6% win, won = 15.8%, >7L = 5.8% ──
+    # Close-up runners are a better predictor than last-start winners
+    fh_for_margin = _get(runner, "form_history")
+    if fh_for_margin:
         try:
-            fh_kri = json.loads(fh_for_kri) if isinstance(fh_for_kri, str) else fh_for_kri
-            if isinstance(fh_kri, list):
-                kri_vals = [f.get("kri") for f in fh_kri[:5] if f.get("kri") and f["kri"] > 0]
-                if len(kri_vals) >= 2:
-                    kri_avg = sum(kri_vals) / len(kri_vals)
-                    # Map KRI 0-100 to 0.1-0.9 score: 50=neutral, 80+=strong
-                    kri_score = 0.1 + (min(kri_avg, 100) / 100.0) * 0.8
-                    signal_sum += kri_score * 0.8
-                    signals += 0.8
-                    # KRI trend: recent 2 vs older 2 (momentum signal)
-                    if len(kri_vals) >= 4:
-                        recent = sum(kri_vals[:2]) / 2
-                        older = sum(kri_vals[2:4]) / 2
-                        if recent > older + 5:  # improving by 5+ points
-                            signal_sum += 0.58 * 0.3
-                            signals += 0.3
-                        elif recent < older - 5:  # declining
-                            signal_sum += 0.42 * 0.3
-                            signals += 0.3
+            fh_m = json.loads(fh_for_margin) if isinstance(fh_for_margin, str) else fh_for_margin
+            if isinstance(fh_m, list) and fh_m and isinstance(fh_m[0], dict):
+                last_pos = fh_m[0].get("position") or fh_m[0].get("pos")
+                last_margin = fh_m[0].get("margin")
+                margin_score = 0.5  # neutral
+                if last_pos == 1:
+                    margin_score = 0.80  # Won
+                elif last_margin is not None:
+                    try:
+                        mv = float(last_margin)
+                        if mv <= 0.5:
+                            margin_score = 0.82  # Beaten <0.5L = BETTER than winning
+                        elif mv <= 1.0:
+                            margin_score = 0.72
+                        elif mv <= 2.0:
+                            margin_score = 0.62
+                        elif mv <= 4.0:
+                            margin_score = 0.45
+                        elif mv <= 7.0:
+                            margin_score = 0.30
+                        else:
+                            margin_score = 0.15  # >7L = poor
+                    except (ValueError, TypeError):
+                        pass
+                signal_sum += margin_score * 1.2  # Weight same as T/D stats
+                signals += 1.2
         except (json.JSONDecodeError, TypeError):
             pass
+
+    # Form trend sub-signal
+    form_trend = _get_form_trend(runner)
+    if form_trend == "improving":
+        signal_sum += 0.55
+        signals += 1.0
+    elif form_trend == "declining":
+        signal_sum += 0.45
+        signals += 1.0
+
+    # KRI REMOVED from form — now a standalone factor (_kri_factor)
+    # This prevents double-counting.
 
     if signals > 0:
         score = signal_sum / signals
@@ -2441,28 +2473,41 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
             signal_sum += t_score * 0.4
             signals += 0.4
 
-    # --- Combo bonus: jockey+trainer combination ---
+    # --- Combo: jockey+trainer partnership (3.3x predictor from 381K audit) ---
+    # Combo SR 40%+ = 21.5% win, 0-10% = 6.5%. This is the PRIMARY connection signal.
     if j_a2e and "combo_career" in j_a2e:
         combo = j_a2e["combo_career"]
         combo_runners = combo.get("runners", 0) or 0
         if combo_runners >= 20:
-            # High-confidence partnership: combo becomes PRIMARY signal (+13.1% spread)
+            # PRIMARY: 20+ rides together = strongest connection signal
             combo_sr = (combo.get("strike_rate", 0) or 0)
             combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
             if combo_decimal > 0 and baseline > 0:
                 ratio = combo_decimal / baseline
-                combo_score = 0.5 + max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
-                signal_sum += combo_score * 0.5
-                signals += 0.5
+                combo_score = 0.5 + max(-0.15, min(0.25, (ratio - 1.0) * 0.18))
+                signal_sum += combo_score * 0.8  # Was 0.5 — elevated to primary
+                signals += 0.8
+            # Combo A2E bonus: >1.5 = elite partnership
+            combo_a2e = combo.get("a2e") or combo.get("A2E")
+            if combo_a2e:
+                try:
+                    ca = float(combo_a2e)
+                    if ca > 1.5:
+                        signal_sum += 0.70 * 0.3  # Strong bonus
+                        signals += 0.3
+                    elif ca > 1.2:
+                        signal_sum += 0.60 * 0.2
+                        signals += 0.2
+                except (ValueError, TypeError):
+                    pass
         elif combo_runners >= 5:
-            # Standard combo: secondary signal (0.2 weight)
             combo_sr = (combo.get("strike_rate", 0) or 0)
             combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
             if combo_decimal > 0 and baseline > 0:
                 ratio = combo_decimal / baseline
                 combo_score = 0.5 + max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
-                signal_sum += combo_score * 0.2
-                signals += 0.2
+                signal_sum += combo_score * 0.3  # Was 0.2
+                signals += 0.3
 
     # --- Combo last 100 rides (Q5-Q1: 13.1% — recency premium) ---
     if j_a2e and "combo_last100" in j_a2e:
@@ -2534,7 +2579,32 @@ def _weight_factor(runner: Any, avg_weight: float, race_distance: int = 1400, ra
         distance_mult *= 1.5
 
     adjustment = (class_adj + burden_adj) * distance_mult
-    score += max(-0.10, min(0.10, adjustment))
+
+    # Weight change signal (381K audit): gained 0.5-2kg = 11.9% win, lost 5kg+ = 7.5%
+    # Gaining weight = handicapper rating horse UP = class promotion
+    weight_change_adj = 0.0
+    fh_raw = _get(runner, "form_history")
+    if fh_raw:
+        try:
+            import json as _wj
+            fh = _wj.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+            if isinstance(fh, list) and fh and isinstance(fh[0], dict):
+                last_wt = fh[0].get("weight")
+                if last_wt is not None:
+                    try:
+                        wt_change = weight - float(last_wt)
+                        if wt_change >= 0.5:
+                            weight_change_adj = 0.04  # Gained weight = class up
+                        elif wt_change <= -2.0:
+                            weight_change_adj = -0.03  # Lost significant weight
+                        elif wt_change <= -5.0:
+                            weight_change_adj = -0.05  # Lost a lot = declining
+                    except (ValueError, TypeError):
+                        pass
+        except (ValueError, TypeError):
+            pass
+
+    score += max(-0.12, min(0.12, adjustment + weight_change_adj))
 
     return max(0.05, min(0.95, score))
 
@@ -2604,15 +2674,28 @@ def _horse_profile_factor(runner: Any, race: Any = None) -> float:
                     score += 0.06  # strong recent gelding boost
                 elif age_val <= 4 and career.starts <= 15:
                     score += 0.03  # moderate — may have been gelded mid-career
-        # Mares can be inconsistent in certain conditions
-        elif sex_lower in ("mare", "m", "filly", "f"):
-            score -= 0.01
-        # Colts: context-dependent (22% SR in low-class vs 8.6% in open)
+        # Fillies/Mares: 16%/44% vs Geldings 14%/41% — BETTER than geldings (381K data)
+        elif sex_lower in ("filly", "f"):
+            score += 0.04  # Was -0.01 — fillies actually outperform geldings
+        elif sex_lower in ("mare", "m"):
+            score += 0.02  # Mares slightly better than geldings
+        # Colts: 17%/47% — best sex category
         elif sex_lower in ("colt", "c"):
             if is_low_class:
-                score += 0.08  # strong advantage in maidens/low-class
+                score += 0.10  # Strong in maidens/low-class (was 0.08)
             else:
-                score -= 0.02  # slight penalty in open company
+                score += 0.03  # Still positive in open (was -0.02)
+
+    # Age × Class interaction (381K audit):
+    # 3-4yo in BM/Handicap = 18-19% win, 6+ in BM = 11%
+    if age and isinstance(age, (int, float)) and race_class:
+        age = int(age)
+        is_benchmark = any(kw in race_class.lower() for kw in ("benchmark", "bm", "handicap"))
+        if is_benchmark:
+            if age <= 4:
+                score += 0.04  # Young horse in BM = outperforms
+            elif age >= 6:
+                score -= 0.04  # Older in BM = underperforms
 
     return max(0.05, min(0.95, score))
 
