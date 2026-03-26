@@ -599,6 +599,17 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
         # Expected value = prob * odds - 1 (per $1 bet)
         ev = win_prob * odds - 1 if odds > 0 else -1
 
+        # KASH consensus: boost confidence when independent model agrees
+        kash_rp = r.get("kash_rated_price")
+        kash_boost = 0.0
+        if kash_rp and kash_rp > 0 and win_prob > 0:
+            kash_wp = 1.0 / kash_rp
+            divergence = abs(win_prob - kash_wp)
+            if divergence < 0.08:
+                kash_boost = 0.02  # Strong agreement — small but meaningful
+            elif divergence > 0.15:
+                kash_boost = -0.01  # Strong disagreement — slight dampen
+
         candidates.append({
             "saddlecloth": sc,
             "horse_name": r.get("horse_name", ""),
@@ -610,7 +621,10 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
             "place_value_rating": place_value,
             "rec_stake": rec_stake,
             "ev": ev,
-            "confidence_boost": r.get("_confidence_boost", 0.0),
+            "confidence_boost": r.get("_confidence_boost", 0.0) + kash_boost,
+            "kash_rated_price": kash_rp,
+            "kash_speed_cat": r.get("kash_speed_cat"),
+            "kash_early_speed": r.get("kash_early_speed"),
         })
 
     return candidates
