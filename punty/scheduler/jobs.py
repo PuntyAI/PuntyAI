@@ -1214,14 +1214,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                         results["steps"].append(f"regen_approve_post: {post_result.get('status')}")
                         results["post_result"] = post_result
                         results["content_id"] = content_id
-                        # Populate Betfair queue with fresh picks from regenerated content
-                        try:
-                            from punty.betting.queue import populate_bet_queue
-                            queued = await populate_bet_queue(db, meeting_id, content_id)
-                            if queued:
-                                results["steps"].append(f"betfair_queue: {queued} bets")
-                        except Exception as eq:
-                            logger.error(f"Betfair queue failed for {venue}: {eq}")
+                        # Betfair: JIT mode — bets placed at T-5min by scheduler
                     else:
                         results["errors"].append("regen: no content_id returned")
                 except Exception as e:
@@ -1238,15 +1231,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     results["steps"].append(f"post_existing: {post_result.get('status')}")
                     results["post_result"] = post_result
                     results["content_id"] = morning_content.id
-                    # Populate Betfair bet queue (regen/full-gen paths do this
-                    # via auto_approve_and_post, but post-existing skipped it)
-                    try:
-                        from punty.betting.queue import populate_bet_queue
-                        queued = await populate_bet_queue(db, morning_content.meeting_id, morning_content.id)
-                        if queued:
-                            results["steps"].append(f"betfair_queue: {queued} bets")
-                    except Exception as eq:
-                        logger.error(f"Betfair queue failed for {venue}: {eq}")
+                    # Betfair: JIT mode — bets placed at T-5min by scheduler
                 except Exception as e:
                     logger.error(f"Post existing failed for {venue}: {e}")
                     results["errors"].append(f"post_existing: {str(e)}")
@@ -1748,6 +1733,94 @@ async def daily_kash_ratings() -> dict:
         return {"status": "ok", "matched": matched}
     except Exception as e:
         logger.error(f"KASH ratings job failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def post_kash_probability_refresh() -> dict:
+    """Re-run probability for all today's races after KASH data arrives.
+
+    Called at 10:15am AEST, after KASH fetch at 10:00am.
+    Updates Pick.win_probability and Pick.place_probability with
+    fresh LGBM predictions that include KASH features.
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting, Race, Runner
+    from punty.models.pick import Pick
+    from punty.config import melb_today
+    from punty.probability import calculate_race_probabilities
+
+    today = melb_today()
+    updated_picks = 0
+    races_processed = 0
+
+    try:
+        async with async_session() as db:
+            meeting_result = await db.execute(
+                select(Meeting).where(Meeting.date == today, Meeting.selected == True)
+            )
+            meetings = meeting_result.scalars().all()
+
+            for meeting in meetings:
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting.id)
+                )
+                races = race_result.scalars().all()
+
+                for race in races:
+                    race_id = race.id
+                    runner_result = await db.execute(
+                        select(Runner).where(
+                            Runner.race_id == race_id,
+                            Runner.scratched != True,
+                        )
+                    )
+                    runners = runner_result.scalars().all()
+                    if len(runners) < 2:
+                        continue
+
+                    try:
+                        probs = calculate_race_probabilities(runners, race, meeting)
+                    except Exception as e:
+                        logger.warning(f"Probability failed for {race_id}: {e}")
+                        continue
+
+                    races_processed += 1
+
+                    # Update picks with fresh probability
+                    pick_result = await db.execute(
+                        select(Pick).where(
+                            Pick.meeting_id == meeting.id,
+                            Pick.race_number == race.race_number,
+                            Pick.pick_type == "selection",
+                        )
+                    )
+                    picks = pick_result.scalars().all()
+
+                    for pick in picks:
+                        horse_name = pick.horse_name
+                        prob = probs.get(horse_name)
+                        if not prob:
+                            continue
+                        old_wp = pick.win_probability
+                        old_pp = pick.place_probability
+                        pick.win_probability = round(prob.win_probability, 4)
+                        pick.place_probability = round(prob.place_probability, 4)
+                        if old_wp and abs(pick.win_probability - old_wp) > 0.02:
+                            logger.debug(
+                                f"KASH refresh: {horse_name} WP {old_wp:.0%} → {pick.win_probability:.0%}"
+                            )
+                        updated_picks += 1
+
+            await db.commit()
+
+        logger.info(
+            f"Post-KASH probability refresh: {races_processed} races, "
+            f"{updated_picks} picks updated"
+        )
+        return {"status": "ok", "races": races_processed, "picks_updated": updated_picks}
+
+    except Exception as e:
+        logger.error(f"Post-KASH probability refresh failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 

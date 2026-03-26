@@ -312,13 +312,7 @@ async def review_content(
                 await store_picks_as_memories(db, content.meeting_id, content.id)
                 # Picks stored successfully — now safe to approve
                 content.status = ContentStatus.APPROVED
-                # Populate Betfair auto-bet queue (non-blocking)
-                try:
-                    from punty.betting.queue import populate_bet_queue
-                    await populate_bet_queue(db, content.meeting_id, content.id)
-                except Exception as bf_e:
-                    import logging
-                    logging.getLogger(__name__).warning(f"Betfair queue populate: {bf_e}")
+                # Betfair: JIT mode — bets placed at T-5min, not at approval time
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(

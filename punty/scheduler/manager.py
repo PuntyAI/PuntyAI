@@ -275,6 +275,18 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
+        # Post-KASH probability refresh at 10:15am
+        # Re-runs probability for all today's races with KASH features populated
+        from punty.scheduler.jobs import post_kash_probability_refresh
+        self.add_job(
+            "post-kash-probability-refresh",
+            post_kash_probability_refresh,
+            trigger_type="cron",
+            hour=10,
+            minute=15,
+            timezone=MELB_TZ,
+        )
+
         # Weekly pattern refresh — Thursday 10pm
         self.add_job(
             "weekly-pattern-refresh",

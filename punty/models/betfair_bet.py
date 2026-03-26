@@ -55,9 +55,14 @@ class BetfairBet(Base):
     settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Scheduling
-    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # race_time - 5min
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     placed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
+
+    # JIT audit — probability at bet decision time (not stale from generation)
+    jit_win_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    jit_place_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    jit_evaluated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     pick: Mapped[Optional["Pick"]] = relationship("Pick")
