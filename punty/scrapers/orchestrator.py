@@ -1126,16 +1126,16 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
                                             f"${runner.opening_odds:.2f} — {ratio:.1f}x divergence"
                                         )
                                         continue
-                            runner.current_odds = bf_price
-                            odds_updated += 1
-                            if not runner.opening_odds:
-                                runner.opening_odds = bf_price
+                            from punty.odds import update_runner_odds
+                            if update_runner_odds(runner, current_odds=bf_price,
+                                                  opening_odds=bf_price, source="betfair"):
+                                odds_updated += 1
                             # Use real Betfair PLACE odds if available.
                             # Do NOT estimate — let PointsBet fill or Harville calculate.
                             place_key = (od["race_id"], od["horse_name"])
                             real_place = bf_place_odds.get(place_key)
-                            if real_place and real_place > 1.0 and real_place < bf_price:
-                                runner.place_odds = real_place
+                            if real_place and real_place > 1.0:
+                                update_runner_odds(runner, place_odds=real_place, source="betfair")
                     logger.info(
                         f"Odds refresh for {meeting_id}: updated {odds_updated} "
                         f"runners from Betfair ({len(bf_place_odds)} with real place odds)"
@@ -1252,11 +1252,10 @@ async def refresh_odds(meeting_id: str, db: AsyncSession) -> dict:
             for runner in all_runners.scalars().all():
                 price = runner.pf_assessed_price or runner.pf_ai_price
                 if price and price > 1.0:
-                    runner.current_odds = round(price, 2)
-                    if not runner.opening_odds:
-                        runner.opening_odds = round(price, 2)
-                    # Don't estimate place_odds — let Harville calculate from field
-                    pf_fallback += 1
+                    from punty.odds import update_runner_odds
+                    if update_runner_odds(runner, current_odds=round(price, 2),
+                                          opening_odds=round(price, 2), source="punting_form"):
+                        pf_fallback += 1
             if pf_fallback:
                 logger.info(
                     f"No Betfair markets for {meeting_id} — "
@@ -1799,8 +1798,9 @@ async def _merge_betfair_odds(db: AsyncSession, meeting_id: str, odds_data: list
 
         # Fill current_odds if no other provider has odds
         if not runner.current_odds or runner.current_odds <= 1.0:
-            runner.current_odds = price
-            filled_current += 1
+            from punty.odds import update_runner_odds
+            if update_runner_odds(runner, current_odds=price, source="betfair"):
+                filled_current += 1
 
     await db.flush()
     logger.info(
@@ -1871,32 +1871,11 @@ async def _merge_pointsbet_odds(db: AsyncSession, meeting_id: str, odds_data: li
         runner.odds_pointsbet = win_odds
         matched += 1
 
-        # Update current_odds: fill if empty, or overwrite if wildly stale
-        # (e.g. early tote $23 vs PointsBet fixed $1.70)
-        if not runner.current_odds or runner.current_odds <= 1.0:
-            runner.current_odds = win_odds
+        # Update current_odds + place_odds via centralised service
+        from punty.odds import update_runner_odds
+        if update_runner_odds(runner, current_odds=win_odds, place_odds=place_odds,
+                              source="pointsbet"):
             filled_current += 1
-        elif runner.current_odds > 1.0:
-            ratio = max(runner.current_odds, win_odds) / min(runner.current_odds, win_odds)
-            if ratio > 3.0:
-                logger.info(
-                    f"PointsBet override current_odds: {runner.horse_name} "
-                    f"${runner.current_odds:.2f} -> ${win_odds:.2f} ({ratio:.1f}x divergence)"
-                )
-                runner.current_odds = win_odds
-                filled_current += 1
-
-        # Fill place_odds if missing or stale
-        # Sanity: place_odds must be > 1.0 AND less than win_odds
-        if place_odds and place_odds > 1.0 and (not win_odds or place_odds < win_odds):
-            if not runner.place_odds or runner.place_odds <= 1.0:
-                runner.place_odds = place_odds
-                filled_place += 1
-            elif runner.place_odds > 1.0:
-                place_ratio = max(runner.place_odds, place_odds) / min(runner.place_odds, place_odds)
-                if place_ratio > 3.0:
-                    runner.place_odds = place_odds
-                    filled_place += 1
 
     await db.flush()
     logger.info(
@@ -1971,8 +1950,9 @@ async def _merge_betfair_place_odds(db: AsyncSession, place_data: list[dict]) ->
                     break
 
         if runner:
-            runner.place_odds = price
-            matched += 1
+            from punty.odds import update_runner_odds
+            if update_runner_odds(runner, place_odds=price, source="betfair"):
+                matched += 1
 
     if matched:
         await db.flush()
@@ -2141,20 +2121,14 @@ async def _merge_tab_odds(db: AsyncSession, meeting_id: str, odds_data: list[dic
         matched += 1
 
         # Apply odds (with MAX_VALID_ODDS guard)
-        # TAB odds: store on odds_tab but only fill current_odds if empty.
-        # PB/Betfair are more reliable — TAB tote pools inflate outsider prices.
+        # TAB odds: store on odds_tab, route through centralised service
         if win_odds and 1.0 < win_odds <= MAX_VALID_ODDS:
             runner.odds_tab = win_odds
-            if not runner.current_odds or runner.current_odds <= 1.0:
-                runner.current_odds = win_odds
+            from punty.odds import update_runner_odds
+            if update_runner_odds(runner, current_odds=win_odds,
+                                  opening_odds=opening_odds, place_odds=place_odds,
+                                  source="tab"):
                 filled += 1
-
-        if opening_odds and 1.0 < opening_odds <= MAX_VALID_ODDS:
-            if not runner.opening_odds:
-                runner.opening_odds = opening_odds
-
-        if place_odds and 1.0 < place_odds <= MAX_VALID_ODDS:
-            runner.place_odds = place_odds
 
         if item.get("scratched"):
             runner.scratched = True
@@ -2183,19 +2157,12 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
         )
         runner = result.scalar_one_or_none()
         if runner:
-            if odds.get("current_odds") is not None:
-                new_odds = odds["current_odds"]
-                # Sanity: reject >3x divergence from existing odds
-                if runner.current_odds and runner.current_odds > 1.0 and new_odds > 1.0:
-                    ratio = max(new_odds, runner.current_odds) / min(new_odds, runner.current_odds)
-                    if ratio <= 3.0:
-                        runner.current_odds = new_odds
-                else:
-                    runner.current_odds = new_odds
-            if odds.get("opening_odds") is not None and not runner.opening_odds:
-                runner.opening_odds = odds["opening_odds"]
-            if odds.get("place_odds") is not None:
-                runner.place_odds = odds["place_odds"]
+            from punty.odds import update_runner_odds
+            update_runner_odds(runner,
+                current_odds=odds.get("current_odds"),
+                opening_odds=odds.get("opening_odds"),
+                place_odds=odds.get("place_odds"),
+                source=odds.get("source", "unknown"))
             if odds.get("scratched"):
                 runner.scratched = True
                 runner.scratching_reason = odds.get("scratching_reason") or runner.scratching_reason

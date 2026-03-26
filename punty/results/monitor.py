@@ -2564,25 +2564,16 @@ class ResultsMonitor:
                         or odds_data.get("odds_ladbrokes")
                     )
                     if best_odds and best_odds > 1.0:
-                        # Sanity: reject if >3x divergence from existing odds
-                        if runner.current_odds and runner.current_odds > 1.0:
-                            ratio = max(best_odds, runner.current_odds) / min(best_odds, runner.current_odds)
-                            if ratio > 3.0:
-                                logger.warning(
-                                    f"Odds refresh rejected: {runner.horse_name} "
-                                    f"${runner.current_odds:.2f} → ${best_odds:.2f} ({ratio:.1f}x divergence)"
-                                )
-                                best_odds = None
-                        if best_odds:
-                            runner.current_odds = best_odds
-                        if not runner.opening_odds:
-                            runner.opening_odds = best_odds
+                        from punty.odds import update_runner_odds
+                        update_runner_odds(runner,
+                            current_odds=best_odds,
+                            opening_odds=best_odds,
+                            place_odds=odds_data.get("place_odds"),
+                            source="racing_com")
                     for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
                         val = odds_data.get(field)
                         if val:
                             setattr(runner, field, val)
-                    if odds_data.get("place_odds"):
-                        runner.place_odds = odds_data["place_odds"]
 
         # Track condition from racing.com — only allow same-base refinements.
         # racing.com is NOT authoritative for track conditions (Racing Australia is).

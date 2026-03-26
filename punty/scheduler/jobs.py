@@ -1060,16 +1060,17 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                                     or odds_data.get("odds_tab")  # Last resort
                                 )
                                 if best_odds and best_odds > 1.0:
-                                    runner.current_odds = best_odds
-                                    if not runner.opening_odds:
-                                        runner.opening_odds = best_odds
-                                    odds_updated += 1
+                                    from punty.odds import update_runner_odds
+                                    if update_runner_odds(runner,
+                                        current_odds=best_odds,
+                                        opening_odds=best_odds,
+                                        place_odds=odds_data.get("place_odds"),
+                                        source="racing_com"):
+                                        odds_updated += 1
                                 for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
                                     val = odds_data.get(field)
                                     if val:
                                         setattr(runner, field, val)
-                                if odds_data.get("place_odds"):
-                                    runner.place_odds = odds_data["place_odds"]
                                 if odds_data.get("odds_flucs") and not runner.odds_flucs:
                                     runner.odds_flucs = odds_data["odds_flucs"]
                     if odds_updated:
