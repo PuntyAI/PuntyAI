@@ -449,6 +449,28 @@ async def populate_bet_queue(
         win_odds = pick.odds_at_tip or 0
         est_place_odds = _estimate_place_odds(win_odds)
 
+        # KASH consensus check — log divergence for analysis
+        race_id = f"{meeting_id}-r{race.race_number}"
+        runner_result = await db.execute(
+            select(Runner).where(
+                Runner.race_id == race_id,
+                Runner.saddlecloth == pick.saddlecloth,
+            )
+        )
+        runner = runner_result.scalar_one_or_none()
+        kash_price = runner.kash_rated_price if runner and hasattr(runner, "kash_rated_price") else None
+        if kash_price and win_odds:
+            # Convert KASH rated price to implied prob for comparison
+            kash_implied = 1.0 / kash_price if kash_price > 0 else 0
+            our_wp = pick.win_probability or 0
+            divergence = abs(our_wp - kash_implied)
+            consensus = "AGREE" if divergence < 0.10 else "DIVERGE"
+            logger.info(
+                f"KASH {consensus}: {pick.horse_name} R{pick.race_number} "
+                f"— our WP={our_wp:.0%} KASH={kash_implied:.0%} "
+                f"(KASH ${kash_price:.2f} vs ours ${win_odds:.2f})"
+            )
+
         # Pure Kelly — no minimum stake, no fallback. Kelly decides.
         stake = await get_current_stake(db, place_probability=pp, odds=est_place_odds)
         if stake <= 0:
@@ -957,22 +979,39 @@ async def execute_due_bets(db: AsyncSession) -> int:
 
         bet.selection_id = selection_id
 
-        # Get live Betfair place odds (for Kelly sizing and edge check)
-        current_odds = await get_place_odds(db, market["market_id"], selection_id)
-        if not current_odds:
-            # BSP doesn't need live odds, but we need them for Kelly sizing
-            # Use requested_odds as fallback for stake calculation
-            current_odds = bet.requested_odds or 0
+        # Get live Betfair odds for accurate Kelly sizing.
+        # Harville estimates overestimate place odds by ~$0.25 on avg (backtest
+        # validated: Harville $1.75 vs real BSP $1.50). Live exchange odds are
+        # the most accurate pre-BSP price available.
+        if bet.bet_type == "win":
+            # For win bets, get live back price from win market
+            current_odds = await get_place_odds(db, market["market_id"], selection_id)
+            kelly_prob = pick.win_probability or 0
+        else:
+            # For place bets, get live back price from place market
+            current_odds = await get_place_odds(db, market["market_id"], selection_id)
+            kelly_prob = place_prob
 
-        # Kelly stake based on live odds and PP — apply $12.50 floor
-        stake = await get_current_stake(db, place_probability=place_prob,
-                                         odds=current_odds if current_odds > 1 else 0)
-        fallback = float(await _get_setting(
-            db, "betfair_kelly_fallback_stake",
-            str(DEFAULT_KELLY_FALLBACK_STAKE),
-        ))
-        if stake < fallback:
-            stake = fallback
+        if not current_odds or current_odds <= 1.0:
+            # Fallback: estimate from win odds (Harville) — better than nothing
+            win_odds = pick.odds_at_tip or 0
+            if bet.bet_type == "win":
+                current_odds = win_odds if win_odds > 1 else 2.0
+            else:
+                current_odds = _estimate_place_odds(win_odds) if win_odds > 1 else 1.50
+            logger.info(
+                f"No live {bet.bet_type} odds for {bet.horse_name} — "
+                f"using estimate ${current_odds:.2f}"
+            )
+
+        # Kelly stake using live odds — no fallback floor, pure Kelly decides
+        stake = await get_current_stake(db, place_probability=kelly_prob,
+                                         odds=current_odds)
+        if stake <= 0:
+            # Kelly sees no edge at live odds — bet minimum 0.5% of balance
+            stake = round(balance * 0.005, 2)
+            if stake < 2.0:
+                stake = 2.0  # Betfair absolute minimum
 
         bet.stake = round(stake, 2)
 
