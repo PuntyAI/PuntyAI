@@ -443,6 +443,28 @@ async def daily_morning_scrape() -> dict:
                 logger.error(f"Speed maps failed for {meeting.venue}: {e}")
                 results["errors"].append(f"speed_maps {meeting.venue}: {str(e)}")
 
+    # Step 2b: PointsBet odds refresh before generation — PB has the most
+    # reliable fixed odds. This ensures current_odds reflects real market
+    # prices, not stale TAB tote pools.
+    try:
+        from punty.scrapers.orchestrator import refresh_pointsbet_odds
+        async with async_session() as db:
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                ).order_by(Meeting.venue)
+            )
+            for meeting in result.scalars().all():
+                try:
+                    await refresh_pointsbet_odds(meeting.id, db)
+                    logger.info(f"PB odds refresh: {meeting.venue}")
+                except Exception as e:
+                    logger.warning(f"PB odds refresh failed for {meeting.venue}: {e}")
+    except Exception as e:
+        logger.warning(f"Pre-generation PB odds refresh failed: {e}")
+        results["errors"].append(f"pb_odds_refresh: {str(e)}")
+
     # Step 3: Generate early mail for all meetings (approve only, no social post)
     try:
         gen_results = await morning_generate_all()
@@ -1025,17 +1047,19 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                             if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                                 logger.info(f"Gear change: {horse_name} (R{race_num}) {r['gear_changes']}")
                                 runner.gear_changes = r["gear_changes"]
-                            # Always apply fresh odds (overnight odds can be wildly stale)
+                            # Apply fresh odds — PB > Betfair > Sportsbet > others
+                            # TAB excluded: tote pools inflate outsider prices
                             odds_data = r.get("odds")
                             if odds_data:
                                 best_odds = (
-                                    odds_data.get("odds_betfair")
-                                    or odds_data.get("odds_tab")
+                                    odds_data.get("odds_pointsbet")
+                                    or odds_data.get("odds_betfair")
                                     or odds_data.get("odds_sportsbet")
                                     or odds_data.get("odds_bet365")
                                     or odds_data.get("odds_ladbrokes")
+                                    or odds_data.get("odds_tab")  # Last resort
                                 )
-                                if best_odds:
+                                if best_odds and best_odds > 1.0:
                                     runner.current_odds = best_odds
                                     if not runner.opening_odds:
                                         runner.opening_odds = best_odds

@@ -2554,15 +2554,27 @@ class ResultsMonitor:
                 # Apply fresh odds (keeps odds current during race day)
                 odds_data = r.get("odds")
                 if odds_data:
+                    # Priority: PB > Betfair > Sportsbet > others
+                    # TAB excluded from current_odds — tote pools are unreliable
                     best_odds = (
-                        odds_data.get("odds_betfair")
-                        or odds_data.get("odds_tab")
+                        odds_data.get("odds_pointsbet")
+                        or odds_data.get("odds_betfair")
                         or odds_data.get("odds_sportsbet")
                         or odds_data.get("odds_bet365")
                         or odds_data.get("odds_ladbrokes")
                     )
-                    if best_odds:
-                        runner.current_odds = best_odds
+                    if best_odds and best_odds > 1.0:
+                        # Sanity: reject if >3x divergence from existing odds
+                        if runner.current_odds and runner.current_odds > 1.0:
+                            ratio = max(best_odds, runner.current_odds) / min(best_odds, runner.current_odds)
+                            if ratio > 3.0:
+                                logger.warning(
+                                    f"Odds refresh rejected: {runner.horse_name} "
+                                    f"${runner.current_odds:.2f} → ${best_odds:.2f} ({ratio:.1f}x divergence)"
+                                )
+                                best_odds = None
+                        if best_odds:
+                            runner.current_odds = best_odds
                         if not runner.opening_odds:
                             runner.opening_odds = best_odds
                     for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):

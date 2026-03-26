@@ -1905,6 +1905,32 @@ async def _merge_pointsbet_odds(db: AsyncSession, meeting_id: str, odds_data: li
     )
 
 
+async def refresh_pointsbet_odds(meeting_id: str, db: AsyncSession) -> int:
+    """Fetch and merge fresh PointsBet odds for all races in a meeting.
+
+    Called before morning generation to ensure current_odds reflects
+    real market prices, not stale TAB tote pools.
+    Returns count of runners updated.
+    """
+    from punty.scrapers.pointsbet import PointsBetScraper
+    from punty.models.meeting import Meeting
+
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        return 0
+
+    pb = PointsBetScraper()
+    try:
+        odds = await pb.get_meeting_odds(meeting.venue, meeting.date)
+        if odds:
+            await _merge_pointsbet_odds(db, meeting_id, odds)
+            await db.commit()
+            return len(odds)
+    except Exception as e:
+        logger.warning(f"PointsBet odds refresh failed for {meeting.venue}: {e}")
+    return 0
+
+
 async def _merge_betfair_place_odds(db: AsyncSession, place_data: list[dict]) -> None:
     """Merge Betfair PLACE market odds into runner records.
 
@@ -2115,13 +2141,13 @@ async def _merge_tab_odds(db: AsyncSession, meeting_id: str, odds_data: list[dic
         matched += 1
 
         # Apply odds (with MAX_VALID_ODDS guard)
-        # For international venues, TAB/PointsBet/HKJC are the only real
-        # odds sources — always overwrite current_odds (may be stale/wrong)
+        # TAB odds: store on odds_tab but only fill current_odds if empty.
+        # PB/Betfair are more reliable — TAB tote pools inflate outsider prices.
         if win_odds and 1.0 < win_odds <= MAX_VALID_ODDS:
             runner.odds_tab = win_odds
             if not runner.current_odds or runner.current_odds <= 1.0:
+                runner.current_odds = win_odds
                 filled += 1
-            runner.current_odds = win_odds
 
         if opening_odds and 1.0 < opening_odds <= MAX_VALID_ODDS:
             if not runner.opening_odds:
@@ -2158,7 +2184,14 @@ async def _merge_odds(db: AsyncSession, meeting_id: str, odds_list: list[dict]) 
         runner = result.scalar_one_or_none()
         if runner:
             if odds.get("current_odds") is not None:
-                runner.current_odds = odds["current_odds"]
+                new_odds = odds["current_odds"]
+                # Sanity: reject >3x divergence from existing odds
+                if runner.current_odds and runner.current_odds > 1.0 and new_odds > 1.0:
+                    ratio = max(new_odds, runner.current_odds) / min(new_odds, runner.current_odds)
+                    if ratio <= 3.0:
+                        runner.current_odds = new_odds
+                else:
+                    runner.current_odds = new_odds
             if odds.get("opening_odds") is not None and not runner.opening_odds:
                 runner.opening_odds = odds["opening_odds"]
             if odds.get("place_odds") is not None:
