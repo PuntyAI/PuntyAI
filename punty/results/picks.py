@@ -1124,6 +1124,7 @@ def _find_dividend(exotic_divs: dict, exotic_key: str, exclude: list[str] | None
         return 0.0
 
     # Pass 1: exact key match (e.g. "quinella" matches "quinella" but not "quinella place 1")
+    exotic_key = exotic_key.lower().strip()
     for key, val in exotic_divs.items():
         key_lower = key.lower().strip()
         if key_lower == exotic_key:
