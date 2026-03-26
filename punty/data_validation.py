@@ -235,13 +235,14 @@ async def validate_settlement(
         fp = runner.finish_position if runner else None
         prefix = f"{pick.horse_name or f'SC{pick.saddlecloth}'} ({venue} R{race_number})"
 
-        # ── Settled but no finish position ──
-        if fp is None and pick.pick_type == "selection":
-            await log_issue(db, "settlement", "warning",
-                f"Settled but no finish position — {prefix}",
-                meeting_id=meeting_id, race_number=race_number,
-                pick_id=pick.id, link=f"/meets/{meeting_id}")
-            issues += 1
+        # ── Settled but no finish position (only flag for our picks, not field runners) ──
+        if fp is None and pick.pick_type == "selection" and pick.tip_rank and pick.tip_rank <= 4:
+            if pick.bet_stake and pick.bet_stake > 0:
+                await log_issue(db, "settlement", "warning",
+                    f"Staked pick settled but no finish position — {prefix}",
+                    meeting_id=meeting_id, race_number=race_number,
+                    pick_id=pick.id, link=f"/meets/{meeting_id}")
+                issues += 1
 
         if pick.pick_type == "selection" and pick.bet_stake and pick.bet_stake > 0:
             stake = pick.bet_stake
