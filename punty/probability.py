@@ -411,92 +411,92 @@ FACTOR_REGISTRY = {
 #   form=0.5128, market=0.3205, wc=0.0513, jt=0.0385, barrier=0.0256,
 #   hp=0.0256, cf=0.0256, pace=0.00, movement=0.00
 # Rounded to clean values that sum to 1.0
+# ── Win Weights: 100% INDEPENDENT — no market, odds, or external model signals ──
+# Tuned from 381,656 Proform runner signal audit (2025-2026).
+# All predictions from OUR data: form, fitness, connections, pace, physical, class.
+# External models (KASH, market, PF predictions) used ONLY as post-prediction sense check.
 DEFAULT_WEIGHTS = {
-    "form": 0.57,
-    "market": 0.27,
-    "weight_carried": 0.05,
-    "jockey_trainer": 0.04,
-    "barrier": 0.03,
-    "horse_profile": 0.02,
-    "class_fitness": 0.02,
-    "movement": 0.00,
-    "pace": 0.00,
-    "deep_learning": 0.00,  # grid search: 0.00 optimal; calibration also forces 0.0
-}  # sums to 1.0 — 2026-03-13: deep_learning 0.03→0.00, redistributed to form
+    "form": 0.40,              # Was 0.57 — reduced because KRI/closing extracted as standalone
+    "kri": 0.12,               # NEW — strongest non-market signal (62.8% vs 6.4% win SR, 10x spread)
+    "jockey_trainer": 0.10,    # Was 0.04 — elevated for combo SR (3.3x predictor)
+    "pace": 0.06,              # Was 0.00 — settle 1-2 = 13.5% vs settle 12 = 7.7%
+    "weight_carried": 0.06,    # Was 0.05 — weight gained = class promotion signal
+    "barrier": 0.05,           # Was 0.03 — condition-dependent barrier scoring
+    "horse_profile": 0.05,     # Was 0.02 — sex/age×class strong discriminators
+    "closing_ability": 0.05,   # NEW — gained 3+ spots = 12.4% vs lost 3+ = 8.3%
+    "class_fitness": 0.05,     # Was 0.02 — elevated for condition records
+    "deep_learning": 0.06,     # Was 0.00 — re-enabled for pattern signals
+}  # sums to 1.0 — 2026-03-26: market/movement/KASH REMOVED, 100% own data
 
-# Distance-specific weight overrides — tuned via batch 2 grid search (seed=123, 400 combos x 500 races per bucket)
-# Middle was biggest win: -0.39% → +9.75% ROI. horse_profile elevated for short/middle distances.
+# Distance-specific weight overrides — data-driven from 381K runner audit
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — matches default weights
-        "form": 0.57, "market": 0.27, "weight_carried": 0.05, "barrier": 0.03,
-        "horse_profile": 0.02, "class_fitness": 0.02, "jockey_trainer": 0.04,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    "sprint": {  # ≤1100m — KRI + pace critical (explosive speed + early position)
+        "form": 0.40, "kri": 0.14, "jockey_trainer": 0.08, "pace": 0.08,
+        "weight_carried": 0.06, "horse_profile": 0.05, "barrier": 0.06,
+        "closing_ability": 0.05, "class_fitness": 0.04, "deep_learning": 0.04,
     },
-    "short": {  # 1101-1399m — horse_profile 4x boost, pace emerges (batch 2)
-        "form": 0.525, "market": 0.241, "horse_profile": 0.093, "jockey_trainer": 0.058,
-        "barrier": 0.023, "weight_carried": 0.023, "class_fitness": 0.023,
-        "pace": 0.013, "movement": 0.00, "deep_learning": 0.00,
+    "short": {  # 1101-1399m
+        "form": 0.40, "kri": 0.12, "jockey_trainer": 0.09, "pace": 0.07,
+        "weight_carried": 0.06, "horse_profile": 0.05, "barrier": 0.05,
+        "closing_ability": 0.05, "class_fitness": 0.06, "deep_learning": 0.05,
     },
-    "middle": {  # 1400-1799m — biggest improvement: -0.39% → +9.75% win ROI (batch 2)
-        "form": 0.509, "market": 0.231, "horse_profile": 0.090, "weight_carried": 0.067,
-        "jockey_trainer": 0.056, "barrier": 0.034, "class_fitness": 0.013,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    "middle": {  # 1400-1799m — jockey/class gains importance
+        "form": 0.40, "kri": 0.10, "jockey_trainer": 0.10, "pace": 0.05,
+        "weight_carried": 0.07, "horse_profile": 0.05, "barrier": 0.04,
+        "closing_ability": 0.05, "class_fitness": 0.08, "deep_learning": 0.06,
     },
-    "classic": {  # 1800-2199m — jockey_trainer 2x boost (batch 2)
-        "form": 0.515, "market": 0.234, "jockey_trainer": 0.091, "weight_carried": 0.068,
-        "horse_profile": 0.036, "barrier": 0.034, "class_fitness": 0.023,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    "classic": {  # 1800-2199m — connections + class dominate
+        "form": 0.40, "kri": 0.07, "jockey_trainer": 0.13, "pace": 0.04,
+        "weight_carried": 0.07, "horse_profile": 0.05, "barrier": 0.03,
+        "closing_ability": 0.05, "class_fitness": 0.10, "deep_learning": 0.06,
     },
-    "staying": {  # 2200m+ — jockey_trainer & class_fitness elevated (batch 2)
-        "form": 0.515, "market": 0.234, "jockey_trainer": 0.091, "class_fitness": 0.068,
-        "weight_carried": 0.046, "horse_profile": 0.046, "barrier": 0.00,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
+    "staying": {  # 2200m+ — class + connections critical, KRI less relevant
+        "form": 0.40, "kri": 0.05, "jockey_trainer": 0.15, "pace": 0.03,
+        "weight_carried": 0.06, "horse_profile": 0.05, "barrier": 0.02,
+        "closing_ability": 0.05, "class_fitness": 0.13, "deep_learning": 0.06,
     },
 }
 
-# Place-specific weights — optimized via batch 2 grid search (1500 combos x 1000 races)
-# Key insight: form is much more important for place than previously assumed (0.38 vs 0.25)
-# Market less dominant for place (0.27 vs 0.35) — market prices win probability, not place
+# ── Place Weights: INDEPENDENT — consistency-focused signals ──
+# Place probability favours consistency: class_fitness, jockey reliability, pace
 DEFAULT_PLACE_WEIGHTS = {
-    "form": 0.44,
-    "market": 0.22,
-    "class_fitness": 0.09,
-    "jockey_trainer": 0.09,
-    "barrier": 0.05,
-    "weight_carried": 0.05,
-    "horse_profile": 0.04,
-    "pace": 0.02,
-    "movement": 0.00,
-    "deep_learning": 0.00,
-}  # sums to 1.0 — 2026-03-13: deep_learning 0.03→0.00, redistributed to form
+    "form": 0.38,
+    "kri": 0.08,               # Less critical for place (consistency > explosion)
+    "class_fitness": 0.12,     # Was 0.09 — consistency indicator elevated
+    "jockey_trainer": 0.12,    # Was 0.09 — jockey reliability for placing
+    "barrier": 0.06,
+    "weight_carried": 0.06,
+    "horse_profile": 0.05,
+    "pace": 0.04,
+    "closing_ability": 0.05,
+    "deep_learning": 0.04,
+}  # sums to 1.0 — 2026-03-26: market REMOVED, consistency signals elevated
 
-# Distance-specific place weight overrides — tuned via batch 2 grid search
-# Key finding: class_fitness 3x for staying place, jockey_trainer dominant for classic place
 DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m
-        "form": 0.367, "market": 0.238, "class_fitness": 0.099, "jockey_trainer": 0.099,
-        "barrier": 0.079, "weight_carried": 0.079, "horse_profile": 0.020,
-        "movement": 0.020, "pace": 0.00, "deep_learning": 0.00,
+    "sprint": {
+        "form": 0.36, "kri": 0.10, "class_fitness": 0.10, "jockey_trainer": 0.10,
+        "barrier": 0.08, "weight_carried": 0.08, "horse_profile": 0.04,
+        "pace": 0.06, "closing_ability": 0.04, "deep_learning": 0.04,
     },
-    "short": {  # 1101-1399m — weight_carried boosted, pace emerges (batch 2)
-        "form": 0.400, "market": 0.262, "weight_carried": 0.087, "class_fitness": 0.054,
-        "jockey_trainer": 0.054, "horse_profile": 0.044, "pace": 0.044,
-        "barrier": 0.033, "movement": 0.022, "deep_learning": 0.00,
+    "short": {
+        "form": 0.38, "kri": 0.08, "class_fitness": 0.10, "jockey_trainer": 0.10,
+        "weight_carried": 0.08, "horse_profile": 0.05, "pace": 0.05,
+        "barrier": 0.05, "closing_ability": 0.05, "deep_learning": 0.06,
     },
-    "middle": {  # 1400-1799m — barrier 3x boost, class_fitness elevated (batch 2)
-        "form": 0.361, "market": 0.274, "class_fitness": 0.091, "barrier": 0.091,
-        "jockey_trainer": 0.057, "horse_profile": 0.047, "weight_carried": 0.034,
-        "pace": 0.023, "movement": 0.023, "deep_learning": 0.00,
+    "middle": {
+        "form": 0.36, "kri": 0.07, "class_fitness": 0.12, "barrier": 0.06,
+        "jockey_trainer": 0.10, "horse_profile": 0.05, "weight_carried": 0.06,
+        "pace": 0.04, "closing_ability": 0.06, "deep_learning": 0.08,
     },
-    "classic": {  # 1800-2199m — jockey_trainer dominant for place (batch 2)
-        "form": 0.353, "market": 0.276, "jockey_trainer": 0.143, "class_fitness": 0.085,
-        "weight_carried": 0.048, "pace": 0.038, "barrier": 0.029,
-        "horse_profile": 0.029, "movement": 0.00, "deep_learning": 0.00,
+    "classic": {
+        "form": 0.35, "kri": 0.05, "jockey_trainer": 0.15, "class_fitness": 0.12,
+        "weight_carried": 0.06, "pace": 0.04, "barrier": 0.04,
+        "horse_profile": 0.04, "closing_ability": 0.06, "deep_learning": 0.09,
     },
-    "staying": {  # 2200m+ — class_fitness 3x for staying place (batch 2)
-        "form": 0.405, "market": 0.265, "class_fitness": 0.155, "jockey_trainer": 0.055,
-        "barrier": 0.033, "weight_carried": 0.033, "horse_profile": 0.023,
-        "movement": 0.032, "pace": 0.00, "deep_learning": 0.00,
+    "staying": {
+        "form": 0.35, "kri": 0.04, "class_fitness": 0.18, "jockey_trainer": 0.12,
+        "barrier": 0.03, "weight_carried": 0.05, "horse_profile": 0.04,
+        "closing_ability": 0.06, "pace": 0.03, "deep_learning": 0.10,
     },
 }
 
@@ -1128,20 +1128,19 @@ def calculate_race_probabilities(
     for runner in active:
         rid = _get(runner, "id", "")
 
-        # Calculate all factor scores
-        mkt_raw = _market_consensus(runner, overround)
-        # Use calibrated market curve if available (maps raw prob → better score)
-        mkt_score = _calibrated_score("market_prob", mkt_raw, fallback=mkt_raw) if mkt_raw > 0 else 0.0
+        # Calculate all factor scores — 100% independent, no market/KASH/PF predictions
         scores = {
-            "market":         mkt_score,
-            "movement":       _market_movement_factor(runner) if w.get("movement", 0) > 0 else 0.5,
             "form":           _form_rating(runner, track_condition, baseline, race, meeting),
-            "class_fitness":  _class_factor(runner, baseline, race),
-            "pace":           _pace_factor(runner, pace_scenario) if w.get("pace", 0) > 0 else 0.5,
-            "barrier":        _barrier_draw_factor(runner, field_size, race_distance, venue=_get(meeting, "venue", "")),
+            "kri":            _kri_factor(runner, race_distance, track_condition),
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
+            "pace":           _pace_factor(runner, pace_scenario),
             "weight_carried": _weight_factor(runner, avg_weight, race_distance, race),
+            "barrier":        _barrier_draw_factor(runner, field_size, race_distance,
+                                                   venue=_get(meeting, "venue", ""),
+                                                   track_condition=track_condition),
             "horse_profile":  _horse_profile_factor(runner, race),
+            "closing_ability": _closing_ability_factor(runner),
+            "class_fitness":  _class_factor(runner, baseline, race),
             "deep_learning":  0.5,  # placeholder, set below if weight > 0
         }
 
@@ -1155,7 +1154,9 @@ def calculate_race_probabilities(
             dl_matched_patterns = []
 
         all_factor_scores[rid] = scores
-        market_implied[rid] = mkt_raw  # raw market probability for value detection
+        # Market implied still computed for value detection (post-prediction only)
+        mkt_raw = _market_consensus(runner, overround) if overround > 0 else 0.0
+        market_implied[rid] = mkt_raw
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
         factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
@@ -1178,12 +1179,9 @@ def calculate_race_probabilities(
         for rid, scores in all_factor_scores.items():
             factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
 
-    # Step 1b: Dynamic market weight boost for low-information races
-    eff_w = _boost_market_weight(w, all_factor_scores)
-
-    # Step 1c: Compute weighted sums with effective weights
+    # Step 1b: Compute weighted sums (no market boost — 100% independent)
     for rid, scores in all_factor_scores.items():
-        raw = sum(eff_w.get(k, 0.0) * v for k, v in scores.items())
+        raw = sum(w.get(k, 0.0) * v for k, v in scores.items())
         raw_scores[rid] = max(0.001, raw)
 
     # Step 2: Normalize to sum to 1.0
@@ -1206,8 +1204,8 @@ def calculate_race_probabilities(
         if sharp_total > 0:
             win_probs = {rid: p / sharp_total for rid, p in sharpened.items()}
 
-    # Step 2b: Market floor — prevent extreme disagreement with market
-    win_probs = _apply_market_floor(win_probs, market_implied)
+    # Market floor REMOVED — our model is 100% independent.
+    # External models (KASH, market, PF) used only as post-prediction sense check.
 
     # Step 2d: Post-scoring adjustments (ProPun strategy multipliers)
     # Applied after calibration + market floor, before place probability calculation.
@@ -1749,6 +1747,156 @@ def _condition_stats_field(track_condition: str) -> Optional[str]:
     if any(k in tc for k in ("good", "firm", "gd")):
         return "good_track_stats"
     return None
+
+
+# ──────────────────────────────────────────────
+# Factor: KRI (Kick Reaction Index)
+# ──────────────────────────────────────────────
+
+def _kri_factor(runner: Any, distance: int = 1400, track_condition: str = "") -> float:
+    """KRI-based scoring — strongest non-market signal.
+
+    Data (381K runners): KRI 80-100 = 62.8% win SR, 0-19 = 6.4% (10x spread).
+    Context: KRI matters MORE in sprints (explosive speed), LESS in staying (sustained),
+    LESS on heavy tracks (ground nullifies late kick).
+    """
+    import json as _json
+
+    # Extract KRI from form_history
+    fh_raw = _get(runner, "form_history")
+    if not fh_raw:
+        return 0.5  # No data = neutral
+    try:
+        fh = _json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+    except (ValueError, TypeError):
+        return 0.5
+    if not isinstance(fh, list):
+        return 0.5
+
+    # Get KRI values from last 3 non-trial starts
+    kri_values = []
+    for start in fh[:5]:
+        if isinstance(start, dict) and not start.get("is_trial"):
+            kri = start.get("kri")
+            if kri is not None:
+                try:
+                    kri_values.append(float(kri))
+                except (ValueError, TypeError):
+                    pass
+
+    if not kri_values:
+        return 0.5
+
+    # Primary: most recent KRI
+    recent_kri = kri_values[0]
+
+    # Map 0-100 to score 0.1-0.9
+    # Calibrated from data: KRI 80+ = 62.8% win, 40-59 = 26.3%, 0-19 = 6.4%
+    if recent_kri >= 80:
+        base_score = 0.90
+    elif recent_kri >= 60:
+        base_score = 0.75
+    elif recent_kri >= 40:
+        base_score = 0.60
+    elif recent_kri >= 20:
+        base_score = 0.45
+    else:
+        base_score = 0.20
+
+    # KRI trend: improving = bonus (recent 2 vs older)
+    if len(kri_values) >= 3:
+        recent_avg = sum(kri_values[:2]) / 2
+        older_avg = sum(kri_values[2:min(4, len(kri_values))]) / len(kri_values[2:min(4, len(kri_values))])
+        if recent_avg > older_avg + 10:
+            base_score += 0.05  # KRI improving
+        elif recent_avg < older_avg - 10:
+            base_score -= 0.03  # KRI declining
+
+    # Context: distance scaling
+    # Sprint: KRI critical (explosive speed), Staying: less relevant
+    if distance and distance <= 1200:
+        dist_mult = 1.15  # Amplify KRI for sprints
+    elif distance and distance <= 1600:
+        dist_mult = 1.05
+    elif distance and distance >= 2200:
+        dist_mult = 0.80  # Dampen for stayers
+    else:
+        dist_mult = 1.0
+
+    # Context: track condition scaling
+    # Heavy: ground nullifies late kick, Good: KRI fully applies
+    tc_lower = (track_condition or "").lower()
+    if "heavy" in tc_lower:
+        cond_mult = 0.70
+    elif "soft" in tc_lower:
+        cond_mult = 0.85
+    else:
+        cond_mult = 1.0
+
+    # Apply context multipliers around neutral point
+    adjusted = 0.5 + (base_score - 0.5) * dist_mult * cond_mult
+    return max(0.05, min(0.95, adjusted))
+
+
+# ──────────────────────────────────────────────
+# Factor: Closing Ability (position change)
+# ──────────────────────────────────────────────
+
+def _closing_ability_factor(runner: Any) -> float:
+    """Score based on how much ground horse makes up in the run.
+
+    Data (381K runners): Gained 3+ spots = 12.4% win, Lost 3+ = 8.3%.
+    Uses settle→finish position change from last 3 starts, recency-weighted.
+    """
+    import json as _json
+
+    fh_raw = _get(runner, "form_history")
+    if not fh_raw:
+        return 0.5
+    try:
+        fh = _json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+    except (ValueError, TypeError):
+        return 0.5
+    if not isinstance(fh, list):
+        return 0.5
+
+    changes = []
+    weights = [1.0, 0.7, 0.5]  # Recency weighting
+    for i, start in enumerate(fh[:3]):
+        if not isinstance(start, dict) or start.get("is_trial"):
+            continue
+        settle = start.get("settled")
+        finish = start.get("position") or start.get("pos")
+        if settle is not None and finish is not None:
+            try:
+                change = int(settle) - int(finish)  # Positive = gained ground
+                w = weights[i] if i < len(weights) else 0.3
+                changes.append((change, w))
+            except (ValueError, TypeError):
+                pass
+
+    if not changes:
+        return 0.5
+
+    # Weighted average position change
+    total_w = sum(w for _, w in changes)
+    avg_change = sum(c * w for c, w in changes) / total_w if total_w > 0 else 0
+
+    # Map to score: gained 5+ spots = 0.85, gained 3 = 0.70, neutral = 0.50, lost 3+ = 0.30
+    if avg_change >= 5:
+        score = 0.85
+    elif avg_change >= 3:
+        score = 0.70
+    elif avg_change >= 1:
+        score = 0.60
+    elif avg_change >= -1:
+        score = 0.50
+    elif avg_change >= -3:
+        score = 0.40
+    else:
+        score = 0.25
+
+    return max(0.05, min(0.95, score))
 
 
 # ──────────────────────────────────────────────

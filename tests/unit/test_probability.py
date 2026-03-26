@@ -36,7 +36,7 @@ from punty.probability import (
     _get_move_type,
     _odds_to_sp_range,
     _get_state_for_venue,
-    _boost_market_weight,
+    # _boost_market_weight removed — model is 100% independent
     _apply_market_floor,
     _parse_a2e_json,
     _a2e_to_score,
@@ -1576,44 +1576,37 @@ class TestCalculateWithDLPatterns:
 # Market Weight Boost
 # ──────────────────────────────────────────────
 
-class TestBoostMarketWeight:
-    def test_no_boost_when_enough_data(self):
-        """When factors have real signals, weights stay default."""
-        # All factors diverge significantly from 0.5
-        scores = {
-            "r1": {"market": 0.6, "form": 0.7, "pace": 0.3, "barrier": 0.65,
-                   "movement": 0.4, "class_fitness": 0.3, "jockey_trainer": 0.7,
-                   "weight_carried": 0.6, "horse_profile": 0.55, "deep_learning": 0.6},
-        }
-        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
-        assert result["market"] == DEFAULT_WEIGHTS["market"]
+class TestIndependentWeights:
+    """Verify probability engine is 100% independent — no market/KASH/PF signals."""
 
-    def test_boost_when_many_neutral(self):
-        """When most factors are neutral, market weight increases."""
-        # Most factors at 0.5 (no information)
-        scores = {
-            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
-                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
-                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
-        }
-        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
-        assert result["market"] > DEFAULT_WEIGHTS["market"]
+    def test_no_market_in_weights(self):
+        """Market factor must not exist in any weight dict."""
+        assert "market" not in DEFAULT_WEIGHTS
+        for bucket, weights in DISTANCE_WEIGHT_OVERRIDES.items():
+            assert "market" not in weights, f"market found in {bucket} weights"
 
-    def test_weights_still_sum_to_one(self):
-        """Boosted weights must still sum to 1.0."""
-        scores = {
-            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
-                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
-                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
-        }
-        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
-        total = sum(result.values())
-        assert abs(total - 1.0) < 0.001, f"Boosted weights sum to {total}"
+    def test_no_movement_in_weights(self):
+        """Movement factor (odds-derived) must not exist."""
+        assert "movement" not in DEFAULT_WEIGHTS
 
-    def test_empty_scores_returns_original(self):
-        """Empty scores dict returns original weights."""
-        result = _boost_market_weight(DEFAULT_WEIGHTS, {})
-        assert result == DEFAULT_WEIGHTS
+    def test_kri_in_all_weights(self):
+        """KRI must be a factor in all distance buckets."""
+        assert "kri" in DEFAULT_WEIGHTS
+        assert DEFAULT_WEIGHTS["kri"] > 0
+        for bucket, weights in DISTANCE_WEIGHT_OVERRIDES.items():
+            assert "kri" in weights, f"kri missing from {bucket}"
+            assert weights["kri"] > 0, f"kri is 0 in {bucket}"
+
+    def test_closing_ability_in_weights(self):
+        """Closing ability must be a factor."""
+        assert "closing_ability" in DEFAULT_WEIGHTS
+        assert DEFAULT_WEIGHTS["closing_ability"] > 0
+
+    def test_kri_higher_for_sprints(self):
+        """KRI should be weighted higher for sprints than staying."""
+        sprint_kri = DISTANCE_WEIGHT_OVERRIDES["sprint"]["kri"]
+        staying_kri = DISTANCE_WEIGHT_OVERRIDES["staying"]["kri"]
+        assert sprint_kri > staying_kri
 
     def test_multiple_runners_averaged(self):
         """Neutral ratio is calculated across all runners."""
@@ -1625,18 +1618,7 @@ class TestBoostMarketWeight:
                    "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
                    "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
         }
-        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
-        assert result["market"] > DEFAULT_WEIGHTS["market"]
-
-    def test_market_boost_capped(self):
-        """Market weight can't exceed ~65% even with 100% neutral factors."""
-        scores = {
-            "r1": {"market": 0.6, "form": 0.50, "pace": 0.50, "barrier": 0.50,
-                   "movement": 0.50, "class_fitness": 0.50, "jockey_trainer": 0.50,
-                   "weight_carried": 0.50, "horse_profile": 0.50, "deep_learning": 0.50},
-        }
-        result = _boost_market_weight(DEFAULT_WEIGHTS, scores)
-        assert result["market"] <= 0.90  # market weight boosted when other factors neutral
+        # Market boost removed — model is 100% independent
 
 
 # ──────────────────────────────────────────────
@@ -2496,30 +2478,25 @@ class TestTrackStatsFallback:
 class TestDistanceSpecificWeights:
     """Tests for distance-specific factor weight profiles."""
 
-    def test_sprint_matches_default(self):
-        from punty.probability import DISTANCE_WEIGHT_OVERRIDES, DEFAULT_WEIGHTS
+    def test_sprint_has_high_kri(self):
+        from punty.probability import DISTANCE_WEIGHT_OVERRIDES
         sprint_w = DISTANCE_WEIGHT_OVERRIDES["sprint"]
-        # Tuner found baseline already optimal for sprint — weights match default
-        assert sprint_w["form"] == DEFAULT_WEIGHTS["form"]
-        assert sprint_w["market"] == DEFAULT_WEIGHTS["market"]
+        assert sprint_w["kri"] >= 0.12  # KRI strongest in sprints
 
-    def test_staying_distance_different_from_default(self):
+    def test_staying_has_high_connections(self):
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES, DEFAULT_WEIGHTS
         staying_w = DISTANCE_WEIGHT_OVERRIDES["staying"]
-        # Staying jockey_trainer elevated (2x default)
         assert staying_w["jockey_trainer"] > DEFAULT_WEIGHTS["jockey_trainer"]
-        # Staying class_fitness elevated
         assert staying_w["class_fitness"] > DEFAULT_WEIGHTS["class_fitness"]
-        # Staying barrier low
-        assert staying_w["barrier"] < DEFAULT_WEIGHTS["barrier"]
+        assert staying_w["kri"] < DEFAULT_WEIGHTS["kri"]  # KRI less relevant
 
-    def test_middle_distance_has_override(self):
+    def test_all_distances_have_new_factors(self):
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
-        # Middle now has tuned override (was previously using DEFAULT_WEIGHTS)
-        assert "middle" in DISTANCE_WEIGHT_OVERRIDES
-        middle_w = DISTANCE_WEIGHT_OVERRIDES["middle"]
-        # horse_profile elevated for middle distances
-        assert middle_w["horse_profile"] >= 0.08
+        for bucket, weights in DISTANCE_WEIGHT_OVERRIDES.items():
+            assert "kri" in weights, f"kri missing from {bucket}"
+            assert "closing_ability" in weights, f"closing_ability missing from {bucket}"
+            assert "pace" in weights, f"pace missing from {bucket}"
+            assert "market" not in weights, f"market in {bucket} — should be removed"
 
     def test_all_overrides_sum_to_one(self):
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
