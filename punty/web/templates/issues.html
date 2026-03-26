@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Issues - PuntyAI{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-display font-bold" style="color: var(--text-primary);">Issue Tracker</h1>
+            <p class="text-sm" style="color: var(--text-muted);">
+                Settlement errors, missing dividends, failed bets
+            </p>
+        </div>
+        {% if open_count > 0 %}
+        <div class="text-right">
+            <div class="text-2xl font-display font-bold" style="color: #f87171;">{{ open_count }}</div>
+            <div class="text-xs" style="color: var(--text-muted);">Open issues</div>
+            {% if total_amount > 0 %}
+            <div class="text-sm font-heading font-bold" style="color: #f87171;">${{ '%.0f'|format(total_amount) }} at risk</div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="px-4 py-2 rounded-lg" style="background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2);">
+            <span class="text-sm font-heading font-bold" style="color: #4ade80;">All clear</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if issues %}
+    <div class="space-y-2">
+        {% for issue in issues %}
+        <div class="rounded-xl p-4 {% if issue.resolved %}opacity-50{% endif %}"
+             style="background: var(--bg-card-alt); border: 1px solid {% if issue.severity == 'error' and not issue.resolved %}rgba(248, 113, 113, 0.3){% elif issue.severity == 'warning' and not issue.resolved %}rgba(250, 204, 21, 0.3){% else %}var(--border-subtle){% endif %};">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        {% if issue.severity == 'error' %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style="background: rgba(248, 113, 113, 0.15); color: #f87171;">Error</span>
+                        {% elif issue.severity == 'warning' %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style="background: rgba(250, 204, 21, 0.15); color: #facc15;">Warning</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style="background: rgba(0, 212, 255, 0.15); color: var(--cyan);">Info</span>
+                        {% endif %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style="background: var(--bg-card-alt); color: var(--text-muted);">{{ issue.category }}</span>
+                        {% if issue.amount %}
+                        <span class="text-xs font-heading font-bold" style="color: #f87171;">${{ '%.2f'|format(issue.amount) }}</span>
+                        {% endif %}
+                        {% if issue.resolved %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style="background: rgba(74, 222, 128, 0.15); color: #4ade80;">Resolved</span>
+                        {% endif %}
+                    </div>
+                    <h3 class="font-heading font-semibold text-sm mb-1" style="color: var(--text-primary);">{{ issue.title }}</h3>
+                    {% if issue.description %}
+                    <p class="text-xs mb-1" style="color: var(--text-secondary);">{{ issue.description }}</p>
+                    {% endif %}
+                    <div class="flex items-center gap-3 text-xs" style="color: var(--text-muted);">
+                        <span>{{ issue.created_at.strftime('%d %b %H:%M') if issue.created_at else '' }}</span>
+                        {% if issue.meeting_id %}
+                        <span>{{ issue.meeting_id }}</span>
+                        {% endif %}
+                        {% if issue.race_number %}
+                        <span>R{{ issue.race_number }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if issue.link %}
+                    <a href="{{ issue.link }}" class="px-3 py-1.5 rounded-lg text-xs font-heading font-semibold"
+                       style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.2); color: var(--cyan);">
+                        View
+                    </a>
+                    {% endif %}
+                    {% if not issue.resolved %}
+                    <form method="POST" action="/issues/{{ issue.id }}/resolve">
+                        <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-heading font-semibold"
+                                style="background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2); color: #4ade80;">
+                            Resolve
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12" style="color: var(--text-muted);">
+        <p class="text-lg font-heading">No issues found</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
+from starlette.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, Integer, or_, and_
@@ -843,6 +844,39 @@ async def learnings_page(request: Request, db: AsyncSession = Depends(get_db)):
             "stats": stats,
         },
     )
+
+
+@router.get("/issues", response_class=HTMLResponse)
+async def issues_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Issue tracker — settlement errors, missing dividends, failed bets."""
+    from punty.models.issue import Issue
+
+    result = await db.execute(
+        select(Issue).order_by(Issue.resolved, Issue.created_at.desc()).limit(200)
+    )
+    issues = result.scalars().all()
+
+    open_count = sum(1 for i in issues if not i.resolved)
+    total_amount = sum(i.amount or 0 for i in issues if not i.resolved)
+
+    return templates.TemplateResponse("issues.html", {
+        "request": request,
+        "issues": issues,
+        "open_count": open_count,
+        "total_amount": total_amount,
+    })
+
+
+@router.post("/issues/{issue_id}/resolve", response_class=HTMLResponse)
+async def resolve_issue(request: Request, issue_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark an issue as resolved."""
+    from punty.models.issue import Issue
+    issue = await db.get(Issue, issue_id)
+    if issue:
+        issue.resolved = True
+        issue.resolved_at = melb_now().replace(tzinfo=None)
+        await db.commit()
+    return RedirectResponse(url="/issues", status_code=303)
 
 
 @router.get("/balance-sheet", response_class=HTMLResponse)

@@ -859,9 +859,24 @@ async def _settle_picks_for_race_impl(
                 return_amount = dividend * flexi_pct
                 pick.pnl = round(return_amount - stake, 2)
             elif hit and dividend == 0:
-                # Hit but no dividend available — TAB rules: refund
+                # Hit but no dividend available — log as issue for manual review
                 pick.pnl = 0.0
                 logger.warning(f"Exotic pick {pick.id} hit but dividend=0 — treating as refund")
+                try:
+                    from punty.issues import log_issue
+                    await log_issue(
+                        db, "settlement", "error",
+                        f"Exotic hit but $0 P&L — missing {exotic_type} dividend",
+                        description=f"Pick {pick.id} ({exotic_type}) won but no dividend in exotic_results. "
+                                    f"Stake: ${stake:.2f}. Check PointsBet/TAB for actual dividend.",
+                        meeting_id=pick.meeting_id,
+                        race_number=pick.race_number,
+                        pick_id=pick.id,
+                        link=f"/meets/{pick.meeting_id}",
+                        amount=stake,
+                    )
+                except Exception:
+                    pass  # Don't let issue logging break settlement
             else:
                 pick.pnl = round(-cost, 2)
             pick.hit = hit
