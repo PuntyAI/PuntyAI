@@ -384,33 +384,27 @@ def _get_calibrated_weights() -> dict[str, float] | None:
 
 # Factor registry — defines all probability factors with metadata
 FACTOR_REGISTRY = {
-    "market":         {"label": "Market Consensus", "category": "Market Intelligence",
-                       "description": "Multi-bookmaker median odds stripped of overround"},
-    "movement":       {"label": "Market Movement",  "category": "Market Intelligence",
-                       "description": "Odds shift direction and magnitude — smart money signals"},
-    "form":           {"label": "Form Rating",      "category": "Form & Fitness",
-                       "description": "Recent results, track/distance/condition win rates"},
-    "class_fitness":  {"label": "Class & Fitness",   "category": "Form & Fitness",
-                       "description": "Class level suitability and fitness from spell length"},
-    "pace":           {"label": "Pace Factor",       "category": "Race Dynamics",
-                       "description": "Speed map position, pace scenario, and map factor"},
-    "barrier":        {"label": "Barrier Draw",      "category": "Race Dynamics",
-                       "description": "Gate position advantage relative to field size and distance"},
-    "jockey_trainer": {"label": "Jockey & Trainer",  "category": "Connections",
-                       "description": "Jockey and trainer win rate statistics"},
-    "weight_carried": {"label": "Weight Carried",    "category": "Physical",
-                       "description": "Carried weight relative to race average"},
-    "horse_profile":  {"label": "Horse Profile",     "category": "Physical",
-                       "description": "Age and sex peak performance assessment"},
-    "deep_learning":  {"label": "Deep Learning",     "category": "Pattern Intelligence",
-                       "description": "Historical pattern edges from 280K+ runners analysis"},
+    "form":            {"label": "Form Rating",        "category": "Form & Fitness",
+                        "description": "Recent results, T/D/condition records, margins, career stats"},
+    "kri":             {"label": "KRI (Kick Reaction)", "category": "Form & Fitness",
+                        "description": "Explosive finishing ability — 62.8% vs 6.4% win SR (10x spread)"},
+    "jockey_trainer":  {"label": "Jockey & Trainer",   "category": "Connections",
+                        "description": "Connection stats, combo SR, A2E — 3.3x predictor"},
+    "pace":            {"label": "Pace Factor",        "category": "Race Dynamics",
+                        "description": "Settling position, speed map, map factor — 13.5% vs 7.7%"},
+    "weight_carried":  {"label": "Weight Carried",     "category": "Physical",
+                        "description": "Relative weight + weight change signal (gained = class up)"},
+    "barrier":         {"label": "Barrier Draw",       "category": "Race Dynamics",
+                        "description": "Gate position × field × distance × condition (inner heavy = 21%)"},
+    "horse_profile":   {"label": "Horse Profile",      "category": "Physical",
+                        "description": "Age × sex × class peak performance curves"},
+    "closing_ability": {"label": "Closing Ability",    "category": "Race Dynamics",
+                        "description": "Ground gained settle→finish — 12.4% vs 8.3% win SR"},
+    "class_fitness":   {"label": "Class & Fitness",    "category": "Form & Fitness",
+                        "description": "Class suitability, condition records, fitness from spell"},
+    "deep_learning":   {"label": "Pattern Intelligence", "category": "Pattern Intelligence",
+                        "description": "Historical pattern edges from jockey/trainer/venue combos"},
 }
-
-# Default weights (must sum to 1.0)
-# Grid search optimal from batch 1 (seed=42, 2500 combos x 1000 races):
-#   form=0.5128, market=0.3205, wc=0.0513, jt=0.0385, barrier=0.0256,
-#   hp=0.0256, cf=0.0256, pace=0.00, movement=0.00
-# Rounded to clean values that sum to 1.0
 # ── Win Weights: 100% INDEPENDENT — no market, odds, or external model signals ──
 # Tuned from 381,656 Proform runner signal audit (2025-2026).
 # All predictions from OUR data: form, fitness, connections, pace, physical, class.
@@ -2243,11 +2237,16 @@ def _load_barrier_calibration() -> dict:
     return _BARRIER_CALIBRATION
 
 
-def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, venue: str = "") -> float:
-    """Score based on barrier position relative to field size and distance.
+def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400,
+                         venue: str = "", track_condition: str = "") -> float:
+    """Score based on barrier position relative to field size, distance, and track condition.
 
     Inside barriers get a slight boost; wide gates are penalized more at
     shorter distances where there's less time to recover.
+
+    Condition interaction (381K audit):
+    - Inner (1-4) on Heavy: 21% win, 61% place (strong advantage)
+    - Wide (9+) on Good: 11% win, 35% place (significant disadvantage)
     """
     score = 0.5  # neutral
     barrier = _get(runner, "barrier")
@@ -2300,6 +2299,20 @@ def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, ven
         gates_from_ten = barrier - 9  # 1 for gate 10, 5 for gate 14
         penalty = 0.04 * gates_from_ten * dist_mult
         score -= penalty
+
+    # Condition-dependent barrier adjustment (381K audit)
+    # Inner on Heavy = 21% win (strong advantage), Wide on Good = 11% (disadvantage)
+    tc_lower = (track_condition or "").lower()
+    if barrier <= 4:
+        if "heavy" in tc_lower:
+            score += 0.06  # Inner draw on heavy = big advantage
+        elif "soft" in tc_lower:
+            score += 0.03
+    elif barrier >= 9:
+        if "good" in tc_lower and "heavy" not in tc_lower:
+            score -= 0.03  # Wide on good = extra penalty
+        elif "heavy" in tc_lower:
+            score -= 0.05  # Wide on heavy = severe disadvantage
 
     return max(0.05, min(0.95, score))
 

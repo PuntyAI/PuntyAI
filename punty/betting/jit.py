@@ -187,16 +187,23 @@ async def evaluate_and_bet_race(
 
     result["bet_type"] = bet_type
 
-    # ── KASH consensus modifier ──
-    kash_multiplier = 1.0
-    kash_rp = r1.get("kash_rp")
-    if kash_rp and kash_rp > 0 and wp > 0:
-        kash_wp = 1.0 / kash_rp
-        divergence = abs(wp - kash_wp)
-        if divergence >= 0.10:
-            kash_multiplier = 0.85
-            logger.info(f"JIT KASH DIVERGE: {runner.horse_name} R{race_number} "
-                        f"our WP={wp:.0%} KASH={kash_wp:.0%}")
+    # ── 4-Model Sense Check (Us vs PF vs Market vs KASH) ──
+    from punty.sense_check import sense_check_race
+    sense = sense_check_race(runner.saddlecloth, runners)
+    consensus_mult = sense["kelly_mult"]
+
+    if sense["action"] == "skip":
+        result["reason"] = f"Sense check SKIP: {sense['detail']}"
+        await _create_skip_record(db, meeting_id, race_number, result["reason"], now,
+                                  horse_name=runner.horse_name, saddlecloth=runner.saddlecloth,
+                                  jit_wp=wp, jit_pp=pp)
+        logger.info(f"JIT SKIP (outlier): {runner.horse_name} {meeting.venue} R{race_number} — {sense['detail']}")
+        return result
+
+    logger.info(
+        f"JIT Sense: {runner.horse_name} R{race_number} {sense['consensus']} "
+        f"({sense['detail']}) kelly_mult={consensus_mult}"
+    )
 
     # ── Resolve Betfair market + get live odds ──
     from punty.betting.betfair_client import resolve_place_market, resolve_win_market, get_place_odds
@@ -253,7 +260,7 @@ async def evaluate_and_bet_race(
         odds=live_odds,
         max_fraction=max_frac,
     )
-    stake *= kash_multiplier
+    stake *= consensus_mult  # 4-model sense check: HIGH=1.0, MEDIUM=0.85
 
     if stake <= 0:
         stake = round(balance * 0.005, 2)

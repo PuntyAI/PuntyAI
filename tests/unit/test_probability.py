@@ -8,6 +8,7 @@ from punty.probability import (
     StatsRecord,
     FACTOR_REGISTRY,
     DEFAULT_WEIGHTS,
+    DISTANCE_WEIGHT_OVERRIDES,
     calculate_race_probabilities,
     parse_stats_string,
     _market_consensus,
@@ -784,15 +785,16 @@ class TestCalculateRaceProbabilities:
         results = calculate_race_probabilities(runners, _make_race(), _make_meeting(), _skip_lgbm=True)
         factors = results["r1"].factors
 
-        assert "market" in factors
         assert "form" in factors
+        assert "kri" in factors
         assert "pace" in factors
-        assert "movement" in factors
+        assert "closing_ability" in factors
         assert "class_fitness" in factors
         assert "barrier" in factors
         assert "jockey_trainer" in factors
         assert "weight_carried" in factors
         assert "horse_profile" in factors
+        assert "market" not in factors  # Market removed — 100% independent
 
     def test_runners_without_odds_get_probability(self):
         """Runners without odds should still get a probability (from other factors)."""
@@ -2361,7 +2363,8 @@ class TestContextMultipliers:
         probs = calculate_race_probabilities(runners, race, meeting, _skip_lgbm=True)
 
         # r1 should have highest probability from strong signals
-        assert probs["r1"].win_probability > 0.15
+        # (threshold lowered: without market factor, probabilities are more spread)
+        assert probs["r1"].win_probability > 0.10
         # Profile should get colt-in-maiden boost
         assert probs["r1"].factors["horse_profile"] > 0.55
         # All probabilities sum to 1.0
