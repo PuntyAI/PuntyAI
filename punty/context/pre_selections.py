@@ -520,6 +520,7 @@ def calculate_pre_selections(
         fav_price=fav_price,
         distance=race_context.get("distance", 0),
         prize_money=race_context.get("prize_money", 0),
+        runners=race_context.get("runners", []),
     )
 
     # Guaranteed fallback: quinella on top 2 picks if no exotic was selected.
@@ -1154,6 +1155,7 @@ def _select_exotic(
     fav_price: float = 0.0,
     distance: int = 0,
     prize_money: int | float = 0,
+    runners: list[dict] | None = None,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet for this race.
 
@@ -1211,6 +1213,30 @@ def _select_exotic(
         race_shape = "structured"
     else:
         race_shape = "open"
+
+    # ── KASH speed refinement ──
+    # KASH speed_cat (Leader/On-Pace/Midfield/Backmarker) and early_speed
+    # can upgrade/downgrade race shape when pace analysis diverges from
+    # probability spread. Fast leader in a slow race = more dominant.
+    if runners:
+        kash_speeds = []
+        for r in runners:
+            sc = (r.get("kash_speed_cat") or "").lower()
+            es = r.get("kash_early_speed")
+            if sc and not r.get("scratched"):
+                kash_speeds.append({"sc": sc, "es": es or 0})
+        if kash_speeds:
+            leaders = [s for s in kash_speeds if s["sc"] in ("leader", "on pace")]
+            # If <25% of field are leaders/on-pace, pace is thin — upgrade shape
+            # (standout frontrunner advantage = more dominant outcome)
+            if leaders and len(leaders) / len(kash_speeds) < 0.25:
+                if race_shape == "structured":
+                    race_shape = "dominant"  # Thin pace → frontrunner advantage
+            # If >50% are leaders/on-pace, pace is hot — downgrade shape
+            # (hot pace = form reversals, less predictable)
+            elif leaders and len(leaders) / len(kash_speeds) > 0.50:
+                if race_shape == "dominant":
+                    race_shape = "structured"  # Hot pace erodes standout edge
 
     # ── Meet quality score (0-3) ──
     # Drives exotic ambition: higher quality = more ambitious bet types

@@ -128,6 +128,11 @@ FEATURE_NAMES = [
     "trainer_sr_x_venue",    # trainer_career_sr * venue_type/3 (trainer metro/country spec)
     "form_trend_x_class",    # form_trend * class_bucket/6 (improving form by class)
     "days_since_x_class",    # (days_since/365) * class_bucket/6 (freshness by class)
+    # ── v8: KASH model features (4) — independent Betfair model as benchmark ──
+    "kash_wp_implied",       # 1/kash_rated_price — KASH model's implied win probability
+    "kash_early_speed",      # KASH early speed rating (0-1 scale)
+    "kash_late_speed",       # KASH late speed rating (1-5 scale, NaN if unknown)
+    "kash_consensus",        # 1.0 if our market_prob and KASH implied agree within 10%, else 0.0
 ]
 
 NUM_FEATURES = len(FEATURE_NAMES)  # 102
@@ -1208,6 +1213,20 @@ def extract_features_from_runner(
         field_size, cond_sr,
     )
 
+    # ── v8: KASH model features (4) ──
+    # Independent model from Betfair Data Scientists — rated prices + speed data.
+    # Provides consensus signal (two models agree = higher confidence) and
+    # pace data from a different methodology than our speed map scraper.
+    kash_rp = _safe_float(_get(runner, "kash_rated_price"))
+    kash_wp_implied = 1.0 / kash_rp if kash_rp and kash_rp > 0 else nan
+    kash_early_spd = _safe_float(_get(runner, "kash_early_speed")) or nan
+    kash_late_spd = _safe_float(_get(runner, "kash_late_speed")) or nan
+    # Consensus: 1.0 if our implied prob and KASH implied prob agree within 10%
+    if not math.isnan(kash_wp_implied) and not math.isnan(market_prob):
+        kash_consensus = 1.0 if abs(market_prob - kash_wp_implied) < 0.10 else 0.0
+    else:
+        kash_consensus = nan
+
     fvec = [
         market_prob,
         career_win_pct, career_place_pct, _f(career_starts),
@@ -1259,7 +1278,10 @@ def extract_features_from_runner(
         _f(peak_age_sex_score), _f(flucs_direction),
         # ── v6: Context buckets (4) + interactions (10) ──
         dist_bkt, tc_bkt, cls_bkt, vt_code,
-    ] + interactions
+    ] + interactions + [
+        # ── v8: KASH model features (4) ──
+        kash_wp_implied, kash_early_spd, kash_late_spd, kash_consensus,
+    ]
 
     # S1: NaN overrides removed — v5 model trained with these features populated.
 
