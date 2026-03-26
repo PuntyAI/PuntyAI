@@ -819,15 +819,27 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
             cond_data["good"][0], cond_data["soft"][0],
             cond_data["heavy"][0], cond_data["firm"][0],
         ),
-        # ── v8: KASH features (4) — DEPRECATED (external model, NaN) ──
-        *_get_kash_features(
-            pf_runner.get("Name", ""),
-            race_meta.get("date", ""),
-            market_prob,
-        ),
+        # ── v8: KASH features (4) — DEPRECATED (external model, forced NaN) ──
+        nan, nan, nan, nan,  # kash_wp_implied, early, late, consensus
         # ── v9: Signal-driven features (8) ──
         *_get_v9_features(pf_runner, race_meta, distance),
     ]
+
+    # Force ALL market/external model features to NaN for independence
+    # Index reference from FEATURE_NAMES:
+    #  0: market_prob (already NaN above)
+    # 42: place_vs_market
+    # 50: price_move_pct (approx — after group features)
+    # 97: flucs_direction (after peak_age_sex_score)
+    from punty.ml.features import FEATURE_NAMES as _FN
+    for dep_name in ["place_vs_market", "price_move_pct", "flucs_direction"]:
+        try:
+            idx = _FN.index(dep_name)
+            if idx < len(fvec):
+                fvec[idx] = nan
+        except ValueError:
+            pass
+
     return fvec
 
 
