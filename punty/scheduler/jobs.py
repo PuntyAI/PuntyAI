@@ -1736,7 +1736,7 @@ async def daily_validation_sweep() -> dict:
     Runs at 22:00 AEST — after all races have finished and settled.
     """
     from punty.models.database import async_session
-    from punty.validation import validate_today
+    from punty.data_validation import validate_today
 
     try:
         async with async_session() as db:

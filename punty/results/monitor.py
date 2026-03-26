@@ -1210,7 +1210,7 @@ class ResultsMonitor:
 
                     # Validate settlement data quality
                     try:
-                        from punty.validation import validate_settlement
+                        from punty.data_validation import validate_settlement
                         v_issues = await validate_settlement(db, meeting_id, race_num)
                         if v_issues:
                             logger.warning(f"Validation: {v_issues} issues for {meeting.venue} R{race_num}")
