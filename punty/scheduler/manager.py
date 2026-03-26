@@ -199,7 +199,15 @@ class SchedulerManager:
                         logger.warning(
                             f"Significant changes detected for {meeting_id}: {result['changes']}"
                         )
-                        # TODO: Trigger re-evaluation workflow
+                        # Re-evaluate: update pick probabilities with fresh data
+                        try:
+                            from punty.scheduler.jobs import post_kash_probability_refresh
+                            # Re-run probability for this meeting's races
+                            # (reuses the KASH refresh job which updates Pick WP/PP)
+                            logger.info(f"Re-evaluating probabilities for {meeting_id}")
+                            await post_kash_probability_refresh()
+                        except Exception as re_e:
+                            logger.warning(f"Re-evaluation failed for {meeting_id}: {re_e}")
                 except Exception as e:
                     logger.error(f"Context check failed: {e}")
 

@@ -143,6 +143,8 @@ FEATURE_NAMES = [
     "margin_last",           # Margin beaten last start (lengths, 0 = won)
     "condition_record_sr",   # SR on today's specific going (good/soft/heavy)
     "combo_a2e",             # Trainer+jockey combo A2E value
+    # ── v10: Sire feature (1) ──
+    "sire_runners_sr",       # Sire's progeny win strike rate (from KASH/Proform aggregate)
 ]
 
 NUM_FEATURES = len(FEATURE_NAMES)  # 102
@@ -1411,6 +1413,8 @@ def extract_features_from_runner(
         # ── v9: Signal-driven features (8) ──
         _f(kri_score), _f(kri_trend), _f(position_change_val), _f(weight_change_val),
         _f(distance_change_val), _f(margin_last_val), _f(condition_record_sr), _f(combo_a2e_val),
+        # v10: sire
+        nan,  # sire_runners_sr — populated during training from Proform aggregate, NaN at inference
     ]
 
     # S1: NaN overrides removed — v5 model trained with these features populated.

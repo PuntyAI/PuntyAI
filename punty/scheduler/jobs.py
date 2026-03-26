@@ -539,64 +539,66 @@ async def morning_generate_all() -> dict:
 
         logger.info(f"Morning generation starting for {len(meetings)} meetings")
 
-        for meeting in meetings:
+        # Parallel generation: process up to 3 meetings concurrently
+        # Each meeting gets its own DB session to avoid contention
+        import asyncio as _aio
+        _sem = _aio.Semaphore(3)  # Max 3 concurrent AI calls
+
+        async def _generate_one(meeting):
             venue = meeting.venue
             meeting_id = meeting.id
+            async with _sem:
+                try:
+                    async with async_session() as gen_db:
+                        is_ready, issues = await validate_meeting_readiness(meeting_id, gen_db)
+                        if not is_ready:
+                            logger.warning(f"Skipping {venue} — not ready: {issues}")
+                            return {"status": "skipped", "venue": venue, "reason": "; ".join(issues)}
 
-            try:
-                # Check readiness
-                is_ready, issues = await validate_meeting_readiness(meeting_id, db)
-                if not is_ready:
-                    logger.warning(f"Skipping {venue} — not ready: {issues}")
-                    results["skipped"].append({"venue": venue, "reason": "; ".join(issues)})
-                    continue
+                        await create_context_snapshot(gen_db, meeting_id, force=True)
 
-                # Create baseline context snapshot for later comparison
-                await create_context_snapshot(db, meeting_id, force=True)
+                        content_id = None
+                        generator = ContentGenerator(gen_db)
+                        async for event in generator.generate_early_mail_stream(meeting_id):
+                            if event.get("status") == "error":
+                                raise Exception(event.get("label", "Unknown error"))
+                            if event.get("content_id"):
+                                content_id = event.get("content_id")
+                            elif event.get("result", {}).get("content_id"):
+                                content_id = event["result"]["content_id"]
 
-                # Generate early mail
-                content_id = None
-                generator = ContentGenerator(db)
-                async for event in generator.generate_early_mail_stream(meeting_id):
-                    if event.get("status") == "error":
-                        raise Exception(event.get("label", "Unknown error"))
-                    if event.get("content_id"):
-                        content_id = event.get("content_id")
-                    elif event.get("result", {}).get("content_id"):
-                        content_id = event["result"]["content_id"]
+                        if not content_id:
+                            raise Exception("No content_id returned from generation")
 
-                if not content_id:
-                    raise Exception("No content_id returned from generation")
+                        approve_result = await auto_approve_content(content_id, gen_db)
+                        if approve_result["status"] != "approved":
+                            logger.warning(f"Morning approval failed for {venue}: {approve_result}")
+                            return {
+                                "status": "failed", "venue": venue,
+                                "reason": f"approval: {approve_result.get('issues', [])}",
+                            }
+                        return {"status": "generated", "venue": venue, "content_id": content_id}
+                except Exception as e:
+                    logger.error(f"Morning generation failed for {venue}: {e}")
+                    return {"status": "failed", "venue": venue, "reason": str(e)}
 
-                # Auto-approve (no social post)
-                approve_result = await auto_approve_content(content_id, db)
-                if approve_result["status"] != "approved":
-                    logger.warning(f"Morning approval failed for {venue}: {approve_result}")
-                    results["failed"].append({
-                        "venue": venue,
-                        "reason": f"approval: {approve_result.get('issues', [])}",
-                    })
-                    continue
+        # Launch all meetings in parallel (semaphore limits concurrency)
+        gen_results = await _aio.gather(*[_generate_one(m) for m in meetings])
 
-                results["generated"].append(venue)
-                logger.info(f"Morning generation complete for {venue}: {content_id}")
+        for gr in gen_results:
+            if gr["status"] == "generated":
+                results["generated"].append(gr["venue"])
+            elif gr["status"] == "skipped":
+                results["skipped"].append(gr)
+            else:
+                results["failed"].append(gr)
 
-            except Exception as e:
-                logger.error(f"Morning generation failed for {venue}: {e}")
-                results["failed"].append({"venue": venue, "reason": str(e)})
-
-                # Rate limit handling: pause before next meeting
-                error_str = str(e).lower()
-                if "rate limit" in error_str or "429" in error_str:
-                    logger.warning(f"Rate limited — pausing {RATE_LIMIT_QUEUE_PAUSE}s before next meeting")
-                    await asyncio.sleep(RATE_LIMIT_QUEUE_PAUSE)
+        logger.info(
+            f"Morning generation complete: {len(results['generated'])} generated, "
+            f"{len(results['skipped'])} skipped, {len(results['failed'])} failed"
+        )
 
     results["completed_at"] = melb_now().isoformat()
-    gen_count = len(results["generated"])
-    skip_count = len(results["skipped"])
-    fail_count = len(results["failed"])
-    logger.info(f"Morning generation complete: {gen_count} generated, {skip_count} skipped, {fail_count} failed")
-
     return results
 
 

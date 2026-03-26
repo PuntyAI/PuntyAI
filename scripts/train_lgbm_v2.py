@@ -118,6 +118,40 @@ def _load_kash_index() -> dict[tuple[str, str], dict]:
     return _KASH_INDEX
 
 
+# Global sire performance cache — built during data loading
+_SIRE_STATS: dict[str, dict] | None = None
+
+
+def _build_sire_stats(all_runners: list[dict]) -> dict[str, dict]:
+    """Build sire win rate from all Proform runners."""
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"runs": 0, "wins": 0})
+    for r in all_runners:
+        sire = (r.get("Sire") or "").strip().lower()
+        if not sire:
+            continue
+        pos = r.get("Position")
+        if pos is None:
+            continue
+        stats[sire]["runs"] += 1
+        if pos == 1:
+            stats[sire]["wins"] += 1
+    return {s: {"sr": d["wins"] / d["runs"], "runs": d["runs"]}
+            for s, d in stats.items() if d["runs"] >= 20}
+
+
+def _get_sire_sr(sire_name: str) -> float:
+    """Get sire's progeny win strike rate."""
+    global _SIRE_STATS
+    if _SIRE_STATS is None:
+        return float("nan")
+    sire = (sire_name or "").strip().lower()
+    data = _SIRE_STATS.get(sire)
+    if data:
+        return data["sr"]
+    return float("nan")
+
+
 def _get_v9_features(pf_runner: dict, race_meta: dict, distance: int) -> list[float]:
     """Extract v9 signal-driven features from Proform runner data.
 
@@ -823,6 +857,8 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
         nan, nan, nan, nan,  # kash_wp_implied, early, late, consensus
         # ── v9: Signal-driven features (8) ──
         *_get_v9_features(pf_runner, race_meta, distance),
+        # ── v10: Sire feature (1) ──
+        _get_sire_sr(pf_runner.get("Sire", "")),
     ]
 
     # Force ALL market/external model features to NaN for independence
