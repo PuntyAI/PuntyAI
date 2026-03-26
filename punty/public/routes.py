@@ -2599,33 +2599,54 @@ async def get_daily_dashboard() -> dict:
         bet_types.sort(key=lambda x: _BT_ORDER.get(x["name"], 99))
 
         # ── Pick Strike Rates — ALL selections including tracked_only ──
+        # Separate query: include ALL content (even superseded) for accuracy tracking.
+        # The main scorecard filters by active_content, but pick accuracy should
+        # count every selection we made regardless of content lifecycle.
+        pick_race_num_rs = sa_func.coalesce(Pick.race_number, Pick.sequence_start_race)
+        rank_result = await db.execute(
+            select(Pick, Runner)
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .outerjoin(Race, and_(
+                Race.meeting_id == Pick.meeting_id,
+                Race.race_number == pick_race_num_rs,
+            ))
+            .outerjoin(Runner, and_(
+                Runner.race_id == Race.id,
+                Runner.saddlecloth == Pick.saddlecloth,
+            ))
+            .where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                Pick.pick_type == "selection",
+                Pick.tip_rank.isnot(None),
+            )
+        )
+        rank_rows = rank_result.all()
+
+        # Deduplicate: same meeting+race+rank may appear from multiple content versions.
+        # Keep the one from the latest content (highest content_id or most recent).
+        seen_rank_keys = {}  # (meeting_id, race_number, tip_rank) -> (pick, runner)
+        for pick, runner in rank_rows:
+            key = (pick.meeting_id, pick.race_number, pick.tip_rank)
+            if key not in seen_rank_keys:
+                seen_rank_keys[key] = (pick, runner)
+
         _rank_zero = lambda: {
             "total": 0, "settled": 0, "win_won": 0, "place_won": 0,
         }
         rank_stats = {}
-        # Settled selections — count wins and places
-        for pick, runner, race, meeting in settled_rows:
-            if pick.pick_type != "selection" or not pick.tip_rank:
-                continue
-            rank = pick.tip_rank
+        for (mid, rn, rank), (pick, runner) in seen_rank_keys.items():
             if rank not in rank_stats:
                 rank_stats[rank] = _rank_zero()
             rs = rank_stats[rank]
             rs["total"] += 1
-            rs["settled"] += 1
             fp = runner.finish_position if runner else None
-            if fp == 1:
-                rs["win_won"] += 1
-            if fp and fp <= 3:
-                rs["place_won"] += 1
-        # Unsettled selections — count toward total (all picks, including tracked)
-        for pick, runner, race, meeting in unsettled_rows:
-            if pick.pick_type != "selection" or not pick.tip_rank:
-                continue
-            rank = pick.tip_rank
-            if rank not in rank_stats:
-                rank_stats[rank] = _rank_zero()
-            rank_stats[rank]["total"] += 1
+            if fp is not None:
+                rs["settled"] += 1
+                if fp == 1:
+                    rs["win_won"] += 1
+                if fp <= 3:
+                    rs["place_won"] += 1
 
         _rank_labels = {1: "Punty's Pick", 2: "Second Pick", 3: "Third Pick", 4: "Roughie"}
         rank_strike = []
