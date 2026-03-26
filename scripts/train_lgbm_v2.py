@@ -882,8 +882,49 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
 # ── Data loading ────────────────────────────────────────────────────
 
 
+def _build_sire_stats_from_proform(data_dir: Path) -> None:
+    """Pre-pass: build sire win rates from all Proform runners."""
+    global _SIRE_STATS
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"runs": 0, "wins": 0})
+    count = 0
+
+    for year_dir in sorted(data_dir.iterdir()):
+        if not year_dir.is_dir():
+            continue
+        for month_num in range(1, 13):
+            month_names = {1: "January", 2: "February", 3: "March", 4: "April",
+                           5: "May", 6: "June", 7: "July", 8: "August",
+                           9: "September", 10: "October", 11: "November", 12: "December"}
+            form_dir = year_dir / month_names.get(month_num, "") / "Form"
+            if not form_dir.exists():
+                continue
+            for fpath in form_dir.glob("*.json"):
+                try:
+                    runners = json.load(open(fpath))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(runners, list):
+                    continue
+                for r in runners:
+                    sire = (r.get("Sire") or "").strip().lower()
+                    pos = r.get("Position")
+                    if not sire or pos is None or pos == 0:
+                        continue
+                    stats[sire]["runs"] += 1
+                    if pos == 1:
+                        stats[sire]["wins"] += 1
+                    count += 1
+
+    _SIRE_STATS = {s: {"sr": d["wins"] / d["runs"], "runs": d["runs"]}
+                   for s, d in stats.items() if d["runs"] >= 20}
+    print(f"  Sire stats built: {len(_SIRE_STATS)} sires from {count:,} runners")
+
+
 def load_proform_data(data_dir: Path) -> tuple[list[list[float]], list[int], list[int], list[str], list[str]]:
     """Load all Proform data, extract features, return X, y_win, y_place, race_ids, dates."""
+    # Pre-pass: build sire aggregate for sire_runners_sr feature
+    _build_sire_stats_from_proform(data_dir)
     print(f"Loading Proform data from {data_dir}...")
     start = time.time()
 
