@@ -1151,6 +1151,28 @@ class ResultsMonitor:
                                     f"{meeting.venue} R{race_num}: {e}"
                                 )
 
+                    # ── Exotic dividend backfill from PointsBet ──
+                    # Racing.com often returns positions but NOT exotic dividends.
+                    # PointsBet has quinella/exacta/trifecta/first4/quaddie divs.
+                    if not results_data.get("exotics"):
+                        try:
+                            from punty.scrapers.pointsbet import PointsBetScraper
+                            pb_exotic = PointsBetScraper()
+                            pb_exotic_data = await pb_exotic.scrape_results_for_race(
+                                meeting.venue, meeting.date, race_num
+                            )
+                            if pb_exotic_data.get("exotics"):
+                                results_data["exotics"] = pb_exotic_data["exotics"]
+                                logger.info(
+                                    f"PointsBet backfilled {len(pb_exotic_data['exotics'])} "
+                                    f"exotic divs for {meeting.venue} R{race_num}"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"PointsBet exotic backfill failed for "
+                                f"{meeting.venue} R{race_num}: {e}"
+                            )
+
                     await upsert_race_results(db, meeting_id, race_num, results_data)
 
                     # Verify runners were actually updated before proceeding
