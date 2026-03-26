@@ -1898,9 +1898,16 @@ async def refresh_pointsbet_odds(meeting_id: str, db: AsyncSession) -> int:
     if not meeting:
         return 0
 
+    # Get race count for this meeting
+    from punty.models.meeting import Race
+    race_count_result = await db.execute(
+        select(func.count(Race.id)).where(Race.meeting_id == meeting_id)
+    )
+    race_count = race_count_result.scalar() or 8
+
     pb = PointsBetScraper()
     try:
-        odds = await pb.scrape_odds_for_meeting(meeting.venue, meeting.date)
+        odds = await pb.scrape_odds_for_meeting(meeting.venue, meeting.date, meeting_id, race_count)
         if odds:
             await _merge_pointsbet_odds(db, meeting_id, odds)
             await db.commit()
