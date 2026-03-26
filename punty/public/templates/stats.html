@@ -255,22 +255,15 @@
         <div class="rounded-xl p-4 mb-6" style="background: var(--bg-card-alt); border: 1px solid var(--border-subtle); overflow-x: auto;">
             <div class="text-[10px] font-heading font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">Pick Strike Rate</div>
             {% set rank_colors = ['var(--magenta)', 'var(--cyan)', 'var(--yellow)', '#a855f7'] %}
-            <table style="width: 100%; border-collapse: collapse; min-width: 560px;">
+            <table style="width: 100%; border-collapse: collapse; min-width: 420px;">
                 <thead>
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
-                        <th class="text-left font-heading text-[10px] font-bold uppercase tracking-wider pb-2" style="color: var(--text-muted);" rowspan="2">Pick</th>
-                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-2" style="color: var(--text-muted);" rowspan="2">Total</th>
-                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-2" style="color: var(--text-muted);" rowspan="2">Settled</th>
-                        <th class="text-center font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-1" style="color: var(--cyan); border-bottom: 1px solid rgba(0, 212, 255, 0.2);" colspan="3">Win</th>
-                        <th class="text-center font-heading text-[10px] font-bold uppercase tracking-wider pb-1 px-1" style="color: var(--magenta); border-bottom: 1px solid rgba(233, 30, 140, 0.2);" colspan="3">Place</th>
-                    </tr>
-                    <tr style="border-bottom: 1px solid var(--border-subtle);">
-                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">Won</th>
-                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">SR%</th>
-                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">P&amp;L</th>
-                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">Won</th>
-                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">SR%</th>
-                        <th class="text-right font-heading text-[9px] font-bold uppercase tracking-wider pb-2 px-1" style="color: var(--text-muted);">P&amp;L</th>
+                        <th class="text-left font-heading text-[10px] font-bold uppercase tracking-wider pb-2" style="color: var(--text-muted);">Pick</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--text-muted);">Total</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--cyan);">Win</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--cyan);">Win SR%</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--magenta);">Place</th>
+                        <th class="text-right font-heading text-[10px] font-bold uppercase tracking-wider pb-2 px-2" style="color: var(--magenta);">Place SR%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -282,16 +275,11 @@
                                 <span class="font-heading font-semibold text-sm" style="color: var(--text-secondary);">{{ r.label }}</span>
                             </div>
                         </td>
-                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ r.total }}</td>
-                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ r.completed }}</td>
-                        {# Win columns #}
-                        <td class="text-right text-xs py-1.5 px-1" style="color: var(--text-secondary);">{{ r.win_won }}/{{ r.win_total }}</td>
-                        <td class="text-right text-xs font-heading font-semibold py-1.5 px-1" style="color: {{ '#4ade80' if r.win_sr >= 40 else '#facc15' if r.win_sr >= 20 else '#ef4444' if r.win_total > 0 else 'var(--text-muted)' }};">{{ '%.0f'|format(r.win_sr) }}%</td>
-                        <td class="text-right text-xs font-display font-bold py-1.5 px-1" style="color: {{ '#4ade80' if r.win_pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(r.win_pnl) | replace('+', '+$') | replace('-', '-$') }}</td>
-                        {# Place columns #}
-                        <td class="text-right text-xs py-1.5 px-1" style="color: var(--text-secondary);">{{ r.place_won }}/{{ r.place_total }}</td>
-                        <td class="text-right text-xs font-heading font-semibold py-1.5 px-1" style="color: {{ '#4ade80' if r.place_sr >= 40 else '#facc15' if r.place_sr >= 25 else '#ef4444' if r.place_total > 0 else 'var(--text-muted)' }};">{{ '%.0f'|format(r.place_sr) }}%</td>
-                        <td class="text-right text-xs font-display font-bold py-1.5 px-1" style="color: {{ '#4ade80' if r.place_pnl >= 0 else '#ef4444' }};">{{ '%+.0f'|format(r.place_pnl) | replace('+', '+$') | replace('-', '-$') }}</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-muted);">{{ r.settled }}/{{ r.total }}</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-secondary);">{{ r.win_won }}/{{ r.settled }}</td>
+                        <td class="text-right text-xs font-heading font-bold py-1.5 px-2" style="color: {{ '#4ade80' if r.win_sr >= 30 else '#facc15' if r.win_sr >= 15 else '#ef4444' if r.settled > 0 else 'var(--text-muted)' }};">{{ '%.0f'|format(r.win_sr) }}%</td>
+                        <td class="text-right text-xs py-1.5 px-2" style="color: var(--text-secondary);">{{ r.place_won }}/{{ r.settled }}</td>
+                        <td class="text-right text-xs font-heading font-bold py-1.5 px-2" style="color: {{ '#4ade80' if r.place_sr >= 50 else '#facc15' if r.place_sr >= 30 else '#ef4444' if r.settled > 0 else 'var(--text-muted)' }};">{{ '%.0f'|format(r.place_sr) }}%</td>
                     </tr>
                 {% endfor %}
                 </tbody>
