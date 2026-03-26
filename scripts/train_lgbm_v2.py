@@ -50,6 +50,96 @@ MONTH_DIRS = {
 
 MODEL_DIR = ROOT / "punty" / "data"
 
+# KASH model results — indexed by (date, horse_name_lower) for feature enrichment
+_KASH_INDEX: dict[tuple[str, str], dict] | None = None
+_KASH_DIR = ROOT / "betfair_data" / "kash_results"
+_SERVER_KASH_DIR = Path("/opt/puntyai/betfair_data/kash_results")
+
+
+def _load_kash_index() -> dict[tuple[str, str], dict]:
+    """Load all KASH result CSVs into a lookup dict."""
+    global _KASH_INDEX
+    if _KASH_INDEX is not None:
+        return _KASH_INDEX
+
+    import csv
+    kash_dir = _SERVER_KASH_DIR if _SERVER_KASH_DIR.exists() else _KASH_DIR
+    _KASH_INDEX = {}
+    if not kash_dir.exists():
+        print(f"  KASH dir not found: {kash_dir}")
+        return _KASH_INDEX
+
+    for fpath in sorted(kash_dir.glob("Kash_Model_Results_*.csv")):
+        count = 0
+        try:
+            with open(fpath, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    horse = (row.get("Horse") or "").strip().lower()
+                    raw_date = row.get("Date", "")
+                    # Normalize date: "1/01/2025" or "2026-01-01" → "2025-01-01"
+                    try:
+                        if "/" in raw_date:
+                            parts = raw_date.split("/")
+                            if len(parts) == 3:
+                                d, m, y = parts
+                                date_key = f"{y}-{int(m):02d}-{int(d):02d}"
+                            else:
+                                continue
+                        elif "-" in raw_date:
+                            date_key = raw_date[:10]  # Already ISO format
+                        else:
+                            continue
+                    except (ValueError, IndexError):
+                        continue
+                    if not horse:
+                        continue
+
+                    def _sf(v):
+                        try:
+                            return float(v) if v and str(v).strip() not in ("", "Unknown") else None
+                        except (ValueError, TypeError):
+                            return None
+
+                    key = (date_key, horse)
+                    if key not in _KASH_INDEX:
+                        _KASH_INDEX[key] = {
+                            "rp": _sf(row.get("RP")),
+                            "speed_cat": row.get("Speed_Cat", ""),
+                            "early_speed": _sf(row.get("Early_Speed")),
+                            "late_speed": _sf(row.get("Late_Speed")),
+                        }
+                        count += 1
+        except Exception as e:
+            print(f"  KASH load error ({fpath.name}): {e}")
+        print(f"  KASH loaded: {fpath.name} ({count:,} runners)")
+
+    print(f"  KASH index total: {len(_KASH_INDEX):,} runners")
+    return _KASH_INDEX
+
+
+def _get_kash_features(horse_name: str, race_date: str, market_prob: float) -> list[float]:
+    """Look up KASH features for a runner. Returns [wp_implied, early_speed, late_speed, consensus]."""
+    nan = float("nan")
+    idx = _load_kash_index()
+    key = (race_date, horse_name.strip().lower())
+    kash = idx.get(key)
+    if not kash or not kash.get("rp"):
+        return [nan, nan, nan, nan]
+
+    rp = kash["rp"]
+    kash_wp = 1.0 / rp if rp > 0 else nan
+    early = kash["early_speed"] if kash["early_speed"] is not None else nan
+    late = kash["late_speed"] if kash["late_speed"] is not None else nan
+
+    # Consensus: 1.0 if market prob and KASH agree within 10%
+    if not math.isnan(kash_wp) and not math.isnan(market_prob) and market_prob > 0:
+        consensus = 1.0 if abs(market_prob - kash_wp) < 0.10 else 0.0
+    else:
+        consensus = nan
+
+    return [kash_wp, early, late, consensus]
+
 LGBM_PARAMS = {
     "objective": "lambdarank",
     "metric": "ndcg",
@@ -621,6 +711,12 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
             field_size,
             cond_data["good"][0], cond_data["soft"][0],
             cond_data["heavy"][0], cond_data["firm"][0],
+        ),
+        # ── v8: KASH features (4) ──
+        *_get_kash_features(
+            pf_runner.get("Name", ""),
+            race_meta.get("date", ""),
+            market_prob,
         ),
     ]
 
