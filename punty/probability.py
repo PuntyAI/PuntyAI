@@ -418,21 +418,21 @@ FACTOR_REGISTRY = {
 # All predictions from OUR data: form, fitness, connections, pace, physical, class.
 # External models (KASH, market, PF predictions) used ONLY as post-prediction sense check.
 DEFAULT_WEIGHTS = {
-    "speed_rating": 0.320,     # v3: 33.9% — context-aware speed is dominant signal
-    "momentum": 0.197,         # v3: 20.9% — improving/declining trajectory
-    "horse_profile": 0.143,    # v3: 15.1% — age/sex/class interactions
-    "form": 0.070,             # v3: 7.4% — last-5, condition records, margins
-    "kri": 0.047,              # v3: 5.0% — kick rating index
-    "jockey_trainer": 0.047,   # v3: 4.9% — J/T stats
-    "closing_ability": 0.030,  # v3: 3.2% — ground gained settle→finish
-    "pace": 0.025,             # v3: 2.6% — early speed/pace
-    "jt_context": 0.024,       # v3 NEW: 2.6% — J/T specialist performance in context
-    "barrier": 0.019,          # v3: 2.0% — draw advantage
-    "deep_learning": 0.040,    # Pattern intelligence (retained, share reduced)
-    "freshness": 0.018,        # v3: 0.9% — spell patterns
-    "weight_carried": 0.014,   # v3: 0.8% — handicapper assessment
-    "class_fitness": 0.006,    # v3: 0.7% — class suitability
-}  # sums to 1.0 — v3 BACKTEST OPTIMISED (78.2% place SR, beats KASH 69.4%)
+    "form": 0.377,             # v4: 37.7% — biggest real signal (lift +0.122 on holdout)
+    "speed_rating": 0.229,     # v4: 22.9% — context-aware speed (lift +0.074)
+    "momentum": 0.093,         # v4: 9.3% — form trajectory (lift +0.030)
+    "closing_ability": 0.087,  # v4: 8.7% — ground gained (lift +0.028)
+    "pace": 0.062,             # v4: 6.2% — early speed (lift +0.020)
+    "weight_carried": 0.037,   # v4: 3.7% — handicapper assessment
+    "horse_profile": 0.031,    # v4: 3.1% — age/sex interactions
+    "barrier": 0.028,          # v4: 2.8% — draw advantage
+    "jt_context": 0.016,       # v4: 1.6% — J/T specialist (low data lift)
+    "deep_learning": 0.016,    # v4: 1.6% — pattern intelligence
+    "class_fitness": 0.009,    # v4: 0.9% — class suitability
+    "freshness": 0.009,        # v4: 0.9% — spell patterns
+    "kri": 0.003,              # v4: 0.3% — near-zero lift on holdout (data gap)
+    "jockey_trainer": 0.003,   # v4: 0.3% — near-zero lift on holdout (data gap)
+}  # v4: ablation-informed weights from 15-month Proform train, Feb+Mar holdout
 
 # Distance-specific weight overrides — v3 BACKTEST OPTIMISED
 # 78.2% place SR, beats KASH 69.4% by +8.8%. Includes speed_rating + jt_context.
