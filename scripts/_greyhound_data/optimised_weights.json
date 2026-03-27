@@ -1,50 +1,54 @@
 {
   "sprint": {
     "weights": {
-      "f_box_draw": 0.0706,
-      "f_market": 0.1583,
-      "f_early_speed": 0.0101,
-      "f_grade": 0.183,
-      "f_track_dist": 0.3105,
-      "f_recent_form": 0.2675
+      "f_box_draw": 0.0051,
+      "f_market": 0.299,
+      "f_early_speed": 0.066,
+      "f_grade": 0.1187,
+      "f_track_dist": 0.3092,
+      "f_recent_form": 0.1283,
+      "f_box_market": 0.0738
     },
-    "train_win_sr": 0.4658,
+    "train_win_sr": 0.4499,
     "n_races": 18956
   },
   "middle": {
     "weights": {
-      "f_box_draw": 0.0639,
-      "f_market": 0.1993,
-      "f_early_speed": 0.0101,
-      "f_grade": 0.1573,
-      "f_track_dist": 0.3988,
-      "f_recent_form": 0.1705
+      "f_box_draw": 0.0126,
+      "f_market": 0.3261,
+      "f_early_speed": 0.0465,
+      "f_grade": 0.0318,
+      "f_track_dist": 0.4343,
+      "f_recent_form": 0.0807,
+      "f_box_market": 0.068
     },
-    "train_win_sr": 0.4635,
+    "train_win_sr": 0.4587,
     "n_races": 15259
   },
   "distance": {
     "weights": {
-      "f_box_draw": 0.0821,
-      "f_market": 0.1042,
-      "f_early_speed": 0.1026,
-      "f_grade": 0.0316,
-      "f_track_dist": 0.4213,
-      "f_recent_form": 0.2582
+      "f_box_draw": 0.0226,
+      "f_market": 0.2511,
+      "f_early_speed": 0.005,
+      "f_grade": 0.006,
+      "f_track_dist": 0.5168,
+      "f_recent_form": 0.0944,
+      "f_box_market": 0.1041
     },
-    "train_win_sr": 0.5454,
+    "train_win_sr": 0.5363,
     "n_races": 1542
   },
   "global": {
     "weights": {
-      "f_box_draw": 0.0616,
-      "f_market": 0.1733,
-      "f_early_speed": 0.0196,
-      "f_grade": 0.1366,
-      "f_track_dist": 0.385,
-      "f_recent_form": 0.2239
+      "f_box_draw": 0.0544,
+      "f_market": 0.3011,
+      "f_early_speed": 0.0282,
+      "f_grade": 0.0658,
+      "f_track_dist": 0.3662,
+      "f_recent_form": 0.1471,
+      "f_box_market": 0.0372
     },
-    "train_win_sr": 0.4665,
+    "train_win_sr": 0.454,
     "n_races": 35757
   }
 }
