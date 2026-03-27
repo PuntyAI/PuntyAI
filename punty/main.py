@@ -115,6 +115,23 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.debug(f"Calibration cache not available: {e}")
 
+        # Load v3 speed benchmarks + J/T context data
+        try:
+            import json as _json
+            from punty.probability import load_speed_benchmarks, load_jt_context
+            speed_setting = await db.execute(sa_select(AppSettings).where(AppSettings.key == "speed_benchmarks"))
+            s = speed_setting.scalar_one_or_none()
+            if s and s.value:
+                n = load_speed_benchmarks(_json.loads(s.value))
+                logger.info(f"Speed benchmarks loaded: {n} entries")
+            jt_setting = await db.execute(sa_select(AppSettings).where(AppSettings.key == "jt_context_data"))
+            j = jt_setting.scalar_one_or_none()
+            if j and j.value:
+                n = load_jt_context(_json.loads(j.value))
+                logger.info(f"J/T context data loaded: {n} entries")
+        except Exception as e:
+            logger.debug(f"v3 factor data not available: {e}")
+
     if not settings.disable_background:
         # Start scheduler
         from punty.scheduler.manager import scheduler_manager

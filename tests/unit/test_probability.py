@@ -2488,12 +2488,12 @@ class TestDistanceSpecificWeights:
         sprint_w = DISTANCE_WEIGHT_OVERRIDES["sprint"]
         assert sprint_w.get("momentum", 0) > 0
 
-    def test_staying_has_high_kri(self):
-        """v2: staying has highest KRI weight (stamina indicator)."""
+    def test_staying_has_speed_rating(self):
+        """v3: staying has speed_rating as key factor."""
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
         staying_w = DISTANCE_WEIGHT_OVERRIDES["staying"]
-        assert staying_w["kri"] >= 0.20  # KRI dominates in staying
-        assert staying_w["closing_ability"] > staying_w["form"]  # Closing > form for stayers
+        assert staying_w.get("speed_rating", 0) > 0.10
+        assert staying_w.get("jockey_trainer", 0) > staying_w.get("form", 0)
 
     def test_all_distances_have_new_factors(self):
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
