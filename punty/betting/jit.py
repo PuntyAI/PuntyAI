@@ -134,8 +134,8 @@ async def evaluate_and_bet_race(
     # ── Rank runners by PP, select R1 ──
     ranked = []
     for runner in runners:
-        key = runner.horse_name
-        prob = probs.get(key)
+        # Probs are keyed by runner.id, not horse_name
+        prob = probs.get(runner.id) or probs.get(runner.horse_name)
         if not prob:
             continue
         wp = prob.win_probability
