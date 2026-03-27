@@ -339,52 +339,54 @@
 {# ════════════════════════════════════
    SECTION 1: Hero + Proof Bar
    ════════════════════════════════════ #}
-<section class="hero">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8 relative z-10">
-        <div class="grid md:grid-cols-2 gap-12 items-center">
-            {# Left: Copy #}
-            <div class="hero-text">
-                <h1 class="font-display font-bold leading-tight" style="font-size: clamp(2.25rem, 5vw, 3.75rem);">
-                    <span style="color: var(--text-primary);">Beat the </span><span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Market.</span><br>
-                    <span style="color: var(--text-primary); opacity: 0.75;">Don't Chase It.</span>
-                </h1>
-                <p class="text-lg md:text-xl" style="color: var(--text-secondary); margin-top: 1.5rem; margin-bottom: 2.5rem;">
-                    AI-powered probability engine finds value on the track so you don't chase favourites.
-                </p>
-                <div class="flex flex-wrap gap-3">
-                    <a href="/tips" class="btn-cta-lg">
-                        See Today's Tips
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-                    </a>
-                    <a href="/stats" class="btn-secondary inline-flex items-center gap-2 px-6 py-3" style="opacity: 0.85;">
-                        View Scorecard
-                    </a>
-                </div>
+{# ── HERO: Full-width mascot background with overlay text ── #}
+<section class="relative min-h-[550px] md:min-h-[620px] flex flex-col justify-end px-6 pt-12 pb-20 overflow-hidden" style="background: var(--bg-main);">
+    {# Background Mascot #}
+    <div class="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
+        <img src="/static/punty-character.jpg" alt="" class="w-full h-full object-contain object-right-top" style="filter: grayscale(1) brightness(0.5) contrast(1.25);" loading="eager">
+        <div class="absolute inset-0" style="background: linear-gradient(to top, var(--bg-main), rgba(19,19,24,0.4), transparent);"></div>
+    </div>
+    {# Hero Text #}
+    <div class="relative z-10 max-w-4xl">
+        <h1 style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: 0.95; letter-spacing: -0.03em; text-shadow: 0 0 15px rgba(255,176,204,0.4);">
+            BEAT THE <br><span style="color: var(--magenta); font-style: italic;">MARKET.</span><br>DON'T CHASE IT.
+        </h1>
+        <div class="flex flex-wrap gap-4 mt-8">
+            <a href="/tips" class="inline-block px-8 py-4 font-bold uppercase tracking-widest text-sm text-white" style="background: linear-gradient(135deg, #ffb0cc 0%, #ff46a0 100%); font-family: 'Space Grotesk', sans-serif; box-shadow: 0 0 20px rgba(255,70,160,0.3); transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                SEE TODAY'S TIPS
+            </a>
+            <a href="/stats" class="inline-block px-8 py-4 font-bold uppercase tracking-widest text-sm" style="border: 1px solid var(--cyan); color: var(--cyan); font-family: 'Space Grotesk', sans-serif; transition: background 0.2s;" onmouseover="this.style.background='rgba(60,215,255,0.1)'" onmouseout="this.style.background='transparent'">
+                VIEW SCORECARD
+            </a>
+        </div>
+    </div>
+</section>
 
-                {# Proof Bar #}
-                <div class="proof-divider"></div>
-                <div class="proof-bar">
-                    <a href="/stats" class="proof-tile">
-                        <div class="proof-value" style="-webkit-text-fill-color: {{ '#4ade80' if roi_7d >= 0 else '#ef4444' }};">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</div>
-                        <div class="proof-label">7 Day ROI</div>
-                    </a>
-                    <a href="/stats" class="proof-tile">
-                        <div class="proof-value">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</div>
-                        <div class="proof-label">Strike Rate</div>
-                    </a>
-                    <a href="/stats" class="proof-tile">
-                        <div class="proof-value">100%</div>
-                        <div class="proof-label">Transparent</div>
-                    </a>
-                </div>
+{# ── STATS BENTO GRID ── #}
+<section class="px-6 -mt-10 relative z-20 max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-[1px]">
+        <a href="/stats" class="p-8" style="background: var(--bg-card); border-left: 4px solid var(--magenta);">
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--text-muted);">Performance</span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--magenta);">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</span>
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: var(--cyan);">ROI</span>
             </div>
-
-            {# Right: Character #}
-            <div class="flex justify-center md:justify-end">
-                <div class="hero-character">
-                    <img src="/static/punty-character.jpg" alt="Punty - AI Racing Analyst" loading="eager">
-                </div>
+            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">Last 7 Days Activity</p>
+        </a>
+        <a href="/stats" class="p-8" style="background: var(--bg-card); border-left: 4px solid var(--cyan);">
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--text-muted);">Accuracy</span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--cyan);">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</span>
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: var(--text-muted);">STRIKE</span>
             </div>
+            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">v3 Probability Engine</p>
+        </a>
+        <div class="p-8 flex flex-col justify-center items-center text-center" style="background: var(--bg-card-alt);">
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; font-weight: 700;">AI SIGNAL STRENGTH</span>
+            <div class="w-full h-1 mt-4 overflow-hidden" style="background: rgba(255,255,255,0.08);">
+                <div style="background: var(--magenta); height: 100%; width: 88%;"></div>
+            </div>
+            <span style="font-size: 0.6rem; margin-top: 0.5rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.15em;">Optimized for High Volatility</span>
         </div>
     </div>
 </section>
