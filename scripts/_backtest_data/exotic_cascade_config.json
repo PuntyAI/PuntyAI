@@ -1,0 +1,114 @@
+{
+  "classic|good": {
+    "type": "trifecta_structured",
+    "n_races": 121,
+    "quin_rate": 0.083,
+    "exacta_rate": 0.083,
+    "tri_rate": 0.074,
+    "f4_rate": 0.025
+  },
+  "classic|heavy": {
+    "type": "first4_structured",
+    "n_races": 10,
+    "quin_rate": 0.0,
+    "exacta_rate": 0.0,
+    "tri_rate": 0.1,
+    "f4_rate": 0.1
+  },
+  "classic|soft": {
+    "type": "trifecta_structured",
+    "n_races": 66,
+    "quin_rate": 0.091,
+    "exacta_rate": 0.091,
+    "tri_rate": 0.045,
+    "f4_rate": 0.061
+  },
+  "middle|good": {
+    "type": "first4_structured",
+    "n_races": 388,
+    "quin_rate": 0.116,
+    "exacta_rate": 0.111,
+    "tri_rate": 0.057,
+    "f4_rate": 0.041
+  },
+  "middle|heavy": {
+    "type": "first4_structured",
+    "n_races": 35,
+    "quin_rate": 0.114,
+    "exacta_rate": 0.114,
+    "tri_rate": 0.143,
+    "f4_rate": 0.086
+  },
+  "middle|soft": {
+    "type": "trifecta_structured",
+    "n_races": 252,
+    "quin_rate": 0.123,
+    "exacta_rate": 0.123,
+    "tri_rate": 0.044,
+    "f4_rate": 0.044
+  },
+  "short|good": {
+    "type": "trifecta_structured",
+    "n_races": 371,
+    "quin_rate": 0.113,
+    "exacta_rate": 0.113,
+    "tri_rate": 0.065,
+    "f4_rate": 0.027
+  },
+  "short|heavy": {
+    "type": "exacta",
+    "n_races": 41,
+    "quin_rate": 0.098,
+    "exacta_rate": 0.098,
+    "tri_rate": 0.024,
+    "f4_rate": 0.073
+  },
+  "short|soft": {
+    "type": "first4_structured",
+    "n_races": 232,
+    "quin_rate": 0.125,
+    "exacta_rate": 0.125,
+    "tri_rate": 0.06,
+    "f4_rate": 0.047
+  },
+  "sprint|good": {
+    "type": "first4_structured",
+    "n_races": 238,
+    "quin_rate": 0.155,
+    "exacta_rate": 0.155,
+    "tri_rate": 0.084,
+    "f4_rate": 0.071
+  },
+  "sprint|heavy": {
+    "type": "first4_structured",
+    "n_races": 40,
+    "quin_rate": 0.1,
+    "exacta_rate": 0.1,
+    "tri_rate": 0.075,
+    "f4_rate": 0.075
+  },
+  "sprint|soft": {
+    "type": "first4_structured",
+    "n_races": 195,
+    "quin_rate": 0.118,
+    "exacta_rate": 0.118,
+    "tri_rate": 0.092,
+    "f4_rate": 0.072
+  },
+  "staying|good": {
+    "type": "trifecta_structured",
+    "n_races": 41,
+    "quin_rate": 0.146,
+    "exacta_rate": 0.146,
+    "tri_rate": 0.049,
+    "f4_rate": 0.049
+  },
+  "staying|soft": {
+    "type": "first4_structured",
+    "n_races": 22,
+    "quin_rate": 0.136,
+    "exacta_rate": 0.136,
+    "tri_rate": 0.091,
+    "f4_rate": 0.182
+  }
+}

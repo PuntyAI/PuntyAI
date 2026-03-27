@@ -1,0 +1,546 @@
+{
+  "Albion Park|331": {
+    "median_winner_bsp": 4.2,
+    "n_races": 1574
+  },
+  "Albion Park|395": {
+    "median_winner_bsp": 3.95,
+    "n_races": 1468
+  },
+  "Albion Park|520": {
+    "median_winner_bsp": 3.92,
+    "n_races": 1966
+  },
+  "Albion Park|600": {
+    "median_winner_bsp": 3.68,
+    "n_races": 340
+  },
+  "Albion Park|710": {
+    "median_winner_bsp": 3.3,
+    "n_races": 245
+  },
+  "Ballarat|390": {
+    "median_winner_bsp": 4.4,
+    "n_races": 2628
+  },
+  "Ballarat|450": {
+    "median_winner_bsp": 4.0,
+    "n_races": 1842
+  },
+  "Ballarat|545": {
+    "median_winner_bsp": 3.46,
+    "n_races": 285
+  },
+  "Ballarat|660": {
+    "median_winner_bsp": 3.55,
+    "n_races": 51
+  },
+  "Bendigo|425": {
+    "median_winner_bsp": 4.2,
+    "n_races": 3086
+  },
+  "Bendigo|500": {
+    "median_winner_bsp": 4.2,
+    "n_races": 1035
+  },
+  "Bendigo|660": {
+    "median_winner_bsp": 3.22,
+    "n_races": 58
+  },
+  "Broken Hill|375": {
+    "median_winner_bsp": 4.45,
+    "n_races": 660
+  },
+  "Broken Hill|525": {
+    "median_winner_bsp": 2.96,
+    "n_races": 153
+  },
+  "Bulli|340": {
+    "median_winner_bsp": 3.6,
+    "n_races": 708
+  },
+  "Bulli|400": {
+    "median_winner_bsp": 3.54,
+    "n_races": 658
+  },
+  "Bulli|472": {
+    "median_winner_bsp": 3.05,
+    "n_races": 287
+  },
+  "Bulli|515": {
+    "median_winner_bsp": 2.64,
+    "n_races": 33
+  },
+  "Bulli|590": {
+    "median_winner_bsp": 2.5,
+    "n_races": 15
+  },
+  "Bundaberg|315": {
+    "median_winner_bsp": 3.78,
+    "n_races": 188
+  },
+  "Bundaberg|460": {
+    "median_winner_bsp": 3.8,
+    "n_races": 406
+  },
+  "Bundaberg|531": {
+    "median_winner_bsp": 4.14,
+    "n_races": 93
+  },
+  "Capalaba|366": {
+    "median_winner_bsp": 3.16,
+    "n_races": 2704
+  },
+  "Casino|300": {
+    "median_winner_bsp": 4.47,
+    "n_races": 1244
+  },
+  "Casino|411": {
+    "median_winner_bsp": 3.9,
+    "n_races": 1036
+  },
+  "Casino|484": {
+    "median_winner_bsp": 3.82,
+    "n_races": 327
+  },
+  "Casino|620": {
+    "median_winner_bsp": 2.85,
+    "n_races": 32
+  },
+  "Dapto|297": {
+    "median_winner_bsp": 4.0,
+    "n_races": 992
+  },
+  "Dapto|520": {
+    "median_winner_bsp": 4.06,
+    "n_races": 451
+  },
+  "Dapto|600": {
+    "median_winner_bsp": 3.97,
+    "n_races": 145
+  },
+  "Dubbo|318": {
+    "median_winner_bsp": 3.83,
+    "n_races": 1191
+  },
+  "Dubbo|400": {
+    "median_winner_bsp": 4.29,
+    "n_races": 673
+  },
+  "Dubbo|516": {
+    "median_winner_bsp": 3.35,
+    "n_races": 275
+  },
+  "Dubbo|605": {
+    "median_winner_bsp": 4.04,
+    "n_races": 49
+  },
+  "Geelong|400": {
+    "median_winner_bsp": 4.21,
+    "n_races": 2728
+  },
+  "Geelong|460": {
+    "median_winner_bsp": 3.77,
+    "n_races": 1489
+  },
+  "Geelong|520": {
+    "median_winner_bsp": 3.92,
+    "n_races": 92
+  },
+  "Geelong|596": {
+    "median_winner_bsp": 5.4,
+    "n_races": 7
+  },
+  "Geelong|680": {
+    "median_winner_bsp": 3.96,
+    "n_races": 39
+  },
+  "Gosford|388": {
+    "median_winner_bsp": 4.37,
+    "n_races": 1406
+  },
+  "Gosford|515": {
+    "median_winner_bsp": 3.55,
+    "n_races": 503
+  },
+  "Gosford|603": {
+    "median_winner_bsp": 3.4,
+    "n_races": 159
+  },
+  "Gosford|710": {
+    "median_winner_bsp": 4.71,
+    "n_races": 4
+  },
+  "Goulburn|350": {
+    "median_winner_bsp": 3.88,
+    "n_races": 1210
+  },
+  "Goulburn|440": {
+    "median_winner_bsp": 3.45,
+    "n_races": 742
+  },
+  "Grafton|350": {
+    "median_winner_bsp": 4.1,
+    "n_races": 1852
+  },
+  "Grafton|450": {
+    "median_winner_bsp": 3.28,
+    "n_races": 726
+  },
+  "Grafton|660": {
+    "median_winner_bsp": 2.83,
+    "n_races": 34
+  },
+  "Gunnedah|340": {
+    "median_winner_bsp": 3.9,
+    "n_races": 1515
+  },
+  "Gunnedah|431": {
+    "median_winner_bsp": 3.35,
+    "n_races": 482
+  },
+  "Gunnedah|527": {
+    "median_winner_bsp": 3.37,
+    "n_races": 140
+  },
+  "Healesville|300": {
+    "median_winner_bsp": 3.95,
+    "n_races": 2385
+  },
+  "Healesville|350": {
+    "median_winner_bsp": 3.81,
+    "n_races": 2138
+  },
+  "Horsham|410": {
+    "median_winner_bsp": 3.98,
+    "n_races": 1790
+  },
+  "Horsham|485": {
+    "median_winner_bsp": 3.15,
+    "n_races": 495
+  },
+  "Ipswich|288": {
+    "median_winner_bsp": 4.5,
+    "n_races": 1255
+  },
+  "Ipswich|431": {
+    "median_winner_bsp": 4.2,
+    "n_races": 2518
+  },
+  "Ipswich|520": {
+    "median_winner_bsp": 3.59,
+    "n_races": 1177
+  },
+  "Ipswich|630": {
+    "median_winner_bsp": 3.75,
+    "n_races": 144
+  },
+  "Ipswich|732": {
+    "median_winner_bsp": 9.94,
+    "n_races": 4
+  },
+  "Maitland|400": {
+    "median_winner_bsp": 3.28,
+    "n_races": 1175
+  },
+  "Maitland|450": {
+    "median_winner_bsp": 3.06,
+    "n_races": 484
+  },
+  "Maitland|565": {
+    "median_winner_bsp": 3.15,
+    "n_races": 69
+  },
+  "Muswellbrook|336": {
+    "median_winner_bsp": 4.5,
+    "n_races": 709
+  },
+  "Muswellbrook|431": {
+    "median_winner_bsp": 4.2,
+    "n_races": 204
+  },
+  "Muswellbrook|571": {
+    "median_winner_bsp": 3.18,
+    "n_races": 29
+  },
+  "Nowra|365": {
+    "median_winner_bsp": 3.65,
+    "n_races": 1238
+  },
+  "Nowra|520": {
+    "median_winner_bsp": 3.49,
+    "n_races": 499
+  },
+  "Nowra|630": {
+    "median_winner_bsp": 2.6,
+    "n_races": 52
+  },
+  "Q Straight|300": {
+    "median_winner_bsp": 3.42,
+    "n_races": 405
+  },
+  "Q Straight|350": {
+    "median_winner_bsp": 3.35,
+    "n_races": 373
+  },
+  "Q1 Lakeside|352": {
+    "median_winner_bsp": 4.4,
+    "n_races": 632
+  },
+  "Q1 Lakeside|390": {
+    "median_winner_bsp": 4.1,
+    "n_races": 575
+  },
+  "Q1 Lakeside|457": {
+    "median_winner_bsp": 3.74,
+    "n_races": 666
+  },
+  "Q1 Lakeside|550": {
+    "median_winner_bsp": 3.99,
+    "n_races": 107
+  },
+  "Q1 Lakeside|642": {
+    "median_winner_bsp": 3.2,
+    "n_races": 33
+  },
+  "Q2 Parklands|520": {
+    "median_winner_bsp": 3.97,
+    "n_races": 466
+  },
+  "Q2 Parklands|600": {
+    "median_winner_bsp": 3.56,
+    "n_races": 129
+  },
+  "Q2 Parklands|710": {
+    "median_winner_bsp": 3.02,
+    "n_races": 63
+  },
+  "Richmond|320": {
+    "median_winner_bsp": 4.01,
+    "n_races": 2456
+  },
+  "Richmond|324": {
+    "median_winner_bsp": 3.5,
+    "n_races": 1231
+  },
+  "Richmond|401": {
+    "median_winner_bsp": 3.8,
+    "n_races": 1962
+  },
+  "Richmond|520": {
+    "median_winner_bsp": 3.4,
+    "n_races": 856
+  },
+  "Richmond|622": {
+    "median_winner_bsp": 3.09,
+    "n_races": 214
+  },
+  "Richmond|722": {
+    "median_winner_bsp": 3.1,
+    "n_races": 11
+  },
+  "Richmond Straight|324": {
+    "median_winner_bsp": 3.3,
+    "n_races": 305
+  },
+  "Rockhampton|407": {
+    "median_winner_bsp": 4.0,
+    "n_races": 2011
+  },
+  "Rockhampton|510": {
+    "median_winner_bsp": 3.41,
+    "n_races": 355
+  },
+  "Sale|435": {
+    "median_winner_bsp": 4.38,
+    "n_races": 2086
+  },
+  "Sale|440": {
+    "median_winner_bsp": 3.63,
+    "n_races": 11
+  },
+  "Sale|510": {
+    "median_winner_bsp": 4.1,
+    "n_races": 523
+  },
+  "Sale|520": {
+    "median_winner_bsp": 12.5,
+    "n_races": 1
+  },
+  "Sale|640": {
+    "median_winner_bsp": 3.65,
+    "n_races": 74
+  },
+  "Sandown Park|515": {
+    "median_winner_bsp": 4.0,
+    "n_races": 2640
+  },
+  "Sandown Park|595": {
+    "median_winner_bsp": 3.6,
+    "n_races": 771
+  },
+  "Sandown Park|715": {
+    "median_winner_bsp": 3.96,
+    "n_races": 166
+  },
+  "Shepparton|385": {
+    "median_winner_bsp": 4.53,
+    "n_races": 648
+  },
+  "Shepparton|390": {
+    "median_winner_bsp": 4.4,
+    "n_races": 2019
+  },
+  "Shepparton|450": {
+    "median_winner_bsp": 3.96,
+    "n_races": 1535
+  },
+  "Shepparton|650": {
+    "median_winner_bsp": 3.32,
+    "n_races": 59
+  },
+  "Taree|300": {
+    "median_winner_bsp": 4.48,
+    "n_races": 1042
+  },
+  "Taree|314": {
+    "median_winner_bsp": 4.8,
+    "n_races": 137
+  },
+  "Taree|392": {
+    "median_winner_bsp": 4.53,
+    "n_races": 107
+  },
+  "Taree|525": {
+    "median_winner_bsp": 3.5,
+    "n_races": 180
+  },
+  "Taree|537": {
+    "median_winner_bsp": 4.23,
+    "n_races": 33
+  },
+  "Temora|330": {
+    "median_winner_bsp": 4.39,
+    "n_races": 1310
+  },
+  "Temora|457": {
+    "median_winner_bsp": 3.84,
+    "n_races": 507
+  },
+  "Temora|570": {
+    "median_winner_bsp": 3.42,
+    "n_races": 60
+  },
+  "Temora|732": {
+    "median_winner_bsp": 33.77,
+    "n_races": 1
+  },
+  "The Gardens|272": {
+    "median_winner_bsp": 4.56,
+    "n_races": 260
+  },
+  "The Gardens|400": {
+    "median_winner_bsp": 4.1,
+    "n_races": 2649
+  },
+  "The Gardens|515": {
+    "median_winner_bsp": 3.8,
+    "n_races": 997
+  },
+  "The Gardens|600": {
+    "median_winner_bsp": 3.29,
+    "n_races": 192
+  },
+  "The Gardens|715": {
+    "median_winner_bsp": 4.38,
+    "n_races": 28
+  },
+  "The Meadows|525": {
+    "median_winner_bsp": 4.2,
+    "n_races": 2896
+  },
+  "The Meadows|600": {
+    "median_winner_bsp": 3.89,
+    "n_races": 617
+  },
+  "The Meadows|730": {
+    "median_winner_bsp": 3.09,
+    "n_races": 130
+  },
+  "Townsville|380": {
+    "median_winner_bsp": 4.91,
+    "n_races": 2459
+  },
+  "Townsville|498": {
+    "median_winner_bsp": 4.54,
+    "n_races": 694
+  },
+  "Townsville|643": {
+    "median_winner_bsp": 5.08,
+    "n_races": 27
+  },
+  "Traralgon|350": {
+    "median_winner_bsp": 4.36,
+    "n_races": 761
+  },
+  "Traralgon|395": {
+    "median_winner_bsp": 4.3,
+    "n_races": 977
+  },
+  "Traralgon|450": {
+    "median_winner_bsp": 3.99,
+    "n_races": 438
+  },
+  "Traralgon|500": {
+    "median_winner_bsp": 3.71,
+    "n_races": 134
+  },
+  "Wagga|320": {
+    "median_winner_bsp": 3.97,
+    "n_races": 1130
+  },
+  "Wagga|400": {
+    "median_winner_bsp": 4.47,
+    "n_races": 529
+  },
+  "Wagga|525": {
+    "median_winner_bsp": 3.9,
+    "n_races": 237
+  },
+  "Warragul|400": {
+    "median_winner_bsp": 4.3,
+    "n_races": 2995
+  },
+  "Warragul|460": {
+    "median_winner_bsp": 3.93,
+    "n_races": 1693
+  },
+  "Warragul|680": {
+    "median_winner_bsp": 3.05,
+    "n_races": 41
+  },
+  "Warrnambool|390": {
+    "median_winner_bsp": 4.2,
+    "n_races": 2432
+  },
+  "Warrnambool|450": {
+    "median_winner_bsp": 3.97,
+    "n_races": 1201
+  },
+  "Warrnambool|650": {
+    "median_winner_bsp": 3.33,
+    "n_races": 38
+  },
+  "Wentworth Park|280": {
+    "median_winner_bsp": 4.12,
+    "n_races": 77
+  },
+  "Wentworth Park|520": {
+    "median_winner_bsp": 4.0,
+    "n_races": 3014
+  },
+  "Wentworth Park|720": {
+    "median_winner_bsp": 3.45,
+    "n_races": 173
+  }
+}

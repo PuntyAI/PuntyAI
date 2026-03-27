@@ -419,16 +419,16 @@ class TestTuneWeights:
 class TestBiggestChange:
     def test_identifies_biggest(self):
         """Correctly identifies the factor with biggest change."""
-        old = {"market": 0.22, "form": 0.15, "pace": 0.11}
-        new = {"market": 0.25, "form": 0.14, "pace": 0.11}
+        old = {"momentum": 0.22, "form": 0.15, "pace": 0.11}
+        new = {"momentum": 0.25, "form": 0.14, "pace": 0.11}
         result = _biggest_change(old, new)
-        assert "Market" in result
+        assert "Momentum" in result
         assert "+3.0%" in result
 
     def test_decrease(self):
         """Shows decrease direction."""
-        old = {"market": 0.22, "form": 0.18}
-        new = {"market": 0.22, "form": 0.12}
+        old = {"momentum": 0.22, "form": 0.18}
+        new = {"momentum": 0.22, "form": 0.12}
         result = _biggest_change(old, new)
         assert "Form" in result
         assert "-6.0%" in result

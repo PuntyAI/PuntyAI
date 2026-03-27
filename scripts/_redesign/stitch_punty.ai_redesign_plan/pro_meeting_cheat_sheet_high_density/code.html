@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>QUANT_TERM | Flemington Cheat Sheet</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-container": "#b83900",
+              "tertiary-container": "#009ebe",
+              "tertiary-fixed-dim": "#3cd7ff",
+              "on-error-container": "#ffdad6",
+              "surface-bright": "#39383e",
+              "outline": "#a88892",
+              "surface-container-highest": "#35343a",
+              "tertiary-fixed": "#b4ebff",
+              "surface-container-low": "#1b1b20",
+              "surface-tint": "#ffb0cc",
+              "on-primary-container": "#580030",
+              "surface": "#131318",
+              "on-primary-fixed-variant": "#8d0051",
+              "primary-fixed-dim": "#ffb0cc",
+              "primary": "#ffb0cc",
+              "outline-variant": "#594048",
+              "primary-container": "#ff46a0",
+              "tertiary": "#3cd7ff",
+              "on-secondary": "#5d1900",
+              "surface-dim": "#131318",
+              "surface-container-high": "#2a292f",
+              "background": "#131318",
+              "primary-fixed": "#ffd9e4",
+              "secondary-fixed": "#ffdbd0",
+              "secondary": "#ffb59d",
+              "on-surface-variant": "#e1bdc8",
+              "error-container": "#93000a",
+              "on-primary": "#640038",
+              "on-secondary-container": "#ffddd2",
+              "inverse-primary": "#b8006c",
+              "on-tertiary-fixed-variant": "#004e5f",
+              "on-surface": "#e4e1e9",
+              "error": "#ffb4ab",
+              "on-error": "#690005",
+              "on-background": "#e4e1e9",
+              "on-tertiary-container": "#002e3a",
+              "inverse-on-surface": "#303036",
+              "on-secondary-fixed": "#390c00",
+              "surface-container-lowest": "#0e0e13",
+              "surface-container": "#1f1f25",
+              "on-primary-fixed": "#3e0021",
+              "surface-variant": "#35343a",
+              "secondary-fixed-dim": "#ffb59d",
+              "on-tertiary-fixed": "#001f27",
+              "inverse-surface": "#e4e1e9",
+              "on-tertiary": "#003642",
+              "on-secondary-fixed-variant": "#832600"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: #131318; }
+      ::-webkit-scrollbar-thumb { background: #35343a; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 selection:text-primary">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-4 h-12 z-50 bg-[#131318] fixed top-0">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black italic text-[#ffb0cc] tracking-widest font-headline">QUANT_TERM</span>
+<nav class="hidden md:flex items-center gap-6 ml-8">
+<a class="font-['Space_Grotesk'] font-bold uppercase tracking-tighter text-sm text-zinc-500 hover:bg-zinc-800/40 hover:text-white transition-all duration-150 ease-in-out active:opacity-70" href="#">Markets</a>
+<a class="font-['Space_Grotesk'] font-bold uppercase tracking-tighter text-sm text-[#ffb0cc] border-b-2 border-[#ffb0cc] transition-all duration-150 ease-in-out active:opacity-70" href="#">Cheat Sheet</a>
+<a class="font-['Space_Grotesk'] font-bold uppercase tracking-tighter text-sm text-zinc-500 hover:bg-zinc-800/40 hover:text-white transition-all duration-150 ease-in-out active:opacity-70" href="#">Analytics</a>
+</nav>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-zinc-400 cursor-pointer hover:text-white transition-all" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-zinc-400 cursor-pointer hover:text-white transition-all" data-icon="account_balance_wallet">account_balance_wallet</span>
+<div class="h-8 w-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<img alt="Pro Trader Avatar" data-alt="Close-up profile of a sleek digital avatar with neon pink accents on a dark metallic background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAL5U8gk1YBbAcMr9cluKSVo4OGYmjTV3TCX6hGU750u7Cqvorxb8lRp5TePpbf6del0uXyuTyd0HjgVG7l3ShNmpxZDJhtvLCzbgTp00R-MlabWPyKetnGAYTbmoGQFGk2peTEK8QNKO5ypxLtjidJXgsrK0th6l2Et3cfOFWkIycDpBk3wq61pb8ygXcyJSwhlfC1KLNCxhYdh6lF4zXSLBm85Saotk6q8M3lGr7cki08LVuZDqfQ_zGnYNqaKuIuIEnIdTeX0EU"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-20 flex flex-col items-center py-4 z-40 bg-[#1b1b20] mt-12">
+<div class="mb-8">
+<div class="text-[#ffb0cc] font-black text-center py-4 font-headline leading-tight">QT<br/><span class="text-[10px] opacity-60">PRO</span></div>
+</div>
+<nav class="flex flex-col gap-1 w-full flex-grow">
+<a class="flex flex-col items-center justify-center text-zinc-500 w-full py-3 scale-95 active:scale-90 transition-transform hover:text-zinc-200 hover:bg-[#35343a]/50" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="terminal">terminal</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em] uppercase">Terminal</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 w-full py-3 scale-95 active:scale-90 transition-transform hover:text-zinc-200 hover:bg-[#35343a]/50" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="sensors">sensors</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em] uppercase">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 w-full py-3 scale-95 active:scale-90 transition-transform hover:text-zinc-200 hover:bg-[#35343a]/50" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="account_balance">account_balance</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em] uppercase">Portfolio</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#ffb0cc] bg-[#35343a] border-r-2 border-[#ffb0cc] w-full py-3 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="monitoring">monitoring</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em] uppercase">Insights</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 w-full py-3 scale-95 active:scale-90 transition-transform hover:text-zinc-200 hover:bg-[#35343a]/50" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="history">history</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em] uppercase">History</span>
+</a>
+</nav>
+<div class="flex flex-col gap-1 w-full border-t border-outline-variant/10 pt-4">
+<a class="flex flex-col items-center justify-center text-zinc-500 w-full py-3 hover:text-zinc-200" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="help">help</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 w-full py-3 hover:text-zinc-200" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="logout">logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-20 mt-12 p-4 bg-surface min-h-screen">
+<!-- Header / Banner -->
+<div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h1 class="text-3xl font-black font-headline tracking-tighter text-white uppercase leading-none">Flemington <span class="text-primary italic">Cheat Sheet</span></h1>
+<p class="text-zinc-500 text-xs mt-1 uppercase tracking-widest font-medium">Track: Good 4 | Rail: Out 3m Entire Circuit | 10 Race Card</p>
+</div>
+<div class="flex items-center gap-2">
+<div class="bg-surface-container-low px-3 py-1 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-[10px] font-bold tracking-widest text-on-surface-variant">DATA LIVE</span>
+</div>
+<button class="bg-gradient-to-r from-primary to-primary-container px-4 py-2 text-[10px] font-black text-on-primary-container tracking-tighter flex items-center gap-2 uppercase">
+<span class="material-symbols-outlined text-xs" data-icon="bolt" data-weight="fill">bolt</span>
+                    Place Bet
+                </button>
+</div>
+</div>
+<!-- Grid of 10 Races -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+<!-- Race 1 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R1</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Super Sprinters Plate</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">12:15 PM</span>
+</div>
+<div class="space-y-1">
+<!-- Top Pick -->
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">4. Alpha Runner</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">2.45</span>
+</div>
+<!-- Second Pick -->
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">E/W</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">7. Mystic Sky</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">12.0</span>
+</div>
+</div>
+</div>
+<!-- Race 2 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R2</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Stayers Handicap</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">12:50 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">2. Iron Gaze</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">3.10</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">PLACE</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">11. Wanderer</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">6.50</span>
+</div>
+</div>
+</div>
+<!-- Race 3 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R3</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Rising Stars Mile</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">1:25 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">1. Bolt Action</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">1.95</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">E/W</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">5. Velvet Touch</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">21.0</span>
+</div>
+</div>
+</div>
+<!-- Race 4 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R4</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Melbourne Cup Day Hcp</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">2:00 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">6. Ocean Pearl</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">4.20</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">E/W</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">12. Sun King</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">9.00</span>
+</div>
+</div>
+</div>
+<!-- Race 5 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R5</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Victoria Derby Preview</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">2:35 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">9. Future Champion</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">5.50</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">PLACE</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">3. Noble One</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">4.80</span>
+</div>
+</div>
+</div>
+<!-- Race 6 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R6</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Spring Sprint Classic</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">3:10 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">1. Sonic Wave</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">2.10</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">E/W</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">8. Night Crawler</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">15.0</span>
+</div>
+</div>
+</div>
+<!-- Race 7 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R7</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Flemington Oaks</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">3:45 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">5. Rose Petal</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">3.80</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">PLACE</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">10. Silk Ribbon</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">5.20</span>
+</div>
+</div>
+</div>
+<!-- Race 8 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R8</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">The Makybe Diva Stks</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">4:25 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">3. Thunder Cloud</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">2.65</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">E/W</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">2. Legend Soul</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">7.80</span>
+</div>
+</div>
+</div>
+<!-- Race 9 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R9</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">Final Sprint Hcp</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">5:05 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">14. Swift Justice</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">4.90</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">E/W</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">6. Dark Shadow</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">18.0</span>
+</div>
+</div>
+</div>
+<!-- Race 10 Card -->
+<div class="bg-surface-container-low p-2 relative group overflow-hidden border-l border-primary/20">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="bg-primary text-on-primary text-[10px] font-black px-1.5 py-0.5">R10</span>
+<span class="text-[10px] font-bold text-white tracking-tight truncate max-w-[120px]">The Last Ride Hcp</span>
+</div>
+<span class="text-[9px] font-mono text-zinc-400">5:45 PM</span>
+</div>
+<div class="space-y-1">
+<div class="bg-surface-container-highest p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-primary-container text-white text-[8px] font-black px-1 rounded-sm">WIN</span>
+<span class="text-[10px] font-bold text-white truncate">7. Lucky Last</span>
+</div>
+<span class="text-[11px] font-black text-primary font-mono tracking-tighter">3.40</span>
+</div>
+<div class="bg-surface-container-highest/50 p-1.5 flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="bg-outline-variant text-on-surface-variant text-[8px] font-black px-1 rounded-sm">PLACE</span>
+<span class="text-[10px] font-medium text-on-surface-variant truncate">15. Mystery Fin</span>
+</div>
+<span class="text-[11px] font-bold text-tertiary font-mono tracking-tighter">6.00</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Featured Section Asymmetric -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="md:col-span-2 space-y-4">
+<h3 class="font-headline font-black text-xs uppercase tracking-widest text-zinc-500 border-l-2 border-primary pl-2">Track Intelligence Summary</h3>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="bg-surface-container p-3 flex flex-col items-center">
+<span class="text-[10px] text-zinc-500 uppercase font-bold">Bias</span>
+<span class="text-xl font-headline font-black text-white">INSIDE</span>
+</div>
+<div class="bg-surface-container p-3 flex flex-col items-center">
+<span class="text-[10px] text-zinc-500 uppercase font-bold">Pattern</span>
+<span class="text-xl font-headline font-black text-white">LEADERS</span>
+</div>
+<div class="bg-surface-container p-3 flex flex-col items-center">
+<span class="text-[10px] text-zinc-500 uppercase font-bold">Wind</span>
+<span class="text-xl font-headline font-black text-tertiary">15km NW</span>
+</div>
+<div class="bg-surface-container p-3 flex flex-col items-center">
+<span class="text-[10px] text-zinc-500 uppercase font-bold">Confidence</span>
+<span class="text-xl font-headline font-black text-primary">HIGH</span>
+</div>
+</div>
+</div>
+<div class="bg-primary/5 p-4 border border-primary/10 flex flex-col justify-between">
+<div>
+<h4 class="text-[10px] font-black uppercase text-primary tracking-widest mb-2">Banker of the Day</h4>
+<p class="text-white text-lg font-headline font-bold uppercase leading-tight">Race 3: Bolt Action</p>
+<p class="text-zinc-500 text-[10px] mt-1 italic leading-relaxed">Top selection with 82% efficiency rating. Predicted speed map suggests early lead with no pressure.</p>
+</div>
+<div class="mt-4 flex justify-between items-end">
+<div class="flex flex-col">
+<span class="text-[10px] text-zinc-500 font-bold uppercase">Open Price</span>
+<span class="text-lg font-mono font-black text-primary">$1.95</span>
+</div>
+<button class="bg-primary-container text-on-primary-container px-3 py-1.5 text-[9px] font-black uppercase tracking-tighter">Quick Load</button>
+</div>
+</div>
+</div>
+<!-- Footer Stats -->
+<footer class="mt-12 border-t border-outline-variant/10 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="flex items-center gap-6">
+<div class="flex flex-col">
+<span class="text-[8px] text-zinc-500 uppercase font-bold">Total Picks</span>
+<span class="text-sm font-bold text-white">20 Horse Cluster</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[8px] text-zinc-500 uppercase font-bold">Avg Odds</span>
+<span class="text-sm font-bold text-white">5.42 Units</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[8px] text-zinc-500 uppercase font-bold">Pro Win Rate</span>
+<span class="text-sm font-bold text-tertiary">38.4%</span>
+</div>
+</div>
+<div class="text-[9px] text-zinc-600 font-medium uppercase tracking-widest">
+                System Version 8.2.1-PRO | Refreshing in 12s
+            </div>
+</footer>
+</main>
+<!-- Navigation Mobile (Suppressed for Pro Terminal aesthetic but available via pivot if needed) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#1b1b20] flex justify-around items-center h-16 z-50 px-2">
+<a class="flex flex-col items-center text-[#ffb0cc]" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span class="text-[8px] font-bold uppercase mt-1">Terminal</span>
+</a>
+<a class="flex flex-col items-center text-zinc-500" href="#">
+<span class="material-symbols-outlined" data-icon="sensors">sensors</span>
+<span class="text-[8px] font-bold uppercase mt-1">Live</span>
+</a>
+<a class="flex flex-col items-center text-zinc-500" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+<span class="text-[8px] font-bold uppercase mt-1">Portfolio</span>
+</a>
+<a class="flex flex-col items-center text-zinc-500" href="#">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span class="text-[8px] font-bold uppercase mt-1">Insights</span>
+</a>
+</nav>
+</body></html>

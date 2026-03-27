@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PuntyAI - Desktop Terminal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-error": "#690005",
+                        "background": "#131318",
+                        "on-tertiary-container": "#002e3a",
+                        "secondary-fixed-dim": "#ffb59d",
+                        "secondary": "#ffb59d",
+                        "on-primary": "#640038",
+                        "outline-variant": "#594048",
+                        "on-secondary": "#5d1900",
+                        "on-tertiary": "#003642",
+                        "on-secondary-container": "#ffddd2",
+                        "on-primary-fixed": "#3e0021",
+                        "on-primary-fixed-variant": "#8d0051",
+                        "surface-container-lowest": "#0e0e13",
+                        "outline": "#a88892",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#e4e1e9",
+                        "inverse-primary": "#b8006c",
+                        "inverse-surface": "#e4e1e9",
+                        "surface-container": "#1f1f25",
+                        "tertiary-fixed": "#b4ebff",
+                        "inverse-on-surface": "#303036",
+                        "secondary-fixed": "#ffdbd0",
+                        "on-tertiary-fixed": "#001f27",
+                        "primary-fixed-dim": "#ffb0cc",
+                        "primary-container": "#ff46a0",
+                        "error-container": "#93000a",
+                        "on-primary-container": "#580030",
+                        "surface-container-highest": "#35343a",
+                        "surface-dim": "#131318",
+                        "on-surface": "#e4e1e9",
+                        "on-surface-variant": "#e1bdc8",
+                        "surface-container-low": "#1b1b20",
+                        "primary": "#ffb0cc",
+                        "on-secondary-fixed": "#390c00",
+                        "secondary-container": "#b83900",
+                        "surface-variant": "#35343a",
+                        "tertiary-fixed-dim": "#3cd7ff",
+                        "on-secondary-fixed-variant": "#832600",
+                        "tertiary-container": "#009ebe",
+                        "surface-tint": "#ffb0cc",
+                        "surface-bright": "#39383e",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#2a292f",
+                        "surface": "#131318",
+                        "primary-fixed": "#ffd9e4",
+                        "tertiary": "#3cd7ff",
+                        "on-tertiary-fixed-variant": "#004e5f"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #131318;
+            color: #e4e1e9;
+            font-family: 'Inter', sans-serif;
+        }
+        .neon-text-glow {
+            text-shadow: 0 0 20px rgba(233, 30, 140, 0.4);
+        }
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            background: rgba(27, 27, 32, 0.7);
+        }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+<!-- TopNavBar -->
+<header class="bg-[#131318] dark:bg-[#131318] font-['Space_Grotesk'] uppercase tracking-tighter font-bold docked full-width top-0 z-50 flex justify-between items-center w-full px-6 py-3 border-b border-white/5 fixed">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black italic text-[#E91E8C] tracking-widest">PuntyAI</span>
+<nav class="hidden md:flex gap-6">
+<a class="text-slate-400 hover:text-white transition-colors" href="#">Live Odds</a>
+<a class="text-slate-400 hover:text-white transition-colors" href="#">Pro Tips</a>
+<a class="text-slate-400 hover:text-white transition-colors" href="#">Race Cards</a>
+<a class="text-slate-400 hover:text-white transition-colors" href="#">Results</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-400 hover:bg-[#35343a] transition-all duration-200 scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-400 hover:bg-[#35343a] transition-all duration-200 scale-95 active:scale-90 transition-transform flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="text-sm tracking-normal font-medium">$4,250.00</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-[#E91E8C]/30">
+<img alt="Professional Trader Profile" data-alt="Close-up portrait of a professional man with a sharp beard wearing a dark techwear jacket in a moody office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhqSlT-dvCrF0cE9dgCeJlp2TpDM41DEtYiMLtpCiUTcGJbNIUJR__8SAPL9LplbdLPLGwze2P4S6heXqq1NG2ngpStnZdp3fBfrEYKyGOBH4GRsldcPGMMOdjsd_CevvgY4Nl_emBvyDTb_IPUqjdfxbPsC7T4MoOp4ThezfY_05RsfCHBEF6DaBzqDwvK62nsBFDhwst-BQCV_i8BdbfJnTWyKkA8nfUyVtIXTuBhheLie_aRJvd-_jbgGZKfnqvPTnZcLNbDQE"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="bg-[#1b1b20] dark:bg-[#1b1b20] font-['Space_Grotesk'] font-medium text-sm tracking-wide docked left-0 h-screen w-64 border-r border-white/5 shadow-[4px_0px_24px_rgba(0,0,0,0.4)] fixed left-0 top-0 h-full flex flex-col pt-20 pb-6 px-4 z-40">
+<div class="flex items-center gap-3 px-2 mb-8">
+<div class="w-10 h-10 bg-primary-container/20 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-[#3cd7ff]" data-icon="grid_view">grid_view</span>
+</div>
+<div>
+<p class="text-white font-bold leading-tight">Pro Terminal</p>
+<p class="text-xs text-[#3cd7ff]">Elite Tier</p>
+</div>
+</div>
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-3 text-[#3cd7ff] bg-[#35343a] border-r-4 border-[#3cd7ff] active:translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all active:translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="Settings_input_component">settings_input_component</span>
+<span>Live Ticker</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all active:translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span>AI Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all active:translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="confirmation_number">confirmation_number</span>
+<span>My Bets</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all active:translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="newspaper">newspaper</span>
+<span>Stable News</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all active:translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</div>
+<div class="mt-auto space-y-4">
+<button class="w-full py-3 bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-bold text-xs rounded-sm hover:brightness-110 transition-all">
+                Upgrade to VIP
+            </button>
+<div class="pt-4 border-t border-white/5 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-white transition-all text-xs" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="help">help</span>
+<span>Support</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-white transition-all text-xs" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen">
+<!-- Hero Section -->
+<section class="relative h-[600px] flex items-center px-12 overflow-hidden">
+<div class="absolute inset-0 z-0 opacity-10 flex items-center justify-end pointer-events-none pr-12">
+<img alt="PuntyAI Mascot" class="h-full object-contain" data-alt="A stylized, futuristic robotic horse head silhouette with glowing neon pink accents and geometric chrome plating" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_gldBh2b9PsS6eUiC4IW_hchpiNaPbvrJNAqR-psigThxLU-JLAXvKpMP6AJZWTmsDKj5n7nYMB5i_yCFhpP7ogXDYXzQ2QgY64JBSZnTzws8c9BlRR1JM-_F7V68O-BOm7Ja9gozoym5AHg__OjbcJ3fi8yyDBZgbQcX3EjsILrrc0nWhdaCtoCQfFEtYeKLUm2s6wnzhfYeZLWbFjmsSXlCcBKb_uYCEOJSH919tpNhZ5KRvQlSE-iWef_xCpwIkBn8vG2QJgA"/>
+</div>
+<div class="relative z-10 max-w-4xl">
+<div class="inline-flex items-center gap-2 px-3 py-1 bg-[#3cd7ff]/10 text-[#3cd7ff] rounded-full text-xs font-bold tracking-widest mb-6">
+<span class="material-symbols-outlined text-sm" data-icon="bolt">bolt</span>
+                    ALGORITHMIC EDGE ACTIVE
+                </div>
+<h1 class="font-headline text-7xl font-black italic tracking-tighter leading-none mb-8">
+                    BEAT THE MARKET.<br/>
+<span class="text-primary neon-text-glow">DON'T CHASE IT.</span>
+</h1>
+<p class="text-on-surface-variant text-xl max-w-xl font-body mb-10 leading-relaxed">
+                    Leverage neural-network predictions and high-frequency data models to dominate the track. Stop guessing, start calculating.
+                </p>
+<div class="flex gap-4">
+<button class="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-black tracking-tight rounded-sm hover:scale-105 active:scale-95 transition-all">
+                        SEE TODAY'S TIPS
+                    </button>
+<button class="px-8 py-4 border-2 border-tertiary text-tertiary font-black tracking-tight rounded-sm hover:bg-tertiary/10 active:scale-95 transition-all">
+                        VIEW SCORECARD
+                    </button>
+</div>
+</div>
+</section>
+<!-- Key Stats Dashboard -->
+<section class="px-12 -mt-20 relative z-20">
+<div class="grid grid-cols-4 gap-4">
+<div class="bg-surface-container-high p-6 flex flex-col justify-between group hover:bg-surface-bright transition-colors cursor-default">
+<p class="text-xs text-on-surface-variant font-bold tracking-widest uppercase mb-4">Performance</p>
+<div class="flex items-end justify-between">
+<span class="text-4xl font-headline font-black text-white">+9.1%</span>
+<span class="text-tertiary font-bold mb-1">ROI</span>
+</div>
+<div class="mt-4 h-1 bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-3/4"></div>
+</div>
+</div>
+<div class="bg-surface-container-high p-6 flex flex-col justify-between group hover:bg-surface-bright transition-colors cursor-default">
+<p class="text-xs text-on-surface-variant font-bold tracking-widest uppercase mb-4">Accuracy</p>
+<div class="flex items-end justify-between">
+<span class="text-4xl font-headline font-black text-white">28.4%</span>
+<span class="text-secondary font-bold mb-1">STRIKE</span>
+</div>
+<div class="mt-4 h-1 bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-1/3"></div>
+</div>
+</div>
+<div class="bg-surface-container-high p-6 flex flex-col justify-between group hover:bg-surface-bright transition-colors cursor-default">
+<p class="text-xs text-on-surface-variant font-bold tracking-widest uppercase mb-4">AI Signal Strength</p>
+<div class="flex items-end justify-between">
+<span class="text-4xl font-headline font-black text-white">MAX</span>
+<span class="material-symbols-outlined text-primary mb-1" data-icon="network_intelligence_update">network_intelligence_update</span>
+</div>
+<div class="mt-4 flex gap-1">
+<div class="h-1 flex-1 bg-primary"></div>
+<div class="h-1 flex-1 bg-primary"></div>
+<div class="h-1 flex-1 bg-primary"></div>
+<div class="h-1 flex-1 bg-primary"></div>
+<div class="h-1 flex-1 bg-primary"></div>
+</div>
+</div>
+<div class="bg-primary p-6 flex flex-col justify-center items-center text-center cursor-pointer hover:brightness-110 transition-all">
+<p class="text-on-primary-container font-black uppercase text-sm tracking-widest">Connect Wallet</p>
+<p class="text-on-primary-container/80 text-xs mt-1">Unlock Pro Feeds</p>
+</div>
+</div>
+</section>
+<!-- Main Content Grid -->
+<section class="px-12 py-16 grid grid-cols-12 gap-8">
+<!-- Next to Jump Section (Wide Grid) -->
+<div class="col-span-8 space-y-6">
+<div class="flex items-center justify-between mb-2">
+<h2 class="font-headline text-3xl font-black italic tracking-tight">NEXT TO JUMP</h2>
+<a class="text-xs font-bold text-tertiary flex items-center gap-1 hover:underline uppercase tracking-widest" href="#">View Schedule <span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span></a>
+</div>
+<div class="grid grid-cols-1 gap-4">
+<!-- Race Row 1 -->
+<div class="bg-surface-container-low p-5 flex items-center justify-between group hover:bg-surface-container-high transition-all">
+<div class="flex items-center gap-6">
+<div class="text-center w-16">
+<span class="block text-2xl font-black text-white">R4</span>
+<span class="text-[10px] text-on-surface-variant font-bold tracking-widest">1400M</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg text-white">Randwick</h3>
+<p class="text-xs text-on-surface-variant font-medium">TAB handicap • Good 4</p>
+</div>
+</div>
+<div class="flex items-center gap-12">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-slate-200" title="Silks 1"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-red-400" title="Silks 2"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-blue-500" title="Silks 3"></div>
+</div>
+<div class="text-right">
+<span class="block font-headline font-black text-2xl text-primary tabular-nums">02:45</span>
+<span class="text-[10px] text-primary/70 font-bold uppercase">Seconds left</span>
+</div>
+<button class="px-6 py-2 bg-surface-container-lowest text-white font-bold text-xs uppercase tracking-widest hover:bg-primary hover:text-on-primary-container transition-all">Quick Bet</button>
+</div>
+</div>
+<!-- Race Row 2 -->
+<div class="bg-surface-container-low p-5 flex items-center justify-between group hover:bg-surface-container-high transition-all">
+<div class="flex items-center gap-6">
+<div class="text-center w-16">
+<span class="block text-2xl font-black text-white">R1</span>
+<span class="text-[10px] text-on-surface-variant font-bold tracking-widest">1200M</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg text-white">Sha Tin</h3>
+<p class="text-xs text-on-surface-variant font-medium">Griffin Trophy • Firm 1</p>
+</div>
+</div>
+<div class="flex items-center gap-12">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-emerald-400"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-amber-400"></div>
+</div>
+<div class="text-right">
+<span class="block font-headline font-black text-2xl text-white tabular-nums">08:12</span>
+<span class="text-[10px] text-on-surface-variant font-bold uppercase">Minutes left</span>
+</div>
+<button class="px-6 py-2 bg-surface-container-lowest text-white font-bold text-xs uppercase tracking-widest hover:bg-primary hover:text-on-primary-container transition-all">Quick Bet</button>
+</div>
+</div>
+<!-- Race Row 3 -->
+<div class="bg-surface-container-low p-5 flex items-center justify-between group hover:bg-surface-container-high transition-all">
+<div class="flex items-center gap-6">
+<div class="text-center w-16">
+<span class="block text-2xl font-black text-white">R6</span>
+<span class="text-[10px] text-on-surface-variant font-bold tracking-widest">2400M</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg text-white">Riccarton</h3>
+<p class="text-xs text-on-surface-variant font-medium">NZ Derby • Soft 5</p>
+</div>
+</div>
+<div class="flex items-center gap-12">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-purple-500"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-indigo-500"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-sky-500"></div>
+</div>
+<div class="text-right">
+<span class="block font-headline font-black text-2xl text-white tabular-nums">15:40</span>
+<span class="text-[10px] text-on-surface-variant font-bold uppercase">Minutes left</span>
+</div>
+<button class="px-6 py-2 bg-surface-container-lowest text-white font-bold text-xs uppercase tracking-widest hover:bg-primary hover:text-on-primary-container transition-all">Quick Bet</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Latest Analysis (Sidebar Card) -->
+<div class="col-span-4">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline text-2xl font-black italic tracking-tight">ANALYSIS</h2>
+</div>
+<div class="bg-surface-container-low overflow-hidden flex flex-col h-full border-l-2 border-primary/20">
+<div class="relative h-48 overflow-hidden">
+<img alt="The Edge on Saturday" class="w-full h-full object-cover filter grayscale brightness-50 hover:scale-105 transition-transform duration-700" data-alt="Dramatic monochrome black and white photography of a professional jockey riding a powerful racehorse at full gallop on a dirt track" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0gIhy9mIoyMPY_NDnSb-JUpgq38hF5ZospPHut3DeWSn-kCnl_BXH5-BRbvA5FNSVw3cLmVOXilMfllC7SsfU0BnP_BKck3q2cIcoIrF5f1zJnBE-NI2nnAEoCsBH9QaG4U-7GzA1gACzT1s7Bdg62_Aa813H3NcY0Hxr4RXxkXRai2cVEw9XM15yQwabwqKf2TiyH3zLRpNb4ADN8vdOm_rwnwsDIV9EcFlUVr5_Vv_5f2lkJkJEGS4tj_6f2DFKHsQKZeUjsgw"/>
+<div class="absolute bottom-4 left-4">
+<span class="bg-primary text-on-primary-container px-2 py-1 text-[10px] font-black uppercase tracking-widest">Premium Content</span>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<h3 class="font-headline text-2xl font-bold mb-3 uppercase tracking-tighter">THE EDGE ON SATURDAY</h3>
+<p class="text-on-surface-variant text-sm font-body leading-relaxed mb-6">
+                            Our proprietary algorithm has identified 3 significant market inefficiencies in the Caulfield Cup. We analyze the late-season form spikes that the bookies have completely missed.
+                        </p>
+<div class="mt-auto space-y-4">
+<div class="flex items-center gap-3 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span>
+<span>Published 2 hours ago</span>
+</div>
+<a class="block w-full py-4 bg-surface-container-highest text-center text-white font-black text-xs uppercase tracking-widest border border-white/5 hover:bg-[#E91E8C] transition-colors" href="#">
+                                Read Full Analysis
+                            </a>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Dynamic Ticker Bar -->
+<div class="fixed bottom-0 left-64 right-0 h-10 bg-surface-container-lowest border-t border-white/5 flex items-center overflow-hidden z-30">
+<div class="flex items-center gap-2 px-4 bg-surface-container-high h-full border-r border-white/5 whitespace-nowrap">
+<span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+<span class="text-[10px] font-black text-white uppercase tracking-widest">Live Feed</span>
+</div>
+<div class="flex-1 flex gap-12 px-6 items-center whitespace-nowrap animate-marquee">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest"><span class="text-primary mr-2">FIXED ODDS:</span> Randwick R4 - Gold Strike $4.20 <span class="text-tertiary ml-1">▲</span></span>
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest"><span class="text-primary mr-2">SYSTEM ALERT:</span> Unusual Volume Sha Tin R1 <span class="material-symbols-outlined text-[12px] align-middle" data-icon="warning">warning</span></span>
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest"><span class="text-primary mr-2">RESULT:</span> Rosehill R2 - Thunder Bolt (W) $9.50</span>
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest"><span class="text-primary mr-2">FIXED ODDS:</span> Riccarton R6 - Red Velvet $2.10 <span class="text-secondary ml-1">▼</span></span>
+</div>
+</div>
+</main>
+<style>
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            display: inline-flex;
+            animation: marquee 30s linear infinite;
+        }
+    </style>
+
+```</body></html>

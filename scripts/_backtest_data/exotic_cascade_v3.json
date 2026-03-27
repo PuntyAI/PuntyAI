@@ -1,0 +1,62 @@
+{
+  "classic|good": {
+    "type": "exacta",
+    "sr": 14.3,
+    "roi": 230.0
+  },
+  "classic|soft": {
+    "type": "exacta",
+    "sr": 13.6,
+    "roi": 83.0
+  },
+  "middle|good": {
+    "type": "exacta",
+    "sr": 17.7,
+    "roi": 312.6
+  },
+  "middle|heavy": {
+    "type": "exacta",
+    "sr": 27.3,
+    "roi": 116.8
+  },
+  "middle|soft": {
+    "type": "quin_box",
+    "sr": 19.0,
+    "roi": 15.8
+  },
+  "short|good": {
+    "type": "exacta",
+    "sr": 18.9,
+    "roi": 530.0
+  },
+  "short|heavy": {
+    "type": "quin",
+    "sr": 40.0,
+    "roi": 298.0
+  },
+  "short|soft": {
+    "type": "exacta",
+    "sr": 14.3,
+    "roi": 95.2
+  },
+  "sprint|good": {
+    "type": "tri",
+    "sr": 12.8,
+    "roi": 168.7
+  },
+  "sprint|heavy": {
+    "type": "quin_box",
+    "sr": 36.4,
+    "roi": 113.0
+  },
+  "sprint|soft": {
+    "type": "exacta",
+    "sr": 23.6,
+    "roi": 260.8
+  },
+  "staying|good": {
+    "type": "exacta",
+    "sr": 6.2,
+    "roi": -64.4
+  }
+}

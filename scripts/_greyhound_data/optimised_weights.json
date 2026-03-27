@@ -1,0 +1,50 @@
+{
+  "sprint": {
+    "weights": {
+      "f_box_draw": 0.0706,
+      "f_market": 0.1583,
+      "f_early_speed": 0.0101,
+      "f_grade": 0.183,
+      "f_track_dist": 0.3105,
+      "f_recent_form": 0.2675
+    },
+    "train_win_sr": 0.4658,
+    "n_races": 18956
+  },
+  "middle": {
+    "weights": {
+      "f_box_draw": 0.0639,
+      "f_market": 0.1993,
+      "f_early_speed": 0.0101,
+      "f_grade": 0.1573,
+      "f_track_dist": 0.3988,
+      "f_recent_form": 0.1705
+    },
+    "train_win_sr": 0.4635,
+    "n_races": 15259
+  },
+  "distance": {
+    "weights": {
+      "f_box_draw": 0.0821,
+      "f_market": 0.1042,
+      "f_early_speed": 0.1026,
+      "f_grade": 0.0316,
+      "f_track_dist": 0.4213,
+      "f_recent_form": 0.2582
+    },
+    "train_win_sr": 0.5454,
+    "n_races": 1542
+  },
+  "global": {
+    "weights": {
+      "f_box_draw": 0.0616,
+      "f_market": 0.1733,
+      "f_early_speed": 0.0196,
+      "f_grade": 0.1366,
+      "f_track_dist": 0.385,
+      "f_recent_form": 0.2239
+    },
+    "train_win_sr": 0.4665,
+    "n_races": 35757
+  }
+}

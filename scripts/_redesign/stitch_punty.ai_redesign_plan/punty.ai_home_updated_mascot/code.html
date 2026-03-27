@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PuntyAI - Beat the Market</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary-fixed-variant": "#832600",
+                        "on-secondary-container": "#ffddd2",
+                        "on-surface": "#e4e1e9",
+                        "secondary-fixed": "#ffdbd0",
+                        "surface-variant": "#35343a",
+                        "on-secondary": "#5d1900",
+                        "outline": "#a88892",
+                        "outline-variant": "#594048",
+                        "on-primary-container": "#580030",
+                        "tertiary-fixed": "#b4ebff",
+                        "surface-container-lowest": "#0e0e13",
+                        "on-background": "#e4e1e9",
+                        "tertiary": "#3cd7ff",
+                        "surface-container-high": "#2a292f",
+                        "on-tertiary": "#003642",
+                        "background": "#131318",
+                        "on-tertiary-container": "#002e3a",
+                        "tertiary-fixed-dim": "#3cd7ff",
+                        "surface-container-highest": "#35343a",
+                        "on-primary-fixed-variant": "#8d0051",
+                        "inverse-surface": "#e4e1e9",
+                        "secondary-fixed-dim": "#ffb59d",
+                        "surface": "#131318",
+                        "surface-dim": "#131318",
+                        "secondary-container": "#b83900",
+                        "primary-fixed": "#ffd9e4",
+                        "on-tertiary-fixed-variant": "#004e5f",
+                        "primary-container": "#ff46a0",
+                        "surface-bright": "#39383e",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#ffb0cc",
+                        "surface-tint": "#ffb0cc",
+                        "on-primary-fixed": "#3e0021",
+                        "on-secondary-fixed": "#390c00",
+                        "on-surface-variant": "#e1bdc8",
+                        "on-error": "#690005",
+                        "primary-fixed-dim": "#ffb0cc",
+                        "surface-container": "#1f1f25",
+                        "surface-container-low": "#1b1b20",
+                        "error": "#ffb4ab",
+                        "secondary": "#ffb59d",
+                        "on-primary": "#640038",
+                        "on-tertiary-fixed": "#001f27",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#b8006c",
+                        "tertiary-container": "#009ebe",
+                        "inverse-on-surface": "#303036"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .gradient-primary {
+            background: linear-gradient(135deg, #ffb0cc 0%, #ff46a0 100%);
+        }
+        .text-glow-primary {
+            text-shadow: 0 0 15px rgba(255, 176, 204, 0.4);
+        }
+        .asymmetric-clip {
+            clip-path: polygon(0 0, 100% 0, 100% 85%, 0% 100%);
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary/30">
+<!-- TopAppBar -->
+<header class="fixed top-0 z-50 w-full bg-[#131318] flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#ffb0cc] hover:bg-[#35343a] transition-colors p-2 rounded-lg cursor-pointer">menu</span>
+<span class="text-[#ffb0cc] font-black italic tracking-tighter font-['Space_Grotesk'] text-xl">PuntyAI</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#ffb0cc] hover:bg-[#35343a] transition-colors p-2 rounded-lg cursor-pointer">notifications</span>
+</div>
+</header>
+<main class="pt-16 pb-24">
+<!-- Hero Section -->
+<section class="relative min-h-[618px] flex flex-col justify-end px-6 pt-12 pb-20 overflow-hidden bg-surface">
+<!-- Background Mascot Element -->
+<div class="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
+<img alt="PuntyAI mascot watermark" class="w-full h-full object-contain object-right-top grayscale brightness-50 contrast-125" src="https://lh3.googleusercontent.com/aida/ADBb0ui8pO_gtxZMNp1cs_Qy5YJzcgTiH4zvJzzdhlPe1WHI6ZyjKz_0LhmVZiUXO3pLs31W_DputyTk_i-zBQrwwjr7jYjvxWuuoQusQLNYKvnYg3x7oe-6mhoapcvK2UTsApi7x9QJdTEKGwO-DDQRBAg8Fj3tBcMYe6z9v91Ws53172UDvQ-4Y-xMRx64h4inr4Oq1zeEIP_JXhkAaM7no43K2veks5gUtj5jkGX5HEZRYEiE0CpAYLqb4GAZ3TJkmxgTNTgJXb9V"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+</div>
+<div class="relative z-10 max-w-4xl">
+<h1 class="font-headline font-black text-5xl md:text-7xl lg:text-8xl tracking-tighter leading-none mb-6 text-glow-primary">
+                BEAT THE <br/><span class="text-primary italic">MARKET.</span><br/>DON'T CHASE IT.
+            </h1>
+<div class="flex flex-wrap gap-4 mt-8">
+<button class="gradient-primary px-8 py-4 text-on-primary font-headline font-bold uppercase tracking-widest text-sm rounded-sm hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,70,160,0.3)]">
+                    See Today's Tips
+                </button>
+<button class="border border-tertiary px-8 py-4 text-tertiary font-headline font-bold uppercase tracking-widest text-sm rounded-sm hover:bg-tertiary/10 transition-all">
+                    View Scorecard
+                </button>
+</div>
+</div>
+</section>
+<!-- Stats Bento Grid -->
+<section class="px-6 -mt-10 relative z-20">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-1">
+<div class="bg-surface-container-low p-8 border-l-4 border-primary">
+<span class="font-label text-xs uppercase tracking-[0.2em] text-outline">Performance</span>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="font-headline text-4xl font-bold text-primary">+9.1%</span>
+<span class="font-label text-sm text-tertiary">ROI</span>
+</div>
+<p class="text-xs mt-1 text-on-surface-variant">Last 7 Days Activity</p>
+</div>
+<div class="bg-surface-container-low p-8 border-l-4 border-tertiary">
+<span class="font-label text-xs uppercase tracking-[0.2em] text-outline">Accuracy</span>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="font-headline text-4xl font-bold text-tertiary">28.4%</span>
+<span class="font-label text-sm text-outline">STRIKE</span>
+</div>
+<p class="text-xs mt-1 text-on-surface-variant">Precision Algorithm V4.2</p>
+</div>
+<div class="bg-surface-container-high p-8 flex flex-col justify-center items-center text-center">
+<span class="material-symbols-outlined text-primary mb-2" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-headline text-lg font-bold">AI SIGNAL STRENGTH</span>
+<div class="w-full bg-surface-container-lowest h-1 mt-4 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[88%]"></div>
+</div>
+<span class="text-[10px] mt-2 text-outline uppercase tracking-widest">Optimized for High Volatility</span>
+</div>
+</div>
+</section>
+<!-- Next to Jump List -->
+<section class="mt-20 px-6">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline text-3xl font-extrabold tracking-tight">NEXT TO JUMP</h2>
+<p class="text-outline text-sm">Real-time alerts for upcoming markets</p>
+</div>
+<div class="flex gap-2">
+<div class="bg-surface-container-highest px-3 py-1 rounded-full text-[10px] font-bold text-tertiary uppercase tracking-wider">LIVE FEED</div>
+</div>
+</div>
+<div class="space-y-1">
+<!-- Race Item -->
+<div class="group bg-surface-container-low hover:bg-surface-bright transition-colors p-5 flex items-center justify-between">
+<div class="flex items-center gap-6">
+<div class="bg-surface-container-highest w-12 h-12 flex items-center justify-center font-headline font-bold text-xl text-primary">R4</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="bg-secondary/20 text-secondary text-[10px] px-2 py-0.5 font-bold rounded-sm">AUS</span>
+<span class="font-bold text-lg">Randwick</span>
+</div>
+<span class="text-xs text-outline">1600m Handicap • Heavy 8</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline text-2xl font-bold text-tertiary">5m</div>
+<span class="text-[10px] uppercase text-outline tracking-widest">Until Jump</span>
+</div>
+</div>
+<!-- Race Item -->
+<div class="group bg-surface-container-low hover:bg-surface-bright transition-colors p-5 flex items-center justify-between">
+<div class="flex items-center gap-6">
+<div class="bg-surface-container-highest w-12 h-12 flex items-center justify-center font-headline font-bold text-xl text-outline">R1</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="bg-tertiary/20 text-tertiary text-[10px] px-2 py-0.5 font-bold rounded-sm">HK</span>
+<span class="font-bold text-lg">Sha Tin</span>
+</div>
+<span class="text-xs text-outline">1200m Sprint • Turf</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline text-2xl font-bold text-on-surface">12m</div>
+<span class="text-[10px] uppercase text-outline tracking-widest">Until Jump</span>
+</div>
+</div>
+<!-- Race Item -->
+<div class="group bg-surface-container-low hover:bg-surface-bright transition-colors p-5 flex items-center justify-between">
+<div class="flex items-center gap-6">
+<div class="bg-surface-container-highest w-12 h-12 flex items-center justify-center font-headline font-bold text-xl text-outline">R7</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="bg-primary/20 text-primary text-[10px] px-2 py-0.5 font-bold rounded-sm">NZ</span>
+<span class="font-bold text-lg">Riccarton</span>
+</div>
+<span class="text-xs text-outline">2000m Stayers • Good 4</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline text-2xl font-bold text-on-surface">24m</div>
+<span class="text-[10px] uppercase text-outline tracking-widest">Until Jump</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Market Editorial Feature -->
+<section class="mt-20 px-6">
+<div class="bg-surface-container-highest rounded-sm overflow-hidden flex flex-col md:flex-row border border-outline-variant/10">
+<div class="md:w-1/2 relative h-64 md:h-auto">
+<img alt="Close up of horse racing finishing line" class="w-full h-full object-cover grayscale" data-alt="Cinematic close-up of a dark racehorse in motion, dramatic lighting, rain droplets and neon reflections on the ground" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKlTDNAmmX1MJxtTAH84hYlJBCWQCPUE7xijo1UswpJRe9t7IT4j5CQhrepsDDy_Atn2VyJ7trzhADTqKeZeJsbEnGLbnLlUVYqP-d7fOUcsoycf_Z3U7-9XxolXv_R02w-20ArXpBq4PRcFFqepVzKnN48JAvq3oRgn4R354dcoJOj3xZCuHLsjmn1eqHrv9lHb6Cnbree7Mi5vlB2Y6FzX0-Id0K7_G3ejONbn0mkVj20HsGIYxqDNv7RoC8VOERR2Fdsv-qFcQ"/>
+<div class="absolute inset-0 bg-primary/10 mix-blend-overlay"></div>
+</div>
+<div class="md:w-1/2 p-10 flex flex-col justify-center">
+<span class="font-headline text-primary font-bold tracking-widest text-xs mb-2">QUICK READ</span>
+<h3 class="font-headline text-3xl font-black italic tracking-tighter mb-4">THE EDGE ON SATURDAY</h3>
+<p class="text-on-surface-variant leading-relaxed mb-6">Our algorithms are flagging a massive pricing discrepancy in the Randwick mid-card. Sharp money is moving on the outsiders while the public chases favorites.</p>
+<a class="text-tertiary font-bold flex items-center gap-2 hover:gap-4 transition-all" href="#">
+                    Read Full Analysis <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center pb-safe pt-2 bg-[#131318] z-50 shadow-[0px_-4px_24px_rgba(0,0,0,0.4)] border-t border-[#35343a]/15">
+<a class="flex flex-col items-center justify-center text-[#ffb0cc] bg-[#ffb0cc]/10 rounded-xl px-3 py-1 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#35343a] px-3 py-1 hover:text-[#ffb0cc] transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined">art_track</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em]">Meetings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#35343a] px-3 py-1 hover:text-[#ffb0cc] transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em]">Scorecard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#35343a] px-3 py-1 hover:text-[#ffb0cc] transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-[0.05em]">Profile</span>
+</a>
+</nav>
+</body></html>

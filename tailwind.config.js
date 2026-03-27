@@ -8,25 +8,33 @@ module.exports = {
     extend: {
       colors: {
         punty: {
-          dark: '#0a0a0f',
-          card: '#12121a',
-          card2: '#1a1a25',
-          border: 'rgba(255,255,255,0.08)',
-          magenta: '#e91e8c',
-          mbright: '#ff2d9e',
-          cyan: '#00d4ff',
-          orange: '#ff6b35',
+          dark: '#131318',
+          card: '#1b1b20',
+          card2: '#35343a',
+          border: 'rgba(255,255,255,0.06)',
+          magenta: '#ff46a0',
+          mbright: '#ffb0cc',
+          cyan: '#3cd7ff',
+          orange: '#ffb59d',
           yellow: '#ffc107',
           purple: '#9d4edd',
-          muted: '#606070',
-          coral: '#e91e8c',
+          muted: '#808090',
+          coral: '#ff46a0',
           gold: '#ffc107',
+          pink: '#ffb0cc',
+          'pink-dark': '#b30069',
         }
       },
       fontFamily: {
-        display: ['"Orbitron"', 'sans-serif'],
-        heading: ['"Rajdhani"', 'sans-serif'],
-        body: ['"Source Sans Pro"', 'sans-serif'],
+        display: ['"Space Grotesk"', 'sans-serif'],
+        heading: ['"Space Grotesk"', 'sans-serif'],
+        body: ['"Inter"', 'sans-serif'],
+      },
+      borderRadius: {
+        'sm': '0.125rem',
+        DEFAULT: '0.25rem',
+        'md': '0.375rem',
+        'lg': '0.375rem',
       }
     }
   },

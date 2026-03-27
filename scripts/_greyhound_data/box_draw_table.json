@@ -1,0 +1,5842 @@
+{
+  "Albion Park|331|1": {
+    "win_rate": 0.2263,
+    "place_rate": 0.5165,
+    "n_starts": 1489
+  },
+  "Albion Park|331|2": {
+    "win_rate": 0.1444,
+    "place_rate": 0.4067,
+    "n_starts": 1468
+  },
+  "Albion Park|331|3": {
+    "win_rate": 0.141,
+    "place_rate": 0.379,
+    "n_starts": 1454
+  },
+  "Albion Park|331|4": {
+    "win_rate": 0.1129,
+    "place_rate": 0.3482,
+    "n_starts": 1453
+  },
+  "Albion Park|331|5": {
+    "win_rate": 0.1143,
+    "place_rate": 0.345,
+    "n_starts": 1426
+  },
+  "Albion Park|331|6": {
+    "win_rate": 0.1041,
+    "place_rate": 0.3187,
+    "n_starts": 1431
+  },
+  "Albion Park|331|7": {
+    "win_rate": 0.0976,
+    "place_rate": 0.337,
+    "n_starts": 1445
+  },
+  "Albion Park|331|8": {
+    "win_rate": 0.1061,
+    "place_rate": 0.3409,
+    "n_starts": 1461
+  },
+  "Albion Park|331|9": {
+    "win_rate": 0.0855,
+    "place_rate": 0.2799,
+    "n_starts": 468
+  },
+  "Albion Park|331|10": {
+    "win_rate": 0.0602,
+    "place_rate": 0.2406,
+    "n_starts": 133
+  },
+  "Albion Park|395|1": {
+    "win_rate": 0.2375,
+    "place_rate": 0.5412,
+    "n_starts": 1419
+  },
+  "Albion Park|395|2": {
+    "win_rate": 0.1909,
+    "place_rate": 0.4546,
+    "n_starts": 1399
+  },
+  "Albion Park|395|3": {
+    "win_rate": 0.1477,
+    "place_rate": 0.3952,
+    "n_starts": 1341
+  },
+  "Albion Park|395|4": {
+    "win_rate": 0.1255,
+    "place_rate": 0.3482,
+    "n_starts": 1370
+  },
+  "Albion Park|395|5": {
+    "win_rate": 0.1036,
+    "place_rate": 0.3409,
+    "n_starts": 1226
+  },
+  "Albion Park|395|6": {
+    "win_rate": 0.09,
+    "place_rate": 0.2853,
+    "n_starts": 1367
+  },
+  "Albion Park|395|7": {
+    "win_rate": 0.0868,
+    "place_rate": 0.2717,
+    "n_starts": 1336
+  },
+  "Albion Park|395|8": {
+    "win_rate": 0.0772,
+    "place_rate": 0.2753,
+    "n_starts": 1373
+  },
+  "Albion Park|395|9": {
+    "win_rate": 0.0758,
+    "place_rate": 0.2727,
+    "n_starts": 264
+  },
+  "Albion Park|395|10": {
+    "win_rate": 0.027,
+    "place_rate": 0.1622,
+    "n_starts": 74
+  },
+  "Albion Park|520|1": {
+    "win_rate": 0.182,
+    "place_rate": 0.434,
+    "n_starts": 1901
+  },
+  "Albion Park|520|2": {
+    "win_rate": 0.1973,
+    "place_rate": 0.4297,
+    "n_starts": 1850
+  },
+  "Albion Park|520|3": {
+    "win_rate": 0.1343,
+    "place_rate": 0.3731,
+    "n_starts": 1742
+  },
+  "Albion Park|520|4": {
+    "win_rate": 0.1337,
+    "place_rate": 0.3426,
+    "n_starts": 1833
+  },
+  "Albion Park|520|5": {
+    "win_rate": 0.0963,
+    "place_rate": 0.3071,
+    "n_starts": 1485
+  },
+  "Albion Park|520|6": {
+    "win_rate": 0.1058,
+    "place_rate": 0.3065,
+    "n_starts": 1729
+  },
+  "Albion Park|520|7": {
+    "win_rate": 0.1149,
+    "place_rate": 0.2998,
+    "n_starts": 1811
+  },
+  "Albion Park|520|8": {
+    "win_rate": 0.1251,
+    "place_rate": 0.3313,
+    "n_starts": 1814
+  },
+  "Albion Park|520|9": {
+    "win_rate": 0.0536,
+    "place_rate": 0.2146,
+    "n_starts": 261
+  },
+  "Albion Park|520|10": {
+    "win_rate": 0.0484,
+    "place_rate": 0.1935,
+    "n_starts": 62
+  },
+  "Albion Park|600|1": {
+    "win_rate": 0.203,
+    "place_rate": 0.4394,
+    "n_starts": 330
+  },
+  "Albion Park|600|2": {
+    "win_rate": 0.2031,
+    "place_rate": 0.3938,
+    "n_starts": 325
+  },
+  "Albion Park|600|3": {
+    "win_rate": 0.1502,
+    "place_rate": 0.3663,
+    "n_starts": 273
+  },
+  "Albion Park|600|4": {
+    "win_rate": 0.1365,
+    "place_rate": 0.3397,
+    "n_starts": 315
+  },
+  "Albion Park|600|5": {
+    "win_rate": 0.1037,
+    "place_rate": 0.3237,
+    "n_starts": 241
+  },
+  "Albion Park|600|6": {
+    "win_rate": 0.106,
+    "place_rate": 0.3392,
+    "n_starts": 283
+  },
+  "Albion Park|600|7": {
+    "win_rate": 0.0987,
+    "place_rate": 0.2895,
+    "n_starts": 304
+  },
+  "Albion Park|600|8": {
+    "win_rate": 0.1143,
+    "place_rate": 0.3238,
+    "n_starts": 315
+  },
+  "Albion Park|600|9": {
+    "win_rate": 0.0588,
+    "place_rate": 0.2353,
+    "n_starts": 34
+  },
+  "Albion Park|710|1": {
+    "win_rate": 0.1574,
+    "place_rate": 0.3702,
+    "n_starts": 235
+  },
+  "Albion Park|710|2": {
+    "win_rate": 0.1775,
+    "place_rate": 0.342,
+    "n_starts": 231
+  },
+  "Albion Park|710|3": {
+    "win_rate": 0.2466,
+    "place_rate": 0.4452,
+    "n_starts": 146
+  },
+  "Albion Park|710|4": {
+    "win_rate": 0.1565,
+    "place_rate": 0.3304,
+    "n_starts": 230
+  },
+  "Albion Park|710|5": {
+    "win_rate": 0.1986,
+    "place_rate": 0.4178,
+    "n_starts": 146
+  },
+  "Albion Park|710|6": {
+    "win_rate": 0.1183,
+    "place_rate": 0.3314,
+    "n_starts": 169
+  },
+  "Albion Park|710|7": {
+    "win_rate": 0.0976,
+    "place_rate": 0.278,
+    "n_starts": 205
+  },
+  "Albion Park|710|8": {
+    "win_rate": 0.1121,
+    "place_rate": 0.2328,
+    "n_starts": 232
+  },
+  "Ballarat|390|1": {
+    "win_rate": 0.1508,
+    "place_rate": 0.3779,
+    "n_starts": 2506
+  },
+  "Ballarat|390|2": {
+    "win_rate": 0.1302,
+    "place_rate": 0.371,
+    "n_starts": 2504
+  },
+  "Ballarat|390|3": {
+    "win_rate": 0.1349,
+    "place_rate": 0.3603,
+    "n_starts": 2298
+  },
+  "Ballarat|390|4": {
+    "win_rate": 0.1444,
+    "place_rate": 0.3429,
+    "n_starts": 2438
+  },
+  "Ballarat|390|5": {
+    "win_rate": 0.1204,
+    "place_rate": 0.3503,
+    "n_starts": 2027
+  },
+  "Ballarat|390|6": {
+    "win_rate": 0.1195,
+    "place_rate": 0.3341,
+    "n_starts": 2293
+  },
+  "Ballarat|390|7": {
+    "win_rate": 0.1308,
+    "place_rate": 0.3503,
+    "n_starts": 2455
+  },
+  "Ballarat|390|8": {
+    "win_rate": 0.1548,
+    "place_rate": 0.3968,
+    "n_starts": 2462
+  },
+  "Ballarat|390|9": {
+    "win_rate": 0.0824,
+    "place_rate": 0.2975,
+    "n_starts": 279
+  },
+  "Ballarat|390|10": {
+    "win_rate": 0.0909,
+    "place_rate": 0.2679,
+    "n_starts": 209
+  },
+  "Ballarat|450|1": {
+    "win_rate": 0.1697,
+    "place_rate": 0.3973,
+    "n_starts": 1762
+  },
+  "Ballarat|450|2": {
+    "win_rate": 0.1502,
+    "place_rate": 0.3855,
+    "n_starts": 1738
+  },
+  "Ballarat|450|3": {
+    "win_rate": 0.1141,
+    "place_rate": 0.3362,
+    "n_starts": 1639
+  },
+  "Ballarat|450|4": {
+    "win_rate": 0.1241,
+    "place_rate": 0.3324,
+    "n_starts": 1724
+  },
+  "Ballarat|450|5": {
+    "win_rate": 0.1132,
+    "place_rate": 0.3257,
+    "n_starts": 1440
+  },
+  "Ballarat|450|6": {
+    "win_rate": 0.1325,
+    "place_rate": 0.3512,
+    "n_starts": 1623
+  },
+  "Ballarat|450|7": {
+    "win_rate": 0.1222,
+    "place_rate": 0.3339,
+    "n_starts": 1743
+  },
+  "Ballarat|450|8": {
+    "win_rate": 0.1503,
+    "place_rate": 0.3975,
+    "n_starts": 1756
+  },
+  "Ballarat|450|9": {
+    "win_rate": 0.07,
+    "place_rate": 0.28,
+    "n_starts": 200
+  },
+  "Ballarat|450|10": {
+    "win_rate": 0.0976,
+    "place_rate": 0.3008,
+    "n_starts": 123
+  },
+  "Ballarat|545|1": {
+    "win_rate": 0.2316,
+    "place_rate": 0.4853,
+    "n_starts": 272
+  },
+  "Ballarat|545|2": {
+    "win_rate": 0.1641,
+    "place_rate": 0.3588,
+    "n_starts": 262
+  },
+  "Ballarat|545|3": {
+    "win_rate": 0.1348,
+    "place_rate": 0.3435,
+    "n_starts": 230
+  },
+  "Ballarat|545|4": {
+    "win_rate": 0.1444,
+    "place_rate": 0.3037,
+    "n_starts": 270
+  },
+  "Ballarat|545|5": {
+    "win_rate": 0.0984,
+    "place_rate": 0.3005,
+    "n_starts": 183
+  },
+  "Ballarat|545|6": {
+    "win_rate": 0.0855,
+    "place_rate": 0.2863,
+    "n_starts": 234
+  },
+  "Ballarat|545|7": {
+    "win_rate": 0.1457,
+    "place_rate": 0.3543,
+    "n_starts": 254
+  },
+  "Ballarat|545|8": {
+    "win_rate": 0.1265,
+    "place_rate": 0.3162,
+    "n_starts": 253
+  },
+  "Ballarat|545|9": {
+    "win_rate": 0.069,
+    "place_rate": 0.2414,
+    "n_starts": 29
+  },
+  "Ballarat|660|1": {
+    "win_rate": 0.1373,
+    "place_rate": 0.451,
+    "n_starts": 51
+  },
+  "Ballarat|660|2": {
+    "win_rate": 0.2157,
+    "place_rate": 0.5294,
+    "n_starts": 51
+  },
+  "Ballarat|660|3": {
+    "win_rate": 0.1579,
+    "place_rate": 0.3684,
+    "n_starts": 38
+  },
+  "Ballarat|660|4": {
+    "win_rate": 0.1667,
+    "place_rate": 0.3125,
+    "n_starts": 48
+  },
+  "Ballarat|660|5": {
+    "win_rate": 0.2258,
+    "place_rate": 0.4516,
+    "n_starts": 31
+  },
+  "Ballarat|660|6": {
+    "win_rate": 0.175,
+    "place_rate": 0.35,
+    "n_starts": 40
+  },
+  "Ballarat|660|7": {
+    "win_rate": 0.0652,
+    "place_rate": 0.2174,
+    "n_starts": 46
+  },
+  "Ballarat|660|8": {
+    "win_rate": 0.04,
+    "place_rate": 0.22,
+    "n_starts": 50
+  },
+  "Bendigo|425|1": {
+    "win_rate": 0.1567,
+    "place_rate": 0.4004,
+    "n_starts": 2942
+  },
+  "Bendigo|425|2": {
+    "win_rate": 0.1624,
+    "place_rate": 0.3959,
+    "n_starts": 2925
+  },
+  "Bendigo|425|3": {
+    "win_rate": 0.1138,
+    "place_rate": 0.3189,
+    "n_starts": 2813
+  },
+  "Bendigo|425|4": {
+    "win_rate": 0.137,
+    "place_rate": 0.3487,
+    "n_starts": 2905
+  },
+  "Bendigo|425|5": {
+    "win_rate": 0.1103,
+    "place_rate": 0.326,
+    "n_starts": 2420
+  },
+  "Bendigo|425|6": {
+    "win_rate": 0.1028,
+    "place_rate": 0.3123,
+    "n_starts": 2792
+  },
+  "Bendigo|425|7": {
+    "win_rate": 0.1305,
+    "place_rate": 0.3546,
+    "n_starts": 2882
+  },
+  "Bendigo|425|8": {
+    "win_rate": 0.1639,
+    "place_rate": 0.4221,
+    "n_starts": 2935
+  },
+  "Bendigo|425|9": {
+    "win_rate": 0.0449,
+    "place_rate": 0.2082,
+    "n_starts": 245
+  },
+  "Bendigo|425|10": {
+    "win_rate": 0.0526,
+    "place_rate": 0.1947,
+    "n_starts": 190
+  },
+  "Bendigo|500|1": {
+    "win_rate": 0.1966,
+    "place_rate": 0.4387,
+    "n_starts": 987
+  },
+  "Bendigo|500|2": {
+    "win_rate": 0.1588,
+    "place_rate": 0.4351,
+    "n_starts": 970
+  },
+  "Bendigo|500|3": {
+    "win_rate": 0.1393,
+    "place_rate": 0.378,
+    "n_starts": 926
+  },
+  "Bendigo|500|4": {
+    "win_rate": 0.1151,
+    "place_rate": 0.298,
+    "n_starts": 973
+  },
+  "Bendigo|500|5": {
+    "win_rate": 0.1132,
+    "place_rate": 0.3247,
+    "n_starts": 813
+  },
+  "Bendigo|500|6": {
+    "win_rate": 0.1062,
+    "place_rate": 0.3369,
+    "n_starts": 923
+  },
+  "Bendigo|500|7": {
+    "win_rate": 0.1173,
+    "place_rate": 0.3102,
+    "n_starts": 980
+  },
+  "Bendigo|500|8": {
+    "win_rate": 0.1339,
+    "place_rate": 0.3378,
+    "n_starts": 971
+  },
+  "Bendigo|500|9": {
+    "win_rate": 0.1098,
+    "place_rate": 0.2439,
+    "n_starts": 82
+  },
+  "Bendigo|500|10": {
+    "win_rate": 0.0417,
+    "place_rate": 0.1042,
+    "n_starts": 48
+  },
+  "Bendigo|660|1": {
+    "win_rate": 0.1111,
+    "place_rate": 0.3889,
+    "n_starts": 54
+  },
+  "Bendigo|660|2": {
+    "win_rate": 0.1786,
+    "place_rate": 0.2857,
+    "n_starts": 56
+  },
+  "Bendigo|660|3": {
+    "win_rate": 0.1,
+    "place_rate": 0.25,
+    "n_starts": 40
+  },
+  "Bendigo|660|4": {
+    "win_rate": 0.2037,
+    "place_rate": 0.3148,
+    "n_starts": 54
+  },
+  "Bendigo|660|5": {
+    "win_rate": 0.1081,
+    "place_rate": 0.4595,
+    "n_starts": 37
+  },
+  "Bendigo|660|6": {
+    "win_rate": 0.1463,
+    "place_rate": 0.3415,
+    "n_starts": 41
+  },
+  "Bendigo|660|7": {
+    "win_rate": 0.1731,
+    "place_rate": 0.4038,
+    "n_starts": 52
+  },
+  "Bendigo|660|8": {
+    "win_rate": 0.1404,
+    "place_rate": 0.2982,
+    "n_starts": 57
+  },
+  "Broken Hill|375|1": {
+    "win_rate": 0.2181,
+    "place_rate": 0.4798,
+    "n_starts": 642
+  },
+  "Broken Hill|375|2": {
+    "win_rate": 0.1877,
+    "place_rate": 0.4243,
+    "n_starts": 634
+  },
+  "Broken Hill|375|3": {
+    "win_rate": 0.1533,
+    "place_rate": 0.3193,
+    "n_starts": 548
+  },
+  "Broken Hill|375|4": {
+    "win_rate": 0.1289,
+    "place_rate": 0.327,
+    "n_starts": 636
+  },
+  "Broken Hill|375|5": {
+    "win_rate": 0.1024,
+    "place_rate": 0.3274,
+    "n_starts": 449
+  },
+  "Broken Hill|375|6": {
+    "win_rate": 0.0897,
+    "place_rate": 0.2637,
+    "n_starts": 546
+  },
+  "Broken Hill|375|7": {
+    "win_rate": 0.1101,
+    "place_rate": 0.3035,
+    "n_starts": 636
+  },
+  "Broken Hill|375|8": {
+    "win_rate": 0.1034,
+    "place_rate": 0.2994,
+    "n_starts": 638
+  },
+  "Broken Hill|375|9": {
+    "win_rate": 0.1379,
+    "place_rate": 0.3103,
+    "n_starts": 29
+  },
+  "Broken Hill|525|1": {
+    "win_rate": 0.2297,
+    "place_rate": 0.4459,
+    "n_starts": 148
+  },
+  "Broken Hill|525|2": {
+    "win_rate": 0.1838,
+    "place_rate": 0.375,
+    "n_starts": 136
+  },
+  "Broken Hill|525|3": {
+    "win_rate": 0.1136,
+    "place_rate": 0.3295,
+    "n_starts": 88
+  },
+  "Broken Hill|525|4": {
+    "win_rate": 0.125,
+    "place_rate": 0.2847,
+    "n_starts": 144
+  },
+  "Broken Hill|525|5": {
+    "win_rate": 0.1509,
+    "place_rate": 0.3491,
+    "n_starts": 106
+  },
+  "Broken Hill|525|6": {
+    "win_rate": 0.0941,
+    "place_rate": 0.2706,
+    "n_starts": 85
+  },
+  "Broken Hill|525|7": {
+    "win_rate": 0.1418,
+    "place_rate": 0.3433,
+    "n_starts": 134
+  },
+  "Broken Hill|525|8": {
+    "win_rate": 0.1586,
+    "place_rate": 0.3241,
+    "n_starts": 145
+  },
+  "Bulli|340|1": {
+    "win_rate": 0.2081,
+    "place_rate": 0.457,
+    "n_starts": 663
+  },
+  "Bulli|340|2": {
+    "win_rate": 0.2047,
+    "place_rate": 0.445,
+    "n_starts": 645
+  },
+  "Bulli|340|3": {
+    "win_rate": 0.152,
+    "place_rate": 0.361,
+    "n_starts": 579
+  },
+  "Bulli|340|4": {
+    "win_rate": 0.1402,
+    "place_rate": 0.348,
+    "n_starts": 635
+  },
+  "Bulli|340|5": {
+    "win_rate": 0.0528,
+    "place_rate": 0.2094,
+    "n_starts": 511
+  },
+  "Bulli|340|6": {
+    "win_rate": 0.1013,
+    "place_rate": 0.3002,
+    "n_starts": 553
+  },
+  "Bulli|340|7": {
+    "win_rate": 0.148,
+    "place_rate": 0.3489,
+    "n_starts": 642
+  },
+  "Bulli|340|8": {
+    "win_rate": 0.1101,
+    "place_rate": 0.3381,
+    "n_starts": 636
+  },
+  "Bulli|340|9": {
+    "win_rate": 0.0963,
+    "place_rate": 0.2148,
+    "n_starts": 135
+  },
+  "Bulli|340|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.0938,
+    "n_starts": 32
+  },
+  "Bulli|400|1": {
+    "win_rate": 0.1617,
+    "place_rate": 0.4076,
+    "n_starts": 606
+  },
+  "Bulli|400|2": {
+    "win_rate": 0.1924,
+    "place_rate": 0.4243,
+    "n_starts": 608
+  },
+  "Bulli|400|3": {
+    "win_rate": 0.1276,
+    "place_rate": 0.3133,
+    "n_starts": 533
+  },
+  "Bulli|400|4": {
+    "win_rate": 0.1263,
+    "place_rate": 0.302,
+    "n_starts": 586
+  },
+  "Bulli|400|5": {
+    "win_rate": 0.1208,
+    "place_rate": 0.3157,
+    "n_starts": 472
+  },
+  "Bulli|400|6": {
+    "win_rate": 0.1185,
+    "place_rate": 0.325,
+    "n_starts": 523
+  },
+  "Bulli|400|7": {
+    "win_rate": 0.1456,
+    "place_rate": 0.3466,
+    "n_starts": 577
+  },
+  "Bulli|400|8": {
+    "win_rate": 0.1481,
+    "place_rate": 0.3468,
+    "n_starts": 594
+  },
+  "Bulli|400|9": {
+    "win_rate": 0.0755,
+    "place_rate": 0.217,
+    "n_starts": 106
+  },
+  "Bulli|400|10": {
+    "win_rate": 0.087,
+    "place_rate": 0.1739,
+    "n_starts": 23
+  },
+  "Bulli|472|1": {
+    "win_rate": 0.221,
+    "place_rate": 0.4457,
+    "n_starts": 267
+  },
+  "Bulli|472|2": {
+    "win_rate": 0.1919,
+    "place_rate": 0.4022,
+    "n_starts": 271
+  },
+  "Bulli|472|3": {
+    "win_rate": 0.0804,
+    "place_rate": 0.2663,
+    "n_starts": 199
+  },
+  "Bulli|472|4": {
+    "win_rate": 0.1358,
+    "place_rate": 0.3057,
+    "n_starts": 265
+  },
+  "Bulli|472|5": {
+    "win_rate": 0.1089,
+    "place_rate": 0.2673,
+    "n_starts": 202
+  },
+  "Bulli|472|6": {
+    "win_rate": 0.1414,
+    "place_rate": 0.3485,
+    "n_starts": 198
+  },
+  "Bulli|472|7": {
+    "win_rate": 0.139,
+    "place_rate": 0.3398,
+    "n_starts": 259
+  },
+  "Bulli|472|8": {
+    "win_rate": 0.1353,
+    "place_rate": 0.312,
+    "n_starts": 266
+  },
+  "Bulli|472|9": {
+    "win_rate": 0.0909,
+    "place_rate": 0.2273,
+    "n_starts": 22
+  },
+  "Bulli|515|1": {
+    "win_rate": 0.1,
+    "place_rate": 0.2333,
+    "n_starts": 30
+  },
+  "Bulli|515|2": {
+    "win_rate": 0.2,
+    "place_rate": 0.5333,
+    "n_starts": 30
+  },
+  "Bulli|515|3": {
+    "win_rate": 0.1364,
+    "place_rate": 0.4545,
+    "n_starts": 22
+  },
+  "Bulli|515|4": {
+    "win_rate": 0.2333,
+    "place_rate": 0.3667,
+    "n_starts": 30
+  },
+  "Bulli|515|5": {
+    "win_rate": 0.1429,
+    "place_rate": 0.4286,
+    "n_starts": 21
+  },
+  "Bulli|515|6": {
+    "win_rate": 0.0909,
+    "place_rate": 0.2727,
+    "n_starts": 22
+  },
+  "Bulli|515|7": {
+    "win_rate": 0.1852,
+    "place_rate": 0.3333,
+    "n_starts": 27
+  },
+  "Bulli|515|8": {
+    "win_rate": 0.1481,
+    "place_rate": 0.2963,
+    "n_starts": 27
+  },
+  "Bundaberg|315|1": {
+    "win_rate": 0.2265,
+    "place_rate": 0.453,
+    "n_starts": 181
+  },
+  "Bundaberg|315|2": {
+    "win_rate": 0.1534,
+    "place_rate": 0.3693,
+    "n_starts": 176
+  },
+  "Bundaberg|315|3": {
+    "win_rate": 0.1667,
+    "place_rate": 0.4405,
+    "n_starts": 168
+  },
+  "Bundaberg|315|4": {
+    "win_rate": 0.0994,
+    "place_rate": 0.3626,
+    "n_starts": 171
+  },
+  "Bundaberg|315|5": {
+    "win_rate": 0.1096,
+    "place_rate": 0.3219,
+    "n_starts": 146
+  },
+  "Bundaberg|315|6": {
+    "win_rate": 0.1104,
+    "place_rate": 0.319,
+    "n_starts": 163
+  },
+  "Bundaberg|315|7": {
+    "win_rate": 0.1098,
+    "place_rate": 0.3179,
+    "n_starts": 173
+  },
+  "Bundaberg|315|8": {
+    "win_rate": 0.1186,
+    "place_rate": 0.2994,
+    "n_starts": 177
+  },
+  "Bundaberg|315|9": {
+    "win_rate": 0.037,
+    "place_rate": 0.2222,
+    "n_starts": 27
+  },
+  "Bundaberg|460|1": {
+    "win_rate": 0.1984,
+    "place_rate": 0.4674,
+    "n_starts": 383
+  },
+  "Bundaberg|460|2": {
+    "win_rate": 0.1849,
+    "place_rate": 0.4245,
+    "n_starts": 384
+  },
+  "Bundaberg|460|3": {
+    "win_rate": 0.1676,
+    "place_rate": 0.3988,
+    "n_starts": 346
+  },
+  "Bundaberg|460|4": {
+    "win_rate": 0.1158,
+    "place_rate": 0.3395,
+    "n_starts": 380
+  },
+  "Bundaberg|460|5": {
+    "win_rate": 0.1185,
+    "place_rate": 0.3404,
+    "n_starts": 329
+  },
+  "Bundaberg|460|6": {
+    "win_rate": 0.1146,
+    "place_rate": 0.3037,
+    "n_starts": 349
+  },
+  "Bundaberg|460|7": {
+    "win_rate": 0.087,
+    "place_rate": 0.2989,
+    "n_starts": 368
+  },
+  "Bundaberg|460|8": {
+    "win_rate": 0.1103,
+    "place_rate": 0.3385,
+    "n_starts": 390
+  },
+  "Bundaberg|460|9": {
+    "win_rate": 0.0566,
+    "place_rate": 0.1321,
+    "n_starts": 53
+  },
+  "Bundaberg|531|1": {
+    "win_rate": 0.1512,
+    "place_rate": 0.3605,
+    "n_starts": 86
+  },
+  "Bundaberg|531|2": {
+    "win_rate": 0.1868,
+    "place_rate": 0.4725,
+    "n_starts": 91
+  },
+  "Bundaberg|531|3": {
+    "win_rate": 0.1282,
+    "place_rate": 0.3718,
+    "n_starts": 78
+  },
+  "Bundaberg|531|4": {
+    "win_rate": 0.1628,
+    "place_rate": 0.3488,
+    "n_starts": 86
+  },
+  "Bundaberg|531|5": {
+    "win_rate": 0.0909,
+    "place_rate": 0.2879,
+    "n_starts": 66
+  },
+  "Bundaberg|531|6": {
+    "win_rate": 0.1579,
+    "place_rate": 0.3421,
+    "n_starts": 76
+  },
+  "Bundaberg|531|7": {
+    "win_rate": 0.0988,
+    "place_rate": 0.284,
+    "n_starts": 81
+  },
+  "Bundaberg|531|8": {
+    "win_rate": 0.1463,
+    "place_rate": 0.378,
+    "n_starts": 82
+  },
+  "Capalaba|366|1": {
+    "win_rate": 0.1309,
+    "place_rate": 0.3715,
+    "n_starts": 2536
+  },
+  "Capalaba|366|2": {
+    "win_rate": 0.1266,
+    "place_rate": 0.3253,
+    "n_starts": 2527
+  },
+  "Capalaba|366|3": {
+    "win_rate": 0.1231,
+    "place_rate": 0.3261,
+    "n_starts": 2389
+  },
+  "Capalaba|366|4": {
+    "win_rate": 0.1142,
+    "place_rate": 0.3125,
+    "n_starts": 2531
+  },
+  "Capalaba|366|5": {
+    "win_rate": 0.1142,
+    "place_rate": 0.3491,
+    "n_starts": 2137
+  },
+  "Capalaba|366|6": {
+    "win_rate": 0.1461,
+    "place_rate": 0.3776,
+    "n_starts": 2410
+  },
+  "Capalaba|366|7": {
+    "win_rate": 0.1486,
+    "place_rate": 0.397,
+    "n_starts": 2496
+  },
+  "Capalaba|366|8": {
+    "win_rate": 0.1879,
+    "place_rate": 0.4284,
+    "n_starts": 2549
+  },
+  "Capalaba|366|9": {
+    "win_rate": 0.0634,
+    "place_rate": 0.2277,
+    "n_starts": 347
+  },
+  "Capalaba|366|10": {
+    "win_rate": 0.0122,
+    "place_rate": 0.1585,
+    "n_starts": 82
+  },
+  "Casino|300|1": {
+    "win_rate": 0.2146,
+    "place_rate": 0.4832,
+    "n_starts": 1188
+  },
+  "Casino|300|2": {
+    "win_rate": 0.1423,
+    "place_rate": 0.4132,
+    "n_starts": 1181
+  },
+  "Casino|300|3": {
+    "win_rate": 0.1382,
+    "place_rate": 0.3484,
+    "n_starts": 1085
+  },
+  "Casino|300|4": {
+    "win_rate": 0.1561,
+    "place_rate": 0.3635,
+    "n_starts": 1172
+  },
+  "Casino|300|5": {
+    "win_rate": 0.0745,
+    "place_rate": 0.2549,
+    "n_starts": 1020
+  },
+  "Casino|300|6": {
+    "win_rate": 0.1156,
+    "place_rate": 0.3349,
+    "n_starts": 1081
+  },
+  "Casino|300|7": {
+    "win_rate": 0.1313,
+    "place_rate": 0.3627,
+    "n_starts": 1158
+  },
+  "Casino|300|8": {
+    "win_rate": 0.1025,
+    "place_rate": 0.3294,
+    "n_starts": 1181
+  },
+  "Casino|300|9": {
+    "win_rate": 0.0656,
+    "place_rate": 0.235,
+    "n_starts": 183
+  },
+  "Casino|300|10": {
+    "win_rate": 0.08,
+    "place_rate": 0.28,
+    "n_starts": 25
+  },
+  "Casino|411|1": {
+    "win_rate": 0.2366,
+    "place_rate": 0.4863,
+    "n_starts": 989
+  },
+  "Casino|411|2": {
+    "win_rate": 0.1531,
+    "place_rate": 0.4159,
+    "n_starts": 993
+  },
+  "Casino|411|3": {
+    "win_rate": 0.1227,
+    "place_rate": 0.3455,
+    "n_starts": 880
+  },
+  "Casino|411|4": {
+    "win_rate": 0.1167,
+    "place_rate": 0.3286,
+    "n_starts": 977
+  },
+  "Casino|411|5": {
+    "win_rate": 0.0988,
+    "place_rate": 0.2988,
+    "n_starts": 820
+  },
+  "Casino|411|6": {
+    "win_rate": 0.1119,
+    "place_rate": 0.311,
+    "n_starts": 894
+  },
+  "Casino|411|7": {
+    "win_rate": 0.1142,
+    "place_rate": 0.3333,
+    "n_starts": 981
+  },
+  "Casino|411|8": {
+    "win_rate": 0.1313,
+    "place_rate": 0.3444,
+    "n_starts": 967
+  },
+  "Casino|411|9": {
+    "win_rate": 0.0496,
+    "place_rate": 0.2645,
+    "n_starts": 121
+  },
+  "Casino|411|10": {
+    "win_rate": 0.08,
+    "place_rate": 0.24,
+    "n_starts": 25
+  },
+  "Casino|484|1": {
+    "win_rate": 0.1688,
+    "place_rate": 0.4318,
+    "n_starts": 308
+  },
+  "Casino|484|2": {
+    "win_rate": 0.1543,
+    "place_rate": 0.3794,
+    "n_starts": 311
+  },
+  "Casino|484|3": {
+    "win_rate": 0.1496,
+    "place_rate": 0.3583,
+    "n_starts": 254
+  },
+  "Casino|484|4": {
+    "win_rate": 0.1266,
+    "place_rate": 0.3084,
+    "n_starts": 308
+  },
+  "Casino|484|5": {
+    "win_rate": 0.1111,
+    "place_rate": 0.3333,
+    "n_starts": 225
+  },
+  "Casino|484|6": {
+    "win_rate": 0.1036,
+    "place_rate": 0.259,
+    "n_starts": 251
+  },
+  "Casino|484|7": {
+    "win_rate": 0.147,
+    "place_rate": 0.3195,
+    "n_starts": 313
+  },
+  "Casino|484|8": {
+    "win_rate": 0.1635,
+    "place_rate": 0.3558,
+    "n_starts": 312
+  },
+  "Casino|484|9": {
+    "win_rate": 0.069,
+    "place_rate": 0.2414,
+    "n_starts": 29
+  },
+  "Casino|620|1": {
+    "win_rate": 0.2069,
+    "place_rate": 0.4483,
+    "n_starts": 29
+  },
+  "Casino|620|2": {
+    "win_rate": 0.3571,
+    "place_rate": 0.5357,
+    "n_starts": 28
+  },
+  "Casino|620|3": {
+    "win_rate": 0.0435,
+    "place_rate": 0.2609,
+    "n_starts": 23
+  },
+  "Casino|620|4": {
+    "win_rate": 0.125,
+    "place_rate": 0.3438,
+    "n_starts": 32
+  },
+  "Casino|620|5": {
+    "win_rate": 0.2083,
+    "place_rate": 0.4167,
+    "n_starts": 24
+  },
+  "Casino|620|6": {
+    "win_rate": 0.0952,
+    "place_rate": 0.2857,
+    "n_starts": 21
+  },
+  "Casino|620|7": {
+    "win_rate": 0.0667,
+    "place_rate": 0.2,
+    "n_starts": 30
+  },
+  "Casino|620|8": {
+    "win_rate": 0.069,
+    "place_rate": 0.2414,
+    "n_starts": 29
+  },
+  "Dapto|297|1": {
+    "win_rate": 0.2049,
+    "place_rate": 0.4467,
+    "n_starts": 947
+  },
+  "Dapto|297|2": {
+    "win_rate": 0.1488,
+    "place_rate": 0.39,
+    "n_starts": 941
+  },
+  "Dapto|297|3": {
+    "win_rate": 0.1337,
+    "place_rate": 0.339,
+    "n_starts": 823
+  },
+  "Dapto|297|4": {
+    "win_rate": 0.1286,
+    "place_rate": 0.3103,
+    "n_starts": 925
+  },
+  "Dapto|297|5": {
+    "win_rate": 0.1237,
+    "place_rate": 0.3508,
+    "n_starts": 744
+  },
+  "Dapto|297|6": {
+    "win_rate": 0.12,
+    "place_rate": 0.3169,
+    "n_starts": 833
+  },
+  "Dapto|297|7": {
+    "win_rate": 0.1107,
+    "place_rate": 0.3344,
+    "n_starts": 912
+  },
+  "Dapto|297|8": {
+    "win_rate": 0.1415,
+    "place_rate": 0.3602,
+    "n_starts": 919
+  },
+  "Dapto|297|9": {
+    "win_rate": 0.0397,
+    "place_rate": 0.2222,
+    "n_starts": 126
+  },
+  "Dapto|297|10": {
+    "win_rate": 0.0286,
+    "place_rate": 0.1429,
+    "n_starts": 35
+  },
+  "Dapto|520|1": {
+    "win_rate": 0.1565,
+    "place_rate": 0.3715,
+    "n_starts": 428
+  },
+  "Dapto|520|2": {
+    "win_rate": 0.171,
+    "place_rate": 0.38,
+    "n_starts": 421
+  },
+  "Dapto|520|3": {
+    "win_rate": 0.1232,
+    "place_rate": 0.3724,
+    "n_starts": 341
+  },
+  "Dapto|520|4": {
+    "win_rate": 0.1327,
+    "place_rate": 0.3104,
+    "n_starts": 422
+  },
+  "Dapto|520|5": {
+    "win_rate": 0.1433,
+    "place_rate": 0.3355,
+    "n_starts": 307
+  },
+  "Dapto|520|6": {
+    "win_rate": 0.1354,
+    "place_rate": 0.3569,
+    "n_starts": 325
+  },
+  "Dapto|520|7": {
+    "win_rate": 0.1303,
+    "place_rate": 0.3223,
+    "n_starts": 422
+  },
+  "Dapto|520|8": {
+    "win_rate": 0.1544,
+    "place_rate": 0.3325,
+    "n_starts": 421
+  },
+  "Dapto|520|9": {
+    "win_rate": 0.0556,
+    "place_rate": 0.3519,
+    "n_starts": 54
+  },
+  "Dapto|600|1": {
+    "win_rate": 0.2044,
+    "place_rate": 0.4234,
+    "n_starts": 137
+  },
+  "Dapto|600|2": {
+    "win_rate": 0.1119,
+    "place_rate": 0.3284,
+    "n_starts": 134
+  },
+  "Dapto|600|3": {
+    "win_rate": 0.1868,
+    "place_rate": 0.3077,
+    "n_starts": 91
+  },
+  "Dapto|600|4": {
+    "win_rate": 0.1159,
+    "place_rate": 0.3043,
+    "n_starts": 138
+  },
+  "Dapto|600|5": {
+    "win_rate": 0.1765,
+    "place_rate": 0.402,
+    "n_starts": 102
+  },
+  "Dapto|600|6": {
+    "win_rate": 0.0795,
+    "place_rate": 0.3636,
+    "n_starts": 88
+  },
+  "Dapto|600|7": {
+    "win_rate": 0.1439,
+    "place_rate": 0.2576,
+    "n_starts": 132
+  },
+  "Dapto|600|8": {
+    "win_rate": 0.1799,
+    "place_rate": 0.3957,
+    "n_starts": 139
+  },
+  "Dubbo|318|1": {
+    "win_rate": 0.2294,
+    "place_rate": 0.5066,
+    "n_starts": 1129
+  },
+  "Dubbo|318|2": {
+    "win_rate": 0.1599,
+    "place_rate": 0.4268,
+    "n_starts": 1113
+  },
+  "Dubbo|318|3": {
+    "win_rate": 0.1257,
+    "place_rate": 0.3647,
+    "n_starts": 1042
+  },
+  "Dubbo|318|4": {
+    "win_rate": 0.1314,
+    "place_rate": 0.3369,
+    "n_starts": 1119
+  },
+  "Dubbo|318|5": {
+    "win_rate": 0.1342,
+    "place_rate": 0.3658,
+    "n_starts": 924
+  },
+  "Dubbo|318|6": {
+    "win_rate": 0.1122,
+    "place_rate": 0.3049,
+    "n_starts": 1043
+  },
+  "Dubbo|318|7": {
+    "win_rate": 0.0988,
+    "place_rate": 0.3199,
+    "n_starts": 1113
+  },
+  "Dubbo|318|8": {
+    "win_rate": 0.0993,
+    "place_rate": 0.2773,
+    "n_starts": 1118
+  },
+  "Dubbo|318|9": {
+    "win_rate": 0.0559,
+    "place_rate": 0.2179,
+    "n_starts": 179
+  },
+  "Dubbo|318|10": {
+    "win_rate": 0.0833,
+    "place_rate": 0.25,
+    "n_starts": 48
+  },
+  "Dubbo|400|1": {
+    "win_rate": 0.2078,
+    "place_rate": 0.4969,
+    "n_starts": 640
+  },
+  "Dubbo|400|2": {
+    "win_rate": 0.1685,
+    "place_rate": 0.415,
+    "n_starts": 641
+  },
+  "Dubbo|400|3": {
+    "win_rate": 0.0988,
+    "place_rate": 0.3422,
+    "n_starts": 567
+  },
+  "Dubbo|400|4": {
+    "win_rate": 0.1433,
+    "place_rate": 0.3424,
+    "n_starts": 628
+  },
+  "Dubbo|400|5": {
+    "win_rate": 0.1343,
+    "place_rate": 0.3367,
+    "n_starts": 499
+  },
+  "Dubbo|400|6": {
+    "win_rate": 0.1254,
+    "place_rate": 0.2933,
+    "n_starts": 566
+  },
+  "Dubbo|400|7": {
+    "win_rate": 0.1398,
+    "place_rate": 0.322,
+    "n_starts": 615
+  },
+  "Dubbo|400|8": {
+    "win_rate": 0.0883,
+    "place_rate": 0.2839,
+    "n_starts": 634
+  },
+  "Dubbo|400|9": {
+    "win_rate": 0.0465,
+    "place_rate": 0.1395,
+    "n_starts": 86
+  },
+  "Dubbo|516|1": {
+    "win_rate": 0.2148,
+    "place_rate": 0.3984,
+    "n_starts": 256
+  },
+  "Dubbo|516|2": {
+    "win_rate": 0.1654,
+    "place_rate": 0.3898,
+    "n_starts": 254
+  },
+  "Dubbo|516|3": {
+    "win_rate": 0.125,
+    "place_rate": 0.375,
+    "n_starts": 184
+  },
+  "Dubbo|516|4": {
+    "win_rate": 0.176,
+    "place_rate": 0.4,
+    "n_starts": 250
+  },
+  "Dubbo|516|5": {
+    "win_rate": 0.114,
+    "place_rate": 0.3264,
+    "n_starts": 193
+  },
+  "Dubbo|516|6": {
+    "win_rate": 0.1123,
+    "place_rate": 0.2941,
+    "n_starts": 187
+  },
+  "Dubbo|516|7": {
+    "win_rate": 0.1176,
+    "place_rate": 0.2706,
+    "n_starts": 255
+  },
+  "Dubbo|516|8": {
+    "win_rate": 0.1401,
+    "place_rate": 0.3074,
+    "n_starts": 257
+  },
+  "Dubbo|516|9": {
+    "win_rate": 0.0385,
+    "place_rate": 0.1154,
+    "n_starts": 26
+  },
+  "Dubbo|605|1": {
+    "win_rate": 0.2083,
+    "place_rate": 0.4167,
+    "n_starts": 48
+  },
+  "Dubbo|605|2": {
+    "win_rate": 0.1463,
+    "place_rate": 0.2683,
+    "n_starts": 41
+  },
+  "Dubbo|605|3": {
+    "win_rate": 0.1724,
+    "place_rate": 0.2414,
+    "n_starts": 29
+  },
+  "Dubbo|605|4": {
+    "win_rate": 0.1667,
+    "place_rate": 0.4524,
+    "n_starts": 42
+  },
+  "Dubbo|605|5": {
+    "win_rate": 0.1935,
+    "place_rate": 0.4194,
+    "n_starts": 31
+  },
+  "Dubbo|605|6": {
+    "win_rate": 0.1154,
+    "place_rate": 0.2308,
+    "n_starts": 26
+  },
+  "Dubbo|605|7": {
+    "win_rate": 0.1667,
+    "place_rate": 0.4048,
+    "n_starts": 42
+  },
+  "Dubbo|605|8": {
+    "win_rate": 0.122,
+    "place_rate": 0.3902,
+    "n_starts": 41
+  },
+  "Geelong|400|1": {
+    "win_rate": 0.1564,
+    "place_rate": 0.3947,
+    "n_starts": 2589
+  },
+  "Geelong|400|2": {
+    "win_rate": 0.1608,
+    "place_rate": 0.3714,
+    "n_starts": 2569
+  },
+  "Geelong|400|3": {
+    "win_rate": 0.1419,
+    "place_rate": 0.3497,
+    "n_starts": 2368
+  },
+  "Geelong|400|4": {
+    "win_rate": 0.1301,
+    "place_rate": 0.3333,
+    "n_starts": 2544
+  },
+  "Geelong|400|5": {
+    "win_rate": 0.124,
+    "place_rate": 0.3382,
+    "n_starts": 1984
+  },
+  "Geelong|400|6": {
+    "win_rate": 0.1127,
+    "place_rate": 0.3114,
+    "n_starts": 2386
+  },
+  "Geelong|400|7": {
+    "win_rate": 0.1292,
+    "place_rate": 0.3564,
+    "n_starts": 2531
+  },
+  "Geelong|400|8": {
+    "win_rate": 0.1496,
+    "place_rate": 0.3714,
+    "n_starts": 2574
+  },
+  "Geelong|400|9": {
+    "win_rate": 0.0521,
+    "place_rate": 0.2083,
+    "n_starts": 192
+  },
+  "Geelong|400|10": {
+    "win_rate": 0.0423,
+    "place_rate": 0.2042,
+    "n_starts": 142
+  },
+  "Geelong|460|1": {
+    "win_rate": 0.1532,
+    "place_rate": 0.4018,
+    "n_starts": 1416
+  },
+  "Geelong|460|2": {
+    "win_rate": 0.1264,
+    "place_rate": 0.3189,
+    "n_starts": 1408
+  },
+  "Geelong|460|3": {
+    "win_rate": 0.0986,
+    "place_rate": 0.2865,
+    "n_starts": 1288
+  },
+  "Geelong|460|4": {
+    "win_rate": 0.1495,
+    "place_rate": 0.363,
+    "n_starts": 1391
+  },
+  "Geelong|460|5": {
+    "win_rate": 0.1152,
+    "place_rate": 0.3152,
+    "n_starts": 1085
+  },
+  "Geelong|460|6": {
+    "win_rate": 0.1271,
+    "place_rate": 0.3737,
+    "n_starts": 1314
+  },
+  "Geelong|460|7": {
+    "win_rate": 0.1701,
+    "place_rate": 0.3895,
+    "n_starts": 1376
+  },
+  "Geelong|460|8": {
+    "win_rate": 0.1546,
+    "place_rate": 0.3761,
+    "n_starts": 1404
+  },
+  "Geelong|460|9": {
+    "win_rate": 0.0752,
+    "place_rate": 0.2406,
+    "n_starts": 133
+  },
+  "Geelong|460|10": {
+    "win_rate": 0.0845,
+    "place_rate": 0.1831,
+    "n_starts": 71
+  },
+  "Geelong|520|1": {
+    "win_rate": 0.1124,
+    "place_rate": 0.382,
+    "n_starts": 89
+  },
+  "Geelong|520|2": {
+    "win_rate": 0.2024,
+    "place_rate": 0.4286,
+    "n_starts": 84
+  },
+  "Geelong|520|3": {
+    "win_rate": 0.2278,
+    "place_rate": 0.519,
+    "n_starts": 79
+  },
+  "Geelong|520|4": {
+    "win_rate": 0.1667,
+    "place_rate": 0.381,
+    "n_starts": 84
+  },
+  "Geelong|520|5": {
+    "win_rate": 0.0769,
+    "place_rate": 0.3231,
+    "n_starts": 65
+  },
+  "Geelong|520|6": {
+    "win_rate": 0.1299,
+    "place_rate": 0.3117,
+    "n_starts": 77
+  },
+  "Geelong|520|7": {
+    "win_rate": 0.0706,
+    "place_rate": 0.2471,
+    "n_starts": 85
+  },
+  "Geelong|520|8": {
+    "win_rate": 0.1264,
+    "place_rate": 0.2644,
+    "n_starts": 87
+  },
+  "Geelong|680|1": {
+    "win_rate": 0.1538,
+    "place_rate": 0.4103,
+    "n_starts": 39
+  },
+  "Geelong|680|2": {
+    "win_rate": 0.2432,
+    "place_rate": 0.4054,
+    "n_starts": 37
+  },
+  "Geelong|680|3": {
+    "win_rate": 0.1429,
+    "place_rate": 0.3571,
+    "n_starts": 28
+  },
+  "Geelong|680|4": {
+    "win_rate": 0.0571,
+    "place_rate": 0.3143,
+    "n_starts": 35
+  },
+  "Geelong|680|5": {
+    "win_rate": 0.1739,
+    "place_rate": 0.3913,
+    "n_starts": 23
+  },
+  "Geelong|680|6": {
+    "win_rate": 0.3077,
+    "place_rate": 0.5769,
+    "n_starts": 26
+  },
+  "Geelong|680|7": {
+    "win_rate": 0.0526,
+    "place_rate": 0.0789,
+    "n_starts": 38
+  },
+  "Geelong|680|8": {
+    "win_rate": 0.1176,
+    "place_rate": 0.2941,
+    "n_starts": 34
+  },
+  "Gosford|388|1": {
+    "win_rate": 0.1756,
+    "place_rate": 0.4489,
+    "n_starts": 1321
+  },
+  "Gosford|388|2": {
+    "win_rate": 0.1508,
+    "place_rate": 0.4008,
+    "n_starts": 1300
+  },
+  "Gosford|388|3": {
+    "win_rate": 0.1432,
+    "place_rate": 0.3689,
+    "n_starts": 1236
+  },
+  "Gosford|388|4": {
+    "win_rate": 0.1248,
+    "place_rate": 0.3573,
+    "n_starts": 1282
+  },
+  "Gosford|388|5": {
+    "win_rate": 0.1212,
+    "place_rate": 0.3468,
+    "n_starts": 1139
+  },
+  "Gosford|388|6": {
+    "win_rate": 0.1116,
+    "place_rate": 0.3106,
+    "n_starts": 1201
+  },
+  "Gosford|388|7": {
+    "win_rate": 0.126,
+    "place_rate": 0.3484,
+    "n_starts": 1286
+  },
+  "Gosford|388|8": {
+    "win_rate": 0.1426,
+    "place_rate": 0.3678,
+    "n_starts": 1297
+  },
+  "Gosford|388|9": {
+    "win_rate": 0.0496,
+    "place_rate": 0.1633,
+    "n_starts": 343
+  },
+  "Gosford|388|10": {
+    "win_rate": 0.0562,
+    "place_rate": 0.1236,
+    "n_starts": 89
+  },
+  "Gosford|515|1": {
+    "win_rate": 0.1444,
+    "place_rate": 0.4159,
+    "n_starts": 464
+  },
+  "Gosford|515|2": {
+    "win_rate": 0.1699,
+    "place_rate": 0.3978,
+    "n_starts": 465
+  },
+  "Gosford|515|3": {
+    "win_rate": 0.15,
+    "place_rate": 0.32,
+    "n_starts": 400
+  },
+  "Gosford|515|4": {
+    "win_rate": 0.1504,
+    "place_rate": 0.3252,
+    "n_starts": 452
+  },
+  "Gosford|515|5": {
+    "win_rate": 0.1391,
+    "place_rate": 0.3373,
+    "n_starts": 338
+  },
+  "Gosford|515|6": {
+    "win_rate": 0.1203,
+    "place_rate": 0.3233,
+    "n_starts": 399
+  },
+  "Gosford|515|7": {
+    "win_rate": 0.1174,
+    "place_rate": 0.3341,
+    "n_starts": 443
+  },
+  "Gosford|515|8": {
+    "win_rate": 0.1674,
+    "place_rate": 0.3436,
+    "n_starts": 454
+  },
+  "Gosford|515|9": {
+    "win_rate": 0.0617,
+    "place_rate": 0.1605,
+    "n_starts": 81
+  },
+  "Gosford|603|1": {
+    "win_rate": 0.2552,
+    "place_rate": 0.4207,
+    "n_starts": 145
+  },
+  "Gosford|603|2": {
+    "win_rate": 0.2013,
+    "place_rate": 0.4027,
+    "n_starts": 149
+  },
+  "Gosford|603|3": {
+    "win_rate": 0.0763,
+    "place_rate": 0.3305,
+    "n_starts": 118
+  },
+  "Gosford|603|4": {
+    "win_rate": 0.1275,
+    "place_rate": 0.3087,
+    "n_starts": 149
+  },
+  "Gosford|603|5": {
+    "win_rate": 0.1028,
+    "place_rate": 0.243,
+    "n_starts": 107
+  },
+  "Gosford|603|6": {
+    "win_rate": 0.1379,
+    "place_rate": 0.3103,
+    "n_starts": 116
+  },
+  "Gosford|603|7": {
+    "win_rate": 0.1301,
+    "place_rate": 0.3836,
+    "n_starts": 146
+  },
+  "Gosford|603|8": {
+    "win_rate": 0.1277,
+    "place_rate": 0.3333,
+    "n_starts": 141
+  },
+  "Goulburn|350|1": {
+    "win_rate": 0.2035,
+    "place_rate": 0.4279,
+    "n_starts": 1145
+  },
+  "Goulburn|350|2": {
+    "win_rate": 0.1288,
+    "place_rate": 0.3579,
+    "n_starts": 1126
+  },
+  "Goulburn|350|3": {
+    "win_rate": 0.1417,
+    "place_rate": 0.3435,
+    "n_starts": 1016
+  },
+  "Goulburn|350|4": {
+    "win_rate": 0.1151,
+    "place_rate": 0.3051,
+    "n_starts": 1121
+  },
+  "Goulburn|350|5": {
+    "win_rate": 0.1301,
+    "place_rate": 0.3682,
+    "n_starts": 899
+  },
+  "Goulburn|350|6": {
+    "win_rate": 0.1182,
+    "place_rate": 0.33,
+    "n_starts": 1015
+  },
+  "Goulburn|350|7": {
+    "win_rate": 0.127,
+    "place_rate": 0.3309,
+    "n_starts": 1118
+  },
+  "Goulburn|350|8": {
+    "win_rate": 0.1503,
+    "place_rate": 0.3846,
+    "n_starts": 1131
+  },
+  "Goulburn|350|9": {
+    "win_rate": 0.0543,
+    "place_rate": 0.25,
+    "n_starts": 184
+  },
+  "Goulburn|350|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.2439,
+    "n_starts": 41
+  },
+  "Goulburn|440|1": {
+    "win_rate": 0.2053,
+    "place_rate": 0.4218,
+    "n_starts": 716
+  },
+  "Goulburn|440|2": {
+    "win_rate": 0.1453,
+    "place_rate": 0.3561,
+    "n_starts": 688
+  },
+  "Goulburn|440|3": {
+    "win_rate": 0.1121,
+    "place_rate": 0.3209,
+    "n_starts": 589
+  },
+  "Goulburn|440|4": {
+    "win_rate": 0.1408,
+    "place_rate": 0.3405,
+    "n_starts": 696
+  },
+  "Goulburn|440|5": {
+    "win_rate": 0.1284,
+    "place_rate": 0.3523,
+    "n_starts": 545
+  },
+  "Goulburn|440|6": {
+    "win_rate": 0.099,
+    "place_rate": 0.3038,
+    "n_starts": 586
+  },
+  "Goulburn|440|7": {
+    "win_rate": 0.1391,
+    "place_rate": 0.3652,
+    "n_starts": 690
+  },
+  "Goulburn|440|8": {
+    "win_rate": 0.147,
+    "place_rate": 0.3674,
+    "n_starts": 694
+  },
+  "Goulburn|440|9": {
+    "win_rate": 0.0233,
+    "place_rate": 0.1279,
+    "n_starts": 86
+  },
+  "Goulburn|440|10": {
+    "win_rate": 0.15,
+    "place_rate": 0.25,
+    "n_starts": 20
+  },
+  "Grafton|350|1": {
+    "win_rate": 0.148,
+    "place_rate": 0.3931,
+    "n_starts": 1750
+  },
+  "Grafton|350|2": {
+    "win_rate": 0.1368,
+    "place_rate": 0.3466,
+    "n_starts": 1754
+  },
+  "Grafton|350|3": {
+    "win_rate": 0.1302,
+    "place_rate": 0.3459,
+    "n_starts": 1613
+  },
+  "Grafton|350|4": {
+    "win_rate": 0.1377,
+    "place_rate": 0.3372,
+    "n_starts": 1714
+  },
+  "Grafton|350|5": {
+    "win_rate": 0.1219,
+    "place_rate": 0.3464,
+    "n_starts": 1403
+  },
+  "Grafton|350|6": {
+    "win_rate": 0.1159,
+    "place_rate": 0.3296,
+    "n_starts": 1614
+  },
+  "Grafton|350|7": {
+    "win_rate": 0.1456,
+    "place_rate": 0.3653,
+    "n_starts": 1744
+  },
+  "Grafton|350|8": {
+    "win_rate": 0.1611,
+    "place_rate": 0.4085,
+    "n_starts": 1738
+  },
+  "Grafton|350|9": {
+    "win_rate": 0.0367,
+    "place_rate": 0.1755,
+    "n_starts": 245
+  },
+  "Grafton|350|10": {
+    "win_rate": 0.1111,
+    "place_rate": 0.2222,
+    "n_starts": 54
+  },
+  "Grafton|450|1": {
+    "win_rate": 0.1455,
+    "place_rate": 0.3689,
+    "n_starts": 694
+  },
+  "Grafton|450|2": {
+    "win_rate": 0.1591,
+    "place_rate": 0.3667,
+    "n_starts": 679
+  },
+  "Grafton|450|3": {
+    "win_rate": 0.1374,
+    "place_rate": 0.3588,
+    "n_starts": 524
+  },
+  "Grafton|450|4": {
+    "win_rate": 0.1422,
+    "place_rate": 0.3226,
+    "n_starts": 682
+  },
+  "Grafton|450|5": {
+    "win_rate": 0.137,
+    "place_rate": 0.3433,
+    "n_starts": 533
+  },
+  "Grafton|450|6": {
+    "win_rate": 0.1391,
+    "place_rate": 0.3177,
+    "n_starts": 532
+  },
+  "Grafton|450|7": {
+    "win_rate": 0.1479,
+    "place_rate": 0.3683,
+    "n_starts": 676
+  },
+  "Grafton|450|8": {
+    "win_rate": 0.1471,
+    "place_rate": 0.3774,
+    "n_starts": 673
+  },
+  "Grafton|450|9": {
+    "win_rate": 0.0119,
+    "place_rate": 0.0952,
+    "n_starts": 84
+  },
+  "Grafton|660|1": {
+    "win_rate": 0.1667,
+    "place_rate": 0.3667,
+    "n_starts": 30
+  },
+  "Grafton|660|2": {
+    "win_rate": 0.2258,
+    "place_rate": 0.3871,
+    "n_starts": 31
+  },
+  "Grafton|660|3": {
+    "win_rate": 0.1429,
+    "place_rate": 0.381,
+    "n_starts": 21
+  },
+  "Grafton|660|4": {
+    "win_rate": 0.1875,
+    "place_rate": 0.3438,
+    "n_starts": 32
+  },
+  "Grafton|660|7": {
+    "win_rate": 0.0312,
+    "place_rate": 0.2188,
+    "n_starts": 32
+  },
+  "Grafton|660|8": {
+    "win_rate": 0.1786,
+    "place_rate": 0.2143,
+    "n_starts": 28
+  },
+  "Gunnedah|340|1": {
+    "win_rate": 0.1669,
+    "place_rate": 0.4176,
+    "n_starts": 1444
+  },
+  "Gunnedah|340|2": {
+    "win_rate": 0.1592,
+    "place_rate": 0.3857,
+    "n_starts": 1413
+  },
+  "Gunnedah|340|3": {
+    "win_rate": 0.1201,
+    "place_rate": 0.3221,
+    "n_starts": 1332
+  },
+  "Gunnedah|340|4": {
+    "win_rate": 0.1073,
+    "place_rate": 0.3191,
+    "n_starts": 1426
+  },
+  "Gunnedah|340|5": {
+    "win_rate": 0.1279,
+    "place_rate": 0.3595,
+    "n_starts": 1235
+  },
+  "Gunnedah|340|6": {
+    "win_rate": 0.129,
+    "place_rate": 0.3552,
+    "n_starts": 1326
+  },
+  "Gunnedah|340|7": {
+    "win_rate": 0.1405,
+    "place_rate": 0.3686,
+    "n_starts": 1438
+  },
+  "Gunnedah|340|8": {
+    "win_rate": 0.1338,
+    "place_rate": 0.3957,
+    "n_starts": 1405
+  },
+  "Gunnedah|340|9": {
+    "win_rate": 0.067,
+    "place_rate": 0.2057,
+    "n_starts": 209
+  },
+  "Gunnedah|340|10": {
+    "win_rate": 0.0577,
+    "place_rate": 0.1154,
+    "n_starts": 52
+  },
+  "Gunnedah|431|1": {
+    "win_rate": 0.1952,
+    "place_rate": 0.4539,
+    "n_starts": 456
+  },
+  "Gunnedah|431|2": {
+    "win_rate": 0.1806,
+    "place_rate": 0.4009,
+    "n_starts": 454
+  },
+  "Gunnedah|431|3": {
+    "win_rate": 0.1517,
+    "place_rate": 0.3557,
+    "n_starts": 402
+  },
+  "Gunnedah|431|4": {
+    "win_rate": 0.1167,
+    "place_rate": 0.3414,
+    "n_starts": 454
+  },
+  "Gunnedah|431|5": {
+    "win_rate": 0.1186,
+    "place_rate": 0.31,
+    "n_starts": 371
+  },
+  "Gunnedah|431|6": {
+    "win_rate": 0.1072,
+    "place_rate": 0.3267,
+    "n_starts": 401
+  },
+  "Gunnedah|431|7": {
+    "win_rate": 0.0943,
+    "place_rate": 0.2982,
+    "n_starts": 456
+  },
+  "Gunnedah|431|8": {
+    "win_rate": 0.1425,
+    "place_rate": 0.3509,
+    "n_starts": 456
+  },
+  "Gunnedah|431|9": {
+    "win_rate": 0.037,
+    "place_rate": 0.2407,
+    "n_starts": 54
+  },
+  "Gunnedah|527|1": {
+    "win_rate": 0.1692,
+    "place_rate": 0.3923,
+    "n_starts": 130
+  },
+  "Gunnedah|527|2": {
+    "win_rate": 0.1278,
+    "place_rate": 0.3459,
+    "n_starts": 133
+  },
+  "Gunnedah|527|3": {
+    "win_rate": 0.2039,
+    "place_rate": 0.466,
+    "n_starts": 103
+  },
+  "Gunnedah|527|4": {
+    "win_rate": 0.1308,
+    "place_rate": 0.3077,
+    "n_starts": 130
+  },
+  "Gunnedah|527|5": {
+    "win_rate": 0.1313,
+    "place_rate": 0.2828,
+    "n_starts": 99
+  },
+  "Gunnedah|527|6": {
+    "win_rate": 0.1386,
+    "place_rate": 0.3465,
+    "n_starts": 101
+  },
+  "Gunnedah|527|7": {
+    "win_rate": 0.1364,
+    "place_rate": 0.3106,
+    "n_starts": 132
+  },
+  "Gunnedah|527|8": {
+    "win_rate": 0.1343,
+    "place_rate": 0.3433,
+    "n_starts": 134
+  },
+  "Healesville|300|1": {
+    "win_rate": 0.1278,
+    "place_rate": 0.3724,
+    "n_starts": 2285
+  },
+  "Healesville|300|2": {
+    "win_rate": 0.1362,
+    "place_rate": 0.3673,
+    "n_starts": 2246
+  },
+  "Healesville|300|3": {
+    "win_rate": 0.1197,
+    "place_rate": 0.3234,
+    "n_starts": 2205
+  },
+  "Healesville|300|4": {
+    "win_rate": 0.1356,
+    "place_rate": 0.3613,
+    "n_starts": 2220
+  },
+  "Healesville|300|5": {
+    "win_rate": 0.1164,
+    "place_rate": 0.3371,
+    "n_starts": 2044
+  },
+  "Healesville|300|6": {
+    "win_rate": 0.1161,
+    "place_rate": 0.3477,
+    "n_starts": 2180
+  },
+  "Healesville|300|7": {
+    "win_rate": 0.1517,
+    "place_rate": 0.3857,
+    "n_starts": 2235
+  },
+  "Healesville|300|8": {
+    "win_rate": 0.1641,
+    "place_rate": 0.4405,
+    "n_starts": 2218
+  },
+  "Healesville|300|9": {
+    "win_rate": 0.0511,
+    "place_rate": 0.2128,
+    "n_starts": 235
+  },
+  "Healesville|300|10": {
+    "win_rate": 0.0838,
+    "place_rate": 0.2094,
+    "n_starts": 191
+  },
+  "Healesville|350|1": {
+    "win_rate": 0.1393,
+    "place_rate": 0.3814,
+    "n_starts": 2032
+  },
+  "Healesville|350|2": {
+    "win_rate": 0.1287,
+    "place_rate": 0.3221,
+    "n_starts": 2012
+  },
+  "Healesville|350|3": {
+    "win_rate": 0.1216,
+    "place_rate": 0.3354,
+    "n_starts": 1965
+  },
+  "Healesville|350|4": {
+    "win_rate": 0.1243,
+    "place_rate": 0.3616,
+    "n_starts": 2019
+  },
+  "Healesville|350|5": {
+    "win_rate": 0.1264,
+    "place_rate": 0.3472,
+    "n_starts": 1780
+  },
+  "Healesville|350|6": {
+    "win_rate": 0.1318,
+    "place_rate": 0.3702,
+    "n_starts": 1980
+  },
+  "Healesville|350|7": {
+    "win_rate": 0.1403,
+    "place_rate": 0.3846,
+    "n_starts": 2010
+  },
+  "Healesville|350|8": {
+    "win_rate": 0.1585,
+    "place_rate": 0.4307,
+    "n_starts": 2006
+  },
+  "Healesville|350|9": {
+    "win_rate": 0.0529,
+    "place_rate": 0.1982,
+    "n_starts": 227
+  },
+  "Healesville|350|10": {
+    "win_rate": 0.0452,
+    "place_rate": 0.1751,
+    "n_starts": 177
+  },
+  "Horsham|410|1": {
+    "win_rate": 0.2109,
+    "place_rate": 0.4759,
+    "n_starts": 1683
+  },
+  "Horsham|410|2": {
+    "win_rate": 0.1695,
+    "place_rate": 0.3978,
+    "n_starts": 1664
+  },
+  "Horsham|410|3": {
+    "win_rate": 0.1334,
+    "place_rate": 0.3406,
+    "n_starts": 1462
+  },
+  "Horsham|410|4": {
+    "win_rate": 0.1316,
+    "place_rate": 0.3272,
+    "n_starts": 1641
+  },
+  "Horsham|410|5": {
+    "win_rate": 0.1085,
+    "place_rate": 0.3221,
+    "n_starts": 1217
+  },
+  "Horsham|410|6": {
+    "win_rate": 0.1232,
+    "place_rate": 0.3048,
+    "n_starts": 1493
+  },
+  "Horsham|410|7": {
+    "win_rate": 0.1146,
+    "place_rate": 0.3011,
+    "n_starts": 1614
+  },
+  "Horsham|410|8": {
+    "win_rate": 0.1377,
+    "place_rate": 0.3301,
+    "n_starts": 1648
+  },
+  "Horsham|410|9": {
+    "win_rate": 0.0537,
+    "place_rate": 0.1544,
+    "n_starts": 149
+  },
+  "Horsham|410|10": {
+    "win_rate": 0.0619,
+    "place_rate": 0.2165,
+    "n_starts": 97
+  },
+  "Horsham|485|1": {
+    "win_rate": 0.222,
+    "place_rate": 0.4857,
+    "n_starts": 455
+  },
+  "Horsham|485|2": {
+    "win_rate": 0.1693,
+    "place_rate": 0.3786,
+    "n_starts": 449
+  },
+  "Horsham|485|3": {
+    "win_rate": 0.1387,
+    "place_rate": 0.3093,
+    "n_starts": 375
+  },
+  "Horsham|485|4": {
+    "win_rate": 0.1082,
+    "place_rate": 0.2826,
+    "n_starts": 453
+  },
+  "Horsham|485|5": {
+    "win_rate": 0.1534,
+    "place_rate": 0.3805,
+    "n_starts": 339
+  },
+  "Horsham|485|6": {
+    "win_rate": 0.1221,
+    "place_rate": 0.3143,
+    "n_starts": 385
+  },
+  "Horsham|485|7": {
+    "win_rate": 0.1359,
+    "place_rate": 0.3065,
+    "n_starts": 434
+  },
+  "Horsham|485|8": {
+    "win_rate": 0.1247,
+    "place_rate": 0.3363,
+    "n_starts": 449
+  },
+  "Horsham|485|9": {
+    "win_rate": 0.0484,
+    "place_rate": 0.2742,
+    "n_starts": 62
+  },
+  "Horsham|485|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.0435,
+    "n_starts": 23
+  },
+  "Ipswich|288|1": {
+    "win_rate": 0.1933,
+    "place_rate": 0.4893,
+    "n_starts": 1216
+  },
+  "Ipswich|288|2": {
+    "win_rate": 0.14,
+    "place_rate": 0.4283,
+    "n_starts": 1221
+  },
+  "Ipswich|288|3": {
+    "win_rate": 0.1109,
+    "place_rate": 0.3453,
+    "n_starts": 1199
+  },
+  "Ipswich|288|4": {
+    "win_rate": 0.1084,
+    "place_rate": 0.3134,
+    "n_starts": 1190
+  },
+  "Ipswich|288|5": {
+    "win_rate": 0.1225,
+    "place_rate": 0.377,
+    "n_starts": 1167
+  },
+  "Ipswich|288|6": {
+    "win_rate": 0.0986,
+    "place_rate": 0.3302,
+    "n_starts": 1187
+  },
+  "Ipswich|288|7": {
+    "win_rate": 0.1157,
+    "place_rate": 0.3395,
+    "n_starts": 1193
+  },
+  "Ipswich|288|8": {
+    "win_rate": 0.1407,
+    "place_rate": 0.392,
+    "n_starts": 1194
+  },
+  "Ipswich|288|9": {
+    "win_rate": 0.1125,
+    "place_rate": 0.3,
+    "n_starts": 160
+  },
+  "Ipswich|288|10": {
+    "win_rate": 0.075,
+    "place_rate": 0.275,
+    "n_starts": 40
+  },
+  "Ipswich|431|1": {
+    "win_rate": 0.2036,
+    "place_rate": 0.4983,
+    "n_starts": 2412
+  },
+  "Ipswich|431|2": {
+    "win_rate": 0.1707,
+    "place_rate": 0.4396,
+    "n_starts": 2384
+  },
+  "Ipswich|431|3": {
+    "win_rate": 0.1476,
+    "place_rate": 0.372,
+    "n_starts": 2304
+  },
+  "Ipswich|431|4": {
+    "win_rate": 0.1233,
+    "place_rate": 0.3295,
+    "n_starts": 2343
+  },
+  "Ipswich|431|5": {
+    "win_rate": 0.1076,
+    "place_rate": 0.3316,
+    "n_starts": 2156
+  },
+  "Ipswich|431|6": {
+    "win_rate": 0.0956,
+    "place_rate": 0.3091,
+    "n_starts": 2281
+  },
+  "Ipswich|431|7": {
+    "win_rate": 0.1085,
+    "place_rate": 0.3246,
+    "n_starts": 2332
+  },
+  "Ipswich|431|8": {
+    "win_rate": 0.1005,
+    "place_rate": 0.3194,
+    "n_starts": 2348
+  },
+  "Ipswich|431|9": {
+    "win_rate": 0.0784,
+    "place_rate": 0.2667,
+    "n_starts": 510
+  },
+  "Ipswich|431|10": {
+    "win_rate": 0.0764,
+    "place_rate": 0.1975,
+    "n_starts": 157
+  },
+  "Ipswich|520|1": {
+    "win_rate": 0.1898,
+    "place_rate": 0.4494,
+    "n_starts": 1117
+  },
+  "Ipswich|520|2": {
+    "win_rate": 0.1586,
+    "place_rate": 0.426,
+    "n_starts": 1122
+  },
+  "Ipswich|520|3": {
+    "win_rate": 0.1649,
+    "place_rate": 0.3725,
+    "n_starts": 1055
+  },
+  "Ipswich|520|4": {
+    "win_rate": 0.1401,
+    "place_rate": 0.3512,
+    "n_starts": 1099
+  },
+  "Ipswich|520|5": {
+    "win_rate": 0.1077,
+    "place_rate": 0.3347,
+    "n_starts": 956
+  },
+  "Ipswich|520|6": {
+    "win_rate": 0.1025,
+    "place_rate": 0.3247,
+    "n_starts": 1044
+  },
+  "Ipswich|520|7": {
+    "win_rate": 0.1033,
+    "place_rate": 0.2998,
+    "n_starts": 1084
+  },
+  "Ipswich|520|8": {
+    "win_rate": 0.1058,
+    "place_rate": 0.3303,
+    "n_starts": 1096
+  },
+  "Ipswich|520|9": {
+    "win_rate": 0.0931,
+    "place_rate": 0.25,
+    "n_starts": 204
+  },
+  "Ipswich|520|10": {
+    "win_rate": 0.0278,
+    "place_rate": 0.1667,
+    "n_starts": 72
+  },
+  "Ipswich|630|1": {
+    "win_rate": 0.1888,
+    "place_rate": 0.5385,
+    "n_starts": 143
+  },
+  "Ipswich|630|2": {
+    "win_rate": 0.1159,
+    "place_rate": 0.2971,
+    "n_starts": 138
+  },
+  "Ipswich|630|3": {
+    "win_rate": 0.1429,
+    "place_rate": 0.395,
+    "n_starts": 119
+  },
+  "Ipswich|630|4": {
+    "win_rate": 0.1714,
+    "place_rate": 0.3286,
+    "n_starts": 140
+  },
+  "Ipswich|630|5": {
+    "win_rate": 0.1296,
+    "place_rate": 0.3796,
+    "n_starts": 108
+  },
+  "Ipswich|630|6": {
+    "win_rate": 0.1129,
+    "place_rate": 0.3226,
+    "n_starts": 124
+  },
+  "Ipswich|630|7": {
+    "win_rate": 0.0896,
+    "place_rate": 0.2388,
+    "n_starts": 134
+  },
+  "Ipswich|630|8": {
+    "win_rate": 0.1449,
+    "place_rate": 0.3406,
+    "n_starts": 138
+  },
+  "Maitland|400|1": {
+    "win_rate": 0.195,
+    "place_rate": 0.4465,
+    "n_starts": 1113
+  },
+  "Maitland|400|2": {
+    "win_rate": 0.1589,
+    "place_rate": 0.3841,
+    "n_starts": 1070
+  },
+  "Maitland|400|3": {
+    "win_rate": 0.1493,
+    "place_rate": 0.3357,
+    "n_starts": 971
+  },
+  "Maitland|400|4": {
+    "win_rate": 0.0981,
+    "place_rate": 0.3206,
+    "n_starts": 1070
+  },
+  "Maitland|400|5": {
+    "win_rate": 0.1344,
+    "place_rate": 0.3326,
+    "n_starts": 863
+  },
+  "Maitland|400|6": {
+    "win_rate": 0.1143,
+    "place_rate": 0.3218,
+    "n_starts": 954
+  },
+  "Maitland|400|7": {
+    "win_rate": 0.1395,
+    "place_rate": 0.3487,
+    "n_starts": 1061
+  },
+  "Maitland|400|8": {
+    "win_rate": 0.1439,
+    "place_rate": 0.3482,
+    "n_starts": 1077
+  },
+  "Maitland|400|9": {
+    "win_rate": 0.0523,
+    "place_rate": 0.1744,
+    "n_starts": 172
+  },
+  "Maitland|400|10": {
+    "win_rate": 0.0233,
+    "place_rate": 0.1163,
+    "n_starts": 43
+  },
+  "Maitland|450|1": {
+    "win_rate": 0.1663,
+    "place_rate": 0.4,
+    "n_starts": 445
+  },
+  "Maitland|450|2": {
+    "win_rate": 0.2,
+    "place_rate": 0.436,
+    "n_starts": 445
+  },
+  "Maitland|450|3": {
+    "win_rate": 0.1453,
+    "place_rate": 0.3663,
+    "n_starts": 344
+  },
+  "Maitland|450|4": {
+    "win_rate": 0.1348,
+    "place_rate": 0.3258,
+    "n_starts": 445
+  },
+  "Maitland|450|5": {
+    "win_rate": 0.1,
+    "place_rate": 0.3156,
+    "n_starts": 320
+  },
+  "Maitland|450|6": {
+    "win_rate": 0.1211,
+    "place_rate": 0.2845,
+    "n_starts": 355
+  },
+  "Maitland|450|7": {
+    "win_rate": 0.1641,
+    "place_rate": 0.3659,
+    "n_starts": 451
+  },
+  "Maitland|450|8": {
+    "win_rate": 0.1267,
+    "place_rate": 0.3022,
+    "n_starts": 450
+  },
+  "Maitland|450|9": {
+    "win_rate": 0.0526,
+    "place_rate": 0.1579,
+    "n_starts": 57
+  },
+  "Maitland|565|1": {
+    "win_rate": 0.15,
+    "place_rate": 0.3833,
+    "n_starts": 60
+  },
+  "Maitland|565|2": {
+    "win_rate": 0.1167,
+    "place_rate": 0.3167,
+    "n_starts": 60
+  },
+  "Maitland|565|3": {
+    "win_rate": 0.2558,
+    "place_rate": 0.4651,
+    "n_starts": 43
+  },
+  "Maitland|565|4": {
+    "win_rate": 0.0806,
+    "place_rate": 0.371,
+    "n_starts": 62
+  },
+  "Maitland|565|5": {
+    "win_rate": 0.2273,
+    "place_rate": 0.4091,
+    "n_starts": 44
+  },
+  "Maitland|565|6": {
+    "win_rate": 0.1429,
+    "place_rate": 0.3333,
+    "n_starts": 42
+  },
+  "Maitland|565|7": {
+    "win_rate": 0.125,
+    "place_rate": 0.2812,
+    "n_starts": 64
+  },
+  "Maitland|565|8": {
+    "win_rate": 0.2031,
+    "place_rate": 0.2188,
+    "n_starts": 64
+  },
+  "Muswellbrook|336|1": {
+    "win_rate": 0.164,
+    "place_rate": 0.4106,
+    "n_starts": 677
+  },
+  "Muswellbrook|336|2": {
+    "win_rate": 0.1652,
+    "place_rate": 0.378,
+    "n_starts": 672
+  },
+  "Muswellbrook|336|3": {
+    "win_rate": 0.1669,
+    "place_rate": 0.3606,
+    "n_starts": 599
+  },
+  "Muswellbrook|336|4": {
+    "win_rate": 0.1198,
+    "place_rate": 0.3099,
+    "n_starts": 668
+  },
+  "Muswellbrook|336|5": {
+    "win_rate": 0.0879,
+    "place_rate": 0.3187,
+    "n_starts": 546
+  },
+  "Muswellbrook|336|6": {
+    "win_rate": 0.1281,
+    "place_rate": 0.3627,
+    "n_starts": 601
+  },
+  "Muswellbrook|336|7": {
+    "win_rate": 0.1206,
+    "place_rate": 0.3374,
+    "n_starts": 655
+  },
+  "Muswellbrook|336|8": {
+    "win_rate": 0.1475,
+    "place_rate": 0.389,
+    "n_starts": 671
+  },
+  "Muswellbrook|336|9": {
+    "win_rate": 0.0396,
+    "place_rate": 0.2376,
+    "n_starts": 101
+  },
+  "Muswellbrook|431|1": {
+    "win_rate": 0.2268,
+    "place_rate": 0.5155,
+    "n_starts": 194
+  },
+  "Muswellbrook|431|2": {
+    "win_rate": 0.1979,
+    "place_rate": 0.4583,
+    "n_starts": 192
+  },
+  "Muswellbrook|431|3": {
+    "win_rate": 0.1273,
+    "place_rate": 0.4121,
+    "n_starts": 165
+  },
+  "Muswellbrook|431|4": {
+    "win_rate": 0.1192,
+    "place_rate": 0.342,
+    "n_starts": 193
+  },
+  "Muswellbrook|431|5": {
+    "win_rate": 0.1203,
+    "place_rate": 0.3481,
+    "n_starts": 158
+  },
+  "Muswellbrook|431|6": {
+    "win_rate": 0.1394,
+    "place_rate": 0.297,
+    "n_starts": 165
+  },
+  "Muswellbrook|431|7": {
+    "win_rate": 0.0838,
+    "place_rate": 0.2461,
+    "n_starts": 191
+  },
+  "Muswellbrook|431|8": {
+    "win_rate": 0.1005,
+    "place_rate": 0.2275,
+    "n_starts": 189
+  },
+  "Muswellbrook|571|1": {
+    "win_rate": 0.1786,
+    "place_rate": 0.3571,
+    "n_starts": 28
+  },
+  "Muswellbrook|571|2": {
+    "win_rate": 0.2,
+    "place_rate": 0.44,
+    "n_starts": 25
+  },
+  "Muswellbrook|571|4": {
+    "win_rate": 0.1538,
+    "place_rate": 0.4231,
+    "n_starts": 26
+  },
+  "Muswellbrook|571|5": {
+    "win_rate": 0.2609,
+    "place_rate": 0.3913,
+    "n_starts": 23
+  },
+  "Muswellbrook|571|7": {
+    "win_rate": 0.0,
+    "place_rate": 0.44,
+    "n_starts": 25
+  },
+  "Muswellbrook|571|8": {
+    "win_rate": 0.0769,
+    "place_rate": 0.1154,
+    "n_starts": 26
+  },
+  "Nowra|365|1": {
+    "win_rate": 0.2158,
+    "place_rate": 0.4675,
+    "n_starts": 1168
+  },
+  "Nowra|365|2": {
+    "win_rate": 0.178,
+    "place_rate": 0.395,
+    "n_starts": 1157
+  },
+  "Nowra|365|3": {
+    "win_rate": 0.1286,
+    "place_rate": 0.344,
+    "n_starts": 1003
+  },
+  "Nowra|365|4": {
+    "win_rate": 0.1269,
+    "place_rate": 0.2975,
+    "n_starts": 1143
+  },
+  "Nowra|365|5": {
+    "win_rate": 0.1509,
+    "place_rate": 0.3509,
+    "n_starts": 875
+  },
+  "Nowra|365|6": {
+    "win_rate": 0.1109,
+    "place_rate": 0.3001,
+    "n_starts": 983
+  },
+  "Nowra|365|7": {
+    "win_rate": 0.1013,
+    "place_rate": 0.3231,
+    "n_starts": 1145
+  },
+  "Nowra|365|8": {
+    "win_rate": 0.12,
+    "place_rate": 0.3196,
+    "n_starts": 1142
+  },
+  "Nowra|365|9": {
+    "win_rate": 0.0581,
+    "place_rate": 0.2516,
+    "n_starts": 155
+  },
+  "Nowra|365|10": {
+    "win_rate": 0.0698,
+    "place_rate": 0.2326,
+    "n_starts": 43
+  },
+  "Nowra|520|1": {
+    "win_rate": 0.1818,
+    "place_rate": 0.4271,
+    "n_starts": 473
+  },
+  "Nowra|520|2": {
+    "win_rate": 0.2184,
+    "place_rate": 0.4218,
+    "n_starts": 467
+  },
+  "Nowra|520|3": {
+    "win_rate": 0.1205,
+    "place_rate": 0.3342,
+    "n_starts": 365
+  },
+  "Nowra|520|4": {
+    "win_rate": 0.1335,
+    "place_rate": 0.3517,
+    "n_starts": 472
+  },
+  "Nowra|520|5": {
+    "win_rate": 0.1683,
+    "place_rate": 0.3492,
+    "n_starts": 315
+  },
+  "Nowra|520|6": {
+    "win_rate": 0.126,
+    "place_rate": 0.3056,
+    "n_starts": 373
+  },
+  "Nowra|520|7": {
+    "win_rate": 0.1283,
+    "place_rate": 0.2978,
+    "n_starts": 460
+  },
+  "Nowra|520|8": {
+    "win_rate": 0.0884,
+    "place_rate": 0.2435,
+    "n_starts": 464
+  },
+  "Nowra|520|9": {
+    "win_rate": 0.0682,
+    "place_rate": 0.1591,
+    "n_starts": 44
+  },
+  "Nowra|630|1": {
+    "win_rate": 0.2083,
+    "place_rate": 0.3958,
+    "n_starts": 48
+  },
+  "Nowra|630|2": {
+    "win_rate": 0.125,
+    "place_rate": 0.2917,
+    "n_starts": 48
+  },
+  "Nowra|630|3": {
+    "win_rate": 0.1111,
+    "place_rate": 0.2963,
+    "n_starts": 27
+  },
+  "Nowra|630|4": {
+    "win_rate": 0.2889,
+    "place_rate": 0.4667,
+    "n_starts": 45
+  },
+  "Nowra|630|5": {
+    "win_rate": 0.0526,
+    "place_rate": 0.2368,
+    "n_starts": 38
+  },
+  "Nowra|630|6": {
+    "win_rate": 0.2308,
+    "place_rate": 0.3462,
+    "n_starts": 26
+  },
+  "Nowra|630|7": {
+    "win_rate": 0.1429,
+    "place_rate": 0.4286,
+    "n_starts": 49
+  },
+  "Nowra|630|8": {
+    "win_rate": 0.098,
+    "place_rate": 0.2745,
+    "n_starts": 51
+  },
+  "Q Straight|300|1": {
+    "win_rate": 0.1237,
+    "place_rate": 0.4,
+    "n_starts": 380
+  },
+  "Q Straight|300|2": {
+    "win_rate": 0.1466,
+    "place_rate": 0.3979,
+    "n_starts": 382
+  },
+  "Q Straight|300|3": {
+    "win_rate": 0.1489,
+    "place_rate": 0.3989,
+    "n_starts": 376
+  },
+  "Q Straight|300|4": {
+    "win_rate": 0.1368,
+    "place_rate": 0.3632,
+    "n_starts": 380
+  },
+  "Q Straight|300|5": {
+    "win_rate": 0.1145,
+    "place_rate": 0.3324,
+    "n_starts": 358
+  },
+  "Q Straight|300|6": {
+    "win_rate": 0.1034,
+    "place_rate": 0.3342,
+    "n_starts": 377
+  },
+  "Q Straight|300|7": {
+    "win_rate": 0.1211,
+    "place_rate": 0.3737,
+    "n_starts": 380
+  },
+  "Q Straight|300|8": {
+    "win_rate": 0.1559,
+    "place_rate": 0.414,
+    "n_starts": 372
+  },
+  "Q Straight|300|9": {
+    "win_rate": 0.0714,
+    "place_rate": 0.1837,
+    "n_starts": 98
+  },
+  "Q Straight|300|10": {
+    "win_rate": 0.0882,
+    "place_rate": 0.2059,
+    "n_starts": 34
+  },
+  "Q Straight|350|1": {
+    "win_rate": 0.176,
+    "place_rate": 0.4581,
+    "n_starts": 358
+  },
+  "Q Straight|350|2": {
+    "win_rate": 0.1257,
+    "place_rate": 0.3547,
+    "n_starts": 358
+  },
+  "Q Straight|350|3": {
+    "win_rate": 0.1239,
+    "place_rate": 0.3746,
+    "n_starts": 347
+  },
+  "Q Straight|350|4": {
+    "win_rate": 0.125,
+    "place_rate": 0.3889,
+    "n_starts": 360
+  },
+  "Q Straight|350|5": {
+    "win_rate": 0.1238,
+    "place_rate": 0.3094,
+    "n_starts": 307
+  },
+  "Q Straight|350|6": {
+    "win_rate": 0.1496,
+    "place_rate": 0.3548,
+    "n_starts": 341
+  },
+  "Q Straight|350|7": {
+    "win_rate": 0.1335,
+    "place_rate": 0.3153,
+    "n_starts": 352
+  },
+  "Q Straight|350|8": {
+    "win_rate": 0.1096,
+    "place_rate": 0.3764,
+    "n_starts": 356
+  },
+  "Q Straight|350|9": {
+    "win_rate": 0.0541,
+    "place_rate": 0.2432,
+    "n_starts": 37
+  },
+  "Q1 Lakeside|352|1": {
+    "win_rate": 0.1599,
+    "place_rate": 0.4127,
+    "n_starts": 613
+  },
+  "Q1 Lakeside|352|2": {
+    "win_rate": 0.1164,
+    "place_rate": 0.3705,
+    "n_starts": 610
+  },
+  "Q1 Lakeside|352|3": {
+    "win_rate": 0.1136,
+    "place_rate": 0.3525,
+    "n_starts": 590
+  },
+  "Q1 Lakeside|352|4": {
+    "win_rate": 0.1275,
+    "place_rate": 0.349,
+    "n_starts": 596
+  },
+  "Q1 Lakeside|352|5": {
+    "win_rate": 0.1266,
+    "place_rate": 0.3761,
+    "n_starts": 561
+  },
+  "Q1 Lakeside|352|6": {
+    "win_rate": 0.1275,
+    "place_rate": 0.3725,
+    "n_starts": 596
+  },
+  "Q1 Lakeside|352|7": {
+    "win_rate": 0.1302,
+    "place_rate": 0.3723,
+    "n_starts": 599
+  },
+  "Q1 Lakeside|352|8": {
+    "win_rate": 0.1393,
+    "place_rate": 0.4128,
+    "n_starts": 596
+  },
+  "Q1 Lakeside|352|9": {
+    "win_rate": 0.0694,
+    "place_rate": 0.25,
+    "n_starts": 144
+  },
+  "Q1 Lakeside|352|10": {
+    "win_rate": 0.0526,
+    "place_rate": 0.1842,
+    "n_starts": 38
+  },
+  "Q1 Lakeside|390|1": {
+    "win_rate": 0.1509,
+    "place_rate": 0.4055,
+    "n_starts": 550
+  },
+  "Q1 Lakeside|390|2": {
+    "win_rate": 0.1056,
+    "place_rate": 0.3515,
+    "n_starts": 549
+  },
+  "Q1 Lakeside|390|3": {
+    "win_rate": 0.1405,
+    "place_rate": 0.3771,
+    "n_starts": 541
+  },
+  "Q1 Lakeside|390|4": {
+    "win_rate": 0.1463,
+    "place_rate": 0.3815,
+    "n_starts": 540
+  },
+  "Q1 Lakeside|390|5": {
+    "win_rate": 0.118,
+    "place_rate": 0.367,
+    "n_starts": 534
+  },
+  "Q1 Lakeside|390|6": {
+    "win_rate": 0.1335,
+    "place_rate": 0.3628,
+    "n_starts": 532
+  },
+  "Q1 Lakeside|390|7": {
+    "win_rate": 0.1091,
+    "place_rate": 0.3527,
+    "n_starts": 550
+  },
+  "Q1 Lakeside|390|8": {
+    "win_rate": 0.1341,
+    "place_rate": 0.4112,
+    "n_starts": 552
+  },
+  "Q1 Lakeside|390|9": {
+    "win_rate": 0.0606,
+    "place_rate": 0.2576,
+    "n_starts": 132
+  },
+  "Q1 Lakeside|390|10": {
+    "win_rate": 0.1034,
+    "place_rate": 0.2759,
+    "n_starts": 29
+  },
+  "Q1 Lakeside|457|1": {
+    "win_rate": 0.1871,
+    "place_rate": 0.4387,
+    "n_starts": 620
+  },
+  "Q1 Lakeside|457|2": {
+    "win_rate": 0.1853,
+    "place_rate": 0.4393,
+    "n_starts": 626
+  },
+  "Q1 Lakeside|457|3": {
+    "win_rate": 0.118,
+    "place_rate": 0.359,
+    "n_starts": 610
+  },
+  "Q1 Lakeside|457|4": {
+    "win_rate": 0.1405,
+    "place_rate": 0.3538,
+    "n_starts": 619
+  },
+  "Q1 Lakeside|457|5": {
+    "win_rate": 0.1176,
+    "place_rate": 0.3254,
+    "n_starts": 544
+  },
+  "Q1 Lakeside|457|6": {
+    "win_rate": 0.1221,
+    "place_rate": 0.3449,
+    "n_starts": 606
+  },
+  "Q1 Lakeside|457|7": {
+    "win_rate": 0.1058,
+    "place_rate": 0.3253,
+    "n_starts": 624
+  },
+  "Q1 Lakeside|457|8": {
+    "win_rate": 0.1047,
+    "place_rate": 0.3349,
+    "n_starts": 621
+  },
+  "Q1 Lakeside|457|9": {
+    "win_rate": 0.0385,
+    "place_rate": 0.1769,
+    "n_starts": 130
+  },
+  "Q1 Lakeside|457|10": {
+    "win_rate": 0.0278,
+    "place_rate": 0.1389,
+    "n_starts": 36
+  },
+  "Q1 Lakeside|550|1": {
+    "win_rate": 0.2233,
+    "place_rate": 0.4272,
+    "n_starts": 103
+  },
+  "Q1 Lakeside|550|2": {
+    "win_rate": 0.2277,
+    "place_rate": 0.4455,
+    "n_starts": 101
+  },
+  "Q1 Lakeside|550|3": {
+    "win_rate": 0.1364,
+    "place_rate": 0.3409,
+    "n_starts": 88
+  },
+  "Q1 Lakeside|550|4": {
+    "win_rate": 0.0714,
+    "place_rate": 0.3469,
+    "n_starts": 98
+  },
+  "Q1 Lakeside|550|5": {
+    "win_rate": 0.1647,
+    "place_rate": 0.3647,
+    "n_starts": 85
+  },
+  "Q1 Lakeside|550|6": {
+    "win_rate": 0.1071,
+    "place_rate": 0.3333,
+    "n_starts": 84
+  },
+  "Q1 Lakeside|550|7": {
+    "win_rate": 0.0619,
+    "place_rate": 0.1959,
+    "n_starts": 97
+  },
+  "Q1 Lakeside|550|8": {
+    "win_rate": 0.1262,
+    "place_rate": 0.3883,
+    "n_starts": 103
+  },
+  "Q1 Lakeside|642|1": {
+    "win_rate": 0.1562,
+    "place_rate": 0.2188,
+    "n_starts": 32
+  },
+  "Q1 Lakeside|642|2": {
+    "win_rate": 0.3667,
+    "place_rate": 0.6,
+    "n_starts": 30
+  },
+  "Q1 Lakeside|642|3": {
+    "win_rate": 0.1667,
+    "place_rate": 0.375,
+    "n_starts": 24
+  },
+  "Q1 Lakeside|642|4": {
+    "win_rate": 0.2222,
+    "place_rate": 0.3704,
+    "n_starts": 27
+  },
+  "Q1 Lakeside|642|5": {
+    "win_rate": 0.0435,
+    "place_rate": 0.2609,
+    "n_starts": 23
+  },
+  "Q1 Lakeside|642|6": {
+    "win_rate": 0.1667,
+    "place_rate": 0.3333,
+    "n_starts": 24
+  },
+  "Q1 Lakeside|642|7": {
+    "win_rate": 0.0741,
+    "place_rate": 0.1852,
+    "n_starts": 27
+  },
+  "Q1 Lakeside|642|8": {
+    "win_rate": 0.0,
+    "place_rate": 0.2667,
+    "n_starts": 30
+  },
+  "Q2 Parklands|520|1": {
+    "win_rate": 0.2022,
+    "place_rate": 0.4549,
+    "n_starts": 455
+  },
+  "Q2 Parklands|520|2": {
+    "win_rate": 0.1771,
+    "place_rate": 0.4193,
+    "n_starts": 446
+  },
+  "Q2 Parklands|520|3": {
+    "win_rate": 0.1393,
+    "place_rate": 0.3358,
+    "n_starts": 402
+  },
+  "Q2 Parklands|520|4": {
+    "win_rate": 0.1193,
+    "place_rate": 0.3326,
+    "n_starts": 436
+  },
+  "Q2 Parklands|520|5": {
+    "win_rate": 0.1176,
+    "place_rate": 0.3105,
+    "n_starts": 306
+  },
+  "Q2 Parklands|520|6": {
+    "win_rate": 0.1235,
+    "place_rate": 0.3086,
+    "n_starts": 405
+  },
+  "Q2 Parklands|520|7": {
+    "win_rate": 0.1176,
+    "place_rate": 0.28,
+    "n_starts": 425
+  },
+  "Q2 Parklands|520|8": {
+    "win_rate": 0.1145,
+    "place_rate": 0.3061,
+    "n_starts": 428
+  },
+  "Q2 Parklands|520|9": {
+    "win_rate": 0.0652,
+    "place_rate": 0.2826,
+    "n_starts": 46
+  },
+  "Q2 Parklands|600|1": {
+    "win_rate": 0.224,
+    "place_rate": 0.48,
+    "n_starts": 125
+  },
+  "Q2 Parklands|600|2": {
+    "win_rate": 0.1774,
+    "place_rate": 0.3952,
+    "n_starts": 124
+  },
+  "Q2 Parklands|600|3": {
+    "win_rate": 0.1183,
+    "place_rate": 0.3763,
+    "n_starts": 93
+  },
+  "Q2 Parklands|600|4": {
+    "win_rate": 0.1818,
+    "place_rate": 0.3967,
+    "n_starts": 121
+  },
+  "Q2 Parklands|600|5": {
+    "win_rate": 0.1923,
+    "place_rate": 0.3462,
+    "n_starts": 78
+  },
+  "Q2 Parklands|600|6": {
+    "win_rate": 0.1275,
+    "place_rate": 0.2941,
+    "n_starts": 102
+  },
+  "Q2 Parklands|600|7": {
+    "win_rate": 0.0885,
+    "place_rate": 0.2832,
+    "n_starts": 113
+  },
+  "Q2 Parklands|600|8": {
+    "win_rate": 0.0678,
+    "place_rate": 0.2203,
+    "n_starts": 118
+  },
+  "Q2 Parklands|710|1": {
+    "win_rate": 0.1774,
+    "place_rate": 0.4194,
+    "n_starts": 62
+  },
+  "Q2 Parklands|710|2": {
+    "win_rate": 0.1552,
+    "place_rate": 0.2586,
+    "n_starts": 58
+  },
+  "Q2 Parklands|710|3": {
+    "win_rate": 0.1316,
+    "place_rate": 0.2895,
+    "n_starts": 38
+  },
+  "Q2 Parklands|710|4": {
+    "win_rate": 0.129,
+    "place_rate": 0.3871,
+    "n_starts": 62
+  },
+  "Q2 Parklands|710|5": {
+    "win_rate": 0.2121,
+    "place_rate": 0.3636,
+    "n_starts": 33
+  },
+  "Q2 Parklands|710|6": {
+    "win_rate": 0.1395,
+    "place_rate": 0.2326,
+    "n_starts": 43
+  },
+  "Q2 Parklands|710|7": {
+    "win_rate": 0.1481,
+    "place_rate": 0.3148,
+    "n_starts": 54
+  },
+  "Q2 Parklands|710|8": {
+    "win_rate": 0.15,
+    "place_rate": 0.3,
+    "n_starts": 60
+  },
+  "Richmond|320|1": {
+    "win_rate": 0.1749,
+    "place_rate": 0.4497,
+    "n_starts": 2315
+  },
+  "Richmond|320|2": {
+    "win_rate": 0.1436,
+    "place_rate": 0.3809,
+    "n_starts": 2326
+  },
+  "Richmond|320|3": {
+    "win_rate": 0.1341,
+    "place_rate": 0.3625,
+    "n_starts": 2215
+  },
+  "Richmond|320|4": {
+    "win_rate": 0.1195,
+    "place_rate": 0.3271,
+    "n_starts": 2302
+  },
+  "Richmond|320|5": {
+    "win_rate": 0.1358,
+    "place_rate": 0.3681,
+    "n_starts": 2032
+  },
+  "Richmond|320|6": {
+    "win_rate": 0.1284,
+    "place_rate": 0.3546,
+    "n_starts": 2180
+  },
+  "Richmond|320|7": {
+    "win_rate": 0.1279,
+    "place_rate": 0.3528,
+    "n_starts": 2307
+  },
+  "Richmond|320|8": {
+    "win_rate": 0.1162,
+    "place_rate": 0.3499,
+    "n_starts": 2298
+  },
+  "Richmond|320|9": {
+    "win_rate": 0.0488,
+    "place_rate": 0.2062,
+    "n_starts": 451
+  },
+  "Richmond|320|10": {
+    "win_rate": 0.0515,
+    "place_rate": 0.2268,
+    "n_starts": 97
+  },
+  "Richmond|324|1": {
+    "win_rate": 0.1572,
+    "place_rate": 0.4056,
+    "n_starts": 1139
+  },
+  "Richmond|324|2": {
+    "win_rate": 0.1416,
+    "place_rate": 0.3771,
+    "n_starts": 1151
+  },
+  "Richmond|324|3": {
+    "win_rate": 0.1146,
+    "place_rate": 0.3304,
+    "n_starts": 1126
+  },
+  "Richmond|324|4": {
+    "win_rate": 0.1111,
+    "place_rate": 0.3333,
+    "n_starts": 1143
+  },
+  "Richmond|324|5": {
+    "win_rate": 0.1131,
+    "place_rate": 0.3576,
+    "n_starts": 1043
+  },
+  "Richmond|324|6": {
+    "win_rate": 0.1376,
+    "place_rate": 0.3765,
+    "n_starts": 1134
+  },
+  "Richmond|324|7": {
+    "win_rate": 0.1394,
+    "place_rate": 0.3812,
+    "n_starts": 1141
+  },
+  "Richmond|324|8": {
+    "win_rate": 0.1601,
+    "place_rate": 0.4007,
+    "n_starts": 1168
+  },
+  "Richmond|324|9": {
+    "win_rate": 0.0441,
+    "place_rate": 0.1982,
+    "n_starts": 227
+  },
+  "Richmond|324|10": {
+    "win_rate": 0.0545,
+    "place_rate": 0.2182,
+    "n_starts": 55
+  },
+  "Richmond|401|1": {
+    "win_rate": 0.2295,
+    "place_rate": 0.5172,
+    "n_starts": 1887
+  },
+  "Richmond|401|2": {
+    "win_rate": 0.1675,
+    "place_rate": 0.4307,
+    "n_starts": 1839
+  },
+  "Richmond|401|3": {
+    "win_rate": 0.1207,
+    "place_rate": 0.3576,
+    "n_starts": 1756
+  },
+  "Richmond|401|4": {
+    "win_rate": 0.1084,
+    "place_rate": 0.2997,
+    "n_starts": 1845
+  },
+  "Richmond|401|5": {
+    "win_rate": 0.122,
+    "place_rate": 0.3273,
+    "n_starts": 1598
+  },
+  "Richmond|401|6": {
+    "win_rate": 0.1055,
+    "place_rate": 0.3259,
+    "n_starts": 1715
+  },
+  "Richmond|401|7": {
+    "win_rate": 0.1239,
+    "place_rate": 0.3483,
+    "n_starts": 1832
+  },
+  "Richmond|401|8": {
+    "win_rate": 0.1023,
+    "place_rate": 0.3231,
+    "n_starts": 1848
+  },
+  "Richmond|401|9": {
+    "win_rate": 0.0475,
+    "place_rate": 0.1869,
+    "n_starts": 337
+  },
+  "Richmond|401|10": {
+    "win_rate": 0.0115,
+    "place_rate": 0.1034,
+    "n_starts": 87
+  },
+  "Richmond|520|1": {
+    "win_rate": 0.2221,
+    "place_rate": 0.4834,
+    "n_starts": 815
+  },
+  "Richmond|520|2": {
+    "win_rate": 0.1747,
+    "place_rate": 0.4084,
+    "n_starts": 813
+  },
+  "Richmond|520|3": {
+    "win_rate": 0.161,
+    "place_rate": 0.39,
+    "n_starts": 677
+  },
+  "Richmond|520|4": {
+    "win_rate": 0.1121,
+    "place_rate": 0.3165,
+    "n_starts": 812
+  },
+  "Richmond|520|5": {
+    "win_rate": 0.1294,
+    "place_rate": 0.3151,
+    "n_starts": 603
+  },
+  "Richmond|520|6": {
+    "win_rate": 0.1109,
+    "place_rate": 0.2964,
+    "n_starts": 658
+  },
+  "Richmond|520|7": {
+    "win_rate": 0.1106,
+    "place_rate": 0.2671,
+    "n_starts": 805
+  },
+  "Richmond|520|8": {
+    "win_rate": 0.1074,
+    "place_rate": 0.3034,
+    "n_starts": 801
+  },
+  "Richmond|520|9": {
+    "win_rate": 0.0538,
+    "place_rate": 0.2473,
+    "n_starts": 93
+  },
+  "Richmond|622|1": {
+    "win_rate": 0.2261,
+    "place_rate": 0.4673,
+    "n_starts": 199
+  },
+  "Richmond|622|2": {
+    "win_rate": 0.1832,
+    "place_rate": 0.396,
+    "n_starts": 202
+  },
+  "Richmond|622|3": {
+    "win_rate": 0.1987,
+    "place_rate": 0.3907,
+    "n_starts": 151
+  },
+  "Richmond|622|4": {
+    "win_rate": 0.1263,
+    "place_rate": 0.3485,
+    "n_starts": 198
+  },
+  "Richmond|622|5": {
+    "win_rate": 0.125,
+    "place_rate": 0.4013,
+    "n_starts": 152
+  },
+  "Richmond|622|6": {
+    "win_rate": 0.1149,
+    "place_rate": 0.3176,
+    "n_starts": 148
+  },
+  "Richmond|622|7": {
+    "win_rate": 0.0686,
+    "place_rate": 0.2157,
+    "n_starts": 204
+  },
+  "Richmond|622|8": {
+    "win_rate": 0.1232,
+    "place_rate": 0.2562,
+    "n_starts": 203
+  },
+  "Richmond|622|9": {
+    "win_rate": 0.0417,
+    "place_rate": 0.0833,
+    "n_starts": 24
+  },
+  "Richmond Straight|324|1": {
+    "win_rate": 0.13,
+    "place_rate": 0.3249,
+    "n_starts": 277
+  },
+  "Richmond Straight|324|2": {
+    "win_rate": 0.1007,
+    "place_rate": 0.3381,
+    "n_starts": 278
+  },
+  "Richmond Straight|324|3": {
+    "win_rate": 0.1498,
+    "place_rate": 0.3333,
+    "n_starts": 267
+  },
+  "Richmond Straight|324|4": {
+    "win_rate": 0.1448,
+    "place_rate": 0.3552,
+    "n_starts": 290
+  },
+  "Richmond Straight|324|5": {
+    "win_rate": 0.1344,
+    "place_rate": 0.3874,
+    "n_starts": 253
+  },
+  "Richmond Straight|324|6": {
+    "win_rate": 0.1462,
+    "place_rate": 0.3692,
+    "n_starts": 260
+  },
+  "Richmond Straight|324|7": {
+    "win_rate": 0.1368,
+    "place_rate": 0.386,
+    "n_starts": 285
+  },
+  "Richmond Straight|324|8": {
+    "win_rate": 0.1568,
+    "place_rate": 0.4146,
+    "n_starts": 287
+  },
+  "Richmond Straight|324|9": {
+    "win_rate": 0.0357,
+    "place_rate": 0.0893,
+    "n_starts": 56
+  },
+  "Rockhampton|407|1": {
+    "win_rate": 0.1981,
+    "place_rate": 0.4488,
+    "n_starts": 1923
+  },
+  "Rockhampton|407|2": {
+    "win_rate": 0.148,
+    "place_rate": 0.4016,
+    "n_starts": 1905
+  },
+  "Rockhampton|407|3": {
+    "win_rate": 0.1442,
+    "place_rate": 0.3544,
+    "n_starts": 1775
+  },
+  "Rockhampton|407|4": {
+    "win_rate": 0.1291,
+    "place_rate": 0.3392,
+    "n_starts": 1890
+  },
+  "Rockhampton|407|5": {
+    "win_rate": 0.1203,
+    "place_rate": 0.3411,
+    "n_starts": 1554
+  },
+  "Rockhampton|407|6": {
+    "win_rate": 0.1018,
+    "place_rate": 0.3032,
+    "n_starts": 1758
+  },
+  "Rockhampton|407|7": {
+    "win_rate": 0.1234,
+    "place_rate": 0.3298,
+    "n_starts": 1880
+  },
+  "Rockhampton|407|8": {
+    "win_rate": 0.1222,
+    "place_rate": 0.3339,
+    "n_starts": 1890
+  },
+  "Rockhampton|407|9": {
+    "win_rate": 0.0625,
+    "place_rate": 0.2708,
+    "n_starts": 240
+  },
+  "Rockhampton|407|10": {
+    "win_rate": 0.0952,
+    "place_rate": 0.2619,
+    "n_starts": 42
+  },
+  "Rockhampton|510|1": {
+    "win_rate": 0.1765,
+    "place_rate": 0.4235,
+    "n_starts": 340
+  },
+  "Rockhampton|510|2": {
+    "win_rate": 0.194,
+    "place_rate": 0.4,
+    "n_starts": 335
+  },
+  "Rockhampton|510|3": {
+    "win_rate": 0.1493,
+    "place_rate": 0.3433,
+    "n_starts": 268
+  },
+  "Rockhampton|510|4": {
+    "win_rate": 0.1239,
+    "place_rate": 0.3172,
+    "n_starts": 331
+  },
+  "Rockhampton|510|5": {
+    "win_rate": 0.0928,
+    "place_rate": 0.2996,
+    "n_starts": 237
+  },
+  "Rockhampton|510|6": {
+    "win_rate": 0.1449,
+    "place_rate": 0.3392,
+    "n_starts": 283
+  },
+  "Rockhampton|510|7": {
+    "win_rate": 0.1473,
+    "place_rate": 0.2978,
+    "n_starts": 319
+  },
+  "Rockhampton|510|8": {
+    "win_rate": 0.1152,
+    "place_rate": 0.3333,
+    "n_starts": 330
+  },
+  "Rockhampton|510|9": {
+    "win_rate": 0.04,
+    "place_rate": 0.28,
+    "n_starts": 25
+  },
+  "Sale|435|1": {
+    "win_rate": 0.149,
+    "place_rate": 0.3787,
+    "n_starts": 2020
+  },
+  "Sale|435|2": {
+    "win_rate": 0.1276,
+    "place_rate": 0.35,
+    "n_starts": 1983
+  },
+  "Sale|435|3": {
+    "win_rate": 0.1255,
+    "place_rate": 0.3381,
+    "n_starts": 1905
+  },
+  "Sale|435|4": {
+    "win_rate": 0.127,
+    "place_rate": 0.3388,
+    "n_starts": 1960
+  },
+  "Sale|435|5": {
+    "win_rate": 0.1171,
+    "place_rate": 0.3409,
+    "n_starts": 1631
+  },
+  "Sale|435|6": {
+    "win_rate": 0.1374,
+    "place_rate": 0.3411,
+    "n_starts": 1885
+  },
+  "Sale|435|7": {
+    "win_rate": 0.1411,
+    "place_rate": 0.3778,
+    "n_starts": 1985
+  },
+  "Sale|435|8": {
+    "win_rate": 0.1513,
+    "place_rate": 0.4188,
+    "n_starts": 1996
+  },
+  "Sale|435|9": {
+    "win_rate": 0.0341,
+    "place_rate": 0.1364,
+    "n_starts": 176
+  },
+  "Sale|435|10": {
+    "win_rate": 0.0444,
+    "place_rate": 0.163,
+    "n_starts": 135
+  },
+  "Sale|510|1": {
+    "win_rate": 0.1984,
+    "place_rate": 0.483,
+    "n_starts": 499
+  },
+  "Sale|510|2": {
+    "win_rate": 0.1737,
+    "place_rate": 0.4121,
+    "n_starts": 495
+  },
+  "Sale|510|3": {
+    "win_rate": 0.1285,
+    "place_rate": 0.3276,
+    "n_starts": 467
+  },
+  "Sale|510|4": {
+    "win_rate": 0.1046,
+    "place_rate": 0.2837,
+    "n_starts": 497
+  },
+  "Sale|510|5": {
+    "win_rate": 0.1106,
+    "place_rate": 0.3317,
+    "n_starts": 407
+  },
+  "Sale|510|6": {
+    "win_rate": 0.1053,
+    "place_rate": 0.3224,
+    "n_starts": 456
+  },
+  "Sale|510|7": {
+    "win_rate": 0.1498,
+    "place_rate": 0.3381,
+    "n_starts": 494
+  },
+  "Sale|510|8": {
+    "win_rate": 0.1199,
+    "place_rate": 0.3577,
+    "n_starts": 492
+  },
+  "Sale|510|9": {
+    "win_rate": 0.0,
+    "place_rate": 0.1373,
+    "n_starts": 51
+  },
+  "Sale|510|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.2273,
+    "n_starts": 22
+  },
+  "Sale|640|1": {
+    "win_rate": 0.1831,
+    "place_rate": 0.3944,
+    "n_starts": 71
+  },
+  "Sale|640|2": {
+    "win_rate": 0.1212,
+    "place_rate": 0.3485,
+    "n_starts": 66
+  },
+  "Sale|640|3": {
+    "win_rate": 0.1034,
+    "place_rate": 0.2586,
+    "n_starts": 58
+  },
+  "Sale|640|4": {
+    "win_rate": 0.1918,
+    "place_rate": 0.3151,
+    "n_starts": 73
+  },
+  "Sale|640|5": {
+    "win_rate": 0.2,
+    "place_rate": 0.48,
+    "n_starts": 50
+  },
+  "Sale|640|6": {
+    "win_rate": 0.0968,
+    "place_rate": 0.2903,
+    "n_starts": 62
+  },
+  "Sale|640|7": {
+    "win_rate": 0.0746,
+    "place_rate": 0.2985,
+    "n_starts": 67
+  },
+  "Sale|640|8": {
+    "win_rate": 0.1642,
+    "place_rate": 0.3284,
+    "n_starts": 67
+  },
+  "Sandown Park|515|1": {
+    "win_rate": 0.2336,
+    "place_rate": 0.5047,
+    "n_starts": 2556
+  },
+  "Sandown Park|515|2": {
+    "win_rate": 0.1806,
+    "place_rate": 0.4352,
+    "n_starts": 2530
+  },
+  "Sandown Park|515|3": {
+    "win_rate": 0.1436,
+    "place_rate": 0.3432,
+    "n_starts": 2200
+  },
+  "Sandown Park|515|4": {
+    "win_rate": 0.1389,
+    "place_rate": 0.3331,
+    "n_starts": 2483
+  },
+  "Sandown Park|515|5": {
+    "win_rate": 0.1236,
+    "place_rate": 0.3291,
+    "n_starts": 1796
+  },
+  "Sandown Park|515|6": {
+    "win_rate": 0.1098,
+    "place_rate": 0.2829,
+    "n_starts": 2195
+  },
+  "Sandown Park|515|7": {
+    "win_rate": 0.091,
+    "place_rate": 0.2623,
+    "n_starts": 2406
+  },
+  "Sandown Park|515|8": {
+    "win_rate": 0.0967,
+    "place_rate": 0.2738,
+    "n_starts": 2429
+  },
+  "Sandown Park|515|9": {
+    "win_rate": 0.0287,
+    "place_rate": 0.1675,
+    "n_starts": 209
+  },
+  "Sandown Park|515|10": {
+    "win_rate": 0.0171,
+    "place_rate": 0.1795,
+    "n_starts": 117
+  },
+  "Sandown Park|595|1": {
+    "win_rate": 0.2473,
+    "place_rate": 0.4893,
+    "n_starts": 748
+  },
+  "Sandown Park|595|2": {
+    "win_rate": 0.1919,
+    "place_rate": 0.4324,
+    "n_starts": 740
+  },
+  "Sandown Park|595|3": {
+    "win_rate": 0.1378,
+    "place_rate": 0.3339,
+    "n_starts": 566
+  },
+  "Sandown Park|595|4": {
+    "win_rate": 0.1245,
+    "place_rate": 0.3324,
+    "n_starts": 731
+  },
+  "Sandown Park|595|5": {
+    "win_rate": 0.1375,
+    "place_rate": 0.3147,
+    "n_starts": 502
+  },
+  "Sandown Park|595|6": {
+    "win_rate": 0.1096,
+    "place_rate": 0.2648,
+    "n_starts": 593
+  },
+  "Sandown Park|595|7": {
+    "win_rate": 0.089,
+    "place_rate": 0.2984,
+    "n_starts": 697
+  },
+  "Sandown Park|595|8": {
+    "win_rate": 0.1029,
+    "place_rate": 0.2812,
+    "n_starts": 729
+  },
+  "Sandown Park|595|9": {
+    "win_rate": 0.1,
+    "place_rate": 0.2,
+    "n_starts": 40
+  },
+  "Sandown Park|595|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.0952,
+    "n_starts": 21
+  },
+  "Sandown Park|715|1": {
+    "win_rate": 0.1623,
+    "place_rate": 0.4221,
+    "n_starts": 154
+  },
+  "Sandown Park|715|2": {
+    "win_rate": 0.1742,
+    "place_rate": 0.3871,
+    "n_starts": 155
+  },
+  "Sandown Park|715|3": {
+    "win_rate": 0.1455,
+    "place_rate": 0.3818,
+    "n_starts": 110
+  },
+  "Sandown Park|715|4": {
+    "win_rate": 0.1355,
+    "place_rate": 0.2774,
+    "n_starts": 155
+  },
+  "Sandown Park|715|5": {
+    "win_rate": 0.1282,
+    "place_rate": 0.2991,
+    "n_starts": 117
+  },
+  "Sandown Park|715|6": {
+    "win_rate": 0.1597,
+    "place_rate": 0.3109,
+    "n_starts": 119
+  },
+  "Sandown Park|715|7": {
+    "win_rate": 0.1301,
+    "place_rate": 0.3288,
+    "n_starts": 146
+  },
+  "Sandown Park|715|8": {
+    "win_rate": 0.1579,
+    "place_rate": 0.3553,
+    "n_starts": 152
+  },
+  "Shepparton|385|1": {
+    "win_rate": 0.1724,
+    "place_rate": 0.4797,
+    "n_starts": 615
+  },
+  "Shepparton|385|2": {
+    "win_rate": 0.1438,
+    "place_rate": 0.378,
+    "n_starts": 619
+  },
+  "Shepparton|385|3": {
+    "win_rate": 0.1137,
+    "place_rate": 0.3462,
+    "n_starts": 598
+  },
+  "Shepparton|385|4": {
+    "win_rate": 0.1452,
+    "place_rate": 0.3556,
+    "n_starts": 599
+  },
+  "Shepparton|385|5": {
+    "win_rate": 0.1023,
+    "place_rate": 0.3088,
+    "n_starts": 557
+  },
+  "Shepparton|385|6": {
+    "win_rate": 0.1014,
+    "place_rate": 0.3108,
+    "n_starts": 592
+  },
+  "Shepparton|385|7": {
+    "win_rate": 0.1424,
+    "place_rate": 0.3502,
+    "n_starts": 611
+  },
+  "Shepparton|385|8": {
+    "win_rate": 0.1442,
+    "place_rate": 0.4006,
+    "n_starts": 624
+  },
+  "Shepparton|385|9": {
+    "win_rate": 0.0816,
+    "place_rate": 0.2041,
+    "n_starts": 49
+  },
+  "Shepparton|385|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.1429,
+    "n_starts": 56
+  },
+  "Shepparton|390|1": {
+    "win_rate": 0.1609,
+    "place_rate": 0.4046,
+    "n_starts": 1945
+  },
+  "Shepparton|390|2": {
+    "win_rate": 0.1556,
+    "place_rate": 0.4064,
+    "n_starts": 1902
+  },
+  "Shepparton|390|3": {
+    "win_rate": 0.1204,
+    "place_rate": 0.3522,
+    "n_starts": 1860
+  },
+  "Shepparton|390|4": {
+    "win_rate": 0.1051,
+    "place_rate": 0.3365,
+    "n_starts": 1893
+  },
+  "Shepparton|390|5": {
+    "win_rate": 0.112,
+    "place_rate": 0.3337,
+    "n_starts": 1696
+  },
+  "Shepparton|390|6": {
+    "win_rate": 0.114,
+    "place_rate": 0.3328,
+    "n_starts": 1842
+  },
+  "Shepparton|390|7": {
+    "win_rate": 0.1455,
+    "place_rate": 0.3606,
+    "n_starts": 1897
+  },
+  "Shepparton|390|8": {
+    "win_rate": 0.1513,
+    "place_rate": 0.4049,
+    "n_starts": 1904
+  },
+  "Shepparton|390|9": {
+    "win_rate": 0.0439,
+    "place_rate": 0.2634,
+    "n_starts": 205
+  },
+  "Shepparton|390|10": {
+    "win_rate": 0.0814,
+    "place_rate": 0.2093,
+    "n_starts": 172
+  },
+  "Shepparton|450|1": {
+    "win_rate": 0.167,
+    "place_rate": 0.4213,
+    "n_starts": 1443
+  },
+  "Shepparton|450|2": {
+    "win_rate": 0.1406,
+    "place_rate": 0.3679,
+    "n_starts": 1408
+  },
+  "Shepparton|450|3": {
+    "win_rate": 0.1274,
+    "place_rate": 0.3578,
+    "n_starts": 1389
+  },
+  "Shepparton|450|4": {
+    "win_rate": 0.1217,
+    "place_rate": 0.3291,
+    "n_starts": 1413
+  },
+  "Shepparton|450|5": {
+    "win_rate": 0.1043,
+    "place_rate": 0.3341,
+    "n_starts": 1266
+  },
+  "Shepparton|450|6": {
+    "win_rate": 0.1265,
+    "place_rate": 0.3348,
+    "n_starts": 1383
+  },
+  "Shepparton|450|7": {
+    "win_rate": 0.1274,
+    "place_rate": 0.3531,
+    "n_starts": 1413
+  },
+  "Shepparton|450|8": {
+    "win_rate": 0.1734,
+    "place_rate": 0.4241,
+    "n_starts": 1436
+  },
+  "Shepparton|450|9": {
+    "win_rate": 0.0275,
+    "place_rate": 0.1813,
+    "n_starts": 182
+  },
+  "Shepparton|450|10": {
+    "win_rate": 0.05,
+    "place_rate": 0.1583,
+    "n_starts": 120
+  },
+  "Shepparton|650|1": {
+    "win_rate": 0.0893,
+    "place_rate": 0.375,
+    "n_starts": 56
+  },
+  "Shepparton|650|2": {
+    "win_rate": 0.1538,
+    "place_rate": 0.25,
+    "n_starts": 52
+  },
+  "Shepparton|650|3": {
+    "win_rate": 0.2667,
+    "place_rate": 0.4444,
+    "n_starts": 45
+  },
+  "Shepparton|650|4": {
+    "win_rate": 0.1667,
+    "place_rate": 0.4444,
+    "n_starts": 54
+  },
+  "Shepparton|650|5": {
+    "win_rate": 0.175,
+    "place_rate": 0.35,
+    "n_starts": 40
+  },
+  "Shepparton|650|6": {
+    "win_rate": 0.1042,
+    "place_rate": 0.375,
+    "n_starts": 48
+  },
+  "Shepparton|650|7": {
+    "win_rate": 0.1538,
+    "place_rate": 0.3846,
+    "n_starts": 52
+  },
+  "Shepparton|650|8": {
+    "win_rate": 0.0926,
+    "place_rate": 0.3333,
+    "n_starts": 54
+  },
+  "Taree|300|1": {
+    "win_rate": 0.1816,
+    "place_rate": 0.4844,
+    "n_starts": 991
+  },
+  "Taree|300|2": {
+    "win_rate": 0.1589,
+    "place_rate": 0.3982,
+    "n_starts": 982
+  },
+  "Taree|300|3": {
+    "win_rate": 0.1277,
+    "place_rate": 0.3769,
+    "n_starts": 971
+  },
+  "Taree|300|4": {
+    "win_rate": 0.1287,
+    "place_rate": 0.3432,
+    "n_starts": 979
+  },
+  "Taree|300|5": {
+    "win_rate": 0.1247,
+    "place_rate": 0.3189,
+    "n_starts": 922
+  },
+  "Taree|300|6": {
+    "win_rate": 0.1042,
+    "place_rate": 0.3065,
+    "n_starts": 969
+  },
+  "Taree|300|7": {
+    "win_rate": 0.1122,
+    "place_rate": 0.3539,
+    "n_starts": 989
+  },
+  "Taree|300|8": {
+    "win_rate": 0.1214,
+    "place_rate": 0.3801,
+    "n_starts": 997
+  },
+  "Taree|300|9": {
+    "win_rate": 0.0563,
+    "place_rate": 0.169,
+    "n_starts": 142
+  },
+  "Taree|300|10": {
+    "win_rate": 0.0,
+    "place_rate": 0.1304,
+    "n_starts": 23
+  },
+  "Taree|314|1": {
+    "win_rate": 0.1493,
+    "place_rate": 0.4552,
+    "n_starts": 134
+  },
+  "Taree|314|2": {
+    "win_rate": 0.1667,
+    "place_rate": 0.4167,
+    "n_starts": 132
+  },
+  "Taree|314|3": {
+    "win_rate": 0.093,
+    "place_rate": 0.3643,
+    "n_starts": 129
+  },
+  "Taree|314|4": {
+    "win_rate": 0.097,
+    "place_rate": 0.3134,
+    "n_starts": 134
+  },
+  "Taree|314|5": {
+    "win_rate": 0.1339,
+    "place_rate": 0.3386,
+    "n_starts": 127
+  },
+  "Taree|314|6": {
+    "win_rate": 0.122,
+    "place_rate": 0.3496,
+    "n_starts": 123
+  },
+  "Taree|314|7": {
+    "win_rate": 0.1154,
+    "place_rate": 0.3231,
+    "n_starts": 130
+  },
+  "Taree|314|8": {
+    "win_rate": 0.1667,
+    "place_rate": 0.4242,
+    "n_starts": 132
+  },
+  "Taree|392|1": {
+    "win_rate": 0.2136,
+    "place_rate": 0.4854,
+    "n_starts": 103
+  },
+  "Taree|392|2": {
+    "win_rate": 0.18,
+    "place_rate": 0.45,
+    "n_starts": 100
+  },
+  "Taree|392|3": {
+    "win_rate": 0.15,
+    "place_rate": 0.46,
+    "n_starts": 100
+  },
+  "Taree|392|4": {
+    "win_rate": 0.1616,
+    "place_rate": 0.4141,
+    "n_starts": 99
+  },
+  "Taree|392|5": {
+    "win_rate": 0.1042,
+    "place_rate": 0.3021,
+    "n_starts": 96
+  },
+  "Taree|392|6": {
+    "win_rate": 0.0693,
+    "place_rate": 0.2277,
+    "n_starts": 101
+  },
+  "Taree|392|7": {
+    "win_rate": 0.0588,
+    "place_rate": 0.3039,
+    "n_starts": 102
+  },
+  "Taree|392|8": {
+    "win_rate": 0.11,
+    "place_rate": 0.38,
+    "n_starts": 100
+  },
+  "Taree|392|9": {
+    "win_rate": 0.0833,
+    "place_rate": 0.2083,
+    "n_starts": 24
+  },
+  "Taree|525|1": {
+    "win_rate": 0.2011,
+    "place_rate": 0.408,
+    "n_starts": 174
+  },
+  "Taree|525|2": {
+    "win_rate": 0.2011,
+    "place_rate": 0.4425,
+    "n_starts": 174
+  },
+  "Taree|525|3": {
+    "win_rate": 0.169,
+    "place_rate": 0.4085,
+    "n_starts": 142
+  },
+  "Taree|525|4": {
+    "win_rate": 0.0795,
+    "place_rate": 0.2955,
+    "n_starts": 176
+  },
+  "Taree|525|5": {
+    "win_rate": 0.1507,
+    "place_rate": 0.3699,
+    "n_starts": 146
+  },
+  "Taree|525|6": {
+    "win_rate": 0.1208,
+    "place_rate": 0.3356,
+    "n_starts": 149
+  },
+  "Taree|525|7": {
+    "win_rate": 0.1065,
+    "place_rate": 0.284,
+    "n_starts": 169
+  },
+  "Taree|525|8": {
+    "win_rate": 0.0747,
+    "place_rate": 0.3333,
+    "n_starts": 174
+  },
+  "Taree|537|1": {
+    "win_rate": 0.1875,
+    "place_rate": 0.4062,
+    "n_starts": 32
+  },
+  "Taree|537|2": {
+    "win_rate": 0.2,
+    "place_rate": 0.5,
+    "n_starts": 30
+  },
+  "Taree|537|3": {
+    "win_rate": 0.0,
+    "place_rate": 0.2759,
+    "n_starts": 29
+  },
+  "Taree|537|4": {
+    "win_rate": 0.25,
+    "place_rate": 0.3438,
+    "n_starts": 32
+  },
+  "Taree|537|5": {
+    "win_rate": 0.1905,
+    "place_rate": 0.5238,
+    "n_starts": 21
+  },
+  "Taree|537|6": {
+    "win_rate": 0.1613,
+    "place_rate": 0.2581,
+    "n_starts": 31
+  },
+  "Taree|537|7": {
+    "win_rate": 0.069,
+    "place_rate": 0.2414,
+    "n_starts": 29
+  },
+  "Taree|537|8": {
+    "win_rate": 0.0625,
+    "place_rate": 0.3125,
+    "n_starts": 32
+  },
+  "Temora|330|1": {
+    "win_rate": 0.1926,
+    "place_rate": 0.4501,
+    "n_starts": 1262
+  },
+  "Temora|330|2": {
+    "win_rate": 0.147,
+    "place_rate": 0.3978,
+    "n_starts": 1252
+  },
+  "Temora|330|3": {
+    "win_rate": 0.1269,
+    "place_rate": 0.3491,
+    "n_starts": 1206
+  },
+  "Temora|330|4": {
+    "win_rate": 0.104,
+    "place_rate": 0.3064,
+    "n_starts": 1250
+  },
+  "Temora|330|5": {
+    "win_rate": 0.1058,
+    "place_rate": 0.3093,
+    "n_starts": 1096
+  },
+  "Temora|330|6": {
+    "win_rate": 0.1041,
+    "place_rate": 0.3099,
+    "n_starts": 1210
+  },
+  "Temora|330|7": {
+    "win_rate": 0.1161,
+    "place_rate": 0.3627,
+    "n_starts": 1249
+  },
+  "Temora|330|8": {
+    "win_rate": 0.1598,
+    "place_rate": 0.4221,
+    "n_starts": 1239
+  },
+  "Temora|330|9": {
+    "win_rate": 0.0719,
+    "place_rate": 0.2222,
+    "n_starts": 153
+  },
+  "Temora|330|10": {
+    "win_rate": 0.129,
+    "place_rate": 0.3548,
+    "n_starts": 31
+  },
+  "Temora|457|1": {
+    "win_rate": 0.166,
+    "place_rate": 0.3568,
+    "n_starts": 482
+  },
+  "Temora|457|2": {
+    "win_rate": 0.1387,
+    "place_rate": 0.3592,
+    "n_starts": 476
+  },
+  "Temora|457|3": {
+    "win_rate": 0.1298,
+    "place_rate": 0.3149,
+    "n_starts": 416
+  },
+  "Temora|457|4": {
+    "win_rate": 0.1304,
+    "place_rate": 0.3375,
+    "n_starts": 483
+  },
+  "Temora|457|5": {
+    "win_rate": 0.1405,
+    "place_rate": 0.3757,
+    "n_starts": 370
+  },
+  "Temora|457|6": {
+    "win_rate": 0.1301,
+    "place_rate": 0.3759,
+    "n_starts": 415
+  },
+  "Temora|457|7": {
+    "win_rate": 0.1357,
+    "place_rate": 0.3445,
+    "n_starts": 479
+  },
+  "Temora|457|8": {
+    "win_rate": 0.1452,
+    "place_rate": 0.3672,
+    "n_starts": 482
+  },
+  "Temora|457|9": {
+    "win_rate": 0.0577,
+    "place_rate": 0.1923,
+    "n_starts": 52
+  },
+  "Temora|570|1": {
+    "win_rate": 0.1818,
+    "place_rate": 0.3636,
+    "n_starts": 55
+  },
+  "Temora|570|2": {
+    "win_rate": 0.1636,
+    "place_rate": 0.3455,
+    "n_starts": 55
+  },
+  "Temora|570|3": {
+    "win_rate": 0.2045,
+    "place_rate": 0.4091,
+    "n_starts": 44
+  },
+  "Temora|570|4": {
+    "win_rate": 0.2182,
+    "place_rate": 0.4182,
+    "n_starts": 55
+  },
+  "Temora|570|5": {
+    "win_rate": 0.1463,
+    "place_rate": 0.3171,
+    "n_starts": 41
+  },
+  "Temora|570|6": {
+    "win_rate": 0.0,
+    "place_rate": 0.3256,
+    "n_starts": 43
+  },
+  "Temora|570|7": {
+    "win_rate": 0.1273,
+    "place_rate": 0.2727,
+    "n_starts": 55
+  },
+  "Temora|570|8": {
+    "win_rate": 0.0962,
+    "place_rate": 0.3077,
+    "n_starts": 52
+  },
+  "The Gardens|272|1": {
+    "win_rate": 0.1741,
+    "place_rate": 0.4575,
+    "n_starts": 247
+  },
+  "The Gardens|272|2": {
+    "win_rate": 0.1741,
+    "place_rate": 0.4251,
+    "n_starts": 247
+  },
+  "The Gardens|272|3": {
+    "win_rate": 0.1189,
+    "place_rate": 0.3789,
+    "n_starts": 227
+  },
+  "The Gardens|272|4": {
+    "win_rate": 0.112,
+    "place_rate": 0.32,
+    "n_starts": 250
+  },
+  "The Gardens|272|5": {
+    "win_rate": 0.1019,
+    "place_rate": 0.3194,
+    "n_starts": 216
+  },
+  "The Gardens|272|6": {
+    "win_rate": 0.1387,
+    "place_rate": 0.3613,
+    "n_starts": 238
+  },
+  "The Gardens|272|7": {
+    "win_rate": 0.1064,
+    "place_rate": 0.3149,
+    "n_starts": 235
+  },
+  "The Gardens|272|8": {
+    "win_rate": 0.1577,
+    "place_rate": 0.4025,
+    "n_starts": 241
+  },
+  "The Gardens|272|9": {
+    "win_rate": 0.02,
+    "place_rate": 0.12,
+    "n_starts": 50
+  },
+  "The Gardens|400|1": {
+    "win_rate": 0.1953,
+    "place_rate": 0.4811,
+    "n_starts": 2540
+  },
+  "The Gardens|400|2": {
+    "win_rate": 0.1494,
+    "place_rate": 0.4033,
+    "n_starts": 2524
+  },
+  "The Gardens|400|3": {
+    "win_rate": 0.1261,
+    "place_rate": 0.3619,
+    "n_starts": 2443
+  },
+  "The Gardens|400|4": {
+    "win_rate": 0.1176,
+    "place_rate": 0.3332,
+    "n_starts": 2500
+  },
+  "The Gardens|400|5": {
+    "win_rate": 0.1149,
+    "place_rate": 0.3302,
+    "n_starts": 2262
+  },
+  "The Gardens|400|6": {
+    "win_rate": 0.118,
+    "place_rate": 0.3411,
+    "n_starts": 2407
+  },
+  "The Gardens|400|7": {
+    "win_rate": 0.1059,
+    "place_rate": 0.3217,
+    "n_starts": 2484
+  },
+  "The Gardens|400|8": {
+    "win_rate": 0.1337,
+    "place_rate": 0.3719,
+    "n_starts": 2514
+  },
+  "The Gardens|400|9": {
+    "win_rate": 0.0618,
+    "place_rate": 0.1898,
+    "n_starts": 453
+  },
+  "The Gardens|400|10": {
+    "win_rate": 0.0316,
+    "place_rate": 0.1684,
+    "n_starts": 95
+  },
+  "The Gardens|515|1": {
+    "win_rate": 0.2103,
+    "place_rate": 0.4655,
+    "n_starts": 956
+  },
+  "The Gardens|515|2": {
+    "win_rate": 0.1862,
+    "place_rate": 0.4286,
+    "n_starts": 945
+  },
+  "The Gardens|515|3": {
+    "win_rate": 0.1192,
+    "place_rate": 0.3236,
+    "n_starts": 822
+  },
+  "The Gardens|515|4": {
+    "win_rate": 0.1532,
+    "place_rate": 0.3457,
+    "n_starts": 940
+  },
+  "The Gardens|515|5": {
+    "win_rate": 0.1676,
+    "place_rate": 0.3936,
+    "n_starts": 686
+  },
+  "The Gardens|515|6": {
+    "win_rate": 0.0946,
+    "place_rate": 0.2565,
+    "n_starts": 803
+  },
+  "The Gardens|515|7": {
+    "win_rate": 0.1004,
+    "place_rate": 0.281,
+    "n_starts": 936
+  },
+  "The Gardens|515|8": {
+    "win_rate": 0.0923,
+    "place_rate": 0.2959,
+    "n_starts": 943
+  },
+  "The Gardens|515|9": {
+    "win_rate": 0.0476,
+    "place_rate": 0.1714,
+    "n_starts": 105
+  },
+  "The Gardens|600|1": {
+    "win_rate": 0.1667,
+    "place_rate": 0.477,
+    "n_starts": 174
+  },
+  "The Gardens|600|2": {
+    "win_rate": 0.1838,
+    "place_rate": 0.3622,
+    "n_starts": 185
+  },
+  "The Gardens|600|3": {
+    "win_rate": 0.1748,
+    "place_rate": 0.4056,
+    "n_starts": 143
+  },
+  "The Gardens|600|4": {
+    "win_rate": 0.1657,
+    "place_rate": 0.3886,
+    "n_starts": 175
+  },
+  "The Gardens|600|5": {
+    "win_rate": 0.0857,
+    "place_rate": 0.2929,
+    "n_starts": 140
+  },
+  "The Gardens|600|6": {
+    "win_rate": 0.0657,
+    "place_rate": 0.2555,
+    "n_starts": 137
+  },
+  "The Gardens|600|7": {
+    "win_rate": 0.1611,
+    "place_rate": 0.3278,
+    "n_starts": 180
+  },
+  "The Gardens|600|8": {
+    "win_rate": 0.1215,
+    "place_rate": 0.2707,
+    "n_starts": 181
+  },
+  "The Gardens|600|9": {
+    "win_rate": 0.1,
+    "place_rate": 0.1,
+    "n_starts": 20
+  },
+  "The Gardens|715|1": {
+    "win_rate": 0.1786,
+    "place_rate": 0.3214,
+    "n_starts": 28
+  },
+  "The Gardens|715|2": {
+    "win_rate": 0.1852,
+    "place_rate": 0.2593,
+    "n_starts": 27
+  },
+  "The Gardens|715|3": {
+    "win_rate": 0.0,
+    "place_rate": 0.4231,
+    "n_starts": 26
+  },
+  "The Gardens|715|4": {
+    "win_rate": 0.1071,
+    "place_rate": 0.25,
+    "n_starts": 28
+  },
+  "The Gardens|715|6": {
+    "win_rate": 0.2,
+    "place_rate": 0.44,
+    "n_starts": 25
+  },
+  "The Gardens|715|7": {
+    "win_rate": 0.2692,
+    "place_rate": 0.5385,
+    "n_starts": 26
+  },
+  "The Gardens|715|8": {
+    "win_rate": 0.0714,
+    "place_rate": 0.2143,
+    "n_starts": 28
+  },
+  "The Meadows|525|1": {
+    "win_rate": 0.2149,
+    "place_rate": 0.4601,
+    "n_starts": 2797
+  },
+  "The Meadows|525|2": {
+    "win_rate": 0.161,
+    "place_rate": 0.3774,
+    "n_starts": 2801
+  },
+  "The Meadows|525|3": {
+    "win_rate": 0.1399,
+    "place_rate": 0.3447,
+    "n_starts": 2338
+  },
+  "The Meadows|525|4": {
+    "win_rate": 0.1355,
+    "place_rate": 0.3382,
+    "n_starts": 2768
+  },
+  "The Meadows|525|5": {
+    "win_rate": 0.107,
+    "place_rate": 0.3083,
+    "n_starts": 1972
+  },
+  "The Meadows|525|6": {
+    "win_rate": 0.1134,
+    "place_rate": 0.3009,
+    "n_starts": 2373
+  },
+  "The Meadows|525|7": {
+    "win_rate": 0.1179,
+    "place_rate": 0.3071,
+    "n_starts": 2638
+  },
+  "The Meadows|525|8": {
+    "win_rate": 0.1233,
+    "place_rate": 0.3251,
+    "n_starts": 2716
+  },
+  "The Meadows|525|9": {
+    "win_rate": 0.0495,
+    "place_rate": 0.2277,
+    "n_starts": 202
+  },
+  "The Meadows|525|10": {
+    "win_rate": 0.0531,
+    "place_rate": 0.2655,
+    "n_starts": 113
+  },
+  "The Meadows|600|1": {
+    "win_rate": 0.172,
+    "place_rate": 0.4384,
+    "n_starts": 593
+  },
+  "The Meadows|600|2": {
+    "win_rate": 0.2114,
+    "place_rate": 0.4094,
+    "n_starts": 596
+  },
+  "The Meadows|600|3": {
+    "win_rate": 0.1414,
+    "place_rate": 0.3597,
+    "n_starts": 481
+  },
+  "The Meadows|600|4": {
+    "win_rate": 0.1583,
+    "place_rate": 0.3236,
+    "n_starts": 581
+  },
+  "The Meadows|600|5": {
+    "win_rate": 0.1316,
+    "place_rate": 0.3443,
+    "n_starts": 395
+  },
+  "The Meadows|600|6": {
+    "win_rate": 0.1149,
+    "place_rate": 0.3004,
+    "n_starts": 496
+  },
+  "The Meadows|600|7": {
+    "win_rate": 0.1038,
+    "place_rate": 0.275,
+    "n_starts": 549
+  },
+  "The Meadows|600|8": {
+    "win_rate": 0.1088,
+    "place_rate": 0.3005,
+    "n_starts": 579
+  },
+  "The Meadows|600|9": {
+    "win_rate": 0.0,
+    "place_rate": 0.1212,
+    "n_starts": 33
+  },
+  "The Meadows|730|1": {
+    "win_rate": 0.1681,
+    "place_rate": 0.3445,
+    "n_starts": 119
+  },
+  "The Meadows|730|2": {
+    "win_rate": 0.1721,
+    "place_rate": 0.3852,
+    "n_starts": 122
+  },
+  "The Meadows|730|3": {
+    "win_rate": 0.1216,
+    "place_rate": 0.3378,
+    "n_starts": 74
+  },
+  "The Meadows|730|4": {
+    "win_rate": 0.1667,
+    "place_rate": 0.2857,
+    "n_starts": 126
+  },
+  "The Meadows|730|5": {
+    "win_rate": 0.2159,
+    "place_rate": 0.4659,
+    "n_starts": 88
+  },
+  "The Meadows|730|6": {
+    "win_rate": 0.0933,
+    "place_rate": 0.28,
+    "n_starts": 75
+  },
+  "The Meadows|730|7": {
+    "win_rate": 0.1282,
+    "place_rate": 0.3675,
+    "n_starts": 117
+  },
+  "The Meadows|730|8": {
+    "win_rate": 0.1475,
+    "place_rate": 0.3115,
+    "n_starts": 122
+  },
+  "Townsville|380|1": {
+    "win_rate": 0.1404,
+    "place_rate": 0.4015,
+    "n_starts": 2344
+  },
+  "Townsville|380|2": {
+    "win_rate": 0.15,
+    "place_rate": 0.3999,
+    "n_starts": 2333
+  },
+  "Townsville|380|3": {
+    "win_rate": 0.1206,
+    "place_rate": 0.3513,
+    "n_starts": 2306
+  },
+  "Townsville|380|4": {
+    "win_rate": 0.1393,
+    "place_rate": 0.367,
+    "n_starts": 2319
+  },
+  "Townsville|380|5": {
+    "win_rate": 0.1383,
+    "place_rate": 0.3404,
+    "n_starts": 2227
+  },
+  "Townsville|380|6": {
+    "win_rate": 0.1168,
+    "place_rate": 0.3499,
+    "n_starts": 2295
+  },
+  "Townsville|380|7": {
+    "win_rate": 0.1052,
+    "place_rate": 0.3284,
+    "n_starts": 2320
+  },
+  "Townsville|380|8": {
+    "win_rate": 0.1354,
+    "place_rate": 0.4115,
+    "n_starts": 2333
+  },
+  "Townsville|380|9": {
+    "win_rate": 0.092,
+    "place_rate": 0.2985,
+    "n_starts": 402
+  },
+  "Townsville|380|10": {
+    "win_rate": 0.0545,
+    "place_rate": 0.3,
+    "n_starts": 110
+  },
+  "Townsville|498|1": {
+    "win_rate": 0.1846,
+    "place_rate": 0.4478,
+    "n_starts": 661
+  },
+  "Townsville|498|2": {
+    "win_rate": 0.1755,
+    "place_rate": 0.4251,
+    "n_starts": 661
+  },
+  "Townsville|498|3": {
+    "win_rate": 0.1242,
+    "place_rate": 0.3711,
+    "n_starts": 636
+  },
+  "Townsville|498|4": {
+    "win_rate": 0.1265,
+    "place_rate": 0.3354,
+    "n_starts": 656
+  },
+  "Townsville|498|5": {
+    "win_rate": 0.1115,
+    "place_rate": 0.3145,
+    "n_starts": 601
+  },
+  "Townsville|498|6": {
+    "win_rate": 0.1086,
+    "place_rate": 0.3371,
+    "n_starts": 626
+  },
+  "Townsville|498|7": {
+    "win_rate": 0.1155,
+    "place_rate": 0.3663,
+    "n_starts": 658
+  },
+  "Townsville|498|8": {
+    "win_rate": 0.1146,
+    "place_rate": 0.3424,
+    "n_starts": 663
+  },
+  "Townsville|498|9": {
+    "win_rate": 0.055,
+    "place_rate": 0.211,
+    "n_starts": 109
+  },
+  "Townsville|498|10": {
+    "win_rate": 0.04,
+    "place_rate": 0.16,
+    "n_starts": 25
+  },
+  "Townsville|643|1": {
+    "win_rate": 0.1111,
+    "place_rate": 0.4074,
+    "n_starts": 27
+  },
+  "Townsville|643|2": {
+    "win_rate": 0.125,
+    "place_rate": 0.4583,
+    "n_starts": 24
+  },
+  "Townsville|643|3": {
+    "win_rate": 0.0476,
+    "place_rate": 0.2857,
+    "n_starts": 21
+  },
+  "Townsville|643|4": {
+    "win_rate": 0.2,
+    "place_rate": 0.36,
+    "n_starts": 25
+  },
+  "Townsville|643|5": {
+    "win_rate": 0.25,
+    "place_rate": 0.4,
+    "n_starts": 20
+  },
+  "Townsville|643|6": {
+    "win_rate": 0.2174,
+    "place_rate": 0.3478,
+    "n_starts": 23
+  },
+  "Townsville|643|7": {
+    "win_rate": 0.0769,
+    "place_rate": 0.2692,
+    "n_starts": 26
+  },
+  "Townsville|643|8": {
+    "win_rate": 0.12,
+    "place_rate": 0.36,
+    "n_starts": 25
+  },
+  "Traralgon|350|1": {
+    "win_rate": 0.1726,
+    "place_rate": 0.4411,
+    "n_starts": 730
+  },
+  "Traralgon|350|2": {
+    "win_rate": 0.1608,
+    "place_rate": 0.365,
+    "n_starts": 715
+  },
+  "Traralgon|350|3": {
+    "win_rate": 0.1085,
+    "place_rate": 0.3477,
+    "n_starts": 673
+  },
+  "Traralgon|350|4": {
+    "win_rate": 0.1314,
+    "place_rate": 0.3329,
+    "n_starts": 700
+  },
+  "Traralgon|350|5": {
+    "win_rate": 0.0931,
+    "place_rate": 0.3007,
+    "n_starts": 612
+  },
+  "Traralgon|350|6": {
+    "win_rate": 0.1174,
+    "place_rate": 0.3328,
+    "n_starts": 673
+  },
+  "Traralgon|350|7": {
+    "win_rate": 0.1206,
+    "place_rate": 0.3206,
+    "n_starts": 705
+  },
+  "Traralgon|350|8": {
+    "win_rate": 0.1766,
+    "place_rate": 0.4435,
+    "n_starts": 708
+  },
+  "Traralgon|350|9": {
+    "win_rate": 0.0741,
+    "place_rate": 0.1975,
+    "n_starts": 81
+  },
+  "Traralgon|350|10": {
+    "win_rate": 0.0566,
+    "place_rate": 0.2264,
+    "n_starts": 53
+  },
+  "Traralgon|395|1": {
+    "win_rate": 0.1763,
+    "place_rate": 0.4252,
+    "n_starts": 936
+  },
+  "Traralgon|395|2": {
+    "win_rate": 0.1494,
+    "place_rate": 0.3615,
+    "n_starts": 924
+  },
+  "Traralgon|395|3": {
+    "win_rate": 0.1287,
+    "place_rate": 0.3371,
+    "n_starts": 878
+  },
+  "Traralgon|395|4": {
+    "win_rate": 0.1164,
+    "place_rate": 0.3414,
+    "n_starts": 911
+  },
+  "Traralgon|395|5": {
+    "win_rate": 0.1191,
+    "place_rate": 0.3424,
+    "n_starts": 806
+  },
+  "Traralgon|395|6": {
+    "win_rate": 0.1425,
+    "place_rate": 0.3523,
+    "n_starts": 877
+  },
+  "Traralgon|395|7": {
+    "win_rate": 0.1067,
+    "place_rate": 0.3427,
+    "n_starts": 928
+  },
+  "Traralgon|395|8": {
+    "win_rate": 0.1317,
+    "place_rate": 0.3863,
+    "n_starts": 919
+  },
+  "Traralgon|395|9": {
+    "win_rate": 0.0882,
+    "place_rate": 0.2255,
+    "n_starts": 102
+  },
+  "Traralgon|395|10": {
+    "win_rate": 0.0781,
+    "place_rate": 0.2656,
+    "n_starts": 64
+  },
+  "Traralgon|450|1": {
+    "win_rate": 0.1898,
+    "place_rate": 0.4161,
+    "n_starts": 411
+  },
+  "Traralgon|450|2": {
+    "win_rate": 0.1391,
+    "place_rate": 0.3765,
+    "n_starts": 417
+  },
+  "Traralgon|450|3": {
+    "win_rate": 0.1143,
+    "place_rate": 0.3506,
+    "n_starts": 385
+  },
+  "Traralgon|450|4": {
+    "win_rate": 0.129,
+    "place_rate": 0.326,
+    "n_starts": 411
+  },
+  "Traralgon|450|5": {
+    "win_rate": 0.1144,
+    "place_rate": 0.3431,
+    "n_starts": 341
+  },
+  "Traralgon|450|6": {
+    "win_rate": 0.1224,
+    "place_rate": 0.3342,
+    "n_starts": 392
+  },
+  "Traralgon|450|7": {
+    "win_rate": 0.1148,
+    "place_rate": 0.3636,
+    "n_starts": 418
+  },
+  "Traralgon|450|8": {
+    "win_rate": 0.1542,
+    "place_rate": 0.3735,
+    "n_starts": 415
+  },
+  "Traralgon|450|9": {
+    "win_rate": 0.0943,
+    "place_rate": 0.2642,
+    "n_starts": 53
+  },
+  "Traralgon|450|10": {
+    "win_rate": 0.0385,
+    "place_rate": 0.1538,
+    "n_starts": 26
+  },
+  "Traralgon|500|1": {
+    "win_rate": 0.1797,
+    "place_rate": 0.3516,
+    "n_starts": 128
+  },
+  "Traralgon|500|2": {
+    "win_rate": 0.1885,
+    "place_rate": 0.3934,
+    "n_starts": 122
+  },
+  "Traralgon|500|3": {
+    "win_rate": 0.1228,
+    "place_rate": 0.3684,
+    "n_starts": 114
+  },
+  "Traralgon|500|4": {
+    "win_rate": 0.121,
+    "place_rate": 0.4032,
+    "n_starts": 124
+  },
+  "Traralgon|500|5": {
+    "win_rate": 0.1183,
+    "place_rate": 0.3118,
+    "n_starts": 93
+  },
+  "Traralgon|500|6": {
+    "win_rate": 0.1053,
+    "place_rate": 0.307,
+    "n_starts": 114
+  },
+  "Traralgon|500|7": {
+    "win_rate": 0.1429,
+    "place_rate": 0.3413,
+    "n_starts": 126
+  },
+  "Traralgon|500|8": {
+    "win_rate": 0.1452,
+    "place_rate": 0.3387,
+    "n_starts": 124
+  },
+  "Wagga|320|1": {
+    "win_rate": 0.2041,
+    "place_rate": 0.4268,
+    "n_starts": 1073
+  },
+  "Wagga|320|2": {
+    "win_rate": 0.1468,
+    "place_rate": 0.3801,
+    "n_starts": 1063
+  },
+  "Wagga|320|3": {
+    "win_rate": 0.1242,
+    "place_rate": 0.3484,
+    "n_starts": 910
+  },
+  "Wagga|320|4": {
+    "win_rate": 0.0567,
+    "place_rate": 0.2221,
+    "n_starts": 1058
+  },
+  "Wagga|320|5": {
+    "win_rate": 0.1165,
+    "place_rate": 0.327,
+    "n_starts": 841
+  },
+  "Wagga|320|6": {
+    "win_rate": 0.1302,
+    "place_rate": 0.3422,
+    "n_starts": 906
+  },
+  "Wagga|320|7": {
+    "win_rate": 0.1357,
+    "place_rate": 0.3536,
+    "n_starts": 1083
+  },
+  "Wagga|320|8": {
+    "win_rate": 0.1929,
+    "place_rate": 0.4259,
+    "n_starts": 1073
+  },
+  "Wagga|320|9": {
+    "win_rate": 0.0804,
+    "place_rate": 0.2321,
+    "n_starts": 112
+  },
+  "Wagga|320|10": {
+    "win_rate": 0.1154,
+    "place_rate": 0.1538,
+    "n_starts": 26
+  },
+  "Wagga|400|1": {
+    "win_rate": 0.1876,
+    "place_rate": 0.3892,
+    "n_starts": 501
+  },
+  "Wagga|400|2": {
+    "win_rate": 0.1653,
+    "place_rate": 0.4073,
+    "n_starts": 496
+  },
+  "Wagga|400|3": {
+    "win_rate": 0.1103,
+    "place_rate": 0.3083,
+    "n_starts": 399
+  },
+  "Wagga|400|4": {
+    "win_rate": 0.1408,
+    "place_rate": 0.3099,
+    "n_starts": 497
+  },
+  "Wagga|400|5": {
+    "win_rate": 0.1552,
+    "place_rate": 0.3547,
+    "n_starts": 406
+  },
+  "Wagga|400|6": {
+    "win_rate": 0.0889,
+    "place_rate": 0.3136,
+    "n_starts": 405
+  },
+  "Wagga|400|7": {
+    "win_rate": 0.1229,
+    "place_rate": 0.3375,
+    "n_starts": 480
+  },
+  "Wagga|400|8": {
+    "win_rate": 0.1551,
+    "place_rate": 0.3559,
+    "n_starts": 503
+  },
+  "Wagga|400|9": {
+    "win_rate": 0.0652,
+    "place_rate": 0.2609,
+    "n_starts": 46
+  },
+  "Wagga|525|1": {
+    "win_rate": 0.2389,
+    "place_rate": 0.4381,
+    "n_starts": 226
+  },
+  "Wagga|525|2": {
+    "win_rate": 0.125,
+    "place_rate": 0.3482,
+    "n_starts": 224
+  },
+  "Wagga|525|3": {
+    "win_rate": 0.1965,
+    "place_rate": 0.3988,
+    "n_starts": 173
+  },
+  "Wagga|525|4": {
+    "win_rate": 0.1228,
+    "place_rate": 0.3596,
+    "n_starts": 228
+  },
+  "Wagga|525|5": {
+    "win_rate": 0.1369,
+    "place_rate": 0.3393,
+    "n_starts": 168
+  },
+  "Wagga|525|6": {
+    "win_rate": 0.1059,
+    "place_rate": 0.3059,
+    "n_starts": 170
+  },
+  "Wagga|525|7": {
+    "win_rate": 0.1565,
+    "place_rate": 0.3478,
+    "n_starts": 230
+  },
+  "Wagga|525|8": {
+    "win_rate": 0.0711,
+    "place_rate": 0.2444,
+    "n_starts": 225
+  },
+  "Warragul|400|1": {
+    "win_rate": 0.1852,
+    "place_rate": 0.4368,
+    "n_starts": 2857
+  },
+  "Warragul|400|2": {
+    "win_rate": 0.1477,
+    "place_rate": 0.3945,
+    "n_starts": 2816
+  },
+  "Warragul|400|3": {
+    "win_rate": 0.1169,
+    "place_rate": 0.3374,
+    "n_starts": 2712
+  },
+  "Warragul|400|4": {
+    "win_rate": 0.1171,
+    "place_rate": 0.3253,
+    "n_starts": 2776
+  },
+  "Warragul|400|5": {
+    "win_rate": 0.1149,
+    "place_rate": 0.3304,
+    "n_starts": 2349
+  },
+  "Warragul|400|6": {
+    "win_rate": 0.1341,
+    "place_rate": 0.3482,
+    "n_starts": 2714
+  },
+  "Warragul|400|7": {
+    "win_rate": 0.1258,
+    "place_rate": 0.3413,
+    "n_starts": 2775
+  },
+  "Warragul|400|8": {
+    "win_rate": 0.1414,
+    "place_rate": 0.3788,
+    "n_starts": 2822
+  },
+  "Warragul|400|9": {
+    "win_rate": 0.0374,
+    "place_rate": 0.1682,
+    "n_starts": 321
+  },
+  "Warragul|400|10": {
+    "win_rate": 0.0569,
+    "place_rate": 0.2236,
+    "n_starts": 246
+  },
+  "Warragul|460|1": {
+    "win_rate": 0.1702,
+    "place_rate": 0.4349,
+    "n_starts": 1598
+  },
+  "Warragul|460|2": {
+    "win_rate": 0.1616,
+    "place_rate": 0.3931,
+    "n_starts": 1590
+  },
+  "Warragul|460|3": {
+    "win_rate": 0.1126,
+    "place_rate": 0.3305,
+    "n_starts": 1510
+  },
+  "Warragul|460|4": {
+    "win_rate": 0.1327,
+    "place_rate": 0.3489,
+    "n_starts": 1568
+  },
+  "Warragul|460|5": {
+    "win_rate": 0.1399,
+    "place_rate": 0.3413,
+    "n_starts": 1301
+  },
+  "Warragul|460|6": {
+    "win_rate": 0.1131,
+    "place_rate": 0.3129,
+    "n_starts": 1486
+  },
+  "Warragul|460|7": {
+    "win_rate": 0.1348,
+    "place_rate": 0.3431,
+    "n_starts": 1565
+  },
+  "Warragul|460|8": {
+    "win_rate": 0.1294,
+    "place_rate": 0.3629,
+    "n_starts": 1576
+  },
+  "Warragul|460|9": {
+    "win_rate": 0.0824,
+    "place_rate": 0.2363,
+    "n_starts": 182
+  },
+  "Warragul|460|10": {
+    "win_rate": 0.0496,
+    "place_rate": 0.2314,
+    "n_starts": 121
+  },
+  "Warragul|680|1": {
+    "win_rate": 0.1795,
+    "place_rate": 0.3077,
+    "n_starts": 39
+  },
+  "Warragul|680|2": {
+    "win_rate": 0.2,
+    "place_rate": 0.375,
+    "n_starts": 40
+  },
+  "Warragul|680|3": {
+    "win_rate": 0.0938,
+    "place_rate": 0.3125,
+    "n_starts": 32
+  },
+  "Warragul|680|4": {
+    "win_rate": 0.2703,
+    "place_rate": 0.4865,
+    "n_starts": 37
+  },
+  "Warragul|680|5": {
+    "win_rate": 0.1481,
+    "place_rate": 0.4444,
+    "n_starts": 27
+  },
+  "Warragul|680|6": {
+    "win_rate": 0.0,
+    "place_rate": 0.25,
+    "n_starts": 32
+  },
+  "Warragul|680|7": {
+    "win_rate": 0.0811,
+    "place_rate": 0.1622,
+    "n_starts": 37
+  },
+  "Warragul|680|8": {
+    "win_rate": 0.1714,
+    "place_rate": 0.2571,
+    "n_starts": 35
+  },
+  "Warrnambool|390|1": {
+    "win_rate": 0.1849,
+    "place_rate": 0.4284,
+    "n_starts": 2325
+  },
+  "Warrnambool|390|2": {
+    "win_rate": 0.1557,
+    "place_rate": 0.3795,
+    "n_starts": 2319
+  },
+  "Warrnambool|390|3": {
+    "win_rate": 0.1216,
+    "place_rate": 0.3206,
+    "n_starts": 2221
+  },
+  "Warrnambool|390|4": {
+    "win_rate": 0.1188,
+    "place_rate": 0.3384,
+    "n_starts": 2314
+  },
+  "Warrnambool|390|5": {
+    "win_rate": 0.1073,
+    "place_rate": 0.3194,
+    "n_starts": 1966
+  },
+  "Warrnambool|390|6": {
+    "win_rate": 0.1166,
+    "place_rate": 0.3059,
+    "n_starts": 2213
+  },
+  "Warrnambool|390|7": {
+    "win_rate": 0.1213,
+    "place_rate": 0.3438,
+    "n_starts": 2301
+  },
+  "Warrnambool|390|8": {
+    "win_rate": 0.1478,
+    "place_rate": 0.3928,
+    "n_starts": 2314
+  },
+  "Warrnambool|390|9": {
+    "win_rate": 0.0435,
+    "place_rate": 0.163,
+    "n_starts": 92
+  },
+  "Warrnambool|390|10": {
+    "win_rate": 0.0333,
+    "place_rate": 0.2,
+    "n_starts": 60
+  },
+  "Warrnambool|450|1": {
+    "win_rate": 0.1942,
+    "place_rate": 0.4688,
+    "n_starts": 1169
+  },
+  "Warrnambool|450|2": {
+    "win_rate": 0.1869,
+    "place_rate": 0.3962,
+    "n_starts": 1156
+  },
+  "Warrnambool|450|3": {
+    "win_rate": 0.0907,
+    "place_rate": 0.2861,
+    "n_starts": 1080
+  },
+  "Warrnambool|450|4": {
+    "win_rate": 0.1103,
+    "place_rate": 0.3098,
+    "n_starts": 1133
+  },
+  "Warrnambool|450|5": {
+    "win_rate": 0.1193,
+    "place_rate": 0.3379,
+    "n_starts": 947
+  },
+  "Warrnambool|450|6": {
+    "win_rate": 0.1125,
+    "place_rate": 0.3457,
+    "n_starts": 1076
+  },
+  "Warrnambool|450|7": {
+    "win_rate": 0.1171,
+    "place_rate": 0.3354,
+    "n_starts": 1127
+  },
+  "Warrnambool|450|8": {
+    "win_rate": 0.146,
+    "place_rate": 0.3439,
+    "n_starts": 1137
+  },
+  "Warrnambool|450|9": {
+    "win_rate": 0.0169,
+    "place_rate": 0.1525,
+    "n_starts": 59
+  },
+  "Warrnambool|450|10": {
+    "win_rate": 0.0513,
+    "place_rate": 0.2564,
+    "n_starts": 39
+  },
+  "Warrnambool|650|1": {
+    "win_rate": 0.2162,
+    "place_rate": 0.5135,
+    "n_starts": 37
+  },
+  "Warrnambool|650|2": {
+    "win_rate": 0.1429,
+    "place_rate": 0.2857,
+    "n_starts": 35
+  },
+  "Warrnambool|650|3": {
+    "win_rate": 0.1429,
+    "place_rate": 0.25,
+    "n_starts": 28
+  },
+  "Warrnambool|650|4": {
+    "win_rate": 0.1818,
+    "place_rate": 0.303,
+    "n_starts": 33
+  },
+  "Warrnambool|650|5": {
+    "win_rate": 0.125,
+    "place_rate": 0.4583,
+    "n_starts": 24
+  },
+  "Warrnambool|650|6": {
+    "win_rate": 0.1923,
+    "place_rate": 0.3462,
+    "n_starts": 26
+  },
+  "Warrnambool|650|7": {
+    "win_rate": 0.1944,
+    "place_rate": 0.3333,
+    "n_starts": 36
+  },
+  "Warrnambool|650|8": {
+    "win_rate": 0.0,
+    "place_rate": 0.1935,
+    "n_starts": 31
+  },
+  "Wentworth Park|280|1": {
+    "win_rate": 0.1316,
+    "place_rate": 0.4079,
+    "n_starts": 76
+  },
+  "Wentworth Park|280|2": {
+    "win_rate": 0.1622,
+    "place_rate": 0.4189,
+    "n_starts": 74
+  },
+  "Wentworth Park|280|3": {
+    "win_rate": 0.2344,
+    "place_rate": 0.4219,
+    "n_starts": 64
+  },
+  "Wentworth Park|280|4": {
+    "win_rate": 0.1216,
+    "place_rate": 0.3243,
+    "n_starts": 74
+  },
+  "Wentworth Park|280|5": {
+    "win_rate": 0.0833,
+    "place_rate": 0.3167,
+    "n_starts": 60
+  },
+  "Wentworth Park|280|6": {
+    "win_rate": 0.1364,
+    "place_rate": 0.2727,
+    "n_starts": 66
+  },
+  "Wentworth Park|280|7": {
+    "win_rate": 0.0845,
+    "place_rate": 0.2535,
+    "n_starts": 71
+  },
+  "Wentworth Park|280|8": {
+    "win_rate": 0.1507,
+    "place_rate": 0.411,
+    "n_starts": 73
+  },
+  "Wentworth Park|520|1": {
+    "win_rate": 0.1861,
+    "place_rate": 0.4342,
+    "n_starts": 2886
+  },
+  "Wentworth Park|520|2": {
+    "win_rate": 0.1549,
+    "place_rate": 0.3651,
+    "n_starts": 2835
+  },
+  "Wentworth Park|520|3": {
+    "win_rate": 0.1401,
+    "place_rate": 0.3539,
+    "n_starts": 2498
+  },
+  "Wentworth Park|520|4": {
+    "win_rate": 0.1297,
+    "place_rate": 0.3183,
+    "n_starts": 2790
+  },
+  "Wentworth Park|520|5": {
+    "win_rate": 0.1358,
+    "place_rate": 0.3475,
+    "n_starts": 2098
+  },
+  "Wentworth Park|520|6": {
+    "win_rate": 0.1359,
+    "place_rate": 0.3233,
+    "n_starts": 2487
+  },
+  "Wentworth Park|520|7": {
+    "win_rate": 0.1174,
+    "place_rate": 0.3172,
+    "n_starts": 2752
+  },
+  "Wentworth Park|520|8": {
+    "win_rate": 0.1305,
+    "place_rate": 0.3201,
+    "n_starts": 2752
+  },
+  "Wentworth Park|520|9": {
+    "win_rate": 0.0473,
+    "place_rate": 0.1861,
+    "n_starts": 317
+  },
+  "Wentworth Park|520|10": {
+    "win_rate": 0.0625,
+    "place_rate": 0.25,
+    "n_starts": 96
+  },
+  "Wentworth Park|720|1": {
+    "win_rate": 0.2,
+    "place_rate": 0.4364,
+    "n_starts": 165
+  },
+  "Wentworth Park|720|2": {
+    "win_rate": 0.1656,
+    "place_rate": 0.3822,
+    "n_starts": 157
+  },
+  "Wentworth Park|720|3": {
+    "win_rate": 0.1591,
+    "place_rate": 0.3523,
+    "n_starts": 88
+  },
+  "Wentworth Park|720|4": {
+    "win_rate": 0.1484,
+    "place_rate": 0.2903,
+    "n_starts": 155
+  },
+  "Wentworth Park|720|5": {
+    "win_rate": 0.2241,
+    "place_rate": 0.3103,
+    "n_starts": 116
+  },
+  "Wentworth Park|720|6": {
+    "win_rate": 0.1546,
+    "place_rate": 0.3299,
+    "n_starts": 97
+  },
+  "Wentworth Park|720|7": {
+    "win_rate": 0.1226,
+    "place_rate": 0.3161,
+    "n_starts": 155
+  },
+  "Wentworth Park|720|8": {
+    "win_rate": 0.0982,
+    "place_rate": 0.2822,
+    "n_starts": 163
+  }
+}

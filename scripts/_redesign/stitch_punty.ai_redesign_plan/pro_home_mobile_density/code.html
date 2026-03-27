@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>QUANT_TRACK | PuntyAI Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed": "#ffd9e4",
+              "primary-container": "#ff46a0",
+              "background": "#131318",
+              "tertiary": "#3cd7ff",
+              "on-tertiary-container": "#002e3a",
+              "secondary": "#ffb59d",
+              "on-secondary": "#5d1900",
+              "inverse-on-surface": "#303036",
+              "on-primary-container": "#580030",
+              "surface-container-high": "#2a292f",
+              "tertiary-fixed": "#b4ebff",
+              "surface-tint": "#ffb0cc",
+              "inverse-primary": "#b8006c",
+              "error": "#ffb4ab",
+              "surface-container": "#1f1f25",
+              "on-secondary-fixed": "#390c00",
+              "on-secondary-container": "#ffddd2",
+              "secondary-container": "#b83900",
+              "surface-container-highest": "#35343a",
+              "on-error-container": "#ffdad6",
+              "secondary-fixed": "#ffdbd0",
+              "primary-fixed-dim": "#ffb0cc",
+              "on-primary-fixed-variant": "#8d0051",
+              "tertiary-container": "#009ebe",
+              "outline": "#a88892",
+              "on-surface-variant": "#e1bdc8",
+              "on-primary": "#640038",
+              "error-container": "#93000a",
+              "surface-dim": "#131318",
+              "surface-bright": "#39383e",
+              "on-secondary-fixed-variant": "#832600",
+              "on-error": "#690005",
+              "surface-variant": "#35343a",
+              "on-tertiary-fixed-variant": "#004e5f",
+              "on-tertiary-fixed": "#001f27",
+              "on-primary-fixed": "#3e0021",
+              "surface-container-lowest": "#0e0e13",
+              "surface-container-low": "#1b1b20",
+              "secondary-fixed-dim": "#ffb59d",
+              "outline-variant": "#594048",
+              "on-tertiary": "#003642",
+              "surface": "#131318",
+              "on-surface": "#e4e1e9",
+              "tertiary-fixed-dim": "#3cd7ff",
+              "primary": "#ffb0cc",
+              "inverse-surface": "#e4e1e9",
+              "on-background": "#e4e1e9"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .pro-glow {
+            box-shadow: 0 0 15px rgba(255, 70, 160, 0.15);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-container selection:text-white antialiased">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-4 h-14 bg-[#131318]/95 backdrop-blur-xl shadow-[0px_24px_48px_rgba(0,0,0,0.4)]">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#E91E8C] active:scale-95 duration-100 cursor-pointer" data-icon="menu">menu</span>
+<h1 class="text-lg font-black text-[#E91E8C] tracking-[0.2em] font-['Space_Grotesk'] uppercase">QUANT_TRACK</h1>
+</div>
+<div class="flex items-center gap-2">
+<div class="bg-[#1b1b20] px-3 py-1 rounded-sm border border-outline-variant/20">
+<span class="text-[10px] block text-zinc-500 font-bold tracking-tighter uppercase leading-none">Wallet Balance</span>
+<span class="text-sm font-black text-white">$1,240.50</span>
+</div>
+</div>
+</header>
+<main class="pt-14 pb-20 min-h-screen">
+<!-- Hero Section with Mascot Backdrop -->
+<section class="relative h-56 overflow-hidden flex items-end p-4">
+<div class="absolute inset-0 z-0">
+<img alt="PuntyAI Mascot" class="w-full h-full object-cover opacity-20 filter grayscale contrast-125 scale-110" data-alt="Abstract edgy digital mascot illustration with neon pink glitches and futuristic metallic textures on a dark charcoal background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDB6DzRzUlfr0o1Ivu8bLWmh-BLKL8TI_XwC1yD5q1zz-mep325ZgZyc0EQV9noPaa-eth0kIWx9woNfSsDwbPv8YDQwVc4lQjGkuBbng0gwEPWga_8XF8g9977cel9QdBs_HUNqUyj5YT9E1f9G4UxwmuYBWuCw7yqfKdT1UfsBOG3UD0uebN7OKvFLBweizo9XaQBw-XLv60oH_cJ7HJ2Q9qzDl8spCoHF-rYl2_zaWT_a65xPK_j1bkBESFpw46lZzyG3gsec9E"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
+</div>
+<div class="relative z-10 w-full">
+<div class="flex flex-col gap-1">
+<span class="bg-primary-container text-[10px] font-black px-1.5 py-0.5 w-fit rounded-sm text-white uppercase tracking-widest">System Active</span>
+<h2 class="text-4xl font-black font-headline tracking-tighter leading-none italic uppercase">
+                        NEURAL<br/><span class="text-primary">OVERRIDE</span>
+</h2>
+<p class="text-[11px] text-zinc-400 font-medium max-w-[200px] leading-tight">AI algorithms processing 4.2k data points per second across global tracks.</p>
+</div>
+</div>
+</section>
+<!-- ROI & Metrics Bento Row -->
+<div class="px-3 -mt-4 grid grid-cols-2 gap-2">
+<!-- ROI Performance Card -->
+<div class="bg-surface-container-high p-3 rounded-lg flex flex-col justify-between h-32 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-16 h-16 bg-primary-container/5 rounded-full -mr-8 -mt-8"></div>
+<div>
+<span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Performance ROI</span>
+<div class="flex items-baseline gap-1">
+<span class="text-2xl font-black font-headline text-tertiary">+24.8%</span>
+<span class="text-[10px] text-tertiary/60 font-bold italic">WTD</span>
+</div>
+</div>
+<!-- Mini Sparkline Placeholder -->
+<div class="w-full h-10 flex items-end gap-0.5">
+<div class="flex-1 bg-tertiary/20 h-1/4 rounded-t-xs"></div>
+<div class="flex-1 bg-tertiary/20 h-1/2 rounded-t-xs"></div>
+<div class="flex-1 bg-tertiary/40 h-2/3 rounded-t-xs"></div>
+<div class="flex-1 bg-tertiary/30 h-1/3 rounded-t-xs"></div>
+<div class="flex-1 bg-tertiary/60 h-3/4 rounded-t-xs"></div>
+<div class="flex-1 bg-tertiary h-full rounded-t-xs"></div>
+</div>
+</div>
+<!-- Win Rate / Volume Card -->
+<div class="bg-surface-container-high p-3 rounded-lg flex flex-col justify-between h-32">
+<div>
+<span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Neural Accuracy</span>
+<span class="text-2xl font-black font-headline text-white">72.4%</span>
+</div>
+<div class="space-y-1.5">
+<div class="w-full h-1 bg-surface-container-lowest rounded-full overflow-hidden">
+<div class="w-[72%] h-full bg-primary-container"></div>
+</div>
+<div class="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+<span class="text-zinc-500">Confidence</span>
+<span class="text-primary">Target: 80%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Next to Jump Live Feed -->
+<section class="mt-6 px-3">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-error animate-pulse text-sm" data-icon="sensors" style="font-variation-settings: 'FILL' 1;">sensors</span>
+<h3 class="font-headline font-bold text-sm tracking-widest uppercase">Next to Jump</h3>
+</div>
+<div class="flex gap-1">
+<span class="px-2 py-0.5 bg-surface-container-highest text-[9px] font-bold rounded-full text-zinc-400">AUS</span>
+<span class="px-2 py-0.5 bg-surface-container-highest text-[9px] font-bold rounded-full text-zinc-400">NZ</span>
+<span class="px-2 py-0.5 bg-surface-container-highest text-[9px] font-bold rounded-full text-zinc-400">HK</span>
+</div>
+</div>
+<div class="space-y-2">
+<!-- Race Item 1 -->
+<div class="bg-surface-container-low p-2 rounded-sm border-l-2 border-primary-container flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-surface-container-highest rounded-sm flex items-center justify-center font-black text-primary text-xs italic">
+                            R4
+                        </div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="text-[11px] font-black uppercase tracking-tight">Flemington</span>
+<span class="text-[9px] text-zinc-500 font-bold">AUS</span>
+</div>
+<div class="text-[10px] text-zinc-400 font-medium">Neural Pick: <span class="text-tertiary">#3 Red Comet</span></div>
+</div>
+</div>
+<div class="text-right">
+<div class="text-xs font-black text-error font-headline tracking-tighter">01:24</div>
+<button class="mt-0.5 bg-primary-container hover:bg-primary px-2 py-0.5 text-[9px] font-black uppercase text-white rounded-xs transition-all active:scale-90">Place Bet</button>
+</div>
+</div>
+<!-- Race Item 2 -->
+<div class="bg-surface-container-low p-2 rounded-sm border-l-2 border-zinc-700 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-surface-container-highest rounded-sm flex items-center justify-center font-black text-zinc-500 text-xs italic">
+                            R7
+                        </div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="text-[11px] font-black uppercase tracking-tight">Sha Tin</span>
+<span class="text-[9px] text-zinc-500 font-bold">HK</span>
+</div>
+<div class="text-[10px] text-zinc-400 font-medium">Neural Pick: <span class="text-tertiary">#1 Golden Dragon</span></div>
+</div>
+</div>
+<div class="text-right">
+<div class="text-xs font-black text-white font-headline tracking-tighter">04:50</div>
+<button class="mt-0.5 bg-surface-container-highest border border-outline-variant/30 hover:bg-surface-bright px-2 py-0.5 text-[9px] font-black uppercase text-zinc-300 rounded-xs transition-all active:scale-90">Details</button>
+</div>
+</div>
+<!-- Race Item 3 -->
+<div class="bg-surface-container-low p-2 rounded-sm border-l-2 border-zinc-700 flex items-center justify-between opacity-80">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-surface-container-highest rounded-sm flex items-center justify-center font-black text-zinc-500 text-xs italic">
+                            R2
+                        </div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="text-[11px] font-black uppercase tracking-tight">Riccarton</span>
+<span class="text-[9px] text-zinc-500 font-bold">NZ</span>
+</div>
+<div class="text-[10px] text-zinc-400 font-medium">Neural Pick: <span class="text-tertiary">#8 Southern Wind</span></div>
+</div>
+</div>
+<div class="text-right">
+<div class="text-xs font-black text-white font-headline tracking-tighter">12:15</div>
+<button class="mt-0.5 bg-surface-container-highest border border-outline-variant/30 px-2 py-0.5 text-[9px] font-black uppercase text-zinc-300 rounded-xs">Details</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Dynamic Insights Slider -->
+<section class="mt-6">
+<div class="px-3 mb-3">
+<h3 class="font-headline font-bold text-sm tracking-widest uppercase">Algorithmic Signals</h3>
+</div>
+<div class="flex overflow-x-auto gap-3 px-3 no-scrollbar pb-2">
+<!-- Insight 1 -->
+<div class="flex-shrink-0 w-64 bg-surface-container-highest p-3 rounded-lg border-t-2 border-tertiary">
+<div class="flex justify-between items-start mb-2">
+<span class="text-[9px] font-black text-tertiary uppercase tracking-widest">Late Money Signal</span>
+<span class="material-symbols-outlined text-xs text-tertiary" data-icon="trending_up">trending_up</span>
+</div>
+<p class="text-[11px] leading-relaxed font-medium text-zinc-200">Heavy smart-money detected on <span class="text-primary font-bold">#5 Thunderstruck</span> (Eagle Farm R2) in last 60s. Price contracting 4.20 → 3.10.</p>
+</div>
+<!-- Insight 2 -->
+<div class="flex-shrink-0 w-64 bg-surface-container-highest p-3 rounded-lg border-t-2 border-secondary">
+<div class="flex justify-between items-start mb-2">
+<span class="text-[9px] font-black text-secondary uppercase tracking-widest">Value Alert</span>
+<span class="material-symbols-outlined text-xs text-secondary" data-icon="star">star</span>
+</div>
+<p class="text-[11px] leading-relaxed font-medium text-zinc-200">Historical performance data suggests <span class="text-primary font-bold">#2 Ocean Blue</span> is undervalued at 12.00 on current track surface.</p>
+</div>
+</div>
+</section>
+<!-- Action Quick-Grid -->
+<section class="mt-4 px-3 grid grid-cols-4 gap-2">
+<button class="flex flex-col items-center justify-center p-2 bg-surface-container-low rounded-lg transition-colors active:scale-95 group">
+<span class="material-symbols-outlined text-zinc-500 group-active:text-primary mb-1" data-icon="query_stats">query_stats</span>
+<span class="text-[8px] font-black uppercase tracking-tighter text-zinc-500">Scan</span>
+</button>
+<button class="flex flex-col items-center justify-center p-2 bg-surface-container-low rounded-lg transition-colors active:scale-95 group">
+<span class="material-symbols-outlined text-zinc-500 group-active:text-primary mb-1" data-icon="history_edu">history_edu</span>
+<span class="text-[8px] font-black uppercase tracking-tighter text-zinc-500">Logs</span>
+</button>
+<button class="flex flex-col items-center justify-center p-2 bg-surface-container-low rounded-lg transition-colors active:scale-95 group">
+<span class="material-symbols-outlined text-zinc-500 group-active:text-primary mb-1" data-icon="hub">hub</span>
+<span class="text-[8px] font-black uppercase tracking-tighter text-zinc-500">Nodes</span>
+</button>
+<button class="flex flex-col items-center justify-center p-2 bg-surface-container-low rounded-lg transition-colors active:scale-95 group">
+<span class="material-symbols-outlined text-zinc-500 group-active:text-primary mb-1" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-[8px] font-black uppercase tracking-tighter text-zinc-500">Auto</span>
+</button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 bg-[#131318] px-2">
+<a class="flex flex-col items-center justify-center text-[#E91E8C] border-t-2 border-[#E91E8C] pt-1 active:opacity-80 scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-xl mb-0.5" data-icon="sports_score" style="font-variation-settings: 'FILL' 1;">sports_score</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest font-bold">Races</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 pt-1 hover:text-white transition-all active:opacity-80 scale-90" href="#">
+<span class="material-symbols-outlined text-xl mb-0.5" data-icon="insights">insights</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest font-bold">Analytics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 pt-1 hover:text-white transition-all active:opacity-80 scale-90" href="#">
+<span class="material-symbols-outlined text-xl mb-0.5" data-icon="receipt_long">receipt_long</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest font-bold">My Bets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 pt-1 hover:text-white transition-all active:opacity-80 scale-90" href="#">
+<span class="material-symbols-outlined text-xl mb-0.5" data-icon="sensors">sensors</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest font-bold">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-zinc-500 pt-1 hover:text-white transition-all active:opacity-80 scale-90" href="#">
+<span class="material-symbols-outlined text-xl mb-0.5" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest font-bold">Wallet</span>
+</a>
+</nav>
+</body></html>

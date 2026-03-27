@@ -1,0 +1,14 @@
+{
+  "ffa": {
+    "win_rate": 0.1464
+  },
+  "graded": {
+    "win_rate": 0.1346
+  },
+  "maiden": {
+    "win_rate": 0.1355
+  },
+  "other": {
+    "win_rate": 0.1367
+  }
+}

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>QUANT_TRACK - Pro Cheat Sheet</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#006876",
+                        "surface": "#f8f9fa",
+                        "on-tertiary-container": "#f7feff",
+                        "tertiary-container": "#757474",
+                        "tertiary-fixed-dim": "#c8c6c5",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed": "#e5e2e1",
+                        "primary-container": "#df0e84",
+                        "surface-container-highest": "#e1e3e4",
+                        "background": "#f8f9fa",
+                        "primary-fixed-dim": "#ffb0cc",
+                        "outline": "#8d6f79",
+                        "on-secondary-fixed": "#001f25",
+                        "surface-container-high": "#e7e8e9",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#edeeef",
+                        "on-background": "#191c1d",
+                        "on-surface": "#191c1d",
+                        "on-secondary-container": "#006573",
+                        "surface-variant": "#e1e3e4",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#f3f4f5",
+                        "secondary-fixed-dim": "#44d8f1",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#e1bdc8",
+                        "secondary-fixed": "#a1efff",
+                        "surface-dim": "#d9dadb",
+                        "on-surface-variant": "#594048",
+                        "on-secondary-fixed-variant": "#004e59",
+                        "inverse-on-surface": "#f0f1f2",
+                        "inverse-surface": "#2e3132",
+                        "surface-bright": "#f8f9fa",
+                        "primary-fixed": "#ffd9e4",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#b8006c",
+                        "error": "#ba1a1a",
+                        "on-primary-container": "#fffbff",
+                        "tertiary": "#5d5c5b",
+                        "inverse-primary": "#ffb0cc",
+                        "on-primary-fixed": "#3e0021",
+                        "secondary-container": "#58e6ff",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#1c1b1b",
+                        "on-primary-fixed-variant": "#8d0051",
+                        "on-tertiary-fixed-variant": "#474746",
+                        "primary": "#b30069"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, .font-headline { font-family: 'Space Grotesk', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface antialiased mb-20">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-4 h-14 bg-[#f8f9fa] dark:bg-[#191c1d] backdrop-blur-md">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface">menu</span>
+<h1 class="text-xl font-bold tracking-tighter text-[#b30069] dark:text-[#E91E8C] font-headline">QUANT_TRACK</h1>
+</div>
+<div class="bg-surface-container px-3 py-1 rounded-lg">
+<span class="text-primary font-headline font-bold">$1,240.50</span>
+</div>
+</header>
+<main class="pt-20 px-4 max-w-md mx-auto">
+<!-- Meeting Header -->
+<div class="mb-6">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label text-xs uppercase tracking-widest text-secondary font-bold">Today's Meeting</span>
+<span class="font-label text-xs uppercase tracking-widest text-on-surface opacity-50">10 Races</span>
+</div>
+<h2 class="text-4xl font-headline font-bold tracking-tight text-on-surface">FLEMINGTON</h2>
+<div class="w-12 h-1 bg-primary mt-2"></div>
+</div>
+<!-- Race List: Ultra-High Density -->
+<section class="space-y-2">
+<!-- Header for List -->
+<div class="grid grid-cols-12 px-2 pb-1 text-[10px] font-label font-bold uppercase tracking-wider text-on-surface opacity-40">
+<div class="col-span-2">RACE</div>
+<div class="col-span-5 text-center">TOP PICK (WIN)</div>
+<div class="col-span-5 text-center">SAVER (E/W)</div>
+</div>
+<!-- Race Rows (1 to 10) -->
+<!-- Race 1 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-lowest p-2 rounded-lg border-l-4 border-primary shadow-sm">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none">R1</span>
+<span class="text-[10px] font-medium opacity-60">12:30</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">4</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold truncate max-w-[60px]">APOLLO</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">12</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold truncate max-w-[60px]">ZEPHYR</span>
+</div>
+</div>
+</div>
+<!-- Race 2-10 loop representation -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R2</span>
+<span class="text-[10px] font-medium opacity-50">13:05</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">7</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">NOVA</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">1</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">AXIOM</span>
+</div>
+</div>
+</div>
+<!-- Race 3 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R3</span>
+<span class="text-[10px] font-medium opacity-50">13:40</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">2</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">TITAN</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">9</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">LUNA</span>
+</div>
+</div>
+</div>
+<!-- Race 4 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R4</span>
+<span class="text-[10px] font-medium opacity-50">14:15</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">11</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">GHOST</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">5</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">FLINT</span>
+</div>
+</div>
+</div>
+<!-- Race 5 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R5</span>
+<span class="text-[10px] font-medium opacity-50">14:50</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">3</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">VEGA</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">14</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">ORION</span>
+</div>
+</div>
+</div>
+<!-- Race 6 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R6</span>
+<span class="text-[10px] font-medium opacity-50">15:25</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">8</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">SWIFT</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">2</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">BOLD</span>
+</div>
+</div>
+</div>
+<!-- Race 7 (Main Event) -->
+<div class="grid grid-cols-12 items-center bg-surface-container p-2 rounded-lg border-2 border-secondary/20">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none text-secondary">R7</span>
+<span class="text-[10px] font-medium opacity-50">16:00</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container-highest">
+<span class="text-primary font-headline font-bold text-xl">1</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">KING</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">10</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">ACE</span>
+</div>
+</div>
+</div>
+<!-- Race 8 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R8</span>
+<span class="text-[10px] font-medium opacity-50">16:40</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">5</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">DUKE</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">6</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">JADE</span>
+</div>
+</div>
+</div>
+<!-- Race 9 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R9</span>
+<span class="text-[10px] font-medium opacity-50">17:15</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">15</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">MIST</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">4</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">PEAK</span>
+</div>
+</div>
+</div>
+<!-- Race 10 -->
+<div class="grid grid-cols-12 items-center bg-surface-container-low p-2 rounded-lg">
+<div class="col-span-2 flex flex-col">
+<span class="font-headline font-bold text-lg leading-none opacity-80">R10</span>
+<span class="text-[10px] font-medium opacity-50">17:50</span>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2 border-r border-surface-container">
+<span class="text-primary font-headline font-bold text-xl">6</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-primary font-label leading-none">WIN</span>
+<span class="text-xs font-bold">LAST</span>
+</div>
+</div>
+<div class="col-span-5 flex items-center justify-center gap-2">
+<span class="text-secondary font-headline font-bold text-xl">9</span>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-secondary font-label leading-none">E/W</span>
+<span class="text-xs font-bold">STOP</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Insights Summary (Bento Style) -->
+<section class="mt-8 grid grid-cols-2 gap-3 pb-12">
+<!-- Bias Radar Card -->
+<div class="col-span-1 bg-surface-container-high p-3 rounded-xl border-l-4 border-secondary">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-secondary text-lg">radar</span>
+<span class="font-label text-[10px] font-bold uppercase tracking-wider text-secondary">Bias Radar</span>
+</div>
+<div class="text-center py-2">
+<div class="relative w-16 h-16 mx-auto mb-2">
+<div class="absolute inset-0 border-2 border-secondary/20 rounded-full"></div>
+<div class="absolute inset-0 border-t-4 border-secondary rounded-full transform rotate-45"></div>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="font-headline font-bold text-secondary text-sm">FAV</span>
+</div>
+</div>
+<p class="text-[10px] font-body text-on-surface/70 leading-tight">Strong bias to outside rails in final 400m.</p>
+</div>
+</div>
+<!-- Hot Jockey Card -->
+<div class="col-span-1 bg-surface-container-high p-3 rounded-xl border-l-4 border-primary">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-primary text-lg">electric_bolt</span>
+<span class="font-label text-[10px] font-bold uppercase tracking-wider text-primary">Hot Jockey</span>
+</div>
+<div class="flex flex-col items-center gap-2 py-1">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="J. McDonald" class="w-full h-full object-cover" data-alt="Close up portrait of a professional jockey with determination in eyes, high contrast bright natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6nqxSk9zH35vEmwYRDR_Xt83QF2EXzmkuOQCAGrCgxIgvtfZ0IJDsRJcvsTASBwM-R9PKQtORTNi0k9cgXclcvrOXsrVKSTSPgtXNw3wC7_BUig_LPIukabd1ipHyzZ94GyBrasvz1BFOBVq3pMsXvS4TP5sPMdu_l4wpbT2ac6zyFrIdcp72-DKXOI1P4nnPMx8GEPmrk4Nf96BWvKpohPHrojcUwFBUE1NubeAc8BjBc7EPxdHvfJg2EbWrPgU-0qCKP2om6pc"/>
+</div>
+<div class="text-center">
+<span class="block font-headline font-bold text-sm leading-none">J. McDONALD</span>
+<span class="text-[10px] font-body font-bold text-primary">3/5 WINS TODAY</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-2 pb-safe h-16 bg-[#f8f9fa]/80 dark:bg-[#191c1d]/80 backdrop-blur-xl border-t border-[#edeeef] dark:border-[#2a2d2e]">
+<div class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all">
+<span class="material-symbols-outlined">speed</span>
+<span class="font-label text-[10px] uppercase font-bold tracking-wider">Races</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label text-[10px] uppercase font-bold tracking-wider">Analytics</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#b30069] dark:text-[#E91E8C] scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+<span class="font-label text-[10px] uppercase font-bold tracking-wider">My Bets</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all">
+<span class="material-symbols-outlined">live_tv</span>
+<span class="font-label text-[10px] uppercase font-bold tracking-wider">Live</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label text-[10px] uppercase font-bold tracking-wider">Wallet</span>
+</div>
+</nav>
+</body></html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "surface-container-lowest": "#ffffff",
+                "secondary": "#006876",
+                "surface": "#f8f9fa",
+                "on-tertiary-container": "#f7feff",
+                "tertiary-container": "#757474",
+                "tertiary-fixed-dim": "#c8c6c5",
+                "on-secondary": "#ffffff",
+                "tertiary-fixed": "#e5e2e1",
+                "primary-container": "#df0e84",
+                "surface-container-highest": "#e1e3e4",
+                "background": "#f8f9fa",
+                "primary-fixed-dim": "#ffb0cc",
+                "outline": "#8d6f79",
+                "on-secondary-fixed": "#001f25",
+                "surface-container-high": "#e7e8e9",
+                "on-primary": "#ffffff",
+                "surface-container": "#edeeef",
+                "on-background": "#191c1d",
+                "on-surface": "#191c1d",
+                "on-secondary-container": "#006573",
+                "surface-variant": "#e1e3e4",
+                "on-error": "#ffffff",
+                "surface-container-low": "#f3f4f5",
+                "secondary-fixed-dim": "#44d8f1",
+                "on-error-container": "#93000a",
+                "outline-variant": "#e1bdc8",
+                "secondary-fixed": "#a1efff",
+                "surface-dim": "#d9dadb",
+                "on-surface-variant": "#594048",
+                "on-secondary-fixed-variant": "#004e59",
+                "inverse-on-surface": "#f0f1f2",
+                "inverse-surface": "#2e3132",
+                "surface-bright": "#f8f9fa",
+                "primary-fixed": "#ffd9e4",
+                "error-container": "#ffdad6",
+                "surface-tint": "#b8006c",
+                "error": "#ba1a1a",
+                "on-primary-container": "#fffbff",
+                "tertiary": "#5d5c5b",
+                "inverse-primary": "#ffb0cc",
+                "on-primary-fixed": "#3e0021",
+                "secondary-container": "#58e6ff",
+                "on-tertiary": "#ffffff",
+                "on-tertiary-fixed": "#1c1b1b",
+                "on-primary-fixed-variant": "#8d0051",
+                "on-tertiary-fixed-variant": "#474746",
+                "primary": "#b30069"
+              },
+              fontFamily: {
+                "headline": ["Space Grotesk"],
+                "body": ["Inter"],
+                "label": ["Space Grotesk"]
+              },
+              borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .text-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 104, 118, 0.2);
+        }
+        .asymmetric-clip {
+            clip-path: polygon(0 0, 100% 0, 95% 100%, 0% 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body antialiased">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-4 h-14 bg-[#f8f9fa]/80 dark:bg-[#191c1d]/80 backdrop-blur-md">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#b30069] dark:text-[#E91E8C] hover:opacity-80 transition-opacity">menu</span>
+<h1 class="font-['Space_Grotesk'] font-bold tracking-tight text-xl text-[#b30069] dark:text-[#E91E8C]">QUANT_TRACK</h1>
+</div>
+<div class="flex items-center">
+<span class="font-['Space_Grotesk'] font-bold text-[#b30069] dark:text-[#E91E8C]">$1,240.50</span>
+</div>
+</header>
+<main class="pt-20 pb-24 px-4 overflow-x-hidden relative min-h-screen">
+<!-- Background Mascot Watermark -->
+<div class="fixed inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden">
+<div class="opacity-[0.03] scale-150 transform -rotate-12 translate-x-20">
+<img alt="Mascot Watermark" class="w-full h-full grayscale" data-alt="Stylized geometric horse head mascot silhouette, minimalist line art, etched into technical background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAArlKBdS2yEIVXAdv21uaJEx4K2pjPumX4uoYoCyUEljCoZDukv0RcnCraF4csOsfmGZ0lQ-bVjfPbgha6xEq-2uTF4IZxcpDHr8lXevcEDr2Y3HJaJ55vPizWm5CgoLNmb1MvKOW3dd7IRhwoi4USMgtUfZ6Nms9NO98WHDX2RvErZ_CLfbgtuMvCr-_nNegUNkGQho3uNeO426BecSeFoe6HLG7HNa61p0kXpJiKzhokP7NBSBQFa7sV2fqm1iEnm4JV8XPrXo"/>
+</div>
+</div>
+<!-- Performance ROI Command Center -->
+<section class="relative z-10 mb-8">
+<div class="flex flex-col gap-4">
+<div class="bg-surface-container-lowest p-6 rounded-xl relative overflow-hidden shadow-sm">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16"></div>
+<div class="flex justify-between items-end">
+<div>
+<span class="font-label text-[10px] uppercase font-bold tracking-widest text-secondary opacity-70">Portfolio Performance</span>
+<div class="font-headline text-5xl font-bold tracking-tighter text-on-surface mt-1">+24.8% <span class="text-2xl align-top text-primary">ROI</span></div>
+</div>
+<div class="text-right">
+<span class="font-label text-[10px] uppercase font-bold tracking-widest text-secondary opacity-70">Neural Accuracy</span>
+<div class="font-headline text-2xl font-bold text-on-surface">72.4%</div>
+</div>
+</div>
+<!-- ROI Sparkline Mock -->
+<div class="mt-6 h-12 w-full flex items-end gap-1">
+<div class="flex-1 bg-surface-container h-4 rounded-t-sm"></div>
+<div class="flex-1 bg-surface-container h-6 rounded-t-sm"></div>
+<div class="flex-1 bg-surface-container h-8 rounded-t-sm"></div>
+<div class="flex-1 bg-surface-container h-5 rounded-t-sm"></div>
+<div class="flex-1 bg-surface-container h-9 rounded-t-sm"></div>
+<div class="flex-1 bg-primary/40 h-10 rounded-t-sm"></div>
+<div class="flex-1 bg-primary h-12 rounded-t-sm"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Live Feed: Next to Jump -->
+<section class="relative z-10 mb-8">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline text-lg font-bold tracking-tight uppercase text-on-surface">Next to Jump</h2>
+<div class="flex items-center gap-2">
+<span class="flex h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label text-[10px] font-bold tracking-wider text-primary">LIVE UPDATES</span>
+</div>
+</div>
+<!-- Bento Feed -->
+<div class="grid grid-cols-1 gap-4">
+<!-- Card 1: Flemington (Primary Focused) -->
+<div class="bg-surface-container-lowest rounded-xl p-5 shadow-sm border-l-4 border-primary">
+<div class="flex justify-between items-start mb-4">
+<div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-secondary">location_on</span>
+<span class="font-headline font-bold text-on-surface">FLEMINGTON</span>
+</div>
+<span class="font-body text-xs text-on-surface-variant">R6 • 1200m • Turf • G1</span>
+</div>
+<div class="bg-primary/10 px-3 py-1 rounded-full">
+<span class="font-headline font-bold text-primary text-sm">2:45 LEFT</span>
+</div>
+</div>
+<div class="flex items-center justify-between py-3 border-y border-surface-container">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-surface-container rounded-lg flex items-center justify-center font-headline font-bold text-on-surface">#4</div>
+<div>
+<div class="font-headline font-bold text-on-surface leading-none">BOLT CUTTER</div>
+<div class="font-body text-[10px] text-on-surface-variant mt-1 uppercase">J: J. Kah | T: C. Waller</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline font-bold text-xl text-secondary">$3.40</div>
+<div class="font-label text-[9px] text-primary font-bold">TOP PREDICTION</div>
+</div>
+</div>
+<div class="flex gap-2 mt-4">
+<button class="flex-1 bg-primary text-on-primary font-headline font-bold py-3 rounded-lg hover:opacity-90 active:scale-95 transition-all text-sm">PLACE BET</button>
+<button class="px-4 border border-outline/15 text-on-surface font-headline font-bold py-3 rounded-lg hover:bg-surface-container transition-all text-sm">DETAILS</button>
+</div>
+</div>
+<!-- Card 2: Sha Tin (Asymmetric) -->
+<div class="bg-surface-container rounded-xl p-5 overflow-hidden relative">
+<div class="flex justify-between items-start">
+<div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-secondary">location_on</span>
+<span class="font-headline font-bold text-on-surface">SHA TIN</span>
+</div>
+<span class="font-body text-xs text-on-surface-variant">R3 • 1400m • All Weather</span>
+</div>
+<div class="text-right">
+<span class="font-label text-[10px] uppercase font-bold text-on-surface-variant block">Jumping In</span>
+<span class="font-headline font-bold text-on-surface text-lg">08:12</span>
+</div>
+</div>
+<div class="mt-4 space-y-3">
+<div class="flex justify-between items-center text-sm">
+<span class="font-body text-on-surface">#1 SILVER LINING</span>
+<span class="font-headline font-bold">$2.15</span>
+</div>
+<div class="flex justify-between items-center text-sm opacity-60">
+<span class="font-body text-on-surface">#9 DRAGON GATE</span>
+<span class="font-headline font-bold">$5.80</span>
+</div>
+</div>
+</div>
+<!-- Card 3: Riccarton (Technical Mini) -->
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border-t-2 border-secondary">
+<span class="font-label text-[9px] font-bold text-secondary uppercase tracking-widest">Riccarton R2</span>
+<div class="mt-2 font-headline font-bold text-lg leading-tight">TRACK: SOFT 5</div>
+<div class="mt-1 font-body text-[10px] text-on-surface-variant">Weather: Overcast</div>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border-t-2 border-primary">
+<span class="font-label text-[9px] font-bold text-primary uppercase tracking-widest">Market Alert</span>
+<div class="mt-2 font-headline font-bold text-lg leading-tight">LATE FLUC</div>
+<div class="mt-1 font-body text-[10px] text-on-surface-variant">Bolt Cutter 4.2 → 3.4</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Live Feed List (High Density) -->
+<section class="relative z-10">
+<h3 class="font-headline text-[10px] font-bold tracking-[0.2em] uppercase text-on-surface-variant mb-4">Upcoming Global Feed</h3>
+<div class="space-y-1">
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg">
+<div class="flex items-center gap-3">
+<span class="font-headline font-bold text-xs text-secondary">14:50</span>
+<span class="font-body text-sm font-medium">CAULFIELD R1</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-lg">chevron_right</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg">
+<div class="flex items-center gap-3">
+<span class="font-headline font-bold text-xs text-secondary">15:05</span>
+<span class="font-body text-sm font-medium">RANDWICK R4</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-lg">chevron_right</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg">
+<div class="flex items-center gap-3">
+<span class="font-headline font-bold text-xs text-secondary">15:15</span>
+<span class="font-body text-sm font-medium">DOOMBEN R2</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-lg">chevron_right</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-2 pb-safe h-16 bg-[#f8f9fa]/80 dark:bg-[#191c1d]/80 backdrop-blur-xl border-t border-[#edeeef] dark:border-[#2a2d2e]">
+<a class="flex flex-col items-center justify-center text-[#b30069] dark:text-[#E91E8C] scale-110 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="speed" style="font-variation-settings: 'FILL' 1;">speed</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase font-bold tracking-wider mt-1">Races</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase font-bold tracking-wider mt-1">Analytics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase font-bold tracking-wider mt-1">My Bets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="live_tv">live_tv</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase font-bold tracking-wider mt-1">Live</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#191c1d] dark:text-[#edeeef] opacity-70 hover:bg-[#edeeef] dark:hover:bg-[#2a2d2e] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase font-bold tracking-wider mt-1">Wallet</span>
+</a>
+</nav>
+</body></html>

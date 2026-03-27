@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-error": "#690005",
+                        "background": "#131318",
+                        "on-tertiary-container": "#002e3a",
+                        "secondary-fixed-dim": "#ffb59d",
+                        "secondary": "#ffb59d",
+                        "on-primary": "#640038",
+                        "outline-variant": "#594048",
+                        "on-secondary": "#5d1900",
+                        "on-tertiary": "#003642",
+                        "on-secondary-container": "#ffddd2",
+                        "on-primary-fixed": "#3e0021",
+                        "on-primary-fixed-variant": "#8d0051",
+                        "surface-container-lowest": "#0e0e13",
+                        "outline": "#a88892",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#e4e1e9",
+                        "inverse-primary": "#b8006c",
+                        "inverse-surface": "#e4e1e9",
+                        "surface-container": "#1f1f25",
+                        "tertiary-fixed": "#b4ebff",
+                        "inverse-on-surface": "#303036",
+                        "secondary-fixed": "#ffdbd0",
+                        "on-tertiary-fixed": "#001f27",
+                        "primary-fixed-dim": "#ffb0cc",
+                        "primary-container": "#ff46a0",
+                        "error-container": "#93000a",
+                        "on-primary-container": "#580030",
+                        "surface-container-highest": "#35343a",
+                        "surface-dim": "#131318",
+                        "on-surface": "#e4e1e9",
+                        "on-surface-variant": "#e1bdc8",
+                        "surface-container-low": "#1b1b20",
+                        "primary": "#ffb0cc",
+                        "on-secondary-fixed": "#390c00",
+                        "secondary-container": "#b83900",
+                        "surface-variant": "#35343a",
+                        "tertiary-fixed-dim": "#3cd7ff",
+                        "on-secondary-fixed-variant": "#832600",
+                        "tertiary-container": "#009ebe",
+                        "surface-tint": "#ffb0cc",
+                        "surface-bright": "#39383e",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#2a292f",
+                        "surface": "#131318",
+                        "primary-fixed": "#ffd9e4",
+                        "tertiary": "#3cd7ff",
+                        "on-tertiary-fixed-variant": "#004e5f"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #131318;
+            color: #e4e1e9;
+            font-family: 'Inter', sans-serif;
+        }
+        .race-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 1rem;
+        }
+        .neon-border-win {
+            box-shadow: inset 0 0 4px #ff46a0;
+        }
+        .neon-border-place {
+            box-shadow: inset 0 0 4px #3cd7ff;
+        }
+    </style>
+</head>
+<body class="overflow-hidden">
+<!-- TopNavBar Shell -->
+<header class="bg-[#131318] dark:bg-[#131318] docked full-width top-0 z-50 flex justify-between items-center w-full px-6 py-3 border-b border-white/5">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black italic text-[#E91E8C] tracking-widest font-['Space_Grotesk'] uppercase tracking-tighter">PuntyAI</span>
+<nav class="hidden md:flex gap-6">
+<a class="text-slate-400 hover:text-white transition-colors font-['Space_Grotesk'] uppercase tracking-tighter font-bold" href="#">Live Odds</a>
+<a class="text-[#E91E8C] border-b-2 border-[#E91E8C] pb-1 font-['Space_Grotesk'] uppercase tracking-tighter font-bold" href="#">Pro Tips</a>
+<a class="text-slate-400 hover:text-white transition-colors font-['Space_Grotesk'] uppercase tracking-tighter font-bold" href="#">Race Cards</a>
+<a class="text-slate-400 hover:text-white transition-colors font-['Space_Grotesk'] uppercase tracking-tighter font-bold" href="#">Results</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex bg-[#1b1b20] items-center px-3 py-1 rounded gap-2">
+<span class="material-symbols-outlined text-slate-400 text-sm">search</span>
+<input class="bg-transparent border-none text-xs focus:ring-0 text-slate-200 w-48" placeholder="Search track or horse..." type="text"/>
+</div>
+<button class="material-symbols-outlined text-slate-400 hover:bg-[#35343a] p-2 transition-all duration-200 scale-95 active:scale-90">notifications</button>
+<button class="material-symbols-outlined text-slate-400 hover:bg-[#35343a] p-2 transition-all duration-200 scale-95 active:scale-90">account_balance_wallet</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-white/10">
+<img alt="Professional Trader Profile" data-alt="Professional horse racing trader headshot, focused expression, dark neutral background, high contrast editorial lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6Km5krD2OL9MferA63jm2AswKlC7zClk_1_-mYHwt21eAb0_2LyXCdxxONsOsfjycB9rbMU4tf1mDr3rfjjRem2gs3dz36s-Do1wB0IfzoBztajYgMdSu16_BCFsCQt728b2KGitC5NwEp_LZB8Gnvy94LyJBC2Z-lWHnJZAkmjKwv-lDtTOghkqwwFgGd0kQdIBmjOdX-HcGRtRW7xpUqsoUsk4k7D_MJ-Xtm5S0EsrQneg6QAeen_tj2D_nNrFGBj4QGtDLXaQ"/>
+</div>
+</div>
+</header>
+<div class="flex h-screen overflow-hidden">
+<!-- SideNavBar Shell -->
+<aside class="bg-[#1b1b20] dark:bg-[#1b1b20] fixed left-0 top-0 h-full flex flex-col pt-20 pb-6 px-4 border-r border-white/5 shadow-[4px_0px_24px_rgba(0,0,0,0.4)] w-64 z-40">
+<div class="flex items-center gap-3 mb-8 px-2">
+<div class="w-10 h-10 bg-gradient-to-br from-primary to-primary-container rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary">monitoring</span>
+</div>
+<div>
+<h3 class="font-['Space_Grotesk'] font-bold text-sm text-on-surface">Pro Terminal</h3>
+<p class="text-[10px] text-tertiary font-bold uppercase tracking-widest">Elite Tier</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all font-['Space_Grotesk'] font-medium text-sm tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+                    Dashboard
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded text-[#3cd7ff] bg-[#35343a] border-r-4 border-[#3cd7ff] transition-all font-['Space_Grotesk'] font-medium text-sm tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="Settings_input_component">settings_input_component</span>
+                    Live Ticker
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all font-['Space_Grotesk'] font-medium text-sm tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+                    AI Analytics
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all font-['Space_Grotesk'] font-medium text-sm tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="confirmation_number">confirmation_number</span>
+                    My Bets
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all font-['Space_Grotesk'] font-medium text-sm tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="newspaper">newspaper</span>
+                    Stable News
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded text-slate-500 hover:text-[#E91E8C] hover:bg-[#35343a] hover:pl-2 transition-all font-['Space_Grotesk'] font-medium text-sm tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                    Settings
+                </a>
+</nav>
+<div class="mt-auto pt-6 border-t border-white/5 space-y-4">
+<button class="w-full py-2 bg-gradient-to-r from-primary to-primary-container text-on-primary text-xs font-black uppercase tracking-widest rounded-sm hover:brightness-110 transition-all">
+                    Upgrade to VIP
+                </button>
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-white transition-all font-['Space_Grotesk'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="help">help</span>
+                        Support
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-white transition-all font-['Space_Grotesk'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="logout">logout</span>
+                        Logout
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-64 pt-20 overflow-y-auto bg-surface">
+<div class="p-6">
+<!-- Header: Flemington - Nov 04, 2024 - Good 4 -->
+<div class="flex flex-col md:flex-row justify-between items-end mb-8 border-l-4 border-primary pl-4">
+<div>
+<h1 class="font-headline text-4xl font-extrabold tracking-tighter uppercase leading-none">Flemington</h1>
+<p class="font-headline text-lg text-slate-400 mt-1 uppercase tracking-widest">Nov 04, 2024 — <span class="text-tertiary">Good 4</span></p>
+</div>
+<div class="flex gap-4 items-center">
+<div class="bg-surface-container-low p-3 flex gap-6">
+<div class="text-center">
+<p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Predicted ROI</p>
+<p class="font-headline text-xl font-bold text-primary">+14.2%</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Confidence Score</p>
+<p class="font-headline text-xl font-bold text-tertiary">A-</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Bento Grid Layout for Races -->
+<div class="flex gap-6">
+<div class="flex-1">
+<div class="race-grid">
+<!-- Race Card Template Loop (10 Races) -->
+<!-- Race 1 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R1 • 1000m</span>
+<span class="text-[10px] text-slate-500 font-mono">12:45 PM</span>
+</div>
+<div class="space-y-2">
+<!-- Top Pick (Win) -->
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container neon-border-win">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">4</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Velo City</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 88%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$2.45</p>
+<p class="text-[8px] text-primary uppercase font-bold">Win Only</p>
+</div>
+</div>
+<!-- Second Pick (E/W) -->
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary neon-border-place">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">12</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Street Echo</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 64%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$8.50</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">E/W Value</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 2 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R2 • 1200m</span>
+<span class="text-[10px] text-slate-500 font-mono">1:20 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">1</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Turbo Charge</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 92%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$1.90</p>
+<p class="text-[8px] text-primary uppercase font-bold">LOCK</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">7</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Neon Knight</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 51%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$15.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">Value Shot</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 3 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R3 • 1600m</span>
+<span class="text-[10px] text-slate-500 font-mono">1:55 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">9</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Golden Slipper</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 79%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$4.20</p>
+<p class="text-[8px] text-primary uppercase font-bold">Top Elect</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">2</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Shadow Box</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 68%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$6.50</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">Each-Way</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 4 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R4 • 2000m</span>
+<span class="text-[10px] text-slate-500 font-mono">2:30 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">3</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Deep Water</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 82%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$3.10</p>
+<p class="text-[8px] text-primary uppercase font-bold">Solid Pick</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">5</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">River Run</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 55%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$9.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">E/W Threat</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 5 (The Big One) -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R5 • 2500m</span>
+<span class="text-[10px] text-slate-500 font-mono">3:10 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">11</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Sky Dancer</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 95%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$1.75</p>
+<p class="text-[8px] text-primary uppercase font-bold">BANKER</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">6</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Iron Fist</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 42%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$21.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">Place Flyer</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 6 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R6 • 1100m</span>
+<span class="text-[10px] text-slate-500 font-mono">3:45 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">8</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Light Year</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 74%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$5.50</p>
+<p class="text-[8px] text-primary uppercase font-bold">Win</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">10</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Moon Phase</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 61%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$8.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">E/W</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 7 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R7 • 1400m</span>
+<span class="text-[10px] text-slate-500 font-mono">4:20 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">2</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Sonic Boom</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 80%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$3.80</p>
+<p class="text-[8px] text-primary uppercase font-bold">Primary</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">14</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Quiet storm</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 58%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$11.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">Saver</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 8 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R8 • 1600m</span>
+<span class="text-[10px] text-slate-500 font-mono">4:55 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">5</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Wild Rose</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 85%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$2.90</p>
+<p class="text-[8px] text-primary uppercase font-bold">Strong</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">1</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Arctic Fox</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 66%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$7.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">E/W</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 9 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R9 • 1200m</span>
+<span class="text-[10px] text-slate-500 font-mono">5:30 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">10</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Fire Starter</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 77%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$4.80</p>
+<p class="text-[8px] text-primary uppercase font-bold">Main</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">4</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Coal Dust</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 53%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$12.00</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">Longshot</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Race 10 -->
+<div class="bg-surface-container-low p-4 relative group hover:bg-surface-container-high transition-all">
+<div class="flex justify-between items-center mb-3">
+<span class="font-headline font-black text-slate-600 text-lg uppercase italic">R10 • 1000m</span>
+<span class="text-[10px] text-slate-500 font-mono">6:00 PM</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-primary-container">
+<div class="bg-primary-container text-on-primary w-6 h-6 flex items-center justify-center font-black text-xs">6</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Last Stand</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 89%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-primary font-black text-lg">$2.10</p>
+<p class="text-[8px] text-primary uppercase font-bold">WIN</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-lowest p-2 border-l-2 border-tertiary">
+<div class="bg-tertiary text-on-tertiary w-6 h-6 flex items-center justify-center font-black text-xs">3</div>
+<div class="flex-1">
+<p class="font-headline font-bold text-sm tracking-tight text-white uppercase">Final Word</p>
+<p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Confidence 70%</p>
+</div>
+<div class="text-right">
+<p class="font-mono text-tertiary font-black text-lg">$6.20</p>
+<p class="text-[8px] text-tertiary uppercase font-bold">E/W</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Edge Insight Callout Box -->
+<aside class="w-80 space-y-4">
+<div class="bg-surface-container-highest p-6 relative border-t-4 border-tertiary">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-tertiary">insights</span>
+<h3 class="font-headline font-black uppercase text-sm tracking-widest">Punty's Meeting Edge</h3>
+</div>
+<div class="space-y-4 font-body text-sm leading-relaxed text-slate-300">
+<p>
+                                    Flemington today is playing slightly towards those on the rail in the first 400m. The <span class="text-white font-bold italic">Good 4</span> surface is firm but fair. 
+                                </p>
+<div class="p-3 bg-surface-container-lowest border-l-2 border-primary">
+<p class="text-xs font-bold text-primary uppercase mb-1">PRO INSIGHT</p>
+<p class="text-[13px] italic">Watch for the 'Sky Dancer' (R5) to dominate the straight. Late market support for 'Shadow Box' (R3) suggests a big prep move.</p>
+</div>
+<div class="pt-4 border-t border-white/5">
+<p class="text-[10px] text-slate-500 uppercase font-bold mb-2 tracking-widest">Track Condition Details</p>
+<div class="grid grid-cols-2 gap-2">
+<div class="bg-surface-container-lowest p-2 rounded">
+<p class="text-[9px] text-slate-500 uppercase">Wind</p>
+<p class="text-xs font-bold">12km/h NW</p>
+</div>
+<div class="bg-surface-container-lowest p-2 rounded">
+<p class="text-[9px] text-slate-500 uppercase">Rail</p>
+<p class="text-xs font-bold">+4m Entire</p>
+</div>
+</div>
+</div>
+</div>
+<button class="mt-6 w-full py-3 bg-tertiary text-on-tertiary font-black uppercase tracking-widest text-xs hover:brightness-110 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">download</span>
+                                Download CSV Data
+                            </button>
+</div>
+<!-- Mini Map / Location -->
+<div class="bg-surface-container-low h-48 relative overflow-hidden group">
+<div class="absolute inset-0 bg-black/40 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+<p class="text-white font-headline font-black uppercase tracking-widest text-sm">View Track Map</p>
+</div>
+<img class="w-full h-full object-cover" data-alt="Aerial drone photography of an elite horse racing track layout, morning fog, professional sports venue aesthetic" data-location="Melbourne, Australia" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9MJVY7mDfxyfhB1xnrKE8xxHd5_H23pMLgsi6a90poU7kc7K6SnM2bAj68GK_iYQppg9BtDFPKoWLnETsy0a3x0Djgm2ihhAe38MA_Y-4pYctCWm22Cs66ii2JmNv9ebRbrhJ5fQu-F5-GEDJ5yfJjGfQU0yApSINXfztidEh3FYIvPSG81HtmsmwMu2qGEOIroH30CPmusjjIBnoaXQgLr4AaJ2jcfwPlfMYFqkmlWclzrLRylIvdLvlKpCh_rD7_zhp-0Pla_A"/>
+<div class="absolute bottom-2 left-2 z-20 bg-black/60 px-2 py-1 text-[9px] font-bold uppercase tracking-widest">Flemington Racecourse</div>
+</div>
+</aside>
+</div>
+</div>
+</main>
+</div>
+<!-- Floating Action Button (FAB) suppressed per protocol for detailed view -->
+</body></html>

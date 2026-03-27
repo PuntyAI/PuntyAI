@@ -17,8 +17,8 @@
         position: absolute;
         inset: 0;
         background:
-            radial-gradient(ellipse 80% 60% at 20% 50%, rgba(233,30,140,0.12) 0%, transparent 70%),
-            radial-gradient(ellipse 60% 50% at 80% 40%, rgba(0,212,255,0.08) 0%, transparent 70%);
+            radial-gradient(ellipse 80% 60% at 20% 50%, rgba(255,70,160,0.12) 0%, transparent 70%),
+            radial-gradient(ellipse 60% 50% at 80% 40%, rgba(60,215,255,0.08) 0%, transparent 70%);
         pointer-events: none;
     }
     .hero::after {
@@ -40,9 +40,9 @@
         position: relative;
         width: 100%;
         max-width: min(388px, 40vw);
-        border-radius: 24px;
+        border-radius: 0.375rem;
         overflow: hidden;
-        box-shadow: 0 8px 40px rgba(233,30,140,0.18), 0 2px 16px rgba(0,0,0,0.4);
+        box-shadow: 0 8px 40px rgba(255,70,160,0.18), 0 2px 16px rgba(0,0,0,0.4);
     }
     @media (max-width: 767px) {
         .hero-character { max-width: 240px; }
@@ -51,8 +51,8 @@
         width: 100%;
         height: auto;
         display: block;
-        border-radius: 24px;
-        filter: drop-shadow(0 0 60px rgba(233,30,140,0.25));
+        border-radius: 0.375rem;
+        filter: drop-shadow(0 0 60px rgba(255,70,160,0.25));
     }
     .hero-character::after {
         content: '';
@@ -66,7 +66,7 @@
     /* ── Proof Bar ── */
     .proof-divider {
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(233,30,140,0.2), rgba(0,212,255,0.15), transparent);
+        background: linear-gradient(90deg, transparent, rgba(255,70,160,0.2), rgba(60,215,255,0.15), transparent);
         margin-top: 2.5rem;
         margin-bottom: 0.5rem;
     }
@@ -78,11 +78,11 @@
     }
     .proof-tile {
         background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 14px;
+        border: none;
+        border-radius: 0.375rem;
         padding: 1.5rem 1.25rem;
         text-align: center;
-        transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+        transition: transform 0.15s, box-shadow 0.15s;
         text-decoration: none;
         box-shadow: 0 0 0 0 transparent;
         position: relative;
@@ -90,25 +90,20 @@
     .proof-tile::after {
         content: '';
         position: absolute;
-        inset: -1px;
-        border-radius: 15px;
-        border: 1px solid transparent;
-        background: linear-gradient(135deg, rgba(233,30,140,0.06), rgba(0,212,255,0.04)) border-box;
-        mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-        mask-composite: exclude;
-        -webkit-mask-composite: xor;
+        inset: 0;
+        border-radius: 0.375rem;
+        background: linear-gradient(135deg, rgba(255,70,160,0.06), rgba(60,215,255,0.04));
         pointer-events: none;
         opacity: 0;
         transition: opacity 0.15s;
     }
     .proof-tile:hover {
         transform: translateY(-2px);
-        border-color: rgba(233, 30, 140, 0.3);
-        box-shadow: 0 0 20px rgba(233,30,140,0.06);
+        box-shadow: 0 0 20px rgba(255,70,160,0.06);
     }
     .proof-tile:hover::after { opacity: 1; }
     .proof-value {
-        font-family: 'Orbitron', sans-serif;
+        font-family: 'Space Grotesk', sans-serif;
         font-size: 2.5rem;
         font-weight: 800;
         line-height: 1.1;
@@ -117,7 +112,7 @@
         -webkit-text-fill-color: transparent;
     }
     .proof-label {
-        font-family: 'Rajdhani', sans-serif;
+        font-family: 'Space Grotesk', sans-serif;
         font-size: 0.7rem;
         font-weight: 600;
         text-transform: uppercase;
@@ -130,8 +125,6 @@
     .ticker-wrap {
         overflow: hidden;
         padding: 1rem 0;
-        border-top: 1px solid var(--border-subtle);
-        border-bottom: 1px solid var(--border-subtle);
         margin: 2.5rem 0;
         background: var(--bg-card-alt);
     }
@@ -152,7 +145,7 @@
         align-items: center;
         gap: 0.5rem;
         white-space: nowrap;
-        font-family: 'Rajdhani', sans-serif;
+        font-family: 'Space Grotesk', sans-serif;
         font-weight: 600;
         font-size: 0.85rem;
         letter-spacing: 0.02em;
@@ -168,15 +161,15 @@
         overflow-x: auto;
         padding-bottom: 0.5rem;
         scrollbar-width: thin;
-        scrollbar-color: rgba(233, 30, 140, 0.3) transparent;
+        scrollbar-color: rgba(255, 70, 160, 0.3) transparent;
     }
     .meetings-scroll::-webkit-scrollbar { height: 4px; }
-    .meetings-scroll::-webkit-scrollbar-thumb { background: rgba(233, 30, 140, 0.3); border-radius: 2px; }
+    .meetings-scroll::-webkit-scrollbar-thumb { background: rgba(255, 70, 160, 0.3); border-radius: 2px; }
     .meeting-card {
         flex: 0 0 200px;
         background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 16px;
+        border: none;
+        border-radius: 0.375rem;
         padding: 1.25rem;
         transition: all 0.2s ease;
         text-decoration: none;
@@ -184,11 +177,10 @@
     }
     .meeting-card:hover {
         transform: translateY(-3px);
-        border-color: rgba(233, 30, 140, 0.3);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 0 12px rgba(233,30,140,0.06);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 0 12px rgba(255,70,160,0.06);
     }
     .meeting-card.metro-card {
-        border-color: rgba(233, 30, 140, 0.2);
+        background: var(--bg-card-alt);
     }
 
     /* ── State Badges ── */
@@ -196,7 +188,7 @@
         display: inline-block;
         padding: 0.1rem 0.4rem;
         border-radius: 4px;
-        font-family: 'Rajdhani', sans-serif;
+        font-family: 'Space Grotesk', sans-serif;
         font-size: 0.6rem;
         font-weight: 700;
         text-transform: uppercase;
@@ -214,7 +206,7 @@
     /* ── How It Works ── */
     .hiw-section {
         position: relative;
-        background: linear-gradient(180deg, var(--bg-card-alt) 0%, rgba(233,30,140,0.015) 100%);
+        background: linear-gradient(180deg, var(--bg-card-alt) 0%, rgba(255,70,160,0.015) 100%);
     }
     .hiw-steps {
         position: relative;
@@ -227,7 +219,7 @@
         top: 2.5rem;
         bottom: 2.5rem;
         width: 1px;
-        background: linear-gradient(180deg, rgba(233,30,140,0.2), rgba(255,107,53,0.15), rgba(255,193,7,0.1));
+        background: linear-gradient(180deg, rgba(255,70,160,0.2), rgba(255,181,157,0.15), rgba(255,193,7,0.1));
         pointer-events: none;
     }
     .hiw-step {
@@ -245,12 +237,12 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: 'Orbitron', sans-serif;
+        font-family: 'Space Grotesk', sans-serif;
         font-weight: 800;
         font-size: 1.1rem;
         color: white;
         background: var(--gradient-sunset);
-        box-shadow: 0 2px 12px rgba(233,30,140,0.2);
+        box-shadow: 0 2px 12px rgba(255,70,160,0.2);
         position: relative;
         z-index: 1;
     }
@@ -259,17 +251,17 @@
     .cta-block {
         position: relative;
         padding: 2.5rem 2rem;
-        border-radius: 20px;
+        border-radius: 0.375rem;
         overflow: hidden;
-        background: linear-gradient(135deg, rgba(233, 30, 140, 0.1), rgba(255, 107, 53, 0.1));
-        border: 1px solid rgba(233, 30, 140, 0.2);
-        box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 40px rgba(233,30,140,0.05);
+        background: linear-gradient(135deg, rgba(255, 70, 160, 0.1), rgba(255, 181, 157, 0.1));
+        border: none;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.3);
     }
     .cta-block::before {
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(135deg, rgba(233,30,140,0.04) 0%, transparent 50%, rgba(255,107,53,0.04) 100%);
+        background: linear-gradient(135deg, rgba(255,70,160,0.04) 0%, transparent 50%, rgba(255,181,157,0.04) 100%);
         animation: cta-shimmer 6s ease-in-out infinite;
         pointer-events: none;
     }
@@ -285,20 +277,20 @@
         gap: 0.5rem;
         background: var(--gradient-sunset);
         color: white;
-        font-family: 'Rajdhani', sans-serif;
+        font-family: 'Space Grotesk', sans-serif;
         font-weight: 700;
         font-size: 1.15rem;
         padding: 0.9rem 2.5rem;
-        border-radius: 12px;
+        border-radius: 0.375rem;
         border: none;
         cursor: pointer;
         text-decoration: none;
         transition: transform 0.15s, box-shadow 0.15s;
-        box-shadow: 0 2px 16px rgba(233,30,140,0.25);
+        box-shadow: 0 2px 16px rgba(255,70,160,0.25);
     }
     .btn-cta-lg:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 24px rgba(233,30,140,0.35);
+        box-shadow: 0 4px 24px rgba(255,70,160,0.35);
     }
 
     /* ── Section divider ── */
@@ -595,7 +587,7 @@
                     </div>
                 </div>
                 <div style="display: flex; justify-content: center;">
-                    <div id="cta-carousel" style="width: 18rem; height: 18rem; border-radius: 1rem; overflow: hidden; position: relative; border: 2px solid rgba(233, 30, 140, 0.3); box-shadow: 0 4px 24px rgba(233,30,140,0.15), 0 0 40px rgba(233,30,140,0.08);">
+                    <div id="cta-carousel" style="width: 18rem; height: 18rem; border-radius: 0.375rem; overflow: hidden; position: relative; box-shadow: 0 4px 24px rgba(255,70,160,0.15);">
                         <img src="/static/punty-character.jpg" alt="Punty" style="width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; opacity: 1; transition: opacity 0.7s;">
                     </div>
                 </div>

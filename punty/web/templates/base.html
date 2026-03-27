@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0a0a0f">
+    <meta name="theme-color" content="#131318">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PuntyAI">
@@ -33,30 +33,32 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #0a0a0f;
-            --bg-card: #12121a;
-            --bg-card-alt: #1a1a25;
-            --magenta: #e91e8c;
-            --cyan: #00d4ff;
-            --orange: #ff6b35;
+            --bg-dark: #131318;
+            --bg-card: #1b1b20;
+            --bg-card-alt: #35343a;
+            --magenta: #ff46a0;
+            --pink-light: #ffb0cc;
+            --pink-dark: #b30069;
+            --cyan: #3cd7ff;
+            --orange: #ffb59d;
             --yellow: #ffc107;
             --purple: #9d4edd;
             --text-primary: #ffffff;
             --text-secondary: #c0c0cc;
             --text-muted: #808090;
-            --border-subtle: rgba(255,255,255,0.08);
-            --gradient-sunset: linear-gradient(180deg, #ff2d9e 0%, #ff6b35 50%, #ffc107 100%);
-            --gradient-header: linear-gradient(90deg, #e91e8c 0%, #9d4edd 50%, #00d4ff 100%);
+            --border-subtle: rgba(255,255,255,0.06);
+            --gradient-sunset: linear-gradient(180deg, #ff46a0 0%, #ffb59d 50%, #ffc107 100%);
+            --gradient-header: linear-gradient(90deg, #ff46a0 0%, #9d4edd 50%, #3cd7ff 100%);
         }
 
         * { box-sizing: border-box; }
         html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
         body {
-            font-family: 'Source Sans Pro', sans-serif;
+            font-family: 'Inter', sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
             min-height: 100vh;
@@ -86,18 +88,9 @@
         }
         button:disabled { pointer-events: none; }
 
-        /* Scanlines */
-        .scanlines {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 2px);
-            z-index: 1000;
-        }
-
         /* Header */
         .site-header {
-            background: linear-gradient(180deg, #15151f 0%, var(--bg-dark) 100%);
-            border-bottom: 1px solid var(--border-subtle);
+            background: #1b1b20;
             position: relative;
             overflow: hidden;
         }
@@ -107,37 +100,38 @@
             bottom: 0; left: 0; right: 0;
             height: 2px;
             background: var(--gradient-header);
-            opacity: 0.8;
+            opacity: 0.6;
         }
 
         .logo-text {
-            font-family: 'Orbitron', sans-serif;
+            font-family: 'Space Grotesk', sans-serif;
             font-size: 2rem;
-            font-weight: 900;
+            font-weight: 700;
             background: var(--gradient-sunset);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            letter-spacing: 2px;
-        }
-
-        .logo-tagline {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            letter-spacing: 2px;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
         }
 
-        /* Headlines use Rajdhani */
-        h1, h2, h3 { font-family: 'Rajdhani', sans-serif; }
+        .logo-tagline {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
 
-        /* Card backgrounds */
-        .bg-white { background: var(--bg-card) !important; border: 1px solid var(--border-subtle) !important; }
+        /* Headlines use Space Grotesk */
+        h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
+
+        /* Card backgrounds — surface color shifts, no borders */
+        .bg-white { background: var(--bg-card) !important; border: none !important; }
         .bg-gray-50 { background: var(--bg-card-alt) !important; }
         .bg-gray-100 { background: rgba(255,255,255,0.04) !important; }
 
-        /* Borders */
+        /* Borders — removed where possible */
         .border-gray-200, .border-gray-100 { border-color: var(--border-subtle) !important; }
         .border-b { border-color: var(--border-subtle) !important; }
         .divide-gray-200 > :not(:last-child) { border-color: var(--border-subtle) !important; }
@@ -151,12 +145,12 @@
         .text-gray-500 { color: #808090 !important; }
         .text-gray-400 { color: #606070 !important; }
 
-        /* Accent — magenta */
+        /* Accent — pink */
         .bg-punty-coral { background: var(--magenta) !important; }
         .text-punty-coral { color: var(--magenta) !important; }
-        .hover\:text-punty-coral:hover { color: #ff2d9e !important; }
+        .hover\:text-punty-coral:hover { color: var(--pink-light) !important; }
         .border-punty-coral { border-color: var(--magenta) !important; }
-        .hover\:bg-punty-coral\/90:hover { background: #ff2d9e !important; }
+        .hover\:bg-punty-coral\/90:hover { background: var(--pink-light) !important; }
 
         /* Functional colours */
         .text-green-600, .text-green-700, .text-green-800 { color: #4ade80 !important; }
@@ -173,32 +167,34 @@
         .bg-green-100, .bg-green-50 { background: rgba(74,222,128,0.12) !important; }
         .bg-red-100 { background: rgba(248,113,113,0.12) !important; }
         .bg-yellow-100 { background: rgba(255,193,7,0.12) !important; }
-        .bg-blue-100 { background: rgba(0,212,255,0.12) !important; }
-        .bg-orange-50 { background: rgba(255,107,53,0.08) !important; }
-        .bg-orange-200 { background: rgba(255,107,53,0.2) !important; }
+        .bg-blue-100 { background: rgba(60,215,255,0.12) !important; }
+        .bg-orange-50 { background: rgba(255,181,157,0.08) !important; }
+        .bg-orange-200 { background: rgba(255,181,157,0.2) !important; }
         .bg-yellow-200 { background: rgba(255,193,7,0.2) !important; }
         .bg-purple-200 { background: rgba(157,78,221,0.2) !important; }
-        .bg-teal-100 { background: rgba(0,212,255,0.12) !important; }
+        .bg-teal-100 { background: rgba(60,215,255,0.12) !important; }
 
         /* Shadows */
         .shadow, .shadow-lg { box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important; }
 
-        /* Rounded */
-        .rounded-lg { border-radius: 12px !important; }
+        /* Rounded — sharp corners, max 6px */
+        .rounded-lg { border-radius: 0.375rem !important; }
+        .rounded-xl { border-radius: 0.375rem !important; }
+        .rounded-2xl { border-radius: 0.375rem !important; }
 
         /* Buttons */
         .hover\:bg-gray-50:hover { background: rgba(255,255,255,0.04) !important; }
 
         /* Nav links */
         .nav-link {
-            font-family: 'Rajdhani', sans-serif;
+            font-family: 'Space Grotesk', sans-serif;
             font-size: 0.85rem;
             font-weight: 600;
-            letter-spacing: 1px;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
             color: var(--text-secondary);
             padding: 0.5rem 0.75rem;
-            border-radius: 6px;
+            border-radius: 0.25rem;
             transition: all 0.15s ease;
         }
         .nav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
@@ -207,66 +203,72 @@
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-card); }
         ::-webkit-scrollbar-thumb { background: var(--magenta); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #ff2d9e; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--pink-light); }
         /* Firefox */
         * { scrollbar-color: var(--magenta) var(--bg-card); scrollbar-width: thin; }
 
-        /* Race number pill — gradient sunset */
+        /* Race number pill */
         .race-num-pill {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 800;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
             width: 40px; height: 40px;
             display: flex; align-items: center; justify-content: center;
             background: var(--gradient-sunset);
-            border-radius: 8px;
+            border-radius: 0.375rem;
             color: white;
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
             font-size: 1.1rem;
+            font-variant-numeric: tabular-nums;
         }
 
         /* Pick badges */
         .pick-top { background: var(--magenta); color: white; }
-        .pick-2nd { background: rgba(0,212,255,0.2); color: var(--cyan); border: 1px solid rgba(0,212,255,0.3); }
-        .pick-3rd { background: rgba(255,193,7,0.2); color: var(--yellow); border: 1px solid rgba(255,193,7,0.3); }
-        .pick-roughie { background: rgba(157,78,221,0.2); color: var(--purple); border: 1px solid rgba(157,78,221,0.3); }
-        .pick-exotic { background: rgba(0,212,255,0.1); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2); }
-        .pick-sequence { background: rgba(0,212,255,0.08); color: var(--cyan); border: 1px solid rgba(0,212,255,0.15); }
+        .pick-2nd { background: rgba(60,215,255,0.2); color: var(--cyan); }
+        .pick-3rd { background: rgba(255,193,7,0.2); color: var(--yellow); }
+        .pick-roughie { background: rgba(157,78,221,0.2); color: var(--purple); }
+        .pick-exotic { background: rgba(60,215,255,0.1); color: var(--cyan); }
+        .pick-sequence { background: rgba(60,215,255,0.08); color: var(--cyan); }
 
         /* Top pick runner highlight */
         .runner-highlight {
-            background: linear-gradient(90deg, rgba(233,30,140,0.15) 0%, transparent 100%);
+            background: linear-gradient(90deg, rgba(255,70,160,0.15) 0%, transparent 100%);
             border-left: 3px solid var(--magenta);
         }
 
         /* Odds colours */
-        .odds-fav { color: #ff2d9e; }
+        .odds-fav { color: var(--pink-light); }
         .odds-value { color: var(--cyan); }
 
         /* Footer */
         .site-footer {
-            font-family: 'Rajdhani', sans-serif;
+            font-family: 'Space Grotesk', sans-serif;
             font-size: 0.8rem;
             color: var(--text-muted);
-            letter-spacing: 1px;
+            letter-spacing: 0.05em;
         }
         .footer-brand {
-            font-family: 'Orbitron', sans-serif;
+            font-family: 'Space Grotesk', sans-serif;
             background: var(--gradient-sunset);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+        }
+
+        /* Tabular numbers for odds/stats */
+        .font-display, .font-heading {
+            font-family: 'Space Grotesk', sans-serif;
+            font-variant-numeric: tabular-nums;
         }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen font-body">
     {% if is_staging %}
-    <div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#ff6b35,#e91e8c);color:white;text-align:center;padding:4px 0;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;">
+    <div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#ffb59d,#ff46a0);color:white;text-align:center;padding:4px 0;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:0.05em;">
       STAGING ENVIRONMENT
     </div>
     <div style="height:26px;"></div>
     {% endif %}
-    <div class="scanlines"></div>
 
     <!-- Header -->
     <header class="site-header">
@@ -318,22 +320,22 @@
             </div>
         </div>
         <!-- Mobile nav dropdown -->
-        <nav id="mobile-menu" class="hidden md:hidden border-t px-4 pb-3 pt-1" style="border-color: var(--border); background: var(--bg-card);">
-            <a href="/" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Dashboard</a>
-            <a href="/meets" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Meets</a>
-            <a href="/content" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Content</a>
-            <a href="/review" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <nav id="mobile-menu" class="hidden md:hidden px-4 pb-3 pt-1" style="background: var(--bg-card);">
+            <a href="/" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Dashboard</a>
+            <a href="/meets" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Meets</a>
+            <a href="/content" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Content</a>
+            <a href="/review" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">
                 Review
                 <span class="ml-1 bg-punty-magenta/20 text-punty-mbright text-xs px-2 py-0.5 rounded-full"
                       hx-get="/api/content/review-count" hx-trigger="every 60s [document.visibilityState==='visible']" hx-swap="innerHTML">
                     {% if pending_reviews is defined and pending_reviews > 0 %}{{ pending_reviews }}{% endif %}
                 </span>
             </a>
-            <a href="/betfair" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Betfair</a>
-            <a href="/balance-sheet" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Ledger</a>
-            <a href="/probability" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Calibration</a>
-            <a href="/analytics" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Analytics</a>
-            <a href="/settings" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Rajdhani', sans-serif;">Settings</a>
+            <a href="/betfair" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Betfair</a>
+            <a href="/balance-sheet" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Ledger</a>
+            <a href="/probability" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Calibration</a>
+            <a href="/analytics" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.04);">Analytics</a>
+            <a href="/settings" class="block py-3 text-sm font-semibold uppercase tracking-wider" style="color: var(--text-secondary); font-family: 'Space Grotesk', sans-serif;">Settings</a>
         </nav>
     </header>
 
@@ -373,21 +375,22 @@
             return _origFetch.call(this, url, opts);
         };
 
-        function showToast(message, type = 'info') {
-            const colors = {
-                'info': 'background:rgba(0,212,255,0.9);border:1px solid rgba(0,212,255,0.5)',
-                'success': 'background:rgba(74,222,128,0.9);border:1px solid rgba(74,222,128,0.5)',
-                'error': 'background:rgba(233,30,140,0.9);border:1px solid rgba(233,30,140,0.5)',
-                'warning': 'background:rgba(255,193,7,0.9);border:1px solid rgba(255,193,7,0.5)'
+        function showToast(message, type) {
+            type = type || 'info';
+            var colors = {
+                'info': 'background:rgba(60,215,255,0.9)',
+                'success': 'background:rgba(74,222,128,0.9)',
+                'error': 'background:rgba(255,70,160,0.9)',
+                'warning': 'background:rgba(255,193,7,0.9)'
             };
-            const toast = document.createElement('div');
-            toast.style.cssText = colors[type] + ';color:white;padding:0.75rem 1.5rem;border-radius:8px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:0.5px;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
+            var toast = document.createElement('div');
+            toast.style.cssText = colors[type] + ';color:white;padding:0.75rem 1.5rem;border-radius:0.375rem;font-family:Space Grotesk,sans-serif;font-weight:600;letter-spacing:0.02em;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
             toast.className = 'transform transition-all duration-300';
             toast.textContent = message;
             document.getElementById('toast-container').appendChild(toast);
-            setTimeout(() => {
+            setTimeout(function() {
                 toast.classList.add('opacity-0', 'translate-x-full');
-                setTimeout(() => toast.remove(), 300);
+                setTimeout(function() { toast.remove(); }, 300);
             }, 3000);
         }
 
@@ -399,10 +402,11 @@
         document.body.addEventListener('htmx:beforeRequest', function(evt) {
             var btn = evt.detail.elt;
             if (btn.tagName === 'BUTTON') {
-                btn._origHTML = btn.innerHTML;
+                btn._origHTML = btn.textContent;
                 btn.disabled = true;
                 btn.classList.add('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = '<span class="spinner"></span> ' + (btn.textContent.trim().split(' ').slice(0,2).join(' ') || 'Working') + '...';
+                var label = btn.textContent.trim().split(' ').slice(0,2).join(' ') || 'Working';
+                btn.textContent = label + '...';
             }
         });
         document.body.addEventListener('htmx:afterRequest', function(evt) {
@@ -410,21 +414,21 @@
             if (btn.tagName === 'BUTTON' && btn._origHTML) {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = btn._origHTML;
+                btn.textContent = btn._origHTML;
                 delete btn._origHTML;
             }
         });
 
         async function withLoading(btn, fn) {
-            var orig = btn.innerHTML;
+            var orig = btn.textContent;
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
-            btn.innerHTML = '<span class="spinner"></span> Working...';
+            btn.textContent = 'Working...';
             try { return await fn(); }
             finally {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = orig;
+                btn.textContent = orig;
             }
         }
     </script>

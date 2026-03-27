@@ -132,25 +132,25 @@
 
     <!-- ═══ HERO STATS — compact row ═══ -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+        <div class="bg-[#1b1b20] rounded-md p-3 sm:p-5 text-center">
             <div class="text-2xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 {{ all_time_stats.today_winners or 0 }}
             </div>
             <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Today</div>
         </div>
-        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+        <div class="bg-[#1b1b20] rounded-md p-3 sm:p-5 text-center">
             <div class="text-2xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 {{ all_time_stats.total_winners or 0 }}
             </div>
             <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Winners</div>
         </div>
-        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+        <div class="bg-[#1b1b20] rounded-md p-3 sm:p-5 text-center">
             <div class="text-2xl sm:text-4xl font-display font-black" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
                 {{ todays_meetings|length }}
             </div>
             <div class="text-xs font-heading font-semibold text-gray-500 uppercase tracking-wider mt-1">Meets</div>
         </div>
-        <div class="bg-punty-card rounded-xl p-3 sm:p-5 border border-punty-border text-center">
+        <div class="bg-[#1b1b20] rounded-md p-3 sm:p-5 text-center">
             <div class="text-xl sm:text-3xl font-display font-black" style="color: var(--punty-cyan);">
                 ${{ token_stats.month_cost if token_stats is defined else '0' }}
             </div>
@@ -178,8 +178,8 @@
             <div class="space-y-4 sm:space-y-6 p-4 sm:p-6">
 
                 <!-- Wins Ticker -->
-                <div id="wins-ticker" class="bg-punty-card rounded-xl border border-punty-border overflow-hidden">
-                    <div class="flex items-center px-4 py-2 border-b border-punty-border">
+                <div id="wins-ticker" class="bg-[#1b1b20] rounded-md overflow-hidden">
+                    <div class="flex items-center px-4 py-2" style="background:#35343a;">
                         <span class="text-punty-magenta text-lg mr-2">&#x1F3C6;</span>
                         <span class="font-heading font-semibold text-sm uppercase tracking-wider text-gray-400">Recent Wins</span>
                     </div>
@@ -196,11 +196,11 @@
                         100% { transform: translateX(-50%); }
                     }
                     .ticker-scroll:hover { animation-play-state: paused; }
-                    .win-item { display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
-                    .win-celebration { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.9rem; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+                    .win-item { display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; background: rgba(255,255,255,0.03); border-radius: 0.375rem; }
+                    .win-celebration { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 0.9rem; background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
                     .win-horse { color: #fff; font-weight: 600; }
                     .win-venue { color: var(--text-muted); font-size: 0.85rem; }
-                    .win-amounts { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; }
+                    .win-amounts { font-family: 'Space Grotesk', sans-serif; font-size: 0.75rem; }
                     .win-stake { color: var(--text-muted); }
                     .win-return { color: #4ade80; }
                 </style>
@@ -321,13 +321,13 @@
                 <div>
                     <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
                         <div>
-                            <h3 class="text-base sm:text-lg font-bold text-gray-900" style="font-family: Rajdhani, sans-serif;">All-Time P&L</h3>
+                            <h3 class="text-base sm:text-lg font-bold text-gray-900" style="font-family: Space Grotesk, sans-serif;">All-Time P&L</h3>
                             <p class="text-xs text-gray-400">Cumulative profit & loss across all settled meetings</p>
                         </div>
                         {% if cumulative_pnl and cumulative_pnl|length > 0 %}
                         {% set latest = cumulative_pnl[-1] %}
                         <div class="text-right">
-                            <div class="text-2xl sm:text-3xl font-bold {{ 'text-green-600' if latest.cumulative_pnl >= 0 else 'text-red-600' }}" style="font-family: Orbitron, sans-serif;">
+                            <div class="text-2xl sm:text-3xl font-bold {{ 'text-green-600' if latest.cumulative_pnl >= 0 else 'text-red-600' }}" style="font-family: Space Grotesk, sans-serif;">
                                 {{ '%+.1f'|format(latest.cumulative_pnl / latest.cumulative_staked * 100 if latest.cumulative_staked else 0) }}%
                             </div>
                             <div class="text-xs text-gray-500">
@@ -814,15 +814,15 @@ function updateMonitorUI() {
                         usePointStyle: true,
                         pointStyle: 'line',
                         padding: 15,
-                        font: { family: 'Rajdhani', size: 12 }
+                        font: { family: 'Space Grotesk', size: 12 }
                     }
                 },
                 tooltip: {
                     backgroundColor: '#1a1a25',
                     borderColor: 'rgba(255,255,255,0.1)',
                     borderWidth: 1,
-                    titleFont: { family: 'Rajdhani', size: 14, weight: '600' },
-                    bodyFont: { family: 'Source Sans Pro', size: 12 },
+                    titleFont: { family: 'Space Grotesk', size: 14, weight: '600' },
+                    bodyFont: { family: 'Inter', size: 12 },
                     padding: 12,
                     callbacks: {
                         title: function(items) {
@@ -840,13 +840,13 @@ function updateMonitorUI() {
             scales: {
                 x: {
                     grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#606070', font: { family: 'Rajdhani', size: 12 } },
+                    ticks: { color: '#606070', font: { family: 'Space Grotesk', size: 12 } },
                 },
                 y: {
                     grid: { color: 'rgba(255,255,255,0.04)' },
                     ticks: {
                         color: '#606070',
-                        font: { family: 'Rajdhani', size: 12 },
+                        font: { family: 'Space Grotesk', size: 12 },
                         callback: function(v) { return (v >= 0 ? '+' : '') + v.toFixed(1) + '%'; }
                     },
                 }
