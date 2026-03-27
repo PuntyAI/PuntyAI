@@ -114,25 +114,60 @@ def get_calibrated_weights(
 ) -> dict[str, float]:
     """Get optimal weights for a specific racing context.
 
-    Tries context cell first, falls back to distance-level defaults.
+    v2 hierarchical lookup: dcc -> dc -> distance -> global -> code defaults.
+    Supports both v1 (4-part context keys) and v2 (hierarchical dict) formats.
     Thread-safe (read-only after calibration).
     """
-    # Try cached calibrated weights
     if _cache is None:
         _cache = _CALIBRATION_CACHE
 
+    if not _cache:
+        dist_bucket = _distance_bucket(distance)
+        return DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
+
+    dist = _distance_bucket(distance)
+    cond = _condition_bucket(condition)
+    cls = _class_bucket(race_class)
+
+    # v2 format: hierarchical dict with dcc_weights, dc_weights, distance_weights, global_weights
+    if "dcc_weights" in _cache or "dc_weights" in _cache or "distance_weights" in _cache:
+        # Try dcc (distance|condition|class) — most specific
+        dcc_key = f"{dist}|{cond}|{cls}"
+        dcc_weights = _cache.get("dcc_weights", {})
+        if dcc_key in dcc_weights:
+            return dcc_weights[dcc_key]
+
+        # Try dc (distance|condition)
+        dc_key = f"{dist}|{cond}"
+        dc_weights = _cache.get("dc_weights", {})
+        if dc_key in dc_weights:
+            return dc_weights[dc_key]
+
+        # Try distance only
+        dist_weights = _cache.get("distance_weights", {})
+        if dist in dist_weights:
+            return dist_weights[dist]
+
+        # Try global weights
+        global_weights = _cache.get("global_weights")
+        if global_weights:
+            return global_weights
+
+        # Fall through to code defaults
+        return DISTANCE_WEIGHT_OVERRIDES.get(dist, DEFAULT_WEIGHTS)
+
+    # v1 format: flat dict of "dist|cond|class|venue_type" -> weights
     key = get_context_key(distance, condition, race_class, venue)
     if key in _cache:
         return _cache[key]
 
-    # Fallback: try just distance × condition
-    dist_cond_key = f"{_distance_bucket(distance)}|{_condition_bucket(condition)}|*|*"
+    # v1 fallback: try just distance × condition
+    dist_cond_key = f"{dist}|{cond}|*|*"
     if dist_cond_key in _cache:
         return _cache[dist_cond_key]
 
-    # Fallback: distance-level defaults
-    dist_bucket = _distance_bucket(distance)
-    return DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
+    # Code-level defaults
+    return DISTANCE_WEIGHT_OVERRIDES.get(dist, DEFAULT_WEIGHTS)
 
 
 # In-memory cache (loaded at startup, refreshed weekly)
@@ -140,7 +175,11 @@ _CALIBRATION_CACHE: dict[str, dict[str, float]] = {}
 
 
 async def load_calibration_cache(db: AsyncSession) -> int:
-    """Load calibrated weights from DB into memory cache."""
+    """Load calibrated weights from DB into memory cache.
+
+    Supports both v1 (flat dict of context keys) and v2 (hierarchical dict
+    with global_weights, distance_weights, dc_weights, dcc_weights).
+    """
     global _CALIBRATION_CACHE
 
     result = await db.execute(
@@ -153,8 +192,24 @@ async def load_calibration_cache(db: AsyncSession) -> int:
     try:
         data = json.loads(setting.value)
         _CALIBRATION_CACHE = data
-        logger.info(f"Loaded {len(data)} calibrated weight cells")
-        return len(data)
+
+        # Count cells for logging
+        if "dcc_weights" in data or "dc_weights" in data:
+            # v2 format
+            n_dcc = len(data.get("dcc_weights", {}))
+            n_dc = len(data.get("dc_weights", {}))
+            n_dist = len(data.get("distance_weights", {}))
+            has_global = 1 if data.get("global_weights") else 0
+            total = n_dcc + n_dc + n_dist + has_global
+            logger.info(
+                "Loaded v2 calibration: %d dcc, %d dc, %d dist, %d global (%d total cells)",
+                n_dcc, n_dc, n_dist, has_global, total,
+            )
+            return total
+        else:
+            # v1 format
+            logger.info(f"Loaded {len(data)} calibrated weight cells (v1 format)")
+            return len(data)
     except (json.JSONDecodeError, TypeError):
         return 0
 

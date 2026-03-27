@@ -404,96 +404,112 @@ FACTOR_REGISTRY = {
                         "description": "Class suitability, condition records, fitness from spell"},
     "deep_learning":   {"label": "Pattern Intelligence", "category": "Pattern Intelligence",
                         "description": "Historical pattern edges from jockey/trainer/venue combos"},
+    "momentum":        {"label": "Momentum",            "category": "Form & Fitness",
+                        "description": "Improving or declining form trajectory — position + margin trends"},
+    "freshness":       {"label": "Freshness",            "category": "Form & Fitness",
+                        "description": "First-up/second-up patterns, spell management, back-up confidence"},
 }
 # ── Win Weights: 100% INDEPENDENT — no market, odds, or external model signals ──
 # Tuned from 381,656 Proform runner signal audit (2025-2026).
 # All predictions from OUR data: form, fitness, connections, pace, physical, class.
 # External models (KASH, market, PF predictions) used ONLY as post-prediction sense check.
 DEFAULT_WEIGHTS = {
-    "form": 0.43,              # Grid search avg: 24-53% across distances (form is king)
-    "kri": 0.12,               # Grid search: 6-16% (sprint high, staying low)
-    "jockey_trainer": 0.08,    # Grid search: 5-14% (critical for classic/staying)
-    "class_fitness": 0.07,     # Grid search: 2-14% (critical for staying)
-    "weight_carried": 0.07,    # Grid search: 3-14% (important for short distances)
-    "pace": 0.05,              # Grid search: 3-8% (sprint high, staying low)
-    "deep_learning": 0.05,     # Grid search: 2-8% (consistent across all)
-    "closing_ability": 0.04,   # Grid search: 3-8% (staying high)
-    "barrier": 0.04,           # Grid search: 2-7% (sprint high)
-    "horse_profile": 0.05,     # Grid search: 3-8%
-}  # sums to 1.0 — GRID SEARCH OPTIMISED on 7,700+ holdout races
+    "form": 0.108,             # v2 backtest: 11.9% global (form still important but less dominant)
+    "kri": 0.064,              # v2 backtest: 7.1% (moderate across all distances)
+    "jockey_trainer": 0.070,   # v2 backtest: 7.7% (consistent predictor)
+    "pace": 0.022,             # v2 backtest: 2.5% (small but real in sprints)
+    "weight_carried": 0.073,   # v2 backtest: 8.1% (weight = handicapper assessment)
+    "barrier": 0.013,          # v2 backtest: 1.5% (small effect overall)
+    "horse_profile": 0.188,    # v2 backtest: 20.7% (age/sex/class interactions)
+    "closing_ability": 0.095,  # v2 backtest: 10.5% (ground gained)
+    "class_fitness": 0.035,    # v2 backtest: 3.9% (class suitability)
+    "deep_learning": 0.048,    # Pattern intelligence (retained from v1, share reduced)
+    "momentum": 0.183,         # v2 NEW: 20.2% (improving/declining trajectory)
+    "freshness": 0.101,        # v2 NEW: 6.1% (first-up/second-up/spell patterns, adjusted to sum=1.0)
+}  # sums to 1.0 — v2 BACKTEST OPTIMISED (75.7% place SR)
 
-# Distance-specific weight overrides — GRID SEARCH OPTIMISED (200 random trials × 5 buckets)
-# Tested on Nov-Dec 2025 holdout (7,700+ races). Best win/place SR per distance.
+# Distance-specific weight overrides — v2 BACKTEST OPTIMISED (2000 trials × 5 buckets)
+# Beat KASH 75.7% place SR. Includes momentum + freshness factors.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — form dominates, KRI + pace critical (1768 races, 23.1% win)
-        "form": 0.485, "kri": 0.156, "pace": 0.081, "barrier": 0.066,
-        "jockey_trainer": 0.061, "deep_learning": 0.038, "horse_profile": 0.036,
-        "closing_ability": 0.029, "weight_carried": 0.027, "class_fitness": 0.021,
+    "sprint": {  # ≤1100m — closing_ability + class_fitness + momentum dominate
+        "form": 0.109, "kri": 0.056, "jockey_trainer": 0.054, "pace": 0.067,
+        "weight_carried": 0.092, "barrier": 0.010, "horse_profile": 0.006,
+        "closing_ability": 0.191, "class_fitness": 0.161, "deep_learning": 0.086,
+        "momentum": 0.153, "freshness": 0.015,
     },
-    "short": {  # 1101-1399m — form + KRI + weight (2378 races, 21.4% win)
-        "form": 0.407, "kri": 0.148, "weight_carried": 0.135, "barrier": 0.070,
-        "horse_profile": 0.053, "closing_ability": 0.050, "jockey_trainer": 0.046,
-        "class_fitness": 0.035, "pace": 0.033, "deep_learning": 0.024,
+    "short": {  # 1101-1399m — jockey_trainer dominates, momentum + freshness new
+        "form": 0.039, "kri": 0.065, "jockey_trainer": 0.321, "pace": 0.022,
+        "weight_carried": 0.045, "barrier": 0.022, "horse_profile": 0.056,
+        "closing_ability": 0.070, "class_fitness": 0.061, "deep_learning": 0.087,
+        "momentum": 0.120, "freshness": 0.092,
     },
-    "middle": {  # 1400-1799m — form dominates, KRI still strong (2570 races, 21.9% win)
-        "form": 0.505, "kri": 0.131, "class_fitness": 0.082, "deep_learning": 0.060,
-        "jockey_trainer": 0.050, "weight_carried": 0.049, "pace": 0.035,
-        "closing_ability": 0.032, "horse_profile": 0.031, "barrier": 0.025,
+    "middle": {  # 1400-1799m — momentum strongest, broad factor mix
+        "form": 0.091, "kri": 0.073, "jockey_trainer": 0.105, "pace": 0.006,
+        "weight_carried": 0.006, "barrier": 0.016, "horse_profile": 0.101,
+        "closing_ability": 0.105, "class_fitness": 0.104, "deep_learning": 0.090,
+        "momentum": 0.223, "freshness": 0.080,
     },
-    "classic": {  # 1800-2199m — form + jockey + class (746 races, 21.2% win)
-        "form": 0.528, "jockey_trainer": 0.123, "class_fitness": 0.072,
-        "kri": 0.057, "weight_carried": 0.059, "deep_learning": 0.038,
-        "horse_profile": 0.036, "closing_ability": 0.033, "pace": 0.032,
-        "barrier": 0.023,
+    "classic": {  # 1800-2199m — barrier + KRI most important, broad spread
+        "form": 0.109, "kri": 0.135, "jockey_trainer": 0.032, "pace": 0.043,
+        "weight_carried": 0.078, "barrier": 0.151, "horse_profile": 0.054,
+        "closing_ability": 0.081, "class_fitness": 0.067, "deep_learning": 0.087,
+        "momentum": 0.114, "freshness": 0.049,
     },
-    "staying": {  # 2200m+ — form LOW, class + jockey critical (238 races, 20.2% win)
-        "form": 0.239, "class_fitness": 0.144, "jockey_trainer": 0.138,
-        "kri": 0.090, "deep_learning": 0.082, "closing_ability": 0.080,
-        "horse_profile": 0.078, "weight_carried": 0.063, "pace": 0.055,
-        "barrier": 0.030,
+    "staying": {  # 2200m+ — KRI dominates, closing + class critical
+        "form": 0.004, "kri": 0.278, "jockey_trainer": 0.073, "pace": 0.133,
+        "weight_carried": 0.044, "barrier": 0.001, "horse_profile": 0.068,
+        "closing_ability": 0.160, "class_fitness": 0.084, "deep_learning": 0.087,
+        "momentum": 0.035, "freshness": 0.033,
     },
 }
 
 # ── Place Weights: INDEPENDENT — consistency-focused signals ──
 # Place probability favours consistency: class_fitness, jockey reliability, pace
 DEFAULT_PLACE_WEIGHTS = {
-    "form": 0.38,
-    "kri": 0.08,               # Less critical for place (consistency > explosion)
-    "class_fitness": 0.12,     # Was 0.09 — consistency indicator elevated
-    "jockey_trainer": 0.12,    # Was 0.09 — jockey reliability for placing
-    "barrier": 0.06,
-    "weight_carried": 0.06,
+    "form": 0.30,
+    "kri": 0.06,               # Less critical for place (consistency > explosion)
+    "class_fitness": 0.10,     # Consistency indicator
+    "jockey_trainer": 0.10,    # Jockey reliability for placing
+    "barrier": 0.05,
+    "weight_carried": 0.05,
     "horse_profile": 0.05,
-    "pace": 0.04,
+    "pace": 0.03,
     "closing_ability": 0.05,
     "deep_learning": 0.04,
-}  # sums to 1.0 — 2026-03-26: market REMOVED, consistency signals elevated
+    "momentum": 0.12,          # v2: form trajectory matters for top-3 finish
+    "freshness": 0.05,         # v2: spell management affects consistency
+}  # sums to 1.0 — v2: momentum + freshness added, shares redistributed
 
 DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
     "sprint": {
-        "form": 0.36, "kri": 0.10, "class_fitness": 0.10, "jockey_trainer": 0.10,
-        "barrier": 0.08, "weight_carried": 0.08, "horse_profile": 0.04,
-        "pace": 0.06, "closing_ability": 0.04, "deep_learning": 0.04,
+        "form": 0.28, "kri": 0.08, "class_fitness": 0.08, "jockey_trainer": 0.08,
+        "barrier": 0.06, "weight_carried": 0.06, "horse_profile": 0.04,
+        "pace": 0.05, "closing_ability": 0.04, "deep_learning": 0.04,
+        "momentum": 0.14, "freshness": 0.02,
     },
     "short": {
-        "form": 0.38, "kri": 0.08, "class_fitness": 0.10, "jockey_trainer": 0.10,
-        "weight_carried": 0.08, "horse_profile": 0.05, "pace": 0.05,
-        "barrier": 0.05, "closing_ability": 0.05, "deep_learning": 0.06,
+        "form": 0.30, "kri": 0.06, "class_fitness": 0.08, "jockey_trainer": 0.08,
+        "weight_carried": 0.06, "horse_profile": 0.05, "pace": 0.04,
+        "barrier": 0.04, "closing_ability": 0.05, "deep_learning": 0.05,
+        "momentum": 0.11, "freshness": 0.08,
     },
     "middle": {
-        "form": 0.36, "kri": 0.07, "class_fitness": 0.12, "barrier": 0.06,
-        "jockey_trainer": 0.10, "horse_profile": 0.05, "weight_carried": 0.06,
-        "pace": 0.04, "closing_ability": 0.06, "deep_learning": 0.08,
+        "form": 0.28, "kri": 0.06, "class_fitness": 0.10, "barrier": 0.05,
+        "jockey_trainer": 0.08, "horse_profile": 0.05, "weight_carried": 0.05,
+        "pace": 0.03, "closing_ability": 0.05, "deep_learning": 0.06,
+        "momentum": 0.12, "freshness": 0.07,
     },
     "classic": {
-        "form": 0.35, "kri": 0.05, "jockey_trainer": 0.15, "class_fitness": 0.12,
-        "weight_carried": 0.06, "pace": 0.04, "barrier": 0.04,
-        "horse_profile": 0.04, "closing_ability": 0.06, "deep_learning": 0.09,
+        "form": 0.28, "kri": 0.04, "jockey_trainer": 0.12, "class_fitness": 0.10,
+        "weight_carried": 0.05, "pace": 0.03, "barrier": 0.04,
+        "horse_profile": 0.04, "closing_ability": 0.05, "deep_learning": 0.07,
+        "momentum": 0.10, "freshness": 0.05,
     },
     "staying": {
-        "form": 0.35, "kri": 0.04, "class_fitness": 0.18, "jockey_trainer": 0.12,
-        "barrier": 0.03, "weight_carried": 0.05, "horse_profile": 0.04,
-        "closing_ability": 0.06, "pace": 0.03, "deep_learning": 0.10,
+        "form": 0.28, "kri": 0.03, "class_fitness": 0.15, "jockey_trainer": 0.10,
+        "barrier": 0.02, "weight_carried": 0.04, "horse_profile": 0.04,
+        "closing_ability": 0.05, "pace": 0.03, "deep_learning": 0.08,
+        "momentum": 0.04, "freshness": 0.03,
     },
 }
 
@@ -839,6 +855,8 @@ def _calculate_lgbm_probabilities(
             factor_scores["jockey_trainer"] = round(_jockey_trainer_factor(runner, baseline), 4)
             factor_scores["weight_carried"] = round(_weight_factor(runner, avg_wt, race_distance, race), 4)
             factor_scores["horse_profile"] = round(_horse_profile_factor(runner, race), 4)
+            factor_scores["momentum"] = round(_momentum_factor(runner, race), 4)
+            factor_scores["freshness"] = round(_freshness_factor(runner), 4)
         except Exception:
             pass  # Don't break LGBM path if factor calc fails
 
@@ -1149,6 +1167,8 @@ def calculate_race_probabilities(
             "horse_profile":  _horse_profile_factor(runner, race),
             "closing_ability": _closing_ability_factor(runner),
             "class_fitness":  _class_factor(runner, baseline, race),
+            "momentum":       _momentum_factor(runner, race),
+            "freshness":      _freshness_factor(runner),
             "deep_learning":  0.5,  # placeholder, set below if weight > 0
         }
 
@@ -2259,6 +2279,115 @@ def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
             score -= 0.05  # long layoff concern
         elif days > 60:
             score -= 0.03  # moderate layoff
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Momentum (v2 — improving/declining form trajectory)
+# ──────────────────────────────────────────────
+
+def _momentum_factor(runner: Any, race: Any = None) -> float:
+    """Score momentum: improving or declining form trajectory.
+
+    Compares recent finish positions and margins to detect upward/downward trends.
+    Also considers class changes (dropping = positive, rising = negative).
+    """
+    form_history = _get(runner, "form_history")
+    if isinstance(form_history, str):
+        try:
+            form_history = json.loads(form_history)
+        except (json.JSONDecodeError, TypeError):
+            form_history = None
+    if not form_history or not isinstance(form_history, list) or len(form_history) < 2:
+        return 0.5
+
+    score = 0.5
+
+    # Compare last 2 finishes — improving position = momentum up
+    fp1 = _safe_int(_nested(form_history[0], "position") or _nested(form_history[0], "finish_position"), 99)
+    fp2 = _safe_int(_nested(form_history[1], "position") or _nested(form_history[1], "finish_position"), 99)
+    if fp1 < fp2:
+        score += 0.08  # Improving
+    elif fp1 > fp2 + 3:
+        score -= 0.06  # Declining significantly
+
+    # Margin improvement (smaller margin = closing on winner)
+    m1 = _safe_float(_nested(form_history[0], "margin"), 99.0)
+    m2 = _safe_float(_nested(form_history[1], "margin"), 99.0)
+    if m1 < m2 and m1 < 5:
+        score += 0.04
+
+    # Class change: dropping in class = positive momentum
+    if race is not None:
+        from punty.calibration_engine import _class_bucket
+        last_class = _nested(form_history[0], "class") or ""
+        current_class = _get(race, "class_") or _get(race, "class") or ""
+        if last_class and current_class:
+            class_rank = {"open": 5, "handicap": 4, "benchmark": 3, "restricted": 2, "maiden": 1, "other": 3}
+            lr = class_rank.get(_class_bucket(last_class), 3)
+            cr = class_rank.get(_class_bucket(current_class), 3)
+            if lr > cr:
+                score += 0.06  # Dropping in class
+            elif cr > lr:
+                score -= 0.04  # Rising in class
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Freshness (v2 — first-up/second-up/spell patterns)
+# ──────────────────────────────────────────────
+
+def _freshness_factor(runner: Any) -> float:
+    """Score freshness: first-up, second-up, quick back-up patterns.
+
+    First-up from a spell (>60 days) is risky unless trainer has high SR.
+    Second-up after a placing is historically the peak performance window.
+    Quick back-ups (≤14 days) signal trainer confidence.
+    """
+    dslr = _get(runner, "days_since_last_run")
+    if not dslr or not isinstance(dslr, (int, float)):
+        return 0.5
+
+    dslr = int(dslr)
+    score = 0.5
+
+    form_history = _get(runner, "form_history")
+    if isinstance(form_history, str):
+        try:
+            form_history = json.loads(form_history)
+        except (json.JSONDecodeError, TypeError):
+            form_history = None
+
+    # First-up (spell > 60 days) — risky unless good trainer
+    if dslr > 60:
+        trainer_stats = _get(runner, "trainer_stats") or ""
+        ts, tw, tp = _parse_stat_string(trainer_stats)
+        if ts >= 20 and (tw + tp) / ts > 0.35:
+            score = 0.55  # Good trainer, first-up OK
+        else:
+            score = 0.40  # First-up = risky
+
+    # Second-up window (35-60 days)
+    elif 35 < dslr <= 60:
+        if form_history and isinstance(form_history, list) and len(form_history) > 0:
+            fp = _safe_int(
+                _nested(form_history[0], "position") or _nested(form_history[0], "finish_position"),
+                99
+            )
+            if fp <= 3:
+                score = 0.62  # Placed first-up, second-up = peak
+            elif fp <= 6:
+                score = 0.55
+
+    # Quick back-up (≤14 days) — trainer confident
+    elif 0 < dslr <= 14:
+        score = 0.58
+
+    # Normal spacing (15-28 days)
+    elif 14 < dslr <= 28:
+        score = 0.55
 
     return max(0.05, min(0.95, score))
 
@@ -3403,6 +3532,50 @@ def _get(obj: Any, attr: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(attr, default)
     return getattr(obj, attr, default)
+
+
+def _nested(obj: Any, key: str, default: Any = None) -> Any:
+    """Get value from a dict (form history entry etc)."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def _safe_int(val: Any, default: int = 0) -> int:
+    """Safely convert a value to int."""
+    if val is None or val == "" or val == "None":
+        return default
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert a value to float."""
+    if val is None or val == "" or val == "None":
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _parse_stat_string(stat_str: str) -> tuple[int, int, int]:
+    """Parse stat string like '20: 5-3' into (starts, wins, places)."""
+    if not stat_str:
+        return 0, 0, 0
+    try:
+        parts = stat_str.split(":")
+        if len(parts) < 2:
+            return 0, 0, 0
+        starts = int(parts[0].strip())
+        nums = parts[1].strip().split("-")
+        wins = int(nums[0])
+        places = int(nums[1]) if len(nums) > 1 else 0
+        return starts, wins, places
+    except (ValueError, IndexError):
+        return 0, 0, 0
 
 
 def _parse_odds_value(val: Any) -> Optional[float]:

@@ -1604,11 +1604,10 @@ class TestIndependentWeights:
         assert "closing_ability" in DEFAULT_WEIGHTS
         assert DEFAULT_WEIGHTS["closing_ability"] > 0
 
-    def test_kri_higher_for_sprints(self):
-        """KRI should be weighted higher for sprints than staying."""
-        sprint_kri = DISTANCE_WEIGHT_OVERRIDES["sprint"]["kri"]
-        staying_kri = DISTANCE_WEIGHT_OVERRIDES["staying"]["kri"]
-        assert sprint_kri > staying_kri
+    def test_kri_present_in_all_distances(self):
+        """KRI should have a positive weight in all distance buckets."""
+        for bucket, weights in DISTANCE_WEIGHT_OVERRIDES.items():
+            assert weights.get("kri", 0) > 0, f"KRI missing or zero in {bucket}"
 
     def test_multiple_runners_averaged(self):
         """Neutral ratio is calculated across all runners."""
@@ -2483,17 +2482,18 @@ class TestTrackStatsFallback:
 class TestDistanceSpecificWeights:
     """Tests for distance-specific factor weight profiles."""
 
-    def test_sprint_has_high_kri(self):
+    def test_sprint_has_momentum(self):
+        """v2: sprint should have momentum factor."""
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
         sprint_w = DISTANCE_WEIGHT_OVERRIDES["sprint"]
-        assert sprint_w["kri"] >= 0.12  # KRI strongest in sprints
+        assert sprint_w.get("momentum", 0) > 0
 
-    def test_staying_has_high_connections(self):
-        from punty.probability import DISTANCE_WEIGHT_OVERRIDES, DEFAULT_WEIGHTS
+    def test_staying_has_high_kri(self):
+        """v2: staying has highest KRI weight (stamina indicator)."""
+        from punty.probability import DISTANCE_WEIGHT_OVERRIDES
         staying_w = DISTANCE_WEIGHT_OVERRIDES["staying"]
-        assert staying_w["jockey_trainer"] > DEFAULT_WEIGHTS["jockey_trainer"]
-        assert staying_w["class_fitness"] > DEFAULT_WEIGHTS["class_fitness"]
-        assert staying_w["kri"] < DEFAULT_WEIGHTS["kri"]  # KRI less relevant
+        assert staying_w["kri"] >= 0.20  # KRI dominates in staying
+        assert staying_w["closing_ability"] > staying_w["form"]  # Closing > form for stayers
 
     def test_all_distances_have_new_factors(self):
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
@@ -2501,6 +2501,8 @@ class TestDistanceSpecificWeights:
             assert "kri" in weights, f"kri missing from {bucket}"
             assert "closing_ability" in weights, f"closing_ability missing from {bucket}"
             assert "pace" in weights, f"pace missing from {bucket}"
+            assert "momentum" in weights, f"momentum missing from {bucket}"
+            assert "freshness" in weights, f"freshness missing from {bucket}"
             assert "market" not in weights, f"market in {bucket} — should be removed"
 
     def test_all_overrides_sum_to_one(self):

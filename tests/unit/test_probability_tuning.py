@@ -260,8 +260,8 @@ class TestFactorPerformance:
     @pytest.mark.asyncio
     async def test_factor_edge_positive(self):
         """Factor with higher scores for winners has positive edge."""
-        factors_win = {"market": 0.7, "form": 0.6, "pace": 0.5}
-        factors_lose = {"market": 0.3, "form": 0.4, "pace": 0.5}
+        factors_win = {"momentum": 0.7, "form": 0.6, "pace": 0.5}
+        factors_lose = {"momentum": 0.3, "form": 0.4, "pace": 0.5}
 
         rows = []
         for _ in range(8):
@@ -273,8 +273,8 @@ class TestFactorPerformance:
         db.execute.return_value = MockResult(rows)
 
         result = await analyze_factor_performance(db)
-        assert "market" in result
-        assert result["market"]["edge"] > 0  # Market distinguishes winners
+        assert "momentum" in result
+        assert result["momentum"]["edge"] > 0  # Momentum distinguishes winners
         assert result["pace"]["edge"] == 0.0  # Pace is neutral
 
     @pytest.mark.asyncio
