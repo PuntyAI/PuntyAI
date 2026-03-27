@@ -120,6 +120,7 @@ async def store_picks_from_content(
     # The AI can deviate from pre-selection exotic recommendations.
     # V3 cascade is data-driven (+302% ROI on Exacta R1/R2,R3).
     try:
+        from collections import defaultdict
         from punty.context.pre_selections import _v3_exotic_cascade, RecommendedPick
         from punty.calibration_engine import _distance_bucket, _condition_bucket
 
