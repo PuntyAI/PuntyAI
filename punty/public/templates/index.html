@@ -373,50 +373,20 @@
     </div>
 </section>
 
-{# ── STATS DASHBOARD GRID ── #}
+{# ── PROOF BAR (real data) ── #}
 <section class="relative z-20 max-w-6xl mx-auto px-6 sm:px-12 -mt-8">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1">
-        {# Performance #}
-        <a href="/stats" class="group block p-6" style="background: #2a292f; transition: background 0.2s;" onmouseover="this.style.background='#39383e'" onmouseout="this.style.background='#2a292f'">
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a4b0; margin-bottom: 1rem;">Performance</p>
-            <div class="flex items-end justify-between">
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 900; color: white;">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</span>
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: #3cd7ff;">ROI</span>
-            </div>
-            <div class="mt-4 h-[3px] overflow-hidden" style="background: rgba(255,255,255,0.05);">
-                <div style="background: #3cd7ff; height: 100%; width: 75%;"></div>
-            </div>
+    <div class="grid grid-cols-3 gap-[1px]">
+        <a href="/stats" class="group block p-5 sm:p-6" style="background: #2a292f; transition: background 0.2s; text-decoration: none;" onmouseover="this.style.background='#35343a'" onmouseout="this.style.background='#2a292f'">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #808090; margin-bottom: 0.5rem;">7 Day ROI</p>
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: clamp(1.5rem, 4vw, 2.25rem); font-weight: 900; color: {{ '#4ade80' if roi_7d and roi_7d >= 0 else '#ef4444' }};">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</span>
         </a>
-        {# Accuracy #}
-        <a href="/stats" class="group block p-6" style="background: #2a292f; transition: background 0.2s;" onmouseover="this.style.background='#39383e'" onmouseout="this.style.background='#2a292f'">
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a4b0; margin-bottom: 1rem;">Accuracy</p>
-            <div class="flex items-end justify-between">
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 900; color: white;">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</span>
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: #ffb59d;">STRIKE</span>
-            </div>
-            <div class="mt-4 h-[3px] overflow-hidden" style="background: rgba(255,255,255,0.05);">
-                <div style="background: #ffb59d; height: 100%; width: {{ (strike_30d / 100) if strike_30d else 0.3 | float * 100 }}%;"></div>
-            </div>
+        <a href="/stats" class="group block p-5 sm:p-6" style="background: #2a292f; transition: background 0.2s; text-decoration: none;" onmouseover="this.style.background='#35343a'" onmouseout="this.style.background='#2a292f'">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #808090; margin-bottom: 0.5rem;">Strike Rate</p>
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: clamp(1.5rem, 4vw, 2.25rem); font-weight: 900; color: white;">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</span>
         </a>
-        {# AI Signal #}
-        <div class="p-6" style="background: #2a292f;">
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a4b0; margin-bottom: 1rem;">AI Signal Strength</p>
-            <div class="flex items-end justify-between">
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 900; color: white;">MAX</span>
-                <span style="color: #ffb0cc; font-size: 1.5rem;">&#x26A1;</span>
-            </div>
-            <div class="mt-4 flex gap-1">
-                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
-                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
-                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
-                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
-                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
-            </div>
-        </div>
-        {# CTA Card #}
-        <a href="/tips" class="p-6 flex flex-col justify-center items-center text-center" style="background: linear-gradient(135deg, #ffb0cc, #ff46a0); transition: filter 0.15s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; color: #3e0021;">Today's Tips</span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: rgba(62,0,33,0.7); margin-top: 0.25rem;">{{ meetings|length if meetings else 0 }} meetings live</span>
+        <a href="/stats" class="group block p-5 sm:p-6" style="background: #2a292f; transition: background 0.2s; text-decoration: none;" onmouseover="this.style.background='#35343a'" onmouseout="this.style.background='#2a292f'">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #808090; margin-bottom: 0.5rem;">All-Time Winners</p>
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: clamp(1.5rem, 4vw, 2.25rem); font-weight: 900; color: white;">{{ stats.alltime_winners }}</span>
         </a>
     </div>
 </section>
@@ -597,30 +567,30 @@
 {# ════════════════════════════════════
    SECTION 4: Bottom CTA
    ════════════════════════════════════ #}
+{# ── CTA Section ── #}
 <section style="padding: 3.5rem 0 4rem;">
     <div class="max-w-5xl mx-auto px-4 sm:px-8">
-        <div class="cta-block">
-            <div class="grid md:grid-cols-3 gap-8 items-center relative z-10">
-                <div class="md:col-span-2">
-                    <h2 class="font-display font-bold" style="font-size: clamp(1.75rem, 4vw, 2.5rem); margin-bottom: 1rem;">
-                        <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Ready to Bet With Edge?</span>
+        <div style="background: linear-gradient(135deg, rgba(255,70,160,0.08), rgba(255,181,157,0.06)); padding: 3rem 2rem; position: relative; overflow: hidden;">
+            <div class="grid md:grid-cols-5 gap-8 items-center relative z-10">
+                <div class="md:col-span-3">
+                    <h2 style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(1.75rem, 4vw, 2.5rem); letter-spacing: -0.03em; margin-bottom: 1rem;">
+                        <span style="background: linear-gradient(135deg, #ffb0cc, #ff46a0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">No Bullshit. Just Picks.</span>
                     </h2>
-                    <p class="text-lg" style="color: var(--text-secondary); margin-bottom: 2rem;">
-                        Our probability engine analyses every runner. You get the value plays — fully tracked, fully transparent.
+                    <p style="font-family: 'Inter', sans-serif; font-size: 1.05rem; color: #a8a4b0; margin-bottom: 2rem; line-height: 1.7;">
+                        13-factor probability engine. Every bet settled against official dividends. Full P&L ledger — we don't hide the losses.
                     </p>
                     <div class="flex flex-wrap gap-3">
-                        <a href="/tips" class="btn-cta-lg">
-                            Browse Today's Tips
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                        <a href="/tips" style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 0.8rem; letter-spacing: 0.05em; padding: 1rem 2.5rem; background: linear-gradient(135deg, #ffb0cc, #ff46a0); color: #3e0021; text-decoration: none; transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
+                            BROWSE TODAY'S TIPS &rarr;
                         </a>
-                        <a href="/about" class="btn-secondary inline-flex items-center gap-2 px-6 py-3" style="opacity: 0.8;">
-                            About Punty
+                        <a href="/about" style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 0.8rem; letter-spacing: 0.05em; padding: 1rem 2.5rem; border: 2px solid #3cd7ff; color: #3cd7ff; text-decoration: none; transition: background 0.2s;" onmouseover="this.style.background='rgba(60,215,255,0.08)'" onmouseout="this.style.background='transparent'">
+                            ABOUT PUNTY
                         </a>
                     </div>
                 </div>
-                <div style="display: flex; justify-content: center;">
-                    <div id="cta-carousel" style="width: 18rem; height: 18rem; border-radius: 0.375rem; overflow: hidden; position: relative; box-shadow: 0 4px 24px rgba(255,70,160,0.15);">
-                        <img src="/static/punty-character.jpg" alt="Punty" style="width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; opacity: 1; transition: opacity 0.7s;">
+                <div class="md:col-span-2 flex justify-center">
+                    <div style="width: 16rem; height: 16rem; overflow: hidden; position: relative;">
+                        <img src="/static/punty-character.jpg" alt="Punty" style="width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.3) contrast(1.1);">
                     </div>
                 </div>
             </div>
