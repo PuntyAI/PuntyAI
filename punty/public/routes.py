@@ -3431,3 +3431,9 @@ async def bf_tracker_balance(request: Request):
         balance = await get_balance(db)
         initial = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
     return {"balance": balance, "initial_balance": initial, "current_stake": calculate_stake(balance, initial)}
+
+
+@router.get("/papa-rick", response_class=HTMLResponse)
+async def papa_rick_page(request: Request):
+    """Hidden novelty page for Papa & Rick's baby market."""
+    return templates.TemplateResponse("papa-rick.html", {"request": request})

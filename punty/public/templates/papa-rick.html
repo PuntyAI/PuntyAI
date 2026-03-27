@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#0a0a0f">
+    <title>Papa & Rick's Baby Market — PuntyAI Specials</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --bg-card-alt: #1a1a25;
+            --magenta: #e91e8c;
+            --cyan: #00d4ff;
+            --orange: #ff6b35;
+            --yellow: #ffc107;
+            --purple: #9d4edd;
+            --green: #00e676;
+            --text-primary: #ffffff;
+            --text-secondary: #c0c0cc;
+            --text-muted: #808090;
+            --border-subtle: rgba(255,255,255,0.08);
+            --gradient-sunset: linear-gradient(180deg, #ff2d9e 0%, #ff6b35 50%, #ffc107 100%);
+            --gradient-header: linear-gradient(90deg, #e91e8c 0%, #9d4edd 50%, #00d4ff 100%);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Source Sans Pro', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(233,30,140,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(0,212,255,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(157,78,221,0.04) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 20px 30px;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: var(--gradient-header);
+            border-radius: 1px;
+        }
+
+        .event-badge {
+            display: inline-block;
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--cyan);
+            background: rgba(0,212,255,0.1);
+            border: 1px solid rgba(0,212,255,0.3);
+            padding: 6px 18px;
+            border-radius: 20px;
+            margin-bottom: 16px;
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(0,212,255,0.2); }
+            50% { box-shadow: 0 0 25px rgba(0,212,255,0.4); }
+        }
+
+        .header h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.4em;
+            font-weight: 800;
+            background: var(--gradient-header);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.3em;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .header .due-date {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85em;
+            color: var(--orange);
+            margin-top: 8px;
+            letter-spacing: 1px;
+        }
+
+        .overdue-badge {
+            display: inline-block;
+            background: rgba(255,107,53,0.15);
+            border: 1px solid rgba(255,107,53,0.5);
+            color: var(--orange);
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 12px;
+            margin-top: 10px;
+            animation: blink-warn 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink-warn {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .photos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 30px 0;
+        }
+
+        .photo-card {
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid var(--border-subtle);
+            position: relative;
+            transition: transform 0.3s, border-color 0.3s;
+        }
+
+        .photo-card:hover {
+            transform: scale(1.02);
+            border-color: var(--magenta);
+        }
+
+        .photo-card img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .photo-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px 12px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.85));
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--cyan);
+        }
+
+        .market-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .market-header {
+            padding: 16px 20px;
+            background: var(--bg-card-alt);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .market-header .race-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--gradient-sunset);
+            font-family: 'Orbitron', monospace;
+            font-weight: 800;
+            font-size: 14px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .market-header h2 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.25em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .market-header .market-status {
+            margin-left: auto;
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 8px;
+        }
+
+        .status-open {
+            background: rgba(0,230,118,0.15);
+            color: var(--green);
+            border: 1px solid rgba(0,230,118,0.3);
+        }
+
+        .status-suspended {
+            background: rgba(255,193,7,0.15);
+            color: var(--yellow);
+            border: 1px solid rgba(255,193,7,0.3);
+            animation: blink-warn 1.5s ease-in-out infinite;
+        }
+
+        .bet-row {
+            display: flex;
+            align-items: center;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.2s;
+            gap: 12px;
+        }
+
+        .bet-row:last-child { border-bottom: none; }
+        .bet-row:hover { background: rgba(255,255,255,0.03); }
+
+        .bet-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .num-fav { background: var(--magenta); color: white; }
+        .num-std { background: var(--bg-card-alt); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+        .num-long { background: rgba(157,78,221,0.3); color: var(--purple); border: 1px solid var(--purple); }
+        .num-blow { background: rgba(255,107,53,0.2); color: var(--orange); border: 1px solid rgba(255,107,53,0.4); }
+
+        .bet-name {
+            flex: 1;
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .bet-name .detail {
+            display: block;
+            font-size: 0.8em;
+            font-weight: 400;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .odds-btn {
+            font-family: 'Orbitron', monospace;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 70px;
+            text-align: center;
+            position: relative;
+        }
+
+        .odds-fav {
+            background: linear-gradient(135deg, var(--magenta), #c4186f);
+            color: white;
+        }
+
+        .odds-std {
+            background: var(--bg-card-alt);
+            color: var(--cyan);
+            border: 1px solid rgba(0,212,255,0.3);
+        }
+
+        .odds-long {
+            background: rgba(157,78,221,0.15);
+            color: var(--purple);
+            border: 1px solid rgba(157,78,221,0.4);
+        }
+
+        .odds-blow {
+            background: rgba(255,107,53,0.1);
+            color: var(--orange);
+            border: 1px solid rgba(255,107,53,0.3);
+        }
+
+        .odds-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .odds-btn.selected {
+            outline: 3px solid var(--green) !important;
+            outline-offset: 2px;
+        }
+
+        .odds-btn.selected::after {
+            content: '\2713';
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 18px;
+            height: 18px;
+            background: var(--green);
+            border-radius: 50%;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: black;
+            font-weight: 900;
+        }
+
+        .movement { font-size: 11px; margin-left: 4px; }
+        .drift { color: var(--orange); }
+        .firm { color: var(--green); }
+
+        .bet-slip {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-top: 2px solid var(--magenta);
+            padding: 16px 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+        }
+
+        .bet-slip.active { transform: translateY(0); }
+
+        .bet-slip-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .slip-info {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .slip-info .slip-count { color: var(--cyan); }
+
+        .place-bet-btn {
+            font-family: 'Orbitron', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 12px 32px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, var(--magenta), var(--purple));
+            color: white;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+        }
+
+        .place-bet-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(233,30,140,0.4);
+        }
+
+        .punty-pick {
+            display: inline-block;
+            font-family: 'Orbitron', monospace;
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, var(--magenta), var(--orange));
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .disclaimer {
+            text-align: center;
+            padding: 30px 20px 50px;
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+
+        .disclaimer a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--bg-card);
+            border: 2px solid var(--magenta);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 450px;
+            width: 90%;
+            animation: pop-in 0.3s ease;
+        }
+
+        @keyframes pop-in {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal h2 {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.5em;
+            background: var(--gradient-header);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        .modal p {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+
+        .modal .receipt {
+            background: var(--bg-card-alt);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-family: 'Source Sans Pro', monospace;
+            font-size: 0.9em;
+            color: var(--text-muted);
+            text-align: left;
+        }
+
+        .modal .receipt .line {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+
+        .modal .receipt .total {
+            border-top: 1px solid var(--border-subtle);
+            margin-top: 8px;
+            padding-top: 8px;
+            color: var(--green);
+            font-weight: 700;
+        }
+
+        .modal-close {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1em;
+            font-weight: 600;
+            padding: 10px 28px;
+            border-radius: 10px;
+            border: 1px solid var(--border-subtle);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        #confetti {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 300;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 { font-size: 1.6em; }
+            .photos { grid-template-columns: 1fr; }
+            .photo-card img { height: 250px; }
+            .bet-row { padding: 12px 14px; }
+            .odds-btn { min-width: 60px; font-size: 12px; padding: 6px 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <div class="event-badge">PuntyAI Novelty Specials</div>
+        <h1>PAPA & RICK'S<br>BABY MARKET</h1>
+        <div class="subtitle">The Most Anticipated Arrival Since Winx's Retirement</div>
+        <div class="due-date">BARRIER DRAW: 21 MARCH 2026</div>
+        <div class="overdue-badge">LATE SCRATCHING — STILL IN THE GATES</div>
+    </div>
+
+    <!-- Photos -->
+    <div class="photos">
+        <div class="photo-card">
+            <img src="/static/papa-rick-1.png" alt="Papa & Rick">
+            <div class="photo-label">The Happy Couple — Form Guide: Impeccable</div>
+        </div>
+        <div class="photo-card">
+            <img src="/static/papa-rick-2.png" alt="Papa & Rick">
+            <div class="photo-label">Papa's Pre-Race Assessment</div>
+        </div>
+    </div>
+
+    <!-- MARKET 1: Gender -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R1</div>
+            <h2>Gender Market</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">Boy <span class="punty-pick">PUNTY'S PICK</span>
+                <span class="detail">Papa's been doing bicep curls — preparing for backyard cricket coaching</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'Boy', '$1.90')">$1.90 <span class="movement firm">&#9660;</span></button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">Girl
+                <span class="detail">Rick already has a matching parasol ready from the French wedding</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Girl', '$1.90')">$1.90</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">3</div>
+            <div class="bet-name">Twins
+                <span class="detail">Papa seen bulk-buying nappies at Costco — suspicious volume</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Twins', '$21.00')">$21.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">4</div>
+            <div class="bet-name">Baby Goat (Literal)
+                <span class="detail">Papa's track record with goats is well documented — see photo evidence</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Baby Goat', '$501.00')">$501</button>
+        </div>
+    </div>
+
+    <!-- MARKET 2: Date of Arrival -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R2</div>
+            <h2>Date of Arrival</h2>
+            <span class="market-status status-suspended">OVERDUE</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">This Week (27-30 Mar)
+                <span class="detail">Stewards' inquiry pending — why is this baby still in the barriers?</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'This Week', '$2.20')">$2.20 <span class="movement firm">&#9660;</span></button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">Early April
+                <span class="detail">Baby waiting for better track conditions</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Early April', '$3.50')">$3.50</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">3</div>
+            <div class="bet-name">Already Born — Papa Just Forgot to Tell Anyone
+                <span class="detail">He's been distracted posing with goats on cliff edges again</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Already Born', '$15.00')">$15.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">4</div>
+            <div class="bet-name">Baby Refuses to Leave — Too Comfy
+                <span class="detail">Stewards have issued a formal "please proceed" notice</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Refuses to Leave', '$8.00')">$8.00</button>
+        </div>
+    </div>
+
+    <!-- MARKET 3: Baby's First Words -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R3</div>
+            <h2>Baby's First Words</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">"Dada"
+                <span class="detail">Classic frontrunner — strong early pace expected</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'Dada', '$2.50')">$2.50</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">"Mama"
+                <span class="detail">Rick's been doing speech therapy drills since week 20</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Mama', '$2.80')">$2.80</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">3</div>
+            <div class="bet-name">"Beer"
+                <span class="detail">Papa's influence. Baby has been exposed to extensive pub environments in utero</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Beer', '$7.00')">$7.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">4</div>
+            <div class="bet-name">"Put it on the nose"
+                <span class="detail">Genetic predisposition detected — gambling DNA confirmed</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Put it on the nose', '$34.00')">$34.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">5</div>
+            <div class="bet-name">"Objection your honour"
+                <span class="detail">Baby emerges ready to file a stewards' protest about the late start</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Objection', '$101.00')">$101</button>
+        </div>
+    </div>
+
+    <!-- MARKET 4: Hair Situation -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R4</div>
+            <h2>Hair Situation at Birth</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">Full Head of Papa's Curls <span class="punty-pick">PUNTY'S PICK</span>
+                <span class="detail">Same coloured hair mate — goat-level mane incoming</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'Papa Curls', '$2.10')">$2.10 <span class="movement firm">&#9660;</span></button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">Bald as a Coot
+                <span class="detail">Standard opener — hair DLC available at 6 months</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Bald', '$3.00')">$3.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">3</div>
+            <div class="bet-name">Full Mullet — Business Up Front, Party in the Back
+                <span class="detail">The French wedding energy was strong — could manifest</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Mullet', '$26.00')">$26.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">4</div>
+            <div class="bet-name">Identical to the Goat from the Cliff Photo
+                <span class="detail">DNA test pending — Papa spent suspiciously long with that goat</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Goat Hair', '$251.00')">$251</button>
+        </div>
+    </div>
+
+    <!-- MARKET 5: Papa's Behaviour in the Delivery Room -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R5</div>
+            <h2>Papa's Delivery Room Behaviour</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">Cries More Than the Baby
+                <span class="detail">Strong form line — seen weeping at French wedding (parasol in hand)</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'Papa Cries More', '$1.70')">$1.70 <span class="movement firm">&#9660;</span></button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">Faints Within 10 Minutes
+                <span class="detail">Barrier 2 draw — wobbly from the start</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Papa Faints', '$4.00')">$4.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">3</div>
+            <div class="bet-name">Asks the Midwife if She Wants to See His Goat Photo
+                <span class="detail">100% strike rate at showing strangers this photo</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Shows Goat Photo', '$3.50')">$3.50</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">4</div>
+            <div class="bet-name">Checks PuntyAI Tips Mid-Contraction
+                <span class="detail">"Babe, Warrnambool R4 is about to jump — just one sec"</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Checks PuntyAI', '$11.00')">$11.00 <span class="movement drift">&#9650;</span></button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">5</div>
+            <div class="bet-name">Accidentally Livestreams It on Facebook
+                <span class="detail">Profile pic update at 4cm dilated — "how good are births?"</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Facebook Live', '$67.00')">$67.00</button>
+        </div>
+    </div>
+
+    <!-- MARKET 6: Baby's Future Career -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R6</div>
+            <h2>Baby's Future Career</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">Professional Punter
+                <span class="detail">Born into the game — compound growth from Day 1</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'Pro Punter', '$3.50')">$3.50</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">Instagram Influencer
+                <span class="detail">Parents' Facebook game is STRONG — natural progression</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Influencer', '$5.00')">$5.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">3</div>
+            <div class="bet-name">Goat Herder (Somewhere in Europe)
+                <span class="detail">Papa's cliff goat encounter was a formative career moment</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Goat Herder', '$9.00')">$9.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">4</div>
+            <div class="bet-name">Jockey
+                <span class="detail">Born late, arrives fast — classic backmarker who swoops</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Jockey', '$15.00')">$15.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">5</div>
+            <div class="bet-name">Replaces Punty as AI Racing Tipster
+                <span class="detail">Superior data processing — hasn't been corrupted by TAB odds yet</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Replaces Punty', '$151.00')">$151</button>
+        </div>
+    </div>
+
+    <!-- MARKET 7: Weight at Birth -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R7</div>
+            <h2>Weight at Birth</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">1</div>
+            <div class="bet-name">Under 3kg
+                <span class="detail">Light weight — apprentice claim applicable</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'Under 3kg', '$4.50')">$4.50</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">2</div>
+            <div class="bet-name">3kg — 3.5kg <span class="punty-pick">PUNTY'S PICK</span>
+                <span class="detail">Ideal racing weight — set weight conditions suit</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, '3-3.5kg', '$2.20')">$2.20</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">3</div>
+            <div class="bet-name">3.5kg — 4kg
+                <span class="detail">Carrying extra — must've gotten into Papa's protein shakes</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, '3.5-4kg', '$3.00')">$3.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">4</div>
+            <div class="bet-name">Over 4kg
+                <span class="detail">Absolute unit. Rick to receive a medal and a free parasol</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Over 4kg', '$6.00')">$6.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">5</div>
+            <div class="bet-name">Weighs More Than Papa's Ego
+                <span class="detail">Technically impossible — but we've listed it for the value</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'More Than Ego', '$999.00')">$999</button>
+        </div>
+    </div>
+
+    <!-- MARKET 8: Name Market -->
+    <div class="market-section">
+        <div class="market-header">
+            <div class="race-pill">R8</div>
+            <h2>Baby Name (If Boy)</h2>
+            <span class="market-status status-open">OPEN</span>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-fav">1</div>
+            <div class="bet-name">A Normal, Sensible Name
+                <span class="detail">Rick's influence — one of them has to be responsible</span>
+            </div>
+            <button class="odds-btn odds-fav" onclick="toggleBet(this, 'Normal Name', '$1.80')">$1.80</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-std">2</div>
+            <div class="bet-name">Something French
+                <span class="detail">French wedding energy + "how good are weddings" — Jean-Pierre incoming</span>
+            </div>
+            <button class="odds-btn odds-std" onclick="toggleBet(this, 'French Name', '$5.00')">$5.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-long">3</div>
+            <div class="bet-name">Punty
+                <span class="detail">Named after the greatest AI tipster of all time. Tax deductible.</span>
+            </div>
+            <button class="odds-btn odds-long" onclick="toggleBet(this, 'Punty', '$41.00')">$41.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">4</div>
+            <div class="bet-name">Winx
+                <span class="detail">Gender-neutral legend. "Winx Pollock" has champion written all over it</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'Winx', '$67.00')">$67.00</button>
+        </div>
+        <div class="bet-row">
+            <div class="bet-number num-blow">5</div>
+            <div class="bet-name">The Goat
+                <span class="detail">First name "The", middle name "Goat". Birth certificate just says GOAT.</span>
+            </div>
+            <button class="odds-btn odds-blow" onclick="toggleBet(this, 'The Goat', '$501.00')">$501</button>
+        </div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+        <p style="font-family: 'Orbitron', monospace; font-size: 10px; color: var(--magenta); margin-bottom: 12px; letter-spacing: 2px;">PUNTYAI NOVELTY SPECIALS — FOR ENTERTAINMENT PURPOSES ONLY</p>
+        <p>No actual money is at risk. Void where prohibited. Papa & Rick's baby is not a registered thoroughbred (yet). All odds are AI-generated based on vibes, goat proximity, and parasol form. PuntyAI accepts no responsibility for overdue babies, French weddings, or cliff-edge goat encounters.</p>
+        <p style="margin-top: 16px;">Congratulations Papa & Rick!</p>
+        <p style="margin-top: 12px; color: var(--text-muted);">
+            <a href="/">Back to PuntyAI</a>
+        </p>
+    </div>
+
+</div>
+
+<!-- Bet Slip -->
+<div class="bet-slip" id="betSlip">
+    <div class="bet-slip-inner">
+        <div class="slip-info">
+            <span class="slip-count" id="slipCount">0</span> selections
+        </div>
+        <button class="place-bet-btn" onclick="placeBet()">PLACE BET</button>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal-overlay" id="modal">
+    <div class="modal">
+        <h2>BET PLACED!</h2>
+        <p>Your bets on the Papa & Rick Baby Market have been locked in. No refunds. No excuses.</p>
+        <div class="receipt" id="receipt"></div>
+        <p style="font-size: 0.85em; color: var(--text-muted);">Reference: #BABYPOLLOCK2026</p>
+        <button class="modal-close" onclick="closeModal()">Sweet As</button>
+    </div>
+</div>
+
+<!-- Confetti -->
+<canvas id="confetti"></canvas>
+
+<script>
+    var selections = [];
+
+    function toggleBet(btn, name, odds) {
+        var idx = -1;
+        for (var i = 0; i < selections.length; i++) {
+            if (selections[i].name === name) { idx = i; break; }
+        }
+        if (idx > -1) {
+            selections.splice(idx, 1);
+            btn.classList.remove('selected');
+        } else {
+            selections.push({ name: name, odds: odds, el: btn });
+            btn.classList.add('selected');
+        }
+        updateSlip();
+    }
+
+    function updateSlip() {
+        var slip = document.getElementById('betSlip');
+        var count = document.getElementById('slipCount');
+        count.textContent = String(selections.length);
+        if (selections.length > 0) {
+            slip.classList.add('active');
+        } else {
+            slip.classList.remove('active');
+        }
+    }
+
+    function placeBet() {
+        if (selections.length === 0) return;
+
+        // Build receipt using safe DOM methods
+        var receipt = document.getElementById('receipt');
+        while (receipt.firstChild) receipt.removeChild(receipt.firstChild);
+
+        selections.forEach(function(s) {
+            var line = document.createElement('div');
+            line.className = 'line';
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = s.name;
+            var oddsSpan = document.createElement('span');
+            oddsSpan.textContent = s.odds;
+            line.appendChild(nameSpan);
+            line.appendChild(oddsSpan);
+            receipt.appendChild(line);
+        });
+
+        // Total line
+        var totalLine = document.createElement('div');
+        totalLine.className = 'line total';
+        var totalLabel = document.createElement('span');
+        totalLabel.textContent = 'Total Stake';
+        var totalVal = document.createElement('span');
+        totalVal.textContent = '$' + (selections.length * 10).toFixed(2);
+        totalLine.appendChild(totalLabel);
+        totalLine.appendChild(totalVal);
+        receipt.appendChild(totalLine);
+
+        // Returns line
+        var returnsLine = document.createElement('div');
+        returnsLine.className = 'line';
+        var returnsLabel = document.createElement('span');
+        returnsLabel.textContent = 'Potential Returns';
+        returnsLabel.style.color = 'var(--orange)';
+        var returnsVal = document.createElement('span');
+        returnsVal.textContent = 'PRICELESS';
+        returnsVal.style.color = 'var(--green)';
+        returnsLine.appendChild(returnsLabel);
+        returnsLine.appendChild(returnsVal);
+        receipt.appendChild(returnsLine);
+
+        // Show modal
+        document.getElementById('modal').classList.add('active');
+
+        // Fire confetti
+        launchConfetti();
+
+        // Clear selections
+        selections.forEach(function(s) { s.el.classList.remove('selected'); });
+        selections = [];
+        updateSlip();
+    }
+
+    function closeModal() {
+        document.getElementById('modal').classList.remove('active');
+    }
+
+    function launchConfetti() {
+        var canvas = document.getElementById('confetti');
+        var ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        var colors = ['#e91e8c', '#00d4ff', '#ff6b35', '#ffc107', '#9d4edd', '#00e676'];
+        var pieces = [];
+
+        for (var i = 0; i < 150; i++) {
+            pieces.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                w: Math.random() * 10 + 5,
+                h: Math.random() * 6 + 3,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                vy: Math.random() * 4 + 2,
+                vx: (Math.random() - 0.5) * 3,
+                rotation: Math.random() * 360,
+                rv: (Math.random() - 0.5) * 10,
+                opacity: 1
+            });
+        }
+
+        var frame = 0;
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            frame++;
+
+            pieces.forEach(function(p) {
+                p.y += p.vy;
+                p.x += p.vx;
+                p.rotation += p.rv;
+                if (frame > 60) p.opacity -= 0.01;
+
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation * Math.PI / 180);
+                ctx.globalAlpha = Math.max(0, p.opacity);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+                ctx.restore();
+            });
+
+            if (frame < 180 && pieces.some(function(p) { return p.opacity > 0; })) {
+                requestAnimationFrame(animate);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+        animate();
+    }
+
+    // Close modal on overlay click
+    document.getElementById('modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+</script>
+
+</body>
+</html>
