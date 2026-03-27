@@ -1156,6 +1156,146 @@ def _get_exotic_budget(meet_quality: float) -> float:
     return base * _midweek_multiplier()
 
 
+# ── V3 Context-Aware Exotic Cascade ──
+# Backtested on v3 model (78.2% place SR): +302% ROI on Exacta R1/R2,R3.
+# Config maps distance×condition → optimal exotic type.
+_EXOTIC_CASCADE_CONFIG = {
+    "classic|good": "exacta", "classic|soft": "exacta", "classic|heavy": "exacta",
+    "middle|good": "exacta", "middle|heavy": "exacta", "middle|soft": "quin_box",
+    "short|good": "exacta", "short|heavy": "quin", "short|soft": "exacta",
+    "sprint|good": "tri", "sprint|heavy": "quin_box", "sprint|soft": "exacta",
+    "staying|good": "exacta", "staying|soft": "exacta", "staying|heavy": "quin_box",
+}
+
+
+def _v3_exotic_cascade(
+    distance: int = 0,
+    track_condition: str = "",
+    picks: list | None = None,
+    field_size: int = 0,
+) -> RecommendedExotic | None:
+    """V3 context-aware exotic routing.
+
+    Builds the exotic directly from our ranked picks. No AI involvement.
+    - Exacta: R1 over R2,R3 (2 combos)
+    - Tri structured: R1,R2 / R2,R3 / R3,R4 (8 combos)
+    - Quinella: R1 with R2 (1 combo)
+    - Quinella Box: R1,R2,R3 (3 combos)
+
+    R1 is ALWAYS anchored. Roughie NEVER in position 1.
+    """
+    from punty.calibration_engine import _distance_bucket, _condition_bucket
+
+    if not picks or len(picks) < 2:
+        return None
+
+    sorted_picks = sorted(picks, key=lambda p: p.rank)
+    r1 = sorted_picks[0]
+    r2 = sorted_picks[1] if len(sorted_picks) > 1 else None
+    r3 = sorted_picks[2] if len(sorted_picks) > 2 else None
+    r4 = sorted_picks[3] if len(sorted_picks) > 3 else None
+
+    if not r1 or not r2:
+        return None
+
+    dist_b = _distance_bucket(distance or 1400)
+    cond_b = _condition_bucket(track_condition or "Good 4")
+    ctx_key = f"{dist_b}|{cond_b}"
+
+    exotic_type = _EXOTIC_CASCADE_CONFIG.get(ctx_key, "exacta")
+
+    # Minimum field sizes
+    if field_size > 0:
+        if exotic_type == "tri" and field_size < 6:
+            exotic_type = "exacta"
+        if exotic_type == "exacta" and field_size < 5:
+            exotic_type = "quin_box"
+        if exotic_type in ("quin", "quin_box") and field_size < 4:
+            return None
+
+    BUDGET = 15.0
+
+    if exotic_type == "exacta":
+        # R1 over R2,R3 — 2 combos
+        runners = [r1.saddlecloth]
+        seconds = [r2.saddlecloth]
+        if r3:
+            seconds.append(r3.saddlecloth)
+        runner_scs = list(set(runners + seconds))
+        runner_names = []
+        sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
+        for sc in runner_scs:
+            runner_names.append(sc_to_name.get(sc, f"#{sc}"))
+        combos = len(seconds)  # R1 over each of the seconds
+        return RecommendedExotic(
+            exotic_type="Exacta",
+            runners=runner_scs,
+            runner_names=runner_names,
+            probability=r1.win_prob * (r2.win_prob + (r3.win_prob if r3 else 0)),
+            value_ratio=1.5,
+            num_combos=combos,
+            format="flat",
+            budget=BUDGET,
+        )
+
+    elif exotic_type == "tri":
+        # Trifecta structured: R1,R2 / R2,R3 / R3,R4 — 8 combos
+        if not r3:
+            # Fall back to exacta
+            return _v3_exotic_cascade(distance, track_condition, picks, field_size)
+        firsts = [r1.saddlecloth, r2.saddlecloth]
+        seconds = [r2.saddlecloth, r3.saddlecloth]
+        thirds = [r3.saddlecloth]
+        if r4:
+            thirds.append(r4.saddlecloth)
+        all_scs = list(set(firsts + seconds + thirds))
+        sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
+        names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
+        combos = len(firsts) * len(seconds) * len(thirds)
+        return RecommendedExotic(
+            exotic_type="Trifecta Standout",
+            runners=all_scs,
+            runner_names=names,
+            probability=r1.win_prob * r2.win_prob * (r3.win_prob if r3 else 0.1),
+            value_ratio=2.0,
+            num_combos=combos,
+            format="flat",
+            budget=BUDGET,
+        )
+
+    elif exotic_type == "quin":
+        # Quinella: R1 with R2 — 1 combo, full $15
+        return RecommendedExotic(
+            exotic_type="Quinella",
+            runners=[r1.saddlecloth, r2.saddlecloth],
+            runner_names=[r1.horse_name, r2.horse_name],
+            probability=r1.win_prob + r2.win_prob,
+            value_ratio=1.5,
+            num_combos=1,
+            format="flat",
+            budget=BUDGET,
+        )
+
+    else:  # quin_box
+        # Quinella Box: R1, R2, R3 — 3 combos
+        scs = [r1.saddlecloth, r2.saddlecloth]
+        names = [r1.horse_name, r2.horse_name]
+        if r3:
+            scs.append(r3.saddlecloth)
+            names.append(r3.horse_name)
+        combos = len(scs) * (len(scs) - 1) // 2
+        return RecommendedExotic(
+            exotic_type="Quinella Box",
+            runners=scs,
+            runner_names=names,
+            probability=(r1.win_prob + r2.win_prob + (r3.win_prob if r3 else 0)) * 0.5,
+            value_ratio=1.2,
+            num_combos=combos,
+            format="boxed",
+            budget=BUDGET,
+        )
+
+
 def _select_exotic(
     exotic_combos: list[dict],
     selection_saddlecloths: set[int],
@@ -1180,6 +1320,23 @@ def _select_exotic(
     """
     if not exotic_combos:
         return None
+
+    # ── V3 Context-Aware Cascade: bypass complex routing when we know
+    #    the optimal exotic type from backtested data (78.2% place SR model).
+    #    Cascade config maps dist×cond → best exotic type.
+    #    Exacta R1/R2,R3 dominates in 8/12 contexts (+302% ROI overall).
+    #    NO box trifecta or first4 box — structured only. ──
+    try:
+        _cascade_result = _v3_exotic_cascade(
+            distance=distance, track_condition=track_condition,
+            picks=picks, field_size=field_size,
+        )
+        if _cascade_result:
+            return _cascade_result
+    except Exception as _e:
+        logger.debug("V3 cascade fallback: %s", _e)
+
+    # ── Legacy routing (fallback if cascade doesn't apply) ──
 
     # ── Try to load meta-model for scoring (used after filtering below) ──
     _use_meta_model = False

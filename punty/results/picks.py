@@ -116,6 +116,66 @@ async def store_picks_from_content(
     # Bet types are set by pre_selections._determine_bet_type() and
     # preserved through the parser. Rank 1 = Win, Rank 2 = Place.
 
+    # ── V3 Exotic Override: replace AI-parsed exotics with cascade output ──
+    # The AI can deviate from pre-selection exotic recommendations.
+    # V3 cascade is data-driven (+302% ROI on Exacta R1/R2,R3).
+    try:
+        from punty.context.pre_selections import _v3_exotic_cascade, RecommendedPick
+        from punty.calibration_engine import _distance_bucket, _condition_bucket
+
+        # Group selections by race number
+        race_selections = defaultdict(list)
+        for pd in pick_dicts:
+            if pd.get("pick_type") == "selection" and pd.get("tip_rank"):
+                race_selections[pd["race_number"]].append(pd)
+
+        # Replace exotic picks with v3 cascade
+        exotic_indices = [i for i, pd in enumerate(pick_dicts) if pd.get("pick_type") == "exotic"]
+        for idx in reversed(exotic_indices):
+            pick_dicts.pop(idx)
+
+        if meeting:
+            for race in meeting.races:
+                sels = race_selections.get(race.race_number, [])
+                if len(sels) < 2:
+                    continue
+                # Build minimal RecommendedPick objects for the cascade
+                mock_picks = []
+                for s in sorted(sels, key=lambda x: x.get("tip_rank", 99)):
+                    key = (race.race_number, s.get("saddlecloth"))
+                    rp = race_probs.get(key)
+                    wp = rp.win_probability if rp else 0.15
+                    mock_picks.append(RecommendedPick(
+                        rank=s.get("tip_rank", 4),
+                        saddlecloth=s.get("saddlecloth", 0),
+                        horse_name=s.get("horse_name", ""),
+                        win_prob=wp,
+                        place_prob=rp.place_probability if rp else 0.40,
+                        odds=s.get("odds_at_tip", 5.0) or 5.0,
+                        bet_type=s.get("bet_type", "place"),
+                        bet_stake=0,
+                    ))
+
+                active = [r for r in race.runners if not r.scratched]
+                cascade = _v3_exotic_cascade(
+                    distance=race.distance or 1400,
+                    track_condition=meeting.track_condition or "Good 4",
+                    picks=mock_picks,
+                    field_size=len(active),
+                )
+                if cascade:
+                    pick_dicts.append({
+                        "pick_type": "exotic",
+                        "race_number": race.race_number,
+                        "exotic_type": cascade.exotic_type,
+                        "exotic_runners": json.dumps(cascade.runners),
+                        "exotic_stake": cascade.budget,
+                        "content_id": content_id,
+                        "meeting_id": meeting_id,
+                    })
+    except Exception as e:
+        logger.warning(f"V3 exotic override failed: {e}")
+
     for pd in pick_dicts:
         pick = Pick(**pd)
         db.add(pick)
