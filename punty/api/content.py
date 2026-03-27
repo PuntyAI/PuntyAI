@@ -70,12 +70,23 @@ async def get_review_queue(db: AsyncSession = Depends(get_db)):
 
 @router.post("/reject-all-pending")
 async def reject_all_pending(db: AsyncSession = Depends(get_db)):
-    """Reject all content in pending_review status."""
-    from punty.models.content import Content, ContentStatus
-    from sqlalchemy import select
+    """Reject all content in pending_review status.
 
+    Excludes content created in the last 60 seconds to avoid a race condition
+    where freshly-generated content lands in pending_review between page load
+    and button click.
+    """
+    from punty.models.content import Content, ContentStatus
+    from punty.config import melb_now
+    from sqlalchemy import select
+    from datetime import timedelta
+
+    cutoff = melb_now() - timedelta(seconds=60)
     result = await db.execute(
-        select(Content).where(Content.status == ContentStatus.PENDING_REVIEW)
+        select(Content).where(
+            Content.status == ContentStatus.PENDING_REVIEW,
+            Content.created_at < cutoff,
+        )
     )
     items = result.scalars().all()
     count = len(items)
