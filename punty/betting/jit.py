@@ -188,17 +188,82 @@ async def evaluate_and_bet_race(
     result["bet_type"] = bet_type
 
     # ── 4-Model Sense Check (Us vs PF vs Market vs KASH) ──
-    from punty.sense_check import sense_check_race
+    from punty.sense_check import sense_check_race, find_consensus_pick
     sense = sense_check_race(runner.saddlecloth, runners)
     consensus_mult = sense["kelly_mult"]
 
     if sense["action"] == "skip":
-        result["reason"] = f"Sense check SKIP: {sense['detail']}"
-        await _create_skip_record(db, meeting_id, race_number, result["reason"], now,
-                                  horse_name=runner.horse_name, saddlecloth=runner.saddlecloth,
-                                  jit_wp=wp, jit_pp=pp)
-        logger.info(f"JIT SKIP (outlier): {runner.horse_name} {meeting.venue} R{race_number} — {sense['detail']}")
-        return result
+        # Before giving up, check if any of our R1/R2/R3 picks matches
+        # the consensus top pick of ALL 3 external models
+        picks_result = await db.execute(
+            select(Pick).where(
+                Pick.meeting_id == meeting_id,
+                Pick.race_number == race_number,
+                Pick.pick_type == "selection",
+                Pick.tip_rank.in_([1, 2, 3]),
+            ).order_by(Pick.tip_rank)
+        )
+        our_picks = picks_result.scalars().all()
+        consensus = find_consensus_pick(our_picks, runners)
+
+        if consensus:
+            # Consensus override — switch to the agreed horse
+            override_sc = consensus["saddlecloth"]
+            override_runner = next((r for r in runners if r.saddlecloth == override_sc), None)
+            if override_runner:
+                # Re-derive WP/PP for the consensus horse
+                prob = probs.get(override_runner.horse_name)
+                if prob:
+                    runner = override_runner
+                    wp = prob.win_probability
+                    pp = prob.place_probability
+                    odds = runner.current_odds or 0
+                    consensus_mult = consensus["kelly_mult"]
+                    result["horse_name"] = runner.horse_name
+
+                    # Re-check PP floor for the consensus horse
+                    if pp < PP_FLOOR:
+                        result["reason"] = f"Consensus R{consensus['tip_rank']} {runner.horse_name} PP {pp:.0%} < {PP_FLOOR:.0%}"
+                        await _create_skip_record(db, meeting_id, race_number, result["reason"], now,
+                                                  horse_name=runner.horse_name, saddlecloth=runner.saddlecloth,
+                                                  jit_wp=wp, jit_pp=pp)
+                        return result
+
+                    # Re-route bet type
+                    r2_wp = ranked[1]["wp"] if len(ranked) > 1 else 0
+                    wp_gap = wp - r2_wp
+                    if wp_gap >= WIN_GAP_THRESHOLD and odds > 1.0:
+                        bet_type = "win"
+                        min_odds = MIN_WIN_ODDS
+                    else:
+                        bet_type = "place"
+                        min_odds = MIN_PLACE_ODDS
+                    result["bet_type"] = bet_type
+
+                    logger.info(
+                        f"JIT CONSENSUS OVERRIDE: R{consensus['tip_rank']} {runner.horse_name} "
+                        f"{meeting.venue} R{race_number} — {consensus['detail']} PP={pp:.0%}"
+                    )
+                    # Fall through to market resolution and betting
+                else:
+                    result["reason"] = f"Sense check SKIP + consensus horse no probs: {sense['detail']}"
+                    await _create_skip_record(db, meeting_id, race_number, result["reason"], now,
+                                              horse_name=runner.horse_name, saddlecloth=runner.saddlecloth,
+                                              jit_wp=wp, jit_pp=pp)
+                    return result
+            else:
+                result["reason"] = f"Sense check SKIP: {sense['detail']}"
+                await _create_skip_record(db, meeting_id, race_number, result["reason"], now,
+                                          horse_name=runner.horse_name, saddlecloth=runner.saddlecloth,
+                                          jit_wp=wp, jit_pp=pp)
+                return result
+        else:
+            result["reason"] = f"Sense check SKIP: {sense['detail']}"
+            await _create_skip_record(db, meeting_id, race_number, result["reason"], now,
+                                      horse_name=runner.horse_name, saddlecloth=runner.saddlecloth,
+                                      jit_wp=wp, jit_pp=pp)
+            logger.info(f"JIT SKIP (outlier): {runner.horse_name} {meeting.venue} R{race_number} — {sense['detail']}")
+            return result
 
     logger.info(
         f"JIT Sense: {runner.horse_name} R{race_number} {sense['consensus']} "

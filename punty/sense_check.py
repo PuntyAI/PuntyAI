@@ -136,3 +136,78 @@ def sense_check_race(
         )
 
     return result
+
+
+def find_consensus_pick(
+    our_picks: list,
+    runners: list,
+) -> dict | None:
+    """Check if any of our R1/R2/R3 picks matches the top pick of ALL 3 external models.
+
+    Args:
+        our_picks: list of Pick objects or dicts with saddlecloth, tip_rank, horse_name
+        runners: list of runner objects with odds, KASH, PF data
+
+    Returns:
+        dict with matched pick info and kelly_mult=1.0, or None if no consensus.
+    """
+    def _get(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    if not runners or not our_picks:
+        return None
+
+    active = [r for r in runners if not _get(r, "scratched")]
+    if not active:
+        return None
+
+    # Find each external model's top pick
+    market_fav = kash_fav = pf_fav = None
+
+    market_runners = [(r, _get(r, "current_odds") or 999) for r in active
+                      if (_get(r, "current_odds") or 0) > 1.0]
+    if market_runners:
+        market_fav = _get(min(market_runners, key=lambda x: x[1])[0], "saddlecloth")
+
+    kash_runners = [(r, _get(r, "kash_rated_price") or 999) for r in active
+                    if (_get(r, "kash_rated_price") or 0) > 0]
+    if kash_runners:
+        kash_fav = _get(min(kash_runners, key=lambda x: x[1])[0], "saddlecloth")
+
+    pf_runners = [(r, _get(r, "pf_ai_score") or 0) for r in active
+                  if (_get(r, "pf_ai_score") or 0) > 0]
+    if not pf_runners:
+        pf_runners = [(r, -(_get(r, "pf_assessed_price") or 999)) for r in active
+                      if (_get(r, "pf_assessed_price") or 0) > 0]
+    if pf_runners:
+        pf_fav = _get(max(pf_runners, key=lambda x: x[1])[0], "saddlecloth")
+
+    # Need all 3 external models to have a pick and agree
+    if market_fav is None or kash_fav is None or pf_fav is None:
+        return None
+    if not (market_fav == kash_fav == pf_fav):
+        return None
+
+    consensus_sc = market_fav
+
+    # Check if any of our R1/R2/R3 matches
+    for pick in our_picks:
+        sc = _get(pick, "saddlecloth")
+        rank = _get(pick, "tip_rank")
+        if sc == consensus_sc:
+            horse = _get(pick, "horse_name", "?")
+            logger.info(
+                f"Consensus override: R{rank} {horse} (SC{sc}) matches all 3 models"
+            )
+            return {
+                "saddlecloth": sc,
+                "tip_rank": rank,
+                "horse_name": horse,
+                "consensus": "HIGH",
+                "kelly_mult": 1.0,
+                "detail": f"ALL 3 models agree on our R{rank} pick",
+            }
+
+    return None
