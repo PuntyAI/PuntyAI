@@ -228,6 +228,47 @@ async def lifespan(app: FastAPI):
                     logger.info("Betfair auto-bet scheduler started")
         except Exception as e:
             logger.debug(f"Betfair scheduler startup: {e}")
+
+        # ── JIT Smoke Test: verify probability pipeline works ──
+        try:
+            from punty.monitoring.betfair_health import jit_smoke_test
+            async with async_session() as smoke_db:
+                smoke = await jit_smoke_test(smoke_db)
+            if smoke["ok"]:
+                logger.info(f"JIT smoke test: {smoke['detail']}")
+            else:
+                logger.error(f"JIT SMOKE TEST FAILED: {smoke['detail']}")
+                # Alert via Telegram
+                try:
+                    if app.state.telegram_bot and app.state.telegram_bot.is_running():
+                        await app.state.telegram_bot.send_alert(
+                            f"🚨 JIT SMOKE TEST FAILED\n{smoke['detail']}"
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"JIT smoke test error: {e}")
+
+        # ── Betfair Heartbeat: alert if zero bets by afternoon ──
+        try:
+            from punty.monitoring.betfair_health import betfair_heartbeat
+            from apscheduler.triggers.cron import CronTrigger
+            from punty.config import MELB_TZ
+            scheduler_manager.scheduler.add_job(
+                betfair_heartbeat,
+                CronTrigger(hour=14, minute=0, timezone=MELB_TZ),
+                id="betfair_heartbeat_14",
+                replace_existing=True,
+            )
+            scheduler_manager.scheduler.add_job(
+                betfair_heartbeat,
+                CronTrigger(hour=17, minute=0, timezone=MELB_TZ),
+                id="betfair_heartbeat_17",
+                replace_existing=True,
+            )
+            logger.info("Betfair heartbeat checks scheduled (14:00 + 17:00 AEDT)")
+        except Exception as e:
+            logger.warning(f"Betfair heartbeat scheduling failed: {e}")
     else:
         app.state.telegram_bot = None
         app.state.results_monitor = None
