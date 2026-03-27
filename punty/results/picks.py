@@ -176,6 +176,16 @@ async def store_picks_from_content(
     except Exception as e:
         logger.warning(f"V3 exotic override failed: {e}")
 
+    # ── Hard kill: never store Trifecta Box or First4 Box (data: -$2,182 lifetime) ──
+    # Trifecta Standout allowed ONLY from v3 cascade (sprint|good context).
+    # Big6 stays (user directive: "hail mary").
+    KILLED_EXOTIC_TYPES = {"Trifecta Box", "First4 Box", "First4"}
+    pick_dicts = [
+        pd for pd in pick_dicts
+        if not (pd.get("pick_type") == "exotic" and pd.get("exotic_type") in KILLED_EXOTIC_TYPES)
+    ]
+
+    # ── Guard: never settle a pick without finish position ──
     for pd in pick_dicts:
         pick = Pick(**pd)
         db.add(pick)
@@ -406,8 +416,17 @@ async def _settle_picks_for_race_impl(
             logger.info(f"Voided scratched selection {pick.horse_name} R{pick.race_number}")
             continue
 
-        # Settle if runner has finish position, OR if race is final with results populated
-        has_result = runner and (runner.finish_position is not None or (race_final and results_populated))
+        # Settle if runner has finish position. If race is final but THIS runner
+        # has no FP, log a warning and skip — don't settle as loss incorrectly.
+        has_result = runner and runner.finish_position is not None and runner.finish_position > 0
+        if not has_result and runner and race_final and results_populated:
+            # Race is final but runner has no finish position — likely late scratching or data gap
+            if pick.bet_stake and pick.bet_stake > 0:
+                logger.warning(
+                    f"Race {race_id} final but {pick.horse_name} (SC{pick.saddlecloth}) has no finish position — "
+                    f"skipping settlement (staked ${pick.bet_stake}). Check for late scratching."
+                )
+                continue  # Don't settle — wait for data fix
 
         if has_result:
             bet_type = str(pick.bet_type or "win").lower().replace(" ", "_")
