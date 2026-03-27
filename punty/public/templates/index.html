@@ -339,55 +339,85 @@
 {# ════════════════════════════════════
    SECTION 1: Hero + Proof Bar
    ════════════════════════════════════ #}
-{# ── HERO: Full-width mascot background with overlay text ── #}
-<section class="relative min-h-[550px] md:min-h-[620px] flex flex-col justify-end px-6 pt-12 pb-20 overflow-hidden" style="background: var(--bg-main);">
-    {# Background Mascot #}
-    <div class="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
-        <img src="/static/punty-character.jpg" alt="" class="w-full h-full object-contain object-right-top" style="filter: grayscale(1) brightness(0.5) contrast(1.25);" loading="eager">
-        <div class="absolute inset-0" style="background: linear-gradient(to top, var(--bg-main), rgba(19,19,24,0.4), transparent);"></div>
+{# ── HERO ── #}
+<section class="relative flex items-center overflow-hidden" style="height: clamp(500px, 70vh, 650px); background: #131318;">
+    {# Mascot background — right-aligned, subtle #}
+    <div class="absolute inset-0 z-0 opacity-[0.08] flex items-center justify-end pointer-events-none">
+        <img src="/static/punty-character.jpg" alt="" class="h-full object-contain" style="filter: grayscale(1) brightness(0.4) contrast(1.3);" loading="eager">
     </div>
-    {# Hero Text #}
-    <div class="relative z-10 max-w-4xl">
-        <h1 style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: 0.95; letter-spacing: -0.03em; text-shadow: 0 0 15px rgba(255,176,204,0.4);">
-            BEAT THE <br><span style="color: var(--magenta); font-style: italic;">MARKET.</span><br>DON'T CHASE IT.
+    <div class="absolute inset-0" style="background: linear-gradient(to right, #131318 30%, rgba(19,19,24,0.6) 70%, rgba(19,19,24,0.3));"></div>
+
+    <div class="relative z-10 max-w-6xl mx-auto px-6 sm:px-12 w-full">
+        {# Status badge #}
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-8" style="background: rgba(60,215,255,0.08); color: #3cd7ff; font-family: 'Space Grotesk', sans-serif; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;">
+            &#x26A1; ALGORITHMIC EDGE ACTIVE
+        </div>
+
+        <h1 style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-style: italic; letter-spacing: -0.04em; line-height: 0.92; font-size: clamp(2.8rem, 6vw, 4.5rem); text-shadow: 0 0 20px rgba(233,30,140,0.3);">
+            BEAT THE MARKET.<br>
+            <span style="color: #ffb0cc;">DON'T CHASE IT.</span>
         </h1>
-        <div class="flex flex-wrap gap-4 mt-8">
-            <a href="/tips" class="inline-block px-8 py-4 font-bold uppercase tracking-widest text-sm text-white" style="background: linear-gradient(135deg, #ffb0cc 0%, #ff46a0 100%); font-family: 'Space Grotesk', sans-serif; box-shadow: 0 0 20px rgba(255,70,160,0.3); transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+
+        <p style="font-family: 'Inter', sans-serif; color: #a8a4b0; font-size: 1.15rem; max-width: 540px; line-height: 1.7; margin-top: 1.5rem;">
+            Leverage neural-network predictions and high-frequency data models to dominate the track. Stop guessing, start calculating.
+        </p>
+
+        <div class="flex flex-wrap gap-4 mt-10">
+            <a href="/tips" style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 0.8rem; letter-spacing: 0.05em; padding: 1rem 2.5rem; background: linear-gradient(135deg, #ffb0cc, #ff46a0); color: #3e0021; text-decoration: none; transition: all 0.15s; box-shadow: 0 0 24px rgba(255,70,160,0.25);" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
                 SEE TODAY'S TIPS
             </a>
-            <a href="/stats" class="inline-block px-8 py-4 font-bold uppercase tracking-widest text-sm" style="border: 1px solid var(--cyan); color: var(--cyan); font-family: 'Space Grotesk', sans-serif; transition: background 0.2s;" onmouseover="this.style.background='rgba(60,215,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="/stats" style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 0.8rem; letter-spacing: 0.05em; padding: 1rem 2.5rem; border: 2px solid #3cd7ff; color: #3cd7ff; text-decoration: none; transition: all 0.15s;" onmouseover="this.style.background='rgba(60,215,255,0.08)'" onmouseout="this.style.background='transparent'">
                 VIEW SCORECARD
             </a>
         </div>
     </div>
 </section>
 
-{# ── STATS BENTO GRID ── #}
-<section class="px-6 -mt-10 relative z-20 max-w-6xl mx-auto">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-[1px]">
-        <a href="/stats" class="p-8" style="background: var(--bg-card); border-left: 4px solid var(--magenta);">
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--text-muted);">Performance</span>
-            <div class="flex items-baseline gap-2 mt-2">
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--magenta);">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</span>
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: var(--cyan);">ROI</span>
+{# ── STATS DASHBOARD GRID ── #}
+<section class="relative z-20 max-w-6xl mx-auto px-6 sm:px-12 -mt-8">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1">
+        {# Performance #}
+        <a href="/stats" class="group block p-6" style="background: #2a292f; transition: background 0.2s;" onmouseover="this.style.background='#39383e'" onmouseout="this.style.background='#2a292f'">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a4b0; margin-bottom: 1rem;">Performance</p>
+            <div class="flex items-end justify-between">
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 900; color: white;">{{ '%+.1f'|format(roi_7d) if roi_7d else '0.0' }}%</span>
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: #3cd7ff;">ROI</span>
             </div>
-            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">Last 7 Days Activity</p>
+            <div class="mt-4 h-[3px] overflow-hidden" style="background: rgba(255,255,255,0.05);">
+                <div style="background: #3cd7ff; height: 100%; width: 75%;"></div>
+            </div>
         </a>
-        <a href="/stats" class="p-8" style="background: var(--bg-card); border-left: 4px solid var(--cyan);">
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--text-muted);">Accuracy</span>
-            <div class="flex items-baseline gap-2 mt-2">
-                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--cyan);">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</span>
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: var(--text-muted);">STRIKE</span>
+        {# Accuracy #}
+        <a href="/stats" class="group block p-6" style="background: #2a292f; transition: background 0.2s;" onmouseover="this.style.background='#39383e'" onmouseout="this.style.background='#2a292f'">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a4b0; margin-bottom: 1rem;">Accuracy</p>
+            <div class="flex items-end justify-between">
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 900; color: white;">{{ '%.1f'|format(strike_30d) if strike_30d else '0.0' }}%</span>
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: #ffb59d;">STRIKE</span>
             </div>
-            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">v3 Probability Engine</p>
+            <div class="mt-4 h-[3px] overflow-hidden" style="background: rgba(255,255,255,0.05);">
+                <div style="background: #ffb59d; height: 100%; width: {{ (strike_30d / 100) if strike_30d else 0.3 | float * 100 }}%;"></div>
+            </div>
         </a>
-        <div class="p-8 flex flex-col justify-center items-center text-center" style="background: var(--bg-card-alt);">
-            <span style="font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; font-weight: 700;">AI SIGNAL STRENGTH</span>
-            <div class="w-full h-1 mt-4 overflow-hidden" style="background: rgba(255,255,255,0.08);">
-                <div style="background: var(--magenta); height: 100%; width: 88%;"></div>
+        {# AI Signal #}
+        <div class="p-6" style="background: #2a292f;">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a8a4b0; margin-bottom: 1rem;">AI Signal Strength</p>
+            <div class="flex items-end justify-between">
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 900; color: white;">MAX</span>
+                <span style="color: #ffb0cc; font-size: 1.5rem;">&#x26A1;</span>
             </div>
-            <span style="font-size: 0.6rem; margin-top: 0.5rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.15em;">Optimized for High Volatility</span>
+            <div class="mt-4 flex gap-1">
+                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
+                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
+                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
+                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
+                <div class="h-[3px] flex-1" style="background: #ffb0cc;"></div>
+            </div>
         </div>
+        {# CTA Card #}
+        <a href="/tips" class="p-6 flex flex-col justify-center items-center text-center" style="background: linear-gradient(135deg, #ffb0cc, #ff46a0); transition: filter 0.15s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; color: #3e0021;">Today's Tips</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: rgba(62,0,33,0.7); margin-top: 0.25rem;">{{ meetings|length if meetings else 0 }} meetings live</span>
+        </a>
     </div>
 </section>
 
