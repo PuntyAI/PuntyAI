@@ -435,56 +435,32 @@ DEFAULT_WEIGHTS = {
 }  # v4: ablation-informed weights from 15-month Proform train, Feb+Mar holdout
 
 # Distance-specific weight overrides — v3 BACKTEST OPTIMISED
-# 78.2% place SR, beats KASH 69.4% by +8.8%. Includes speed_rating + jt_context.
+# v4: Use DEFAULT_WEIGHTS for all distances — ablation-informed, no per-distance overfitting.
+# The v3 per-distance weights were grid-searched on 881 Feb races and don't generalise.
+# v4 global weights are trained on 5,000 sampled races from 15 months and validated on holdout.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — momentum + speed dominate
-        "form": 0.057, "kri": 0.029, "jockey_trainer": 0.113, "pace": 0.050,
-        "weight_carried": 0.039, "barrier": 0.081, "horse_profile": 0.070,
-        "closing_ability": 0.029, "class_fitness": 0.028, "deep_learning": 0.039,
-        "momentum": 0.237, "freshness": 0.050, "speed_rating": 0.163, "jt_context": 0.015,
-    },
-    "short": {  # 1101-1399m — speed + KRI + momentum
-        "form": 0.116, "kri": 0.168, "jockey_trainer": 0.113, "pace": 0.058,
-        "weight_carried": 0.003, "barrier": 0.001, "horse_profile": 0.003,
-        "closing_ability": 0.030, "class_fitness": 0.007, "deep_learning": 0.038,
-        "momentum": 0.130, "freshness": 0.069, "speed_rating": 0.237, "jt_context": 0.028,
-    },
-    "middle": {  # 1400-1799m — jockey_trainer + speed + momentum
-        "form": 0.062, "kri": 0.064, "jockey_trainer": 0.188, "pace": 0.012,
-        "weight_carried": 0.005, "barrier": 0.024, "horse_profile": 0.093,
-        "closing_ability": 0.025, "class_fitness": 0.066, "deep_learning": 0.038,
-        "momentum": 0.103, "freshness": 0.099, "speed_rating": 0.180, "jt_context": 0.040,
-    },
-    "classic": {  # 1800-2199m — class_fitness + momentum + freshness
-        "form": 0.035, "kri": 0.095, "jockey_trainer": 0.037, "pace": 0.033,
-        "weight_carried": 0.084, "barrier": 0.050, "horse_profile": 0.071,
-        "closing_ability": 0.039, "class_fitness": 0.151, "deep_learning": 0.038,
-        "momentum": 0.137, "freshness": 0.121, "speed_rating": 0.081, "jt_context": 0.028,
-    },
-    "staying": {  # 2200m+ — speed + profile + pace
-        "form": 0.035, "kri": 0.001, "jockey_trainer": 0.138, "pace": 0.149,
-        "weight_carried": 0.055, "barrier": 0.012, "horse_profile": 0.170,
-        "closing_ability": 0.015, "class_fitness": 0.037, "deep_learning": 0.038,
-        "momentum": 0.055, "freshness": 0.100, "speed_rating": 0.178, "jt_context": 0.017,
-    },
+    # All buckets use the same ablation-informed weights.
+    # Form (37.7%) and speed_rating (22.9%) are the proven signals.
 }
 
 # ── Place Weights: INDEPENDENT — consistency-focused signals ──
 # Place probability favours consistency: class_fitness, jockey reliability, pace
 DEFAULT_PLACE_WEIGHTS = {
-    "form": 0.30,
-    "kri": 0.06,               # Less critical for place (consistency > explosion)
-    "class_fitness": 0.10,     # Consistency indicator
-    "jockey_trainer": 0.10,    # Jockey reliability for placing
-    "barrier": 0.05,
-    "weight_carried": 0.05,
-    "horse_profile": 0.05,
-    "pace": 0.03,
-    "closing_ability": 0.05,
-    "deep_learning": 0.04,
-    "momentum": 0.12,          # v2: form trajectory matters for top-3 finish
-    "freshness": 0.05,         # v2: spell management affects consistency
-}  # sums to 1.0 — v2: momentum + freshness added, shares redistributed
+    "form": 0.377,
+    "speed_rating": 0.229,
+    "momentum": 0.093,
+    "closing_ability": 0.087,
+    "pace": 0.062,
+    "weight_carried": 0.037,
+    "horse_profile": 0.031,
+    "barrier": 0.028,
+    "jt_context": 0.016,
+    "deep_learning": 0.016,
+    "class_fitness": 0.009,
+    "freshness": 0.009,
+    "kri": 0.003,
+    "jockey_trainer": 0.003,
+}  # v4: same as win weights — ablation-informed from 15-month holdout
 
 DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
     "sprint": {

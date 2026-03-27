@@ -2482,18 +2482,14 @@ class TestTrackStatsFallback:
 class TestDistanceSpecificWeights:
     """Tests for distance-specific factor weight profiles."""
 
-    def test_sprint_has_momentum(self):
-        """v2: sprint should have momentum factor."""
-        from punty.probability import DISTANCE_WEIGHT_OVERRIDES
-        sprint_w = DISTANCE_WEIGHT_OVERRIDES["sprint"]
-        assert sprint_w.get("momentum", 0) > 0
-
-    def test_staying_has_speed_rating(self):
-        """v3: staying has speed_rating as key factor."""
-        from punty.probability import DISTANCE_WEIGHT_OVERRIDES
-        staying_w = DISTANCE_WEIGHT_OVERRIDES["staying"]
-        assert staying_w.get("speed_rating", 0) > 0.10
-        assert staying_w.get("jockey_trainer", 0) > staying_w.get("form", 0)
+    def test_v4_uses_global_weights(self):
+        """v4: no per-distance overfitting, all use DEFAULT_WEIGHTS."""
+        from punty.probability import DISTANCE_WEIGHT_OVERRIDES, DEFAULT_WEIGHTS
+        # v4 emptied distance overrides — global weights used everywhere
+        assert len(DISTANCE_WEIGHT_OVERRIDES) == 0 or all(
+            DISTANCE_WEIGHT_OVERRIDES[k] == DEFAULT_WEIGHTS for k in DISTANCE_WEIGHT_OVERRIDES
+        )
+        assert DEFAULT_WEIGHTS["form"] > 0.30  # Form is dominant in v4
 
     def test_all_distances_have_new_factors(self):
         from punty.probability import DISTANCE_WEIGHT_OVERRIDES
