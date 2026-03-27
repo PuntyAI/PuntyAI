@@ -69,13 +69,14 @@ class BetfairBetScheduler:
             window_start = now + timedelta(minutes=4, seconds=30)
             window_end = now + timedelta(minutes=5, seconds=30)
 
+            from sqlalchemy import or_
             race_result = await db.execute(
                 select(Race).join(Meeting, Meeting.id == Race.meeting_id).where(
                     Meeting.date == melb_today(),
                     Meeting.selected == True,
                     Race.start_time >= window_start,
                     Race.start_time <= window_end,
-                    Race.results_status == "Open",
+                    or_(Race.results_status == "Open", Race.results_status == None),
                 )
             )
             upcoming = race_result.scalars().all()
