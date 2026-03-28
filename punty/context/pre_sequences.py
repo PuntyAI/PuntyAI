@@ -1055,14 +1055,16 @@ def build_all_sequence_lanes(
     else:
         # TAB sequence pools: early quaddie needs 8+ races,
         # big6 needs 8+ races, quaddie is last 4 races (6+ meets)
+        # TAB sequence pools: main quaddie = last 4 races, early quad = 4 before that.
+        # Big6 = last 6 races. These must match TAB pool definitions exactly.
         rules = {
             6:  {"quaddie": (3, 6)},
             7:  {"quaddie": (4, 7)},
             8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
-            9:  {"early_quad": (1, 4), "quaddie": (6, 9), "big6": (4, 9)},
-            10: {"early_quad": (1, 4), "quaddie": (7, 10), "big6": (5, 10)},
-            11: {"early_quad": (1, 4), "quaddie": (8, 11), "big6": (6, 11)},
-            12: {"early_quad": (1, 4), "quaddie": (9, 12), "big6": (7, 12)},
+            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
         }
         sequences = rules.get(
             total_races,
