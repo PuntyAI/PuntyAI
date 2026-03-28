@@ -371,6 +371,18 @@ async def update_balance(body: BalanceUpdate, db: AsyncSession = Depends(get_db)
     return {"balance": body.balance}
 
 
+@router.post("/sync-balance")
+async def sync_balance(db: AsyncSession = Depends(get_db)):
+    """Fetch real balance from Betfair API and update app setting."""
+    from punty.betting.queue import sync_betfair_balance
+    synced = await sync_betfair_balance(db)
+    if synced:
+        from punty.betting.queue import get_balance as _get_balance
+        balance = await _get_balance(db)
+        return {"synced": True, "balance": balance}
+    return {"synced": False, "message": "Betfair API unavailable"}
+
+
 @router.get("/calibration")
 async def get_calibration(db: AsyncSession = Depends(get_db)):
     """Get current probability calibration map — shows how predictions are corrected."""

@@ -85,6 +85,7 @@ class BetfairBet(Base):
             "enabled": self.enabled,
             "status": self.status,
             "bet_id": self.bet_id,
+            "bet_id_short": self.bet_id[-6:] if self.bet_id else None,
             "size_matched": self.size_matched,
             "average_price_matched": self.average_price_matched,
             "error_message": self.error_message,
@@ -95,6 +96,8 @@ class BetfairBet(Base):
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "placed_at": self.placed_at.isoformat() if self.placed_at else None,
             "created_at": self.created_at.isoformat(),
+            "jit_place_probability": self.jit_place_probability,
+            "jit_win_probability": self.jit_win_probability,
         }
 
 

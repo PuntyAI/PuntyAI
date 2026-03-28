@@ -1368,13 +1368,13 @@ async def get_queue_summary(db: AsyncSession) -> dict:
         d = b.to_dict()
         race_id = f"{b.meeting_id}-r{b.race_number}"
         d["runners"] = await _count_active_runners(db, race_id)
-        # Attach place_probability from the linked pick
+        # Attach place_probability from the linked pick, fallback to JIT probability
         if b.pick_id:
             pick_result = await db.execute(select(Pick).where(Pick.id == b.pick_id))
             pick = pick_result.scalar_one_or_none()
-            d["place_probability"] = pick.place_probability if pick else None
+            d["place_probability"] = pick.place_probability if pick else (b.jit_place_probability or None)
         else:
-            d["place_probability"] = None
+            d["place_probability"] = b.jit_place_probability or None
         enriched_bets.append(d)
 
     return {

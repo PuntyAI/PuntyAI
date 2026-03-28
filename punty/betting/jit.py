@@ -28,6 +28,42 @@ MIN_PLACE_ODDS = 1.30
 MIN_WIN_ODDS = 1.50
 MAX_EDGE_CAP = 0.10
 
+# ── Venue/Condition Kelly Modifiers ──
+# Based on historical Betfair place SR analysis
+STRONG_VENUES = {
+    "gold coast", "kembla grange", "scone", "grafton", "sale",
+    "matamata", "port macquarie", "kyneton",
+}  # 70%+ place SR → boost 1.2x
+
+WEAK_VENUES = {
+    "gosford", "sapphire coast", "sunshine coast", "cairns",
+    "toowoomba", "pakenham", "happy valley", "sha tin", "hawera",
+}  # sub-45% place SR → reduce 0.7x
+
+# Track condition multipliers (applied after Kelly + consensus)
+CONDITION_MULTIPLIERS = {
+    "Good 3": 1.0, "Good 4": 1.0,
+    "Soft 5": 1.0,
+    "Soft 6": 0.9, "Soft 7": 0.9,
+    "Heavy 8": 0.75,
+    "Heavy 9": 0.6, "Heavy 10": 0.6,
+}
+
+
+def _venue_condition_modifier(venue: str, track_condition: str) -> float:
+    """Return a combined venue + condition multiplier for Kelly staking."""
+    venue_lower = (venue or "").lower()
+    # Venue modifier
+    if venue_lower in STRONG_VENUES:
+        venue_mult = 1.2
+    elif venue_lower in WEAK_VENUES:
+        venue_mult = 0.7
+    else:
+        venue_mult = 1.0
+    # Condition modifier — match "Good 4", "Heavy 8" etc
+    cond_mult = CONDITION_MULTIPLIERS.get(track_condition or "", 1.0)
+    return round(venue_mult * cond_mult, 3)
+
 
 async def _get_setting(db, key: str, default: str = "") -> str:
     result = await db.execute(select(AppSettings).where(AppSettings.key == key))
@@ -327,6 +363,16 @@ async def evaluate_and_bet_race(
     )
     stake *= consensus_mult  # 4-model sense check: HIGH=1.0, MEDIUM=0.85
 
+    # Venue + track condition modifier
+    vc_mult = _venue_condition_modifier(meeting.venue, meeting.track_condition)
+    stake *= vc_mult
+    if vc_mult != 1.0:
+        logger.info(
+            f"JIT venue/condition modifier: {meeting.venue} ({meeting.track_condition}) "
+            f"mult={vc_mult} (venue={'strong' if (meeting.venue or '').lower() in STRONG_VENUES else 'weak' if (meeting.venue or '').lower() in WEAK_VENUES else 'neutral'}, "
+            f"cond={CONDITION_MULTIPLIERS.get(meeting.track_condition or '', 1.0)})"
+        )
+
     if stake <= 0:
         stake = round(balance * 0.005, 2)
         if stake < 2.0:
@@ -377,7 +423,7 @@ async def evaluate_and_bet_race(
         result["reason"] = (
             f"{bet_type.upper()} gap={wp_gap:.0%} PP={pp:.0%} WP={wp:.0%} "
             f"odds=${odds:.2f} live=${live_odds:.2f} stake=${stake:.2f} "
-            f"kash={kash_multiplier}"
+            f"consensus={consensus_mult} vc={vc_mult}"
         )
         logger.info(f"JIT BET: {runner.horse_name} {meeting.venue} R{race_number} — {result['reason']}")
     else:

@@ -231,6 +231,7 @@
                         <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Stake</th>
                         <th class="px-4 py-2 text-right text-xs uppercase" style="color: var(--text-muted);">Odds</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">PP</th>
+                        <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Matched</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Scheduled</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">Status</th>
                         <th class="px-4 py-2 text-center text-xs uppercase" style="color: var(--text-muted);">P&L</th>
@@ -309,6 +310,22 @@
                                     : 'color: var(--text-muted);'">
                                 <span x-text="bet.place_probability ? (bet.place_probability * 100).toFixed(0) + '%' : '—'"></span>
                             </td>
+                            <td class="px-4 py-2 text-center text-xs" style="font-family: 'Rajdhani', sans-serif;">
+                                <template x-if="bet.size_matched > 0">
+                                    <span style="color: #00ff88;" x-text="'$' + bet.size_matched.toFixed(2)"></span>
+                                </template>
+                                <template x-if="!bet.size_matched && bet.status === 'placed'">
+                                    <span style="color: #ffc107;">PENDING</span>
+                                </template>
+                                <template x-if="!bet.size_matched && bet.status === 'lapsed'">
+                                    <span style="color: #808090;">VOIDED</span>
+                                </template>
+                                <template x-if="!bet.size_matched && !['placed','lapsed'].includes(bet.status)">
+                                    <span style="color: var(--text-muted);">—</span>
+                                </template>
+                                <div x-show="bet.bet_id_short" class="text-[9px] mt-0.5" style="color: var(--text-muted);"
+                                     :title="bet.bet_id || ''" x-text="bet.bet_id_short"></div>
+                            </td>
                             <td class="px-4 py-2 text-center text-xs" style="color: var(--text-muted);"
                                 x-text="bet.scheduled_at ? new Date(bet.scheduled_at).toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '—'">
                             </td>
@@ -326,6 +343,8 @@
                                           :style="statusStyle(bet.status)" x-text="bet.status.toUpperCase()">
                                     </span>
                                 </template>
+                                <div x-show="bet.error_message && bet.status === 'skipped'" class="text-[9px] mt-0.5 max-w-[120px] truncate" style="color: #ff4466;"
+                                     :title="bet.error_message" x-text="bet.error_message"></div>
                             </td>
                             <td class="px-4 py-2 text-center font-bold" style="font-family: 'Rajdhani', sans-serif;"
                                 :style="{ color: bet.pnl > 0 ? '#00ff88' : bet.pnl < 0 ? '#ff4466' : 'var(--text-muted)' }">
@@ -352,7 +371,7 @@
                     <!-- W/L tally row for settled bets -->
                     <template x-if="activeBets.filter(b => b.settled).length > 0">
                         <tr style="border-top: 2px solid var(--border-subtle); background: rgba(255,255,255,0.02);">
-                            <td colspan="10" class="px-4 py-2">
+                            <td colspan="11" class="px-4 py-2">
                                 <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
                                     Results:
                                     <span style="color: #00ff88;" x-text="activeBets.filter(b => b.hit).length + 'W'"></span>
@@ -366,7 +385,7 @@
                     <!-- Cancelled/failed bets (collapsible) -->
                     <template x-if="settledBets.length > 0">
                         <tr>
-                            <td colspan="10" class="px-4 py-2 cursor-pointer" style="border-top: 2px solid var(--border-subtle);"
+                            <td colspan="11" class="px-4 py-2 cursor-pointer" style="border-top: 2px solid var(--border-subtle);"
                                 @click="showSettled = !showSettled">
                                 <span class="text-xs uppercase tracking-wider font-bold" style="color: var(--text-muted);">
                                     <span x-text="showSettled ? '▼' : '▶'"></span>
@@ -650,6 +669,13 @@
                         style="background: rgba(0,212,255,0.15); color: var(--cyan); border: 1px solid rgba(0,212,255,0.3);">
                     Set
                 </button>
+                <button @click="syncBalance()"
+                        class="px-4 py-2 rounded text-sm font-bold"
+                        :disabled="syncingBalance"
+                        style="background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);">
+                    <span x-show="!syncingBalance">Sync</span>
+                    <span x-show="syncingBalance" class="animate-pulse">...</span>
+                </button>
             </div>
             <!-- Calibration mini-chart -->
             <h3 class="text-sm font-bold uppercase tracking-wider mb-2 mt-3" style="color: var(--text-muted);">
@@ -780,6 +806,7 @@ function betfairApp() {
         fallbackSvg: { w: 600, h: 240, zeroY: 120, linePts: '', fillPts: '', points: [], lastVal: 0 },
         _chart: null,
         calibration: [],
+        syncingBalance: false,
 
         // $1M Mission milestones (log scale positions)
         milestones: [
@@ -1446,6 +1473,24 @@ function betfairApp() {
             });
             this.newBalance = '';
             await this.refresh();
+        },
+
+        async syncBalance() {
+            this.syncingBalance = true;
+            try {
+                const resp = await fetch('/api/betfair/sync-balance', { method: 'POST' });
+                const data = await resp.json();
+                if (data.synced) {
+                    this.balance = data.balance;
+                    this.newBalance = '';
+                } else {
+                    this.showErrorToast(data.message || 'Sync failed');
+                }
+            } catch (e) {
+                console.error('Balance sync failed:', e);
+                this.showErrorToast('Balance sync failed: ' + e.message);
+            }
+            this.syncingBalance = false;
         },
 
         async toggleHistory() {

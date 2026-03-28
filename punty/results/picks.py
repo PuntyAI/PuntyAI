@@ -44,6 +44,21 @@ async def store_picks_from_content(
         await db.execute(delete(Pick).where(Pick.content_id.in_(stale_ids)))
 
     pick_dicts = parse_early_mail(raw_content, content_id, meeting_id)
+
+    # Deduplicate: same race + rank + saddlecloth + type = keep first only
+    seen_keys = set()
+    deduped = []
+    for pd in pick_dicts:
+        key = (pd.get("race_number"), pd.get("tip_rank"), pd.get("saddlecloth"), pd.get("pick_type"))
+        if key in seen_keys:
+            logger.info(f"Dedup: skipping duplicate pick {key} in {meeting_id}")
+            continue
+        seen_keys.add(key)
+        deduped.append(pd)
+    if len(deduped) < len(pick_dicts):
+        logger.info(f"Deduped {len(pick_dicts) - len(deduped)} duplicate picks for {meeting_id}")
+    pick_dicts = deduped
+
     if not pick_dicts:
         logger.warning(f"No picks parsed from content {content_id} — flagging for review")
         # Flag content for manual review when parser finds zero picks
