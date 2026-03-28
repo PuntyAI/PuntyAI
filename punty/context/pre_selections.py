@@ -36,7 +36,7 @@ PLACE_MIN_VALUE = 0.95        # accept slight undervalue for Place safety
 
 # Roughie thresholds
 ROUGHIE_MIN_ODDS = 8.0
-ROUGHIE_MAX_ODDS = 20.0   # $20+ roughies historically -100% ROI
+ROUGHIE_MAX_ODDS = 51.0   # Include longshots — tracked_only, no stake risk
 ROUGHIE_MIN_VALUE = 1.10
 
 # Punty's Pick exotic threshold
