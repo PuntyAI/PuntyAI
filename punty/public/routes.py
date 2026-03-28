@@ -1877,12 +1877,12 @@ async def get_best_of_meets() -> dict:
                 "exotic": None,
             }
 
-        # Best Winner: selection, tip_rank <= 3, Win/Saver Win only, highest win_prob
+        # Best Pick: highest win_prob R1 pick across the meeting (any bet type)
         bt_lower = (pick.bet_type or "").lower()
         if (pick.pick_type == "selection"
-                and (pick.tip_rank or 99) <= 3
-                and bt_lower in ("win", "saver_win", "saver win")
-                and (pick.win_probability or 0) >= 0.22):
+                and (pick.tip_rank or 99) == 1
+                and bt_lower not in ("no_bet", "no bet", "exotics only", "exotics_only")
+                and not pick.tracked_only):
             current = meets[mid]["best_winner"]
             if not current or (pick.win_probability or 0) > (current.get("win_prob") or 0):
                 meets[mid]["best_winner"] = {
