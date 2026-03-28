@@ -169,7 +169,10 @@ async def store_picks_from_content(
                     field_size=len(active),
                 )
                 if cascade:
+                    import hashlib
+                    _exotic_id = f"pk-{hashlib.md5(f'{content_id}-{race.race_number}-exotic'.encode()).hexdigest()[:8]}-{race.race_number:03d}"
                     pick_dicts.append({
+                        "id": _exotic_id,
                         "pick_type": "exotic",
                         "race_number": race.race_number,
                         "exotic_type": cascade.exotic_type,
