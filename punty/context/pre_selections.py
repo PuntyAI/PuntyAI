@@ -260,10 +260,16 @@ def calculate_pre_selections(
     # Determine favourite price (lowest odds) for dominant fav logic
     fav_price = min((c["odds"] for c in candidates), default=None)
 
-    # Separate roughie candidates (odds >= $8, value >= 1.1)
+    # Protect top-2 candidates from being demoted to roughie.
+    # Candidates are already sorted by win_prob — top 2 should always be R1/R2.
+    top2_scs = {c["saddlecloth"] for c in candidates[:2]} if len(candidates) >= 2 else set()
+
+    # Separate roughie candidates (odds >= $8, value >= 1.1, NOT in top 2 by WP)
     roughie_pool = [
         c for c in candidates
-        if ROUGHIE_MIN_ODDS <= c["odds"] <= ROUGHIE_MAX_ODDS and c["value_rating"] >= ROUGHIE_MIN_VALUE
+        if ROUGHIE_MIN_ODDS <= c["odds"] <= ROUGHIE_MAX_ODDS
+        and c["value_rating"] >= ROUGHIE_MIN_VALUE
+        and c["saddlecloth"] not in top2_scs
     ]
 
     # Select top 3 picks + roughie
