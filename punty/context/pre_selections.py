@@ -684,12 +684,14 @@ def _determine_bet_type(
         return "Place"  # Will be tracked_only via MAX_STAKED_PICKS
 
     if rank == 1:
-        # R1 bet type decision
+        # R1 bet type decision — our top pick always gets a bet
         if odds <= 0 or odds > 10.0:
             # Long odds or no odds — Place is safer
             return "Place"
         if is_class_open or is_staying:
-            # Class/Open races and staying — Each Way for protection
+            # Class/Open and staying: Win at short odds, Each Way at mid odds
+            if odds < 4.0:
+                return "Win"  # Short-priced Class/Open fav — back to win
             if 4.0 <= odds <= 10.0:
                 return "Each Way"
             return "Place"
@@ -1018,6 +1020,13 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
     for pick in picks:
         if pick.tracked_only:
             continue  # already marked (e.g. NTD path) — preserve original reason
+        # R1 always gets a bet — never edge-gate our top pick
+        if pick.rank == 1:
+            logger.info(
+                f"  edge gate PASS (R1 override): {pick.horse_name} (#{pick.saddlecloth}) "
+                f"rank=1 {pick.bet_type} ${pick.odds:.2f}"
+            )
+            continue
         passed, reason = _passes_edge_gate(pick)
         if not passed:
             pick.tracked_only = True
