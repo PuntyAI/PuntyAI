@@ -1236,14 +1236,17 @@ def _v3_exotic_cascade(
     BUDGET = 15.0
 
     if exotic_type == "f4_standout":
-        # F4 Standout: R1 / R1,R2,R3 / R3,R4 / R4,roughie
-        # Structured legs, NOT boxed. Anchor R1 must win.
+        # F4 Standout structured legs (NOT boxed):
+        # 1st: R1 only (anchor must win)
+        # 2nd: R2, R3, R4 (our top 3 for 2nd)
+        # 3rd: R2, R3, R4, roughie (wider for 3rd)
+        # 4th: R2, R3, R4, roughie (wider for 4th)
+        # Combos: 1 × 3 × 4 × 4 = 48 (but deduplicate positions)
+        # Simplified: 1 × 3 × 3 × 3 = 27 combos
         sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
         all_scs = list(set([r1.saddlecloth, r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]))
         names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
-        # Legs: 1st=R1 / 2nd=R1,R2,R3 / 3rd=R3,R4 / 4th=R4,roughie
-        # Combos: 1 × 3 × 2 × 2 = 12
-        combos = 12
+        combos = 27  # 1 × 3 × 3 × 3
         return RecommendedExotic(
             exotic_type="First4",
             runners=all_scs,
