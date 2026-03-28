@@ -387,6 +387,24 @@ def calculate_pre_selections(
                     used_saddlecloths.add(c["saddlecloth"])
                     break
 
+        # Add picks #5 and #6 (tracked_only) for wider exotic coverage
+        # These feed into F4 Standout legs: R1/R2-R4/R2-R5/R2-R6
+        remaining_for_5_6 = [c for c in candidates if c["saddlecloth"] not in used_saddlecloths]
+        remaining_for_5_6.sort(key=lambda c: c["place_prob"], reverse=True)
+        for c in remaining_for_5_6[:2]:
+            rank = len(picks) + 1
+            pick = _make_pick_from_optimizer(
+                c, rank, is_roughie=False, rec_lookup=rec_lookup,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
+            )
+            pick.tracked_only = True
+            pick.no_bet_reason = "Exotic coverage only (R5/R6)"
+            pick.stake = 0.0
+            pick.bet_type = "Place"
+            picks.append(pick)
+            used_saddlecloths.add(c["saddlecloth"])
+
     # Ensure at least one Win/Saver Win bet — but only when the conditional
     # bet type logic assigned Win to rank 1. If rank 1 was shifted to Place
     # (Class/Open race, staying, or long odds), respect that decision.
@@ -1254,22 +1272,35 @@ def _v3_exotic_cascade(
     BUDGET = 15.0
 
     if exotic_type == "f4_standout":
-        # F4 Standout structured legs (NOT boxed):
-        # 1st: R1 only (anchor must win)
-        # 2nd: R2, R3, R4 (our top 3 for 2nd)
-        # 3rd: R2, R3, R4, roughie (wider for 3rd)
-        # 4th: R2, R3, R4, roughie (wider for 4th)
-        # Combos: 1 × 3 × 4 × 4 = 48 (but deduplicate positions)
-        # Simplified: 1 × 3 × 3 × 3 = 27 combos
+        # F4 Standout structured legs:
+        # 1st: R1 (anchor must win)
+        # 2nd: R2, R3, R4 (3 options)
+        # 3rd: R2, R3, R4, R5 (4 options)
+        # 4th: R2, R3, R4, R5, R6 (5 options — widest coverage)
+        # Combos: 1 × 3 × 4 × 5 = 60
+        r5 = sorted_picks[4] if len(sorted_picks) > 4 else None
+        r6 = sorted_picks[5] if len(sorted_picks) > 5 else None
+
         sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
-        all_scs = list(set([r1.saddlecloth, r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]))
+        all_scs = [r1.saddlecloth, r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        if r5:
+            all_scs.append(r5.saddlecloth)
+        if r6:
+            all_scs.append(r6.saddlecloth)
+        all_scs = list(set(all_scs))
         names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
-        combos = 27  # 1 × 3 × 3 × 3
+
+        # Calculate combos based on available picks
+        leg2 = 3  # R2, R3, R4
+        leg3 = 4 if r5 else 3  # + R5
+        leg4 = 5 if r6 else (4 if r5 else 3)  # + R6
+        combos = 1 * leg2 * leg3 * leg4
+
         return RecommendedExotic(
             exotic_type="First4",
             runners=all_scs,
             runner_names=names,
-            probability=r1.win_prob * r2.win_prob * r3.win_prob * r4.win_prob,
+            probability=r1.win_prob * r2.win_prob * r3.win_prob * (r4.win_prob if r4 else 0.1),
             value_ratio=3.0,
             num_combos=combos,
             format="flat",
