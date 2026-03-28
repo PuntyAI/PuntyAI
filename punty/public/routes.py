@@ -971,6 +971,7 @@ def _compute_pick_data(all_picks: list) -> dict:
     winners_map = {}       # {race_number: [saddlecloth, ...]}
     winning_exotics = {}   # {race_number: exotic_type}
     losing_exotics = {}    # {race_number: exotic_type}  — settled but NOT hit
+    exotic_picks = {}      # {race_number: {type, runners, combos}} — for template rendering
     winning_sequences = [] # [{type, variant}]
     sequence_results = []
     picks_lookup = {}      # {race_number: {saddlecloth: {...}}}
@@ -1037,6 +1038,7 @@ def _compute_pick_data(all_picks: list) -> dict:
                 winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
             elif pick.pick_type == "exotic" and pick.race_number and pick.exotic_type:
                 winning_exotics[pick.race_number] = pick.exotic_type
+                # Store full exotic data for template rendering
             elif pick.pick_type == "sequence" and pick.sequence_type:
                 winning_sequences.append({
                     "type": pick.sequence_type,
@@ -1055,6 +1057,14 @@ def _compute_pick_data(all_picks: list) -> dict:
             # Normalise sequence_type to underscore form (e.g. "early quaddie" -> "early_quaddie")
             seq_type = (pick.sequence_type or pick.pick_type).lower().replace(" ", "_")
             label = seq_type.replace("_", " ").title()
+            # Parse sequence_legs JSON for per-leg display
+            import json as _json_seq
+            _legs_raw = pick.sequence_legs
+            if isinstance(_legs_raw, str):
+                try:
+                    _legs_raw = _json_seq.loads(_legs_raw)
+                except Exception:
+                    _legs_raw = None
             sequence_results.append({
                 "type": seq_type,
                 "variant": pick.sequence_variant,
@@ -1063,6 +1073,7 @@ def _compute_pick_data(all_picks: list) -> dict:
                 "pnl": float(pick.pnl) if pick.pnl is not None else 0.0,
                 "stake": float(pick.exotic_stake or pick.bet_stake or 0),
                 "start_race": pick.sequence_start_race,
+                "legs": _legs_raw if isinstance(_legs_raw, list) else None,
             })
 
         # --- Stats accumulators (settled only) ---
@@ -1088,6 +1099,22 @@ def _compute_pick_data(all_picks: list) -> dict:
                 ex_stats[label]["hits"] += 1
             ex_stats[label]["pnl"] += float(pick.pnl or 0)
             ex_stats[label]["staked"] += float(pick.exotic_stake or 0)
+
+            # Collect exotic pick data for template rendering (overrides AI text)
+            if pick.race_number and pick.exotic_runners:
+                import json as _jex
+                try:
+                    runners = _jex.loads(pick.exotic_runners) if isinstance(pick.exotic_runners, str) else pick.exotic_runners
+                except Exception:
+                    runners = []
+                exotic_picks[pick.race_number] = {
+                    "type": pick.exotic_type,
+                    "runners": runners,
+                    "combos": pick.exotic_stake and len(runners),  # approximate
+                    "hit": pick.hit,
+                    "pnl": float(pick.pnl or 0),
+                    "settled": pick.settled,
+                }
 
         elif pick.pick_type == "sequence":
             key = (pick.sequence_type, pick.sequence_variant)
@@ -1182,6 +1209,7 @@ def _compute_pick_data(all_picks: list) -> dict:
         "winners_map": winners_map,
         "winning_exotics": winning_exotics,
         "losing_exotics": losing_exotics,
+        "exotic_picks": exotic_picks,
         "winning_sequences": winning_sequences,
         "sequence_results": sequence_results,
         "picks_lookup": picks_lookup,
@@ -1414,6 +1442,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             "winners": pick_data["winners_map"],
             "winning_exotics": pick_data["winning_exotics"],
             "losing_exotics": pick_data["losing_exotics"],
+            "exotic_picks": pick_data.get("exotic_picks", {}),
             "winning_sequences": pick_data["winning_sequences"],
             "pp_picks": pick_data["pp_picks"],
             "sequence_results": pick_data["sequence_results"],
