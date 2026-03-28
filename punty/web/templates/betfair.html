@@ -589,10 +589,12 @@
                                 </td>
                                 <td class="px-4 py-2 text-center">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-bold"
-                                          :style="bet.hit
-                                              ? 'background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);'
-                                              : 'background: rgba(255,68,102,0.2); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);'"
-                                          x-text="bet.hit ? 'WON' : 'LOST'">
+                                          :style="bet.status === 'cancelled'
+                                              ? 'background: rgba(128,128,128,0.2); color: #808090; border: 1px solid rgba(128,128,128,0.3);'
+                                              : bet.hit
+                                                  ? 'background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);'
+                                                  : 'background: rgba(255,68,102,0.2); color: #ff4466; border: 1px solid rgba(255,68,102,0.3);'"
+                                          x-text="bet.status === 'cancelled' ? 'VOID' : bet.hit ? 'WON' : 'LOST'">
                                     </span>
                                 </td>
                                 <td class="px-4 py-2 text-center font-bold" style="font-family: 'Rajdhani', sans-serif;"

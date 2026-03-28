@@ -1342,15 +1342,19 @@ async def get_queue_summary(db: AsyncSession) -> dict:
     today_bets = result.scalars().all()
     # Sort in Python as well — mixed datetime formats from rescheduling
     # can confuse DB string ordering
-    today_bets.sort(key=lambda b: b.scheduled_at or "")
+    today_bets.sort(key=lambda b: str(b.scheduled_at or "9999"))
 
     # All-time settled stats
+    # Exclude cancelled/voided from stats — only count actually matched bets
     all_result = await db.execute(
         select(
             func.count(BetfairBet.id),
             func.coalesce(func.sum(BetfairBet.pnl), 0.0),
             func.sum(func.cast(BetfairBet.hit == True, Integer)),
-        ).where(BetfairBet.settled == True).select_from(BetfairBet)
+        ).where(
+            BetfairBet.settled == True,
+            BetfairBet.status != "cancelled",
+        ).select_from(BetfairBet)
     )
     row = all_result.one()
     total_bets = row[0] or 0
