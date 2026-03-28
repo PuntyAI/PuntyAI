@@ -357,7 +357,14 @@ async def auto_approve_content(content_id: str, db: AsyncSession) -> dict:
         except Exception as e:
             logger.error(f"Failed to store picks for {content_id}: {e}")
 
-        # Betfair: JIT mode — bets placed at T-5min by scheduler, not at approval
+        # Queue Betfair bets for visibility — JIT validates at T-5min before placing
+        try:
+            from punty.betting.queue import populate_bet_queue
+            queued = await populate_bet_queue(db, content.meeting_id, content.id)
+            if queued:
+                logger.info(f"Queued {queued} Betfair bets for {content.meeting_id}")
+        except Exception as e:
+            logger.warning(f"Betfair queue population failed: {e}")
 
     await db.commit()
 

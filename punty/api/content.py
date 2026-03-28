@@ -323,7 +323,12 @@ async def review_content(
                 await store_picks_as_memories(db, content.meeting_id, content.id)
                 # Picks stored successfully — now safe to approve
                 content.status = ContentStatus.APPROVED
-                # Betfair: JIT mode — bets placed at T-5min, not at approval time
+                # Queue Betfair bets for visibility — JIT validates at T-5min
+                try:
+                    from punty.betting.queue import populate_bet_queue
+                    await populate_bet_queue(db, content.meeting_id, content.id)
+                except Exception:
+                    pass  # Non-blocking
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(

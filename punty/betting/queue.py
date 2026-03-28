@@ -381,7 +381,7 @@ async def populate_bet_queue(
     slots_remaining = max(0, MAX_BETS_PER_MEETING - existing_count)
 
     # ── Filter: NTD + scratched + age + PP floor ──
-    PP_FLOOR = 0.59
+    PP_FLOOR = 0.55  # v4: lowered from 0.59 for honest model probabilities
     eligible = []
     for pick in race_picks:
         race = races_by_num.get(pick.race_number)
