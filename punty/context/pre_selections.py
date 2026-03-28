@@ -1155,30 +1155,31 @@ def _get_exotic_budget(meet_quality: float) -> float:
 # ── V3 Context-Aware Exotic Cascade ──
 # Backtested on v3 model (78.2% place SR): +302% ROI on Exacta R1/R2,R3.
 # Config maps distance×condition → optimal exotic type.
-# v5 data-driven cascade: F4 Standout dominant (5%+ hit rate in 17/21 cells).
-# Cascade: F4 (8+ runners) → Tri (6+ runners) → Quinella Box (default).
-# Based on actual R1-R4 finish position analysis across all settled races.
+# v6 cascade config: used for MID-FIELD (9-11 runners) routing only.
+# Small fields (≤8) always go F4 Standout. Big fields (12+) always Quin Box.
+# This config determines the exotic type for mid-field races by context.
+# Based on actual R1-R4 finish positions from our settled picks.
 _EXOTIC_CASCADE_CONFIG = {
-    # Sprint: F4 dominant everywhere (8-22% hit rate)
-    "sprint|good": "f4_standout",    # F4 8.1% country, 7.3% metro
-    "sprint|soft": "f4_standout",    # F4 6.1% country, 21.7% metro
-    "sprint|heavy": "f4_standout",   # F4 17.6% country
-    # Short: F4 or Tri depending on context
-    "short|good": "tri",             # Tri 7.2% country, F4 only 2.5% country
-    "short|soft": "f4_standout",     # F4 5.3% country, 10.7% metro
-    "short|heavy": "f4_standout",    # F4 16.0%
-    # Middle: F4 strong across the board
-    "middle|good": "f4_standout",    # F4 5.6% country, 6.1% metro
-    "middle|soft": "f4_standout",    # F4 4.8% country, 7.7% metro
-    "middle|heavy": "f4_standout",   # F4 10.7% — heavy is our strength
-    # Classic: Tri or F4
-    "classic|good": "tri",           # Tri 8.6% country, 9.5% metro
-    "classic|soft": "f4_standout",   # F4 6.4% country, 7.1% metro
-    "classic|heavy": "quin_box",     # small sample, play safe
-    # Staying: F4 surprisingly strong
-    "staying|good": "f4_standout",   # F4 7.7%
-    "staying|soft": "f4_standout",   # F4 22.2%
-    "staying|heavy": "quin_box",     # too small
+    # Sprint mid-field: Tri strong (15% maiden, 15% benchmark)
+    "sprint|good": "tri",            # Tri 14.8% maiden, 6.7% benchmark
+    "sprint|soft": "tri",            # Tri 15% benchmark
+    "sprint|heavy": "f4_standout",   # F4 17.6% (heavy = our strength)
+    # Short mid-field: Exacta dominant
+    "short|good": "exacta",         # Exacta 19.2% other, 17.6% handicap
+    "short|soft": "exacta",         # Exacta 20% maiden, 21.4% benchmark
+    "short|heavy": "f4_standout",   # F4 16% (heavy)
+    # Middle mid-field: mixed — Exacta for soft, Tri for good
+    "middle|good": "tri",           # Tri 8% benchmark, 7.4% overall
+    "middle|soft": "exacta",        # Exacta 28.6% other, 15% benchmark
+    "middle|heavy": "f4_standout",  # F4 10.7% (heavy dominant)
+    # Classic: Tri strong at 21% benchmark
+    "classic|good": "tri",          # Tri 21.4% benchmark
+    "classic|soft": "exacta",       # Exacta 19.6%
+    "classic|heavy": "quin_box",    # tiny sample
+    # Staying
+    "staying|good": "exacta",       # Exacta 7.7%
+    "staying|soft": "f4_standout",  # F4 22.2%
+    "staying|heavy": "quin_box",    # tiny sample
 }
 
 
@@ -1216,23 +1217,39 @@ def _v3_exotic_cascade(
     cond_b = _condition_bucket(track_condition or "Good 4")
     ctx_key = f"{dist_b}|{cond_b}"
 
-    exotic_type = _EXOTIC_CASCADE_CONFIG.get(ctx_key, "quin_box")
+    # CASCADE: F4 → Tri → Exacta → Quin → Quin Box
+    # Field size is the primary router (data shows small fields = F4 goldmine):
+    #   Small (≤8): F4 Standout (20-43% hit rate in our data)
+    #   Mid (9-11): Tri/Exacta based on context
+    #   Big (12+): Quin Box (F4/Tri near 0% in big fields)
+    if field_size <= 0:
+        field_size = 10  # assume mid if unknown
 
-    # CASCADE: try F4 Standout first if enough runners and picks
-    # F4 Standout: R1 / R1,R2,R3 / R3,R4 / R4,roughie — structured, not boxed
-    if field_size >= 8 and r4 and r3:
+    if field_size < 4:
+        return None  # Too few runners
+
+    if field_size <= 8 and r4 and r3:
+        # Small fields: F4 Standout is dominant (our picks fill top 4 at 20-43%)
         exotic_type = "f4_standout"
-
-    # Minimum field sizes — cascade down
-    if field_size > 0:
-        if exotic_type == "f4_standout" and field_size < 8:
+    elif field_size <= 11 and r3:
+        # Mid fields: use context cascade config
+        exotic_type = _EXOTIC_CASCADE_CONFIG.get(ctx_key, "tri")
+        # Ensure minimum runners for chosen type
+        if exotic_type == "f4_standout" and not r4:
             exotic_type = "tri"
-        if exotic_type == "tri" and field_size < 6:
-            exotic_type = "exacta"
-        if exotic_type == "exacta" and field_size < 5:
-            exotic_type = "quin_box"
-        if exotic_type in ("quin", "quin_box") and field_size < 4:
-            return None
+    else:
+        # Big fields (12+): our picks spread thin, default to Quin Box
+        exotic_type = "quin_box"
+
+    # Final minimum field size guards
+    if exotic_type == "f4_standout" and (field_size < 5 or not r4):
+        exotic_type = "tri"
+    if exotic_type == "tri" and (field_size < 5 or not r3):
+        exotic_type = "exacta"
+    if exotic_type == "exacta" and field_size < 4:
+        exotic_type = "quin_box"
+    if exotic_type in ("quin", "quin_box") and field_size < 4:
+        return None
 
     BUDGET = 15.0
 
