@@ -685,18 +685,19 @@ def _determine_bet_type(
 
     if rank == 1:
         # R1 bet type decision — our top pick always gets a bet
+        # Under $4.00 (3/1) → always Win, regardless of class/distance
+        if 0 < odds < 4.0:
+            return "Win"
         if odds <= 0 or odds > 10.0:
             # Long odds or no odds — Place is safer
             return "Place"
         if is_class_open or is_staying:
-            # Class/Open and staying: Win at short odds, Each Way at mid odds
-            if odds < 4.0:
-                return "Win"  # Short-priced Class/Open fav — back to win
+            # Class/Open and staying at mid odds — Each Way for protection
             if 4.0 <= odds <= 10.0:
                 return "Each Way"
             return "Place"
         if odds < 7.0:
-            # Short to mid odds, standard race — Win
+            # Mid odds, standard race — Win
             return "Win"
         # $7-$10 — Each Way
         return "Each Way"
