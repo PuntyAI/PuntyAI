@@ -685,8 +685,8 @@ def _determine_bet_type(
 
     if rank == 1:
         # R1 bet type decision — our top pick always gets a bet
-        # Under $4.00 (3/1) → always Win, regardless of class/distance
-        if 0 < odds < 4.0:
+        # Under $3.00 → always Win, regardless of class/distance
+        if 0 < odds < 3.0:
             return "Win"
         if odds <= 0 or odds > 10.0:
             # Long odds or no odds — Place is safer
