@@ -653,60 +653,15 @@ async def scrape_race_cards(
 async def scrape_speed_maps(
     db: AsyncSession, meeting_id: str, venue: str, race_date: date
 ) -> dict:
-    """Scrape speed maps and update runner positions."""
-    from punty.scrapers.punters import PuntersScraper
-    from punty.models.meeting import Runner, Race
-    from sqlalchemy import select
+    """Scrape speed maps via orchestrator (PuntingForm primary, Racing.com fallback)."""
+    from punty.scrapers.orchestrator import scrape_speed_maps_stream
 
     logger.info(f"Running scrape_speed_maps for {venue} on {race_date}")
 
-    scraper = PuntersScraper()
-    try:
-        data = await scraper.scrape_meeting(venue, race_date)
-        speed_maps = data.get("speed_maps", {})
-        comments = data.get("comments", {})
+    async for _ in scrape_speed_maps_stream(meeting_id, db):
+        pass  # Consume SSE stream; orchestrator handles DB updates
 
-        updated_count = 0
-
-        # Get all races for this meeting
-        result = await db.execute(
-            select(Race).where(Race.meeting_id == meeting_id)
-        )
-        races = result.scalars().all()
-
-        for race in races:
-            race_speed_maps = speed_maps.get(race.race_number, [])
-            race_comments = comments.get(race.race_number, {})
-
-            # Get runners for this race
-            result = await db.execute(
-                select(Runner).where(Runner.race_id == race.id)
-            )
-            runners = result.scalars().all()
-
-            for runner in runners:
-                # Find speed map position
-                for sm in race_speed_maps:
-                    if sm["horse_name"].lower() == runner.horse_name.lower():
-                        if sm.get("speed_map_position"):
-                            runner.speed_map_position = sm["speed_map_position"]
-                            updated_count += 1
-                        break
-
-                # Add comment if available
-                comment = race_comments.get(runner.horse_name)
-                if comment:
-                    runner.comments = comment
-
-        await db.commit()
-
-        return {
-            "status": "success",
-            "updated_count": updated_count,
-        }
-
-    finally:
-        await scraper.close()
+    return {"status": "success"}
 
 
 async def scrape_odds(
@@ -723,76 +678,27 @@ async def scrape_odds(
 async def scrape_results(
     db: AsyncSession, meeting_id: str, venue: str, race_date: date, race_number: Optional[int] = None
 ) -> dict:
-    """Scrape race results."""
-    from punty.scrapers.tab import TabScraper
-    from punty.models.meeting import Race, Runner, Result
-    from sqlalchemy import select
-    import uuid
+    """Scrape race results via RacingComScraper + upsert pipeline.
+
+    Note: Results are primarily handled by the ResultsMonitor background process.
+    This function exists for manual/scheduled one-shot checks.
+    """
+    from punty.scrapers.racing_com import RacingComScraper
+    from punty.scrapers.orchestrator import upsert_race_results
 
     logger.info(f"Running scrape_results for {venue} on {race_date}")
 
-    scraper = TabScraper()
+    scraper = RacingComScraper()
     try:
-        results_data = await scraper.scrape_results(venue, race_date)
-
-        created_count = 0
-
-        # Get races
-        query = select(Race).where(Race.meeting_id == meeting_id)
-        if race_number:
-            query = query.where(Race.race_number == race_number)
-
-        result = await db.execute(query)
-        races = result.scalars().all()
-        races_by_num = {r.race_number: r for r in races}
-
-        for result_data in results_data:
-            race = races_by_num.get(result_data.get("race_number"))
-            if not race:
-                continue
-
-            # Find runner
-            result = await db.execute(
-                select(Runner).where(
-                    Runner.race_id == race.id,
-                    Runner.horse_name.ilike(result_data["horse_name"])
-                )
-            )
-            runner = result.scalar_one_or_none()
-
-            if runner:
-                # Check if result already exists
-                existing = await db.execute(
-                    select(Result).where(
-                        Result.race_id == race.id,
-                        Result.runner_id == runner.id
-                    )
-                )
-                if existing.scalar_one_or_none():
-                    continue
-
-                race_result = Result(
-                    id=str(uuid.uuid4()),
-                    race_id=race.id,
-                    runner_id=runner.id,
-                    position=result_data["position"],
-                    dividend_win=result_data.get("dividend_win"),
-                    dividend_place=result_data.get("dividend_place"),
-                )
-                db.add(race_result)
-                created_count += 1
-
-                # Mark race as finished if we have winner
-                if result_data["position"] == 1:
-                    race.status = "finished"
-
+        results = await scraper.scrape_results(venue, race_date)
+        updated = 0
+        for result in results:
+            rn = result.get("race_number")
+            if rn and (race_number is None or rn == race_number):
+                await upsert_race_results(db, meeting_id, rn, result)
+                updated += 1
         await db.commit()
-
-        return {
-            "status": "success",
-            "created_count": created_count,
-        }
-
+        return {"status": "success", "races_updated": updated}
     finally:
         await scraper.close()
 
