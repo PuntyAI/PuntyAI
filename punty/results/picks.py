@@ -187,7 +187,7 @@ async def store_picks_from_content(
     # ── Hard kill: never store Trifecta Box or First4 Box (data: -$2,182 lifetime) ──
     # Trifecta Standout allowed ONLY from v3 cascade (sprint|good context).
     # Big6 stays (user directive: "hail mary").
-    KILLED_EXOTIC_TYPES = {"Trifecta Box", "First4 Box", "First4"}
+    KILLED_EXOTIC_TYPES = {"Trifecta Box", "First4 Box"}  # First4 Standout allowed from cascade
     pick_dicts = [
         pd for pd in pick_dicts
         if not (pd.get("pick_type") == "exotic" and pd.get("exotic_type") in KILLED_EXOTIC_TYPES)
