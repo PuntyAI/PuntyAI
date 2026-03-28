@@ -24,18 +24,7 @@
             Back to Tips
         </a>
 
-        <!-- Venue Switcher -->
-        {% if same_day_meetings %}
-        <div class="flex flex-wrap items-center gap-2 mb-6">
-            <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Today's Meetings</span>
-            <a href="/tips/{{ meeting.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all" style="background: var(--gradient-sunset); color: #fff;">{{ meeting.venue }}</a>
-            {% for m in same_day_meetings %}
-            <a href="/tips/{{ m.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all hover:brightness-125" style="background: var(--bg-card-alt); color: var(--text-secondary); border: 1px solid var(--border-subtle);">{{ m.venue }}</a>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Meeting Header -->
+        <!-- Meeting Header with Venue Dropdown -->
         <div class="card p-6 mb-8">
             <div class="flex items-start gap-4">
                 <div class="w-16 h-16 rounded-xl flex flex-col items-center justify-center flex-shrink-0" style="background: var(--gradient-sunset);">
@@ -45,9 +34,29 @@
                     </svg>
                 </div>
                 <div class="flex-1">
+                    {# Venue name as dropdown selector #}
+                    {% if same_day_meetings %}
+                    <div class="relative inline-block" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center gap-2 text-3xl md:text-4xl font-heading font-bold cursor-pointer" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                            {{ meeting.venue }}
+                            <svg class="w-5 h-5 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="var(--magenta)" viewBox="0 0 24 24" style="-webkit-text-fill-color: initial;">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open" @click.away="open = false" x-transition
+                             class="absolute z-50 mt-2 w-64 py-2 shadow-xl"
+                             style="background: var(--bg-card); border: 1px solid var(--border-subtle); max-height: 400px; overflow-y: auto;">
+                            <a href="/tips/{{ meeting.id }}" class="block px-4 py-2 text-sm font-heading font-semibold" style="background: var(--magenta); color: white;">{{ meeting.venue }}</a>
+                            {% for m in same_day_meetings %}
+                            <a href="/tips/{{ m.id }}" class="block px-4 py-2 text-sm font-heading font-semibold hover:brightness-125 transition-colors" style="color: var(--text-secondary);" onmouseover="this.style.background='var(--bg-card-alt)'" onmouseout="this.style.background='transparent'">{{ m.venue }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% else %}
                     <h1 class="text-3xl md:text-4xl font-heading font-bold mb-2">
                         <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{{ meeting.venue }}</span>
                     </h1>
+                    {% endif %}
                     <p class="text-lg" style="color: var(--text-secondary);">{{ meeting.date_formatted }}</p>
 
                     <!-- Meeting Details -->
