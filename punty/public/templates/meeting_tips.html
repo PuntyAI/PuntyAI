@@ -193,7 +193,7 @@
                             {% else %}
                             <div class="flex items-center gap-2 mb-1">
                                 <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: var(--cyan);">Track Read</span>
-                                <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-card-alt); color: var(--text-muted);">After R{{ update.race_number }}</span>
+                                {% if update.race_number %}<span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-card-alt); color: var(--text-muted);">After R{{ update.race_number }}</span>{% endif %}
                             </div>
                             {% endif %}
                             <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">{{ update.content }}</p>
