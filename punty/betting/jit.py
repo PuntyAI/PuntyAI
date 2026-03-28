@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Gates
 PP_FLOOR = 0.55  # v4: lowered from 0.59 — v4 model produces honest (lower) PPs
 WIN_GAP_THRESHOLD = 0.15
-MIN_PLACE_ODDS = 1.30
+MIN_PLACE_ODDS = 1.20  # Lowered from 1.30 — 86% of voided BSP bets would have placed
 MIN_WIN_ODDS = 1.50
 MAX_EDGE_CAP = 0.10
 
