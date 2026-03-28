@@ -154,7 +154,11 @@ async def store_picks_from_content(
                         place_prob=rp.place_probability if rp else 0.40,
                         odds=s.get("odds_at_tip", 5.0) or 5.0,
                         bet_type=s.get("bet_type", "place"),
-                        bet_stake=0,
+                        stake=0,
+                        place_odds=None,
+                        value_rating=1.0,
+                        place_value_rating=1.0,
+                        expected_return=0,
                     ))
 
                 active = [r for r in race.runners if not r.scratched]
