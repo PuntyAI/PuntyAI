@@ -796,7 +796,7 @@ def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
     Only force Win on picks within the proven-profitable $2-$10 range.
     Below $2.00 is historically -38.9% ROI on Win — leave as Place.
     """
-    has_win = any(p.bet_type in ("Win", "Saver Win") for p in picks)
+    has_win = any(p.bet_type in ("Win", "Saver Win", "Each Way") for p in picks)
     if has_win or not picks:
         return
 

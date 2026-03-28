@@ -46,10 +46,19 @@ async def store_picks_from_content(
     pick_dicts = parse_early_mail(raw_content, content_id, meeting_id)
 
     # Deduplicate: same race + rank + saddlecloth + type = keep first only
+    # For sequences: use sequence_type as part of the key (not race/rank/sc which are None)
     seen_keys = set()
     deduped = []
     for pd in pick_dicts:
-        key = (pd.get("race_number"), pd.get("tip_rank"), pd.get("saddlecloth"), pd.get("pick_type"))
+        pt = pd.get("pick_type")
+        if pt == "sequence":
+            key = (pt, pd.get("sequence_type"), pd.get("sequence_variant"))
+        elif pt == "big3_multi":
+            key = (pt, "multi")
+        elif pt == "big3":
+            key = (pt, pd.get("race_number"), pd.get("saddlecloth"))
+        else:
+            key = (pd.get("race_number"), pd.get("tip_rank"), pd.get("saddlecloth"), pt)
         if key in seen_keys:
             logger.info(f"Dedup: skipping duplicate pick {key} in {meeting_id}")
             continue
