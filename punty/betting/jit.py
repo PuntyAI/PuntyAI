@@ -22,7 +22,7 @@ from punty.models.settings import AppSettings
 logger = logging.getLogger(__name__)
 
 # Gates
-PP_FLOOR = 0.59
+PP_FLOOR = 0.55  # v4: lowered from 0.59 — v4 model produces honest (lower) PPs
 WIN_GAP_THRESHOLD = 0.15
 MIN_PLACE_ODDS = 1.30
 MIN_WIN_ODDS = 1.50

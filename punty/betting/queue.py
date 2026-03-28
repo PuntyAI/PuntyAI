@@ -1204,6 +1204,20 @@ async def _settle_single_bet(
             )
             bet.matched_odds = bsp
             bet.size_matched = bf_result.get("size_matched", bet.stake)
+        elif not bf_result and bet.size_matched == 0:
+            # Bet was placed but NEVER matched on Betfair (voided/lapsed BSP)
+            logger.warning(
+                f"Betfair bet {bet.id} ({bet.horse_name}) was not matched — voiding. "
+                f"bet_id={bet.bet_id}, size_matched=0"
+            )
+            bet.pnl = 0.0
+            bet.hit = False
+            bet.settled = True
+            bet.settled_at = melb_now_naive()
+            bet.status = "cancelled"
+            bet.error_message = "BSP order not matched — voided (no size_matched)"
+            await db.commit()
+            return 1  # Settled as void
 
     commission_rate = float(await _get_setting(db, "betfair_commission_rate", str(DEFAULT_COMMISSION_RATE)))
     odds = bet.matched_odds or bet.requested_odds or 0
