@@ -1192,33 +1192,77 @@ async def _settle_single_bet(
         else:
             return 0  # Results not in yet
 
-    # Fetch actual BSP from Betfair before settling — BSP orders don't have
-    # matched odds at placement time, only after the race
+    # Fetch actual result from Betfair — checks SETTLED, LAPSED, VOIDED, and current orders
     if bet.bet_id and not bet.bet_id.startswith("mock-"):
         from punty.betting.betfair_client import get_bet_result
         bf_result = await get_bet_result(db, bet.bet_id)
-        if bf_result and bf_result.get("price_matched"):
-            bsp = bf_result["price_matched"]
-            logger.info(
-                f"BSP update for {bet.id}: {bet.matched_odds or bet.requested_odds:.2f} -> {bsp:.2f}"
-            )
-            bet.matched_odds = bsp
-            bet.size_matched = bf_result.get("size_matched", bet.stake)
+
+        if bf_result:
+            bf_status = bf_result.get("status", "")
+
+            # Lapsed/voided/cancelled — BSP didn't match, refund
+            if bf_status in ("lapsed", "voided", "cancelled"):
+                logger.warning(
+                    f"Betfair bet {bet.id} ({bet.horse_name}) {bf_status} — voiding. "
+                    f"bet_id={bet.bet_id}"
+                )
+                bet.pnl = 0.0
+                bet.hit = False
+                bet.settled = True
+                bet.settled_at = melb_now_naive()
+                bet.status = "cancelled"
+                bet.error_message = f"BSP order {bf_status}"
+                bet.size_matched = bf_result.get("size_matched", 0)
+                # Refund stake to balance
+                current_bal = await get_balance(db)
+                await set_balance(db, current_bal + bet.stake)
+                await db.commit()
+                return 1
+
+            # Settled — use Betfair's actual numbers
+            if bf_result.get("price_matched") and bf_result["price_matched"] > 0:
+                bsp = bf_result["price_matched"]
+                logger.info(
+                    f"BSP update for {bet.id}: {bet.matched_odds or bet.requested_odds:.2f} -> {bsp:.2f}"
+                )
+                bet.matched_odds = bsp
+                bet.size_matched = bf_result.get("size_matched", bet.stake)
+
+                # Use Betfair's profit if available (most accurate)
+                if bf_result.get("profit") is not None:
+                    bet.pnl = round(float(bf_result["profit"]), 2)
+                    bet.hit = bet.pnl > 0
+                    bet.settled = True
+                    bet.settled_at = melb_now_naive()
+                    bet.status = "settled"
+                    # Sync balance from API after settlement
+                    from punty.betting.queue import sync_betfair_balance
+                    await sync_betfair_balance(db)
+                    await db.commit()
+                    logger.info(
+                        f"Settled {bet.id} using Betfair profit: {bet.pnl:+.2f} "
+                        f"(BSP {bsp:.2f}, matched {bet.size_matched})"
+                    )
+                    return 1
+
         elif not bf_result and bet.size_matched == 0:
-            # Bet was placed but NEVER matched on Betfair (voided/lapsed BSP)
+            # No record anywhere — bet vanished, void it
             logger.warning(
-                f"Betfair bet {bet.id} ({bet.horse_name}) was not matched — voiding. "
-                f"bet_id={bet.bet_id}, size_matched=0"
+                f"Betfair bet {bet.id} ({bet.horse_name}) not found in any status — voiding. "
+                f"bet_id={bet.bet_id}"
             )
             bet.pnl = 0.0
             bet.hit = False
             bet.settled = True
             bet.settled_at = melb_now_naive()
             bet.status = "cancelled"
-            bet.error_message = "BSP order not matched — voided (no size_matched)"
+            bet.error_message = "BSP order not found — voided"
+            current_bal = await get_balance(db)
+            await set_balance(db, current_bal + bet.stake)
             await db.commit()
-            return 1  # Settled as void
+            return 1
 
+    # Fallback: local P&L calculation (only if Betfair API didn't provide profit)
     commission_rate = float(await _get_setting(db, "betfair_commission_rate", str(DEFAULT_COMMISSION_RATE)))
     odds = bet.matched_odds or bet.requested_odds or 0
 

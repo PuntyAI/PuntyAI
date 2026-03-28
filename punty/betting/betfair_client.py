@@ -406,8 +406,8 @@ async def place_bet(
 async def get_bet_result(db: AsyncSession, bet_id: str) -> Optional[dict]:
     """Query Betfair for the actual settled result of a bet (BSP price, profit/loss).
 
-    Uses listClearedOrders to get the real BSP matched price after a race.
-    Returns: {price_matched, profit, settled_date} or None if not found/settled.
+    Checks SETTLED first, then LAPSED/VOIDED for failed BSP orders.
+    Returns: {price_matched, size_matched, profit, settled_date, status} or None.
     """
     if settings.mock_external:
         return None
@@ -416,30 +416,116 @@ async def get_bet_result(db: AsyncSession, bet_id: str) -> Optional[dict]:
     if not scraper:
         return None
 
+    # Check SETTLED first
+    for bet_status in ["SETTLED", "LAPSED", "VOIDED", "CANCELLED"]:
+        try:
+            result = await scraper._api_call("listClearedOrders", {
+                "betStatus": bet_status,
+                "betIds": [bet_id],
+            })
+        except Exception as e:
+            logger.warning(f"Betfair listClearedOrders ({bet_status}) failed for {bet_id}: {e}")
+            continue
+
+        orders = result.get("clearedOrders", []) if isinstance(result, dict) else []
+        if orders:
+            order = orders[0]
+            price = order.get("priceMatched") or order.get("priceRequested")
+            profit = order.get("profit", 0)
+            size_matched = order.get("sizeSettled", 0) or order.get("sizeMatched", 0)
+            logger.info(
+                f"Betfair {bet_status} result for {bet_id}: price={price}, "
+                f"profit={profit}, size_matched={size_matched}"
+            )
+            return {
+                "price_matched": price,
+                "size_matched": size_matched,
+                "profit": profit,
+                "settled_date": order.get("settledDate"),
+                "status": bet_status.lower(),
+            }
+
+    # Also check listCurrentOrders for pending bets
     try:
-        result = await scraper._api_call("listClearedOrders", {
-            "betStatus": "SETTLED",
+        result = await scraper._api_call("listCurrentOrders", {
             "betIds": [bet_id],
         })
+        orders = result.get("currentOrders", []) if isinstance(result, dict) else []
+        if orders:
+            order = orders[0]
+            size_matched = order.get("sizeMatched", 0)
+            size_lapsed = order.get("sizeLapsed", 0)
+            size_voided = order.get("sizeVoided", 0)
+            size_cancelled = order.get("sizeCancelled", 0)
+            status = order.get("status", "UNKNOWN")
+            logger.info(
+                f"Betfair current order {bet_id}: status={status}, matched={size_matched}, "
+                f"lapsed={size_lapsed}, voided={size_voided}, cancelled={size_cancelled}"
+            )
+            if size_lapsed > 0 or size_voided > 0 or size_cancelled > 0:
+                return {
+                    "price_matched": 0,
+                    "size_matched": size_matched,
+                    "profit": 0,
+                    "settled_date": None,
+                    "status": "lapsed" if size_lapsed > 0 else "voided",
+                }
+            elif size_matched > 0:
+                return {
+                    "price_matched": order.get("averagePriceMatched", 0),
+                    "size_matched": size_matched,
+                    "profit": None,  # Not settled yet
+                    "settled_date": None,
+                    "status": "matched",
+                }
     except Exception as e:
-        logger.warning(f"Betfair listClearedOrders failed for {bet_id}: {e}")
+        logger.warning(f"Betfair listCurrentOrders failed for {bet_id}: {e}")
+
+    return None
+
+
+async def get_account_funds(db: AsyncSession) -> Optional[dict]:
+    """Get full Betfair account funds including exposure."""
+    if settings.mock_external:
+        return {"available": 50.00, "exposure": 0, "total": 50.00}
+
+    scraper = await _get_scraper(db)
+    if not scraper:
         return None
 
-    orders = result.get("clearedOrders", []) if isinstance(result, dict) else []
-    if not orders:
-        return None
+    try:
+        token = await scraper._get_session_token()
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api-au.betfair.com/exchange/account/json-rpc/v1",
+                json=[{
+                    "jsonrpc": "2.0",
+                    "method": "AccountAPING/v1.0/getAccountFunds",
+                    "params": {},
+                    "id": 1,
+                }],
+                headers={
+                    "X-Application": scraper.app_key,
+                    "X-Authentication": token,
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-    order = orders[0]
-    price = order.get("priceMatched") or order.get("priceRequested")
-    profit = order.get("profit")
-    logger.info(
-        f"Betfair BSP result for {bet_id}: price={price}, profit={profit}"
-    )
-    return {
-        "price_matched": price,
-        "profit": profit,
-        "settled_date": order.get("settledDate"),
-    }
+        if isinstance(data, list) and data:
+            result = data[0].get("result", {})
+            available = result.get("availableToBetBalance", 0)
+            exposure = abs(result.get("exposure", 0))
+            return {
+                "available": available,
+                "exposure": exposure,
+                "total": available + exposure,
+            }
+    except Exception as e:
+        logger.error(f"Betfair getAccountFunds failed: {e}")
+    return None
 
 
 async def get_account_balance(db: AsyncSession) -> Optional[float]:
