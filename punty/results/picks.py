@@ -879,15 +879,19 @@ async def _settle_picks_for_race_impl(
                         dividend = _find_dividend(exotic_divs, "trifecta")
                 elif "exacta" in exotic_type:
                     if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                        if is_standout:
-                            # Standout: first runner must win, any other must be 2nd
-                            standout = exotic_runners_int[0]
+                        if is_standout or len(exotic_runners_int) > 2:
+                            # Exacta with 3+ runners or Standout: first runner MUST WIN,
+                            # any of the remaining runners must be 2nd.
+                            # This is NOT a box — order matters for the anchor.
+                            anchor = exotic_runners_int[0]
                             others = set(exotic_runners_int[1:])
-                            hit = (top_sc_int[0] == standout and
+                            hit = (top_sc_int[0] == anchor and
                                    top_sc_int[1] in others)
-                        elif is_boxed or len(exotic_runners_int) > 2:
+                        elif is_boxed:
+                            # Explicit "Exacta Box" (if it ever exists) — any order
                             hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
                         else:
+                            # Straight exacta: exact 1st-2nd order
                             hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
                     if hit:
                         dividend = _find_dividend(exotic_divs, "exacta")

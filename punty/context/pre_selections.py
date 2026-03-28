@@ -1159,12 +1159,25 @@ def _get_exotic_budget(meet_quality: float) -> float:
 # ── V3 Context-Aware Exotic Cascade ──
 # Backtested on v3 model (78.2% place SR): +302% ROI on Exacta R1/R2,R3.
 # Config maps distance×condition → optimal exotic type.
+# v4 rebalanced: more variety, Quinella Box as reliable default.
+# Exacta only where strong directional conviction (sprint/short on good).
+# Tri Standout for sprints. Quinella Box everywhere else.
 _EXOTIC_CASCADE_CONFIG = {
-    "classic|good": "exacta", "classic|soft": "exacta", "classic|heavy": "exacta",
-    "middle|good": "exacta", "middle|heavy": "exacta", "middle|soft": "quin_box",
-    "short|good": "exacta", "short|heavy": "quin", "short|soft": "exacta",
-    "sprint|good": "tri", "sprint|heavy": "quin_box", "sprint|soft": "exacta",
-    "staying|good": "exacta", "staying|soft": "exacta", "staying|heavy": "quin_box",
+    "sprint|good": "tri",        # 12.8% SR, +169% ROI
+    "sprint|soft": "quin_box",   # safer on soft
+    "sprint|heavy": "quin_box",  # heavy = chaos
+    "short|good": "exacta",      # 18.9% SR, +530% ROI
+    "short|soft": "quin_box",    # safer on soft
+    "short|heavy": "quin",       # 40% SR on heavy
+    "middle|good": "quin_box",   # more reliable than exacta live
+    "middle|soft": "quin_box",   # 19% SR
+    "middle|heavy": "quin_box",  # chaos
+    "classic|good": "quin_box",  # broad coverage
+    "classic|soft": "quin_box",  # safer
+    "classic|heavy": "quin_box", # chaos
+    "staying|good": "quin_box",  # small samples
+    "staying|soft": "quin_box",  # safer
+    "staying|heavy": "quin_box", # chaos
 }
 
 
@@ -1202,10 +1215,17 @@ def _v3_exotic_cascade(
     cond_b = _condition_bucket(track_condition or "Good 4")
     ctx_key = f"{dist_b}|{cond_b}"
 
-    exotic_type = _EXOTIC_CASCADE_CONFIG.get(ctx_key, "exacta")
+    exotic_type = _EXOTIC_CASCADE_CONFIG.get(ctx_key, "quin_box")
 
-    # Minimum field sizes
+    # CASCADE: try F4 Standout first if enough runners and picks
+    # F4 Standout: R1 / R1,R2,R3 / R3,R4 / R4,roughie — structured, not boxed
+    if field_size >= 8 and r4 and r3:
+        exotic_type = "f4_standout"
+
+    # Minimum field sizes — cascade down
     if field_size > 0:
+        if exotic_type == "f4_standout" and field_size < 8:
+            exotic_type = "tri"
         if exotic_type == "tri" and field_size < 6:
             exotic_type = "exacta"
         if exotic_type == "exacta" and field_size < 5:
@@ -1215,7 +1235,27 @@ def _v3_exotic_cascade(
 
     BUDGET = 15.0
 
-    if exotic_type == "exacta":
+    if exotic_type == "f4_standout":
+        # F4 Standout: R1 / R1,R2,R3 / R3,R4 / R4,roughie
+        # Structured legs, NOT boxed. Anchor R1 must win.
+        sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
+        all_scs = list(set([r1.saddlecloth, r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]))
+        names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
+        # Legs: 1st=R1 / 2nd=R1,R2,R3 / 3rd=R3,R4 / 4th=R4,roughie
+        # Combos: 1 × 3 × 2 × 2 = 12
+        combos = 12
+        return RecommendedExotic(
+            exotic_type="First4",
+            runners=all_scs,
+            runner_names=names,
+            probability=r1.win_prob * r2.win_prob * r3.win_prob * r4.win_prob,
+            value_ratio=3.0,
+            num_combos=combos,
+            format="flat",
+            budget=BUDGET,
+        )
+
+    elif exotic_type == "exacta":
         # R1 over R2,R3 — 2 combos
         runners = [r1.saddlecloth]
         seconds = [r2.saddlecloth]
