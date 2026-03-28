@@ -1049,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
     var loseExotics = {{ losing_exotics | tojson }};
-    var exoticPicks = {{ exotic_picks | tojson }};
+    var exoticPicks = {{ exotic_picks | default({}) | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
     var seqResults = {{ sequence_results | tojson }};
     var scratchedPicks = {{ scratched_picks | tojson }};

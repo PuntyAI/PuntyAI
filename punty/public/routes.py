@@ -3071,6 +3071,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "winners": data.get("winners", {}),
             "winning_exotics": data.get("winning_exotics", {}),
             "losing_exotics": data.get("losing_exotics", {}),
+            "exotic_picks": data.get("exotic_picks", {}),
             "winning_sequences": data.get("winning_sequences", []),
             "pp_picks": data.get("pp_picks", {}),
             "sequence_results": data.get("sequence_results", []),
