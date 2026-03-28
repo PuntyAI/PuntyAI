@@ -1012,7 +1012,14 @@ async def balance_sheet_page(
             bet_label = pick.pick_type or "Unknown"
 
         odds = pick.odds_at_tip or 0
-        if pick.pick_type != "selection":
+        if pick.pick_type == "selection":
+            bt_lower = (pick.bet_type or "").lower().replace("_", " ")
+            if bt_lower == "place" and pick.place_odds_at_tip:
+                odds = pick.place_odds_at_tip
+            elif bt_lower == "each way" and pick.place_odds_at_tip:
+                # Show win / place odds for EW
+                odds = pick.odds_at_tip or 0
+        else:
             odds = 0
 
         # Race time for chronological display
