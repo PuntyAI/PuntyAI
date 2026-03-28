@@ -1155,25 +1155,30 @@ def _get_exotic_budget(meet_quality: float) -> float:
 # ── V3 Context-Aware Exotic Cascade ──
 # Backtested on v3 model (78.2% place SR): +302% ROI on Exacta R1/R2,R3.
 # Config maps distance×condition → optimal exotic type.
-# v4 rebalanced: more variety, Quinella Box as reliable default.
-# Exacta only where strong directional conviction (sprint/short on good).
-# Tri Standout for sprints. Quinella Box everywhere else.
+# v5 data-driven cascade: F4 Standout dominant (5%+ hit rate in 17/21 cells).
+# Cascade: F4 (8+ runners) → Tri (6+ runners) → Quinella Box (default).
+# Based on actual R1-R4 finish position analysis across all settled races.
 _EXOTIC_CASCADE_CONFIG = {
-    "sprint|good": "tri",        # 12.8% SR, +169% ROI
-    "sprint|soft": "quin_box",   # safer on soft
-    "sprint|heavy": "quin_box",  # heavy = chaos
-    "short|good": "exacta",      # 18.9% SR, +530% ROI
-    "short|soft": "quin_box",    # safer on soft
-    "short|heavy": "quin",       # 40% SR on heavy
-    "middle|good": "quin_box",   # more reliable than exacta live
-    "middle|soft": "quin_box",   # 19% SR
-    "middle|heavy": "quin_box",  # chaos
-    "classic|good": "quin_box",  # broad coverage
-    "classic|soft": "quin_box",  # safer
-    "classic|heavy": "quin_box", # chaos
-    "staying|good": "quin_box",  # small samples
-    "staying|soft": "quin_box",  # safer
-    "staying|heavy": "quin_box", # chaos
+    # Sprint: F4 dominant everywhere (8-22% hit rate)
+    "sprint|good": "f4_standout",    # F4 8.1% country, 7.3% metro
+    "sprint|soft": "f4_standout",    # F4 6.1% country, 21.7% metro
+    "sprint|heavy": "f4_standout",   # F4 17.6% country
+    # Short: F4 or Tri depending on context
+    "short|good": "tri",             # Tri 7.2% country, F4 only 2.5% country
+    "short|soft": "f4_standout",     # F4 5.3% country, 10.7% metro
+    "short|heavy": "f4_standout",    # F4 16.0%
+    # Middle: F4 strong across the board
+    "middle|good": "f4_standout",    # F4 5.6% country, 6.1% metro
+    "middle|soft": "f4_standout",    # F4 4.8% country, 7.7% metro
+    "middle|heavy": "f4_standout",   # F4 10.7% — heavy is our strength
+    # Classic: Tri or F4
+    "classic|good": "tri",           # Tri 8.6% country, 9.5% metro
+    "classic|soft": "f4_standout",   # F4 6.4% country, 7.1% metro
+    "classic|heavy": "quin_box",     # small sample, play safe
+    # Staying: F4 surprisingly strong
+    "staying|good": "f4_standout",   # F4 7.7%
+    "staying|soft": "f4_standout",   # F4 22.2%
+    "staying|heavy": "quin_box",     # too small
 }
 
 
