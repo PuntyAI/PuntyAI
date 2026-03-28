@@ -635,59 +635,55 @@ def _determine_bet_type(
     field_size: int = 12, fav_price: float | None = None,
     race_class: str = "", distance: int = 0,
 ) -> str:
-    """Determine bet type using learned meta-model or rule fallback.
+    """Determine bet type using explicit business rules.
 
-    Meta-model (trained on 79K Proform picks) predicts Win/Each Way/Place
-    based on rank, odds, WP, field size, class, distance, track condition.
-    Falls back to hand-tuned rules if model unavailable.
+    The LightGBM meta-model was disabled because it NEVER recommends Win
+    (trained on Proform data where Win ROI was negative). These rules
+    implement the user's explicit bet type policy.
+
+    Rules:
+    - R1: Win (odds < $7, not Class/Open, not 2000m+)
+    - R1: Each Way ($4-$10, good value)
+    - R1: Place (long odds $10+ or Class/Open/staying)
+    - R2: Place (always)
+    - R3: Place (always, may be tracked_only by staking cap)
+    - Roughie: tracked_only (handled by MAX_STAKED_PICKS)
+    - ≤4 runners: Win for all (no place market)
     """
     # ≤4 runners: no place betting available
     if field_size <= 4:
         return "Win"
 
-    # Try learned model first
-    try:
-        from punty.betting.bettype_model import recommend_bet_type
-        from punty.ml.features import _distance_bucket, _track_cond_bucket, _class_bucket, _venue_type_code
+    odds = c.get("odds", 0) or 0
+    wp = c.get("win_prob", 0) or 0
+    rc = (race_class or "").lower()
+    is_class_open = "class" in rc or "open" in rc or "group" in rc or "listed" in rc
+    is_staying = distance >= 2000
 
-        result = recommend_bet_type(
-            tip_rank=rank,
-            is_roughie=is_roughie,
-            win_prob=c.get("win_prob", 0),
-            place_prob=c.get("place_prob", 0),
-            value_rating=c.get("value_rating", 1.0),
-            odds=c.get("odds", 0),
-            field_size=field_size,
-            distance_bucket=_distance_bucket(distance),
-            class_bucket=_class_bucket(race_class),
-            track_cond_bucket=_track_cond_bucket(c.get("track_condition", "")),
-            venue_type=_venue_type_code(c.get("venue", "")),
-            prize_money=float(c.get("prize_money", 0) or 0),
-            rank1_wp=c.get("rank1_wp", c.get("win_prob", 0)),
-            wp_spread=c.get("wp_spread", 0),
-            gap_to_next=c.get("gap_to_next", 0),
-            fav_odds=float(fav_price or 0),
-            place_odds=c.get("place_odds", 0) or 0,
-        )
-        if result:
-            bet_type, reason = result
-            logger.debug("Bet type model: rank %d → %s (%s)", rank, bet_type, reason)
-            return bet_type
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.debug("Bet type model failed: %s", e)
+    if is_roughie:
+        return "Place"  # Will be tracked_only via MAX_STAKED_PICKS
 
-    # Fallback: hand-tuned rules
-    if rank == 1 and not is_roughie:
-        odds = c.get("odds", 0)
-        rc = (race_class or "").lower()
-        is_class_open = "class" in rc or "open" in rc
-        is_staying = distance >= 2000
-        is_long_odds = odds >= 7.0
-        if is_class_open or is_staying or is_long_odds:
+    if rank == 1:
+        # R1 bet type decision
+        if odds <= 0 or odds > 10.0:
+            # Long odds or no odds — Place is safer
             return "Place"
-        return "Win"
+        if is_class_open or is_staying:
+            # Class/Open races and staying — Each Way for protection
+            if 4.0 <= odds <= 10.0:
+                return "Each Way"
+            return "Place"
+        if odds < 7.0:
+            # Short to mid odds, standard race — Win
+            return "Win"
+        # $7-$10 — Each Way
+        return "Each Way"
+
+    if rank == 2:
+        return "Place"
+
+    if rank == 3:
+        return "Place"
 
     return "Place"
 
