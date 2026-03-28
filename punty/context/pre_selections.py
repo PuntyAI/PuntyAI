@@ -237,11 +237,13 @@ def calculate_pre_selections(
     # Remaining picks still tracked (displayed, not staked) for accuracy tracking.
     is_ntd = 5 <= field_size <= 7
 
-    # Sort by tissue probability + market agreement confidence boost.
+    # Sort by pure win probability — R1 must always be the highest WP horse.
     # VR tiebreaker removed — it promoted losers (VR 1.20+ wins 14.5% vs VR<0.90 at 29.7%).
-    # Confidence boost from market_layer: tissue R1 = market fav → +0.15 boost.
+    # Confidence boost is preserved in candidate data for staking decisions but does NOT
+    # affect ranking order. Previously boost up to 0.20 could override 1-2% WP differences,
+    # causing R1 to display lower WP than R2 (user-reported Rosehill R7 bug).
     candidates.sort(
-        key=lambda c: c["win_prob"] + c.get("confidence_boost", 0.0),
+        key=lambda c: c["win_prob"],
         reverse=True,
     )
 
@@ -1987,7 +1989,8 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
                 ret = round(pick.stake * po, 2)
             elif pick.bet_type == "Each Way":
                 po = pick.place_odds or _estimate_place_odds(pick.odds)
-                ret = round(pick.stake * pick.odds + pick.stake * po, 2)
+                half = pick.stake / 2
+                ret = round(half * pick.odds + half * po, 2)
             else:
                 ret = 0
 
@@ -1997,9 +2000,9 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
                 po = pick.place_odds or _estimate_place_odds(pick.odds)
                 bet_desc = (
                     f"${pick.stake:.2f} Each Way "
-                    f"(=${half:.2f}W + ${half:.2f}P), "
-                    f"return ${round(pick.stake * pick.odds, 2):.2f} (wins) / "
-                    f"${round(pick.stake * po, 2):.2f} (places)"
+                    f"(${half:.2f}W + ${half:.2f}P), "
+                    f"return ${round(half * pick.odds, 2):.2f} (wins) / "
+                    f"${round(half * po, 2):.2f} (places)"
                 )
             elif pick.bet_type == "Place":
                 po = pick.place_odds or _estimate_place_odds(pick.odds)
