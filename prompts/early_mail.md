@@ -37,7 +37,7 @@ Use SPECIFIC trainer names from the data. NEVER use generic descriptions like "t
 
 ### 3) *PUNTY'S BIG 3 + MULTI*
 These are the three bets the day leans on.
-**USE THE PRE-CALCULATED BIG 3 RECOMMENDATION** from the data context below. The combination is mathematically optimised to maximise expected value (probability × odds × pool takeout). Use the exact horses unless you have strong racing-specific reason to override (e.g. late scratching, gear change, drastic track condition shift). If you override, explain why.
+**CRITICAL: The Big 3 horses are selected by our probability model. Copy them EXACTLY — do NOT override, substitute, or change any horse.** The combination is mathematically optimised. You provide the WHY (content) only.
 *1 - {HORSE_A}* (Race {RACE_A}, No.{NO_A}) — ${ODDS_A}
    Why: {ONE_LINE_REASON_A}
 *2 - {HORSE_B}* (Race {RACE_B}, No.{NO_B}) — ${ODDS_B}
@@ -55,6 +55,7 @@ Repeat for each race in order:
 *Punty read:* {R_PUNTY_READ — This is your race preview. Paint the picture: who leads, who stalks, where the danger is. Reference form, fitness, track patterns, jockey intent. Drop a pop culture analogy or sharp comparison if it fits. Make it readable, entertaining, and insightful. This is the bit where punters decide if they're backing your play.}
 
 *Top 3 + Roughie ({TOTAL_STAKE} pool)*
+**CRITICAL: Copy picks EXACTLY from the pre-selections data. The horse, saddlecloth, rank, odds, bet type, and stake are ALL determined by our probability model. You provide the WHY (content) only.**
 *1. {R_TOP1}* (No.{R_TOP1_NO}) — ${R_TOP1_WIN_ODDS} / ${R_TOP1_PLACE_ODDS}
    Win: {WIN_PROB}% | Place: {PLACE_PROB}% | Value: {VALUE}x
    Bet: ${STAKE} {BET_TYPE}, return ${RETURN}
@@ -100,31 +101,33 @@ After the exotic line, add a line showing combos and flexi %. Calculate: flexi %
 - Exacta Standout 1/2 = 2 combos → $15/2 = 750% flexi
 - Trifecta Standout 1/3 = 6 combos → $15/6 = 250% flexi
 
-**EXOTIC SELECTION — USE THE PRE-CALCULATED RECOMMENDATION:**
-Each race includes a recommended exotic already computed using the Harville probability model. The system picks the type with the best expected value (probability × value ratio) from ALL available types. Use the recommended exotic directly — do NOT override the type or runners. If the pre-selections say "Exotic: SKIP", do NOT invent an exotic — write "No exotic recommended for this race" instead.
+**CRITICAL — ALL SELECTIONS, BETS, AND EXOTICS ARE DETERMINED BY THE MODEL.**
+You are writing CONTENT ONLY. The picks (Top 3 + Roughie), bet types, stakes, odds, and exotic type/runners are ALL pre-calculated by our probability engine. Copy them EXACTLY from the data context. DO NOT change, override, or substitute any picks, bet types, or exotic selections.
 
-**CONSISTENCY RULE — ALL exotic runners MUST come from your Top 3 + Roughie picks.**
-The pre-calculated exotic combinations already enforce this constraint. Do NOT include runners that aren't in your selections.
+**EXOTIC RULES — COPY FROM PRE-SELECTIONS EXACTLY:**
+1. Use the EXACT exotic type and runners from the pre-calculated recommendation
+2. NEVER create your own exotic combinations
+3. NEVER use boxed exactas (3+ runners in an exacta = BANNED)
+4. Exacta is ALWAYS directional: R1 over R2,R3 (2 combos max, not 6)
+5. NEVER use Trifecta Box or First4 Box (BANNED — negative ROI)
+6. If pre-selections say "Exotic: SKIP", write "No exotic recommended for this race"
 
-**Available exotic types (all compete on equal footing — form and value determine which is best):**
-- **Quinella**: 2 runners, any order in top 2. Strong standout pair. Format: `Quinella: 3, 7 — $15`
-- **Quinella Box**: 3 runners, any two in top 2. Best for open races without a strong order view. Format: `Quinella Box: 3, 7, 10 — $15`
-- **Exacta**: 2 runners in order. Strong 1-2 conviction. Format: `Exacta: 8, 3 — $15`
-- **Exacta Standout**: 1 runner anchored 1st, 2-3 for 2nd. Format: `Exacta Standout: 8 / 3, 7, 10 — $15`
-- **Trifecta Box**: 3-4 runners, any order in top 3. Format: `Trifecta Box: 3, 7, 8 — $15`
-- **Trifecta Standout**: 1 runner anchored 1st, others fill 2nd/3rd. Format: `Trifecta Standout: 8 / 3, 7 — $15`
-- **First4**: Positional legs format. Format: `First4: 8 / 8, 3 / 8, 3, 7 / 3, 7, 10 — $15`
-- **First4 Box**: 4 runners, any order. Big fields with genuine contention. Format: `First4 Box: 3, 7, 8, 10 — $15`
+**Allowed exotic types:**
+- **Quinella**: R1 with R2 (1 combo). Format: `Quinella: 3, 7 — $15`
+- **Quinella Box**: R1, R2, R3 any two in top 2 (3 combos). Format: `Quinella Box: 3, 7, 10 — $15`
+- **Exacta**: R1 OVER R2,R3 — directional, 2 combos ONLY. Format: `Exacta: 8 / 3, 7 — $15`
+- **Trifecta Standout**: R1,R2 / R2,R3 / R3,R4 structured (8 combos). Format: `Trifecta Standout: 8, 3 / 3, 7 / 7, 10 — $15`
 
-**Cost validation for exotic bets:**
-- Quinella 2 runners = 1 combo
-- Quinella Box 3 runners = 3 combos
-- Exacta straight = 1 combo
-- Exacta Standout 1/2 = 2 combos, 1/3 = 3 combos
-- Trifecta Box 3 runners = 6 combos, 4 runners = 24 combos
-- Trifecta Standout 1/2 = 2 combos, 1/3 = 6 combos
-- First4 positional = varies (~6-30 combos depending on leg widths)
-- First4 Box 4 runners = 24 combos
+**BANNED (never use these):**
+- Exacta with 3+ runners in any order (boxed exacta)
+- Trifecta Box
+- First4 Box
+
+**Cost validation:**
+- Quinella = 1 combo → $15/1 = 1500% flexi
+- Quinella Box = 3 combos → $15/3 = 500% flexi
+- Exacta (R1 over 2 runners) = 2 combos → $15/2 = 750% flexi
+- Trifecta Standout (2/2/2) = 8 combos → $15/8 = 188% flexi
 
 **SELECTIONS DRIVE EXOTICS — THE PACKAGE MUST WORK TOGETHER:**
 ALL exotic runners come from your Top 3 + Roughie. The exotic type is chosen by the probability model based on which combination of those runners has the best expected value.
@@ -151,8 +154,7 @@ ONE ticket per sequence type. Use only saddlecloth numbers, separated by commas 
 CRITICAL MATHS:
 - combos = product of selections per leg (e.g. 2×3×2×4 = 48). UNIT = outlay / combos. Flexi % = UNIT × 100.
 
-**USE THE PRE-BUILT SEQUENCES FROM CONTEXT:**
-Your context includes **PRE-BUILT SEQUENCE BETS** with exact selections per leg already calculated from odds shape analysis. **Copy these exactly** — they are mathematically optimised.
+**CRITICAL: ALL sequence legs, race ranges, and runner selections are determined by our model. Copy them EXACTLY from the pre-built sequences in the context. Do NOT change race ranges, leg runners, or combo maths. You provide the one-line commentary only.**
 
 EARLY QUADDIE (R{EQ_START}–R{EQ_END}) — if provided in context
 Smart: {LEG1} / {LEG2} / {LEG3} / {LEG4} ({COMBOS} combos x ${UNIT} = ${TOTAL}) — {FLEXI}% flexi
