@@ -329,27 +329,11 @@ class FlumineManager:
         from punty.scrapers.betfair import _strip_venue_prefix
         search_venue = _strip_venue_prefix(venue).lower()
 
-        STALE_SECONDS = 300  # reject snapshots older than 5 min
         now = time.monotonic()
-
-        # Log cache state on first lookup per race for diagnostics
         cache_snapshot = list(self._market_cache.values())
-        if cache_snapshot:
-            venues_in_cache = set()
-            for s in cache_snapshot:
-                if now - s.updated_at <= STALE_SECONDS and s.venue:
-                    venues_in_cache.add(f"{s.venue}({s.market_type})")
-            logger.info(
-                f"Flumine cache lookup: venue={search_venue} type={market_type} "
-                f"date={race_date} R{race_number} | "
-                f"cache={len(cache_snapshot)} markets, "
-                f"venues={sorted(venues_in_cache)[:15]}"
-            )
 
         candidates = []
         for snap in cache_snapshot:
-            if now - snap.updated_at > STALE_SECONDS:
-                continue
             if snap.market_type != market_type:
                 continue
             snap_venue = snap.venue.lower()
@@ -385,8 +369,14 @@ class FlumineManager:
             if not named and self._trading_client:
                 try:
                     self._backfill_names(snap.market_id, result)
+                    named = sum(1 for r in result["runners"] if r["horse_name"])
                 except Exception as e:
-                    logger.debug(f"Flumine name backfill failed: {e}")
+                    logger.warning(f"Flumine name backfill failed: {e}")
+
+            logger.info(
+                f"Flumine cache hit: {search_venue} R{race_number} {market_type} "
+                f"→ {snap.market_id} ({named}/{len(result['runners'])} named)"
+            )
 
             return result
 
@@ -439,8 +429,6 @@ class FlumineManager:
         best_diff = None
 
         for snap in self._market_cache.values():
-            if now - snap.updated_at > 300:
-                continue
             if snap.market_type != market_type:
                 continue
             snap_venue = snap.venue.lower()
@@ -478,7 +466,7 @@ class FlumineManager:
         snap = self._market_cache.get(market_id)
         if not snap:
             return None
-        if time.monotonic() - snap.updated_at > 300:
+        if time.monotonic() - snap.updated_at > 1800:  # 30 min — illiquid markets update infrequently
             return None
         for r in snap.runners:
             if r.selection_id == selection_id and r.status == "ACTIVE":
