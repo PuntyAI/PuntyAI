@@ -98,16 +98,27 @@ if _FLUMINE_AVAILABLE:
                 else:
                     start_time = datetime.now(tz=timezone.utc)
 
-                # Build name lookup from market catalogue (streaming
-                # runners only have selection_id + prices, not names)
+                # Build name lookup — try multiple sources since streaming
+                # runners only have selection_id + prices, not names
                 cat_names = {}
+
+                # Source 1: market_catalogue (populated by poll_market_catalogue worker)
                 cat = getattr(market, "market_catalogue", None)
                 if cat and hasattr(cat, "runners") and cat.runners:
                     for cr in cat.runners:
                         sid = getattr(cr, "selection_id", None)
                         rname = getattr(cr, "runner_name", "") or ""
                         rname = re.sub(r"^\d+\.\s*", "", rname)
-                        if sid:
+                        if sid and rname:
+                            cat_names[sid] = rname
+
+                # Source 2: market_definition.runners (from stream, has name on some versions)
+                if not cat_names and md and hasattr(md, "runners") and md.runners:
+                    for dr in md.runners:
+                        sid = getattr(dr, "selection_id", None) or (dr.get("id") if isinstance(dr, dict) else None)
+                        rname = getattr(dr, "name", "") or (dr.get("name", "") if isinstance(dr, dict) else "")
+                        rname = re.sub(r"^\d+\.\s*", "", rname)
+                        if sid and rname:
                             cat_names[sid] = rname
 
                 runners = []
@@ -147,10 +158,12 @@ if _FLUMINE_AVAILABLE:
                 self._manager._market_cache[market_book.market_id] = snapshot
 
                 if is_new and venue:
+                    named = sum(1 for r in runners if r.horse_name)
                     logger.info(
                         f"Flumine cache: +{market_book.market_id} "
                         f"venue={venue} type={market_type} "
-                        f"start={start_time} runners={len(runners)}"
+                        f"start={start_time} runners={len(runners)} "
+                        f"named={named}"
                     )
 
             except Exception as e:
