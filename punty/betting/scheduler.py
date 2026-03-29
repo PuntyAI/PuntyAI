@@ -27,6 +27,7 @@ class BetfairBetScheduler:
         self.running = True
         self._task = asyncio.create_task(self._poll_loop())
         asyncio.create_task(self._recover_zombie_bets())
+        asyncio.create_task(self._recover_missed_races())
         logger.info("BetfairBetScheduler started (JIT mode)")
 
     def stop(self):
@@ -173,6 +174,62 @@ class BetfairBetScheduler:
                     logger.info(f"Recovered {cancelled} zombie bets (cancelled)")
         except Exception as e:
             logger.error(f"Zombie bet recovery failed: {e}")
+
+
+    async def _recover_missed_races(self):
+        """On startup, evaluate any races starting in the next 30 min
+        that were missed (no BetfairBet row). Handles restart recovery."""
+        try:
+            from punty.models.meeting import Meeting, Race
+            from punty.models.betfair_bet import BetfairBet
+            from punty.betting.jit import evaluate_and_bet_race
+            from sqlalchemy import select, or_
+
+            await asyncio.sleep(30)  # let Flumine connect first
+
+            now = melb_now_naive()
+            window_end = now + timedelta(minutes=30)
+
+            async with async_session() as db:
+                race_result = await db.execute(
+                    select(Race).join(Meeting, Meeting.id == Race.meeting_id).where(
+                        Meeting.date == melb_today(),
+                        Meeting.selected == True,
+                        Race.start_time >= now + timedelta(minutes=2),  # not about to jump
+                        Race.start_time <= window_end,
+                        or_(Race.results_status == "Open", Race.results_status == None),
+                    )
+                )
+                upcoming = race_result.scalars().all()
+                recovered = 0
+
+                for race in upcoming:
+                    existing = await db.execute(
+                        select(BetfairBet).where(
+                            BetfairBet.meeting_id == race.meeting_id,
+                            BetfairBet.race_number == race.race_number,
+                        )
+                    )
+                    if existing.scalar_one_or_none():
+                        continue
+
+                    try:
+                        result = await evaluate_and_bet_race(db, race.meeting_id, race.race_number)
+                        action = result.get("action", "?")
+                        horse = result.get("horse_name", "")
+                        reason = result.get("reason", "")
+                        if action == "bet_placed":
+                            recovered += 1
+                            logger.info(f"RECOVERY BET: R{race.race_number} {horse} — {reason}")
+                        else:
+                            logger.info(f"RECOVERY SKIP: {race.meeting_id} R{race.race_number} — {reason}")
+                    except Exception as e:
+                        logger.warning(f"Recovery eval failed: {race.meeting_id} R{race.race_number}: {e}")
+
+                if recovered:
+                    logger.info(f"Startup recovery: {recovered} bets placed for missed races")
+        except Exception as e:
+            logger.error(f"Missed race recovery failed: {e}")
 
 
 # Module-level singleton

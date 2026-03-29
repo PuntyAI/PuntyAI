@@ -1259,36 +1259,30 @@ def _v3_exotic_cascade(
     cond_b = _condition_bucket(track_condition or "Good 4")
     ctx_key = f"{dist_b}|{cond_b}"
 
-    # CASCADE: F4 → Tri → Exacta → Quin → Quin Box
-    # Field size is the primary router (data shows small fields = F4 goldmine):
-    #   Small (≤8): F4 Standout (20-43% hit rate in our data)
-    #   Mid (9-11): Tri/Exacta based on context
-    #   Big (12+): Quin Box (F4/Tri near 0% in big fields)
+    # CASCADE — data-driven routing (week of 2026-03-23 to 2026-03-29):
+    #   Trifecta Standout: 8.3% SR, +202% ROI (high variance, big payoffs)
+    #   Quinella Box: 30.5% SR, -7.2% ROI (reliable, needs better odds)
+    #   Exacta: 0% SR all week — DEAD, route to Quinella Box instead
+    #   First4: 0% SR all week — DEAD, route to Trifecta Standout instead
+    #   Trifecta Box: 0% SR — DEAD
+    #
+    # New routing: only 2 types survive:
+    #   Small/mid fields (≤10) with 3+ picks: Trifecta Standout (structured)
+    #   Everything else: Quinella Box (reliable volume)
     if field_size <= 0:
         field_size = 10  # assume mid if unknown
 
     if field_size < 4:
         return None  # Too few runners
 
-    if field_size <= 8 and r4 and r3:
-        # Small fields: F4 Standout is dominant (our picks fill top 4 at 20-43%)
-        exotic_type = "f4_standout"
-    elif field_size <= 11 and r3:
-        # Mid fields: use context cascade config
-        exotic_type = _EXOTIC_CASCADE_CONFIG.get(ctx_key, "tri")
-        # Ensure minimum runners for chosen type
-        if exotic_type == "f4_standout" and not r4:
-            exotic_type = "tri"
+    if field_size <= 10 and r3:
+        # Trifecta Standout: structured legs, 8.3% SR but +202% ROI
+        exotic_type = "tri"
     else:
-        # Big fields (12+): our picks spread thin, default to Quin Box
+        # Quinella Box: 30.5% SR, reliable for bigger fields
         exotic_type = "quin_box"
 
-    # Final minimum field size guards
-    if exotic_type == "f4_standout" and (field_size < 5 or not r4):
-        exotic_type = "tri"
     if exotic_type == "tri" and (field_size < 5 or not r3):
-        exotic_type = "exacta"
-    if exotic_type == "exacta" and field_size < 4:
         exotic_type = "quin_box"
     if exotic_type in ("quin", "quin_box") and field_size < 4:
         return None

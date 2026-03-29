@@ -526,8 +526,8 @@ class TestSelectExotic:
 # ──────────────────────────────────────────────
 
 class TestTightClusterExoticBoost:
-    def test_v3_cascade_small_field_f4(self):
-        """Small field (≤8 runners) → F4 Standout via V3 cascade."""
+    def test_v3_cascade_small_field_tri_standout(self):
+        """Small field (≤10 runners) → Trifecta Standout via V3 cascade."""
         picks = [
             RecommendedPick(1, 1, "Alpha", "Place", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
             RecommendedPick(2, 2, "Beta", "Place", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
@@ -538,10 +538,10 @@ class TestTightClusterExoticBoost:
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.3, "combos": 1, "format": "flat"},
         ]
-        # V3 cascade overrides combo-based selection for small fields
+        # V3 cascade: small fields get Trifecta Standout (data: +202% ROI)
         result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks, fav_price=3.0, field_size=7)
         assert result is not None
-        assert "First4" in result.exotic_type
+        assert "Trifecta" in result.exotic_type
 
     def test_v3_cascade_mid_field_context(self):
         """Mid field (9-11 runners) → context-dependent (tri/exacta) via V3 cascade."""
