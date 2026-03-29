@@ -17,11 +17,6 @@ from functools import lru_cache
 from typing import Any, Optional
 
 import betfairlightweight
-from betfairlightweight.filters import (
-    market_filter,
-    market_projection,
-    price_projection,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +126,7 @@ async def list_market_catalogue(
     search_venue = _strip_venue_prefix(venue)
 
     try:
+        from betfairlightweight.filters import market_filter
         mf = market_filter(
             event_type_ids=["7"],
             market_countries=[country],
@@ -347,6 +343,7 @@ async def get_market_book(market_id: str) -> Optional[dict]:
         return None
 
     try:
+        from betfairlightweight.filters import price_projection
         pp = price_projection(price_data=["EX_BEST_OFFERS"])
         books = await _run_sync(
             client.betting.list_market_book,
