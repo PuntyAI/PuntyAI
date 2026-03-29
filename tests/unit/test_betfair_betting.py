@@ -149,7 +149,7 @@ class TestPopulateBetQueue:
 
         # Second call returns meeting (for track condition context)
         meeting_result = MagicMock()
-        meeting_result.scalar_one_or_none.return_value = MagicMock(track_condition="Good 4")
+        meeting_result.scalar_one_or_none.return_value = MagicMock(track_condition="Good 4", venue="Sale")
 
         # Third call returns empty picks
         empty_result = MagicMock()
