@@ -98,6 +98,18 @@ if _FLUMINE_AVAILABLE:
                 else:
                     start_time = datetime.now(tz=timezone.utc)
 
+                # Build name lookup from market catalogue (streaming
+                # runners only have selection_id + prices, not names)
+                cat_names = {}
+                cat = getattr(market, "market_catalogue", None)
+                if cat and hasattr(cat, "runners") and cat.runners:
+                    for cr in cat.runners:
+                        sid = getattr(cr, "selection_id", None)
+                        rname = getattr(cr, "runner_name", "") or ""
+                        rname = re.sub(r"^\d+\.\s*", "", rname)
+                        if sid:
+                            cat_names[sid] = rname
+
                 runners = []
                 for r in market_book.runners:
                     back_price = 0.0
@@ -108,9 +120,7 @@ if _FLUMINE_AVAILABLE:
                         if r.ex.available_to_lay:
                             lay_price = r.ex.available_to_lay[0].price
 
-                    name = getattr(r, "runner_name", "") or ""
-                    # Strip saddlecloth prefix "1. Horse Name"
-                    name = re.sub(r"^\d+\.\s*", "", name)
+                    name = cat_names.get(r.selection_id, "")
 
                     runners.append(RunnerSnapshot(
                         selection_id=r.selection_id,
