@@ -78,12 +78,37 @@ async def bulk_select_all(activate: bool = True, db: AsyncSession = Depends(get_
     meetings = result.scalars().all()
 
     count = 0
+    changed_meetings = []
     for meeting in meetings:
         if meeting.selected != activate:
             meeting.selected = activate
             count += 1
+            changed_meetings.append(meeting)
 
     await db.commit()
+
+    # Schedule/remove automation jobs for changed meetings
+    try:
+        from punty.scheduler.manager import scheduler_manager
+        import logging
+        _logger = logging.getLogger(__name__)
+
+        if scheduler_manager and scheduler_manager._started:
+            for meeting in changed_meetings:
+                if activate:
+                    await scheduler_manager.setup_meeting_automation(meeting.id)
+                    _logger.info(f"Bulk activate: scheduled {meeting.venue}")
+                else:
+                    for suffix in ["-pre-race", "-post-race", "-context-check"]:
+                        try:
+                            scheduler_manager.remove_job(f"{meeting.id}{suffix}")
+                        except Exception:
+                            pass
+                    _logger.info(f"Bulk deactivate: removed jobs for {meeting.venue}")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Bulk scheduler update failed: {e}")
+
     return {
         "status": "ok",
         "action": "activated" if activate else "deactivated",
@@ -380,13 +405,45 @@ async def scrape_calendar_endpoint(db: AsyncSession = Depends(get_db)):
 
 @router.put("/{meeting_id}/select")
 async def toggle_select(meeting_id: str, db: AsyncSession = Depends(get_db)):
-    """Toggle meeting selection on/off."""
+    """Toggle meeting selection on/off. Schedules/removes automation jobs accordingly."""
     meeting = await db.get(Meeting, meeting_id)
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
     meeting.selected = not meeting.selected
     await db.commit()
+
+    # Schedule or remove automation jobs based on new state
+    try:
+        from punty.betting.scheduler import betfair_scheduler
+        from punty.scheduler.manager import SchedulerManager
+        import logging
+        _logger = logging.getLogger(__name__)
+
+        if meeting.selected:
+            # Meeting ACTIVATED — set up pre-race and post-race jobs
+            from punty.scheduler.manager import scheduler_manager
+            if scheduler_manager and scheduler_manager._started:
+                result = await scheduler_manager.setup_meeting_automation(meeting_id)
+                _logger.info(f"Activated {meeting.venue}: scheduled jobs {result}")
+            else:
+                _logger.warning(f"Activated {meeting.venue} but scheduler not running")
+        else:
+            # Meeting DEACTIVATED — remove its jobs
+            from punty.scheduler.manager import scheduler_manager
+            if scheduler_manager:
+                # Remove pre-race and post-race jobs for this meeting
+                for suffix in ["-pre-race", "-post-race", "-context-check"]:
+                    job_id = f"{meeting_id}{suffix}"
+                    try:
+                        scheduler_manager.remove_job(job_id)
+                    except Exception:
+                        pass
+                _logger.info(f"Deactivated {meeting.venue}: removed scheduled jobs")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Scheduler update failed for {meeting_id}: {e}")
+
     return {"id": meeting_id, "selected": meeting.selected}
 
 

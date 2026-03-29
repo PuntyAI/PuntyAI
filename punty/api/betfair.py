@@ -334,6 +334,16 @@ async def get_scheduler_status():
     return betfair_scheduler.status()
 
 
+@router.get("/flumine/status")
+async def get_flumine_status():
+    """Get Flumine streaming framework status."""
+    try:
+        from punty.betting.flumine_client import flumine_manager
+        return flumine_manager.status()
+    except ImportError:
+        return {"available": False, "running": False, "markets_cached": 0, "thread_alive": False}
+
+
 @router.post("/scheduler/start")
 async def start_scheduler():
     """Start the bet scheduler."""
@@ -369,6 +379,18 @@ async def update_balance(body: BalanceUpdate, db: AsyncSession = Depends(get_db)
     from punty.betting.queue import set_balance
     await set_balance(db, body.balance)
     return {"balance": body.balance}
+
+
+@router.post("/sync-balance")
+async def sync_balance(db: AsyncSession = Depends(get_db)):
+    """Fetch real balance from Betfair API and update app setting."""
+    from punty.betting.queue import sync_betfair_balance
+    synced = await sync_betfair_balance(db)
+    if synced:
+        from punty.betting.queue import get_balance as _get_balance
+        balance = await _get_balance(db)
+        return {"synced": True, "balance": balance}
+    return {"synced": False, "message": "Betfair API unavailable"}
 
 
 @router.get("/calibration")

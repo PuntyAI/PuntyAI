@@ -179,12 +179,17 @@ async def validate_early_mail(content: Content, db: AsyncSession) -> tuple[bool,
         issues.append(f"Too few saddlecloth numbers ({len(saddlecloth_matches)})")
 
     # Probability-based validation (picks vs race data)
+    # Exotic/sequence runner mismatches are logged but DON'T block approval
+    # because the v3 cascade override fixes exotics at pick storage time.
     try:
         from punty.validation.content_validator import validate_early_mail_probability
         prob_result = await validate_early_mail_probability(raw, content.meeting_id, db)
         for issue in prob_result.errors:
-            issues.append(f"R{issue.race_number} [{issue.category}]: {issue.message}")
-        # Log warnings but don't block approval
+            if issue.category in ("exotic", "sequence"):
+                # Downgrade to warning — v3 cascade fixes these at storage
+                logger.warning(f"Validation (non-blocking) R{issue.race_number} [{issue.category}]: {issue.message}")
+            else:
+                issues.append(f"R{issue.race_number} [{issue.category}]: {issue.message}")
         for issue in prob_result.warnings:
             logger.info(f"Validation warning R{issue.race_number}: {issue.message}")
     except Exception as e:
@@ -352,12 +357,14 @@ async def auto_approve_content(content_id: str, db: AsyncSession) -> dict:
         except Exception as e:
             logger.error(f"Failed to store picks for {content_id}: {e}")
 
-        # Populate Betfair auto-bet queue
+        # Queue Betfair bets for visibility — JIT validates at T-5min before placing
         try:
             from punty.betting.queue import populate_bet_queue
-            await populate_bet_queue(db, content.meeting_id, content.id)
+            queued = await populate_bet_queue(db, content.meeting_id, content.id)
+            if queued:
+                logger.info(f"Queued {queued} Betfair bets for {content.meeting_id}")
         except Exception as e:
-            logger.warning(f"Betfair queue populate for {content_id}: {e}")
+            logger.warning(f"Betfair queue population failed: {e}")
 
     await db.commit()
 

@@ -131,7 +131,17 @@ def _prepare_legs_data(
             for pick in pre_sel.picks:
                 tip_saddlecloths[pick.saddlecloth] = pick.rank
 
-        # Tag actual tip selections vs probability-pool runners
+        # Tag actual tip selections and inject KASH speed data from race context
+        kash_by_sc = {}
+        for ctx_r in rc.get("runners", []):
+            sc_ctx = ctx_r.get("saddlecloth")
+            if sc_ctx and ctx_r.get("kash_speed_cat"):
+                kash_by_sc[sc_ctx] = {
+                    "kash_speed_cat": ctx_r.get("kash_speed_cat"),
+                    "kash_early_speed": ctx_r.get("kash_early_speed"),
+                    "kash_rated_price": ctx_r.get("kash_rated_price"),
+                }
+
         for r in top_runners:
             sc = r.get("saddlecloth", 0)
             if sc in tip_saddlecloths:
@@ -140,6 +150,10 @@ def _prepare_legs_data(
             else:
                 r["_is_pick"] = False
                 r["_pick_rank"] = 99
+            # Inject KASH speed data for leg shape analysis
+            kash = kash_by_sc.get(sc, {})
+            r["_kash_speed_cat"] = kash.get("kash_speed_cat", "")
+            r["_kash_early_speed"] = kash.get("kash_early_speed")
 
         # Extend with runners from race context if needed (up to 8)
         if len(top_runners) < 8:
@@ -187,10 +201,20 @@ def _prepare_legs_data(
         if actual_field < 2:
             actual_field = max(len(top_runners), 8)
 
+        # KASH confidence upgrade: if our #1 pick is also KASH's pace leader,
+        # upgrade leg confidence (tighter coverage = more efficient quaddie)
+        base_confidence = la.get("confidence", "LOW")
+        if top_runners:
+            top_pick = next((r for r in top_runners if r.get("_pick_rank") == 1), None)
+            if top_pick:
+                tp_kash = (top_pick.get("_kash_speed_cat") or "").lower()
+                if tp_kash in ("leader", "on pace") and base_confidence == "MED":
+                    base_confidence = "HIGH"  # KASH pace leader + our #1 = banker
+
         legs_data.append(SequenceLegAnalysis(
             race_number=rn,
             top_runners=top_runners,
-            leg_confidence=la.get("confidence", "LOW"),
+            leg_confidence=base_confidence,
             suggested_width=la.get("suggested_width", 3),
             odds_shape=odds_shape,
             shape_width=shape_width,
@@ -1031,14 +1055,16 @@ def build_all_sequence_lanes(
     else:
         # TAB sequence pools: early quaddie needs 8+ races,
         # big6 needs 8+ races, quaddie is last 4 races (6+ meets)
+        # TAB sequence pools: main quaddie = last 4 races, early quad = 4 before that.
+        # Big6 = last 6 races. These must match TAB pool definitions exactly.
         rules = {
             6:  {"quaddie": (3, 6)},
             7:  {"quaddie": (4, 7)},
             8:  {"early_quad": (1, 4), "quaddie": (5, 8), "big6": (3, 8)},
-            9:  {"early_quad": (1, 4), "quaddie": (6, 9), "big6": (4, 9)},
-            10: {"early_quad": (1, 4), "quaddie": (7, 10), "big6": (5, 10)},
-            11: {"early_quad": (1, 4), "quaddie": (8, 11), "big6": (6, 11)},
-            12: {"early_quad": (1, 4), "quaddie": (9, 12), "big6": (7, 12)},
+            9:  {"early_quad": (2, 5), "quaddie": (6, 9), "big6": (4, 9)},
+            10: {"early_quad": (3, 6), "quaddie": (7, 10), "big6": (5, 10)},
+            11: {"early_quad": (4, 7), "quaddie": (8, 11), "big6": (6, 11)},
+            12: {"early_quad": (5, 8), "quaddie": (9, 12), "big6": (7, 12)},
         }
         sequences = rules.get(
             total_races,

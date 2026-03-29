@@ -525,6 +525,12 @@ class ContextBuilder:
                     runner_data["pf_ai_rank"] = runner.pf_ai_rank  # AI rank in race
                     runner_data["pf_assessed_price"] = runner.pf_assessed_price  # Fundamental value
 
+                    # KASH model ratings (Betfair Data Scientists daily model)
+                    runner_data["kash_rated_price"] = runner.kash_rated_price
+                    runner_data["kash_speed_cat"] = runner.kash_speed_cat
+                    runner_data["kash_early_speed"] = runner.kash_early_speed
+                    runner_data["kash_late_speed"] = runner.kash_late_speed
+
             race_context["runners"].append(runner_data)
 
             if not runner.scratched:

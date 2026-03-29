@@ -36,7 +36,7 @@ PLACE_MIN_VALUE = 0.95        # accept slight undervalue for Place safety
 
 # Roughie thresholds
 ROUGHIE_MIN_ODDS = 8.0
-ROUGHIE_MAX_ODDS = 20.0   # $20+ roughies historically -100% ROI
+ROUGHIE_MAX_ODDS = 51.0   # Include longshots — tracked_only, no stake risk
 ROUGHIE_MIN_VALUE = 1.10
 
 # Punty's Pick exotic threshold
@@ -97,6 +97,7 @@ class RecommendedExotic:
     num_combos: int
     format: str                 # "flat" or "boxed"
     budget: float = EXOTIC_BUDGET  # dynamic budget based on meet quality
+    legs: list[list[int]] | None = None  # positional legs for structured exotics (e.g. [[1], [2,3,4], [2,3,4,5]])
 
 
 @dataclass
@@ -237,11 +238,13 @@ def calculate_pre_selections(
     # Remaining picks still tracked (displayed, not staked) for accuracy tracking.
     is_ntd = 5 <= field_size <= 7
 
-    # Sort by tissue probability + market agreement confidence boost.
+    # Sort by pure win probability — R1 must always be the highest WP horse.
     # VR tiebreaker removed — it promoted losers (VR 1.20+ wins 14.5% vs VR<0.90 at 29.7%).
-    # Confidence boost from market_layer: tissue R1 = market fav → +0.15 boost.
+    # Confidence boost is preserved in candidate data for staking decisions but does NOT
+    # affect ranking order. Previously boost up to 0.20 could override 1-2% WP differences,
+    # causing R1 to display lower WP than R2 (user-reported Rosehill R7 bug).
     candidates.sort(
-        key=lambda c: c["win_prob"] + c.get("confidence_boost", 0.0),
+        key=lambda c: c["win_prob"],
         reverse=True,
     )
 
@@ -258,10 +261,16 @@ def calculate_pre_selections(
     # Determine favourite price (lowest odds) for dominant fav logic
     fav_price = min((c["odds"] for c in candidates), default=None)
 
-    # Separate roughie candidates (odds >= $8, value >= 1.1)
+    # Protect top-3 candidates from being demoted to roughie.
+    # Candidates are already sorted by win_prob — top 3 should always be R1/R2/R3.
+    top3_scs = {c["saddlecloth"] for c in candidates[:3]} if len(candidates) >= 3 else set()
+
+    # Roughie: best probability from $9+ shots, outside top 3
     roughie_pool = [
         c for c in candidates
-        if ROUGHIE_MIN_ODDS <= c["odds"] <= ROUGHIE_MAX_ODDS and c["value_rating"] >= ROUGHIE_MIN_VALUE
+        if c["odds"] >= 9.0
+        and c["odds"] <= ROUGHIE_MAX_ODDS
+        and c["saddlecloth"] not in top3_scs
     ]
 
     # Select top 3 picks + roughie
@@ -271,8 +280,8 @@ def calculate_pre_selections(
     # Pick roughie first (so we can exclude from main pool)
     roughie = None
     if roughie_pool:
-        # Best value roughie
-        roughie_pool.sort(key=lambda c: c["value_rating"], reverse=True)
+        # Best probability roughie from $9+ shots
+        roughie_pool.sort(key=lambda c: c["win_prob"], reverse=True)
         roughie = roughie_pool[0]
         logger.info(
             f"R{race_number} roughie: {roughie['horse_name']} (#{roughie['saddlecloth']}) "
@@ -386,6 +395,24 @@ def calculate_pre_selections(
                     ))
                     used_saddlecloths.add(c["saddlecloth"])
                     break
+
+        # Add picks #5 and #6 (tracked_only) for wider exotic coverage
+        # These feed into F4 Standout legs: R1/R2-R4/R2-R5/R2-R6
+        remaining_for_5_6 = [c for c in candidates if c["saddlecloth"] not in used_saddlecloths]
+        remaining_for_5_6.sort(key=lambda c: c["place_prob"], reverse=True)
+        for c in remaining_for_5_6[:2]:
+            rank = len(picks) + 1
+            pick = _make_pick_from_optimizer(
+                c, rank, is_roughie=False, rec_lookup=rec_lookup,
+                thresholds=thresholds, field_size=field_size, fav_price=fav_price,
+                race_class=race_class, distance=race_distance,
+            )
+            pick.tracked_only = True
+            pick.no_bet_reason = "Exotic coverage only (R5/R6)"
+            pick.stake = 0.0
+            pick.bet_type = "Place"
+            picks.append(pick)
+            used_saddlecloths.add(c["saddlecloth"])
 
     # Ensure at least one Win/Saver Win bet — but only when the conditional
     # bet type logic assigned Win to rank 1. If rank 1 was shifted to Place
@@ -520,6 +547,7 @@ def calculate_pre_selections(
         fav_price=fav_price,
         distance=race_context.get("distance", 0),
         prize_money=race_context.get("prize_money", 0),
+        runners=race_context.get("runners", []),
     )
 
     # Guaranteed fallback: quinella on top 2 picks if no exotic was selected.
@@ -598,6 +626,17 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
         # Expected value = prob * odds - 1 (per $1 bet)
         ev = win_prob * odds - 1 if odds > 0 else -1
 
+        # KASH consensus: boost confidence when independent model agrees
+        kash_rp = r.get("kash_rated_price")
+        kash_boost = 0.0
+        if kash_rp and kash_rp > 0 and win_prob > 0:
+            kash_wp = 1.0 / kash_rp
+            divergence = abs(win_prob - kash_wp)
+            if divergence < 0.08:
+                kash_boost = 0.02  # Strong agreement — small but meaningful
+            elif divergence > 0.15:
+                kash_boost = -0.01  # Strong disagreement — slight dampen
+
         candidates.append({
             "saddlecloth": sc,
             "horse_name": r.get("horse_name", ""),
@@ -609,7 +648,10 @@ def _build_candidates(runners: list[dict]) -> list[dict]:
             "place_value_rating": place_value,
             "rec_stake": rec_stake,
             "ev": ev,
-            "confidence_boost": r.get("_confidence_boost", 0.0),
+            "confidence_boost": r.get("_confidence_boost", 0.0) + kash_boost,
+            "kash_rated_price": kash_rp,
+            "kash_speed_cat": r.get("kash_speed_cat"),
+            "kash_early_speed": r.get("kash_early_speed"),
         })
 
     return candidates
@@ -620,59 +662,58 @@ def _determine_bet_type(
     field_size: int = 12, fav_price: float | None = None,
     race_class: str = "", distance: int = 0,
 ) -> str:
-    """Determine bet type using learned meta-model or rule fallback.
+    """Determine bet type using explicit business rules.
 
-    Meta-model (trained on 79K Proform picks) predicts Win/Each Way/Place
-    based on rank, odds, WP, field size, class, distance, track condition.
-    Falls back to hand-tuned rules if model unavailable.
+    The LightGBM meta-model was disabled because it NEVER recommends Win
+    (trained on Proform data where Win ROI was negative). These rules
+    implement the user's explicit bet type policy.
+
+    Rules:
+    - R1: Win (odds < $7, not Class/Open, not 2000m+)
+    - R1: Each Way ($4-$10, good value)
+    - R1: Place (long odds $10+ or Class/Open/staying)
+    - R2: Place (always)
+    - R3: Place (always, may be tracked_only by staking cap)
+    - Roughie: tracked_only (handled by MAX_STAKED_PICKS)
+    - ≤4 runners: Win for all (no place market)
     """
     # ≤4 runners: no place betting available
     if field_size <= 4:
         return "Win"
 
-    # Try learned model first
-    try:
-        from punty.betting.bettype_model import recommend_bet_type
-        from punty.ml.features import _distance_bucket, _track_cond_bucket, _class_bucket, _venue_type_code
+    odds = c.get("odds", 0) or 0
+    wp = c.get("win_prob", 0) or 0
+    rc = (race_class or "").lower()
+    is_class_open = "class" in rc or "open" in rc or "group" in rc or "listed" in rc
+    is_staying = distance >= 2000
 
-        result = recommend_bet_type(
-            tip_rank=rank,
-            is_roughie=is_roughie,
-            win_prob=c.get("win_prob", 0),
-            place_prob=c.get("place_prob", 0),
-            value_rating=c.get("value_rating", 1.0),
-            odds=c.get("odds", 0),
-            field_size=field_size,
-            distance_bucket=_distance_bucket(distance),
-            class_bucket=_class_bucket(race_class),
-            track_cond_bucket=_track_cond_bucket(c.get("track_condition", "")),
-            venue_type=_venue_type_code(c.get("venue", "")),
-            prize_money=float(c.get("prize_money", 0) or 0),
-            rank1_wp=c.get("rank1_wp", c.get("win_prob", 0)),
-            wp_spread=c.get("wp_spread", 0),
-            gap_to_next=c.get("gap_to_next", 0),
-            fav_odds=float(fav_price or 0),
-            place_odds=c.get("place_odds", 0) or 0,
-        )
-        if result:
-            bet_type, reason = result
-            logger.debug("Bet type model: rank %d → %s (%s)", rank, bet_type, reason)
-            return bet_type
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.debug("Bet type model failed: %s", e)
+    if is_roughie:
+        return "Place"  # Will be tracked_only via MAX_STAKED_PICKS
 
-    # Fallback: hand-tuned rules
-    if rank == 1 and not is_roughie:
-        odds = c.get("odds", 0)
-        rc = (race_class or "").lower()
-        is_class_open = "class" in rc or "open" in rc
-        is_staying = distance >= 2000
-        is_long_odds = odds >= 7.0
-        if is_class_open or is_staying or is_long_odds:
+    if rank == 1:
+        # R1 bet type decision — our top pick always gets a bet
+        # Under $3.00 → always Win, regardless of class/distance
+        if 0 < odds < 3.0:
+            return "Win"
+        if odds <= 0 or odds > 10.0:
+            # Long odds or no odds — Place is safer
             return "Place"
-        return "Win"
+        if is_class_open or is_staying:
+            # Class/Open and staying at mid odds — Each Way for protection
+            if 4.0 <= odds <= 10.0:
+                return "Each Way"
+            return "Place"
+        if odds < 7.0:
+            # Mid odds, standard race — Win
+            return "Win"
+        # $7-$10 — Each Way
+        return "Each Way"
+
+    if rank == 2:
+        return "Place"
+
+    if rank == 3:
+        return "Place"
 
     return "Place"
 
@@ -785,7 +826,7 @@ def _ensure_win_bet(picks: list[RecommendedPick]) -> None:
     Only force Win on picks within the proven-profitable $2-$10 range.
     Below $2.00 is historically -38.9% ROI on Win — leave as Place.
     """
-    has_win = any(p.bet_type in ("Win", "Saver Win") for p in picks)
+    has_win = any(p.bet_type in ("Win", "Saver Win", "Each Way") for p in picks)
     if has_win or not picks:
         return
 
@@ -987,6 +1028,13 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
     for pick in picks:
         if pick.tracked_only:
             continue  # already marked (e.g. NTD path) — preserve original reason
+        # R1 always gets a bet — never edge-gate our top pick
+        if pick.rank == 1:
+            logger.info(
+                f"  edge gate PASS (R1 override): {pick.horse_name} (#{pick.saddlecloth}) "
+                f"rank=1 {pick.bet_type} ${pick.odds:.2f}"
+            )
+            continue
         passed, reason = _passes_edge_gate(pick)
         if not passed:
             pick.tracked_only = True
@@ -1039,19 +1087,23 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
     if len(staked_picks) == 1:
         effective_pool = min(pool, SINGLE_PICK_CAP)
 
-    # Base allocation weights by rank — top 2 picks get most capital
-    # With MAX_STAKED_PICKS=2, only ranks 1-2 normally get stakes
-    base_rank_weights = {1: 0.58, 2: 0.42, 3: 0.22, 4: 0.15}
+    # Base allocation weights by rank.
+    # Data (past week): R1 Win 25% SR -3.2% ROI, R2 Place 48% SR +4.0% ROI.
+    # Win bets get LESS capital — Place is the profit engine.
+    # When R1 is Win: R1 gets ~$7.50 (38%), R2 gets ~$12.50 (62%)
+    # When R1 is Place: R1 gets ~$12.50 (62%), R2 gets ~$7.50 (38%)
+    base_rank_weights = {1: 0.62, 2: 0.50, 3: 0.22, 4: 0.15}
 
     pick_weights: list[float] = []
     for pick in staked_picks:
         base = base_rank_weights.get(pick.rank, 0.15)
 
-        # Win bonus — rank 1 always gets Win, slight boost for conviction
-        if pick.bet_type in ("Win", "Saver Win") and pick.win_prob and pick.win_prob >= 0.20:
-            base *= 1.10  # 10% stake boost for high-conviction Win
+        # Win REDUCTION — Win bets are lower SR, don't deserve extra capital.
+        # Data: R1 Win 25% SR vs R1 Place 54% SR. Shift weight to Place.
+        if pick.bet_type in ("Win", "Saver Win"):
+            base *= 0.60  # 40% reduction for Win bets
 
-        # Saver Win: reduced stake — 60% of full Win allocation
+        # Saver Win: further reduced — 60% of already-reduced Win allocation
         if pick.bet_type == "Saver Win":
             base *= 0.60
 
@@ -1063,9 +1115,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
         if pick.expected_return > 0.10:
             base *= 1.15  # 15% bonus for strong +EV
 
-        # High-confidence Place bonus — Place is our profit engine (+7.55% ROI)
-        if pick.bet_type == "Place" and pick.place_prob >= 0.45:
-            base *= 1.15  # 15% stake boost for high-confidence Place
+        # High-confidence Place bonus — Place is our profit engine
+        # Data: R1 Place 54% SR, R2 Place 48% SR. Both consistently profitable.
+        if pick.bet_type == "Place" and pick.place_prob >= 0.40:
+            base *= 1.20  # 20% stake boost for confident Place bets
 
         # VR-based stake reduction — high VR = overvalued by market
         # Data: VR 1.5-2.0: -28% ROI. VR 2.0+: -34%.
@@ -1141,6 +1194,229 @@ def _get_exotic_budget(meet_quality: float) -> float:
     return base * _midweek_multiplier()
 
 
+# ── V3 Context-Aware Exotic Cascade ──
+# Backtested on v3 model (78.2% place SR): +302% ROI on Exacta R1/R2,R3.
+# Config maps distance×condition → optimal exotic type.
+# v6 cascade config: used for MID-FIELD (9-11 runners) routing only.
+# Small fields (≤8) always go F4 Standout. Big fields (12+) always Quin Box.
+# This config determines the exotic type for mid-field races by context.
+# Based on actual R1-R4 finish positions from our settled picks.
+_EXOTIC_CASCADE_CONFIG = {
+    # Sprint mid-field: Tri strong (15% maiden, 15% benchmark)
+    "sprint|good": "tri",            # Tri 14.8% maiden, 6.7% benchmark
+    "sprint|soft": "tri",            # Tri 15% benchmark
+    "sprint|heavy": "f4_standout",   # F4 17.6% (heavy = our strength)
+    # Short mid-field: Exacta dominant
+    "short|good": "exacta",         # Exacta 19.2% other, 17.6% handicap
+    "short|soft": "exacta",         # Exacta 20% maiden, 21.4% benchmark
+    "short|heavy": "f4_standout",   # F4 16% (heavy)
+    # Middle mid-field: mixed — Exacta for soft, Tri for good
+    "middle|good": "tri",           # Tri 8% benchmark, 7.4% overall
+    "middle|soft": "exacta",        # Exacta 28.6% other, 15% benchmark
+    "middle|heavy": "f4_standout",  # F4 10.7% (heavy dominant)
+    # Classic: Tri strong at 21% benchmark
+    "classic|good": "tri",          # Tri 21.4% benchmark
+    "classic|soft": "exacta",       # Exacta 19.6%
+    "classic|heavy": "quin_box",    # tiny sample
+    # Staying
+    "staying|good": "exacta",       # Exacta 7.7%
+    "staying|soft": "f4_standout",  # F4 22.2%
+    "staying|heavy": "quin_box",    # tiny sample
+}
+
+
+def _v3_exotic_cascade(
+    distance: int = 0,
+    track_condition: str = "",
+    picks: list | None = None,
+    field_size: int = 0,
+) -> RecommendedExotic | None:
+    """V3 context-aware exotic routing.
+
+    Builds the exotic directly from our ranked picks. No AI involvement.
+    - Exacta: R1 over R2,R3 (2 combos)
+    - Tri structured: R1,R2 / R2,R3 / R3,R4 (8 combos)
+    - Quinella: R1 with R2 (1 combo)
+    - Quinella Box: R1,R2,R3 (3 combos)
+
+    R1 is ALWAYS anchored. Roughie NEVER in position 1.
+    """
+    from punty.calibration_engine import _distance_bucket, _condition_bucket
+
+    if not picks or len(picks) < 2:
+        return None
+
+    sorted_picks = sorted(picks, key=lambda p: p.rank)
+    r1 = sorted_picks[0]
+    r2 = sorted_picks[1] if len(sorted_picks) > 1 else None
+    r3 = sorted_picks[2] if len(sorted_picks) > 2 else None
+    r4 = sorted_picks[3] if len(sorted_picks) > 3 else None
+
+    if not r1 or not r2:
+        return None
+
+    dist_b = _distance_bucket(distance or 1400)
+    cond_b = _condition_bucket(track_condition or "Good 4")
+    ctx_key = f"{dist_b}|{cond_b}"
+
+    # CASCADE — data-driven routing (week of 2026-03-23 to 2026-03-29):
+    #   Trifecta Standout: 8.3% SR, +202% ROI (high variance, big payoffs)
+    #   Quinella Box: 30.5% SR, -7.2% ROI (reliable, needs better odds)
+    #   Exacta: 0% SR all week — DEAD, route to Quinella Box instead
+    #   First4: 0% SR all week — DEAD, route to Trifecta Standout instead
+    #   Trifecta Box: 0% SR — DEAD
+    #
+    # New routing: only 2 types survive:
+    #   Small/mid fields (≤10) with 3+ picks: Trifecta Standout (structured)
+    #   Everything else: Quinella Box (reliable volume)
+    if field_size <= 0:
+        field_size = 10  # assume mid if unknown
+
+    if field_size < 4:
+        return None  # Too few runners
+
+    if field_size <= 10 and r3:
+        # Trifecta Standout: structured legs, 8.3% SR but +202% ROI
+        exotic_type = "tri"
+    else:
+        # Quinella Box: 30.5% SR, reliable for bigger fields
+        exotic_type = "quin_box"
+
+    if exotic_type == "tri" and (field_size < 5 or not r3):
+        exotic_type = "quin_box"
+    if exotic_type in ("quin", "quin_box") and field_size < 4:
+        return None
+
+    BUDGET = 15.0
+
+    if exotic_type == "f4_standout":
+        # F4 Standout structured legs:
+        # 1st: R1 (anchor must win)
+        # 2nd: R2, R3, R4 (3 options)
+        # 3rd: R2, R3, R4, R5 (4 options)
+        # 4th: R2, R3, R4, R5, R6 (5 options — widest coverage)
+        # Combos: 1 × 3 × 4 × 5 = 60
+        r5 = sorted_picks[4] if len(sorted_picks) > 4 else None
+        r6 = sorted_picks[5] if len(sorted_picks) > 5 else None
+
+        sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
+        all_scs = [r1.saddlecloth, r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        if r5:
+            all_scs.append(r5.saddlecloth)
+        if r6:
+            all_scs.append(r6.saddlecloth)
+        all_scs = list(set(all_scs))
+        names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
+
+        # Build structured legs
+        leg1_scs = [r1.saddlecloth]
+        leg2_scs = [r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        leg3_scs = [r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        if r5:
+            leg3_scs.append(r5.saddlecloth)
+        leg4_scs = [r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        if r5:
+            leg4_scs.append(r5.saddlecloth)
+        if r6:
+            leg4_scs.append(r6.saddlecloth)
+
+        combos = len(leg1_scs) * len(leg2_scs) * len(leg3_scs) * len(leg4_scs)
+
+        return RecommendedExotic(
+            exotic_type="First4",
+            runners=all_scs,
+            runner_names=names,
+            probability=r1.win_prob * r2.win_prob * r3.win_prob * (r4.win_prob if r4 else 0.1),
+            value_ratio=3.0,
+            num_combos=combos,
+            format="flat",
+            budget=BUDGET,
+            legs=[leg1_scs, leg2_scs, leg3_scs, leg4_scs],
+        )
+
+    elif exotic_type == "exacta":
+        # R1 over R2,R3 — 2 combos
+        firsts = [r1.saddlecloth]
+        seconds = [r2.saddlecloth]
+        if r3:
+            seconds.append(r3.saddlecloth)
+        runner_scs = list(set(firsts + seconds))
+        runner_names = []
+        sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
+        for sc in runner_scs:
+            runner_names.append(sc_to_name.get(sc, f"#{sc}"))
+        combos = len(seconds)  # R1 over each of the seconds
+        return RecommendedExotic(
+            exotic_type="Exacta",
+            runners=runner_scs,
+            runner_names=runner_names,
+            probability=r1.win_prob * (r2.win_prob + (r3.win_prob if r3 else 0)),
+            value_ratio=1.5,
+            num_combos=combos,
+            format="flat",
+            budget=BUDGET,
+            legs=[firsts, seconds],
+        )
+
+    elif exotic_type == "tri":
+        # Trifecta structured: R1,R2 / R2,R3 / R3,R4 — 8 combos
+        if not r3:
+            # Fall back to exacta
+            return _v3_exotic_cascade(distance, track_condition, picks, field_size)
+        firsts = [r1.saddlecloth, r2.saddlecloth]
+        seconds = [r2.saddlecloth, r3.saddlecloth]
+        thirds = [r3.saddlecloth]
+        if r4:
+            thirds.append(r4.saddlecloth)
+        all_scs = list(set(firsts + seconds + thirds))
+        sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
+        names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
+        combos = len(firsts) * len(seconds) * len(thirds)
+        return RecommendedExotic(
+            exotic_type="Trifecta Standout",
+            runners=all_scs,
+            runner_names=names,
+            probability=r1.win_prob * r2.win_prob * (r3.win_prob if r3 else 0.1),
+            value_ratio=2.0,
+            num_combos=combos,
+            format="flat",
+            budget=BUDGET,
+            legs=[firsts, seconds, thirds],
+        )
+
+    elif exotic_type == "quin":
+        # Quinella: R1 with R2 — 1 combo, full $15
+        return RecommendedExotic(
+            exotic_type="Quinella",
+            runners=[r1.saddlecloth, r2.saddlecloth],
+            runner_names=[r1.horse_name, r2.horse_name],
+            probability=r1.win_prob + r2.win_prob,
+            value_ratio=1.5,
+            num_combos=1,
+            format="flat",
+            budget=BUDGET,
+        )
+
+    else:  # quin_box
+        # Quinella Box: R1, R2, R3 — 3 combos
+        scs = [r1.saddlecloth, r2.saddlecloth]
+        names = [r1.horse_name, r2.horse_name]
+        if r3:
+            scs.append(r3.saddlecloth)
+            names.append(r3.horse_name)
+        combos = len(scs) * (len(scs) - 1) // 2
+        return RecommendedExotic(
+            exotic_type="Quinella Box",
+            runners=scs,
+            runner_names=names,
+            probability=(r1.win_prob + r2.win_prob + (r3.win_prob if r3 else 0)) * 0.5,
+            value_ratio=1.2,
+            num_combos=combos,
+            format="boxed",
+            budget=BUDGET,
+        )
+
+
 def _select_exotic(
     exotic_combos: list[dict],
     selection_saddlecloths: set[int],
@@ -1154,6 +1430,7 @@ def _select_exotic(
     fav_price: float = 0.0,
     distance: int = 0,
     prize_money: int | float = 0,
+    runners: list[dict] | None = None,
 ) -> RecommendedExotic | None:
     """Select the best exotic bet for this race.
 
@@ -1164,6 +1441,23 @@ def _select_exotic(
     """
     if not exotic_combos:
         return None
+
+    # ── V3 Context-Aware Cascade: bypass complex routing when we know
+    #    the optimal exotic type from backtested data (78.2% place SR model).
+    #    Cascade config maps dist×cond → best exotic type.
+    #    Exacta R1/R2,R3 dominates in 8/12 contexts (+302% ROI overall).
+    #    NO box trifecta or first4 box — structured only. ──
+    try:
+        _cascade_result = _v3_exotic_cascade(
+            distance=distance, track_condition=track_condition,
+            picks=picks, field_size=field_size,
+        )
+        if _cascade_result:
+            return _cascade_result
+    except Exception as _e:
+        logger.debug("V3 cascade fallback: %s", _e)
+
+    # ── Legacy routing (fallback if cascade doesn't apply) ──
 
     # ── Try to load meta-model for scoring (used after filtering below) ──
     _use_meta_model = False
@@ -1211,6 +1505,30 @@ def _select_exotic(
         race_shape = "structured"
     else:
         race_shape = "open"
+
+    # ── KASH speed refinement ──
+    # KASH speed_cat (Leader/On-Pace/Midfield/Backmarker) and early_speed
+    # can upgrade/downgrade race shape when pace analysis diverges from
+    # probability spread. Fast leader in a slow race = more dominant.
+    if runners:
+        kash_speeds = []
+        for r in runners:
+            sc = (r.get("kash_speed_cat") or "").lower()
+            es = r.get("kash_early_speed")
+            if sc and not r.get("scratched"):
+                kash_speeds.append({"sc": sc, "es": es or 0})
+        if kash_speeds:
+            leaders = [s for s in kash_speeds if s["sc"] in ("leader", "on pace")]
+            # If <25% of field are leaders/on-pace, pace is thin — upgrade shape
+            # (standout frontrunner advantage = more dominant outcome)
+            if leaders and len(leaders) / len(kash_speeds) < 0.25:
+                if race_shape == "structured":
+                    race_shape = "dominant"  # Thin pace → frontrunner advantage
+            # If >50% are leaders/on-pace, pace is hot — downgrade shape
+            # (hot pace = form reversals, less predictable)
+            elif leaders and len(leaders) / len(kash_speeds) > 0.50:
+                if race_shape == "dominant":
+                    race_shape = "structured"  # Hot pace erodes standout edge
 
     # ── Meet quality score (0-3) ──
     # Drives exotic ambition: higher quality = more ambitious bet types
@@ -1698,7 +2016,8 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
                 ret = round(pick.stake * po, 2)
             elif pick.bet_type == "Each Way":
                 po = pick.place_odds or _estimate_place_odds(pick.odds)
-                ret = round(pick.stake * pick.odds + pick.stake * po, 2)
+                half = pick.stake / 2
+                ret = round(half * pick.odds + half * po, 2)
             else:
                 ret = 0
 
@@ -1708,9 +2027,9 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
                 po = pick.place_odds or _estimate_place_odds(pick.odds)
                 bet_desc = (
                     f"${pick.stake:.2f} Each Way "
-                    f"(=${half:.2f}W + ${half:.2f}P), "
-                    f"return ${round(pick.stake * pick.odds, 2):.2f} (wins) / "
-                    f"${round(pick.stake * po, 2):.2f} (places)"
+                    f"(${half:.2f}W + ${half:.2f}P), "
+                    f"return ${round(half * pick.odds, 2):.2f} (wins) / "
+                    f"${round(half * po, 2):.2f} (places)"
                 )
             elif pick.bet_type == "Place":
                 po = pick.place_odds or _estimate_place_odds(pick.odds)
@@ -1722,7 +2041,12 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
 
     if pre_sel.exotic:
         ex = pre_sel.exotic
-        runners_str = ", ".join(str(r) for r in ex.runners)
+        if ex.legs:
+            runners_str = " / ".join(
+                ", ".join(str(r) for r in leg) for leg in ex.legs
+            )
+        else:
+            runners_str = ", ".join(str(r) for r in ex.runners)
         names_str = ", ".join(ex.runner_names)
         budget = ex.budget
         combos = max(1, ex.num_combos)

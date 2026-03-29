@@ -55,9 +55,14 @@ class BetfairBet(Base):
     settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Scheduling
-    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # race_time - 5min
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     placed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=melb_now_naive)
+
+    # JIT audit — probability at bet decision time (not stale from generation)
+    jit_win_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    jit_place_probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    jit_evaluated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     pick: Mapped[Optional["Pick"]] = relationship("Pick")
@@ -80,6 +85,7 @@ class BetfairBet(Base):
             "enabled": self.enabled,
             "status": self.status,
             "bet_id": self.bet_id,
+            "bet_id_short": self.bet_id[-6:] if self.bet_id else None,
             "size_matched": self.size_matched,
             "average_price_matched": self.average_price_matched,
             "error_message": self.error_message,
@@ -90,6 +96,8 @@ class BetfairBet(Base):
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "placed_at": self.placed_at.isoformat() if self.placed_at else None,
             "created_at": self.created_at.isoformat(),
+            "jit_place_probability": self.jit_place_probability,
+            "jit_win_probability": self.jit_win_probability,
         }
 
 

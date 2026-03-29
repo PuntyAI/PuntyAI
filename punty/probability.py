@@ -384,119 +384,114 @@ def _get_calibrated_weights() -> dict[str, float] | None:
 
 # Factor registry — defines all probability factors with metadata
 FACTOR_REGISTRY = {
-    "market":         {"label": "Market Consensus", "category": "Market Intelligence",
-                       "description": "Multi-bookmaker median odds stripped of overround"},
-    "movement":       {"label": "Market Movement",  "category": "Market Intelligence",
-                       "description": "Odds shift direction and magnitude — smart money signals"},
-    "form":           {"label": "Form Rating",      "category": "Form & Fitness",
-                       "description": "Recent results, track/distance/condition win rates"},
-    "class_fitness":  {"label": "Class & Fitness",   "category": "Form & Fitness",
-                       "description": "Class level suitability and fitness from spell length"},
-    "pace":           {"label": "Pace Factor",       "category": "Race Dynamics",
-                       "description": "Speed map position, pace scenario, and map factor"},
-    "barrier":        {"label": "Barrier Draw",      "category": "Race Dynamics",
-                       "description": "Gate position advantage relative to field size and distance"},
-    "jockey_trainer": {"label": "Jockey & Trainer",  "category": "Connections",
-                       "description": "Jockey and trainer win rate statistics"},
-    "weight_carried": {"label": "Weight Carried",    "category": "Physical",
-                       "description": "Carried weight relative to race average"},
-    "horse_profile":  {"label": "Horse Profile",     "category": "Physical",
-                       "description": "Age and sex peak performance assessment"},
-    "deep_learning":  {"label": "Deep Learning",     "category": "Pattern Intelligence",
-                       "description": "Historical pattern edges from 280K+ runners analysis"},
+    "form":            {"label": "Form Rating",        "category": "Form & Fitness",
+                        "description": "Recent results, T/D/condition records, margins, career stats"},
+    "kri":             {"label": "KRI (Kick Reaction)", "category": "Form & Fitness",
+                        "description": "Explosive finishing ability — 62.8% vs 6.4% win SR (10x spread)"},
+    "jockey_trainer":  {"label": "Jockey & Trainer",   "category": "Connections",
+                        "description": "Connection stats, combo SR, A2E — 3.3x predictor"},
+    "pace":            {"label": "Pace Factor",        "category": "Race Dynamics",
+                        "description": "Settling position, speed map, map factor — 13.5% vs 7.7%"},
+    "weight_carried":  {"label": "Weight Carried",     "category": "Physical",
+                        "description": "Relative weight + weight change signal (gained = class up)"},
+    "barrier":         {"label": "Barrier Draw",       "category": "Race Dynamics",
+                        "description": "Gate position × field × distance × condition (inner heavy = 21%)"},
+    "horse_profile":   {"label": "Horse Profile",      "category": "Physical",
+                        "description": "Age × sex × class peak performance curves"},
+    "closing_ability": {"label": "Closing Ability",    "category": "Race Dynamics",
+                        "description": "Ground gained settle→finish — 12.4% vs 8.3% win SR"},
+    "class_fitness":   {"label": "Class & Fitness",    "category": "Form & Fitness",
+                        "description": "Class suitability, condition records, fitness from spell"},
+    "deep_learning":   {"label": "Pattern Intelligence", "category": "Pattern Intelligence",
+                        "description": "Historical pattern edges from jockey/trainer/venue combos"},
+    "momentum":        {"label": "Momentum",            "category": "Form & Fitness",
+                        "description": "Improving or declining form trajectory — position + margin trends"},
+    "freshness":       {"label": "Freshness",            "category": "Form & Fitness",
+                        "description": "First-up/second-up patterns, spell management, back-up confidence"},
+    "speed_rating":    {"label": "Speed Rating",          "category": "Speed",
+                        "description": "Context-aware speed from margins × venue × distance × condition"},
+    "jt_context":      {"label": "J/T Context",           "category": "Connections",
+                        "description": "Jockey/trainer specialist performance by venue type × condition × distance"},
 }
-
-# Default weights (must sum to 1.0)
-# Grid search optimal from batch 1 (seed=42, 2500 combos x 1000 races):
-#   form=0.5128, market=0.3205, wc=0.0513, jt=0.0385, barrier=0.0256,
-#   hp=0.0256, cf=0.0256, pace=0.00, movement=0.00
-# Rounded to clean values that sum to 1.0
+# ── Win Weights: 100% INDEPENDENT — no market, odds, or external model signals ──
+# Tuned from 381,656 Proform runner signal audit (2025-2026).
+# All predictions from OUR data: form, fitness, connections, pace, physical, class.
+# External models (KASH, market, PF predictions) used ONLY as post-prediction sense check.
 DEFAULT_WEIGHTS = {
-    "form": 0.57,
-    "market": 0.27,
-    "weight_carried": 0.05,
-    "jockey_trainer": 0.04,
-    "barrier": 0.03,
-    "horse_profile": 0.02,
-    "class_fitness": 0.02,
-    "movement": 0.00,
-    "pace": 0.00,
-    "deep_learning": 0.00,  # grid search: 0.00 optimal; calibration also forces 0.0
-}  # sums to 1.0 — 2026-03-13: deep_learning 0.03→0.00, redistributed to form
+    "form": 0.377,             # v4: 37.7% — biggest real signal (lift +0.122 on holdout)
+    "speed_rating": 0.229,     # v4: 22.9% — context-aware speed (lift +0.074)
+    "momentum": 0.093,         # v4: 9.3% — form trajectory (lift +0.030)
+    "closing_ability": 0.087,  # v4: 8.7% — ground gained (lift +0.028)
+    "pace": 0.062,             # v4: 6.2% — early speed (lift +0.020)
+    "weight_carried": 0.037,   # v4: 3.7% — handicapper assessment
+    "horse_profile": 0.031,    # v4: 3.1% — age/sex interactions
+    "barrier": 0.028,          # v4: 2.8% — draw advantage
+    "jt_context": 0.016,       # v4: 1.6% — J/T specialist (low data lift)
+    "deep_learning": 0.016,    # v4: 1.6% — pattern intelligence
+    "class_fitness": 0.009,    # v4: 0.9% — class suitability
+    "freshness": 0.009,        # v4: 0.9% — spell patterns
+    "kri": 0.003,              # v4: 0.3% — near-zero lift on holdout (data gap)
+    "jockey_trainer": 0.003,   # v4: 0.3% — near-zero lift on holdout (data gap)
+}  # v4: ablation-informed weights from 15-month Proform train, Feb+Mar holdout
 
-# Distance-specific weight overrides — tuned via batch 2 grid search (seed=123, 400 combos x 500 races per bucket)
-# Middle was biggest win: -0.39% → +9.75% ROI. horse_profile elevated for short/middle distances.
+# Distance-specific weight overrides — v3 BACKTEST OPTIMISED
+# v4: Use DEFAULT_WEIGHTS for all distances — ablation-informed, no per-distance overfitting.
+# The v3 per-distance weights were grid-searched on 881 Feb races and don't generalise.
+# v4 global weights are trained on 5,000 sampled races from 15 months and validated on holdout.
 DISTANCE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m — matches default weights
-        "form": 0.57, "market": 0.27, "weight_carried": 0.05, "barrier": 0.03,
-        "horse_profile": 0.02, "class_fitness": 0.02, "jockey_trainer": 0.04,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
-    },
-    "short": {  # 1101-1399m — horse_profile 4x boost, pace emerges (batch 2)
-        "form": 0.525, "market": 0.241, "horse_profile": 0.093, "jockey_trainer": 0.058,
-        "barrier": 0.023, "weight_carried": 0.023, "class_fitness": 0.023,
-        "pace": 0.013, "movement": 0.00, "deep_learning": 0.00,
-    },
-    "middle": {  # 1400-1799m — biggest improvement: -0.39% → +9.75% win ROI (batch 2)
-        "form": 0.509, "market": 0.231, "horse_profile": 0.090, "weight_carried": 0.067,
-        "jockey_trainer": 0.056, "barrier": 0.034, "class_fitness": 0.013,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
-    },
-    "classic": {  # 1800-2199m — jockey_trainer 2x boost (batch 2)
-        "form": 0.515, "market": 0.234, "jockey_trainer": 0.091, "weight_carried": 0.068,
-        "horse_profile": 0.036, "barrier": 0.034, "class_fitness": 0.023,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
-    },
-    "staying": {  # 2200m+ — jockey_trainer & class_fitness elevated (batch 2)
-        "form": 0.515, "market": 0.234, "jockey_trainer": 0.091, "class_fitness": 0.068,
-        "weight_carried": 0.046, "horse_profile": 0.046, "barrier": 0.00,
-        "pace": 0.00, "movement": 0.00, "deep_learning": 0.00,
-    },
+    # All buckets use the same ablation-informed weights.
+    # Form (37.7%) and speed_rating (22.9%) are the proven signals.
 }
 
-# Place-specific weights — optimized via batch 2 grid search (1500 combos x 1000 races)
-# Key insight: form is much more important for place than previously assumed (0.38 vs 0.25)
-# Market less dominant for place (0.27 vs 0.35) — market prices win probability, not place
+# ── Place Weights: INDEPENDENT — consistency-focused signals ──
+# Place probability favours consistency: class_fitness, jockey reliability, pace
 DEFAULT_PLACE_WEIGHTS = {
-    "form": 0.44,
-    "market": 0.22,
-    "class_fitness": 0.09,
-    "jockey_trainer": 0.09,
-    "barrier": 0.05,
-    "weight_carried": 0.05,
-    "horse_profile": 0.04,
-    "pace": 0.02,
-    "movement": 0.00,
-    "deep_learning": 0.00,
-}  # sums to 1.0 — 2026-03-13: deep_learning 0.03→0.00, redistributed to form
+    "form": 0.377,
+    "speed_rating": 0.229,
+    "momentum": 0.093,
+    "closing_ability": 0.087,
+    "pace": 0.062,
+    "weight_carried": 0.037,
+    "horse_profile": 0.031,
+    "barrier": 0.028,
+    "jt_context": 0.016,
+    "deep_learning": 0.016,
+    "class_fitness": 0.009,
+    "freshness": 0.009,
+    "kri": 0.003,
+    "jockey_trainer": 0.003,
+}  # v4: same as win weights — ablation-informed from 15-month holdout
 
-# Distance-specific place weight overrides — tuned via batch 2 grid search
-# Key finding: class_fitness 3x for staying place, jockey_trainer dominant for classic place
 DISTANCE_PLACE_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
-    "sprint": {  # ≤1100m
-        "form": 0.367, "market": 0.238, "class_fitness": 0.099, "jockey_trainer": 0.099,
-        "barrier": 0.079, "weight_carried": 0.079, "horse_profile": 0.020,
-        "movement": 0.020, "pace": 0.00, "deep_learning": 0.00,
+    "sprint": {
+        "form": 0.28, "kri": 0.08, "class_fitness": 0.08, "jockey_trainer": 0.08,
+        "barrier": 0.06, "weight_carried": 0.06, "horse_profile": 0.04,
+        "pace": 0.05, "closing_ability": 0.04, "deep_learning": 0.04,
+        "momentum": 0.14, "freshness": 0.02,
     },
-    "short": {  # 1101-1399m — weight_carried boosted, pace emerges (batch 2)
-        "form": 0.400, "market": 0.262, "weight_carried": 0.087, "class_fitness": 0.054,
-        "jockey_trainer": 0.054, "horse_profile": 0.044, "pace": 0.044,
-        "barrier": 0.033, "movement": 0.022, "deep_learning": 0.00,
+    "short": {
+        "form": 0.30, "kri": 0.06, "class_fitness": 0.08, "jockey_trainer": 0.08,
+        "weight_carried": 0.06, "horse_profile": 0.05, "pace": 0.04,
+        "barrier": 0.04, "closing_ability": 0.05, "deep_learning": 0.05,
+        "momentum": 0.11, "freshness": 0.08,
     },
-    "middle": {  # 1400-1799m — barrier 3x boost, class_fitness elevated (batch 2)
-        "form": 0.361, "market": 0.274, "class_fitness": 0.091, "barrier": 0.091,
-        "jockey_trainer": 0.057, "horse_profile": 0.047, "weight_carried": 0.034,
-        "pace": 0.023, "movement": 0.023, "deep_learning": 0.00,
+    "middle": {
+        "form": 0.28, "kri": 0.06, "class_fitness": 0.10, "barrier": 0.05,
+        "jockey_trainer": 0.08, "horse_profile": 0.05, "weight_carried": 0.05,
+        "pace": 0.03, "closing_ability": 0.05, "deep_learning": 0.06,
+        "momentum": 0.12, "freshness": 0.07,
     },
-    "classic": {  # 1800-2199m — jockey_trainer dominant for place (batch 2)
-        "form": 0.353, "market": 0.276, "jockey_trainer": 0.143, "class_fitness": 0.085,
-        "weight_carried": 0.048, "pace": 0.038, "barrier": 0.029,
-        "horse_profile": 0.029, "movement": 0.00, "deep_learning": 0.00,
+    "classic": {
+        "form": 0.28, "kri": 0.04, "jockey_trainer": 0.12, "class_fitness": 0.10,
+        "weight_carried": 0.05, "pace": 0.03, "barrier": 0.04,
+        "horse_profile": 0.04, "closing_ability": 0.05, "deep_learning": 0.07,
+        "momentum": 0.10, "freshness": 0.05,
     },
-    "staying": {  # 2200m+ — class_fitness 3x for staying place (batch 2)
-        "form": 0.405, "market": 0.265, "class_fitness": 0.155, "jockey_trainer": 0.055,
-        "barrier": 0.033, "weight_carried": 0.033, "horse_profile": 0.023,
-        "movement": 0.032, "pace": 0.00, "deep_learning": 0.00,
+    "staying": {
+        "form": 0.28, "kri": 0.03, "class_fitness": 0.15, "jockey_trainer": 0.10,
+        "barrier": 0.02, "weight_carried": 0.04, "horse_profile": 0.04,
+        "closing_ability": 0.05, "pace": 0.03, "deep_learning": 0.08,
+        "momentum": 0.04, "freshness": 0.03,
     },
 }
 
@@ -842,6 +837,10 @@ def _calculate_lgbm_probabilities(
             factor_scores["jockey_trainer"] = round(_jockey_trainer_factor(runner, baseline), 4)
             factor_scores["weight_carried"] = round(_weight_factor(runner, avg_wt, race_distance, race), 4)
             factor_scores["horse_profile"] = round(_horse_profile_factor(runner, race), 4)
+            factor_scores["momentum"] = round(_momentum_factor(runner, race), 4)
+            factor_scores["freshness"] = round(_freshness_factor(runner), 4)
+            factor_scores["speed_rating"] = round(_speed_rating_factor(runner, race, meeting), 4)
+            factor_scores["jt_context"] = round(_jt_context_factor(runner, race, meeting), 4)
         except Exception:
             pass  # Don't break LGBM path if factor calc fails
 
@@ -1084,12 +1083,23 @@ def calculate_race_probabilities(
     if weights:
         w = weights
     else:
-        cal = _get_calibrated_weights()
-        if cal:
-            w = cal
-        else:
-            dist_bucket = _get_dist_bucket(race_distance)
-            w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
+        # Try context-aware calibrated weights first (from weekly auto-calibration)
+        try:
+            from punty.calibration_engine import get_calibrated_weights, _CALIBRATION_CACHE
+            if _CALIBRATION_CACHE:
+                track_cond = _get(meeting, "track_condition") or ""
+                race_cls = _get(race, "class_") or _get(race, "class") or ""
+                venue = _get(meeting, "venue") or ""
+                w = get_calibrated_weights(race_distance, track_cond, race_cls, venue)
+            else:
+                raise ImportError  # Fall through to distance defaults
+        except (ImportError, Exception):
+            cal = _get_calibrated_weights()
+            if cal:
+                w = cal
+            else:
+                dist_bucket = _get_dist_bucket(race_distance)
+                w = DISTANCE_WEIGHT_OVERRIDES.get(dist_bucket, DEFAULT_WEIGHTS)
 
     # Apply track condition adjustments — heavy/soft reduce form predictiveness,
     # increase barrier importance (inside rail advantage in wet going)
@@ -1128,20 +1138,23 @@ def calculate_race_probabilities(
     for runner in active:
         rid = _get(runner, "id", "")
 
-        # Calculate all factor scores
-        mkt_raw = _market_consensus(runner, overround)
-        # Use calibrated market curve if available (maps raw prob → better score)
-        mkt_score = _calibrated_score("market_prob", mkt_raw, fallback=mkt_raw) if mkt_raw > 0 else 0.0
+        # Calculate all factor scores — 100% independent, no market/KASH/PF predictions
         scores = {
-            "market":         mkt_score,
-            "movement":       _market_movement_factor(runner) if w.get("movement", 0) > 0 else 0.5,
             "form":           _form_rating(runner, track_condition, baseline, race, meeting),
-            "class_fitness":  _class_factor(runner, baseline, race),
-            "pace":           _pace_factor(runner, pace_scenario) if w.get("pace", 0) > 0 else 0.5,
-            "barrier":        _barrier_draw_factor(runner, field_size, race_distance, venue=_get(meeting, "venue", "")),
+            "kri":            _kri_factor(runner, race_distance, track_condition),
             "jockey_trainer": _jockey_trainer_factor(runner, baseline),
+            "pace":           _pace_factor(runner, pace_scenario),
             "weight_carried": _weight_factor(runner, avg_weight, race_distance, race),
+            "barrier":        _barrier_draw_factor(runner, field_size, race_distance,
+                                                   venue=_get(meeting, "venue", ""),
+                                                   track_condition=track_condition),
             "horse_profile":  _horse_profile_factor(runner, race),
+            "closing_ability": _closing_ability_factor(runner),
+            "class_fitness":  _class_factor(runner, baseline, race),
+            "momentum":       _momentum_factor(runner, race),
+            "freshness":      _freshness_factor(runner),
+            "speed_rating":   _speed_rating_factor(runner, race, meeting),
+            "jt_context":     _jt_context_factor(runner, race, meeting),
             "deep_learning":  0.5,  # placeholder, set below if weight > 0
         }
 
@@ -1155,7 +1168,9 @@ def calculate_race_probabilities(
             dl_matched_patterns = []
 
         all_factor_scores[rid] = scores
-        market_implied[rid] = mkt_raw  # raw market probability for value detection
+        # Market implied still computed for value detection (post-prediction only)
+        mkt_raw = _market_consensus(runner, overround) if overround > 0 else 0.0
+        market_implied[rid] = mkt_raw
         odds = _get_median_odds(runner)
         runner_odds[rid] = odds or 0.0
         factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
@@ -1178,12 +1193,9 @@ def calculate_race_probabilities(
         for rid, scores in all_factor_scores.items():
             factor_details[rid] = {k: round(v, 4) for k, v in scores.items()}
 
-    # Step 1b: Dynamic market weight boost for low-information races
-    eff_w = _boost_market_weight(w, all_factor_scores)
-
-    # Step 1c: Compute weighted sums with effective weights
+    # Step 1b: Compute weighted sums (no market boost — 100% independent)
     for rid, scores in all_factor_scores.items():
-        raw = sum(eff_w.get(k, 0.0) * v for k, v in scores.items())
+        raw = sum(w.get(k, 0.0) * v for k, v in scores.items())
         raw_scores[rid] = max(0.001, raw)
 
     # Step 2: Normalize to sum to 1.0
@@ -1206,8 +1218,8 @@ def calculate_race_probabilities(
         if sharp_total > 0:
             win_probs = {rid: p / sharp_total for rid, p in sharpened.items()}
 
-    # Step 2b: Market floor — prevent extreme disagreement with market
-    win_probs = _apply_market_floor(win_probs, market_implied)
+    # Market floor REMOVED — our model is 100% independent.
+    # External models (KASH, market, PF) used only as post-prediction sense check.
 
     # Step 2d: Post-scoring adjustments (ProPun strategy multipliers)
     # Applied after calibration + market floor, before place probability calculation.
@@ -1629,11 +1641,32 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
         signal_sum += career_score * career_weight
         signals += career_weight
 
-    # Average condition score — aggregate across all track conditions (Q5-Q1: 10.6%)
+    # ── CONDITION-SPECIFIC RECORD — elevated weight on today's surface ──
+    # Data (381K audit): Good SR 50%+ on Good = 38.8% win vs 0-10% = 4.1% (9x spread)
+    # This is the #2 strongest non-market signal after KRI.
+    tc_lower = str(track_condition or "").lower()
+    if "heavy" in tc_lower:
+        cond_field = "heavy_track_stats"
+        cond_weight = 3.0  # Heavy track record is critical
+    elif "soft" in tc_lower:
+        cond_field = "soft_track_stats"
+        cond_weight = 2.5
+    elif "good" in tc_lower or "firm" in tc_lower:
+        cond_field = "good_track_stats"
+        cond_weight = 2.0
+    else:
+        cond_field = None
+        cond_weight = 1.0
+    if cond_field:
+        cond_s = parse_stats_string(_get(runner, cond_field))
+        if cond_s and cond_s.starts >= 3:
+            signal_sum += _stat_to_score(cond_s.win_rate, baseline, "condition_specific") * cond_weight
+            signals += cond_weight
+    # Also keep aggregate condition score as supplementary
     cond_total_starts = 0
     cond_total_wins = 0
-    for cond_field in ("good_track_stats", "soft_track_stats", "heavy_track_stats"):
-        cond_s = parse_stats_string(_get(runner, cond_field))
+    for cf in ("good_track_stats", "soft_track_stats", "heavy_track_stats"):
+        cond_s = parse_stats_string(_get(runner, cf))
         if cond_s:
             cond_total_starts += cond_s.starts
             cond_total_wins += cond_s.wins
@@ -1642,40 +1675,51 @@ def _form_rating(runner: Any, track_condition: str, baseline: float,
         signal_sum += _stat_to_score(avg_cond_wr, baseline) * 0.4
         signals += 0.4
 
-    # Form trend sub-signal: improving form gets a small boost, declining penalised
-    form_trend = _get_form_trend(runner)
-    if form_trend == "improving":
-        signal_sum += 0.55  # slight positive (0.5 baseline + 0.05)
-        signals += 1.0
-    elif form_trend == "declining":
-        signal_sum += 0.45  # slight negative (0.5 baseline - 0.05)
-        signals += 1.0
-
-    # KRI sub-signal: Kick Reaction Index (0-100) with recency weighting
-    fh_for_kri = _get(runner, "form_history")
-    if fh_for_kri:
+    # ── LAST-START MARGIN — beaten <0.5L = 17.6% win, won = 15.8%, >7L = 5.8% ──
+    # Close-up runners are a better predictor than last-start winners
+    fh_for_margin = _get(runner, "form_history")
+    if fh_for_margin:
         try:
-            fh_kri = json.loads(fh_for_kri) if isinstance(fh_for_kri, str) else fh_for_kri
-            if isinstance(fh_kri, list):
-                kri_vals = [f.get("kri") for f in fh_kri[:5] if f.get("kri") and f["kri"] > 0]
-                if len(kri_vals) >= 2:
-                    kri_avg = sum(kri_vals) / len(kri_vals)
-                    # Map KRI 0-100 to 0.1-0.9 score: 50=neutral, 80+=strong
-                    kri_score = 0.1 + (min(kri_avg, 100) / 100.0) * 0.8
-                    signal_sum += kri_score * 0.8
-                    signals += 0.8
-                    # KRI trend: recent 2 vs older 2 (momentum signal)
-                    if len(kri_vals) >= 4:
-                        recent = sum(kri_vals[:2]) / 2
-                        older = sum(kri_vals[2:4]) / 2
-                        if recent > older + 5:  # improving by 5+ points
-                            signal_sum += 0.58 * 0.3
-                            signals += 0.3
-                        elif recent < older - 5:  # declining
-                            signal_sum += 0.42 * 0.3
-                            signals += 0.3
+            fh_m = json.loads(fh_for_margin) if isinstance(fh_for_margin, str) else fh_for_margin
+            if isinstance(fh_m, list) and fh_m and isinstance(fh_m[0], dict):
+                last_pos = fh_m[0].get("position") or fh_m[0].get("pos")
+                last_margin = fh_m[0].get("margin")
+                margin_score = 0.5  # neutral
+                if last_pos == 1:
+                    margin_score = 0.80  # Won
+                elif last_margin is not None:
+                    try:
+                        mv = float(last_margin)
+                        if mv <= 0.5:
+                            margin_score = 0.82  # Beaten <0.5L = BETTER than winning
+                        elif mv <= 1.0:
+                            margin_score = 0.72
+                        elif mv <= 2.0:
+                            margin_score = 0.62
+                        elif mv <= 4.0:
+                            margin_score = 0.45
+                        elif mv <= 7.0:
+                            margin_score = 0.30
+                        else:
+                            margin_score = 0.15  # >7L = poor
+                    except (ValueError, TypeError):
+                        pass
+                signal_sum += margin_score * 1.2  # Weight same as T/D stats
+                signals += 1.2
         except (json.JSONDecodeError, TypeError):
             pass
+
+    # Form trend sub-signal
+    form_trend = _get_form_trend(runner)
+    if form_trend == "improving":
+        signal_sum += 0.55
+        signals += 1.0
+    elif form_trend == "declining":
+        signal_sum += 0.45
+        signals += 1.0
+
+    # KRI REMOVED from form — now a standalone factor (_kri_factor)
+    # This prevents double-counting.
 
     if signals > 0:
         score = signal_sum / signals
@@ -1749,6 +1793,156 @@ def _condition_stats_field(track_condition: str) -> Optional[str]:
     if any(k in tc for k in ("good", "firm", "gd")):
         return "good_track_stats"
     return None
+
+
+# ──────────────────────────────────────────────
+# Factor: KRI (Kick Reaction Index)
+# ──────────────────────────────────────────────
+
+def _kri_factor(runner: Any, distance: int = 1400, track_condition: str = "") -> float:
+    """KRI-based scoring — strongest non-market signal.
+
+    Data (381K runners): KRI 80-100 = 62.8% win SR, 0-19 = 6.4% (10x spread).
+    Context: KRI matters MORE in sprints (explosive speed), LESS in staying (sustained),
+    LESS on heavy tracks (ground nullifies late kick).
+    """
+    import json as _json
+
+    # Extract KRI from form_history
+    fh_raw = _get(runner, "form_history")
+    if not fh_raw:
+        return 0.5  # No data = neutral
+    try:
+        fh = _json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+    except (ValueError, TypeError):
+        return 0.5
+    if not isinstance(fh, list):
+        return 0.5
+
+    # Get KRI values from last 3 non-trial starts
+    kri_values = []
+    for start in fh[:5]:
+        if isinstance(start, dict) and not start.get("is_trial"):
+            kri = start.get("kri")
+            if kri is not None:
+                try:
+                    kri_values.append(float(kri))
+                except (ValueError, TypeError):
+                    pass
+
+    if not kri_values:
+        return 0.5
+
+    # Primary: most recent KRI
+    recent_kri = kri_values[0]
+
+    # Map 0-100 to score 0.1-0.9
+    # Calibrated from data: KRI 80+ = 62.8% win, 40-59 = 26.3%, 0-19 = 6.4%
+    if recent_kri >= 80:
+        base_score = 0.90
+    elif recent_kri >= 60:
+        base_score = 0.75
+    elif recent_kri >= 40:
+        base_score = 0.60
+    elif recent_kri >= 20:
+        base_score = 0.45
+    else:
+        base_score = 0.20
+
+    # KRI trend: improving = bonus (recent 2 vs older)
+    if len(kri_values) >= 3:
+        recent_avg = sum(kri_values[:2]) / 2
+        older_avg = sum(kri_values[2:min(4, len(kri_values))]) / len(kri_values[2:min(4, len(kri_values))])
+        if recent_avg > older_avg + 10:
+            base_score += 0.05  # KRI improving
+        elif recent_avg < older_avg - 10:
+            base_score -= 0.03  # KRI declining
+
+    # Context: distance scaling
+    # Sprint: KRI critical (explosive speed), Staying: less relevant
+    if distance and distance <= 1200:
+        dist_mult = 1.15  # Amplify KRI for sprints
+    elif distance and distance <= 1600:
+        dist_mult = 1.05
+    elif distance and distance >= 2200:
+        dist_mult = 0.80  # Dampen for stayers
+    else:
+        dist_mult = 1.0
+
+    # Context: track condition scaling
+    # Heavy: ground nullifies late kick, Good: KRI fully applies
+    tc_lower = (track_condition or "").lower()
+    if "heavy" in tc_lower:
+        cond_mult = 0.70
+    elif "soft" in tc_lower:
+        cond_mult = 0.85
+    else:
+        cond_mult = 1.0
+
+    # Apply context multipliers around neutral point
+    adjusted = 0.5 + (base_score - 0.5) * dist_mult * cond_mult
+    return max(0.05, min(0.95, adjusted))
+
+
+# ──────────────────────────────────────────────
+# Factor: Closing Ability (position change)
+# ──────────────────────────────────────────────
+
+def _closing_ability_factor(runner: Any) -> float:
+    """Score based on how much ground horse makes up in the run.
+
+    Data (381K runners): Gained 3+ spots = 12.4% win, Lost 3+ = 8.3%.
+    Uses settle→finish position change from last 3 starts, recency-weighted.
+    """
+    import json as _json
+
+    fh_raw = _get(runner, "form_history")
+    if not fh_raw:
+        return 0.5
+    try:
+        fh = _json.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+    except (ValueError, TypeError):
+        return 0.5
+    if not isinstance(fh, list):
+        return 0.5
+
+    changes = []
+    weights = [1.0, 0.7, 0.5]  # Recency weighting
+    for i, start in enumerate(fh[:3]):
+        if not isinstance(start, dict) or start.get("is_trial"):
+            continue
+        settle = start.get("settled")
+        finish = start.get("position") or start.get("pos")
+        if settle is not None and finish is not None:
+            try:
+                change = int(settle) - int(finish)  # Positive = gained ground
+                w = weights[i] if i < len(weights) else 0.3
+                changes.append((change, w))
+            except (ValueError, TypeError):
+                pass
+
+    if not changes:
+        return 0.5
+
+    # Weighted average position change
+    total_w = sum(w for _, w in changes)
+    avg_change = sum(c * w for c, w in changes) / total_w if total_w > 0 else 0
+
+    # Map to score: gained 5+ spots = 0.85, gained 3 = 0.70, neutral = 0.50, lost 3+ = 0.30
+    if avg_change >= 5:
+        score = 0.85
+    elif avg_change >= 3:
+        score = 0.70
+    elif avg_change >= 1:
+        score = 0.60
+    elif avg_change >= -1:
+        score = 0.50
+    elif avg_change >= -3:
+        score = 0.40
+    else:
+        score = 0.25
+
+    return max(0.05, min(0.95, score))
 
 
 # ──────────────────────────────────────────────
@@ -2076,6 +2270,319 @@ def _class_factor(runner: Any, baseline: float, race: Any = None) -> float:
 
 
 # ──────────────────────────────────────────────
+# Factor: Momentum (v2 — improving/declining form trajectory)
+# ──────────────────────────────────────────────
+
+def _momentum_factor(runner: Any, race: Any = None) -> float:
+    """Score momentum: improving or declining form trajectory.
+
+    Compares recent finish positions and margins to detect upward/downward trends.
+    Also considers class changes (dropping = positive, rising = negative).
+    """
+    form_history = _get(runner, "form_history")
+    if isinstance(form_history, str):
+        try:
+            form_history = json.loads(form_history)
+        except (json.JSONDecodeError, TypeError):
+            form_history = None
+    if not form_history or not isinstance(form_history, list) or len(form_history) < 2:
+        return 0.5
+
+    score = 0.5
+
+    # Compare last 2 finishes — improving position = momentum up
+    fp1 = _safe_int(_nested(form_history[0], "position") or _nested(form_history[0], "finish_position"), 99)
+    fp2 = _safe_int(_nested(form_history[1], "position") or _nested(form_history[1], "finish_position"), 99)
+    if fp1 < fp2:
+        score += 0.08  # Improving
+    elif fp1 > fp2 + 3:
+        score -= 0.06  # Declining significantly
+
+    # Margin improvement (smaller margin = closing on winner)
+    m1 = _safe_float(_nested(form_history[0], "margin"), 99.0)
+    m2 = _safe_float(_nested(form_history[1], "margin"), 99.0)
+    if m1 < m2 and m1 < 5:
+        score += 0.04
+
+    # Class change: dropping in class = positive momentum
+    if race is not None:
+        from punty.calibration_engine import _class_bucket
+        last_class = _nested(form_history[0], "class") or ""
+        current_class = _get(race, "class_") or _get(race, "class") or ""
+        if last_class and current_class:
+            class_rank = {"open": 5, "handicap": 4, "benchmark": 3, "restricted": 2, "maiden": 1, "other": 3}
+            lr = class_rank.get(_class_bucket(last_class), 3)
+            cr = class_rank.get(_class_bucket(current_class), 3)
+            if lr > cr:
+                score += 0.06  # Dropping in class
+            elif cr > lr:
+                score -= 0.04  # Rising in class
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Freshness (v2 — first-up/second-up/spell patterns)
+# ──────────────────────────────────────────────
+
+def _freshness_factor(runner: Any) -> float:
+    """Score freshness: first-up, second-up, quick back-up patterns.
+
+    First-up from a spell (>60 days) is risky unless trainer has high SR.
+    Second-up after a placing is historically the peak performance window.
+    Quick back-ups (≤14 days) signal trainer confidence.
+    """
+    dslr = _get(runner, "days_since_last_run")
+    if not dslr or not isinstance(dslr, (int, float)):
+        return 0.5
+
+    dslr = int(dslr)
+    score = 0.5
+
+    form_history = _get(runner, "form_history")
+    if isinstance(form_history, str):
+        try:
+            form_history = json.loads(form_history)
+        except (json.JSONDecodeError, TypeError):
+            form_history = None
+
+    # First-up (spell > 60 days) — risky unless good trainer
+    if dslr > 60:
+        trainer_stats = _get(runner, "trainer_stats") or ""
+        ts, tw, tp = _parse_stat_string(trainer_stats)
+        if ts >= 20 and (tw + tp) / ts > 0.35:
+            score = 0.55  # Good trainer, first-up OK
+        else:
+            score = 0.40  # First-up = risky
+
+    # Second-up window (35-60 days)
+    elif 35 < dslr <= 60:
+        if form_history and isinstance(form_history, list) and len(form_history) > 0:
+            fp = _safe_int(
+                _nested(form_history[0], "position") or _nested(form_history[0], "finish_position"),
+                99
+            )
+            if fp <= 3:
+                score = 0.62  # Placed first-up, second-up = peak
+            elif fp <= 6:
+                score = 0.55
+
+    # Quick back-up (≤14 days) — trainer confident
+    elif 0 < dslr <= 14:
+        score = 0.58
+
+    # Normal spacing (15-28 days)
+    elif 14 < dslr <= 28:
+        score = 0.55
+
+    return max(0.05, min(0.95, score))
+
+
+# ──────────────────────────────────────────────
+# Factor: Speed Rating (context-aware)
+# ──────────────────────────────────────────────
+
+_SPEED_BENCHMARKS: dict = {}
+
+
+def load_speed_benchmarks(data: dict) -> int:
+    """Load speed benchmark table into memory."""
+    global _SPEED_BENCHMARKS
+    _SPEED_BENCHMARKS = data
+    return len(data)
+
+
+def _speed_rating_factor(runner: Any, race: Any = None, meeting: Any = None) -> float:
+    """Context-aware speed rating from form history margins and positions.
+
+    Scores each past start by finish position + margin, weighted by how similar
+    that start's context (venue, distance, condition) is to today's race.
+    """
+    form_history = _nested(runner, "form_history")
+    if isinstance(form_history, str):
+        try:
+            form_history = json.loads(form_history)
+        except (json.JSONDecodeError, TypeError):
+            form_history = []
+    if not form_history or not isinstance(form_history, list):
+        return 0.5
+
+    from punty.calibration_engine import _distance_bucket, _condition_bucket
+
+    today_venue = (_nested(meeting, "venue") or "").lower().strip()
+    today_dist = _distance_bucket(_safe_int(_nested(race, "distance"), 1400))
+    today_cond = _condition_bucket(_nested(meeting, "track_condition") or "Good 4")
+
+    weighted_scores = []
+    for i, h in enumerate(form_history[:5]):
+        pos = _safe_int(
+            _nested(h, "position") or _nested(h, "finish_position"), 99
+        )
+        if pos <= 0 or pos > 20:
+            continue
+        margin = _safe_float(_nested(h, "margin"), None)
+
+        # Parse form entry context
+        fh_dist = _safe_int(_nested(h, "distance"), 0)
+        fh_dist_bucket = _distance_bucket(fh_dist) if fh_dist > 0 else ""
+        fh_cond_bucket = _condition_bucket(_nested(h, "track_condition") or _nested(h, "going") or "")
+        fh_venue = (_nested(h, "venue") or "").lower().strip()
+
+        # Context similarity weighting
+        weight = 0.3
+        if fh_dist_bucket == today_dist:
+            weight += 0.2
+        if fh_cond_bucket == today_cond:
+            weight += 0.15
+        if fh_venue and fh_venue == today_venue:
+            weight += 0.35
+        elif fh_dist_bucket == today_dist and fh_cond_bucket == today_cond:
+            weight += 0.15
+
+        # Recency decay
+        recency = 1.0 - (i * 0.12)
+
+        # Speed score from position + margin
+        if pos == 1:
+            speed_score = 0.80
+            if margin is not None and margin > 2.0:
+                speed_score = 0.90
+            elif margin is not None and margin > 1.0:
+                speed_score = 0.85
+        elif pos == 2:
+            speed_score = 0.65
+            if margin is not None:
+                if margin < 0.2:
+                    speed_score = 0.75
+                elif margin < 0.5:
+                    speed_score = 0.72
+                elif margin < 1.0:
+                    speed_score = 0.68
+        elif pos == 3:
+            speed_score = 0.55
+            if margin is not None and margin < 1.0:
+                speed_score = 0.62
+            elif margin is not None and margin < 2.0:
+                speed_score = 0.58
+        elif pos <= 5:
+            speed_score = 0.42
+            if margin is not None and margin < 2.0:
+                speed_score = 0.48
+        elif pos <= 8:
+            speed_score = 0.35
+        else:
+            speed_score = 0.25
+
+        weighted_scores.append(speed_score * weight * recency)
+
+    if not weighted_scores:
+        return 0.5
+
+    raw = sum(weighted_scores) / len(weighted_scores)
+    return max(0.05, min(0.95, raw))
+
+
+# ──────────────────────────────────────────────
+# Factor: Jockey/Trainer Context Performance
+# ──────────────────────────────────────────────
+
+_JT_CONTEXT_DATA: dict = {}
+
+
+def load_jt_context(data: dict) -> int:
+    """Load J/T context performance table into memory."""
+    global _JT_CONTEXT_DATA
+    _JT_CONTEXT_DATA = data
+    total = sum(len(v) for v in data.values() if isinstance(v, dict))
+    return total
+
+
+def _jt_context_factor(runner: Any, race: Any = None, meeting: Any = None) -> float:
+    """Context-aware jockey/trainer performance.
+
+    Compares J/T place SR in today's specific context (venue_type x condition x distance)
+    against their overall career SR. Specialists get a boost.
+    """
+    from punty.calibration_engine import _distance_bucket, _condition_bucket
+
+    jockey = (_nested(runner, "jockey") or "").strip()
+    trainer = (_nested(runner, "trainer") or "").strip()
+    venue = _nested(meeting, "venue") or ""
+    vt = _venue_type(venue)
+    cond_b = _condition_bucket(_nested(meeting, "track_condition") or "Good 4")
+    dist_b = _distance_bucket(_safe_int(_nested(race, "distance"), 1400))
+
+    jt_jockey = _JT_CONTEXT_DATA.get("jockey_context", {})
+    jt_trainer = _JT_CONTEXT_DATA.get("trainer_context", {})
+    jt_combo = _JT_CONTEXT_DATA.get("combo_context", {})
+    j_overall = _JT_CONTEXT_DATA.get("jockey_overall", {})
+    t_overall = _JT_CONTEXT_DATA.get("trainer_overall", {})
+
+    score = 0.5
+    signals = 0
+
+    # Jockey context
+    if jockey:
+        jk = f"{jockey}|{vt}|{cond_b}|{dist_b}"
+        j_ctx = jt_jockey.get(jk)
+        j_ovr = j_overall.get(jockey)
+
+        if j_ctx and j_ctx.get("starts", 0) >= 5:
+            ctx_psr = j_ctx.get("place_sr", 0.3)
+            ovr_psr = j_ovr.get("place_sr", 0.3) if j_ovr else 0.3
+            delta = ctx_psr - ovr_psr
+            score += delta * 0.6
+            signals += 1
+            if j_ctx.get("starts", 0) >= 20:
+                score += (ctx_psr - 0.30) * 0.15
+                signals += 1
+        elif j_ovr and j_ovr.get("starts", 0) >= 20:
+            score += (j_ovr.get("place_sr", 0.3) - 0.30) * 0.15
+            signals += 1
+
+    # Trainer context
+    if trainer:
+        tk = f"{trainer}|{vt}|{cond_b}|{dist_b}"
+        t_ctx = jt_trainer.get(tk)
+        t_ovr = t_overall.get(trainer)
+
+        if t_ctx and t_ctx.get("starts", 0) >= 5:
+            ctx_psr = t_ctx.get("place_sr", 0.25)
+            ovr_psr = t_ovr.get("place_sr", 0.25) if t_ovr else 0.25
+            delta = ctx_psr - ovr_psr
+            score += delta * 0.45
+            signals += 1
+            if t_ctx.get("starts", 0) >= 20:
+                score += (ctx_psr - 0.25) * 0.10
+                signals += 1
+        elif t_ovr and t_ovr.get("starts", 0) >= 20:
+            score += (t_ovr.get("place_sr", 0.25) - 0.25) * 0.10
+            signals += 1
+
+    # Combo context
+    if jockey and trainer:
+        ck = f"{jockey}|{trainer}|{vt}"
+        c_ctx = jt_combo.get(ck)
+        if c_ctx and c_ctx.get("starts", 0) >= 5:
+            combo_psr = c_ctx.get("place_sr", 0.3)
+            score += (combo_psr - 0.30) * 0.25
+            signals += 1
+
+    if signals == 0:
+        return 0.5
+
+    return max(0.05, min(0.95, score))
+
+
+def _venue_type(venue: str) -> str:
+    """Metro vs country."""
+    if not venue:
+        return "country"
+    from punty.calibration_engine import METRO_VENUES
+    return "metro" if venue.lower().strip() in METRO_VENUES else "country"
+
+
+# ──────────────────────────────────────────────
 # Factor: Barrier Draw
 # ──────────────────────────────────────────────
 
@@ -2095,11 +2602,16 @@ def _load_barrier_calibration() -> dict:
     return _BARRIER_CALIBRATION
 
 
-def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, venue: str = "") -> float:
-    """Score based on barrier position relative to field size and distance.
+def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400,
+                         venue: str = "", track_condition: str = "") -> float:
+    """Score based on barrier position relative to field size, distance, and track condition.
 
     Inside barriers get a slight boost; wide gates are penalized more at
     shorter distances where there's less time to recover.
+
+    Condition interaction (381K audit):
+    - Inner (1-4) on Heavy: 21% win, 61% place (strong advantage)
+    - Wide (9+) on Good: 11% win, 35% place (significant disadvantage)
     """
     score = 0.5  # neutral
     barrier = _get(runner, "barrier")
@@ -2152,6 +2664,20 @@ def _barrier_draw_factor(runner: Any, field_size: int, distance: int = 1400, ven
         gates_from_ten = barrier - 9  # 1 for gate 10, 5 for gate 14
         penalty = 0.04 * gates_from_ten * dist_mult
         score -= penalty
+
+    # Condition-dependent barrier adjustment (381K audit)
+    # Inner on Heavy = 21% win (strong advantage), Wide on Good = 11% (disadvantage)
+    tc_lower = (track_condition or "").lower()
+    if barrier <= 4:
+        if "heavy" in tc_lower:
+            score += 0.06  # Inner draw on heavy = big advantage
+        elif "soft" in tc_lower:
+            score += 0.03
+    elif barrier >= 9:
+        if "good" in tc_lower and "heavy" not in tc_lower:
+            score -= 0.03  # Wide on good = extra penalty
+        elif "heavy" in tc_lower:
+            score -= 0.05  # Wide on heavy = severe disadvantage
 
     return max(0.05, min(0.95, score))
 
@@ -2280,28 +2806,41 @@ def _jockey_trainer_factor(runner: Any, baseline: float) -> float:
             signal_sum += t_score * 0.4
             signals += 0.4
 
-    # --- Combo bonus: jockey+trainer combination ---
+    # --- Combo: jockey+trainer partnership (3.3x predictor from 381K audit) ---
+    # Combo SR 40%+ = 21.5% win, 0-10% = 6.5%. This is the PRIMARY connection signal.
     if j_a2e and "combo_career" in j_a2e:
         combo = j_a2e["combo_career"]
         combo_runners = combo.get("runners", 0) or 0
         if combo_runners >= 20:
-            # High-confidence partnership: combo becomes PRIMARY signal (+13.1% spread)
+            # PRIMARY: 20+ rides together = strongest connection signal
             combo_sr = (combo.get("strike_rate", 0) or 0)
             combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
             if combo_decimal > 0 and baseline > 0:
                 ratio = combo_decimal / baseline
-                combo_score = 0.5 + max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
-                signal_sum += combo_score * 0.5
-                signals += 0.5
+                combo_score = 0.5 + max(-0.15, min(0.25, (ratio - 1.0) * 0.18))
+                signal_sum += combo_score * 0.8  # Was 0.5 — elevated to primary
+                signals += 0.8
+            # Combo A2E bonus: >1.5 = elite partnership
+            combo_a2e = combo.get("a2e") or combo.get("A2E")
+            if combo_a2e:
+                try:
+                    ca = float(combo_a2e)
+                    if ca > 1.5:
+                        signal_sum += 0.70 * 0.3  # Strong bonus
+                        signals += 0.3
+                    elif ca > 1.2:
+                        signal_sum += 0.60 * 0.2
+                        signals += 0.2
+                except (ValueError, TypeError):
+                    pass
         elif combo_runners >= 5:
-            # Standard combo: secondary signal (0.2 weight)
             combo_sr = (combo.get("strike_rate", 0) or 0)
             combo_decimal = combo_sr / 100.0 if combo_sr > 1 else combo_sr
             if combo_decimal > 0 and baseline > 0:
                 ratio = combo_decimal / baseline
                 combo_score = 0.5 + max(-0.15, min(0.20, (ratio - 1.0) * 0.15))
-                signal_sum += combo_score * 0.2
-                signals += 0.2
+                signal_sum += combo_score * 0.3  # Was 0.2
+                signals += 0.3
 
     # --- Combo last 100 rides (Q5-Q1: 13.1% — recency premium) ---
     if j_a2e and "combo_last100" in j_a2e:
@@ -2373,7 +2912,32 @@ def _weight_factor(runner: Any, avg_weight: float, race_distance: int = 1400, ra
         distance_mult *= 1.5
 
     adjustment = (class_adj + burden_adj) * distance_mult
-    score += max(-0.10, min(0.10, adjustment))
+
+    # Weight change signal (381K audit): gained 0.5-2kg = 11.9% win, lost 5kg+ = 7.5%
+    # Gaining weight = handicapper rating horse UP = class promotion
+    weight_change_adj = 0.0
+    fh_raw = _get(runner, "form_history")
+    if fh_raw:
+        try:
+            import json as _wj
+            fh = _wj.loads(fh_raw) if isinstance(fh_raw, str) else fh_raw
+            if isinstance(fh, list) and fh and isinstance(fh[0], dict):
+                last_wt = fh[0].get("weight")
+                if last_wt is not None:
+                    try:
+                        wt_change = weight - float(last_wt)
+                        if wt_change >= 0.5:
+                            weight_change_adj = 0.04  # Gained weight = class up
+                        elif wt_change <= -2.0:
+                            weight_change_adj = -0.03  # Lost significant weight
+                        elif wt_change <= -5.0:
+                            weight_change_adj = -0.05  # Lost a lot = declining
+                    except (ValueError, TypeError):
+                        pass
+        except (ValueError, TypeError):
+            pass
+
+    score += max(-0.12, min(0.12, adjustment + weight_change_adj))
 
     return max(0.05, min(0.95, score))
 
@@ -2443,15 +3007,28 @@ def _horse_profile_factor(runner: Any, race: Any = None) -> float:
                     score += 0.06  # strong recent gelding boost
                 elif age_val <= 4 and career.starts <= 15:
                     score += 0.03  # moderate — may have been gelded mid-career
-        # Mares can be inconsistent in certain conditions
-        elif sex_lower in ("mare", "m", "filly", "f"):
-            score -= 0.01
-        # Colts: context-dependent (22% SR in low-class vs 8.6% in open)
+        # Fillies/Mares: 16%/44% vs Geldings 14%/41% — BETTER than geldings (381K data)
+        elif sex_lower in ("filly", "f"):
+            score += 0.04  # Was -0.01 — fillies actually outperform geldings
+        elif sex_lower in ("mare", "m"):
+            score += 0.02  # Mares slightly better than geldings
+        # Colts: 17%/47% — best sex category
         elif sex_lower in ("colt", "c"):
             if is_low_class:
-                score += 0.08  # strong advantage in maidens/low-class
+                score += 0.10  # Strong in maidens/low-class (was 0.08)
             else:
-                score -= 0.02  # slight penalty in open company
+                score += 0.03  # Still positive in open (was -0.02)
+
+    # Age × Class interaction (381K audit):
+    # 3-4yo in BM/Handicap = 18-19% win, 6+ in BM = 11%
+    if age and isinstance(age, (int, float)) and race_class:
+        age = int(age)
+        is_benchmark = any(kw in race_class.lower() for kw in ("benchmark", "bm", "handicap"))
+        if is_benchmark:
+            if age <= 4:
+                score += 0.04  # Young horse in BM = outperforms
+            elif age >= 6:
+                score -= 0.04  # Older in BM = underperforms
 
     return max(0.05, min(0.95, score))
 
@@ -3145,6 +3722,50 @@ def _get(obj: Any, attr: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(attr, default)
     return getattr(obj, attr, default)
+
+
+def _nested(obj: Any, key: str, default: Any = None) -> Any:
+    """Get value from a dict (form history entry etc)."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def _safe_int(val: Any, default: int = 0) -> int:
+    """Safely convert a value to int."""
+    if val is None or val == "" or val == "None":
+        return default
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert a value to float."""
+    if val is None or val == "" or val == "None":
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _parse_stat_string(stat_str: str) -> tuple[int, int, int]:
+    """Parse stat string like '20: 5-3' into (starts, wins, places)."""
+    if not stat_str:
+        return 0, 0, 0
+    try:
+        parts = stat_str.split(":")
+        if len(parts) < 2:
+            return 0, 0, 0
+        starts = int(parts[0].strip())
+        nums = parts[1].strip().split("-")
+        wins = int(nums[0])
+        places = int(nums[1]) if len(nums) > 1 else 0
+        return starts, wins, places
+    except (ValueError, IndexError):
+        return 0, 0, 0
 
 
 def _parse_odds_value(val: Any) -> Optional[float]:

@@ -50,6 +50,236 @@ MONTH_DIRS = {
 
 MODEL_DIR = ROOT / "punty" / "data"
 
+# KASH model results — indexed by (date, horse_name_lower) for feature enrichment
+_KASH_INDEX: dict[tuple[str, str], dict] | None = None
+_KASH_DIR = ROOT / "betfair_data" / "kash_results"
+_SERVER_KASH_DIR = Path("/opt/puntyai/betfair_data/kash_results")
+
+
+def _load_kash_index() -> dict[tuple[str, str], dict]:
+    """Load all KASH result CSVs into a lookup dict."""
+    global _KASH_INDEX
+    if _KASH_INDEX is not None:
+        return _KASH_INDEX
+
+    import csv
+    kash_dir = _SERVER_KASH_DIR if _SERVER_KASH_DIR.exists() else _KASH_DIR
+    _KASH_INDEX = {}
+    if not kash_dir.exists():
+        print(f"  KASH dir not found: {kash_dir}")
+        return _KASH_INDEX
+
+    for fpath in sorted(kash_dir.glob("Kash_Model_Results_*.csv")):
+        count = 0
+        try:
+            with open(fpath, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    horse = (row.get("Horse") or "").strip().lower()
+                    raw_date = row.get("Date", "")
+                    # Normalize date: "1/01/2025" or "2026-01-01" → "2025-01-01"
+                    try:
+                        if "/" in raw_date:
+                            parts = raw_date.split("/")
+                            if len(parts) == 3:
+                                d, m, y = parts
+                                date_key = f"{y}-{int(m):02d}-{int(d):02d}"
+                            else:
+                                continue
+                        elif "-" in raw_date:
+                            date_key = raw_date[:10]  # Already ISO format
+                        else:
+                            continue
+                    except (ValueError, IndexError):
+                        continue
+                    if not horse:
+                        continue
+
+                    def _sf(v):
+                        try:
+                            return float(v) if v and str(v).strip() not in ("", "Unknown") else None
+                        except (ValueError, TypeError):
+                            return None
+
+                    key = (date_key, horse)
+                    if key not in _KASH_INDEX:
+                        _KASH_INDEX[key] = {
+                            "rp": _sf(row.get("RP")),
+                            "speed_cat": row.get("Speed_Cat", ""),
+                            "early_speed": _sf(row.get("Early_Speed")),
+                            "late_speed": _sf(row.get("Late_Speed")),
+                        }
+                        count += 1
+        except Exception as e:
+            print(f"  KASH load error ({fpath.name}): {e}")
+        print(f"  KASH loaded: {fpath.name} ({count:,} runners)")
+
+    print(f"  KASH index total: {len(_KASH_INDEX):,} runners")
+    return _KASH_INDEX
+
+
+# Global sire performance cache — built during data loading
+_SIRE_STATS: dict[str, dict] | None = None
+
+
+def _build_sire_stats(all_runners: list[dict]) -> dict[str, dict]:
+    """Build sire win rate from all Proform runners."""
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"runs": 0, "wins": 0})
+    for r in all_runners:
+        sire = (r.get("Sire") or "").strip().lower()
+        if not sire:
+            continue
+        pos = r.get("Position")
+        if pos is None:
+            continue
+        stats[sire]["runs"] += 1
+        if pos == 1:
+            stats[sire]["wins"] += 1
+    return {s: {"sr": d["wins"] / d["runs"], "runs": d["runs"]}
+            for s, d in stats.items() if d["runs"] >= 20}
+
+
+def _get_sire_sr(sire_name: str) -> float:
+    """Get sire's progeny win strike rate."""
+    global _SIRE_STATS
+    if _SIRE_STATS is None:
+        return float("nan")
+    sire = (sire_name or "").strip().lower()
+    data = _SIRE_STATS.get(sire)
+    if data:
+        return data["sr"]
+    return float("nan")
+
+
+def _get_v9_features(pf_runner: dict, race_meta: dict, distance: int) -> list[float]:
+    """Extract v9 signal-driven features from Proform runner data.
+
+    Returns [kri_score, kri_trend, position_change, weight_change,
+             distance_change, margin_last, condition_record_sr, combo_a2e]
+    """
+    nan = float("nan")
+    forms = [f for f in pf_runner.get("Forms", []) if not f.get("IsBarrierTrial")]
+
+    # KRI
+    kri_score = nan
+    kri_trend = nan
+    kri_vals = []
+    for f in forms[:5]:
+        kri = f.get("KRI")
+        if kri is not None:
+            try:
+                kri_vals.append(float(kri))
+            except (ValueError, TypeError):
+                pass
+    if kri_vals:
+        kri_score = kri_vals[0]
+        if len(kri_vals) >= 3:
+            recent = sum(kri_vals[:2]) / 2
+            older = sum(kri_vals[2:min(4, len(kri_vals))]) / len(kri_vals[2:min(4, len(kri_vals))])
+            kri_trend = recent - older
+
+    # Position change (settle → finish from last start)
+    position_change = nan
+    if forms:
+        inrun = forms[0].get("InRun", "")
+        settle = None
+        finish_pos = forms[0].get("Position")
+        if inrun and "settling_down" in inrun:
+            for part in inrun.strip().rstrip(";").split(";"):
+                if "settling_down" in part and "," in part:
+                    try:
+                        settle = int(part.split(",")[1].strip())
+                    except (ValueError, IndexError):
+                        pass
+        if settle is not None and finish_pos is not None:
+            try:
+                position_change = float(settle - int(finish_pos))
+            except (ValueError, TypeError):
+                pass
+
+    # Weight change
+    weight_change = nan
+    current_weight = pf_runner.get("Weight")
+    if current_weight and forms and forms[0].get("Weight"):
+        try:
+            weight_change = float(current_weight) - float(forms[0]["Weight"])
+        except (ValueError, TypeError):
+            pass
+
+    # Distance change
+    distance_change = nan
+    if distance and forms and forms[0].get("Distance"):
+        try:
+            distance_change = float(distance) - float(forms[0]["Distance"])
+        except (ValueError, TypeError):
+            pass
+
+    # Margin last start
+    margin_last = nan
+    if forms:
+        if forms[0].get("Position") == 1:
+            margin_last = 0.0
+        elif forms[0].get("Margin") is not None:
+            try:
+                margin_last = float(forms[0]["Margin"])
+            except (ValueError, TypeError):
+                pass
+
+    # Condition-specific career SR
+    condition_record_sr = nan
+    tc = race_meta.get("condition", "")
+    if tc.upper().startswith("G"):
+        rec = pf_runner.get("GoodRecord")
+    elif tc.upper().startswith("S"):
+        rec = pf_runner.get("SoftRecord")
+    elif tc.upper().startswith("H"):
+        rec = pf_runner.get("HeavyRecord")
+    else:
+        rec = None
+    if rec and isinstance(rec, dict):
+        starts = rec.get("Starts", 0)
+        firsts = rec.get("Firsts", 0)
+        if starts and starts > 0:
+            condition_record_sr = firsts / starts
+
+    # Combo A2E
+    combo_a2e = nan
+    combo_data = pf_runner.get("TrainerJockeyA2E_Career")
+    if combo_data and isinstance(combo_data, dict):
+        a2e = combo_data.get("A2E")
+        if a2e is not None:
+            try:
+                combo_a2e = float(a2e)
+            except (ValueError, TypeError):
+                pass
+
+    return [kri_score, kri_trend, position_change, weight_change,
+            distance_change, margin_last, condition_record_sr, combo_a2e]
+
+
+def _get_kash_features(horse_name: str, race_date: str, market_prob: float) -> list[float]:
+    """Look up KASH features for a runner. Returns [wp_implied, early_speed, late_speed, consensus]."""
+    nan = float("nan")
+    idx = _load_kash_index()
+    key = (race_date, horse_name.strip().lower())
+    kash = idx.get(key)
+    if not kash or not kash.get("rp"):
+        return [nan, nan, nan, nan]
+
+    rp = kash["rp"]
+    kash_wp = 1.0 / rp if rp > 0 else nan
+    early = kash["early_speed"] if kash["early_speed"] is not None else nan
+    late = kash["late_speed"] if kash["late_speed"] is not None else nan
+
+    # Consensus: 1.0 if market prob and KASH agree within 10%
+    if not math.isnan(kash_wp) and not math.isnan(market_prob) and market_prob > 0:
+        consensus = 1.0 if abs(market_prob - kash_wp) < 0.10 else 0.0
+    else:
+        consensus = nan
+
+    return [kash_wp, early, late, consensus]
+
 LGBM_PARAMS = {
     "objective": "lambdarank",
     "metric": "ndcg",
@@ -569,8 +799,9 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
     rail_bias = nan
 
     # ── Build feature vector (MUST match FEATURE_NAMES order) ──
-    return [
-        market_prob,
+    # market_prob set to NaN — model is 100% independent of market signals
+    fvec = [
+        nan,  # market_prob → NaN (independence)
         career_win_pct, career_place_pct, _sf(career_starts),
         _sf(td_sr), float(td_starts),
         _sf(dist_sr), float(dist_starts),
@@ -622,14 +853,78 @@ def extract_features_proform(pf_runner: dict, race_meta: dict,
             cond_data["good"][0], cond_data["soft"][0],
             cond_data["heavy"][0], cond_data["firm"][0],
         ),
+        # ── v8: KASH features (4) — DEPRECATED (external model, forced NaN) ──
+        nan, nan, nan, nan,  # kash_wp_implied, early, late, consensus
+        # ── v9: Signal-driven features (8) ──
+        *_get_v9_features(pf_runner, race_meta, distance),
+        # ── v10: Sire feature (1) ──
+        _get_sire_sr(pf_runner.get("Sire", "")),
     ]
+
+    # Force ALL market/external model features to NaN for independence
+    # Index reference from FEATURE_NAMES:
+    #  0: market_prob (already NaN above)
+    # 42: place_vs_market
+    # 50: price_move_pct (approx — after group features)
+    # 97: flucs_direction (after peak_age_sex_score)
+    from punty.ml.features import FEATURE_NAMES as _FN
+    for dep_name in ["place_vs_market", "price_move_pct", "flucs_direction"]:
+        try:
+            idx = _FN.index(dep_name)
+            if idx < len(fvec):
+                fvec[idx] = nan
+        except ValueError:
+            pass
+
+    return fvec
 
 
 # ── Data loading ────────────────────────────────────────────────────
 
 
+def _build_sire_stats_from_proform(data_dir: Path) -> None:
+    """Pre-pass: build sire win rates from all Proform runners."""
+    global _SIRE_STATS
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"runs": 0, "wins": 0})
+    count = 0
+
+    for year_dir in sorted(data_dir.iterdir()):
+        if not year_dir.is_dir():
+            continue
+        for month_num in range(1, 13):
+            month_names = {1: "January", 2: "February", 3: "March", 4: "April",
+                           5: "May", 6: "June", 7: "July", 8: "August",
+                           9: "September", 10: "October", 11: "November", 12: "December"}
+            form_dir = year_dir / month_names.get(month_num, "") / "Form"
+            if not form_dir.exists():
+                continue
+            for fpath in form_dir.glob("*.json"):
+                try:
+                    runners = json.load(open(fpath))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(runners, list):
+                    continue
+                for r in runners:
+                    sire = (r.get("Sire") or "").strip().lower()
+                    pos = r.get("Position")
+                    if not sire or pos is None or pos == 0:
+                        continue
+                    stats[sire]["runs"] += 1
+                    if pos == 1:
+                        stats[sire]["wins"] += 1
+                    count += 1
+
+    _SIRE_STATS = {s: {"sr": d["wins"] / d["runs"], "runs": d["runs"]}
+                   for s, d in stats.items() if d["runs"] >= 20}
+    print(f"  Sire stats built: {len(_SIRE_STATS)} sires from {count:,} runners")
+
+
 def load_proform_data(data_dir: Path) -> tuple[list[list[float]], list[int], list[int], list[str], list[str]]:
     """Load all Proform data, extract features, return X, y_win, y_place, race_ids, dates."""
+    # Pre-pass: build sire aggregate for sire_runners_sr feature
+    _build_sire_stats_from_proform(data_dir)
     print(f"Loading Proform data from {data_dir}...")
     start = time.time()
 
@@ -1074,17 +1369,66 @@ def print_feature_importance(model: lgb.Booster, label: str):
             print(f"    {name:25s} {imp:10.1f}  {bar}")
 
 
-def _quick_train(params, X_tr, y_tr, X_val, y_val):
-    """Train a model silently, return (booster, best_iteration, val_logloss, val_auc)."""
-    train_data = lgb.Dataset(X_tr, label=y_tr, feature_name=FEATURE_NAMES, free_raw_data=False)
-    val_data = lgb.Dataset(X_val, label=y_val, feature_name=FEATURE_NAMES, free_raw_data=False)
+def _quick_train(params, X_tr, y_tr, X_val, y_val, rids_tr=None, rids_val=None):
+    """Train a model silently. Supports both binary and lambdarank.
+
+    For lambdarank, rids_tr/rids_val must be provided for group construction.
+    Returns (booster, best_iteration, val_score, 0).
+    """
+    is_rank = params.get("objective") == "lambdarank"
+
+    if is_rank and rids_tr is not None and rids_val is not None:
+        # Build group sizes for ranking
+        from collections import Counter
+        tr_groups = []
+        current_rid = None
+        current_count = 0
+        for rid in rids_tr:
+            if rid != current_rid:
+                if current_count > 0:
+                    tr_groups.append(current_count)
+                current_rid = rid
+                current_count = 1
+            else:
+                current_count += 1
+        if current_count > 0:
+            tr_groups.append(current_count)
+
+        val_groups = []
+        current_rid = None
+        current_count = 0
+        for rid in rids_val:
+            if rid != current_rid:
+                if current_count > 0:
+                    val_groups.append(current_count)
+                current_rid = rid
+                current_count = 1
+            else:
+                current_count += 1
+        if current_count > 0:
+            val_groups.append(current_count)
+
+        train_data = lgb.Dataset(X_tr, label=y_tr, group=tr_groups,
+                                 feature_name=FEATURE_NAMES, free_raw_data=False)
+        val_data = lgb.Dataset(X_val, label=y_val, group=val_groups,
+                               feature_name=FEATURE_NAMES, free_raw_data=False)
+    else:
+        train_data = lgb.Dataset(X_tr, label=y_tr, feature_name=FEATURE_NAMES, free_raw_data=False)
+        val_data = lgb.Dataset(X_val, label=y_val, feature_name=FEATURE_NAMES, free_raw_data=False)
+
     callbacks = [lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(period=0)]
     model = lgb.train(params, train_data, num_boost_round=NUM_BOOST_ROUND,
                       valid_sets=[val_data], valid_names=["val"], callbacks=callbacks)
-    probs = model.predict(X_val)
-    ll = log_loss(y_val, probs)
-    auc = roc_auc_score(y_val, probs)
-    return model, model.best_iteration, ll, auc
+
+    if is_rank:
+        # For ranking, use NDCG as score (higher is better, negate for min search)
+        score = -model.best_score["val"]["ndcg@1"]
+        return model, model.best_iteration, score, 0
+    else:
+        probs = model.predict(X_val)
+        ll = log_loss(y_val, probs)
+        auc = roc_auc_score(y_val, probs)
+        return model, model.best_iteration, ll, auc
 
 
 def _race_top1(model, X, y, race_ids):
@@ -1097,8 +1441,21 @@ def _race_top1(model, X, y, race_ids):
     return correct / len(groups) if groups else 0
 
 
-def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val):
-    """Grid search over key LGBM hyperparams. Returns best params for win and place."""
+def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_tr, rids_val):
+    """Grid search over key LGBM hyperparams for LambdaRank model."""
+    # Single ranking model (not separate win/place)
+    print(f"\n{'='*60}")
+    print(f"  Hyperparameter search: LambdaRank model")
+    print(f"  {X_tr.shape[0]} train, {X_val.shape[0]} val samples")
+    print(f"{'='*60}")
+
+    base = dict(LGBM_PARAMS)
+    best_score = float("inf")  # Negated NDCG (lower = better)
+    best_params = dict(base)
+
+    y_tr = yw_tr  # LambdaRank uses relevance labels (same as win labels for us)
+    y_val = yw_val
+
     param_grid = {
         "num_leaves": [31, 63, 127],
         "max_depth": [5, 7, 10, -1],
@@ -1110,107 +1467,70 @@ def hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val):
         "lambda_l2": [0.0, 1.0, 5.0],
     }
 
-    # Phase 1: tree structure (num_leaves × max_depth × min_data_in_leaf)
-    # Phase 2: sampling (feature_fraction × bagging_fraction)
-    # Phase 3: regularisation (lambda_l1 × lambda_l2)
-    # Phase 4: learning rate with best of above
-    # This staged approach = 3×4×3 + 3×3 + 3×3 + 3 = 57 combos (not 3^8 = 6561)
+    # Phase 1: tree structure
+    print(f"\n  Phase 1: Tree structure ({3*4*3} combos)...")
+    p1_results = []
+    for nl in param_grid["num_leaves"]:
+        for md in param_grid["max_depth"]:
+            for mdl in param_grid["min_data_in_leaf"]:
+                p = dict(base)
+                p["num_leaves"] = nl
+                p["max_depth"] = md
+                p["min_data_in_leaf"] = mdl
+                _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+                p1_results.append((score, itr, nl, md, mdl))
+                if score < best_score:
+                    best_score = score
+                    best_params.update({"num_leaves": nl, "max_depth": md, "min_data_in_leaf": mdl})
 
-    base = dict(LGBM_PARAMS)
-    best_results = {}
+    p1_results.sort()
+    print(f"    Top 5 tree combos (NDCG@1, higher=better):")
+    for score, itr, nl, md, mdl in p1_results[:5]:
+        print(f"      leaves={nl:3d} depth={md:2d} min_leaf={mdl:3d} -> NDCG@1={-score:.5f} itr={itr}")
 
-    for model_label, y_tr, y_val in [("Win", yw_tr, yw_val), ("Place", yp_tr, yp_val)]:
-        print(f"\n{'='*60}")
-        print(f"  Hyperparameter search: {model_label} model")
-        print(f"{'='*60}")
-
-        best_ll = float("inf")
-        best_params = dict(base)
-
-        # Phase 1: tree structure
-        print(f"\n  Phase 1: Tree structure ({3*4*3} combos)...")
-        p1_results = []
-        for nl in param_grid["num_leaves"]:
-            for md in param_grid["max_depth"]:
-                for mdl in param_grid["min_data_in_leaf"]:
-                    p = dict(base)
-                    p["num_leaves"] = nl
-                    p["max_depth"] = md
-                    p["min_data_in_leaf"] = mdl
-                    _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-                    p1_results.append((ll, auc, itr, nl, md, mdl))
-                    if ll < best_ll:
-                        best_ll = ll
-                        best_params.update({"num_leaves": nl, "max_depth": md, "min_data_in_leaf": mdl})
-
-        p1_results.sort()
-        print(f"    Top 5 tree combos:")
-        for ll, auc, itr, nl, md, mdl in p1_results[:5]:
-            print(f"      leaves={nl:3d} depth={md:2d} min_leaf={mdl:3d} -> logloss={ll:.5f} auc={auc:.4f} itr={itr}")
-
-        # Phase 2: sampling
-        print(f"\n  Phase 2: Sampling ({3*3} combos)...")
-        p2_results = []
-        for ff in param_grid["feature_fraction"]:
-            for bf in param_grid["bagging_fraction"]:
-                p = dict(best_params)
-                p["feature_fraction"] = ff
-                p["bagging_fraction"] = bf
-                _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-                p2_results.append((ll, auc, itr, ff, bf))
-                if ll < best_ll:
-                    best_ll = ll
-                    best_params.update({"feature_fraction": ff, "bagging_fraction": bf})
-
-        p2_results.sort()
-        print(f"    Top 3 sampling combos:")
-        for ll, auc, itr, ff, bf in p2_results[:3]:
-            print(f"      feat_frac={ff:.1f} bag_frac={bf:.1f} -> logloss={ll:.5f} auc={auc:.4f}")
-
-        # Phase 3: regularisation
-        print(f"\n  Phase 3: Regularisation ({3*3} combos)...")
-        p3_results = []
-        for l1 in param_grid["lambda_l1"]:
-            for l2 in param_grid["lambda_l2"]:
-                p = dict(best_params)
-                p["lambda_l1"] = l1
-                p["lambda_l2"] = l2
-                _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-                p3_results.append((ll, auc, itr, l1, l2))
-                if ll < best_ll:
-                    best_ll = ll
-                    best_params.update({"lambda_l1": l1, "lambda_l2": l2})
-
-        p3_results.sort()
-        print(f"    Top 3 reg combos:")
-        for ll, auc, itr, l1, l2 in p3_results[:3]:
-            print(f"      L1={l1:.1f} L2={l2:.1f} -> logloss={ll:.5f} auc={auc:.4f}")
-
-        # Phase 4: learning rate (lower LR + more trees)
-        print(f"\n  Phase 4: Learning rate refinement...")
-        p4_results = []
-        for lr in param_grid["learning_rate"]:
+    # Phase 2: sampling
+    print(f"\n  Phase 2: Sampling ({3*3} combos)...")
+    for ff in param_grid["feature_fraction"]:
+        for bf in param_grid["bagging_fraction"]:
             p = dict(best_params)
-            p["learning_rate"] = lr
-            _, itr, ll, auc = _quick_train(p, X_tr, y_tr, X_val, y_val)
-            p4_results.append((ll, auc, itr, lr))
-            if ll < best_ll:
-                best_ll = ll
-                best_params["learning_rate"] = lr
+            p["feature_fraction"] = ff
+            p["bagging_fraction"] = bf
+            _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+            if score < best_score:
+                best_score = score
+                best_params.update({"feature_fraction": ff, "bagging_fraction": bf})
+                print(f"    New best: feat={ff} bag={bf} NDCG@1={-score:.5f}")
 
-        p4_results.sort()
-        for ll, auc, itr, lr in p4_results:
-            print(f"      lr={lr:.3f} -> logloss={ll:.5f} auc={auc:.4f} itr={itr}")
+    # Phase 3: regularisation
+    print(f"\n  Phase 3: Regularisation ({3*3} combos)...")
+    for l1 in param_grid["lambda_l1"]:
+        for l2 in param_grid["lambda_l2"]:
+            p = dict(best_params)
+            p["lambda_l1"] = l1
+            p["lambda_l2"] = l2
+            _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+            if score < best_score:
+                best_score = score
+                best_params.update({"lambda_l1": l1, "lambda_l2": l2})
+                print(f"    New best: L1={l1} L2={l2} NDCG@1={-score:.5f}")
 
-        # Summary
-        print(f"\n  Best {model_label} params (logloss={best_ll:.5f}):")
-        for k in ["num_leaves", "max_depth", "min_data_in_leaf", "feature_fraction",
-                   "bagging_fraction", "lambda_l1", "lambda_l2", "learning_rate"]:
-            print(f"    {k}: {best_params[k]}")
+    # Phase 4: learning rate
+    print(f"\n  Phase 4: Learning rate refinement...")
+    for lr in param_grid["learning_rate"]:
+        p = dict(best_params)
+        p["learning_rate"] = lr
+        _, itr, score, _ = _quick_train(p, X_tr, y_tr, X_val, y_val, rids_tr, rids_val)
+        if score < best_score:
+            best_score = score
+            best_params["learning_rate"] = lr
+        print(f"      lr={lr:.3f} -> NDCG@1={-score:.5f} itr={itr}")
 
-        best_results[model_label] = best_params
+    print(f"\n  Best params (NDCG@1={-best_score:.5f}):")
+    for k in ["num_leaves", "max_depth", "min_data_in_leaf", "feature_fraction",
+               "bagging_fraction", "lambda_l1", "lambda_l2", "learning_rate"]:
+        print(f"    {k}: {best_params[k]}")
 
-    return best_results
+    return {"Rank": best_params}
 
 
 def _pull_live_db(db_path: Path) -> bool:
@@ -1381,7 +1701,7 @@ def main():
 
     # ── Hyperparameter search (optional, skipped in --auto mode) ──
     if args.tune and not args.auto:
-        best_params = hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_val)
+        best_params = hyperparameter_search(X_tr, yw_tr, yp_tr, X_val, yw_val, yp_val, rids_tr, rids_val)
         # Apply best params globally for final training
         global LGBM_PARAMS
         # Use win params as base, override per model in train calls

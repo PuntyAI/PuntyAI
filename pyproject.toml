@@ -57,6 +57,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+flumine = [
+    "flumine>=2.4.0",
+    "betfairlightweight>=2.20.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

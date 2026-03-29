@@ -443,6 +443,28 @@ async def daily_morning_scrape() -> dict:
                 logger.error(f"Speed maps failed for {meeting.venue}: {e}")
                 results["errors"].append(f"speed_maps {meeting.venue}: {str(e)}")
 
+    # Step 2b: PointsBet odds refresh before generation — PB has the most
+    # reliable fixed odds. This ensures current_odds reflects real market
+    # prices, not stale TAB tote pools.
+    try:
+        from punty.scrapers.orchestrator import refresh_pointsbet_odds
+        async with async_session() as db:
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.date == today,
+                    Meeting.selected == True,
+                ).order_by(Meeting.venue)
+            )
+            for meeting in result.scalars().all():
+                try:
+                    await refresh_pointsbet_odds(meeting.id, db)
+                    logger.info(f"PB odds refresh: {meeting.venue}")
+                except Exception as e:
+                    logger.warning(f"PB odds refresh failed for {meeting.venue}: {e}")
+    except Exception as e:
+        logger.warning(f"Pre-generation PB odds refresh failed: {e}")
+        results["errors"].append(f"pb_odds_refresh: {str(e)}")
+
     # Step 3: Generate early mail for all meetings (approve only, no social post)
     try:
         gen_results = await morning_generate_all()
@@ -517,64 +539,66 @@ async def morning_generate_all() -> dict:
 
         logger.info(f"Morning generation starting for {len(meetings)} meetings")
 
-        for meeting in meetings:
+        # Parallel generation: process up to 3 meetings concurrently
+        # Each meeting gets its own DB session to avoid contention
+        import asyncio as _aio
+        _sem = _aio.Semaphore(3)  # Max 3 concurrent AI calls
+
+        async def _generate_one(meeting):
             venue = meeting.venue
             meeting_id = meeting.id
+            async with _sem:
+                try:
+                    async with async_session() as gen_db:
+                        is_ready, issues = await validate_meeting_readiness(meeting_id, gen_db)
+                        if not is_ready:
+                            logger.warning(f"Skipping {venue} — not ready: {issues}")
+                            return {"status": "skipped", "venue": venue, "reason": "; ".join(issues)}
 
-            try:
-                # Check readiness
-                is_ready, issues = await validate_meeting_readiness(meeting_id, db)
-                if not is_ready:
-                    logger.warning(f"Skipping {venue} — not ready: {issues}")
-                    results["skipped"].append({"venue": venue, "reason": "; ".join(issues)})
-                    continue
+                        await create_context_snapshot(gen_db, meeting_id, force=True)
 
-                # Create baseline context snapshot for later comparison
-                await create_context_snapshot(db, meeting_id, force=True)
+                        content_id = None
+                        generator = ContentGenerator(gen_db)
+                        async for event in generator.generate_early_mail_stream(meeting_id):
+                            if event.get("status") == "error":
+                                raise Exception(event.get("label", "Unknown error"))
+                            if event.get("content_id"):
+                                content_id = event.get("content_id")
+                            elif event.get("result", {}).get("content_id"):
+                                content_id = event["result"]["content_id"]
 
-                # Generate early mail
-                content_id = None
-                generator = ContentGenerator(db)
-                async for event in generator.generate_early_mail_stream(meeting_id):
-                    if event.get("status") == "error":
-                        raise Exception(event.get("label", "Unknown error"))
-                    if event.get("content_id"):
-                        content_id = event.get("content_id")
-                    elif event.get("result", {}).get("content_id"):
-                        content_id = event["result"]["content_id"]
+                        if not content_id:
+                            raise Exception("No content_id returned from generation")
 
-                if not content_id:
-                    raise Exception("No content_id returned from generation")
+                        approve_result = await auto_approve_content(content_id, gen_db)
+                        if approve_result["status"] != "approved":
+                            logger.warning(f"Morning approval failed for {venue}: {approve_result}")
+                            return {
+                                "status": "failed", "venue": venue,
+                                "reason": f"approval: {approve_result.get('issues', [])}",
+                            }
+                        return {"status": "generated", "venue": venue, "content_id": content_id}
+                except Exception as e:
+                    logger.error(f"Morning generation failed for {venue}: {e}")
+                    return {"status": "failed", "venue": venue, "reason": str(e)}
 
-                # Auto-approve (no social post)
-                approve_result = await auto_approve_content(content_id, db)
-                if approve_result["status"] != "approved":
-                    logger.warning(f"Morning approval failed for {venue}: {approve_result}")
-                    results["failed"].append({
-                        "venue": venue,
-                        "reason": f"approval: {approve_result.get('issues', [])}",
-                    })
-                    continue
+        # Launch all meetings in parallel (semaphore limits concurrency)
+        gen_results = await _aio.gather(*[_generate_one(m) for m in meetings])
 
-                results["generated"].append(venue)
-                logger.info(f"Morning generation complete for {venue}: {content_id}")
+        for gr in gen_results:
+            if gr["status"] == "generated":
+                results["generated"].append(gr["venue"])
+            elif gr["status"] == "skipped":
+                results["skipped"].append(gr)
+            else:
+                results["failed"].append(gr)
 
-            except Exception as e:
-                logger.error(f"Morning generation failed for {venue}: {e}")
-                results["failed"].append({"venue": venue, "reason": str(e)})
-
-                # Rate limit handling: pause before next meeting
-                error_str = str(e).lower()
-                if "rate limit" in error_str or "429" in error_str:
-                    logger.warning(f"Rate limited — pausing {RATE_LIMIT_QUEUE_PAUSE}s before next meeting")
-                    await asyncio.sleep(RATE_LIMIT_QUEUE_PAUSE)
+        logger.info(
+            f"Morning generation complete: {len(results['generated'])} generated, "
+            f"{len(results['skipped'])} skipped, {len(results['failed'])} failed"
+        )
 
     results["completed_at"] = melb_now().isoformat()
-    gen_count = len(results["generated"])
-    skip_count = len(results["skipped"])
-    fail_count = len(results["failed"])
-    logger.info(f"Morning generation complete: {gen_count} generated, {skip_count} skipped, {fail_count} failed")
-
     return results
 
 
@@ -1025,27 +1049,30 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                             if r.get("gear_changes") and r["gear_changes"] != runner.gear_changes:
                                 logger.info(f"Gear change: {horse_name} (R{race_num}) {r['gear_changes']}")
                                 runner.gear_changes = r["gear_changes"]
-                            # Always apply fresh odds (overnight odds can be wildly stale)
+                            # Apply fresh odds — PB > Betfair > Sportsbet > others
+                            # TAB excluded: tote pools inflate outsider prices
                             odds_data = r.get("odds")
                             if odds_data:
                                 best_odds = (
-                                    odds_data.get("odds_betfair")
-                                    or odds_data.get("odds_tab")
+                                    odds_data.get("odds_pointsbet")
+                                    or odds_data.get("odds_betfair")
                                     or odds_data.get("odds_sportsbet")
                                     or odds_data.get("odds_bet365")
                                     or odds_data.get("odds_ladbrokes")
+                                    or odds_data.get("odds_tab")  # Last resort
                                 )
-                                if best_odds:
-                                    runner.current_odds = best_odds
-                                    if not runner.opening_odds:
-                                        runner.opening_odds = best_odds
-                                    odds_updated += 1
+                                if best_odds and best_odds > 1.0:
+                                    from punty.odds import update_runner_odds
+                                    if update_runner_odds(runner,
+                                        current_odds=best_odds,
+                                        opening_odds=best_odds,
+                                        place_odds=odds_data.get("place_odds"),
+                                        source="racing_com"):
+                                        odds_updated += 1
                                 for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
                                     val = odds_data.get(field)
                                     if val:
                                         setattr(runner, field, val)
-                                if odds_data.get("place_odds"):
-                                    runner.place_odds = odds_data["place_odds"]
                                 if odds_data.get("odds_flucs") and not runner.odds_flucs:
                                     runner.odds_flucs = odds_data["odds_flucs"]
                     if odds_updated:
@@ -1189,14 +1216,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                         results["steps"].append(f"regen_approve_post: {post_result.get('status')}")
                         results["post_result"] = post_result
                         results["content_id"] = content_id
-                        # Populate Betfair queue with fresh picks from regenerated content
-                        try:
-                            from punty.betting.queue import populate_bet_queue
-                            queued = await populate_bet_queue(db, meeting_id, content_id)
-                            if queued:
-                                results["steps"].append(f"betfair_queue: {queued} bets")
-                        except Exception as eq:
-                            logger.error(f"Betfair queue failed for {venue}: {eq}")
+                        # Betfair: JIT mode — bets placed at T-5min by scheduler
                     else:
                         results["errors"].append("regen: no content_id returned")
                 except Exception as e:
@@ -1213,15 +1233,7 @@ async def meeting_pre_race_job(meeting_id: str) -> dict:
                     results["steps"].append(f"post_existing: {post_result.get('status')}")
                     results["post_result"] = post_result
                     results["content_id"] = morning_content.id
-                    # Populate Betfair bet queue (regen/full-gen paths do this
-                    # via auto_approve_and_post, but post-existing skipped it)
-                    try:
-                        from punty.betting.queue import populate_bet_queue
-                        queued = await populate_bet_queue(db, morning_content.meeting_id, morning_content.id)
-                        if queued:
-                            results["steps"].append(f"betfair_queue: {queued} bets")
-                    except Exception as eq:
-                        logger.error(f"Betfair queue failed for {venue}: {eq}")
+                    # Betfair: JIT mode — bets placed at T-5min by scheduler
                 except Exception as e:
                     logger.error(f"Post existing failed for {venue}: {e}")
                     results["errors"].append(f"post_existing: {str(e)}")
@@ -1369,9 +1381,19 @@ async def mid_morning_odds_refresh() -> dict:
 
             results["meetings"].append(meeting_info)
 
+    # Fetch KASH ratings after odds refresh — models published ~10am AEST
+    try:
+        from punty.scrapers.kash_ratings import apply_kash_ratings
+        kash_matched = await apply_kash_ratings()
+        results["kash_matched"] = kash_matched
+        logger.info(f"KASH ratings applied: {kash_matched} runners")
+    except Exception as e:
+        logger.warning(f"KASH ratings failed during mid-morning refresh: {e}")
+        results["kash_error"] = str(e)
+
     results["completed_at"] = melb_now().isoformat()
     log_system(
-        f"Mid-morning odds refresh complete: {len(meetings)} meetings (display only)",
+        f"Mid-morning refresh complete: {len(meetings)} meetings + KASH ratings",
         status="success",
     )
     logger.info(f"Mid-morning odds refresh complete: {results}")
@@ -1697,6 +1719,152 @@ async def weekly_blog_job() -> dict:
 
     logger.info(f"Weekly blog job complete: {results}")
     return results
+
+
+async def daily_kash_ratings() -> dict:
+    """Fetch KASH model ratings from Betfair and apply to today's runners.
+
+    Runs at 6:00 AM after morning scrape has loaded runner data.
+    KASH provides rated prices and speed data as a benchmark.
+    """
+    from punty.scrapers.kash_ratings import apply_kash_ratings
+
+    try:
+        matched = await apply_kash_ratings()
+        logger.info(f"KASH ratings job: {matched} runners updated")
+        return {"status": "ok", "matched": matched}
+    except Exception as e:
+        logger.error(f"KASH ratings job failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def post_kash_probability_refresh() -> dict:
+    """Re-run probability for all today's races after KASH data arrives.
+
+    Called at 10:15am AEST, after KASH fetch at 10:00am.
+    Updates Pick.win_probability and Pick.place_probability with
+    fresh LGBM predictions that include KASH features.
+    """
+    from punty.models.database import async_session
+    from punty.models.meeting import Meeting, Race, Runner
+    from punty.models.pick import Pick
+    from punty.config import melb_today
+    from punty.probability import calculate_race_probabilities
+
+    today = melb_today()
+    updated_picks = 0
+    races_processed = 0
+
+    try:
+        async with async_session() as db:
+            meeting_result = await db.execute(
+                select(Meeting).where(Meeting.date == today, Meeting.selected == True)
+            )
+            meetings = meeting_result.scalars().all()
+
+            for meeting in meetings:
+                race_result = await db.execute(
+                    select(Race).where(Race.meeting_id == meeting.id)
+                )
+                races = race_result.scalars().all()
+
+                for race in races:
+                    race_id = race.id
+                    runner_result = await db.execute(
+                        select(Runner).where(
+                            Runner.race_id == race_id,
+                            Runner.scratched != True,
+                        )
+                    )
+                    runners = runner_result.scalars().all()
+                    if len(runners) < 2:
+                        continue
+
+                    try:
+                        probs = calculate_race_probabilities(runners, race, meeting)
+                    except Exception as e:
+                        logger.warning(f"Probability failed for {race_id}: {e}")
+                        continue
+
+                    races_processed += 1
+
+                    # Update picks with fresh probability
+                    pick_result = await db.execute(
+                        select(Pick).where(
+                            Pick.meeting_id == meeting.id,
+                            Pick.race_number == race.race_number,
+                            Pick.pick_type == "selection",
+                        )
+                    )
+                    picks = pick_result.scalars().all()
+
+                    for pick in picks:
+                        horse_name = pick.horse_name
+                        prob = probs.get(horse_name)
+                        if not prob:
+                            continue
+                        old_wp = pick.win_probability
+                        old_pp = pick.place_probability
+                        pick.win_probability = round(prob.win_probability, 4)
+                        pick.place_probability = round(prob.place_probability, 4)
+                        if old_wp and abs(pick.win_probability - old_wp) > 0.02:
+                            logger.debug(
+                                f"KASH refresh: {horse_name} WP {old_wp:.0%} → {pick.win_probability:.0%}"
+                            )
+                        updated_picks += 1
+
+            await db.commit()
+
+        logger.info(
+            f"Post-KASH probability refresh: {races_processed} races, "
+            f"{updated_picks} picks updated"
+        )
+        return {"status": "ok", "races": races_processed, "picks_updated": updated_picks}
+
+    except Exception as e:
+        logger.error(f"Post-KASH probability refresh failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def weekly_weight_calibration() -> dict:
+    """Weekly auto-calibration of probability engine weights per context cell.
+
+    Runs Sunday 2am AEST. Analyses last 90 days of settled picks, finds
+    optimal factor weights per (distance × condition × class × venue_type) cell.
+    """
+    from punty.models.database import async_session
+    from punty.calibration_engine import calibrate_weights
+
+    try:
+        async with async_session() as db:
+            result = await calibrate_weights(db)
+        logger.info(f"Weekly calibration: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Weekly calibration failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def daily_validation_sweep() -> dict:
+    """Run comprehensive data validation on today's races.
+
+    Checks: runner data quality, probability consistency, settlement math,
+    exotic dividends, integration health (KASH, Betfair, odds).
+    Logs issues to /issues page.
+
+    Runs at 22:00 AEST — after all races have finished and settled.
+    """
+    from punty.models.database import async_session
+    from punty.data_validation import validate_today
+
+    try:
+        async with async_session() as db:
+            summary = await validate_today(db)
+        logger.info(f"Daily validation: {summary}")
+        return summary
+    except Exception as e:
+        logger.error(f"Daily validation failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
 
 
 async def _upsert_setting(db, key: str, value: str):

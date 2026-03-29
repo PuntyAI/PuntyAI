@@ -195,17 +195,18 @@ def _correct_exotic_runners(raw_content: str, races: list) -> str:
         ai_runners_set = set(ai_runners)
         stake = int(em.group(3))
 
-        # Check if all runners are from our picks
-        picks_for_race = pick_lookup.get(current_race, set())
-        if picks_for_race and ai_runners_set <= picks_for_race:
-            continue  # All runners from picks — OK
-
-        # Runners are wrong — replace with recommended exotic
+        # Always reformat with leg structure when available,
+        # even if AI wrote the correct runners (it won't have / separators)
         rec = exotic_lookup.get(current_race)
         if not rec:
             continue
 
-        runners_str = ", ".join(str(r) for r in rec.runners)
+        if rec.legs:
+            runners_str = " / ".join(
+                ", ".join(str(r) for r in leg) for leg in rec.legs
+            )
+        else:
+            runners_str = ", ".join(str(r) for r in rec.runners)
         names_str = ", ".join(rec.runner_names)
         new_exotic_line = f"{rec.exotic_type}: {runners_str} — ${stake}"
 

@@ -44,6 +44,30 @@ async def store_picks_from_content(
         await db.execute(delete(Pick).where(Pick.content_id.in_(stale_ids)))
 
     pick_dicts = parse_early_mail(raw_content, content_id, meeting_id)
+
+    # Deduplicate: same race + rank + saddlecloth + type = keep first only
+    # For sequences: use sequence_type as part of the key (not race/rank/sc which are None)
+    seen_keys = set()
+    deduped = []
+    for pd in pick_dicts:
+        pt = pd.get("pick_type")
+        if pt == "sequence":
+            key = (pt, pd.get("sequence_type"), pd.get("sequence_variant"))
+        elif pt == "big3_multi":
+            key = (pt, "multi")
+        elif pt == "big3":
+            key = (pt, pd.get("race_number"), pd.get("saddlecloth"))
+        else:
+            key = (pd.get("race_number"), pd.get("tip_rank"), pd.get("saddlecloth"), pt)
+        if key in seen_keys:
+            logger.info(f"Dedup: skipping duplicate pick {key} in {meeting_id}")
+            continue
+        seen_keys.add(key)
+        deduped.append(pd)
+    if len(deduped) < len(pick_dicts):
+        logger.info(f"Deduped {len(pick_dicts) - len(deduped)} duplicate picks for {meeting_id}")
+    pick_dicts = deduped
+
     if not pick_dicts:
         logger.warning(f"No picks parsed from content {content_id} — flagging for review")
         # Flag content for manual review when parser finds zero picks
@@ -116,6 +140,84 @@ async def store_picks_from_content(
     # Bet types are set by pre_selections._determine_bet_type() and
     # preserved through the parser. Rank 1 = Win, Rank 2 = Place.
 
+    # ── V3 Exotic Override: replace AI-parsed exotics with cascade output ──
+    # The AI can deviate from pre-selection exotic recommendations.
+    # V3 cascade is data-driven (+302% ROI on Exacta R1/R2,R3).
+    try:
+        from collections import defaultdict
+        from punty.context.pre_selections import _v3_exotic_cascade, RecommendedPick
+        from punty.calibration_engine import _distance_bucket, _condition_bucket
+
+        # Group selections by race number
+        race_selections = defaultdict(list)
+        for pd in pick_dicts:
+            if pd.get("pick_type") == "selection" and pd.get("tip_rank"):
+                race_selections[pd["race_number"]].append(pd)
+
+        # Replace exotic picks with v3 cascade
+        exotic_indices = [i for i, pd in enumerate(pick_dicts) if pd.get("pick_type") == "exotic"]
+        for idx in reversed(exotic_indices):
+            pick_dicts.pop(idx)
+
+        if meeting:
+            for race in meeting.races:
+                sels = race_selections.get(race.race_number, [])
+                if len(sels) < 2:
+                    continue
+                # Build minimal RecommendedPick objects for the cascade
+                mock_picks = []
+                for s in sorted(sels, key=lambda x: x.get("tip_rank", 99)):
+                    key = (race.race_number, s.get("saddlecloth"))
+                    rp = race_probs.get(key)
+                    wp = rp.win_probability if rp else 0.15
+                    mock_picks.append(RecommendedPick(
+                        rank=s.get("tip_rank", 4),
+                        saddlecloth=s.get("saddlecloth", 0),
+                        horse_name=s.get("horse_name", ""),
+                        win_prob=wp,
+                        place_prob=rp.place_probability if rp else 0.40,
+                        odds=s.get("odds_at_tip", 5.0) or 5.0,
+                        bet_type=s.get("bet_type", "place"),
+                        stake=0,
+                        place_odds=None,
+                        value_rating=1.0,
+                        place_value_rating=1.0,
+                        expected_return=0,
+                    ))
+
+                active = [r for r in race.runners if not r.scratched]
+                cascade = _v3_exotic_cascade(
+                    distance=race.distance or 1400,
+                    track_condition=meeting.track_condition or "Good 4",
+                    picks=mock_picks,
+                    field_size=len(active),
+                )
+                if cascade:
+                    import hashlib
+                    _exotic_id = f"pk-{hashlib.md5(f'{content_id}-{race.race_number}-exotic'.encode()).hexdigest()[:8]}-{race.race_number:03d}"
+                    pick_dicts.append({
+                        "id": _exotic_id,
+                        "pick_type": "exotic",
+                        "race_number": race.race_number,
+                        "exotic_type": cascade.exotic_type,
+                        "exotic_runners": json.dumps(cascade.runners),
+                        "exotic_stake": cascade.budget,
+                        "content_id": content_id,
+                        "meeting_id": meeting_id,
+                    })
+    except Exception as e:
+        logger.warning(f"V3 exotic override failed: {e}")
+
+    # ── Hard kill: never store Trifecta Box or First4 Box (data: -$2,182 lifetime) ──
+    # Trifecta Standout allowed ONLY from v3 cascade (sprint|good context).
+    # Big6 stays (user directive: "hail mary").
+    KILLED_EXOTIC_TYPES = {"Trifecta Box", "First4 Box"}  # First4 Standout allowed from cascade
+    pick_dicts = [
+        pd for pd in pick_dicts
+        if not (pd.get("pick_type") == "exotic" and pd.get("exotic_type") in KILLED_EXOTIC_TYPES)
+    ]
+
+    # ── Guard: never settle a pick without finish position ──
     for pd in pick_dicts:
         pick = Pick(**pd)
         db.add(pick)
@@ -346,8 +448,17 @@ async def _settle_picks_for_race_impl(
             logger.info(f"Voided scratched selection {pick.horse_name} R{pick.race_number}")
             continue
 
-        # Settle if runner has finish position, OR if race is final with results populated
-        has_result = runner and (runner.finish_position is not None or (race_final and results_populated))
+        # Settle if runner has finish position. If race is final but THIS runner
+        # has no FP, log a warning and skip — don't settle as loss incorrectly.
+        has_result = runner and runner.finish_position is not None and runner.finish_position > 0
+        if not has_result and runner and race_final and results_populated:
+            # Race is final but runner has no finish position — likely late scratching or data gap
+            if pick.bet_stake and pick.bet_stake > 0:
+                logger.warning(
+                    f"Race {race_id} final but {pick.horse_name} (SC{pick.saddlecloth}) has no finish position — "
+                    f"skipping settlement (staked ${pick.bet_stake}). Check for late scratching."
+                )
+                continue  # Don't settle — wait for data fix
 
         if has_result:
             bet_type = str(pick.bet_type or "win").lower().replace(" ", "_")
@@ -792,15 +903,19 @@ async def _settle_picks_for_race_impl(
                         dividend = _find_dividend(exotic_divs, "trifecta")
                 elif "exacta" in exotic_type:
                     if len(top_sc_int) >= 2 and len(exotic_runners_int) >= 2:
-                        if is_standout:
-                            # Standout: first runner must win, any other must be 2nd
-                            standout = exotic_runners_int[0]
+                        if is_standout or len(exotic_runners_int) > 2:
+                            # Exacta with 3+ runners or Standout: first runner MUST WIN,
+                            # any of the remaining runners must be 2nd.
+                            # This is NOT a box — order matters for the anchor.
+                            anchor = exotic_runners_int[0]
                             others = set(exotic_runners_int[1:])
-                            hit = (top_sc_int[0] == standout and
+                            hit = (top_sc_int[0] == anchor and
                                    top_sc_int[1] in others)
-                        elif is_boxed or len(exotic_runners_int) > 2:
+                        elif is_boxed:
+                            # Explicit "Exacta Box" (if it ever exists) — any order
                             hit = set(top_sc_int[:2]).issubset(set(exotic_runners_int))
                         else:
+                            # Straight exacta: exact 1st-2nd order
                             hit = list(top_sc_int[:2]) == list(exotic_runners_int[:2])
                     if hit:
                         dividend = _find_dividend(exotic_divs, "exacta")
@@ -859,9 +974,24 @@ async def _settle_picks_for_race_impl(
                 return_amount = dividend * flexi_pct
                 pick.pnl = round(return_amount - stake, 2)
             elif hit and dividend == 0:
-                # Hit but no dividend available — TAB rules: refund
+                # Hit but no dividend available — log as issue for manual review
                 pick.pnl = 0.0
                 logger.warning(f"Exotic pick {pick.id} hit but dividend=0 — treating as refund")
+                try:
+                    from punty.issues import log_issue
+                    await log_issue(
+                        db, "settlement", "error",
+                        f"Exotic hit but $0 P&L — missing {exotic_type} dividend",
+                        description=f"Pick {pick.id} ({exotic_type}) won but no dividend in exotic_results. "
+                                    f"Stake: ${stake:.2f}. Check PointsBet/TAB for actual dividend.",
+                        meeting_id=pick.meeting_id,
+                        race_number=pick.race_number,
+                        pick_id=pick.id,
+                        link=f"/meets/{pick.meeting_id}",
+                        amount=stake,
+                    )
+                except Exception:
+                    pass  # Don't let issue logging break settlement
             else:
                 pick.pnl = round(-cost, 2)
             pick.hit = hit
@@ -1124,6 +1254,7 @@ def _find_dividend(exotic_divs: dict, exotic_key: str, exclude: list[str] | None
         return 0.0
 
     # Pass 1: exact key match (e.g. "quinella" matches "quinella" but not "quinella place 1")
+    exotic_key = exotic_key.lower().strip()
     for key, val in exotic_divs.items():
         key_lower = key.lower().strip()
         if key_lower == exotic_key:
@@ -1157,7 +1288,9 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     Unsettled bets are included in bet count and staked totals
     but do NOT affect P&L — they are pending, not losses.
     """
-    # Settled picks — actual results
+    # Settled picks — actual results.
+    # Include ALL content statuses (even superseded) — a settled pick is settled
+    # regardless of whether the content was later regenerated.
     settled_result = await db.execute(
         select(
             Pick.pick_type,
@@ -1167,13 +1300,11 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
             func.sum(Pick.exotic_stake).label("total_staked_exotic"),
             func.sum(Pick.bet_stake).label("total_staked_bet"),
         )
-        .join(Content, Pick.content_id == Content.id)
         .join(Meeting, Pick.meeting_id == Meeting.id)
         .where(
             Meeting.date == target_date,
             Meeting.selected == True,
             Pick.settled == True,
-            Content.status.notin_(["superseded", "rejected"]),
             or_(Pick.tracked_only == False, Pick.tracked_only.is_(None)),
             Pick.pick_type != "big3",
             ~and_(Pick.pick_type == "selection", Pick.bet_type == "no_bet"),
@@ -1182,7 +1313,8 @@ async def get_performance_summary(db: AsyncSession, target_date: date) -> dict:
     )
     settled_rows = settled_result.all()
 
-    # Unsettled picks — deduct stake, 0 wins
+    # Unsettled picks — keep content filter here to avoid double-counting
+    # from both superseded and active content versions
     unsettled_result = await db.execute(
         select(
             Pick.pick_type,

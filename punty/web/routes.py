@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
+from starlette.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, Integer, or_, and_
@@ -447,9 +448,13 @@ async def meeting_detail(
 
 
 @router.get("/content", response_class=HTMLResponse)
-async def content_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Content management page."""
-    result = await db.execute(select(Content).order_by(Content.created_at.desc()).limit(100))
+async def content_page(request: Request, status: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Content management page with optional status filter."""
+    query = select(Content)
+    if status and status in ("draft", "pending_review", "approved", "rejected",
+                             "regenerating", "scheduled", "sent", "superseded"):
+        query = query.where(Content.status == status)
+    result = await db.execute(query.order_by(Content.created_at.desc()).limit(200))
     content_items = result.scalars().all()
 
     # Group by status — single query instead of N queries
@@ -845,6 +850,39 @@ async def learnings_page(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/issues", response_class=HTMLResponse)
+async def issues_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Issue tracker — settlement errors, missing dividends, failed bets."""
+    from punty.models.issue import Issue
+
+    result = await db.execute(
+        select(Issue).order_by(Issue.resolved, Issue.created_at.desc()).limit(200)
+    )
+    issues = result.scalars().all()
+
+    open_count = sum(1 for i in issues if not i.resolved)
+    total_amount = sum(i.amount or 0 for i in issues if not i.resolved)
+
+    return templates.TemplateResponse("issues.html", {
+        "request": request,
+        "issues": issues,
+        "open_count": open_count,
+        "total_amount": total_amount,
+    })
+
+
+@router.post("/issues/{issue_id}/resolve", response_class=HTMLResponse)
+async def resolve_issue(request: Request, issue_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark an issue as resolved."""
+    from punty.models.issue import Issue
+    issue = await db.get(Issue, issue_id)
+    if issue:
+        issue.resolved = True
+        issue.resolved_at = melb_now().replace(tzinfo=None)
+        await db.commit()
+    return RedirectResponse(url="/issues", status_code=303)
+
+
 @router.get("/balance-sheet", response_class=HTMLResponse)
 @router.get("/balance-sheet/{date_str}", response_class=HTMLResponse)
 async def balance_sheet_page(
@@ -974,7 +1012,14 @@ async def balance_sheet_page(
             bet_label = pick.pick_type or "Unknown"
 
         odds = pick.odds_at_tip or 0
-        if pick.pick_type != "selection":
+        if pick.pick_type == "selection":
+            bt_lower = (pick.bet_type or "").lower().replace("_", " ")
+            if bt_lower == "place" and pick.place_odds_at_tip:
+                odds = pick.place_odds_at_tip
+            elif bt_lower == "each way" and pick.place_odds_at_tip:
+                # Show win / place odds for EW
+                odds = pick.odds_at_tip or 0
+        else:
             odds = 0
 
         # Race time for chronological display

@@ -971,6 +971,7 @@ def _compute_pick_data(all_picks: list) -> dict:
     winners_map = {}       # {race_number: [saddlecloth, ...]}
     winning_exotics = {}   # {race_number: exotic_type}
     losing_exotics = {}    # {race_number: exotic_type}  — settled but NOT hit
+    exotic_picks = {}      # {race_number: {type, runners, combos}} — for template rendering
     winning_sequences = [] # [{type, variant}]
     sequence_results = []
     picks_lookup = {}      # {race_number: {saddlecloth: {...}}}
@@ -1037,6 +1038,7 @@ def _compute_pick_data(all_picks: list) -> dict:
                 winners_map.setdefault(pick.race_number, []).append(pick.saddlecloth)
             elif pick.pick_type == "exotic" and pick.race_number and pick.exotic_type:
                 winning_exotics[pick.race_number] = pick.exotic_type
+                # Store full exotic data for template rendering
             elif pick.pick_type == "sequence" and pick.sequence_type:
                 winning_sequences.append({
                     "type": pick.sequence_type,
@@ -1055,6 +1057,14 @@ def _compute_pick_data(all_picks: list) -> dict:
             # Normalise sequence_type to underscore form (e.g. "early quaddie" -> "early_quaddie")
             seq_type = (pick.sequence_type or pick.pick_type).lower().replace(" ", "_")
             label = seq_type.replace("_", " ").title()
+            # Parse sequence_legs JSON for per-leg display
+            import json as _json_seq
+            _legs_raw = pick.sequence_legs
+            if isinstance(_legs_raw, str):
+                try:
+                    _legs_raw = _json_seq.loads(_legs_raw)
+                except Exception:
+                    _legs_raw = None
             sequence_results.append({
                 "type": seq_type,
                 "variant": pick.sequence_variant,
@@ -1063,6 +1073,7 @@ def _compute_pick_data(all_picks: list) -> dict:
                 "pnl": float(pick.pnl) if pick.pnl is not None else 0.0,
                 "stake": float(pick.exotic_stake or pick.bet_stake or 0),
                 "start_race": pick.sequence_start_race,
+                "legs": _legs_raw if isinstance(_legs_raw, list) else None,
             })
 
         # --- Stats accumulators (settled only) ---
@@ -1088,6 +1099,22 @@ def _compute_pick_data(all_picks: list) -> dict:
                 ex_stats[label]["hits"] += 1
             ex_stats[label]["pnl"] += float(pick.pnl or 0)
             ex_stats[label]["staked"] += float(pick.exotic_stake or 0)
+
+            # Collect exotic pick data for template rendering (overrides AI text)
+            if pick.race_number and pick.exotic_runners:
+                import json as _jex
+                try:
+                    runners = _jex.loads(pick.exotic_runners) if isinstance(pick.exotic_runners, str) else pick.exotic_runners
+                except Exception:
+                    runners = []
+                exotic_picks[pick.race_number] = {
+                    "type": pick.exotic_type,
+                    "runners": runners,
+                    "combos": pick.exotic_stake and len(runners),  # approximate
+                    "hit": pick.hit,
+                    "pnl": float(pick.pnl or 0),
+                    "settled": pick.settled,
+                }
 
         elif pick.pick_type == "sequence":
             key = (pick.sequence_type, pick.sequence_variant)
@@ -1182,6 +1209,7 @@ def _compute_pick_data(all_picks: list) -> dict:
         "winners_map": winners_map,
         "winning_exotics": winning_exotics,
         "losing_exotics": losing_exotics,
+        "exotic_picks": exotic_picks,
         "winning_sequences": winning_sequences,
         "sequence_results": sequence_results,
         "picks_lookup": picks_lookup,
@@ -1414,6 +1442,7 @@ async def get_meeting_tips(meeting_id: str) -> dict | None:
             "winners": pick_data["winners_map"],
             "winning_exotics": pick_data["winning_exotics"],
             "losing_exotics": pick_data["losing_exotics"],
+            "exotic_picks": pick_data.get("exotic_picks", {}),
             "winning_sequences": pick_data["winning_sequences"],
             "pp_picks": pick_data["pp_picks"],
             "sequence_results": pick_data["sequence_results"],
@@ -1848,12 +1877,12 @@ async def get_best_of_meets() -> dict:
                 "exotic": None,
             }
 
-        # Best Winner: selection, tip_rank <= 3, Win/Saver Win only, highest win_prob
+        # Best Pick: highest win_prob R1 pick across the meeting (any bet type)
         bt_lower = (pick.bet_type or "").lower()
         if (pick.pick_type == "selection"
-                and (pick.tip_rank or 99) <= 3
-                and bt_lower in ("win", "saver_win", "saver win")
-                and (pick.win_probability or 0) >= 0.22):
+                and (pick.tip_rank or 99) == 1
+                and bt_lower not in ("no_bet", "no bet", "exotics only", "exotics_only")
+                and not pick.tracked_only):
             current = meets[mid]["best_winner"]
             if not current or (pick.win_probability or 0) > (current.get("win_prob") or 0):
                 meets[mid]["best_winner"] = {
@@ -2598,31 +2627,71 @@ async def get_daily_dashboard() -> dict:
             bet_types.append(data)
         bet_types.sort(key=lambda x: _BT_ORDER.get(x["name"], 99))
 
-        # ── Rank Strike Rates ──
-        # Rank 1: win strike (1st place), Rank 2-4: place strike (top 3)
+        # ── Pick Strike Rates — ALL selections including tracked_only ──
+        # Separate query: include ALL content (even superseded) for accuracy tracking.
+        # The main scorecard filters by active_content, but pick accuracy should
+        # count every selection we made regardless of content lifecycle.
+        pick_race_num_rs = sa_func.coalesce(Pick.race_number, Pick.sequence_start_race)
+        rank_result = await db.execute(
+            select(Pick, Runner)
+            .join(Meeting, Pick.meeting_id == Meeting.id)
+            .outerjoin(Race, and_(
+                Race.meeting_id == Pick.meeting_id,
+                Race.race_number == pick_race_num_rs,
+            ))
+            .outerjoin(Runner, and_(
+                Runner.race_id == Race.id,
+                Runner.saddlecloth == Pick.saddlecloth,
+            ))
+            .where(
+                Meeting.date == today,
+                Meeting.selected == True,
+                Pick.pick_type == "selection",
+                Pick.tip_rank.isnot(None),
+            )
+        )
+        rank_rows = rank_result.all()
+
+        # Deduplicate: same meeting+race+rank may appear from multiple content versions.
+        # Keep the one from the latest content (highest content_id or most recent).
+        seen_rank_keys = {}  # (meeting_id, race_number, tip_rank) -> (pick, runner)
+        for pick, runner in rank_rows:
+            key = (pick.meeting_id, pick.race_number, pick.tip_rank)
+            if key not in seen_rank_keys:
+                seen_rank_keys[key] = (pick, runner)
+
+        _rank_zero = lambda: {
+            "total": 0, "settled": 0, "win_won": 0, "place_won": 0,
+        }
         rank_stats = {}
-        for pick, runner, race, meeting in settled_rows:
-            if pick.pick_type != "selection" or not pick.tip_rank:
-                continue
-            if (pick.bet_type or "").lower() == "no_bet":
-                continue
-            rank = pick.tip_rank
+        for (mid, rn, rank), (pick, runner) in seen_rank_keys.items():
             if rank not in rank_stats:
-                rank_stats[rank] = {"bets": 0, "hits": 0}
-            rank_stats[rank]["bets"] += 1
+                rank_stats[rank] = _rank_zero()
+            rs = rank_stats[rank]
+            rs["total"] += 1
             fp = runner.finish_position if runner else None
-            if fp and fp <= 3:
-                rank_stats[rank]["hits"] += 1
+            if fp is not None:
+                rs["settled"] += 1
+                if fp == 1:
+                    rs["win_won"] += 1
+                if fp <= 3:
+                    rs["place_won"] += 1
+
+        _rank_labels = {1: "Punty's Pick", 2: "Second Pick", 3: "Third Pick", 4: "Roughie"}
         rank_strike = []
         for rank in sorted(rank_stats.keys()):
             rs = rank_stats[rank]
-            strike = round(rs["hits"] / rs["bets"] * 100, 1) if rs["bets"] else 0
+            win_sr = round(rs["win_won"] / rs["settled"] * 100, 1) if rs["settled"] else 0
+            place_sr = round(rs["place_won"] / rs["settled"] * 100, 1) if rs["settled"] else 0
             rank_strike.append({
                 "rank": rank,
-                "bets": rs["bets"],
-                "hits": rs["hits"],
-                "strike": strike,
-                "label": "Place",
+                "label": _rank_labels.get(rank, f"#{rank}"),
+                "total": rs["total"],
+                "settled": rs["settled"],
+                "win_won": rs["win_won"],
+                "win_sr": win_sr,
+                "place_won": rs["place_won"],
+                "place_sr": place_sr,
             })
 
         # ── Insights ──
@@ -3002,6 +3071,7 @@ async def meeting_tips_page(request: Request, meeting_id: str):
             "winners": data.get("winners", {}),
             "winning_exotics": data.get("winning_exotics", {}),
             "losing_exotics": data.get("losing_exotics", {}),
+            "exotic_picks": data.get("exotic_picks", {}),
             "winning_sequences": data.get("winning_sequences", []),
             "pp_picks": data.get("pp_picks", {}),
             "sequence_results": data.get("sequence_results", []),
@@ -3277,12 +3347,40 @@ async def bf_tracker_dashboard(request: Request):
         return None
 
     def _calc_stats(bets_list):
+        import math
         total = len(bets_list)
         if total == 0:
-            return {"bets": 0, "wins": 0, "losses": 0, "pnl": 0, "roi": 0, "strike_rate": 0, "staked": 0}
+            return {"bets": 0, "wins": 0, "losses": 0, "pnl": 0, "roi": 0,
+                    "strike_rate": 0, "staked": 0, "edge_sig": None}
         wins = sum(1 for b in bets_list if b.hit)
         total_pnl = sum(b.pnl or 0 for b in bets_list)
         total_staked = sum(b.stake or 0 for b in bets_list)
+        # Statistical significance: t-statistic for edge.
+        # t = (POT * sqrt(n)) / sqrt((1+POT) * (avg_odds - 1 - POT))
+        # POT = profit on turnover (ROI as decimal)
+        # From Betfair Data Scientists hub — proper test for whether
+        # results are skill or variance.
+        edge_sig = None
+        if total >= 10 and total_staked > 0:
+            pot = total_pnl / total_staked
+            avg_odds = total_staked / total / (total_staked / total) if total else 0
+            # Compute average matched odds from settled bets
+            odds_sum = sum(b.matched_odds or b.requested_odds or 2.0 for b in bets_list)
+            avg_odds = odds_sum / total if total else 2.0
+            denom = (1 + pot) * (avg_odds - 1 - pot)
+            if denom > 0:
+                t_stat = (pot * math.sqrt(total)) / math.sqrt(denom)
+                # Two-sided p-value approximation (normal for large n)
+                p_value = 2 * (1 - 0.5 * (1 + math.erf(abs(t_stat) / math.sqrt(2))))
+                confidence = (1 - p_value) * 100
+                edge_sig = {
+                    "t_stat": round(t_stat, 2),
+                    "p_value": round(p_value, 4),
+                    "confidence": round(confidence, 1),
+                    "verdict": "Edge confirmed" if p_value < 0.05 else
+                               "Promising" if p_value < 0.15 else
+                               "Inconclusive" if p_value < 0.50 else "No edge detected",
+                }
         return {
             "bets": total,
             "wins": wins,
@@ -3291,6 +3389,7 @@ async def bf_tracker_dashboard(request: Request):
             "roi": round((total_pnl / total_staked * 100) if total_staked > 0 else 0, 1),
             "strike_rate": round((wins / total * 100) if total > 0 else 0, 1),
             "staked": round(total_staked, 2),
+            "edge_sig": edge_sig,
         }
 
     def _calc_period(bets_list):
@@ -3362,3 +3461,9 @@ async def bf_tracker_balance(request: Request):
         balance = await get_balance(db)
         initial = float(await _get_setting(db, "betfair_initial_balance", str(DEFAULT_INITIAL_BALANCE)))
     return {"balance": balance, "initial_balance": initial, "current_stake": calculate_stake(balance, initial)}
+
+
+@router.get("/papa-rick", response_class=HTMLResponse)
+async def papa_rick_page(request: Request):
+    """Hidden novelty page for Papa & Rick's baby market."""
+    return templates.TemplateResponse("papa-rick.html", {"request": request})

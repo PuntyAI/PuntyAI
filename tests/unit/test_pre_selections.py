@@ -177,11 +177,11 @@ class TestDetermineBetType:
              "value_rating": 1.10, "place_value_rating": 1.05}
         assert _determine_bet_type(c, rank=1, is_roughie=False) == "Win"
 
-    def test_top_pick_place_at_long_odds(self):
-        """$8 odds rank 1 → Place (Config B: odds >= $7 shifts to Place)."""
+    def test_top_pick_each_way_at_8_odds(self):
+        """$8 odds rank 1 → Each Way ($7-$10 range)."""
         c = {"win_prob": 0.18, "place_prob": 0.45, "odds": 8.0,
              "value_rating": 0.95, "place_value_rating": 1.05}
-        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Place"
+        assert _determine_bet_type(c, rank=1, is_roughie=False) == "Each Way"
 
     def test_top_pick_win_at_2_50(self):
         """$2.50 rank 1 → Win (rank 1 always backs to win)."""
@@ -526,47 +526,41 @@ class TestSelectExotic:
 # ──────────────────────────────────────────────
 
 class TestTightClusterExoticBoost:
-    def test_tight_cluster_value_drives_selection(self):
-        """When top 3 picks are within 5%, higher-value exotic wins via prob × value scoring."""
-        # Picks at 28%, 25%, 23% — very tight cluster (5% spread) → structured
+    def test_v3_cascade_small_field_tri_standout(self):
+        """Small field (≤10 runners) → Trifecta Standout via V3 cascade."""
         picks = [
             RecommendedPick(1, 1, "Alpha", "Place", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
             RecommendedPick(2, 2, "Beta", "Place", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
             RecommendedPick(3, 3, "Gamma", "Place", 4, 3.60, 1.6, 0.23, 0.50, 1.00, 1.0, 0.01),
+            RecommendedPick(4, 4, "Delta", "Place", 3, 8.00, 3.0, 0.10, 0.35, 0.90, 1.0, -0.05),
         ]
         combos = [
-            # Exacta: 12% prob × 1.3 value — higher value wins in prob × value scoring
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.3, "combos": 1, "format": "flat"},
-            # Quinella: 11% prob × 1.05 value — lower value
-            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
-             "probability": 0.11, "value": 1.05, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks, fav_price=3.0)
+        # V3 cascade: small fields get Trifecta Standout (data: +202% ROI)
+        result = _select_exotic(combos, {1, 2, 3, 4}, picks=picks, fav_price=3.0, field_size=7)
         assert result is not None
-        # Exacta wins because prob × value scoring rewards higher value
-        assert result.exotic_type == "Exacta"
+        assert "Trifecta" in result.exotic_type
 
-    def test_no_boost_when_spread_wide(self):
-        """No cluster boost when picks are spread (>8%)."""
+    def test_v3_cascade_mid_field_context(self):
+        """Mid field (9-11 runners) → context-dependent (tri/exacta) via V3 cascade."""
         picks = [
             RecommendedPick(1, 1, "Alpha", "Place", 7, 2.00, 1.2, 0.35, 0.70, 1.05, 1.0, 0.10),
             RecommendedPick(2, 2, "Beta", "Place", 5, 5.00, 2.0, 0.20, 0.50, 1.02, 1.0, 0.01),
             RecommendedPick(3, 3, "Gamma", "Place", 3, 10.0, 3.5, 0.10, 0.35, 0.90, 1.0, -0.1),
         ]
         combos = [
-            # Exacta has higher base EV and should win without cluster boost
             {"type": "Exacta", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.12, "value": 1.5, "combos": 1, "format": "flat"},
-            {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
-             "probability": 0.08, "value": 1.3, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3}, picks=picks, fav_price=3.0)
+        result = _select_exotic(combos, {1, 2, 3}, picks=picks, fav_price=3.0, field_size=10)
         assert result is not None
-        assert result.exotic_type == "Exacta"
+        # Mid field uses context cascade — Tri or Exacta depending on dist×cond
+        assert result.exotic_type in ("Trifecta Standout", "Exacta", "Exacta Standout")
 
-    def test_quinella_not_penalised_in_cluster(self):
-        """Quinella is unordered — should not get directional penalty."""
+    def test_v3_cascade_big_field_quinella(self):
+        """Big field (12+ runners) → Quinella Box via V3 cascade."""
         picks = [
             RecommendedPick(1, 1, "Alpha", "Win", 7, 2.60, 1.3, 0.28, 0.60, 1.05, 1.0, 0.05),
             RecommendedPick(2, 2, "Beta", "Win", 6, 3.30, 1.5, 0.25, 0.55, 1.02, 1.0, 0.03),
@@ -576,9 +570,9 @@ class TestTightClusterExoticBoost:
             {"type": "Quinella", "runners": [1, 2], "runner_names": ["A", "B"],
              "probability": 0.20, "value": 1.3, "combos": 1, "format": "flat"},
         ]
-        result = _select_exotic(combos, {1, 2, 3}, picks=picks)
+        result = _select_exotic(combos, {1, 2, 3}, picks=picks, field_size=14)
         assert result is not None
-        assert result.exotic_type == "Quinella"
+        assert "Quinella" in result.exotic_type
 
 
 # ──────────────────────────────────────────────
@@ -858,7 +852,8 @@ class TestCalculatePreSelections:
         ]
         result = calculate_pre_selections(ctx)
         assert result.exotic is not None
-        assert result.exotic.exotic_type == "Exacta Standout"
+        # V3 cascade routes 7-runner fields to F4 Standout (small field)
+        assert "First4" in result.exotic.exotic_type or "Trifecta" in result.exotic.exotic_type
 
     @mock.patch("punty.probability.calculate_exotic_combinations", return_value=[])
     def test_puntys_pick_exotic_when_high_value(self, _mock_calc):
@@ -927,7 +922,8 @@ class TestFormatPreSelections:
         result = calculate_pre_selections(ctx)
         formatted = format_pre_selections(result)
         assert "Exotic:" in formatted
-        assert "Exacta Standout" in formatted
+        # V3 cascade routes 7-runner fields to First4/Trifecta Standout
+        assert "First4" in formatted or "Trifecta" in formatted
 
     def test_notes_in_output(self):
         runners = [

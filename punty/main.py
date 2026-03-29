@@ -106,6 +106,32 @@ async def lifespan(app: FastAPI):
             _personality_cache.set(setting.value)
             logger.info("Personality prompt loaded from database")
 
+        # Load context-aware calibrated weights
+        try:
+            from punty.calibration_engine import load_calibration_cache
+            cells = await load_calibration_cache(db)
+            if cells:
+                logger.info(f"Calibrated weights loaded: {cells} context cells")
+        except Exception as e:
+            logger.debug(f"Calibration cache not available: {e}")
+
+        # Load v3 speed benchmarks + J/T context data
+        try:
+            import json as _json
+            from punty.probability import load_speed_benchmarks, load_jt_context
+            speed_setting = await db.execute(sa_select(AppSettings).where(AppSettings.key == "speed_benchmarks"))
+            s = speed_setting.scalar_one_or_none()
+            if s and s.value:
+                n = load_speed_benchmarks(_json.loads(s.value))
+                logger.info(f"Speed benchmarks loaded: {n} entries")
+            jt_setting = await db.execute(sa_select(AppSettings).where(AppSettings.key == "jt_context_data"))
+            j = jt_setting.scalar_one_or_none()
+            if j and j.value:
+                n = load_jt_context(_json.loads(j.value))
+                logger.info(f"J/T context data loaded: {n} entries")
+        except Exception as e:
+            logger.debug(f"v3 factor data not available: {e}")
+
     if not settings.disable_background:
         # Start scheduler
         from punty.scheduler.manager import scheduler_manager
@@ -202,6 +228,62 @@ async def lifespan(app: FastAPI):
                     logger.info("Betfair auto-bet scheduler started")
         except Exception as e:
             logger.debug(f"Betfair scheduler startup: {e}")
+
+        # Start Flumine streaming framework (if available)
+        try:
+            from punty.betting.flumine_client import flumine_manager
+            async with async_session() as fm_db:
+                started = await flumine_manager.start(fm_db)
+                if started:
+                    app.state.flumine_manager = flumine_manager
+                    logger.info("Flumine streaming framework started")
+                else:
+                    app.state.flumine_manager = None
+                    logger.info("Flumine not available — using httpx fallback")
+        except Exception as e:
+            app.state.flumine_manager = None
+            logger.debug(f"Flumine startup: {e}")
+
+        # ── JIT Smoke Test: verify probability pipeline works ──
+        try:
+            from punty.monitoring.betfair_health import jit_smoke_test
+            async with async_session() as smoke_db:
+                smoke = await jit_smoke_test(smoke_db)
+            if smoke["ok"]:
+                logger.info(f"JIT smoke test: {smoke['detail']}")
+            else:
+                logger.error(f"JIT SMOKE TEST FAILED: {smoke['detail']}")
+                # Alert via Telegram
+                try:
+                    if app.state.telegram_bot and app.state.telegram_bot.is_running():
+                        await app.state.telegram_bot.send_alert(
+                            f"🚨 JIT SMOKE TEST FAILED\n{smoke['detail']}"
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"JIT smoke test error: {e}")
+
+        # ── Betfair Heartbeat: alert if zero bets by afternoon ──
+        try:
+            from punty.monitoring.betfair_health import betfair_heartbeat
+            from apscheduler.triggers.cron import CronTrigger
+            from punty.config import MELB_TZ
+            scheduler_manager.scheduler.add_job(
+                betfair_heartbeat,
+                CronTrigger(hour=14, minute=0, timezone=MELB_TZ),
+                id="betfair_heartbeat_14",
+                replace_existing=True,
+            )
+            scheduler_manager.scheduler.add_job(
+                betfair_heartbeat,
+                CronTrigger(hour=17, minute=0, timezone=MELB_TZ),
+                id="betfair_heartbeat_17",
+                replace_existing=True,
+            )
+            logger.info("Betfair heartbeat checks scheduled (14:00 + 17:00 AEDT)")
+        except Exception as e:
+            logger.warning(f"Betfair heartbeat scheduling failed: {e}")
     else:
         app.state.telegram_bot = None
         app.state.results_monitor = None
@@ -215,6 +297,12 @@ async def lifespan(app: FastAPI):
         await app.state.telegram_bot.stop()
     if app.state.results_monitor:
         app.state.results_monitor.stop()
+    # Stop Flumine streaming
+    try:
+        if getattr(app.state, "flumine_manager", None):
+            app.state.flumine_manager.stop()
+    except Exception:
+        pass
     # Stop Betfair scheduler
     try:
         from punty.betting.scheduler import betfair_scheduler

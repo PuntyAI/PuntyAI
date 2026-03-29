@@ -24,18 +24,7 @@
             Back to Tips
         </a>
 
-        <!-- Venue Switcher -->
-        {% if same_day_meetings %}
-        <div class="flex flex-wrap items-center gap-2 mb-6">
-            <span class="text-xs font-heading font-semibold uppercase tracking-wider" style="color: var(--text-muted);">Today's Meetings</span>
-            <a href="/tips/{{ meeting.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all" style="background: var(--gradient-sunset); color: #fff;">{{ meeting.venue }}</a>
-            {% for m in same_day_meetings %}
-            <a href="/tips/{{ m.id }}" class="px-3 py-1.5 rounded-full text-sm font-heading font-semibold transition-all hover:brightness-125" style="background: var(--bg-card-alt); color: var(--text-secondary); border: 1px solid var(--border-subtle);">{{ m.venue }}</a>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Meeting Header -->
+        <!-- Meeting Header with Venue Dropdown -->
         <div class="card p-6 mb-8">
             <div class="flex items-start gap-4">
                 <div class="w-16 h-16 rounded-xl flex flex-col items-center justify-center flex-shrink-0" style="background: var(--gradient-sunset);">
@@ -45,9 +34,29 @@
                     </svg>
                 </div>
                 <div class="flex-1">
+                    {# Venue name as dropdown selector #}
+                    {% if same_day_meetings %}
+                    <div class="relative inline-block" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center gap-2 text-3xl md:text-4xl font-heading font-bold cursor-pointer" style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                            {{ meeting.venue }}
+                            <svg class="w-5 h-5 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="var(--magenta)" viewBox="0 0 24 24" style="-webkit-text-fill-color: initial;">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open" @click.away="open = false" x-transition
+                             class="absolute z-50 mt-2 w-64 py-2 shadow-xl"
+                             style="background: var(--bg-card); border: 1px solid var(--border-subtle); max-height: 400px; overflow-y: auto;">
+                            <a href="/tips/{{ meeting.id }}" class="block px-4 py-2 text-sm font-heading font-semibold" style="background: var(--magenta); color: white;">{{ meeting.venue }}</a>
+                            {% for m in same_day_meetings %}
+                            <a href="/tips/{{ m.id }}" class="block px-4 py-2 text-sm font-heading font-semibold hover:brightness-125 transition-colors" style="color: var(--text-secondary);" onmouseover="this.style.background='var(--bg-card-alt)'" onmouseout="this.style.background='transparent'">{{ m.venue }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% else %}
                     <h1 class="text-3xl md:text-4xl font-heading font-bold mb-2">
                         <span style="background: var(--gradient-sunset); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{{ meeting.venue }}</span>
                     </h1>
+                    {% endif %}
                     <p class="text-lg" style="color: var(--text-secondary);">{{ meeting.date_formatted }}</p>
 
                     <!-- Meeting Details -->
@@ -184,7 +193,7 @@
                             {% else %}
                             <div class="flex items-center gap-2 mb-1">
                                 <span class="font-heading font-bold text-sm uppercase tracking-wider" style="color: var(--cyan);">Track Read</span>
-                                <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-card-alt); color: var(--text-muted);">After R{{ update.race_number }}</span>
+                                {% if update.race_number %}<span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-card-alt); color: var(--text-muted);">After R{{ update.race_number }}</span>{% endif %}
                             </div>
                             {% endif %}
                             <p class="text-sm leading-relaxed" style="color: var(--text-secondary);">{{ update.content }}</p>
@@ -978,10 +987,47 @@
         font-family: 'Rajdhani', sans-serif; font-weight: 500;
         font-size: 0.75rem; color: var(--text-muted);
     }
+    /* Per-leg result indicators on sequence pills */
+    .seq-leg-pill.leg-hit {
+        background: rgba(74, 222, 128, 0.25); color: #4ade80;
+        border: 1px solid rgba(74, 222, 128, 0.4);
+    }
+    .seq-leg-miss {
+        display: inline-flex; align-items: center; gap: 2px;
+    }
+    .seq-leg-miss .seq-leg-winner {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 1.5rem; height: 1.5rem; padding: 0 0.35rem;
+        border-radius: 4px; font-family: 'Rajdhani', sans-serif;
+        font-weight: 700; font-size: 0.8rem;
+        background: rgba(248, 113, 113, 0.2); color: #f87171;
+        border: 1px solid rgba(248, 113, 113, 0.3);
+    }
+    .seq-leg-result-label {
+        display: block; text-align: center; margin-top: 2px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .seq-leg-result-label.hit-label { color: #4ade80; }
+    .seq-leg-result-label.miss-label { color: #f87171; }
+    /* Sequence header HIT/MISS badge */
+    .seq-header-badge {
+        display: inline-flex; align-items: center;
+        font-family: 'Orbitron', sans-serif; font-weight: 800;
+        font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase;
+        padding: 2px 8px; border-radius: 4px; margin-left: 0.5rem;
+    }
+    .seq-header-badge.badge-hit {
+        background: rgba(74, 222, 128, 0.15); color: #4ade80;
+    }
+    .seq-header-badge.badge-miss {
+        background: rgba(248, 113, 113, 0.15); color: #f87171;
+    }
     @media (max-width: 640px) {
         .seq-variant-card { padding: 0.625rem 0.75rem; }
         .seq-legs { gap: 0.125rem; }
         .seq-leg-pill { min-width: 1.25rem; height: 1.25rem; font-size: 0.7rem; }
+        .seq-leg-winner { min-width: 1.25rem; height: 1.25rem; font-size: 0.7rem; }
     }
 
     /* Race countdown timer */
@@ -1003,6 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var winners = {{ winners | tojson }};
     var winExotics = {{ winning_exotics | tojson }};
     var loseExotics = {{ losing_exotics | tojson }};
+    var exoticPicks = {{ exotic_picks | default({}) | tojson }};
     var winSequences = {{ winning_sequences | tojson }};
     var seqResults = {{ sequence_results | tojson }};
     var scratchedPicks = {{ scratched_picks | tojson }};
@@ -1235,8 +1282,46 @@ document.addEventListener('DOMContentLoaded', function() {
             big3Acc.id = 'big3-acc';
             var big3Header = document.createElement('div');
             big3Header.className = 'race-accordion-header';
-            big3Header.innerHTML = '<div class="flex items-center gap-3"><span class="race-pill" style="background: linear-gradient(135deg, var(--purple), var(--magenta));">&#9733;</span><div><div class="font-heading font-bold text-sm" style="color: var(--text-primary)">Big 3 & Multi</div></div></div>' +
-                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+            // Build Big3 header with optional HIT/MISS badge
+            var b3HeaderResult = (seqResults || []).filter(function(sr) {
+                return (sr.type || '').toLowerCase().replace(/\s+/g, '_') === 'big3_multi';
+            });
+            var b3Outer = document.createElement('div');
+            b3Outer.className = 'flex items-center gap-3';
+            var b3Pill = document.createElement('span');
+            b3Pill.className = 'race-pill';
+            b3Pill.style.background = 'linear-gradient(135deg, var(--purple), var(--magenta))';
+            b3Pill.textContent = '\u2733';
+            b3Outer.appendChild(b3Pill);
+            var b3TitleWrap = document.createElement('div');
+            var b3Title = document.createElement('div');
+            b3Title.className = 'font-heading font-bold text-sm';
+            b3Title.style.color = 'var(--text-primary)';
+            b3Title.textContent = 'Big 3 & Multi';
+            if (b3HeaderResult.length > 0) {
+                var b3sr = b3HeaderResult[0];
+                var b3Badge = document.createElement('span');
+                b3Badge.className = 'seq-header-badge ' + (b3sr.hit ? 'badge-hit' : 'badge-miss');
+                var b3PnlAbs = Math.abs(b3sr.pnl).toFixed(0);
+                b3Badge.textContent = (b3sr.hit ? 'HIT +$' : 'MISS -$') + b3PnlAbs;
+                b3Title.appendChild(document.createTextNode(' '));
+                b3Title.appendChild(b3Badge);
+            }
+            b3TitleWrap.appendChild(b3Title);
+            b3Outer.appendChild(b3TitleWrap);
+            big3Header.appendChild(b3Outer);
+            var b3Chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            b3Chevron.setAttribute('class', 'accordion-chevron w-5 h-5');
+            b3Chevron.setAttribute('fill', 'none');
+            b3Chevron.setAttribute('stroke', 'currentColor');
+            b3Chevron.setAttribute('viewBox', '0 0 24 24');
+            var b3ChevPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            b3ChevPath.setAttribute('stroke-linecap', 'round');
+            b3ChevPath.setAttribute('stroke-linejoin', 'round');
+            b3ChevPath.setAttribute('stroke-width', '2');
+            b3ChevPath.setAttribute('d', 'M19 9l-7 7-7-7');
+            b3Chevron.appendChild(b3ChevPath);
+            big3Header.appendChild(b3Chevron);
             big3Header.onclick = function() { big3Acc.classList.toggle('open'); };
             var big3Body = document.createElement('div');
             big3Body.className = 'race-accordion-body';
@@ -1462,8 +1547,11 @@ document.addEventListener('DOMContentLoaded', function() {
         header.className = 'race-accordion-header';
 
         var raceData = sec.isRace ? findRaceData(sec.raceNum) : null;
-        header.innerHTML = buildRaceHeader(sec.heading, raceData) +
-            '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        // Non-race sections (sequences) build their own header below — skip generic header
+        if (sec.isRace) {
+            header.innerHTML = buildRaceHeader(sec.heading, raceData) +
+                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        }
         header.onclick = function() { accordion.classList.toggle('open'); };
 
         var body = document.createElement('div');
@@ -1516,6 +1604,38 @@ document.addEventListener('DOMContentLoaded', function() {
             if (exoticTitle && exoticLine && exoticTitle !== exoticLine) {
                 // Move title immediately before exotic line
                 exoticLine.parentNode.insertBefore(exoticTitle, exoticLine);
+            }
+
+            // Replace AI exotic text with model-generated exotic from pick data
+            if (exoticPicks && sec.raceNum && exoticPicks[sec.raceNum]) {
+                var ep = exoticPicks[sec.raceNum];
+                var epType = ep.type || '';
+                var epRunners = ep.runners || [];
+                // Format based on type
+                var formatted = '';
+                if (epType === 'First4' && epRunners.length >= 4) {
+                    // F4 Standout: R1 / R2,R3,R4 / R2,R3,R4,R5 / R2,R3,R4,R5,R6
+                    var r1 = epRunners[0];
+                    var leg2 = epRunners.slice(1, 4).join(', ');
+                    var leg3 = epRunners.slice(1, Math.min(5, epRunners.length)).join(', ');
+                    var leg4 = epRunners.slice(1).join(', ');
+                    formatted = 'First4: ' + r1 + ' / ' + leg2 + ' / ' + leg3 + ' / ' + leg4 + ' — $15';
+                } else if (epType === 'Exacta') {
+                    // Exacta: R1 / R2,R3
+                    formatted = 'Exacta: ' + epRunners[0] + ' / ' + epRunners.slice(1).join(', ') + ' — $15';
+                } else if (epType === 'Trifecta Standout') {
+                    var t1 = epRunners.slice(0, 2).join(', ');
+                    var t2 = epRunners.slice(1, 3).join(', ');
+                    var t3 = epRunners.slice(2, 4).join(', ');
+                    formatted = 'Trifecta: ' + t1 + ' / ' + t2 + ' / ' + t3 + ' — $15';
+                } else if (epType === 'Quinella Box') {
+                    formatted = 'Quinella Box: ' + epRunners.join(', ') + ' — $15';
+                } else if (epType === 'Quinella') {
+                    formatted = 'Quinella: ' + epRunners.join(', ') + ' — $15';
+                }
+                if (formatted && exoticLine) {
+                    exoticLine.textContent = formatted;
+                }
             }
 
             // Append flexi % to exotic lines
@@ -1642,10 +1762,98 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
 
-            var seqPill = '<span class="race-pill" style="background: linear-gradient(135deg, var(--yellow), var(--orange));">&#9830;</span>';
-            header.innerHTML = '<div class="flex items-center gap-3">' + seqPill +
-                '<div class="font-heading font-bold text-sm" style="color: var(--text-primary)">' + sec.heading.textContent + '</div></div>' +
-                '<svg class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+            // Per-leg winner/miss marking on sequence variant pills
+            if (seqRaceMatch && seqResults && seqResults.length > 0) {
+                var seqStartRace = parseInt(seqRaceMatch[1]);
+                var varCards = body.querySelectorAll('.seq-variant-card');
+                varCards.forEach(function(card) {
+                    var vLegs = card.querySelectorAll('.seq-leg');
+                    vLegs.forEach(function(vLeg, legIdx) {
+                        var legRaceNum = seqStartRace + legIdx;
+                        var legRaceObj = racesData.find(function(r) { return r.num === legRaceNum; });
+                        if (!legRaceObj) return;
+                        // Find race winner (finish_position === 1)
+                        var winnerSc = null;
+                        legRaceObj.runners.forEach(function(r) { if (r.fp === 1) winnerSc = r.sc; });
+                        if (winnerSc === null) return; // Race not yet resulted
+                        var vPills = vLeg.querySelectorAll('.seq-leg-pill:not(.scratched-pill):not(.alt-pill)');
+                        var legHit = false;
+                        vPills.forEach(function(pill) {
+                            var pillSc = parseInt(pill.textContent.trim());
+                            if (pillSc === winnerSc) {
+                                pill.classList.add('leg-hit');
+                                legHit = true;
+                            }
+                        });
+                        // Add per-leg result label under the leg
+                        var resultLabel = document.createElement('span');
+                        resultLabel.className = 'seq-leg-result-label ' + (legHit ? 'hit-label' : 'miss-label');
+                        resultLabel.textContent = legHit
+                            ? ('R' + legRaceNum + ' \u2713')
+                            : ('R' + legRaceNum + ' \u2717 (#' + winnerSc + ')');
+                        vLeg.parentNode.insertBefore(resultLabel, vLeg.nextSibling);
+                    });
+                });
+            }
+
+            // Build header — include HIT/MISS badge if settled
+            var seqHeaderBadgeEl = null;
+            if (seqResults && seqResults.length > 0) {
+                var headingTextLC = (sec.heading.textContent || '').toLowerCase();
+                var isEarlyH = /early\s*quadd/i.test(headingTextLC);
+                var isQuaddieH = !isEarlyH && /quadd/i.test(headingTextLC);
+                var headerRaceMatch = headingTextLC.match(/races?\s*(\d+)/i);
+                var headerStartRace = headerRaceMatch ? parseInt(headerRaceMatch[1]) : null;
+                var headerResults = seqResults.filter(function(sr) {
+                    var sType = (sr.type || '').toLowerCase().replace(/\s+/g, '_');
+                    if (isEarlyH) return sType === 'early_quaddie';
+                    if (isQuaddieH) {
+                        if (sType !== 'quaddie') return false;
+                        if (sr.start_race && headerStartRace) return sr.start_race === headerStartRace;
+                        return true;
+                    }
+                    if (/big\s*6/i.test(headingTextLC)) return sType === 'big6';
+                    return false;
+                });
+                if (headerResults.length > 0) {
+                    var anyHit = headerResults.some(function(r) { return r.hit; });
+                    var totalPnl = headerResults.reduce(function(sum, r) { return sum + r.pnl; }, 0);
+                    var pnlDisplay = totalPnl >= 0 ? '+$' + totalPnl.toFixed(0) : '-$' + Math.abs(totalPnl).toFixed(0);
+                    seqHeaderBadgeEl = document.createElement('span');
+                    seqHeaderBadgeEl.className = 'seq-header-badge ' + (anyHit ? 'badge-hit' : 'badge-miss');
+                    seqHeaderBadgeEl.textContent = (anyHit ? 'HIT ' : 'MISS ') + pnlDisplay;
+                }
+            }
+
+            var seqPill = document.createElement('span');
+            seqPill.className = 'race-pill';
+            seqPill.style.background = 'linear-gradient(135deg, var(--yellow), var(--orange))';
+            seqPill.textContent = '\u2666';
+            var seqHeaderDiv = document.createElement('div');
+            seqHeaderDiv.className = 'flex items-center gap-3';
+            seqHeaderDiv.appendChild(seqPill);
+            var seqTitleDiv = document.createElement('div');
+            seqTitleDiv.className = 'font-heading font-bold text-sm';
+            seqTitleDiv.style.color = 'var(--text-primary)';
+            seqTitleDiv.textContent = sec.heading.textContent;
+            if (seqHeaderBadgeEl) {
+                seqTitleDiv.appendChild(document.createTextNode(' '));
+                seqTitleDiv.appendChild(seqHeaderBadgeEl);
+            }
+            seqHeaderDiv.appendChild(seqTitleDiv);
+            var seqChevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            seqChevron.setAttribute('class', 'accordion-chevron w-5 h-5');
+            seqChevron.setAttribute('fill', 'none');
+            seqChevron.setAttribute('stroke', 'currentColor');
+            seqChevron.setAttribute('viewBox', '0 0 24 24');
+            var seqPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            seqPath.setAttribute('stroke-linecap', 'round');
+            seqPath.setAttribute('stroke-linejoin', 'round');
+            seqPath.setAttribute('stroke-width', '2');
+            seqPath.setAttribute('d', 'M19 9l-7 7-7-7');
+            seqChevron.appendChild(seqPath);
+            header.appendChild(seqHeaderDiv);
+            header.appendChild(seqChevron);
 
             // Add sequence results card if we have settled data
             if (seqResults && seqResults.length > 0) {

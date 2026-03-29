@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from punty.betting.queue import (
     calculate_stake, calculate_kelly_stake, populate_bet_queue,
     settle_betfair_bets, execute_due_bets, refresh_bet_selections,
-    cycle_bet_selection, SWAP_THRESHOLD, DEFAULT_MIN_ODDS,
+    cycle_bet_selection, SWAP_THRESHOLD, DEFAULT_MIN_PLACE_ODDS, DEFAULT_MIN_WIN_ODDS,
 )
 
 
@@ -102,7 +102,8 @@ class TestMinOddsFloor:
     """Test the minimum odds floor (exchange minimum)."""
 
     def test_min_odds_default(self):
-        assert DEFAULT_MIN_ODDS == 1.25  # BSP floor — bets below this lapse
+        assert DEFAULT_MIN_PLACE_ODDS == 1.30  # BSP floor for place bets
+        assert DEFAULT_MIN_WIN_ODDS == 1.50  # BSP floor for win bets
 
     def test_kelly_zero_at_short_odds(self):
         """At $1.20 odds, implied = 83%. PP=80% has negative edge → $0."""
@@ -148,7 +149,7 @@ class TestPopulateBetQueue:
 
         # Second call returns meeting (for track condition context)
         meeting_result = MagicMock()
-        meeting_result.scalar_one_or_none.return_value = MagicMock(track_condition="Good 4")
+        meeting_result.scalar_one_or_none.return_value = MagicMock(track_condition="Good 4", venue="Sale")
 
         # Third call returns empty picks
         empty_result = MagicMock()

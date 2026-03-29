@@ -199,7 +199,15 @@ class SchedulerManager:
                         logger.warning(
                             f"Significant changes detected for {meeting_id}: {result['changes']}"
                         )
-                        # TODO: Trigger re-evaluation workflow
+                        # Re-evaluate: update pick probabilities with fresh data
+                        try:
+                            from punty.scheduler.jobs import post_kash_probability_refresh
+                            # Re-run probability for this meeting's races
+                            # (reuses the KASH refresh job which updates Pick WP/PP)
+                            logger.info(f"Re-evaluating probabilities for {meeting_id}")
+                            await post_kash_probability_refresh()
+                        except Exception as re_e:
+                            logger.warning(f"Re-evaluation failed for {meeting_id}: {re_e}")
                 except Exception as e:
                     logger.error(f"Context check failed: {e}")
 
@@ -262,15 +270,42 @@ class SchedulerManager:
             timezone=MELB_TZ,
         )
 
-        # Mid-morning Betfair odds refresh at 9:30 AM
-        # Bridges the gap between morning generation and pre-race jobs
-        # Updates platform display odds only — does NOT touch pick odds_at_tip
+        # Mid-morning odds refresh + KASH ratings at 10:00 AM
+        # KASH models published ~9:30-10:00 AM AEST, so we fetch at 10:00
+        # alongside the Betfair odds refresh. Updates runner display odds
+        # and KASH rated prices/speed data.
         self.add_job(
             "mid-morning-odds-refresh",
             mid_morning_odds_refresh,
             trigger_type="cron",
-            hour=9,
-            minute=30,
+            hour=10,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
+        # Post-KASH probability refresh at 10:15am
+        # Re-runs probability for all today's races with KASH features populated
+        from punty.scheduler.jobs import post_kash_probability_refresh
+        self.add_job(
+            "post-kash-probability-refresh",
+            post_kash_probability_refresh,
+            trigger_type="cron",
+            hour=10,
+            minute=15,
+            timezone=MELB_TZ,
+        )
+
+        # Weekly weight calibration — Sunday 2am AEST
+        # Analyses last 90 days of settled picks, optimises factor weights
+        # per context cell (distance × condition × class × venue_type)
+        from punty.scheduler.jobs import weekly_weight_calibration
+        self.add_job(
+            "weekly-weight-calibration",
+            weekly_weight_calibration,
+            trigger_type="cron",
+            day_of_week="sun",
+            hour=2,
+            minute=0,
             timezone=MELB_TZ,
         )
 
@@ -280,6 +315,19 @@ class SchedulerManager:
             weekly_pattern_refresh,
             trigger_type="cron",
             day_of_week="thu",
+            hour=22,
+            minute=0,
+            timezone=MELB_TZ,
+        )
+
+        # Daily validation sweep — 10pm AEST
+        # Checks all today's races for data quality, settlement math,
+        # integration health (KASH, Betfair, odds)
+        from punty.scheduler.jobs import daily_validation_sweep
+        self.add_job(
+            "daily-validation-sweep",
+            daily_validation_sweep,
+            trigger_type="cron",
             hour=22,
             minute=0,
             timezone=MELB_TZ,

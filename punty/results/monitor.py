@@ -1151,6 +1151,28 @@ class ResultsMonitor:
                                     f"{meeting.venue} R{race_num}: {e}"
                                 )
 
+                    # ── Exotic dividend backfill from PointsBet ──
+                    # Racing.com often returns positions but NOT exotic dividends.
+                    # PointsBet has quinella/exacta/trifecta/first4/quaddie divs.
+                    if not results_data.get("exotics"):
+                        try:
+                            from punty.scrapers.pointsbet import PointsBetScraper
+                            pb_exotic = PointsBetScraper()
+                            pb_exotic_data = await pb_exotic.scrape_results_for_race(
+                                meeting.venue, meeting.date, race_num
+                            )
+                            if pb_exotic_data.get("exotics"):
+                                results_data["exotics"] = pb_exotic_data["exotics"]
+                                logger.info(
+                                    f"PointsBet backfilled {len(pb_exotic_data['exotics'])} "
+                                    f"exotic divs for {meeting.venue} R{race_num}"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"PointsBet exotic backfill failed for "
+                                f"{meeting.venue} R{race_num}: {e}"
+                            )
+
                     await upsert_race_results(db, meeting_id, race_num, results_data)
 
                     # Verify runners were actually updated before proceeding
@@ -1185,6 +1207,15 @@ class ResultsMonitor:
                         await settle_picks_for_race(db, meeting_id, race_num)
                     except Exception as e:
                         logger.error(f"Failed to settle picks for {meeting.venue} R{race_num}: {e}")
+
+                    # Validate settlement data quality
+                    try:
+                        from punty.data_validation import validate_settlement
+                        v_issues = await validate_settlement(db, meeting_id, race_num)
+                        if v_issues:
+                            logger.warning(f"Validation: {v_issues} issues for {meeting.venue} R{race_num}")
+                    except Exception as e:
+                        logger.debug(f"Post-settlement validation failed: {e}")
 
                     # Check intraday loss threshold after settlement
                     try:
@@ -2523,23 +2554,26 @@ class ResultsMonitor:
                 # Apply fresh odds (keeps odds current during race day)
                 odds_data = r.get("odds")
                 if odds_data:
+                    # Priority: PB > Betfair > Sportsbet > others
+                    # TAB excluded from current_odds — tote pools are unreliable
                     best_odds = (
-                        odds_data.get("odds_betfair")
-                        or odds_data.get("odds_tab")
+                        odds_data.get("odds_pointsbet")
+                        or odds_data.get("odds_betfair")
                         or odds_data.get("odds_sportsbet")
                         or odds_data.get("odds_bet365")
                         or odds_data.get("odds_ladbrokes")
                     )
-                    if best_odds:
-                        runner.current_odds = best_odds
-                        if not runner.opening_odds:
-                            runner.opening_odds = best_odds
+                    if best_odds and best_odds > 1.0:
+                        from punty.odds import update_runner_odds
+                        update_runner_odds(runner,
+                            current_odds=best_odds,
+                            opening_odds=best_odds,
+                            place_odds=odds_data.get("place_odds"),
+                            source="racing_com")
                     for field in ("odds_tab", "odds_sportsbet", "odds_bet365", "odds_ladbrokes", "odds_betfair"):
                         val = odds_data.get(field)
                         if val:
                             setattr(runner, field, val)
-                    if odds_data.get("place_odds"):
-                        runner.place_odds = odds_data["place_odds"]
 
         # Track condition from racing.com — only allow same-base refinements.
         # racing.com is NOT authoritative for track conditions (Racing Australia is).
