@@ -116,9 +116,11 @@ if _FLUMINE_AVAILABLE:
                     lay_price = 0.0
                     if hasattr(r, "ex") and r.ex:
                         if r.ex.available_to_back:
-                            back_price = r.ex.available_to_back[0].price
+                            b = r.ex.available_to_back[0]
+                            back_price = b.get("price", 0) if isinstance(b, dict) else getattr(b, "price", 0)
                         if r.ex.available_to_lay:
-                            lay_price = r.ex.available_to_lay[0].price
+                            l = r.ex.available_to_lay[0]
+                            lay_price = l.get("price", 0) if isinstance(l, dict) else getattr(l, "price", 0)
 
                     name = cat_names.get(r.selection_id, "")
 
