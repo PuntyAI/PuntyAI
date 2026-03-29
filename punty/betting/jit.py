@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Gates
 PP_FLOOR = 0.55  # v4: lowered from 0.59 — v4 model produces honest (lower) PPs
-WIN_GAP_THRESHOLD = 0.15
+WIN_GAP_THRESHOLD = 0.10  # Default — overridden by _win_gap_for_race() context
 MIN_PLACE_ODDS = 1.20  # Lowered from 1.30 — 86% of voided BSP bets would have placed
 MIN_WIN_ODDS = 1.50
 MAX_EDGE_CAP = 0.10
@@ -48,6 +48,40 @@ CONDITION_MULTIPLIERS = {
     "Heavy 8": 0.75,
     "Heavy 9": 0.6, "Heavy 10": 0.6,
 }
+
+
+def _win_gap_for_race(race, meeting) -> float:
+    """Context-aware WP gap threshold for win bet routing.
+
+    Weaker races (maidens, low class, country) need a smaller gap to
+    justify a win bet because field quality is lower and our model's
+    edge is more pronounced. Stronger races (open, group, metro) need
+    a bigger gap because competition is tighter.
+    """
+    threshold = WIN_GAP_THRESHOLD  # 0.10 base
+
+    # Class adjustment
+    race_class = (race.class_ or "").lower()
+    if "maiden" in race_class:
+        threshold = 0.08
+    elif any(x in race_class for x in ("class 1", "class 2", "class 3", "bm56", "bm58", "bm60", "bm62", "benchmark 58", "benchmark 60", "benchmark 62")):
+        threshold = 0.09
+    elif any(x in race_class for x in ("group", "listed", "open", "stakes")):
+        threshold = 0.12
+
+    # Small fields — natural gaps are bigger, lower the bar
+    field = race.field_size or 0
+    if 0 < field <= 8:
+        threshold -= 0.02
+
+    # Country venues — weaker competition, gaps more reliable
+    from punty.venues import guess_state
+    venue_lower = (meeting.venue or "").lower()
+    if venue_lower not in {"flemington", "randwick", "rosehill", "caulfield", "moonee valley",
+                           "eagle farm", "doomben", "morphettville", "ascot", "ellerslie"}:
+        threshold -= 0.01
+
+    return max(threshold, 0.06)  # floor at 6%
 
 
 def _venue_condition_modifier(venue: str, track_condition: str) -> float:
@@ -210,13 +244,18 @@ async def evaluate_and_bet_race(
                                   jit_wp=wp, jit_pp=pp)
         return result
 
-    # ── Bet type routing (WP gap) ──
+    # ── Bet type routing (contextual WP gap) ──
     r2_wp = r2["wp"] if r2 else 0
     wp_gap = wp - r2_wp
+    gap_threshold = _win_gap_for_race(race, meeting)
 
-    if wp_gap >= WIN_GAP_THRESHOLD and odds > 1.0:
+    if wp_gap >= gap_threshold and odds > 1.0:
         bet_type = "win"
         min_odds = MIN_WIN_ODDS
+        logger.info(
+            f"JIT WIN route: {runner.horse_name} gap={wp_gap:.0%} >= {gap_threshold:.0%} "
+            f"({race.class_ or 'unknown'}, {race.field_size or '?'} runners)"
+        )
     else:
         bet_type = "place"
         min_odds = MIN_PLACE_ODDS
