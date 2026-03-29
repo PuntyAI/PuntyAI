@@ -98,22 +98,21 @@ if _FLUMINE_AVAILABLE:
                 else:
                     start_time = datetime.now(tz=timezone.utc)
 
-                # Build name lookup — try multiple sources since streaming
-                # runners only have selection_id + prices, not names
+                # Build name lookup — streaming runners only have selection_id
+                # + prices. Names come from catalogue (arrives ~60s after first
+                # stream tick). Start from carry-forward, then override with
+                # fresh data if available.
                 cat_names = {}
 
-                # Source 1: market_catalogue (populated by poll_market_catalogue worker ~60s)
-                cat = getattr(market, "market_catalogue", None)
-                if cat and hasattr(cat, "runners") and cat.runners:
-                    for cr in cat.runners:
-                        sid = getattr(cr, "selection_id", None)
-                        rname = getattr(cr, "runner_name", "") or ""
-                        rname = re.sub(r"^\d+\.\s*", "", rname)
-                        if sid and rname:
-                            cat_names[sid] = rname
+                # Base: carry forward names from previous cache entry
+                old = self._manager._market_cache.get(market_book.market_id)
+                if old:
+                    for r in old.runners:
+                        if r.horse_name:
+                            cat_names[r.selection_id] = r.horse_name
 
-                # Source 2: market_definition.runners (stream metadata)
-                if not cat_names and md and hasattr(md, "runners") and md.runners:
+                # Override with market_definition.runners (stream metadata)
+                if md and hasattr(md, "runners") and md.runners:
                     for dr in md.runners:
                         if isinstance(dr, dict):
                             sid = dr.get("id") or dr.get("selection_id")
@@ -125,13 +124,15 @@ if _FLUMINE_AVAILABLE:
                         if sid and rname:
                             cat_names[sid] = rname
 
-                # Source 3: carry forward from previous cache entry
-                if not cat_names:
-                    old = self._manager._market_cache.get(market_book.market_id)
-                    if old:
-                        for r in old.runners:
-                            if r.horse_name:
-                                cat_names[r.selection_id] = r.horse_name
+                # Override with market_catalogue (best source, populated ~60s in)
+                cat = getattr(market, "market_catalogue", None)
+                if cat and hasattr(cat, "runners") and cat.runners:
+                    for cr in cat.runners:
+                        sid = getattr(cr, "selection_id", None)
+                        rname = getattr(cr, "runner_name", "") or ""
+                        rname = re.sub(r"^\d+\.\s*", "", rname)
+                        if sid and rname:
+                            cat_names[sid] = rname
 
                 runners = []
                 for r in market_book.runners:
@@ -354,8 +355,14 @@ class FlumineManager:
             snap_venue = snap.venue.lower()
             if snap_venue != search_venue and search_venue not in snap_venue:
                 continue
-            # Date check: start_time should be on race_date
-            snap_date = snap.start_time.date() if snap.start_time else None
+            # Date check: convert UTC start_time to Melbourne date
+            if snap.start_time:
+                import zoneinfo
+                melb = zoneinfo.ZoneInfo("Australia/Melbourne")
+                snap_melb = snap.start_time.astimezone(melb) if snap.start_time.tzinfo else snap.start_time
+                snap_date = snap_melb.date()
+            else:
+                snap_date = None
             if snap_date != race_date:
                 continue
             candidates.append(snap)
@@ -371,9 +378,48 @@ class FlumineManager:
         idx = race_number - 1
         if idx < len(candidates):
             snap = candidates[idx]
-            return self._snap_to_dict(snap)
+            result = self._snap_to_dict(snap)
+
+            # If runners have no names, backfill from bflw catalogue (one-time)
+            named = sum(1 for r in result["runners"] if r["horse_name"])
+            if not named and self._trading_client:
+                try:
+                    self._backfill_names(snap.market_id, result)
+                except Exception as e:
+                    logger.debug(f"Flumine name backfill failed: {e}")
+
+            return result
 
         return None
+
+    def _backfill_names(self, market_id: str, result: dict) -> None:
+        """One-time bflw listMarketCatalogue call to get runner names."""
+        catalogues = self._trading_client.betting.list_market_catalogue(
+            filter={"marketIds": [market_id]},
+            market_projection=["RUNNER_DESCRIPTION"],
+            max_results=1,
+        )
+        if not catalogues:
+            return
+        cat = catalogues[0]
+        name_map = {}
+        for cr in cat.runners:
+            sid = cr.selection_id
+            rname = re.sub(r"^\d+\.\s*", "", cr.runner_name or "")
+            if sid and rname:
+                name_map[sid] = rname
+        # Update result runners
+        for r in result["runners"]:
+            if not r["horse_name"] and r["selection_id"] in name_map:
+                r["horse_name"] = name_map[r["selection_id"]]
+        # Also update the cache so future lookups have names
+        snap = self._market_cache.get(market_id)
+        if snap:
+            for sr in snap.runners:
+                if not sr.horse_name and sr.selection_id in name_map:
+                    sr.horse_name = name_map[sr.selection_id]
+        named = sum(1 for r in result["runners"] if r["horse_name"])
+        logger.info(f"Flumine name backfill: {market_id} → {named} runners named")
 
     def get_markets_for_race_by_time(
         self,

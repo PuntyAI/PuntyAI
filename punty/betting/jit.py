@@ -307,21 +307,42 @@ async def evaluate_and_bet_race(
     )
 
     # ── Resolve Betfair market + get live odds ──
-    # Market resolution via httpx (has runner names for matching).
-    # Flumine used for live prices and bet placement.
     from punty.betting.betfair_client import resolve_place_market, resolve_win_market, get_place_odds
     from punty.betting.flumine_client import flumine_manager
 
-    if bet_type == "win":
-        market = await resolve_win_market(db, meeting.venue, meeting.date, meeting_id, race_number)
-    else:
-        market = await resolve_place_market(db, meeting.venue, meeting.date, meeting_id, race_number)
-        if not market:
-            market = await resolve_win_market(db, meeting.venue, meeting.date, meeting_id, race_number)
+    market = None
+    _via_flumine = False
+
+    # Try Flumine cache first (instant, no API call)
+    if flumine_manager.is_available():
+        mtype = "WIN" if bet_type == "win" else "PLACE"
+        market = flumine_manager.get_markets_for_race(
+            meeting.venue, meeting.date, race_number, market_type=mtype,
+        )
+        if market:
+            _via_flumine = True
+        elif mtype == "PLACE":
+            market = flumine_manager.get_markets_for_race(
+                meeting.venue, meeting.date, race_number, market_type="WIN",
+            )
             if market:
+                _via_flumine = True
                 bet_type = "win"
                 min_odds = MIN_WIN_ODDS
                 result["bet_type"] = "win"
+
+    # Fallback to httpx API calls
+    if not market:
+        if bet_type == "win":
+            market = await resolve_win_market(db, meeting.venue, meeting.date, meeting_id, race_number)
+        else:
+            market = await resolve_place_market(db, meeting.venue, meeting.date, meeting_id, race_number)
+            if not market:
+                market = await resolve_win_market(db, meeting.venue, meeting.date, meeting_id, race_number)
+                if market:
+                    bet_type = "win"
+                    min_odds = MIN_WIN_ODDS
+                    result["bet_type"] = "win"
 
     if not market:
         result["reason"] = "No Betfair market available"
@@ -346,12 +367,12 @@ async def evaluate_and_bet_race(
                                   jit_wp=wp, jit_pp=pp)
         return result
 
-    # Get live exchange odds for Kelly — prefer Flumine stream, fallback to httpx
+    # Get live exchange odds for Kelly — Flumine stream → httpx → estimate
     live_odds = None
     if flumine_manager.is_available():
         live_odds = flumine_manager.get_runner_price(market["market_id"], selection_id)
         if live_odds and live_odds > 1.0:
-            logger.info(f"JIT odds via Flumine: {runner.horse_name} ${live_odds:.2f}")
+            logger.info(f"JIT odds via Flumine stream: {runner.horse_name} ${live_odds:.2f}")
     if not live_odds or live_odds <= 1.0:
         live_odds = await get_place_odds(db, market["market_id"], selection_id)
     if not live_odds or live_odds <= 1.0:
@@ -413,8 +434,24 @@ async def evaluate_and_bet_race(
     db.add(bet)
     await db.commit()
 
-    from punty.betting.betfair_client import place_bet
-    place_result = await place_bet(db, market["market_id"], selection_id, stake, min_odds, use_bsp=True)
+    place_result = None
+    if _via_flumine:
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            place_result = await loop.run_in_executor(
+                None, flumine_manager.place_bsp_order,
+                market["market_id"], selection_id, stake, min_odds,
+            )
+            logger.info(f"JIT bet via Flumine: {place_result}")
+            if place_result.get("status") == "failed":
+                logger.warning(f"Flumine placement failed, falling back to httpx: {place_result.get('error')}")
+                place_result = None
+        except Exception as e:
+            logger.warning(f"Flumine placement error, falling back to httpx: {e}")
+    if not place_result:
+        from punty.betting.betfair_client import place_bet
+        place_result = await place_bet(db, market["market_id"], selection_id, stake, min_odds, use_bsp=True)
 
     if place_result.get("status") == "SUCCESS" or place_result.get("bet_id"):
         bet.status = "placed"
