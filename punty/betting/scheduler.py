@@ -124,9 +124,21 @@ class BetfairBetScheduler:
             if legacy_placed:
                 self.bets_placed_today += legacy_placed
 
-            # ── Hourly balance sync ──
+            # ── Hourly balance sync (prefer Flumine cache, fallback to API) ──
             if self._tick_count % 120 == 0:
-                synced = await sync_betfair_balance(db)
+                synced = False
+                try:
+                    from punty.betting.flumine_client import flumine_manager
+                    if flumine_manager.is_available():
+                        bal = flumine_manager.get_account_balance()
+                        if bal is not None:
+                            from punty.betting.queue import set_balance
+                            await set_balance(db, bal)
+                            synced = True
+                except Exception:
+                    pass
+                if not synced:
+                    synced = await sync_betfair_balance(db)
                 if not synced:
                     logger.warning("BetfairBetScheduler: hourly balance sync failed")
 

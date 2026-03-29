@@ -334,6 +334,16 @@ async def get_scheduler_status():
     return betfair_scheduler.status()
 
 
+@router.get("/flumine/status")
+async def get_flumine_status():
+    """Get Flumine streaming framework status."""
+    try:
+        from punty.betting.flumine_client import flumine_manager
+        return flumine_manager.status()
+    except ImportError:
+        return {"available": False, "running": False, "markets_cached": 0, "thread_alive": False}
+
+
 @router.post("/scheduler/start")
 async def start_scheduler():
     """Start the bet scheduler."""

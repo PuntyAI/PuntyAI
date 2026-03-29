@@ -229,6 +229,21 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.debug(f"Betfair scheduler startup: {e}")
 
+        # Start Flumine streaming framework (if available)
+        try:
+            from punty.betting.flumine_client import flumine_manager
+            async with async_session() as fm_db:
+                started = await flumine_manager.start(fm_db)
+                if started:
+                    app.state.flumine_manager = flumine_manager
+                    logger.info("Flumine streaming framework started")
+                else:
+                    app.state.flumine_manager = None
+                    logger.info("Flumine not available — using httpx fallback")
+        except Exception as e:
+            app.state.flumine_manager = None
+            logger.debug(f"Flumine startup: {e}")
+
         # ── JIT Smoke Test: verify probability pipeline works ──
         try:
             from punty.monitoring.betfair_health import jit_smoke_test
@@ -282,6 +297,12 @@ async def lifespan(app: FastAPI):
         await app.state.telegram_bot.stop()
     if app.state.results_monitor:
         app.state.results_monitor.stop()
+    # Stop Flumine streaming
+    try:
+        if getattr(app.state, "flumine_manager", None):
+            app.state.flumine_manager.stop()
+    except Exception:
+        pass
     # Stop Betfair scheduler
     try:
         from punty.betting.scheduler import betfair_scheduler
