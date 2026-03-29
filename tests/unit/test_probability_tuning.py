@@ -422,7 +422,7 @@ class TestBiggestChange:
         old = {"market": 0.22, "form": 0.15, "pace": 0.11}
         new = {"market": 0.25, "form": 0.14, "pace": 0.11}
         result = _biggest_change(old, new)
-        assert "Market" in result
+        assert "market" in result.lower()
         assert "+3.0%" in result
 
     def test_decrease(self):

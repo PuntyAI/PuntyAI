@@ -147,7 +147,7 @@ FEATURE_NAMES = [
     "sire_runners_sr",       # Sire's progeny win strike rate (from KASH/Proform aggregate)
 ]
 
-NUM_FEATURES = len(FEATURE_NAMES)  # 102
+NUM_FEATURES = len(FEATURE_NAMES)  # 115
 # Features the current trained model knows (v5). New features appended after this.
 NUM_FEATURES_V5 = 88
 NUM_FEATURES_V3 = 61
