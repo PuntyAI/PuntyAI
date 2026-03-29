@@ -141,10 +141,18 @@ if _FLUMINE_AVAILABLE:
                     updated_at=time.monotonic(),
                 )
                 # Atomic dict update (thread-safe via GIL)
+                is_new = market_book.market_id not in self._manager._market_cache
                 self._manager._market_cache[market_book.market_id] = snapshot
 
+                if is_new and venue:
+                    logger.info(
+                        f"Flumine cache: +{market_book.market_id} "
+                        f"venue={venue} type={market_type} "
+                        f"start={start_time} runners={len(runners)}"
+                    )
+
             except Exception as e:
-                logger.debug(f"PuntyStrategy cache update error: {e}")
+                logger.warning(f"PuntyStrategy cache update error: {e}", exc_info=True)
 
         def process_orders(self, market, orders: list) -> None:
             for order in orders:
@@ -295,8 +303,22 @@ class FlumineManager:
         STALE_SECONDS = 300  # reject snapshots older than 5 min
         now = time.monotonic()
 
+        # Log cache state on first lookup per race for diagnostics
+        cache_snapshot = list(self._market_cache.values())
+        if cache_snapshot:
+            venues_in_cache = set()
+            for s in cache_snapshot:
+                if now - s.updated_at <= STALE_SECONDS and s.venue:
+                    venues_in_cache.add(f"{s.venue}({s.market_type})")
+            logger.info(
+                f"Flumine cache lookup: venue={search_venue} type={market_type} "
+                f"date={race_date} R{race_number} | "
+                f"cache={len(cache_snapshot)} markets, "
+                f"venues={sorted(venues_in_cache)[:15]}"
+            )
+
         candidates = []
-        for snap in self._market_cache.values():
+        for snap in cache_snapshot:
             if now - snap.updated_at > STALE_SECONDS:
                 continue
             if snap.market_type != market_type:
@@ -311,6 +333,7 @@ class FlumineManager:
             candidates.append(snap)
 
         if not candidates:
+            logger.info(f"Flumine cache miss: no {market_type} markets for {search_venue} on {race_date}")
             return None
 
         # Sort by start time to match race_number positionally
