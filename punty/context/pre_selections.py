@@ -1087,19 +1087,23 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
     if len(staked_picks) == 1:
         effective_pool = min(pool, SINGLE_PICK_CAP)
 
-    # Base allocation weights by rank — top 2 picks get most capital
-    # With MAX_STAKED_PICKS=2, only ranks 1-2 normally get stakes
-    base_rank_weights = {1: 0.58, 2: 0.42, 3: 0.22, 4: 0.15}
+    # Base allocation weights by rank.
+    # Data (past week): R1 Win 25% SR -3.2% ROI, R2 Place 48% SR +4.0% ROI.
+    # Win bets get LESS capital — Place is the profit engine.
+    # When R1 is Win: R1 gets ~$7.50 (38%), R2 gets ~$12.50 (62%)
+    # When R1 is Place: R1 gets ~$12.50 (62%), R2 gets ~$7.50 (38%)
+    base_rank_weights = {1: 0.62, 2: 0.50, 3: 0.22, 4: 0.15}
 
     pick_weights: list[float] = []
     for pick in staked_picks:
         base = base_rank_weights.get(pick.rank, 0.15)
 
-        # Win bonus — rank 1 always gets Win, slight boost for conviction
-        if pick.bet_type in ("Win", "Saver Win") and pick.win_prob and pick.win_prob >= 0.20:
-            base *= 1.10  # 10% stake boost for high-conviction Win
+        # Win REDUCTION — Win bets are lower SR, don't deserve extra capital.
+        # Data: R1 Win 25% SR vs R1 Place 54% SR. Shift weight to Place.
+        if pick.bet_type in ("Win", "Saver Win"):
+            base *= 0.60  # 40% reduction for Win bets
 
-        # Saver Win: reduced stake — 60% of full Win allocation
+        # Saver Win: further reduced — 60% of already-reduced Win allocation
         if pick.bet_type == "Saver Win":
             base *= 0.60
 
@@ -1111,9 +1115,10 @@ def _allocate_stakes(picks: list[RecommendedPick], pool: float, field_size: int 
         if pick.expected_return > 0.10:
             base *= 1.15  # 15% bonus for strong +EV
 
-        # High-confidence Place bonus — Place is our profit engine (+7.55% ROI)
-        if pick.bet_type == "Place" and pick.place_prob >= 0.45:
-            base *= 1.15  # 15% stake boost for high-confidence Place
+        # High-confidence Place bonus — Place is our profit engine
+        # Data: R1 Place 54% SR, R2 Place 48% SR. Both consistently profitable.
+        if pick.bet_type == "Place" and pick.place_prob >= 0.40:
+            base *= 1.20  # 20% stake boost for confident Place bets
 
         # VR-based stake reduction — high VR = overvalued by market
         # Data: VR 1.5-2.0: -28% ROI. VR 2.0+: -34%.
