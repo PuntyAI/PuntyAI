@@ -53,6 +53,9 @@ class RunnerSnapshot:
     lay_price: float = 0.0
     last_traded: float = 0.0
     status: str = "ACTIVE"
+    peak_price: float = 0.0       # highest back price seen
+    peak_time: float = 0.0        # monotonic time of peak
+    prices_since_peak: int = 0    # ticks since peak (for confirming reversal)
 
 
 @dataclass
@@ -148,6 +151,26 @@ if _FLUMINE_AVAILABLE:
 
                     name = cat_names.get(r.selection_id, "")
 
+                    # Track peak price (highest back price seen for this runner)
+                    peak_price = back_price
+                    peak_time = time.monotonic()
+                    prices_since_peak = 0
+                    old_snap = self._manager._market_cache.get(market_book.market_id)
+                    if old_snap:
+                        for old_r in old_snap.runners:
+                            if old_r.selection_id == r.selection_id:
+                                if back_price >= old_r.peak_price:
+                                    # New peak or same — reset counter
+                                    peak_price = back_price
+                                    peak_time = time.monotonic()
+                                    prices_since_peak = 0
+                                else:
+                                    # Price dropped from peak — count ticks
+                                    peak_price = old_r.peak_price
+                                    peak_time = old_r.peak_time
+                                    prices_since_peak = old_r.prices_since_peak + 1
+                                break
+
                     runners.append(RunnerSnapshot(
                         selection_id=r.selection_id,
                         horse_name=name,
@@ -155,6 +178,9 @@ if _FLUMINE_AVAILABLE:
                         lay_price=lay_price,
                         last_traded=getattr(r, "last_price_traded", 0) or 0,
                         status=getattr(r, "status", "ACTIVE"),
+                        peak_price=peak_price,
+                        peak_time=peak_time,
+                        prices_since_peak=prices_since_peak,
                     ))
 
                 snapshot = MarketSnapshot(
@@ -471,6 +497,48 @@ class FlumineManager:
         for r in snap.runners:
             if r.selection_id == selection_id and r.status == "ACTIVE":
                 return r.back_price if r.back_price > 0 else None
+        return None
+
+    def get_best_price(
+        self, market_id: str, selection_id: int
+    ) -> Optional[dict[str, Any]]:
+        """Get the best available price for a runner — peak or current.
+
+        Returns the peak price if the price has started dropping (confirmed
+        reversal = 3+ ticks below peak), otherwise returns current price.
+
+        Returns: {price, is_peak, peak_price, current_price, ticks_since_peak} or None
+        """
+        snap = self._market_cache.get(market_id)
+        if not snap:
+            return None
+        for r in snap.runners:
+            if r.selection_id != selection_id or r.status != "ACTIVE":
+                continue
+            if r.back_price <= 0:
+                return None
+
+            # If price has dropped from peak and stayed down for 3+ ticks,
+            # the peak was real — use it for a LIMIT order
+            REVERSAL_TICKS = 3
+            if (r.peak_price > r.back_price
+                    and r.prices_since_peak >= REVERSAL_TICKS
+                    and r.peak_price > 1.0):
+                return {
+                    "price": r.peak_price,
+                    "is_peak": True,
+                    "peak_price": r.peak_price,
+                    "current_price": r.back_price,
+                    "ticks_since_peak": r.prices_since_peak,
+                }
+            else:
+                return {
+                    "price": r.back_price,
+                    "is_peak": False,
+                    "peak_price": r.peak_price,
+                    "current_price": r.back_price,
+                    "ticks_since_peak": r.prices_since_peak,
+                }
         return None
 
     # ── Order Placement ──────────────────────────────────────────

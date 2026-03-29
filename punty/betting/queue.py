@@ -1291,8 +1291,20 @@ async def _settle_single_bet(
     bet.settled_at = now
     bet.status = "settled"
 
-    # Sync real balance from Betfair API (authoritative)
-    synced = await sync_betfair_balance(db)
+    # Sync real balance — Flumine cache first, then API, then manual fallback
+    synced = False
+    try:
+        from punty.betting.flumine_client import flumine_manager
+        if flumine_manager.is_available():
+            bal = flumine_manager.get_account_balance()
+            if bal is not None:
+                await set_balance(db, bal)
+                synced = True
+                logger.info(f"Post-settlement balance via Flumine: ${bal:.2f}")
+    except Exception:
+        pass
+    if not synced:
+        synced = await sync_betfair_balance(db)
     if not synced:
         # Fallback: manual balance tracking if Betfair API unavailable
         balance = await get_balance(db)

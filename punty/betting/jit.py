@@ -345,11 +345,25 @@ async def evaluate_and_bet_race(
         return result
 
     # ── Get live odds from Flumine stream ──
-    # Flumine gives us the REAL exchange price right now. This is what we
-    # use for Kelly AND for placing LIMIT orders at a known price.
+    # Flumine tracks the price stream and detects peaks (price drifts out
+    # then starts shortening). We bet at the peak for better odds than BSP.
     flumine_price = None
+    flumine_is_peak = False
     if flumine_manager.is_available():
-        flumine_price = flumine_manager.get_runner_price(market["market_id"], selection_id)
+        best = flumine_manager.get_best_price(market["market_id"], selection_id)
+        if best and best["price"] > 1.0:
+            flumine_price = best["price"]
+            flumine_is_peak = best["is_peak"]
+            if flumine_is_peak:
+                logger.info(
+                    f"JIT PEAK PRICE: {runner.horse_name} peak=${best['peak_price']:.2f} "
+                    f"now=${best['current_price']:.2f} ({best['ticks_since_peak']} ticks ago)"
+                )
+            else:
+                logger.info(
+                    f"JIT Flumine price: {runner.horse_name} ${best['current_price']:.2f} "
+                    f"(peak=${best['peak_price']:.2f})"
+                )
 
     live_odds = flumine_price if flumine_price and flumine_price > 1.0 else None
     if not live_odds:
@@ -357,11 +371,6 @@ async def evaluate_and_bet_race(
     if not live_odds or live_odds <= 1.0:
         from punty.betting.queue import _estimate_place_odds
         live_odds = _estimate_place_odds(odds) if bet_type == "place" else (odds if odds > 1 else 2.0)
-
-    logger.info(
-        f"JIT odds: {runner.horse_name} flumine=${flumine_price or 0:.2f} "
-        f"live=${live_odds:.2f} bookie=${odds:.2f}"
-    )
 
     # ── Kelly stake ──
     from punty.betting.queue import calculate_kelly_stake, get_balance as _get_bal
@@ -421,21 +430,27 @@ async def evaluate_and_bet_race(
     from punty.betting.betfair_client import place_bet
 
     if flumine_price and flumine_price >= min_odds:
-        # LIMIT order at the live streaming price — locks in a known price
-        # instead of blind BSP. Flumine gives us the real exchange back price.
+        # LIMIT order at the Flumine price (peak or current).
+        # Peak = price drifted out then started shortening, we lock in the high.
+        # Current = no peak detected yet, take what's available.
+        # Both better than blind BSP because we know the exact price.
+        order_price = flumine_price
         place_result = await place_bet(
             db, market["market_id"], selection_id, stake,
-            price=flumine_price, use_bsp=False,
+            price=order_price, use_bsp=False,
         )
+        tag = "PEAK" if flumine_is_peak else "LIVE"
         logger.info(
-            f"JIT LIMIT order at Flumine price ${flumine_price:.2f}: {place_result}"
+            f"JIT {tag} LIMIT ${order_price:.2f}: {place_result.get('status')} "
+            f"matched={place_result.get('size_matched', 0)}"
         )
     else:
-        # No streaming price available — fall back to BSP
+        # No streaming price or below minimum — BSP fallback
         place_result = await place_bet(
             db, market["market_id"], selection_id, stake,
             price=min_odds, use_bsp=True,
         )
+        logger.info(f"JIT BSP fallback (min ${min_odds:.2f}): {place_result.get('status')}")
 
     if place_result.get("status") == "SUCCESS" or place_result.get("bet_id"):
         bet.status = "placed"
