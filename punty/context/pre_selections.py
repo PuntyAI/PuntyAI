@@ -97,6 +97,7 @@ class RecommendedExotic:
     num_combos: int
     format: str                 # "flat" or "boxed"
     budget: float = EXOTIC_BUDGET  # dynamic budget based on meet quality
+    legs: list[list[int]] | None = None  # positional legs for structured exotics (e.g. [[1], [2,3,4], [2,3,4,5]])
 
 
 @dataclass
@@ -1308,11 +1309,19 @@ def _v3_exotic_cascade(
         all_scs = list(set(all_scs))
         names = [sc_to_name.get(sc, f"#{sc}") for sc in all_scs]
 
-        # Calculate combos based on available picks
-        leg2 = 3  # R2, R3, R4
-        leg3 = 4 if r5 else 3  # + R5
-        leg4 = 5 if r6 else (4 if r5 else 3)  # + R6
-        combos = 1 * leg2 * leg3 * leg4
+        # Build structured legs
+        leg1_scs = [r1.saddlecloth]
+        leg2_scs = [r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        leg3_scs = [r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        if r5:
+            leg3_scs.append(r5.saddlecloth)
+        leg4_scs = [r2.saddlecloth, r3.saddlecloth, r4.saddlecloth]
+        if r5:
+            leg4_scs.append(r5.saddlecloth)
+        if r6:
+            leg4_scs.append(r6.saddlecloth)
+
+        combos = len(leg1_scs) * len(leg2_scs) * len(leg3_scs) * len(leg4_scs)
 
         return RecommendedExotic(
             exotic_type="First4",
@@ -1323,15 +1332,16 @@ def _v3_exotic_cascade(
             num_combos=combos,
             format="flat",
             budget=BUDGET,
+            legs=[leg1_scs, leg2_scs, leg3_scs, leg4_scs],
         )
 
     elif exotic_type == "exacta":
         # R1 over R2,R3 — 2 combos
-        runners = [r1.saddlecloth]
+        firsts = [r1.saddlecloth]
         seconds = [r2.saddlecloth]
         if r3:
             seconds.append(r3.saddlecloth)
-        runner_scs = list(set(runners + seconds))
+        runner_scs = list(set(firsts + seconds))
         runner_names = []
         sc_to_name = {p.saddlecloth: p.horse_name for p in sorted_picks}
         for sc in runner_scs:
@@ -1346,6 +1356,7 @@ def _v3_exotic_cascade(
             num_combos=combos,
             format="flat",
             budget=BUDGET,
+            legs=[firsts, seconds],
         )
 
     elif exotic_type == "tri":
@@ -1371,6 +1382,7 @@ def _v3_exotic_cascade(
             num_combos=combos,
             format="flat",
             budget=BUDGET,
+            legs=[firsts, seconds, thirds],
         )
 
     elif exotic_type == "quin":
@@ -2030,7 +2042,12 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
 
     if pre_sel.exotic:
         ex = pre_sel.exotic
-        runners_str = ", ".join(str(r) for r in ex.runners)
+        if ex.legs:
+            runners_str = " / ".join(
+                ", ".join(str(r) for r in leg) for leg in ex.legs
+            )
+        else:
+            runners_str = ", ".join(str(r) for r in ex.runners)
         names_str = ", ".join(ex.runner_names)
         budget = ex.budget
         combos = max(1, ex.num_combos)

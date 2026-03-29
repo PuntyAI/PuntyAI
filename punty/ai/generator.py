@@ -205,7 +205,12 @@ def _correct_exotic_runners(raw_content: str, races: list) -> str:
         if not rec:
             continue
 
-        runners_str = ", ".join(str(r) for r in rec.runners)
+        if rec.legs:
+            runners_str = " / ".join(
+                ", ".join(str(r) for r in leg) for leg in rec.legs
+            )
+        else:
+            runners_str = ", ".join(str(r) for r in rec.runners)
         names_str = ", ".join(rec.runner_names)
         new_exotic_line = f"{rec.exotic_type}: {runners_str} — ${stake}"
 
