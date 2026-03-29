@@ -102,7 +102,7 @@ if _FLUMINE_AVAILABLE:
                 # runners only have selection_id + prices, not names
                 cat_names = {}
 
-                # Source 1: market_catalogue (populated by poll_market_catalogue worker)
+                # Source 1: market_catalogue (populated by poll_market_catalogue worker ~60s)
                 cat = getattr(market, "market_catalogue", None)
                 if cat and hasattr(cat, "runners") and cat.runners:
                     for cr in cat.runners:
@@ -112,14 +112,26 @@ if _FLUMINE_AVAILABLE:
                         if sid and rname:
                             cat_names[sid] = rname
 
-                # Source 2: market_definition.runners (from stream, has name on some versions)
+                # Source 2: market_definition.runners (stream metadata)
                 if not cat_names and md and hasattr(md, "runners") and md.runners:
                     for dr in md.runners:
-                        sid = getattr(dr, "selection_id", None) or (dr.get("id") if isinstance(dr, dict) else None)
-                        rname = getattr(dr, "name", "") or (dr.get("name", "") if isinstance(dr, dict) else "")
+                        if isinstance(dr, dict):
+                            sid = dr.get("id") or dr.get("selection_id")
+                            rname = dr.get("name", "")
+                        else:
+                            sid = getattr(dr, "selection_id", None) or getattr(dr, "id", None)
+                            rname = getattr(dr, "name", "") or ""
                         rname = re.sub(r"^\d+\.\s*", "", rname)
                         if sid and rname:
                             cat_names[sid] = rname
+
+                # Source 3: carry forward from previous cache entry
+                if not cat_names:
+                    old = self._manager._market_cache.get(market_book.market_id)
+                    if old:
+                        for r in old.runners:
+                            if r.horse_name:
+                                cat_names[r.selection_id] = r.horse_name
 
                 runners = []
                 for r in market_book.runners:
@@ -155,10 +167,11 @@ if _FLUMINE_AVAILABLE:
                 )
                 # Atomic dict update (thread-safe via GIL)
                 is_new = market_book.market_id not in self._manager._market_cache
+                named = sum(1 for r in runners if r.horse_name)
+
                 self._manager._market_cache[market_book.market_id] = snapshot
 
                 if is_new and venue:
-                    named = sum(1 for r in runners if r.horse_name)
                     logger.info(
                         f"Flumine cache: +{market_book.market_id} "
                         f"venue={venue} type={market_type} "
