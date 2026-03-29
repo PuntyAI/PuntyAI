@@ -82,7 +82,7 @@ async def _create_client(db) -> Optional[betfairlightweight.APIClient]:
             username=username,
             password=password,
             app_key=app_key,
-            certs=cert_path,
+            cert_files=(cert_path, key_path),
             locale="en",
             lightweight=False,  # Full response objects for type safety
         )
