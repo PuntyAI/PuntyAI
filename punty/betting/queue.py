@@ -346,6 +346,12 @@ async def populate_bet_queue(
     meeting_result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = meeting_result.scalar_one_or_none()
 
+    # Skip venues not on Betfair (Hong Kong)
+    if meeting:
+        from punty.venues import guess_state
+        if guess_state(meeting.venue or "") == "HK":
+            return 0
+
     # Get R1 picks — best PP per race
     result = await db.execute(
         select(Pick).where(

@@ -134,6 +134,13 @@ async def evaluate_and_bet_race(
         result["reason"] = "Meeting not found or not selected"
         return result
 
+    # Skip venues not on Betfair (Hong Kong)
+    from punty.venues import guess_state
+    state = guess_state(meeting.venue or "")
+    if state == "HK":
+        result["reason"] = "HK not on Betfair"
+        return result
+
     # Load race
     race_id = f"{meeting_id}-r{race_number}"
     race_result = await db.execute(select(Race).where(Race.id == race_id))
