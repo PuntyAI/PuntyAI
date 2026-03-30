@@ -224,6 +224,41 @@ async def store_picks_from_content(
 
     await db.flush()
     logger.info(f"Stored {len(pick_dicts)} picks for content {content_id}")
+
+    # Re-link BetfairBets whose pick_id pointed to deleted picks
+    try:
+        from punty.models.betfair_bet import BetfairBet
+        bet_result = await db.execute(
+            select(BetfairBet).where(
+                BetfairBet.meeting_id == meeting_id,
+                BetfairBet.status.in_(["queued", "placed", "placing"]),
+            )
+        )
+        bets = bet_result.scalars().all()
+        for bet in bets:
+            # Check if current pick_id still exists
+            if bet.pick_id:
+                existing = await db.execute(select(Pick.id).where(Pick.id == bet.pick_id))
+                if existing.scalar_one_or_none():
+                    continue
+            # Find replacement pick by horse/race
+            new_pick_result = await db.execute(
+                select(Pick).where(
+                    Pick.content_id == content_id,
+                    Pick.meeting_id == meeting_id,
+                    Pick.race_number == bet.race_number,
+                    Pick.saddlecloth == bet.saddlecloth,
+                    Pick.pick_type == "selection",
+                ).limit(1)
+            )
+            new_pick = new_pick_result.scalar_one_or_none()
+            if new_pick:
+                old_id = bet.pick_id
+                bet.pick_id = new_pick.id
+                logger.info(f"Re-linked {bet.id} pick: {old_id} → {new_pick.id}")
+    except Exception as e:
+        logger.warning(f"Could not re-link BetfairBets: {e}")
+
     return len(pick_dicts)
 
 

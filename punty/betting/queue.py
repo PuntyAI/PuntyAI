@@ -886,9 +886,10 @@ async def execute_due_bets(db: AsyncSession) -> int:
             continue
 
         # Check horse not scratched since queuing
+        race_id = f"{bet.meeting_id}-r{bet.race_number}"
         runner_result = await db.execute(
             select(Runner).where(
-                Runner.race_id == f"{bet.meeting_id}-r{bet.race_number}",
+                Runner.race_id == race_id,
                 Runner.saddlecloth == bet.saddlecloth,
             )
         )
@@ -898,6 +899,15 @@ async def execute_due_bets(db: AsyncSession) -> int:
             bet.error_message = "Horse scratched"
             logger.info(f"Betfair: {bet.id} cancelled — {bet.horse_name} scratched")
             continue
+
+        # NTD check — late scratchings may have reduced field below 8
+        if bet.bet_type != "win":
+            runner_count = await _count_active_runners(db, race_id)
+            if runner_count < 8:
+                bet.status = "cancelled"
+                bet.error_message = f"NTD — {runner_count} runners (late scratchings)"
+                logger.info(f"Betfair: {bet.id} cancelled — NTD {runner_count} runners")
+                continue
 
         # Load pick to get place_probability for edge gate + Kelly staking
         pick_result = await db.execute(select(Pick).where(Pick.id == bet.pick_id))
@@ -1017,9 +1027,33 @@ async def execute_due_bets(db: AsyncSession) -> int:
             await db.commit()
             continue
 
-        # Place BSP bet — guaranteed fill at market-clearing price
-        result = await place_bet(db, market["market_id"], selection_id,
-                                  bet.stake, min_odds, use_bsp=True)
+        # Try Flumine LIMIT first, BSP fallback
+        from punty.betting.flumine_client import flumine_manager
+        flumine_price = None
+        flumine_is_peak = False
+        if flumine_manager.is_available():
+            best = flumine_manager.get_best_price(market["market_id"], selection_id)
+            if best and best["price"] > 1.0 and best["price"] >= min_odds:
+                flumine_price = best["price"]
+                flumine_is_peak = best["is_peak"]
+
+        if flumine_price:
+            # LIMIT order at Flumine's streamed price (peak or current)
+            result = await place_bet(db, market["market_id"], selection_id,
+                                      bet.stake, flumine_price, use_bsp=False)
+            tag = "PEAK" if flumine_is_peak else "LIVE"
+            logger.info(
+                f"Betfair {tag} LIMIT ${flumine_price:.2f}: {bet.horse_name} "
+                f"{result.get('status')} matched={result.get('size_matched', 0)}"
+            )
+        else:
+            # No streaming price or below minimum — BSP fallback
+            result = await place_bet(db, market["market_id"], selection_id,
+                                      bet.stake, min_odds, use_bsp=True)
+            logger.info(
+                f"Betfair BSP fallback (min ${min_odds:.2f}): {bet.horse_name} "
+                f"{result.get('status')}"
+            )
 
         if result.get("status") == "SUCCESS" or result.get("bet_id"):
             bet.status = "placed"
@@ -1029,13 +1063,14 @@ async def execute_due_bets(db: AsyncSession) -> int:
             bet.matched_odds = result.get("average_price_matched") or current_odds
             bet.placed_at = melb_now_naive()
             placed += 1
-            # BSP: stake is the liability (what we risk), deduct now
             balance -= bet.stake
             await set_balance(db, balance)
             edge_pct = (place_prob - 1.0 / current_odds) * 100 if current_odds > 1 else 0
+            order_type = "LIMIT" if flumine_price else "BSP"
             logger.info(
-                f"Betfair BSP: placed {bet.id} — {bet.horse_name} ${bet.stake:.2f} "
-                f"@ BSP (live ${current_odds:.2f}) "
+                f"Betfair {order_type}: placed {bet.id} — {bet.horse_name} ${bet.stake:.2f} "
+                f"@ {'$' + f'{flumine_price:.2f}' if flumine_price else 'BSP'} "
+                f"(live ${current_odds:.2f}) "
                 f"PP={place_prob:.0%} edge={edge_pct:+.1f}% (balance: ${balance:.2f})"
             )
         else:
@@ -1385,18 +1420,38 @@ async def get_queue_summary(db: AsyncSession) -> dict:
     stake_mode = await _get_setting(db, "betfair_stake_mode", "kelly")
 
     # Enrich bets with runner counts and place probability from linked pick
+    # Filter out $0 stake bets that haven't been placed — no Kelly edge, no point showing
     enriched_bets = []
     for b in today_bets:
+        if (b.stake or 0) <= 0 and b.status in ("queued", "skipped"):
+            continue
         d = b.to_dict()
         race_id = f"{b.meeting_id}-r{b.race_number}"
         d["runners"] = await _count_active_runners(db, race_id)
         # Attach place_probability from the linked pick, fallback to JIT probability
+        pp = None
         if b.pick_id:
             pick_result = await db.execute(select(Pick).where(Pick.id == b.pick_id))
             pick = pick_result.scalar_one_or_none()
-            d["place_probability"] = pick.place_probability if pick else (b.jit_place_probability or None)
-        else:
-            d["place_probability"] = b.jit_place_probability or None
+            if pick:
+                pp = pick.place_probability
+            else:
+                # Pick was deleted (content regenerated) — find replacement by horse/race
+                relink = await db.execute(
+                    select(Pick).where(
+                        Pick.meeting_id == b.meeting_id,
+                        Pick.race_number == b.race_number,
+                        Pick.saddlecloth == b.saddlecloth,
+                        Pick.pick_type == "selection",
+                    ).limit(1)
+                )
+                new_pick = relink.scalar_one_or_none()
+                if new_pick:
+                    b.pick_id = new_pick.id
+                    pp = new_pick.place_probability
+        if pp is None:
+            pp = b.jit_place_probability or None
+        d["place_probability"] = pp
         enriched_bets.append(d)
 
     return {
@@ -1406,7 +1461,7 @@ async def get_queue_summary(db: AsyncSession) -> dict:
         "today_bets": enriched_bets,
         "today_pnl": sum(b.pnl or 0 for b in today_bets if b.settled),
         "today_placed": sum(1 for b in today_bets if b.status in ("placed", "settled")),
-        "today_queued": sum(1 for b in today_bets if b.status == "queued"),
+        "today_queued": sum(1 for b in today_bets if b.status == "queued" and (b.stake or 0) > 0),
         "total_bets": total_bets,
         "total_pnl": total_pnl,
         "total_hits": total_hits,
