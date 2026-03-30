@@ -1989,6 +1989,9 @@ def format_pre_selections(pre_sel: RacePreSelections) -> str:
         lines = [f"\n**LOCKED SELECTIONS (Race {pre_sel.race_number}) — DO NOT REORDER:**"]
 
     for pick in pre_sel.picks:
+        # Picks 5-6 are exotic coverage only — don't show in AI content
+        if pick.rank >= 5 and not pick.is_roughie:
+            continue
         rank_label = "Roughie" if pick.is_roughie else f"Pick #{pick.rank}"
         prob_label = f"Win: {pick.win_prob * 100:.1f}% | Place: {pick.place_prob * 100:.1f}%"
         value_label = f"{pick.value_rating:.2f}x"
